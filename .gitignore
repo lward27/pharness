@@ -1,0 +1,49 @@
+# Rust build output
+/target/
+**/*.rs.bk
+
+# Local pharness runtime state
+/.pharness/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Smoke-test and scratch outputs
+/pharness-write-smoke.txt
+/pharness-live-write-smoke-*.txt
+/pharness-*-smoke*.txt
+/*.log
+
+# Local configuration and environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+/config/pharness.toml
+/config/local.toml
+/config/*.local.toml
+
+# Credentials and cluster-local access files
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa
+id_ed25519
+known_hosts
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+
+# Editor and OS noise
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

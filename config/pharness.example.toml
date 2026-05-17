@@ -1,0 +1,65 @@
+[workspace]
+root = "."
+respect_gitignore = true
+additional_read_dirs = []
+additional_write_dirs = []
+
+[model]
+provider = "fireworks"
+model = "accounts/fireworks/models/kimi-k2p5"
+api_key_env = "FIREWORKS_API_KEY"
+base_url = "https://api.fireworks.ai/inference/v1"
+temperature = 0.1
+max_tokens = 4096
+tool_protocol = "native_tools" # native_tools | json_action
+reasoning_effort = "medium"
+
+[agent]
+max_turns = 40
+max_context_tokens = 96000
+shell_output_max_bytes = 65536
+file_read_max_bytes = 262144
+
+[execution]
+target = "local_process" # local_process | kubernetes_job
+environment = "local"
+
+[cluster]
+# Future V2/V3 fields. Ignored by V1 unless explicitly enabled.
+name = "homelab"
+namespace = "pharness"
+service_account = "pharness-worker"
+gitops_source_of_truth = true
+default_delivery_mode = "gitops" # gitops | direct_apply_break_glass
+
+[rag]
+enabled = false
+endpoint_env = "PHARNESS_RAG_ENDPOINT"
+collection = "pharness-memory"
+
+[policy]
+mode = "default" # default | trusted_writes | plan | deny_all_writes
+allow_read_only_shell = true
+require_approval_for_writes = true
+require_approval_for_network = true
+require_approval_for_destructive = true
+deny_privileged = true
+deny_secret_access = true
+command_timeout_ms = 120000
+
+[policy.cluster]
+allow_read_only_cluster_inspection = false
+require_approval_for_registry_write = true
+require_approval_for_tekton_run = true
+require_approval_for_argocd_sync = true
+require_approval_for_database_change = true
+deny_secret_reads = true
+deny_direct_production_apply = true
+
+[storage]
+kind = "sqlite"
+path = "~/.local/share/pharness/pharness.db"
+
+[api]
+bind = "127.0.0.1:4777"
+cors_origin = "http://127.0.0.1:5173"
