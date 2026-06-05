@@ -273,7 +273,7 @@ fn aggregate_to_model_turn(
     mode: ToolProtocolMode,
 ) -> Result<ModelTurn, ProviderError> {
     let (action, assistant_tool_calls) = match aggregate.tool_calls.as_slice() {
-        [tool_call] => {
+        [tool_call, ..] => {
             let name = tool_call
                 .name
                 .as_deref()
@@ -313,7 +313,6 @@ fn aggregate_to_model_turn(
             ),
             ToolProtocolMode::NativeTools => return Err(FireworksClientError::MissingAction.into()),
         },
-        _ => return Err(FireworksClientError::MultipleToolCalls.into()),
     };
 
     Ok(ModelTurn {
@@ -445,6 +444,42 @@ mod tests {
         assert_eq!(turn.assistant_tool_calls.len(), 1);
         assert_eq!(turn.assistant_tool_calls[0].id, "call_read");
         assert_eq!(turn.assistant_tool_calls[0].name, "read_file");
+    }
+
+    #[test]
+    fn maps_first_tool_call_when_provider_returns_parallel_calls() {
+        let turn = aggregate_to_model_turn(
+            FireworksStreamAggregate {
+                raw_provider_id: Some("chatcmpl-test".to_string()),
+                content: String::new(),
+                tool_calls: vec![
+                    AccumulatedToolCall {
+                        index: 0,
+                        id: Some("call_pipeline_runs".to_string()),
+                        tool_type: Some("function".to_string()),
+                        name: Some("tekton_get_pipeline_runs".to_string()),
+                        arguments:
+                            r#"{"reason":"Inspect PipelineRuns","namespace":null,"name":null,"all_namespaces":true,"label_selector":null}"#
+                                .to_string(),
+                    },
+                    AccumulatedToolCall {
+                        index: 1,
+                        id: Some("call_task_runs".to_string()),
+                        tool_type: Some("function".to_string()),
+                        name: Some("tekton_get_task_runs".to_string()),
+                        arguments:
+                            r#"{"reason":"Inspect TaskRuns","namespace":null,"name":null,"all_namespaces":true,"label_selector":null}"#
+                                .to_string(),
+                    },
+                ],
+            },
+            ToolProtocolMode::NativeTools,
+        )
+        .unwrap();
+
+        assert_eq!(turn.assistant_tool_calls.len(), 1);
+        assert_eq!(turn.assistant_tool_calls[0].id, "call_pipeline_runs");
+        assert_eq!(turn.action.kind_name(), "tekton_get_pipeline_runs");
     }
 
     #[test]

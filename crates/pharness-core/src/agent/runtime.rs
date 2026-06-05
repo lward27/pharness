@@ -1,8 +1,8 @@
 use super::{CancellationFlag, RunStatus};
 use crate::{
     AgentAction, AgentEvent, EventId, EventKind, EventSink, ModelMessage, ModelProvider,
-    ModelRequest, NoopToolExecutor, PolicyDecision, RiskLevel, RunId, SafetyPolicy, SessionId,
-    ToolExecutor, ToolProtocolMode, ToolSpec,
+    ModelRequest, NoopToolExecutor, PolicyDecision, RiskLevel, RunId, RunScope, SafetyPolicy,
+    SessionId, ToolExecutor, ToolProtocolMode, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
 
@@ -75,6 +75,7 @@ where
                     serde_json::json!({
                         "approval_id": approved.approval_id,
                         "action": approved.action.kind_name(),
+                        "run_scope": config.run_scope.to_optional_json(),
                     }),
                 );
                 approved.resume_messages.clone()
@@ -222,6 +223,7 @@ where
                         serde_json::json!({
                             "approval_kind": approval_kind,
                             "summary": summary,
+                            "run_scope": config.run_scope.to_optional_json(),
                         }),
                     );
                     return RunOutcome {
@@ -241,7 +243,9 @@ where
                     });
                 }
                 tool_action => {
-                    let policy_decision = config.policy.evaluate_action(&tool_action);
+                    let policy_decision = config
+                        .policy
+                        .evaluate_action_in_scope(&tool_action, &config.run_scope);
                     self.emit(
                         &config,
                         &mut seq,
@@ -249,6 +253,7 @@ where
                         serde_json::json!({
                             "action": tool_action.kind_name(),
                             "decision": policy_decision,
+                            "run_scope": config.run_scope.to_optional_json(),
                         }),
                     );
 
@@ -276,6 +281,7 @@ where
                                     "approval_kind": approval_kind,
                                     "summary": summary,
                                     "action": tool_action.kind_name(),
+                                    "run_scope": config.run_scope.to_optional_json(),
                                 }),
                             );
                             return RunOutcome {
@@ -445,6 +451,7 @@ pub struct RunConfig {
     pub max_tokens: u32,
     pub max_turns: u32,
     pub policy: SafetyPolicy,
+    pub run_scope: RunScope,
     pub event_seq_start: u64,
 }
 
@@ -460,6 +467,7 @@ impl RunConfig {
             max_tokens: 4096,
             max_turns: 40,
             policy: SafetyPolicy::default(),
+            run_scope: RunScope::default(),
             event_seq_start: 0,
         }
     }
@@ -523,9 +531,10 @@ enum RunStart {
 mod tests {
     use super::{AgentRuntime, ApprovedAction, RunConfig};
     use crate::{
-        AgentAction, ApprovalKind, CancellationFlag, EventKind, InMemoryEventSink,
+        AgentAction, ApprovalKind, CancellationFlag, CapabilityKind, EventKind, InMemoryEventSink,
         LocalReadOnlyFsTools, ModelCapabilities, ModelProvider, ModelRequest, ModelTurn,
-        PolicyMode, ProviderError, RunStatus, SafetyPolicy,
+        PermissionGrant, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, ProviderError,
+        RiskLevel, RunScope, RunStatus, SafetyPolicy,
     };
     use async_trait::async_trait;
     use camino::Utf8PathBuf;
@@ -727,21 +736,67 @@ mod tests {
             crate::NoopToolExecutor,
         );
 
-        let outcome = runtime
-            .run(RunConfig::local_test("write"), CancellationFlag::default())
-            .await;
+        let mut config = RunConfig::local_test("write");
+        config.run_scope = RunScope {
+            namespace: Some("apps-dev".to_string()),
+            repo: Some("git@example.test/team/app.git".to_string()),
+            branch: Some("feature/pharness".to_string()),
+            work_plan_id: None,
+            change_set_id: None,
+            production_impacting: false,
+        };
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
 
         assert_eq!(outcome.status, RunStatus::ApprovalRequired);
         let events = events.events();
         assert!(events
             .iter()
             .any(|event| event.kind == EventKind::PolicyEvaluated));
-        assert!(events
+        let approval_required = events
             .iter()
-            .any(|event| event.kind == EventKind::ApprovalRequired));
+            .find(|event| event.kind == EventKind::ApprovalRequired)
+            .expect("approval required event should exist");
+        assert_eq!(
+            approval_required.payload["run_scope"]["namespace"],
+            "apps-dev"
+        );
         assert!(!events
             .iter()
             .any(|event| event.kind == EventKind::ToolStarted));
+    }
+
+    #[tokio::test]
+    async fn empty_run_scope_serializes_as_null_in_runtime_events() {
+        let events = InMemoryEventSink::default();
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([model_turn(AgentAction::WriteFile {
+                id: "act_write".into(),
+                reason: "write".to_string(),
+                path: Utf8PathBuf::from("README.md"),
+                content: "hello".to_string(),
+            })]),
+            events.clone(),
+            crate::NoopToolExecutor,
+        );
+
+        let outcome = runtime
+            .run(RunConfig::local_test("write"), CancellationFlag::default())
+            .await;
+
+        assert_eq!(outcome.status, RunStatus::ApprovalRequired);
+        let events = events.events();
+        let policy_evaluated = events
+            .iter()
+            .find(|event| event.kind == EventKind::PolicyEvaluated)
+            .expect("policy event should exist");
+        let approval_required = events
+            .iter()
+            .find(|event| event.kind == EventKind::ApprovalRequired)
+            .expect("approval event should exist");
+
+        assert!(policy_evaluated.payload["run_scope"].is_null());
+        assert!(approval_required.payload["run_scope"].is_null());
     }
 
     #[tokio::test]
@@ -877,6 +932,69 @@ mod tests {
             .events()
             .iter()
             .any(|event| event.kind == EventKind::ToolFinished));
+    }
+
+    #[tokio::test]
+    async fn permission_grant_allows_write_and_emits_grant_id() {
+        let temp = unique_temp_dir("runtime-granted-write");
+        fs::create_dir_all(&temp).unwrap();
+
+        let events = InMemoryEventSink::default();
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([
+                model_turn(AgentAction::WriteFile {
+                    id: "act_write".into(),
+                    reason: "write".to_string(),
+                    path: Utf8PathBuf::from("granted.txt"),
+                    content: "granted content".to_string(),
+                }),
+                model_turn(AgentAction::Finish {
+                    id: "act_done".into(),
+                    reason: "done".to_string(),
+                    summary: "wrote granted file".to_string(),
+                    success: true,
+                }),
+            ]),
+            events.clone(),
+            LocalReadOnlyFsTools::new(&temp).unwrap(),
+        );
+        let mut config = RunConfig::local_test("write with grant");
+        config.policy.permission_grants = vec![PermissionGrant {
+            id: "pgrant_test".to_string(),
+            subject: "agent:local-worker".to_string(),
+            scope: PermissionGrantScope {
+                environment: Some("local".to_string()),
+                capability_kinds: vec![CapabilityKind::Filesystem],
+                actions: vec!["write_file".to_string()],
+                max_risk: Some(RiskLevel::Medium),
+                namespaces: Vec::new(),
+                repos: Vec::new(),
+                branches: Vec::new(),
+                work_plan_ids: Vec::new(),
+                change_set_ids: Vec::new(),
+                production_impacting: None,
+            },
+            policy: PermissionGrantPolicy {
+                policy_mode: PolicyMode::TrustedWrites,
+            },
+            expires_at: None,
+        }];
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+
+        assert_eq!(outcome.status, RunStatus::Completed);
+        assert_eq!(
+            fs::read_to_string(temp.join("granted.txt")).unwrap(),
+            "granted content"
+        );
+        let events = events.events();
+        assert!(!events
+            .iter()
+            .any(|event| event.kind == EventKind::ApprovalRequired));
+        assert!(events.iter().any(|event| {
+            event.kind == EventKind::PolicyEvaluated
+                && event.payload["decision"]["grant_id"] == "pgrant_test"
+        }));
     }
 
     fn unique_temp_dir(name: &str) -> std::path::PathBuf {

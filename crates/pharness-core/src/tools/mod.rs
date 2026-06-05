@@ -8,6 +8,6 @@ mod shell;
 pub use capability::{CapabilityKind, ToolCapability};
 pub use cluster::ReadOnlyClusterTools;
 pub use executor::{CompositeToolExecutor, NoopToolExecutor, ToolError, ToolExecutor};
-pub use fs::LocalReadOnlyFsTools;
+pub use fs::{simple_text_diff, LocalReadOnlyFsTools};
 pub use result::{ToolResult, ToolResultStatus};
 pub use shell::LocalShellTools;

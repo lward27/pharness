@@ -14,7 +14,7 @@ pub use agent::{
     RunStatus,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
-pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, WorkspaceMount};
+pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
 pub use ids::{ActionId, ArtifactId, EventId, RunId, SessionId, ToolCallId};
 pub use model::{
     ActionParseError, AgentAction, ApprovalKind, ModelCapabilities, ModelMessage, ModelProvider,
@@ -22,10 +22,12 @@ pub use model::{
     ToolProtocolMode, ToolSpec,
 };
 pub use policy::{
-    classify_command, CommandClass, PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
+    classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
+    PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
 };
 pub use resources::{ArtifactRef, ResourceRef};
 pub use tools::{
-    CapabilityKind, CompositeToolExecutor, LocalReadOnlyFsTools, LocalShellTools, NoopToolExecutor,
-    ReadOnlyClusterTools, ToolCapability, ToolError, ToolExecutor, ToolResult, ToolResultStatus,
+    simple_text_diff, CapabilityKind, CompositeToolExecutor, LocalReadOnlyFsTools, LocalShellTools,
+    NoopToolExecutor, ReadOnlyClusterTools, ToolCapability, ToolError, ToolExecutor, ToolResult,
+    ToolResultStatus,
 };

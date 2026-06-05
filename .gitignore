@@ -2,6 +2,11 @@
 /target/
 **/*.rs.bk
 
+# Frontend dependency and build output
+/ui/node_modules/
+/ui/dist/
+/ui/.npm-cache/
+
 # Local pharness runtime state
 /.pharness/
 *.db

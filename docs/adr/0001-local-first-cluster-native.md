@@ -43,6 +43,7 @@ These CRDs are not V1 implementation scope. They are a schema direction: current
 ## Non-Goals
 
 - No plugin system in V1.
+- No MCP dependency in V1.
 - No direct production deployment autonomy.
 - No broad cluster service account.
 - No hidden RAG memory injection.

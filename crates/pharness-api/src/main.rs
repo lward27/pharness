@@ -5,9 +5,8 @@ mod dto;
 mod worker;
 
 use anyhow::Context;
+use pharness_config::ApiRuntimeConfig;
 use pharness_store::SqliteStore;
-use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
@@ -15,13 +14,11 @@ use tracing_subscriber::EnvFilter;
 async fn main() -> anyhow::Result<()> {
     init_tracing()?;
 
-    let bind: SocketAddr = std::env::var("PHARNESS_BIND")
-        .unwrap_or_else(|_| "127.0.0.1:4777".to_string())
-        .parse()
-        .context("PHARNESS_BIND must be a socket address")?;
-    let db_path = std::env::var("PHARNESS_DB_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(".pharness/pharness.db"));
+    let config = ApiRuntimeConfig::load_from_env()?;
+    let bind = config.api.bind;
+    let db_path = config.storage.path.clone();
+    let cluster_tools = config.cluster_tools();
+    let policy = config.policy.clone();
 
     if let Some(parent) = db_path.parent() {
         tokio::fs::create_dir_all(parent)
@@ -34,9 +31,18 @@ async fn main() -> anyhow::Result<()> {
             .await
             .with_context(|| format!("failed to open {}", db_path.display()))?,
     );
-    let worker =
-        worker::LocalWorker::from_env(store.clone()).context("failed to configure local worker")?;
-    let app = app::router(store, worker);
+    let worker = worker::LocalWorker::from_options(
+        store.clone(),
+        worker::LocalWorkerOptions {
+            api_key: config.model.api_key,
+            model: config.model.model,
+            base_url: config.model.base_url,
+            cluster_tools: cluster_tools.clone(),
+            default_policy: policy.clone(),
+        },
+    )
+    .context("failed to configure local worker")?;
+    let app = app::router(store, worker, cluster_tools, policy);
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "pharness-api listening");

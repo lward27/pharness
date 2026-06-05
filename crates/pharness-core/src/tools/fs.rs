@@ -203,7 +203,7 @@ impl LocalReadOnlyFsTools {
                 "path": path.as_str(),
                 "bytes": content.len(),
                 "existed": before.is_some(),
-                "diff": simple_diff(before.as_deref(), content),
+                "diff": simple_text_diff(before.as_deref(), content),
             }),
         ))
     }
@@ -261,7 +261,7 @@ impl LocalReadOnlyFsTools {
                 "path": path.as_str(),
                 "bytes": after.len(),
                 "replacements": if patch.replace_all { replacements } else { 1 },
-                "diff": simple_diff(Some(&before), &after),
+                "diff": simple_text_diff(Some(&before), &after),
             }),
         ))
     }
@@ -373,7 +373,7 @@ impl ToolExecutor for LocalReadOnlyFsTools {
     }
 }
 
-fn simple_diff(before: Option<&str>, after: &str) -> String {
+pub fn simple_text_diff(before: Option<&str>, after: &str) -> String {
     match before {
         Some(before) if before == after => "unchanged".to_string(),
         Some(before) => format!(

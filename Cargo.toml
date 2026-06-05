@@ -2,6 +2,7 @@
 members = [
     "crates/pharness-api",
     "crates/pharness-cli",
+    "crates/pharness-config",
     "crates/pharness-core",
     "crates/pharness-fireworks",
     "crates/pharness-store",
@@ -26,9 +27,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 secrecy = { version = "0.8", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "postgres", "json", "migrate", "macros"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
+toml = "0.8"
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

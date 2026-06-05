@@ -9,6 +9,8 @@ pub struct FireworksChatRequest {
     pub tools: Vec<FireworksChatTool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<FireworksToolChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parallel_tool_calls: Option<bool>,
     pub stream: bool,
     pub temperature: f32,
     pub max_tokens: u32,
@@ -34,6 +36,7 @@ impl FireworksChatRequest {
                 .collect(),
             tools: tools.into_iter().map(FireworksChatTool::from).collect(),
             tool_choice: Some(FireworksToolChoice::Required),
+            parallel_tool_calls: Some(false),
             stream: true,
             temperature,
             max_tokens,
@@ -56,6 +59,7 @@ impl FireworksChatRequest {
                 .collect(),
             tools: Vec::new(),
             tool_choice: None,
+            parallel_tool_calls: None,
             stream: true,
             temperature,
             max_tokens,
@@ -228,6 +232,7 @@ mod tests {
 
         let json = serde_json::to_value(request).unwrap();
         assert_eq!(json["tool_choice"], "required");
+        assert_eq!(json["parallel_tool_calls"], false);
         assert_eq!(json["tools"][0]["type"], "function");
         assert_eq!(json["tools"][0]["function"]["name"], "list_dir");
     }

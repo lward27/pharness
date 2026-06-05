@@ -23,7 +23,8 @@
 - PipelineRun analysis now correlates the build to the declared Deployment and the Argo CD Application linked by the Deployment tracking annotation.
 - Live PipelineRun analysis now captures useful SDLC evidence available through read-only APIs: repo URL, image reference, deployment target, commit SHA, image digest/image URL, task identity, pod name, per-task status, rollout health, image alignment, and Argo sync/health.
 - The live cluster has the `pipelineruns.tekton.dev` CRD installed. Empty-list handling was proven first, then two user-triggered PipelineRuns were used for real analysis smokes.
-- The current live Finance analyses surface image alignment mismatches because Tekton reports the in-cluster registry hostname while Deployments reference the external registry hostname. That is a registry identity/canonicalization issue to keep visible.
+- The first live Finance analyses surfaced image alignment mismatches because Tekton reports the in-cluster registry hostname while Deployments reference the external registry hostname.
+- Registry aliases are now supported with `PHARNESS_REGISTRY_ALIASES`, so known internal/external registry hostnames can produce `registry_alias_match` without hiding unconfigured registry drift.
 
 # Backlog
 
@@ -31,4 +32,4 @@
 - Consider adding an explicit namespace argument to `argo_get_app` later. For now, one configured Argo namespace keeps the tool surface smaller.
 - Add CLI artifact commands only if API consumers need operator-facing retrieval outside `curl`/Codex.
 - Extend PipelineRun analysis with bounded logs and Prometheus signals once those inputs have their own read policy.
-- Add registry image identity normalization later so equivalent internal and external registry references can be compared without producing noisy mismatches.
+- Move registry alias configuration into parsed config once pharness has a real config loader.

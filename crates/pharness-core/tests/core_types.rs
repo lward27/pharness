@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use pharness_core::{
     ArtifactRef, CapabilityKind, EnvironmentRef, EnvironmentTier, ExecutionTarget, ResourceRef,
-    ToolCapability, WorkspaceMount,
+    RunScope, ToolCapability, WorkspaceMount,
 };
 
 #[test]
@@ -71,6 +71,33 @@ fn environment_ref_marks_production_context() {
     let restored: EnvironmentRef =
         serde_json::from_str(&serde_json::to_string(&environment).unwrap()).unwrap();
     assert_eq!(restored.tier, EnvironmentTier::Production);
+}
+
+#[test]
+fn run_scope_carries_sdlc_metadata() {
+    let scope = RunScope {
+        namespace: Some("apps-dev".to_string()),
+        repo: Some("git@example.test/team/app.git".to_string()),
+        branch: Some("feature/pharness".to_string()),
+        work_plan_id: Some("wplan_1".to_string()),
+        change_set_id: Some("cset_1".to_string()),
+        production_impacting: false,
+    };
+
+    let restored: RunScope = serde_json::from_str(&serde_json::to_string(&scope).unwrap()).unwrap();
+
+    assert_eq!(restored, scope);
+    assert!(!restored.is_empty());
+    assert!(RunScope::default().is_empty());
+    assert_eq!(RunScope::default().to_optional_json(), None);
+    assert_eq!(
+        scope.to_optional_json().unwrap()["namespace"],
+        serde_json::json!("apps-dev")
+    );
+    assert_eq!(
+        scope.to_optional_json().unwrap()["change_set_id"],
+        serde_json::json!("cset_1")
+    );
 }
 
 #[test]

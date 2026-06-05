@@ -15,7 +15,7 @@ The product surface is intentionally small:
 - Human approval for writes, destructive commands, network access, and sensitive operations.
 - Durable sessions and event replay.
 - Minimal UI for prompt entry, live events, approvals, diffs, and status.
-- No plugin marketplace, no integration ecosystem, no MCP in V1.
+- No plugin marketplace, no integration ecosystem, no MCP dependency in V1.
 
 ## Current Verified Baseline
 
@@ -68,6 +68,8 @@ V1 should not implement these integrations directly. It should, however, avoid c
 - Treat GitOps as the default path for production changes: edit manifests/config in Git, let Argo reconcile, then verify cluster state.
 - Make read-only cluster and observability inspection cheap, but require explicit approval for production-impacting writes, deploy syncs, database changes, registry mutations, secret access, and network exposure changes.
 - Keep the event model rich enough to replay not just local tool calls, but a full build-deploy-observe loop.
+- Leave room for MCP-backed adapters later, especially for Jira, Slack, documentation systems, and other workflow tools, without making MCP the core tool model.
+- Treat any future MCP server as a governed `ToolServer`: allowlisted, scoped, policy-evaluated, audited, redacted, and mapped to explicit capability definitions.
 
 ## Kubernetes SDLC CRD Model
 
@@ -221,7 +223,7 @@ Do not build different business logic for these modes. Both should produce the s
 
 - No plugin marketplace.
 - No third-party integration ecosystem.
-- No MCP in V1.
+- No MCP dependency in V1.
 - No remote execution in V1.
 - No direct Kubernetes mutation tools in V1, except through explicit shell commands governed by policy.
 - No V1 assumption that `kubectl`, `argocd`, `tkn`, `helm`, registry clients, or database CLIs are safe just because they are installed.
@@ -778,6 +780,8 @@ GET    /api/sessions/:session_id/messages
 
 POST   /api/sessions/:session_id/runs
 GET    /api/sessions/:session_id/runs
+GET    /api/runs
+GET    /api/runs/summary
 GET    /api/runs/:run_id
 POST   /api/runs/:run_id/cancel
 
@@ -787,6 +791,7 @@ GET    /api/runs/:run_id/events/stream
 POST   /api/runs/:run_id/approvals
 
 GET    /api/approvals
+GET    /api/approvals/summary
 GET    /api/approvals/:approval_id
 POST   /api/approvals/:approval_id/approve
 POST   /api/approvals/:approval_id/deny
@@ -794,7 +799,37 @@ POST   /api/approvals/:approval_id/deny
 GET    /api/artifacts/:artifact_id
 GET    /api/runs/:run_id/artifacts
 GET    /api/runs/:run_id/diff
+GET    /api/observations
+GET    /api/observations/:observation_id
+GET    /api/runs/:run_id/observations
+GET    /api/incidents
+GET    /api/incidents/:incident_id
+GET    /api/remediation-plans
+GET    /api/remediation-plans/:plan_id
+POST   /api/work-plans/from-remediation-plan
+GET    /api/work-plans
+GET    /api/work-plans/:work_plan_id
+GET    /api/approval-gates
+GET    /api/approval-gates/summary
+GET    /api/approval-gates/:gate_id
+POST   /api/approval-gates/:gate_id/satisfy
+POST   /api/approval-gates/:gate_id/waive
+POST   /api/approval-gates/:gate_id/reject
+
+GET    /api/permission-grants
+POST   /api/permission-grants
+GET    /api/permission-grants/:grant_id
+POST   /api/permission-grants/:grant_id/revoke
+
+GET    /api/audit-events
 ```
+
+- `GET /api/observations` accepts optional run, source, kind, subject, normalized resource identity, observed-time, limit, and offset filters.
+- `GET /api/incidents` accepts optional run, status, severity, normalized resource identity, created-time, limit, and offset filters.
+- `GET /api/remediation-plans` accepts optional incident, run, status, risk, normalized resource identity, created-time, limit, and offset filters.
+- `GET /api/work-plans` accepts optional remediation plan, incident, run, status, risk, normalized resource identity, created-time, limit, and offset filters.
+- `GET /api/approval-gates` accepts optional remediation plan, incident, run, status, gate kind, risk, normalized resource identity, created-time, limit, and offset filters.
+- `GET /api/approval-gates/summary` accepts the same non-pagination filters and returns grouped counts by status, gate kind, risk, age, resource identity, incident, and remediation plan.
 
 V2/V3 API additions should extend this shape instead of replacing it:
 
@@ -1314,10 +1349,17 @@ target = "local_process" # local_process | kubernetes_job
 environment = "local"
 
 [cluster]
-# Future V2/V3 fields. Ignored by V1 unless explicitly enabled.
+# V1 reads tool URLs and local command settings. Remaining fields keep the
+# config shape aligned with the future in-cluster runtime.
 name = "homelab"
 namespace = "pharness"
 service_account = "pharness-worker"
+kubectl_bin = "kubectl"
+argocd_namespace = "argocd"
+prometheus_url = ""
+loki_url = ""
+tool_timeout_ms = 15000
+tool_max_output_bytes = 524288
 gitops_source_of_truth = true
 default_delivery_mode = "gitops" # gitops | direct_apply_break_glass
 
@@ -1327,6 +1369,8 @@ endpoint_env = "PHARNESS_RAG_ENDPOINT"
 collection = "pharness-memory"
 
 [policy]
+subject = "agent:local-worker"
+environment = "local"
 mode = "default" # default | trusted_writes | plan | deny_all_writes
 allow_read_only_shell = true
 require_approval_for_writes = true
@@ -1722,15 +1766,21 @@ Current status:
 - Policy decisions are durable events and use explicit `allow`, `ask`, and `deny` results.
 - Read-only filesystem, git, and typed cluster reads are allowed.
 - File writes ask by default; destructive/network shell commands ask; privileged and secret-accessing commands deny.
+- Policy identity includes subject and environment. V1 defaults to `agent:local-worker` in `local`.
+- Active, unexpired `PermissionGrant` records are snapshotted onto new runs and can convert matching local `write_file` and `patch_file` approvals from `ask` to `allow` when subject, environment, capability kind, action, and risk ceiling match.
+- Run scope metadata can carry namespace, repo, branch, and production-impacting flags. It is persisted and observable; empty scope is normalized as absent/null, while non-empty scope is preserved as a structured object.
+- Matching grant use is serialized as `policy.evaluated.payload.decision.grant_id`.
+- Permission grants do not override denials and do not grant shell, network, privileged, secret, destructive, registry, deployment, or production mutation behavior.
 - The default worker schema exposes `write_file` and `patch_file` behind policy approval.
 - The default worker schema does not expose `request_approval`. Models must call the concrete policy-gated tool; policy creates approval-required state. This avoids approvals that have no reviewed action payload to resume.
+- Pending `write_file` and `patch_file` approvals persist preview JSON with generated pre-execution diffs when the target is safe to preview.
 
 Next slice:
 
-1. Smoke-test approval resume with a harmless real Fireworks write task.
-2. Add CLI approval commands.
-3. Store and retrieve reviewed diffs/artifacts for write and future patch actions.
-4. Add richer patch preview/review if the approval UI needs generated diffs before approval.
+1. Add a live permission-grant smoke that proves a default-mode write can complete without approval only when the active grant matches.
+2. Evaluate namespace, repo, branch, and production-impacting grant fields once run and typed capability metadata are reliably populated.
+3. Add richer approval preview rendering in the UI once the UI exists.
+4. Extend grant enforcement to typed non-production cluster mutations only after mutation capabilities exist and have resource-level scope metadata.
 
 Risks/tradeoffs:
 
@@ -1875,21 +1925,36 @@ Acceptance criteria:
 
 Current status:
 
-- Implemented: `POST /api/runs`, `GET /api/runs/:id`, `GET /api/runs/:id/events`, `GET /api/runs/:id/events/stream`, `GET /api/runs/:id/diff`, `GET /api/runs/:id/artifacts`, `GET /api/artifacts/:id`, `POST /api/runs/:id/cancel`, `GET /api/approvals`, `POST /api/runs/:id/approvals`, `POST /api/capabilities/execute`, and effective worker config.
+- Implemented: `POST /api/runs`, `GET /api/runs`, `GET /api/runs/summary`, `GET /api/runs/:id`, `GET /api/runs/:id/events`, `GET /api/runs/:id/events/stream`, `GET /api/runs/:id/diff`, `GET /api/runs/:id/artifacts`, `GET /api/runs/:id/observations`, `GET /api/artifacts/:id`, `GET /api/observations`, `GET /api/observations/:id`, `GET /api/incidents`, `GET /api/incidents/:id`, `GET /api/remediation-plans`, `GET /api/remediation-plans/:id`, `GET /api/approval-gates`, `GET /api/approval-gates/:id`, gate lifecycle routes, `POST /api/runs/:id/cancel`, `GET /api/approvals`, `GET /api/approvals/:id`, `POST /api/approvals/:id/approve`, `POST /api/approvals/:id/deny`, `POST /api/runs/:id/approvals`, `GET/POST /api/permission-grants`, `GET /api/permission-grants/:id`, `POST /api/permission-grants/:id/revoke`, `GET /api/audit-events`, `POST /api/capabilities/execute`, and effective worker config.
 - Verified with a real Fireworks-backed run that persisted structured events and final result JSON.
+- Fireworks native tool requests disable parallel tool calls and degrade to the first returned tool call if a model ignores that request.
 - Tested approval denial, approval listing, and runtime approved-action resume.
 - Live-tested `pharness-cli approvals list` and `pharness-cli approvals approve --run-id ...` against a real Fireworks write approval.
 - Live-tested direct model-free capability execution for Kubernetes pod reads, Argo Application reads, secret-shaped Kubernetes denial, and missing Prometheus URL error handling.
 - Live-tested Prometheus success through a loopback port-forward, including direct capability execution, model-backed run execution, secret-shaped query denial, response compaction, and artifact retrieval.
+- Implemented `prometheus_inventory` as a bounded read-only LGTM action for Prometheus targets, rules, and active alerts. Inventory summaries omit rule query bodies and alert annotations.
+- Implemented `loki_log_summary` as a bounded read-only LGTM action for compacted Loki log reads. It clamps requested windows and limits, redacts secret-shaped log lines, and emits persisted observability artifacts.
 - Implemented typed read-only Tekton PipelineRun inventory through `tekton_get_pipeline_runs`, TaskRun inventory through `tekton_get_task_runs`, and normalized PipelineRun analysis through `tekton_analyze_pipeline_run`.
 - Live-tested PipelineRun analysis against real Finance PipelineRuns; pharness now correlates build outputs to Deployment rollout status, image alignment, and Argo sync/health without mutating the cluster.
-- Not implemented: approval-by-id routes.
+- Implemented narrow permission grant enforcement for local file writes. Active, unexpired grants snapshot onto new runs and can allow matching filesystem `write_file` and `patch_file` actions without broadening denials or cluster mutation policy. Matching allow decisions include `decision.grant_id`; grant create, revoke, and use are now represented as durable audit events.
+- Implemented durable audit events for approval decisions and all direct capability outcomes. Direct capability audits record executed/failed/denied state with compact summaries instead of full capability arguments or full tool payloads.
+- Implemented approval-by-id routes and CLI support for deciding by either run id or approval id. Approval-id decisions reject stale approvals that are no longer the current pending approval for the run.
+- Implemented approval queue pagination plus run-scope and requested-time filters for namespace, repo, branch, production-impacting metadata, and approval request time.
+- Implemented persisted approval previews for write and patch actions. Approval detail responses include pre-execution diff JSON when safe to preview.
+- Implemented bounded timeout cancellation for direct capability execution. Cancelled capability calls return structured JSON and durable `direct_capability.cancelled` audit events.
+- Implemented approval queue summaries grouped by status, kind, risk level, age bucket, and run-scope fields.
+- Implemented run queue summaries and `pharness-cli runs cancel`; cancellation can return the durable event log without raw curl.
+- Implemented durable run-scoped observations for successful cluster, Tekton, Argo, Prometheus, and Loki reads. Observations point to artifacts when available and expose compact resource facts plus normalized resource identity through API/CLI.
+- Implemented read-only incident candidates derived from Tekton PipelineRun analysis observations. Incidents preserve source observation links and normalized resource identity.
+- Implemented durable `RemediationPlan` drafts derived from candidate incidents. Plans are queryable by API/CLI and carry read-only review steps plus explicit approval gates, but they are not executable.
+- Implemented idempotent, non-executable `WorkPlan` records derived from RemediationPlan drafts. WorkPlans are queryable by API/CLI and preserve the source plan, approval gates, and read-only steps for future execution design.
+- Implemented durable `ApprovalGate` rows derived from RemediationPlan drafts. Gates are queryable and summarizable by API/CLI and can be marked satisfied, waived, or rejected with audit events; they remain descriptive until plan execution exists.
 
 Next API order:
 
-1. Approval-by-id routes if external operators need global approval workflows.
-2. CLI artifact commands if operator workflow needs them.
-3. Broader read-only cluster inventory capabilities, starting with LGTM endpoints.
+1. Run the updated smoke playbook and capture evidence for capability cancellation plus write approval previews.
+2. Add asynchronous direct capability handles only if timeout-based cancellation is not enough for operator workflows.
+3. Add approval actor/decider summaries after approval assignment exists.
 
 Risks/tradeoffs:
 
@@ -2066,6 +2131,7 @@ Implementation steps:
    - metrics
    - traces
    - alert state
+   - V1 now includes bounded Prometheus inventory for targets, rules, and active alerts. Loki and Tempo remain future read-only slices.
 15. Keep all mutation capabilities disabled or approval-only until V3.
 
 Suggested files/modules:
@@ -2472,7 +2538,8 @@ This is the order Codex should implement in this repo:
 - SQLite local DB.
 - SSE over WebSockets for V1 because replay is simpler.
 - No plugin loading.
-- No MCP until after V1 stable, and only if it solves a concrete local workflow.
+- No MCP dependency until after V1 stable, and only if it solves a concrete integration workflow.
+- Future MCP support must be an adapter path behind policy and audit, not arbitrary runtime tool discovery.
 - V1 cluster-shaped commands are treated as risky shell commands, not privileged built-ins.
 - V2 adds read-only cluster observation before cluster mutation.
 - V3 production changes flow through GitOps, typed capabilities, approval gates, and observability verification.

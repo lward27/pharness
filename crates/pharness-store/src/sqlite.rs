@@ -1,6 +1,15 @@
 use crate::{
-    CreateApproval, CreateArtifact, CreateFileChange, CreateRun, CreateSession, StoredApproval,
-    StoredArtifact, StoredFileChange, StoredRun,
+    ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
+    ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
+    ApprovalSummary, ApprovalSummaryFilter, BooleanCountBucket, ChangeSetListFilter, CountBucket,
+    CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
+    CreateFileChange, CreateIncident, CreateObservation, CreatePermissionGrant,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, IncidentListFilter,
+    ObservationListFilter, RemediationPlanListFilter, RunListFilter, RunSummary, RunSummaryFilter,
+    StoredApproval, StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
+    StoredFileChange, StoredIncident, StoredObservation, StoredPermissionGrant,
+    StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
+    UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -101,6 +110,85 @@ impl SqliteStore {
         row.map(row_to_run).transpose()
     }
 
+    pub async fn list_runs(&self, filter: RunListFilter) -> Result<Vec<StoredRun>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let production_impacting =
+            filter
+                .production_impacting
+                .map(|value| if value { 1_i64 } else { 0_i64 });
+        let rows = sqlx::query(
+            r#"
+            SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
+                   finished_at, cancel_requested_at, error, result_json, execution_target_json
+            FROM runs
+            JOIN sessions ON sessions.id = runs.session_id
+            WHERE (?1 IS NULL OR status = ?1)
+              AND (?2 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?2)
+              AND (?3 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?3)
+              AND (?4 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?4)
+              AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?5)
+              AND (?6 IS NULL OR CAST(started_at AS INTEGER) >= ?6)
+              AND (?7 IS NULL OR CAST(started_at AS INTEGER) <= ?7)
+            ORDER BY started_at DESC, runs.id DESC
+            LIMIT ?8 OFFSET ?9
+            "#,
+        )
+        .bind(filter.status)
+        .bind(filter.namespace)
+        .bind(filter.repo)
+        .bind(filter.branch)
+        .bind(production_impacting)
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_run).collect()
+    }
+
+    pub async fn run_summary(&self, filter: RunSummaryFilter) -> Result<RunSummary, StoreError> {
+        let total = run_summary_total(&self.pool, &filter).await?;
+        let by_status = run_summary_text_buckets(&self.pool, &filter, "status").await?;
+        let by_age_bucket = run_summary_age_buckets(&self.pool, &filter).await?;
+        let by_namespace = run_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(execution_target_json, '$.run_scope.namespace')",
+        )
+        .await?;
+        let by_repo = run_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(execution_target_json, '$.run_scope.repo')",
+        )
+        .await?;
+        let by_branch = run_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(execution_target_json, '$.run_scope.branch')",
+        )
+        .await?;
+        let by_production_impacting = run_summary_bool_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(execution_target_json, '$.run_scope.production_impacting')",
+        )
+        .await?;
+
+        Ok(RunSummary {
+            total,
+            by_status,
+            by_age_bucket,
+            by_namespace,
+            by_repo,
+            by_branch,
+            by_production_impacting,
+        })
+    }
+
     pub async fn mark_run_running(&self, run_id: &RunId) -> Result<StoredRun, StoreError> {
         sqlx::query(
             r#"
@@ -191,8 +279,16 @@ impl SqliteStore {
             .action_json
             .map(|value| serde_json::to_string(&value))
             .transpose()?;
+        let preview_json = approval
+            .preview_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
         let resume_messages_json = approval
             .resume_messages_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let run_scope_json = approval
+            .run_scope_json
             .map(|value| serde_json::to_string(&value))
             .transpose()?;
 
@@ -200,9 +296,10 @@ impl SqliteStore {
             r#"
             INSERT INTO approvals (
               id, session_id, run_id, status, kind, summary, risk_level,
-              requested_at, action_json, resume_messages_json, turns_completed
+              requested_at, run_scope_json, action_json, preview_json,
+              resume_messages_json, turns_completed
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
             "#,
         )
         .bind(&approval.id)
@@ -213,7 +310,9 @@ impl SqliteStore {
         .bind(&approval.summary)
         .bind(&approval.risk_level)
         .bind(now)
+        .bind(run_scope_json)
         .bind(action_json)
+        .bind(preview_json)
         .bind(resume_messages_json)
         .bind(i64::from(approval.turns_completed))
         .execute(&self.pool)
@@ -244,52 +343,108 @@ impl SqliteStore {
         &self,
         run_id: &RunId,
     ) -> Result<Option<StoredApproval>, StoreError> {
-        let row = sqlx::query(
-            r#"
-            SELECT id, session_id, run_id, status, kind, summary, risk_level,
-                   requested_at, decided_at, decided_by, decision_reason,
-                   action_json, resume_messages_json, turns_completed
-            FROM approvals
-            WHERE run_id = ?1 AND status = 'pending'
-            ORDER BY requested_at DESC
-            LIMIT 1
-            "#,
-        )
-        .bind(run_id.as_str())
-        .fetch_optional(&self.pool)
-        .await?;
+        let sql = format!(
+            "{} ORDER BY requested_at DESC LIMIT 1",
+            approval_select_sql("WHERE run_id = ?1 AND status = 'pending'")
+        );
+        let row = sqlx::query(&sql)
+            .bind(run_id.as_str())
+            .fetch_optional(&self.pool)
+            .await?;
 
         row.map(row_to_approval).transpose()
     }
 
     pub async fn list_approvals(
         &self,
-        status: Option<&str>,
-        limit: u32,
+        filter: ApprovalListFilter,
     ) -> Result<Vec<StoredApproval>, StoreError> {
-        let limit = i64::from(limit.clamp(1, 200));
-        let rows = match status {
-            Some(status) => {
-                let sql = format!(
-                    "{} ORDER BY requested_at DESC LIMIT ?2",
-                    approval_select_sql("WHERE status = ?1")
-                );
-                sqlx::query(&sql)
-                    .bind(status)
-                    .bind(limit)
-                    .fetch_all(&self.pool)
-                    .await?
-            }
-            None => {
-                let sql = format!(
-                    "{} ORDER BY requested_at DESC LIMIT ?1",
-                    approval_select_sql("")
-                );
-                sqlx::query(&sql).bind(limit).fetch_all(&self.pool).await?
-            }
-        };
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let production_impacting =
+            filter
+                .production_impacting
+                .map(|value| if value { 1_i64 } else { 0_i64 });
+        let sql = format!(
+            r#"
+            {}
+            ORDER BY requested_at DESC, id DESC
+            LIMIT ?8 OFFSET ?9
+            "#,
+            approval_select_sql(
+                r#"
+                WHERE (?1 IS NULL OR status = ?1)
+                  AND (?2 IS NULL OR json_extract(run_scope_json, '$.namespace') = ?2)
+                  AND (?3 IS NULL OR json_extract(run_scope_json, '$.repo') = ?3)
+                  AND (?4 IS NULL OR json_extract(run_scope_json, '$.branch') = ?4)
+                  AND (?5 IS NULL OR json_extract(run_scope_json, '$.production_impacting') = ?5)
+                  AND (?6 IS NULL OR CAST(requested_at AS INTEGER) >= ?6)
+                  AND (?7 IS NULL OR CAST(requested_at AS INTEGER) <= ?7)
+                "#
+            )
+        );
+        let rows = sqlx::query(&sql)
+            .bind(filter.status)
+            .bind(filter.namespace)
+            .bind(filter.repo)
+            .bind(filter.branch)
+            .bind(production_impacting)
+            .bind(filter.requested_after_ms)
+            .bind(filter.requested_before_ms)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
 
         rows.into_iter().map(row_to_approval).collect()
+    }
+
+    pub async fn approval_summary(
+        &self,
+        filter: ApprovalSummaryFilter,
+    ) -> Result<ApprovalSummary, StoreError> {
+        let total = approval_summary_total(&self.pool, &filter).await?;
+        let by_status = approval_summary_text_buckets(&self.pool, &filter, "status").await?;
+        let by_kind = approval_summary_text_buckets(&self.pool, &filter, "kind").await?;
+        let by_risk_level =
+            approval_summary_text_buckets(&self.pool, &filter, "risk_level").await?;
+        let by_age_bucket = approval_summary_age_buckets(&self.pool, &filter).await?;
+        let by_namespace = approval_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(run_scope_json, '$.namespace')",
+        )
+        .await?;
+        let by_repo = approval_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(run_scope_json, '$.repo')",
+        )
+        .await?;
+        let by_branch = approval_summary_text_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(run_scope_json, '$.branch')",
+        )
+        .await?;
+        let by_production_impacting = approval_summary_bool_buckets(
+            &self.pool,
+            &filter,
+            "json_extract(run_scope_json, '$.production_impacting')",
+        )
+        .await?;
+
+        Ok(ApprovalSummary {
+            total,
+            by_status,
+            by_kind,
+            by_risk_level,
+            by_age_bucket,
+            by_namespace,
+            by_repo,
+            by_branch,
+            by_production_impacting,
+        })
     }
 
     pub async fn decide_pending_approval(
@@ -507,6 +662,929 @@ impl SqliteStore {
         rows.into_iter().map(row_to_artifact).collect()
     }
 
+    pub async fn create_observation(
+        &self,
+        observation: CreateObservation,
+    ) -> Result<StoredObservation, StoreError> {
+        let now = now_string();
+        let resource_ref_json = observation
+            .resource_ref_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let data_json = serde_json::to_string(&observation.data_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO observations (
+              id, session_id, run_id, source, kind, subject, summary,
+              resource_namespace, resource_kind, resource_name,
+              resource_ref_json, artifact_id, data_json, observed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "#,
+        )
+        .bind(&observation.id)
+        .bind(observation.session_id.as_str())
+        .bind(observation.run_id.as_ref().map(RunId::as_str))
+        .bind(&observation.source)
+        .bind(&observation.kind)
+        .bind(&observation.subject)
+        .bind(&observation.summary)
+        .bind(observation.resource_namespace)
+        .bind(observation.resource_kind)
+        .bind(observation.resource_name)
+        .bind(resource_ref_json)
+        .bind(observation.artifact_id)
+        .bind(data_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_observation(&observation.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "observation".to_string(),
+                id: observation.id,
+            })
+    }
+
+    pub async fn get_observation(
+        &self,
+        observation_id: &str,
+    ) -> Result<Option<StoredObservation>, StoreError> {
+        let row = sqlx::query(observation_select_sql("WHERE id = ?1"))
+            .bind(observation_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_observation).transpose()
+    }
+
+    pub async fn list_run_observations(
+        &self,
+        run_id: &RunId,
+    ) -> Result<Vec<StoredObservation>, StoreError> {
+        let rows = sqlx::query(observation_select_sql(
+            "WHERE run_id = ?1 ORDER BY observed_at ASC, id ASC",
+        ))
+        .bind(run_id.as_str())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_observation).collect()
+    }
+
+    pub async fn list_observations(
+        &self,
+        filter: ObservationListFilter,
+    ) -> Result<Vec<StoredObservation>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, session_id, run_id, source, kind, subject, summary,
+                   resource_namespace, resource_kind, resource_name,
+                   resource_ref_json, artifact_id, data_json, observed_at
+            FROM observations
+            WHERE (?1 IS NULL OR run_id = ?1)
+              AND (?2 IS NULL OR source = ?2)
+              AND (?3 IS NULL OR kind = ?3)
+              AND (?4 IS NULL OR subject = ?4)
+              AND (?5 IS NULL OR resource_namespace = ?5)
+              AND (?6 IS NULL OR resource_kind = ?6)
+              AND (?7 IS NULL OR resource_name = ?7)
+              AND (?8 IS NULL OR CAST(observed_at AS INTEGER) >= ?8)
+              AND (?9 IS NULL OR CAST(observed_at AS INTEGER) <= ?9)
+            ORDER BY observed_at DESC, id DESC
+            LIMIT ?10 OFFSET ?11
+            "#,
+        )
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.source)
+        .bind(filter.kind)
+        .bind(filter.subject)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.observed_after_ms)
+        .bind(filter.observed_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_observation).collect()
+    }
+
+    pub async fn create_incident(
+        &self,
+        incident: CreateIncident,
+    ) -> Result<StoredIncident, StoreError> {
+        let now = now_string();
+        let data_json = serde_json::to_string(&incident.data_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO incidents (
+              id, observation_id, session_id, run_id, status, severity, title, summary,
+              resource_namespace, resource_kind, resource_name, data_json, created_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            "#,
+        )
+        .bind(&incident.id)
+        .bind(&incident.observation_id)
+        .bind(incident.session_id.as_str())
+        .bind(incident.run_id.as_ref().map(RunId::as_str))
+        .bind(&incident.status)
+        .bind(&incident.severity)
+        .bind(&incident.title)
+        .bind(&incident.summary)
+        .bind(incident.resource_namespace)
+        .bind(incident.resource_kind)
+        .bind(incident.resource_name)
+        .bind(data_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_incident(&incident.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "incident".to_string(),
+                id: incident.id,
+            })
+    }
+
+    pub async fn get_incident(
+        &self,
+        incident_id: &str,
+    ) -> Result<Option<StoredIncident>, StoreError> {
+        let row = sqlx::query(incident_select_sql("WHERE id = ?1"))
+            .bind(incident_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_incident).transpose()
+    }
+
+    pub async fn list_incidents(
+        &self,
+        filter: IncidentListFilter,
+    ) -> Result<Vec<StoredIncident>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, observation_id, session_id, run_id, status, severity, title, summary,
+                   resource_namespace, resource_kind, resource_name, data_json, created_at
+            FROM incidents
+            WHERE (?1 IS NULL OR run_id = ?1)
+              AND (?2 IS NULL OR status = ?2)
+              AND (?3 IS NULL OR severity = ?3)
+              AND (?4 IS NULL OR resource_namespace = ?4)
+              AND (?5 IS NULL OR resource_kind = ?5)
+              AND (?6 IS NULL OR resource_name = ?6)
+              AND (?7 IS NULL OR CAST(created_at AS INTEGER) >= ?7)
+              AND (?8 IS NULL OR CAST(created_at AS INTEGER) <= ?8)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?9 OFFSET ?10
+            "#,
+        )
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.severity)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_incident).collect()
+    }
+
+    pub async fn create_remediation_plan(
+        &self,
+        plan: CreateRemediationPlan,
+    ) -> Result<StoredRemediationPlan, StoreError> {
+        let now = now_string();
+        let plan_json = serde_json::to_string(&plan.plan_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO remediation_plans (
+              id, incident_id, session_id, run_id, status, title, summary, risk_level,
+              requires_approval, resource_namespace, resource_kind, resource_name,
+              plan_json, created_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "#,
+        )
+        .bind(&plan.id)
+        .bind(&plan.incident_id)
+        .bind(plan.session_id.as_str())
+        .bind(plan.run_id.as_ref().map(RunId::as_str))
+        .bind(&plan.status)
+        .bind(&plan.title)
+        .bind(&plan.summary)
+        .bind(&plan.risk_level)
+        .bind(if plan.requires_approval { 1 } else { 0 })
+        .bind(plan.resource_namespace)
+        .bind(plan.resource_kind)
+        .bind(plan.resource_name)
+        .bind(plan_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_remediation_plan(&plan.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "remediation_plan".to_string(),
+                id: plan.id,
+            })
+    }
+
+    pub async fn get_remediation_plan(
+        &self,
+        plan_id: &str,
+    ) -> Result<Option<StoredRemediationPlan>, StoreError> {
+        let row = sqlx::query(remediation_plan_select_sql("WHERE id = ?1"))
+            .bind(plan_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_remediation_plan).transpose()
+    }
+
+    pub async fn list_remediation_plans(
+        &self,
+        filter: RemediationPlanListFilter,
+    ) -> Result<Vec<StoredRemediationPlan>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, incident_id, session_id, run_id, status, title, summary, risk_level,
+                   requires_approval, resource_namespace, resource_kind, resource_name,
+                   plan_json, created_at
+            FROM remediation_plans
+            WHERE (?1 IS NULL OR incident_id = ?1)
+              AND (?2 IS NULL OR run_id = ?2)
+              AND (?3 IS NULL OR status = ?3)
+              AND (?4 IS NULL OR risk_level = ?4)
+              AND (?5 IS NULL OR resource_namespace = ?5)
+              AND (?6 IS NULL OR resource_kind = ?6)
+              AND (?7 IS NULL OR resource_name = ?7)
+              AND (?8 IS NULL OR CAST(created_at AS INTEGER) >= ?8)
+              AND (?9 IS NULL OR CAST(created_at AS INTEGER) <= ?9)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?10 OFFSET ?11
+            "#,
+        )
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_remediation_plan).collect()
+    }
+
+    pub async fn create_work_plan(
+        &self,
+        plan: CreateWorkPlan,
+    ) -> Result<StoredWorkPlan, StoreError> {
+        let now = now_string();
+        let work_plan_json = serde_json::to_string(&plan.work_plan_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO work_plans (
+              id, remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
+              risk_level, requires_approval, resource_namespace, resource_kind, resource_name,
+              work_plan_json, created_at, updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            "#,
+        )
+        .bind(&plan.id)
+        .bind(&plan.remediation_plan_id)
+        .bind(&plan.incident_id)
+        .bind(plan.session_id.as_str())
+        .bind(plan.run_id.as_ref().map(RunId::as_str))
+        .bind(&plan.status)
+        .bind(&plan.title)
+        .bind(&plan.summary)
+        .bind(&plan.risk_level)
+        .bind(if plan.requires_approval { 1 } else { 0 })
+        .bind(plan.resource_namespace)
+        .bind(plan.resource_kind)
+        .bind(plan.resource_name)
+        .bind(work_plan_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_work_plan(&plan.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_plan".to_string(),
+                id: plan.id,
+            })
+    }
+
+    pub async fn get_work_plan(
+        &self,
+        work_plan_id: &str,
+    ) -> Result<Option<StoredWorkPlan>, StoreError> {
+        let row = sqlx::query(work_plan_select_sql("WHERE id = ?1"))
+            .bind(work_plan_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_work_plan).transpose()
+    }
+
+    pub async fn get_work_plan_by_remediation_plan(
+        &self,
+        remediation_plan_id: &str,
+    ) -> Result<Option<StoredWorkPlan>, StoreError> {
+        let row = sqlx::query(work_plan_select_sql("WHERE remediation_plan_id = ?1"))
+            .bind(remediation_plan_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_work_plan).transpose()
+    }
+
+    pub async fn list_work_plans(
+        &self,
+        filter: WorkPlanListFilter,
+    ) -> Result<Vec<StoredWorkPlan>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
+                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
+                   resource_name, work_plan_json, created_at, updated_at, revision,
+                   status_changed_at, status_changed_by, status_reason
+            FROM work_plans
+            WHERE (?1 IS NULL OR remediation_plan_id = ?1)
+              AND (?2 IS NULL OR incident_id = ?2)
+              AND (?3 IS NULL OR run_id = ?3)
+              AND (?4 IS NULL OR status = ?4)
+              AND (?5 IS NULL OR risk_level = ?5)
+              AND (?6 IS NULL OR resource_namespace = ?6)
+              AND (?7 IS NULL OR resource_kind = ?7)
+              AND (?8 IS NULL OR resource_name = ?8)
+              AND (?9 IS NULL OR CAST(created_at AS INTEGER) >= ?9)
+              AND (?10 IS NULL OR CAST(created_at AS INTEGER) <= ?10)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?11 OFFSET ?12
+            "#,
+        )
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_work_plan).collect()
+    }
+
+    pub async fn update_work_plan_status(
+        &self,
+        work_plan_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkPlan, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE work_plans
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_plan_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_work_plan(work_plan_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_plan".to_string(),
+                id: work_plan_id.to_string(),
+            })
+    }
+
+    pub async fn revise_work_plan(
+        &self,
+        work_plan_id: &str,
+        revision: UpdateWorkPlanRevision,
+    ) -> Result<StoredWorkPlan, StoreError> {
+        let now = now_string();
+        let work_plan_json = serde_json::to_string(&revision.work_plan_json)?;
+        sqlx::query(
+            r#"
+            UPDATE work_plans
+            SET title = COALESCE(?2, title),
+                summary = COALESCE(?3, summary),
+                risk_level = COALESCE(?4, risk_level),
+                requires_approval = COALESCE(?5, requires_approval),
+                work_plan_json = ?6,
+                status = 'draft',
+                updated_at = ?7,
+                revision = revision + 1,
+                status_changed_at = ?7,
+                status_changed_by = ?8,
+                status_reason = ?9
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_plan_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(
+            revision
+                .requires_approval
+                .map(|value| if value { 1 } else { 0 }),
+        )
+        .bind(work_plan_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_work_plan(work_plan_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_plan".to_string(),
+                id: work_plan_id.to_string(),
+            })
+    }
+
+    pub async fn create_change_set(
+        &self,
+        change_set: CreateChangeSet,
+    ) -> Result<StoredChangeSet, StoreError> {
+        let now = now_string();
+        let change_set_json = serde_json::to_string(&change_set.change_set_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO change_sets (
+              id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+              status, title, summary, risk_level, material_hash, resource_namespace,
+              resource_kind, resource_name, change_set_json, created_at, updated_at,
+              status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+            "#,
+        )
+        .bind(&change_set.id)
+        .bind(&change_set.work_plan_id)
+        .bind(&change_set.remediation_plan_id)
+        .bind(&change_set.incident_id)
+        .bind(change_set.session_id.as_str())
+        .bind(change_set.run_id.as_ref().map(RunId::as_str))
+        .bind(&change_set.status)
+        .bind(&change_set.title)
+        .bind(&change_set.summary)
+        .bind(&change_set.risk_level)
+        .bind(&change_set.material_hash)
+        .bind(change_set.resource_namespace)
+        .bind(change_set.resource_kind)
+        .bind(change_set.resource_name)
+        .bind(change_set_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_change_set(&change_set.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "change_set".to_string(),
+                id: change_set.id,
+            })
+    }
+
+    pub async fn get_change_set(
+        &self,
+        change_set_id: &str,
+    ) -> Result<Option<StoredChangeSet>, StoreError> {
+        let row = sqlx::query(change_set_select_sql("WHERE id = ?1"))
+            .bind(change_set_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_change_set).transpose()
+    }
+
+    pub async fn get_change_set_by_work_plan(
+        &self,
+        work_plan_id: &str,
+    ) -> Result<Option<StoredChangeSet>, StoreError> {
+        let row = sqlx::query(change_set_select_sql("WHERE work_plan_id = ?1"))
+            .bind(work_plan_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_change_set).transpose()
+    }
+
+    pub async fn list_change_sets(
+        &self,
+        filter: ChangeSetListFilter,
+    ) -> Result<Vec<StoredChangeSet>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision,
+                   resource_namespace, resource_kind, resource_name, change_set_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM change_sets
+            WHERE (?1 IS NULL OR work_plan_id = ?1)
+              AND (?2 IS NULL OR remediation_plan_id = ?2)
+              AND (?3 IS NULL OR incident_id = ?3)
+              AND (?4 IS NULL OR run_id = ?4)
+              AND (?5 IS NULL OR status = ?5)
+              AND (?6 IS NULL OR risk_level = ?6)
+              AND (?7 IS NULL OR resource_namespace = ?7)
+              AND (?8 IS NULL OR resource_kind = ?8)
+              AND (?9 IS NULL OR resource_name = ?9)
+              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
+              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?12 OFFSET ?13
+            "#,
+        )
+        .bind(filter.work_plan_id)
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_change_set).collect()
+    }
+
+    pub async fn update_change_set_status(
+        &self,
+        change_set_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredChangeSet, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE change_sets
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(change_set_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_change_set(change_set_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "change_set".to_string(),
+                id: change_set_id.to_string(),
+            })
+    }
+
+    pub async fn revise_change_set(
+        &self,
+        change_set_id: &str,
+        revision: UpdateChangeSetRevision,
+    ) -> Result<StoredChangeSet, StoreError> {
+        let now = now_string();
+        let change_set_json = serde_json::to_string(&revision.change_set_json)?;
+        sqlx::query(
+            r#"
+            UPDATE change_sets
+            SET title = COALESCE(?2, title),
+                summary = COALESCE(?3, summary),
+                risk_level = COALESCE(?4, risk_level),
+                material_hash = ?5,
+                change_set_json = ?6,
+                status = 'draft',
+                updated_at = ?7,
+                revision = revision + 1,
+                status_changed_at = ?7,
+                status_changed_by = ?8,
+                status_reason = ?9
+            WHERE id = ?1
+            "#,
+        )
+        .bind(change_set_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(revision.material_hash)
+        .bind(change_set_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_change_set(change_set_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "change_set".to_string(),
+                id: change_set_id.to_string(),
+            })
+    }
+
+    pub async fn create_approval_gate(
+        &self,
+        gate: CreateApprovalGate,
+    ) -> Result<StoredApprovalGate, StoreError> {
+        let now = now_string();
+        let gate_json = serde_json::to_string(&gate.gate_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO approval_gates (
+              id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+              gate_order, title, summary, risk_level, resource_namespace, resource_kind,
+              resource_name, gate_json, created_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+            "#,
+        )
+        .bind(&gate.id)
+        .bind(&gate.remediation_plan_id)
+        .bind(&gate.incident_id)
+        .bind(gate.session_id.as_str())
+        .bind(gate.run_id.as_ref().map(RunId::as_str))
+        .bind(&gate.status)
+        .bind(&gate.gate_kind)
+        .bind(gate.gate_order)
+        .bind(&gate.title)
+        .bind(&gate.summary)
+        .bind(&gate.risk_level)
+        .bind(gate.resource_namespace)
+        .bind(gate.resource_kind)
+        .bind(gate.resource_name)
+        .bind(gate_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_approval_gate(&gate.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "approval_gate".to_string(),
+                id: gate.id,
+            })
+    }
+
+    pub async fn get_approval_gate(
+        &self,
+        gate_id: &str,
+    ) -> Result<Option<StoredApprovalGate>, StoreError> {
+        let row = sqlx::query(approval_gate_select_sql("WHERE id = ?1"))
+            .bind(gate_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_approval_gate).transpose()
+    }
+
+    pub async fn decide_approval_gate(
+        &self,
+        gate_id: &str,
+        status: &str,
+        decided_by: Option<String>,
+        decision_reason: Option<String>,
+    ) -> Result<StoredApprovalGate, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE approval_gates
+            SET status = ?2,
+                decided_at = ?3,
+                decided_by = ?4,
+                decision_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(gate_id)
+        .bind(status)
+        .bind(now)
+        .bind(decided_by)
+        .bind(decision_reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_approval_gate(gate_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "approval_gate".to_string(),
+                id: gate_id.to_string(),
+            })
+    }
+
+    pub async fn list_approval_gates(
+        &self,
+        filter: ApprovalGateListFilter,
+    ) -> Result<Vec<StoredApprovalGate>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+                   gate_order, title, summary, risk_level, resource_namespace, resource_kind,
+                   resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
+                   stale_at, stale_by, stale_reason
+            FROM approval_gates
+            WHERE (?1 IS NULL OR remediation_plan_id = ?1)
+              AND (?2 IS NULL OR incident_id = ?2)
+              AND (?3 IS NULL OR run_id = ?3)
+              AND (?4 IS NULL OR status = ?4)
+              AND (?5 IS NULL OR gate_kind = ?5)
+              AND (?6 IS NULL OR risk_level = ?6)
+              AND (?7 IS NULL OR resource_namespace = ?7)
+              AND (?8 IS NULL OR resource_kind = ?8)
+              AND (?9 IS NULL OR resource_name = ?9)
+              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
+              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
+            ORDER BY created_at DESC, remediation_plan_id DESC, gate_order ASC, id ASC
+            LIMIT ?12 OFFSET ?13
+            "#,
+        )
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.gate_kind)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_approval_gate).collect()
+    }
+
+    pub async fn stale_approval_gates_for_remediation_plan(
+        &self,
+        remediation_plan_id: &str,
+        stale_by: Option<String>,
+        stale_reason: Option<String>,
+    ) -> Result<Vec<StoredApprovalGate>, StoreError> {
+        let gates = self
+            .list_approval_gates(ApprovalGateListFilter {
+                remediation_plan_id: Some(remediation_plan_id.to_string()),
+                status: None,
+                limit: 200,
+                ..ApprovalGateListFilter::default()
+            })
+            .await?
+            .into_iter()
+            .filter(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"))
+            .collect::<Vec<_>>();
+
+        let mut staled = Vec::with_capacity(gates.len());
+        for gate in gates {
+            staled.push(
+                self.stale_approval_gate(&gate.id, stale_by.clone(), stale_reason.clone())
+                    .await?,
+            );
+        }
+
+        Ok(staled)
+    }
+
+    async fn stale_approval_gate(
+        &self,
+        gate_id: &str,
+        stale_by: Option<String>,
+        stale_reason: Option<String>,
+    ) -> Result<StoredApprovalGate, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE approval_gates
+            SET status = 'stale',
+                stale_at = ?2,
+                stale_by = ?3,
+                stale_reason = ?4
+            WHERE id = ?1
+            "#,
+        )
+        .bind(gate_id)
+        .bind(now)
+        .bind(stale_by)
+        .bind(stale_reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_approval_gate(gate_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "approval_gate".to_string(),
+                id: gate_id.to_string(),
+            })
+    }
+
+    pub async fn approval_gate_summary(
+        &self,
+        filter: ApprovalGateSummaryFilter,
+    ) -> Result<ApprovalGateSummary, StoreError> {
+        let total = approval_gate_summary_total(&self.pool, &filter).await?;
+        let by_status = approval_gate_summary_text_buckets(&self.pool, &filter, "status").await?;
+        let by_gate_kind =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "gate_kind").await?;
+        let by_risk_level =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "risk_level").await?;
+        let by_age_bucket = approval_gate_summary_age_buckets(&self.pool, &filter).await?;
+        let by_resource_namespace =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "resource_namespace").await?;
+        let by_resource_kind =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "resource_kind").await?;
+        let by_resource_name =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "resource_name").await?;
+        let by_incident_id =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "incident_id").await?;
+        let by_remediation_plan_id =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "remediation_plan_id").await?;
+
+        Ok(ApprovalGateSummary {
+            total,
+            by_status,
+            by_gate_kind,
+            by_risk_level,
+            by_age_bucket,
+            by_resource_namespace,
+            by_resource_kind,
+            by_resource_name,
+            by_incident_id,
+            by_remediation_plan_id,
+        })
+    }
+
     pub async fn list_events(&self, run_id: &RunId) -> Result<Vec<AgentEvent>, StoreError> {
         let rows = sqlx::query(
             r#"
@@ -521,6 +1599,191 @@ impl SqliteStore {
         .await?;
 
         rows.into_iter().map(row_to_event).collect()
+    }
+
+    pub async fn create_permission_grant(
+        &self,
+        grant: CreatePermissionGrant,
+    ) -> Result<StoredPermissionGrant, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO permission_grants (
+              id, subject, status, reason, scope_json, policy_json, created_at, expires_at
+            )
+            VALUES (?1, ?2, 'active', ?3, ?4, ?5, ?6, ?7)
+            "#,
+        )
+        .bind(&grant.id)
+        .bind(&grant.subject)
+        .bind(&grant.reason)
+        .bind(serde_json::to_string(&grant.scope_json)?)
+        .bind(serde_json::to_string(&grant.policy_json)?)
+        .bind(now)
+        .bind(grant.expires_at)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_permission_grant(&grant.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "permission grant".to_string(),
+                id: grant.id,
+            })
+    }
+
+    pub async fn get_permission_grant(
+        &self,
+        grant_id: &str,
+    ) -> Result<Option<StoredPermissionGrant>, StoreError> {
+        let row = sqlx::query(permission_grant_select_sql("WHERE id = ?1"))
+            .bind(grant_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_permission_grant).transpose()
+    }
+
+    pub async fn list_permission_grants(
+        &self,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<StoredPermissionGrant>, StoreError> {
+        let limit = i64::from(limit.clamp(1, 200));
+        let rows = match status {
+            Some(status) => {
+                sqlx::query(permission_grant_select_sql(
+                    "WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2",
+                ))
+                .bind(status)
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            None => {
+                sqlx::query(permission_grant_select_sql(
+                    "ORDER BY created_at DESC LIMIT ?1",
+                ))
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?
+            }
+        };
+
+        rows.into_iter().map(row_to_permission_grant).collect()
+    }
+
+    pub async fn revoke_permission_grant(
+        &self,
+        grant_id: &str,
+        revoked_by: Option<String>,
+        revoke_reason: Option<String>,
+    ) -> Result<StoredPermissionGrant, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE permission_grants
+            SET status = 'revoked',
+                revoked_at = ?2,
+                revoked_by = ?3,
+                revoke_reason = ?4
+            WHERE id = ?1
+            "#,
+        )
+        .bind(grant_id)
+        .bind(now)
+        .bind(revoked_by)
+        .bind(revoke_reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_permission_grant(grant_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "permission grant".to_string(),
+                id: grant_id.to_string(),
+            })
+    }
+
+    pub async fn create_audit_event(
+        &self,
+        event: CreateAuditEvent,
+    ) -> Result<StoredAuditEvent, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO audit_events (
+              id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+        )
+        .bind(&event.id)
+        .bind(&event.kind)
+        .bind(event.actor)
+        .bind(&event.resource_kind)
+        .bind(&event.resource_id)
+        .bind(event.run_id.as_ref().map(RunId::as_str))
+        .bind(serde_json::to_string(&event.payload_json)?)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_audit_event(&event.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "audit event".to_string(),
+                id: event.id,
+            })
+    }
+
+    pub async fn get_audit_event(
+        &self,
+        event_id: &str,
+    ) -> Result<Option<StoredAuditEvent>, StoreError> {
+        let row = sqlx::query(audit_event_select_sql("WHERE id = ?1"))
+            .bind(event_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_audit_event).transpose()
+    }
+
+    pub async fn list_audit_events(
+        &self,
+        resource_kind: Option<&str>,
+        resource_id: Option<&str>,
+        run_id: Option<&RunId>,
+        limit: u32,
+    ) -> Result<Vec<StoredAuditEvent>, StoreError> {
+        let limit = i64::from(limit.clamp(1, 200));
+        let rows = match (resource_kind, resource_id, run_id) {
+            (Some(resource_kind), Some(resource_id), _) => sqlx::query(audit_event_select_sql(
+                "WHERE resource_kind = ?1 AND resource_id = ?2 ORDER BY created_at DESC LIMIT ?3",
+            ))
+            .bind(resource_kind)
+            .bind(resource_id)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?,
+            (_, _, Some(run_id)) => {
+                sqlx::query(audit_event_select_sql(
+                    "WHERE run_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+                ))
+                .bind(run_id.as_str())
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            _ => {
+                sqlx::query(audit_event_select_sql("ORDER BY created_at DESC LIMIT ?1"))
+                    .bind(limit)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+        };
+
+        rows.into_iter().map(row_to_audit_event).collect()
     }
 }
 
@@ -556,6 +1819,157 @@ fn row_to_artifact(row: sqlx::sqlite::SqliteRow) -> Result<StoredArtifact, Store
     })
 }
 
+fn row_to_observation(row: sqlx::sqlite::SqliteRow) -> Result<StoredObservation, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let resource_ref_json: Option<String> = row.try_get("resource_ref_json")?;
+    let data_json: String = row.try_get("data_json")?;
+    Ok(StoredObservation {
+        id: row.try_get("id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        source: row.try_get("source")?,
+        kind: row.try_get("kind")?,
+        subject: row.try_get("subject")?,
+        summary: row.try_get("summary")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        resource_ref_json: resource_ref_json
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
+        artifact_id: row.try_get("artifact_id")?,
+        data_json: serde_json::from_str(&data_json)?,
+        observed_at: row.try_get("observed_at")?,
+    })
+}
+
+fn row_to_incident(row: sqlx::sqlite::SqliteRow) -> Result<StoredIncident, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let data_json: String = row.try_get("data_json")?;
+    Ok(StoredIncident {
+        id: row.try_get("id")?,
+        observation_id: row.try_get("observation_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        severity: row.try_get("severity")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        data_json: serde_json::from_str(&data_json)?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn row_to_remediation_plan(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredRemediationPlan, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let plan_json: String = row.try_get("plan_json")?;
+    Ok(StoredRemediationPlan {
+        id: row.try_get("id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        requires_approval: row.try_get::<i64, _>("requires_approval")? != 0,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        plan_json: serde_json::from_str(&plan_json)?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn row_to_work_plan(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkPlan, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let work_plan_json: String = row.try_get("work_plan_json")?;
+    Ok(StoredWorkPlan {
+        id: row.try_get("id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        requires_approval: row.try_get::<i64, _>("requires_approval")? != 0,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        work_plan_json: serde_json::from_str(&work_plan_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        revision: row.try_get("revision")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_change_set(row: sqlx::sqlite::SqliteRow) -> Result<StoredChangeSet, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let change_set_json: String = row.try_get("change_set_json")?;
+    Ok(StoredChangeSet {
+        id: row.try_get("id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        material_hash: row.try_get("material_hash")?,
+        revision: row.try_get("revision")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        change_set_json: serde_json::from_str(&change_set_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_approval_gate(row: sqlx::sqlite::SqliteRow) -> Result<StoredApprovalGate, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let gate_json: String = row.try_get("gate_json")?;
+    Ok(StoredApprovalGate {
+        id: row.try_get("id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        gate_kind: row.try_get("gate_kind")?,
+        gate_order: row.try_get("gate_order")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        gate_json: serde_json::from_str(&gate_json)?,
+        created_at: row.try_get("created_at")?,
+        decided_at: row.try_get("decided_at")?,
+        decided_by: row.try_get("decided_by")?,
+        decision_reason: row.try_get("decision_reason")?,
+        stale_at: row.try_get("stale_at")?,
+        stale_by: row.try_get("stale_by")?,
+        stale_reason: row.try_get("stale_reason")?,
+    })
+}
+
 fn artifact_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
@@ -576,6 +1990,128 @@ fn artifact_select_sql(where_clause: &str) -> &'static str {
             "#
         }
         _ => unreachable!("artifact select SQL only supports known static clauses"),
+    }
+}
+
+fn observation_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, session_id, run_id, source, kind, subject, summary,
+                   resource_namespace, resource_kind, resource_name,
+                   resource_ref_json, artifact_id, data_json, observed_at
+            FROM observations
+            WHERE id = ?1
+            "#
+        }
+        "WHERE run_id = ?1 ORDER BY observed_at ASC, id ASC" => {
+            r#"
+            SELECT id, session_id, run_id, source, kind, subject, summary,
+                   resource_namespace, resource_kind, resource_name,
+                   resource_ref_json, artifact_id, data_json, observed_at
+            FROM observations
+            WHERE run_id = ?1
+            ORDER BY observed_at ASC, id ASC
+            "#
+        }
+        _ => unreachable!("observation select SQL only supports known static clauses"),
+    }
+}
+
+fn incident_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, observation_id, session_id, run_id, status, severity, title, summary,
+                   resource_namespace, resource_kind, resource_name, data_json, created_at
+            FROM incidents
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("incident select SQL only supports known static clauses"),
+    }
+}
+
+fn remediation_plan_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, incident_id, session_id, run_id, status, title, summary, risk_level,
+                   requires_approval, resource_namespace, resource_kind, resource_name,
+                   plan_json, created_at
+            FROM remediation_plans
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("remediation plan select SQL only supports known static clauses"),
+    }
+}
+
+fn work_plan_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
+                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
+                   resource_name, work_plan_json, created_at, updated_at, revision,
+                   status_changed_at, status_changed_by, status_reason
+            FROM work_plans
+            WHERE id = ?1
+            "#
+        }
+        "WHERE remediation_plan_id = ?1" => {
+            r#"
+            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
+                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
+                   resource_name, work_plan_json, created_at, updated_at, revision,
+                   status_changed_at, status_changed_by, status_reason
+            FROM work_plans
+            WHERE remediation_plan_id = ?1
+            "#
+        }
+        _ => unreachable!("work plan select SQL only supports known static clauses"),
+    }
+}
+
+fn change_set_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision,
+                   resource_namespace, resource_kind, resource_name, change_set_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM change_sets
+            WHERE id = ?1
+            "#
+        }
+        "WHERE work_plan_id = ?1" => {
+            r#"
+            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision,
+                   resource_namespace, resource_kind, resource_name, change_set_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM change_sets
+            WHERE work_plan_id = ?1
+            "#
+        }
+        _ => unreachable!("change set select SQL only supports known static clauses"),
+    }
+}
+
+fn approval_gate_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+                   gate_order, title, summary, risk_level, resource_namespace, resource_kind,
+                   resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
+                   stale_at, stale_by, stale_reason
+            FROM approval_gates
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("approval gate select SQL only supports known static clauses"),
     }
 }
 
@@ -600,9 +2136,178 @@ fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
     })
 }
 
+const RUN_SUMMARY_WHERE: &str = r#"
+WHERE (?1 IS NULL OR status = ?1)
+  AND (?2 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?2)
+  AND (?3 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?3)
+  AND (?4 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?4)
+  AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?5)
+  AND (?6 IS NULL OR CAST(started_at AS INTEGER) >= ?6)
+  AND (?7 IS NULL OR CAST(started_at AS INTEGER) <= ?7)
+"#;
+
+const RUN_AGE_BUCKET_CASE: &str = r#"
+CASE
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 300000 THEN 'lt_5m'
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 3600000 THEN '5m_to_1h'
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 86400000 THEN '1h_to_24h'
+  ELSE 'gte_24h'
+END
+"#;
+
+const RUN_AGE_BUCKET_ORDER_CASE: &str = r#"
+CASE
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 300000 THEN 0
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 3600000 THEN 1
+  WHEN (?8 - CAST(started_at AS INTEGER)) < 86400000 THEN 2
+  ELSE 3
+END
+"#;
+
+async fn run_summary_total(
+    pool: &SqlitePool,
+    filter: &RunSummaryFilter,
+) -> Result<u64, StoreError> {
+    let sql = format!("SELECT COUNT(*) AS count FROM runs {RUN_SUMMARY_WHERE}");
+    let count: i64 = sqlx::query_scalar(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(run_summary_production_impacting(filter))
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(count.max(0) as u64)
+}
+
+async fn run_summary_text_buckets(
+    pool: &SqlitePool,
+    filter: &RunSummaryFilter,
+    field_expr: &str,
+) -> Result<Vec<CountBucket>, StoreError> {
+    let sql = format!(
+        r#"
+        SELECT {field_expr} AS value, COUNT(*) AS count
+        FROM runs
+        {RUN_SUMMARY_WHERE}
+        GROUP BY value
+        ORDER BY count DESC, value ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(run_summary_production_impacting(filter))
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(CountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+async fn run_summary_age_buckets(
+    pool: &SqlitePool,
+    filter: &RunSummaryFilter,
+) -> Result<Vec<CountBucket>, StoreError> {
+    let now = now_string();
+    let sql = format!(
+        r#"
+        SELECT age_bucket AS value, COUNT(*) AS count
+        FROM (
+            SELECT
+                {RUN_AGE_BUCKET_CASE} AS age_bucket,
+                {RUN_AGE_BUCKET_ORDER_CASE} AS sort_order
+            FROM runs
+            {RUN_SUMMARY_WHERE}
+        )
+        GROUP BY age_bucket, sort_order
+        ORDER BY sort_order ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(run_summary_production_impacting(filter))
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .bind(now)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(CountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+async fn run_summary_bool_buckets(
+    pool: &SqlitePool,
+    filter: &RunSummaryFilter,
+    field_expr: &str,
+) -> Result<Vec<BooleanCountBucket>, StoreError> {
+    let sql = format!(
+        r#"
+        SELECT {field_expr} AS value, COUNT(*) AS count
+        FROM runs
+        {RUN_SUMMARY_WHERE}
+        GROUP BY value
+        ORDER BY count DESC, value ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(run_summary_production_impacting(filter))
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let value = row
+                .try_get::<Option<i64>, _>("value")?
+                .map(|value| value != 0);
+            Ok(BooleanCountBucket {
+                value,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+fn run_summary_production_impacting(filter: &RunSummaryFilter) -> Option<i64> {
+    filter
+        .production_impacting
+        .map(|value| if value { 1_i64 } else { 0_i64 })
+}
+
 fn row_to_approval(row: sqlx::sqlite::SqliteRow) -> Result<StoredApproval, StoreError> {
     let action_json: Option<String> = row.try_get("action_json")?;
+    let preview_json: Option<String> = row.try_get("preview_json")?;
     let resume_messages_json: Option<String> = row.try_get("resume_messages_json")?;
+    let run_scope_json: Option<String> = row.try_get("run_scope_json")?;
     Ok(StoredApproval {
         id: row.try_get("id")?,
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
@@ -615,7 +2320,13 @@ fn row_to_approval(row: sqlx::sqlite::SqliteRow) -> Result<StoredApproval, Store
         decided_at: row.try_get("decided_at")?,
         decided_by: row.try_get("decided_by")?,
         decision_reason: row.try_get("decision_reason")?,
+        run_scope_json: run_scope_json
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
         action_json: action_json
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
+        preview_json: preview_json
             .map(|value| serde_json::from_str(&value))
             .transpose()?,
         resume_messages_json: resume_messages_json
@@ -630,11 +2341,317 @@ fn approval_select_sql(where_clause: &str) -> String {
         r#"
         SELECT id, session_id, run_id, status, kind, summary, risk_level,
                requested_at, decided_at, decided_by, decision_reason,
-               action_json, resume_messages_json, turns_completed
+               run_scope_json, action_json, preview_json, resume_messages_json, turns_completed
         FROM approvals
         {where_clause}
         "#
     )
+}
+
+const APPROVAL_SUMMARY_WHERE: &str = r#"
+WHERE (?1 IS NULL OR status = ?1)
+  AND (?2 IS NULL OR json_extract(run_scope_json, '$.namespace') = ?2)
+  AND (?3 IS NULL OR json_extract(run_scope_json, '$.repo') = ?3)
+  AND (?4 IS NULL OR json_extract(run_scope_json, '$.branch') = ?4)
+  AND (?5 IS NULL OR json_extract(run_scope_json, '$.production_impacting') = ?5)
+  AND (?6 IS NULL OR CAST(requested_at AS INTEGER) >= ?6)
+  AND (?7 IS NULL OR CAST(requested_at AS INTEGER) <= ?7)
+"#;
+
+const APPROVAL_AGE_BUCKET_CASE: &str = r#"
+CASE
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 300000 THEN 'lt_5m'
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 3600000 THEN '5m_to_1h'
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 86400000 THEN '1h_to_24h'
+  ELSE 'gte_24h'
+END
+"#;
+
+const APPROVAL_AGE_BUCKET_ORDER_CASE: &str = r#"
+CASE
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 300000 THEN 0
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 3600000 THEN 1
+  WHEN (?8 - CAST(requested_at AS INTEGER)) < 86400000 THEN 2
+  ELSE 3
+END
+"#;
+
+async fn approval_summary_total(
+    pool: &SqlitePool,
+    filter: &ApprovalSummaryFilter,
+) -> Result<u64, StoreError> {
+    let sql = format!("SELECT COUNT(*) AS count FROM approvals {APPROVAL_SUMMARY_WHERE}");
+    let count: i64 = sqlx::query_scalar(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(summary_production_impacting(filter))
+        .bind(filter.requested_after_ms)
+        .bind(filter.requested_before_ms)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(count.max(0) as u64)
+}
+
+async fn approval_summary_text_buckets(
+    pool: &SqlitePool,
+    filter: &ApprovalSummaryFilter,
+    field_expr: &str,
+) -> Result<Vec<ApprovalCountBucket>, StoreError> {
+    let sql = format!(
+        r#"
+        SELECT {field_expr} AS value, COUNT(*) AS count
+        FROM approvals
+        {APPROVAL_SUMMARY_WHERE}
+        GROUP BY value
+        ORDER BY count DESC, value ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(summary_production_impacting(filter))
+        .bind(filter.requested_after_ms)
+        .bind(filter.requested_before_ms)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(ApprovalCountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+async fn approval_summary_age_buckets(
+    pool: &SqlitePool,
+    filter: &ApprovalSummaryFilter,
+) -> Result<Vec<ApprovalCountBucket>, StoreError> {
+    let now = now_string();
+    let sql = format!(
+        r#"
+        SELECT age_bucket AS value, COUNT(*) AS count
+        FROM (
+            SELECT
+                {APPROVAL_AGE_BUCKET_CASE} AS age_bucket,
+                {APPROVAL_AGE_BUCKET_ORDER_CASE} AS sort_order
+            FROM approvals
+            {APPROVAL_SUMMARY_WHERE}
+        )
+        GROUP BY age_bucket, sort_order
+        ORDER BY sort_order ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(summary_production_impacting(filter))
+        .bind(filter.requested_after_ms)
+        .bind(filter.requested_before_ms)
+        .bind(now)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(ApprovalCountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+async fn approval_summary_bool_buckets(
+    pool: &SqlitePool,
+    filter: &ApprovalSummaryFilter,
+    field_expr: &str,
+) -> Result<Vec<ApprovalBooleanCountBucket>, StoreError> {
+    let sql = format!(
+        r#"
+        SELECT {field_expr} AS value, COUNT(*) AS count
+        FROM approvals
+        {APPROVAL_SUMMARY_WHERE}
+        GROUP BY value
+        ORDER BY count DESC, value ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.status.clone())
+        .bind(filter.namespace.clone())
+        .bind(filter.repo.clone())
+        .bind(filter.branch.clone())
+        .bind(summary_production_impacting(filter))
+        .bind(filter.requested_after_ms)
+        .bind(filter.requested_before_ms)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let value = row
+                .try_get::<Option<i64>, _>("value")?
+                .map(|value| value != 0);
+            Ok(ApprovalBooleanCountBucket {
+                value,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+fn summary_production_impacting(filter: &ApprovalSummaryFilter) -> Option<i64> {
+    filter
+        .production_impacting
+        .map(|value| if value { 1_i64 } else { 0_i64 })
+}
+
+const APPROVAL_GATE_SUMMARY_WHERE: &str = r#"
+WHERE (?1 IS NULL OR remediation_plan_id = ?1)
+  AND (?2 IS NULL OR incident_id = ?2)
+  AND (?3 IS NULL OR run_id = ?3)
+  AND (?4 IS NULL OR status = ?4)
+  AND (?5 IS NULL OR gate_kind = ?5)
+  AND (?6 IS NULL OR risk_level = ?6)
+  AND (?7 IS NULL OR resource_namespace = ?7)
+  AND (?8 IS NULL OR resource_kind = ?8)
+  AND (?9 IS NULL OR resource_name = ?9)
+  AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
+  AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
+"#;
+
+const APPROVAL_GATE_AGE_BUCKET_CASE: &str = r#"
+CASE
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 300000 THEN 'lt_5m'
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 3600000 THEN '5m_to_1h'
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 86400000 THEN '1h_to_24h'
+  ELSE 'gte_24h'
+END
+"#;
+
+const APPROVAL_GATE_AGE_BUCKET_ORDER_CASE: &str = r#"
+CASE
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 300000 THEN 0
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 3600000 THEN 1
+  WHEN (?12 - CAST(created_at AS INTEGER)) < 86400000 THEN 2
+  ELSE 3
+END
+"#;
+
+async fn approval_gate_summary_total(
+    pool: &SqlitePool,
+    filter: &ApprovalGateSummaryFilter,
+) -> Result<u64, StoreError> {
+    let sql = format!("SELECT COUNT(*) AS count FROM approval_gates {APPROVAL_GATE_SUMMARY_WHERE}");
+    let count: i64 = sqlx::query_scalar(&sql)
+        .bind(filter.remediation_plan_id.clone())
+        .bind(filter.incident_id.clone())
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status.clone())
+        .bind(filter.gate_kind.clone())
+        .bind(filter.risk_level.clone())
+        .bind(filter.resource_namespace.clone())
+        .bind(filter.resource_kind.clone())
+        .bind(filter.resource_name.clone())
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(count.max(0) as u64)
+}
+
+async fn approval_gate_summary_text_buckets(
+    pool: &SqlitePool,
+    filter: &ApprovalGateSummaryFilter,
+    field_expr: &str,
+) -> Result<Vec<ApprovalGateCountBucket>, StoreError> {
+    let sql = format!(
+        r#"
+        SELECT {field_expr} AS value, COUNT(*) AS count
+        FROM approval_gates
+        {APPROVAL_GATE_SUMMARY_WHERE}
+        GROUP BY value
+        ORDER BY count DESC, value ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.remediation_plan_id.clone())
+        .bind(filter.incident_id.clone())
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status.clone())
+        .bind(filter.gate_kind.clone())
+        .bind(filter.risk_level.clone())
+        .bind(filter.resource_namespace.clone())
+        .bind(filter.resource_kind.clone())
+        .bind(filter.resource_name.clone())
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(ApprovalGateCountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
+}
+
+async fn approval_gate_summary_age_buckets(
+    pool: &SqlitePool,
+    filter: &ApprovalGateSummaryFilter,
+) -> Result<Vec<ApprovalGateCountBucket>, StoreError> {
+    let now = now_string();
+    let sql = format!(
+        r#"
+        SELECT age_bucket AS value, COUNT(*) AS count
+        FROM (
+            SELECT
+                {APPROVAL_GATE_AGE_BUCKET_CASE} AS age_bucket,
+                {APPROVAL_GATE_AGE_BUCKET_ORDER_CASE} AS sort_order
+            FROM approval_gates
+            {APPROVAL_GATE_SUMMARY_WHERE}
+        )
+        GROUP BY age_bucket, sort_order
+        ORDER BY sort_order ASC
+        "#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(filter.remediation_plan_id.clone())
+        .bind(filter.incident_id.clone())
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status.clone())
+        .bind(filter.gate_kind.clone())
+        .bind(filter.risk_level.clone())
+        .bind(filter.resource_namespace.clone())
+        .bind(filter.resource_kind.clone())
+        .bind(filter.resource_name.clone())
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(now)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(ApprovalGateCountBucket {
+                value: row.try_get("value")?,
+                count: row.try_get::<i64, _>("count")?.max(0) as u64,
+            })
+        })
+        .collect()
 }
 
 fn row_to_event(row: sqlx::sqlite::SqliteRow) -> Result<AgentEvent, StoreError> {
@@ -648,6 +2665,113 @@ fn row_to_event(row: sqlx::sqlite::SqliteRow) -> Result<AgentEvent, StoreError> 
         kind: serde_json::from_value(serde_json::Value::String(kind_text))?,
         payload: serde_json::from_str(&payload_json)?,
     })
+}
+
+fn row_to_permission_grant(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredPermissionGrant, StoreError> {
+    let scope_json: String = row.try_get("scope_json")?;
+    let policy_json: String = row.try_get("policy_json")?;
+    Ok(StoredPermissionGrant {
+        id: row.try_get("id")?,
+        subject: row.try_get("subject")?,
+        status: row.try_get("status")?,
+        reason: row.try_get("reason")?,
+        scope_json: serde_json::from_str(&scope_json)?,
+        policy_json: serde_json::from_str(&policy_json)?,
+        created_at: row.try_get("created_at")?,
+        expires_at: row.try_get("expires_at")?,
+        revoked_at: row.try_get("revoked_at")?,
+        revoked_by: row.try_get("revoked_by")?,
+        revoke_reason: row.try_get("revoke_reason")?,
+    })
+}
+
+fn row_to_audit_event(row: sqlx::sqlite::SqliteRow) -> Result<StoredAuditEvent, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let payload_json: String = row.try_get("payload_json")?;
+    Ok(StoredAuditEvent {
+        id: row.try_get("id")?,
+        kind: row.try_get("kind")?,
+        actor: row.try_get("actor")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_id: row.try_get("resource_id")?,
+        run_id: run_id.map(RunId::new),
+        payload_json: serde_json::from_str(&payload_json)?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn permission_grant_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, subject, status, reason, scope_json, policy_json, created_at,
+                   expires_at, revoked_at, revoked_by, revoke_reason
+            FROM permission_grants
+            WHERE id = ?1
+            "#
+        }
+        "WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2" => {
+            r#"
+            SELECT id, subject, status, reason, scope_json, policy_json, created_at,
+                   expires_at, revoked_at, revoked_by, revoke_reason
+            FROM permission_grants
+            WHERE status = ?1
+            ORDER BY created_at DESC
+            LIMIT ?2
+            "#
+        }
+        "ORDER BY created_at DESC LIMIT ?1" => {
+            r#"
+            SELECT id, subject, status, reason, scope_json, policy_json, created_at,
+                   expires_at, revoked_at, revoked_by, revoke_reason
+            FROM permission_grants
+            ORDER BY created_at DESC
+            LIMIT ?1
+            "#
+        }
+        _ => unreachable!("permission grant select SQL only supports known static clauses"),
+    }
+}
+
+fn audit_event_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            FROM audit_events
+            WHERE id = ?1
+            "#
+        }
+        "WHERE resource_kind = ?1 AND resource_id = ?2 ORDER BY created_at DESC LIMIT ?3" => {
+            r#"
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            FROM audit_events
+            WHERE resource_kind = ?1 AND resource_id = ?2
+            ORDER BY created_at DESC
+            LIMIT ?3
+            "#
+        }
+        "WHERE run_id = ?1 ORDER BY created_at DESC LIMIT ?2" => {
+            r#"
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            FROM audit_events
+            WHERE run_id = ?1
+            ORDER BY created_at DESC
+            LIMIT ?2
+            "#
+        }
+        "ORDER BY created_at DESC LIMIT ?1" => {
+            r#"
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            FROM audit_events
+            ORDER BY created_at DESC
+            LIMIT ?1
+            "#
+        }
+        _ => unreachable!("audit event select SQL only supports known static clauses"),
+    }
 }
 
 fn now_string() -> String {
@@ -674,7 +2798,10 @@ pub enum StoreError {
 #[cfg(test)]
 mod tests {
     use super::SqliteStore;
-    use crate::{CreateRun, CreateSession};
+    use crate::{
+        ApprovalListFilter, ApprovalSummaryFilter, CreateAuditEvent, CreateRun, CreateSession,
+        RunListFilter, RunSummaryFilter,
+    };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
 
     #[tokio::test]
@@ -707,7 +2834,7 @@ mod tests {
         store
             .append_event(&AgentEvent {
                 event_id: EventId::new("evt_1"),
-                session_id,
+                session_id: session_id.clone(),
                 run_id: run_id.clone(),
                 seq: 1,
                 kind: EventKind::RunStarted,
@@ -722,6 +2849,107 @@ mod tests {
         assert_eq!(run.status, "queued");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::RunStarted);
+    }
+
+    #[tokio::test]
+    async fn lists_runs_with_status_scope_and_time_filters() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_run_list");
+        let stale_run_id = RunId::new("run_stale");
+        let fresh_run_id = RunId::new("run_fresh");
+
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "run list".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+
+        for (run_id, namespace, status) in [
+            (&stale_run_id, "apps-dev", "completed"),
+            (&fresh_run_id, "apps-prod", "approval_required"),
+        ] {
+            store
+                .create_run(CreateRun {
+                    id: run_id.clone(),
+                    session_id: session_id.clone(),
+                    user_task: format!("inspect {namespace}"),
+                    cwd: ".".to_string(),
+                    max_turns: 10,
+                    initial_status: status.to_string(),
+                    execution_target_json: serde_json::json!({
+                        "kind": "local_process",
+                        "run_scope": {
+                            "namespace": namespace,
+                            "repo": "git@example.test/team/app.git",
+                            "branch": "feature/pharness",
+                            "production_impacting": namespace == "apps-prod"
+                        }
+                    }),
+                })
+                .await
+                .unwrap();
+        }
+
+        let stale_started_at = super::now_string()
+            .parse::<i64>()
+            .unwrap()
+            .saturating_sub(2 * 60 * 60 * 1000)
+            .to_string();
+        sqlx::query("UPDATE runs SET started_at = ?1 WHERE id = ?2")
+            .bind(stale_started_at)
+            .bind(stale_run_id.as_str())
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let cutoff = super::now_string()
+            .parse::<i64>()
+            .unwrap()
+            .saturating_sub(30 * 60 * 1000);
+
+        let approval_required = store
+            .list_runs(RunListFilter {
+                status: Some("approval_required".to_string()),
+                namespace: Some("apps-prod".to_string()),
+                production_impacting: Some(true),
+                started_after_ms: Some(cutoff),
+                limit: 50,
+                ..RunListFilter::default()
+            })
+            .await
+            .unwrap();
+        let stale = store
+            .list_runs(RunListFilter {
+                started_before_ms: Some(cutoff),
+                limit: 50,
+                ..RunListFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(approval_required.len(), 1);
+        assert_eq!(approval_required[0].id, fresh_run_id);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].id, stale_run_id);
+
+        let summary = store
+            .run_summary(RunSummaryFilter {
+                started_after_ms: Some(cutoff),
+                ..RunSummaryFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(summary.total, 1);
+        assert_eq!(
+            summary.by_status[0].value.as_deref(),
+            Some("approval_required")
+        );
+        assert_eq!(summary.by_namespace[0].value.as_deref(), Some("apps-prod"));
+        assert_eq!(summary.by_production_impacting[0].value, Some(true));
+        assert_eq!(summary.by_age_bucket[0].value.as_deref(), Some("lt_5m"));
     }
 
     #[tokio::test]
@@ -801,7 +3029,18 @@ mod tests {
                 kind: "file_write".to_string(),
                 summary: "write file".to_string(),
                 risk_level: "medium".to_string(),
+                run_scope_json: Some(serde_json::json!({
+                    "namespace": "apps-dev",
+                    "repo": "git@example.test/team/app.git",
+                    "branch": "feature/pharness",
+                    "production_impacting": false
+                })),
                 action_json: Some(serde_json::json!({"action":"write_file"})),
+                preview_json: Some(serde_json::json!({
+                    "kind": "file_write",
+                    "action": "write_file",
+                    "status": "ok"
+                })),
                 resume_messages_json: Some(serde_json::json!([])),
                 turns_completed: 1,
             })
@@ -816,6 +3055,14 @@ mod tests {
             .unwrap();
         assert_eq!(pending.id, "appr_1");
         assert_eq!(pending.turns_completed, 1);
+        assert_eq!(
+            pending.run_scope_json.as_ref().unwrap()["namespace"],
+            "apps-dev"
+        );
+        assert_eq!(
+            pending.preview_json.as_ref().unwrap()["action"],
+            "write_file"
+        );
 
         let decided = store
             .decide_pending_approval(
@@ -870,17 +3117,218 @@ mod tests {
                 kind: "file_write".to_string(),
                 summary: "write file".to_string(),
                 risk_level: "medium".to_string(),
+                run_scope_json: None,
                 action_json: None,
+                preview_json: None,
                 resume_messages_json: None,
                 turns_completed: 1,
             })
             .await
             .unwrap();
 
-        let approvals = store.list_approvals(Some("pending"), 50).await.unwrap();
+        let approvals = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                limit: 50,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(approvals.len(), 1);
         assert_eq!(approvals[0].id, "appr_list");
+
+        store
+            .create_approval(crate::CreateApproval {
+                id: "appr_scoped".to_string(),
+                session_id: SessionId::new("ses_approval_list"),
+                run_id: RunId::new("run_approval_list"),
+                status: "pending".to_string(),
+                kind: "file_write".to_string(),
+                summary: "write scoped file".to_string(),
+                risk_level: "medium".to_string(),
+                run_scope_json: Some(serde_json::json!({
+                    "namespace": "apps-dev",
+                    "repo": "git@example.test/team/app.git",
+                    "branch": "feature/pharness",
+                    "production_impacting": false
+                })),
+                action_json: None,
+                preview_json: None,
+                resume_messages_json: None,
+                turns_completed: 1,
+            })
+            .await
+            .unwrap();
+
+        let scoped = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                namespace: Some("apps-dev".to_string()),
+                repo: Some("git@example.test/team/app.git".to_string()),
+                branch: Some("feature/pharness".to_string()),
+                production_impacting: Some(false),
+                requested_after_ms: None,
+                requested_before_ms: None,
+                limit: 50,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        let second_page = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                limit: 1,
+                offset: 1,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].id, "appr_scoped");
+        assert_eq!(second_page.len(), 1);
+
+        let summary = store
+            .approval_summary(ApprovalSummaryFilter {
+                status: Some("pending".to_string()),
+                namespace: Some("apps-dev".to_string()),
+                repo: Some("git@example.test/team/app.git".to_string()),
+                branch: Some("feature/pharness".to_string()),
+                production_impacting: Some(false),
+                requested_after_ms: None,
+                requested_before_ms: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(summary.total, 1);
+        assert_eq!(summary.by_status[0].value.as_deref(), Some("pending"));
+        assert_eq!(summary.by_kind[0].value.as_deref(), Some("file_write"));
+        assert_eq!(summary.by_risk_level[0].value.as_deref(), Some("medium"));
+        assert_eq!(summary.by_age_bucket[0].value.as_deref(), Some("lt_5m"));
+        assert_eq!(summary.by_namespace[0].value.as_deref(), Some("apps-dev"));
+        assert_eq!(summary.by_production_impacting[0].value, Some(false));
+    }
+
+    #[tokio::test]
+    async fn summarizes_approval_age_buckets() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_approval_age");
+        let run_id = RunId::new("run_approval_age");
+
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "approval age".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "write".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "approval_required".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+
+        for id in ["appr_fresh", "appr_stale"] {
+            store
+                .create_approval(crate::CreateApproval {
+                    id: id.to_string(),
+                    session_id: session_id.clone(),
+                    run_id: run_id.clone(),
+                    status: "pending".to_string(),
+                    kind: "file_write".to_string(),
+                    summary: "write file".to_string(),
+                    risk_level: "medium".to_string(),
+                    run_scope_json: None,
+                    action_json: None,
+                    preview_json: None,
+                    resume_messages_json: None,
+                    turns_completed: 1,
+                })
+                .await
+                .unwrap();
+        }
+
+        let stale_requested_at = super::now_string()
+            .parse::<i128>()
+            .unwrap()
+            .saturating_sub(2 * 60 * 60 * 1000)
+            .to_string();
+        sqlx::query("UPDATE approvals SET requested_at = ?1 WHERE id = ?2")
+            .bind(stale_requested_at)
+            .bind("appr_stale")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let cutoff = super::now_string()
+            .parse::<i64>()
+            .unwrap()
+            .saturating_sub(30 * 60 * 1000);
+
+        let fresh = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                requested_after_ms: Some(cutoff),
+                limit: 50,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
+        let stale = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                requested_before_ms: Some(cutoff),
+                limit: 50,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(fresh.len(), 1);
+        assert_eq!(fresh[0].id, "appr_fresh");
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].id, "appr_stale");
+
+        let summary = store
+            .approval_summary(ApprovalSummaryFilter {
+                status: Some("pending".to_string()),
+                ..ApprovalSummaryFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            summary
+                .by_age_bucket
+                .iter()
+                .map(|bucket| (bucket.value.as_deref(), bucket.count))
+                .collect::<Vec<_>>(),
+            vec![(Some("lt_5m"), 1), (Some("1h_to_24h"), 1)]
+        );
+
+        let stale_summary = store
+            .approval_summary(ApprovalSummaryFilter {
+                status: Some("pending".to_string()),
+                requested_before_ms: Some(cutoff),
+                ..ApprovalSummaryFilter::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(stale_summary.total, 1);
+        assert_eq!(
+            stale_summary.by_age_bucket[0].value.as_deref(),
+            Some("1h_to_24h")
+        );
     }
 
     #[tokio::test]
@@ -980,5 +3428,486 @@ mod tests {
             artifacts[0].content_json.as_ref().unwrap()["result_count"],
             2
         );
+    }
+
+    #[tokio::test]
+    async fn persists_observations() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_observation");
+        let run_id = RunId::new("run_observation");
+
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "observation".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "observe".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "queued".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+
+        let observation = store
+            .create_observation(crate::CreateObservation {
+                id: "obs_test".to_string(),
+                session_id,
+                run_id: Some(run_id.clone()),
+                source: "prometheus".to_string(),
+                kind: "query".to_string(),
+                subject: "up".to_string(),
+                summary: "read Prometheus instant query".to_string(),
+                resource_namespace: None,
+                resource_kind: Some("query".to_string()),
+                resource_name: Some("up".to_string()),
+                resource_ref_json: Some(serde_json::json!({
+                    "provider": "prometheus",
+                    "kind": "query",
+                    "name": "up"
+                })),
+                artifact_id: None,
+                data_json: serde_json::json!({"result_count": 2}),
+            })
+            .await
+            .unwrap();
+
+        let fetched = store
+            .get_observation(&observation.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let observations = store.list_run_observations(&run_id).await.unwrap();
+        let filtered = store
+            .list_observations(crate::ObservationListFilter {
+                run_id: Some(run_id.clone()),
+                source: Some("prometheus".to_string()),
+                kind: Some("query".to_string()),
+                subject: Some("up".to_string()),
+                resource_namespace: None,
+                resource_kind: Some("query".to_string()),
+                resource_name: Some("up".to_string()),
+                observed_after_ms: Some(0),
+                observed_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(fetched.subject, "up");
+        assert_eq!(fetched.resource_kind.as_deref(), Some("query"));
+        assert_eq!(fetched.resource_name.as_deref(), Some("up"));
+        assert_eq!(observations.len(), 1);
+        assert_eq!(observations[0].data_json["result_count"], 2);
+        assert_eq!(filtered.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn persists_incidents() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_incident");
+        let run_id = RunId::new("run_incident");
+
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "incident".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "observe incident".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "queued".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+        store
+            .create_observation(crate::CreateObservation {
+                id: "obs_incident".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                source: "tekton".to_string(),
+                kind: "pipeline_run_analysis".to_string(),
+                subject: "build-app".to_string(),
+                summary: "analyzed Tekton PipelineRun ci/build-app".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                resource_ref_json: None,
+                artifact_id: None,
+                data_json: serde_json::json!({"status": "failed"}),
+            })
+            .await
+            .unwrap();
+
+        let incident = store
+            .create_incident(crate::CreateIncident {
+                id: "inc_test".to_string(),
+                observation_id: "obs_incident".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "candidate".to_string(),
+                severity: "high".to_string(),
+                title: "Tekton PipelineRun issue: ci/build-app".to_string(),
+                summary: "PipelineRun status is failed".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                data_json: serde_json::json!({"reasons": ["pipeline_status=failed"]}),
+            })
+            .await
+            .unwrap();
+
+        let fetched = store.get_incident(&incident.id).await.unwrap().unwrap();
+        let incidents = store
+            .list_incidents(crate::IncidentListFilter {
+                run_id: Some(run_id.clone()),
+                status: Some("candidate".to_string()),
+                severity: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(fetched.observation_id, "obs_incident");
+        assert_eq!(fetched.severity, "high");
+        assert_eq!(incidents.len(), 1);
+        assert_eq!(incidents[0].id, "inc_test");
+
+        let plan = store
+            .create_remediation_plan(crate::CreateRemediationPlan {
+                id: "rplan_test".to_string(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "draft".to_string(),
+                title: "Draft remediation for ci/build-app".to_string(),
+                summary: "Review failed PipelineRun before any mutation".to_string(),
+                risk_level: "high".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                plan_json: serde_json::json!({
+                    "approval_gates": ["before_pipeline_rerun"],
+                    "steps": [{"kind": "read_only", "action": "inspect_taskruns"}]
+                }),
+            })
+            .await
+            .unwrap();
+        let fetched_plan = store.get_remediation_plan(&plan.id).await.unwrap().unwrap();
+        let plans = store
+            .list_remediation_plans(crate::RemediationPlanListFilter {
+                incident_id: Some("inc_test".to_string()),
+                run_id: Some(run_id.clone()),
+                status: Some("draft".to_string()),
+                risk_level: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert!(fetched_plan.requires_approval);
+        assert_eq!(fetched_plan.incident_id, "inc_test");
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].id, "rplan_test");
+
+        let work_plan = store
+            .create_work_plan(crate::CreateWorkPlan {
+                id: "wplan_test".to_string(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "draft".to_string(),
+                title: "WorkPlan for ci/build-app".to_string(),
+                summary: "Review failed PipelineRun before execution".to_string(),
+                risk_level: "high".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                work_plan_json: serde_json::json!({
+                    "source": {"kind": "remediation_plan", "id": "rplan_test"},
+                    "execution": {"enabled": false},
+                    "steps": [{"kind": "read_only", "action": "inspect_taskruns"}]
+                }),
+            })
+            .await
+            .unwrap();
+        let fetched_work_plan = store.get_work_plan(&work_plan.id).await.unwrap().unwrap();
+        let idempotency_lookup = store
+            .get_work_plan_by_remediation_plan("rplan_test")
+            .await
+            .unwrap()
+            .unwrap();
+        let work_plans = store
+            .list_work_plans(crate::WorkPlanListFilter {
+                remediation_plan_id: Some("rplan_test".to_string()),
+                incident_id: Some("inc_test".to_string()),
+                run_id: Some(run_id.clone()),
+                status: Some("draft".to_string()),
+                risk_level: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(fetched_work_plan.remediation_plan_id, "rplan_test");
+        assert_eq!(idempotency_lookup.id, "wplan_test");
+        assert_eq!(work_plans.len(), 1);
+        assert_eq!(work_plans[0].id, "wplan_test");
+        assert!(!work_plans[0].work_plan_json["execution"]["enabled"]
+            .as_bool()
+            .unwrap());
+
+        let gate = store
+            .create_approval_gate(crate::CreateApprovalGate {
+                id: "agate_test".to_string(),
+                remediation_plan_id: plan.id,
+                incident_id: incident.id,
+                session_id,
+                run_id: Some(run_id.clone()),
+                status: "pending".to_string(),
+                gate_kind: "pipeline_mutation".to_string(),
+                gate_order: 1,
+                title: "Approve pipeline mutation".to_string(),
+                summary: "Require approval before rerunning Tekton resources".to_string(),
+                risk_level: "high".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                gate_json: serde_json::json!({
+                    "required_before": "rerunning PipelineRun"
+                }),
+            })
+            .await
+            .unwrap();
+        let fetched_gate = store.get_approval_gate(&gate.id).await.unwrap().unwrap();
+        let gates = store
+            .list_approval_gates(crate::ApprovalGateListFilter {
+                remediation_plan_id: Some("rplan_test".to_string()),
+                incident_id: Some("inc_test".to_string()),
+                run_id: Some(run_id.clone()),
+                status: Some("pending".to_string()),
+                gate_kind: Some("pipeline_mutation".to_string()),
+                risk_level: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(fetched_gate.remediation_plan_id, "rplan_test");
+        assert_eq!(fetched_gate.gate_kind, "pipeline_mutation");
+        assert_eq!(gates.len(), 1);
+        assert_eq!(gates[0].id, "agate_test");
+
+        let gate_summary = store
+            .approval_gate_summary(crate::ApprovalGateSummaryFilter {
+                remediation_plan_id: Some("rplan_test".to_string()),
+                incident_id: Some("inc_test".to_string()),
+                run_id: Some(run_id.clone()),
+                status: Some("pending".to_string()),
+                gate_kind: Some("pipeline_mutation".to_string()),
+                risk_level: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(gate_summary.total, 1);
+        assert_eq!(gate_summary.by_status[0].value.as_deref(), Some("pending"));
+        assert_eq!(
+            gate_summary.by_gate_kind[0].value.as_deref(),
+            Some("pipeline_mutation")
+        );
+        assert_eq!(
+            gate_summary.by_age_bucket[0].value.as_deref(),
+            Some("lt_5m")
+        );
+        assert_eq!(
+            gate_summary.by_resource_namespace[0].value.as_deref(),
+            Some("ci")
+        );
+
+        let satisfied_gate = store
+            .decide_approval_gate(
+                "agate_test",
+                "satisfied",
+                Some("lucas".to_string()),
+                Some("reviewed smoke evidence".to_string()),
+            )
+            .await
+            .unwrap();
+        let satisfied_gates = store
+            .list_approval_gates(crate::ApprovalGateListFilter {
+                remediation_plan_id: Some("rplan_test".to_string()),
+                incident_id: Some("inc_test".to_string()),
+                run_id: Some(run_id),
+                status: Some("satisfied".to_string()),
+                gate_kind: Some("pipeline_mutation".to_string()),
+                risk_level: Some("high".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(satisfied_gate.status, "satisfied");
+        assert_eq!(satisfied_gate.decided_by.as_deref(), Some("lucas"));
+        assert_eq!(
+            satisfied_gate.decision_reason.as_deref(),
+            Some("reviewed smoke evidence")
+        );
+        assert!(satisfied_gate.decided_at.is_some());
+        assert_eq!(satisfied_gates.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn persists_lists_and_revokes_permission_grants() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+
+        let grant = store
+            .create_permission_grant(crate::CreatePermissionGrant {
+                id: "grant_test".to_string(),
+                subject: "agent:local-worker".to_string(),
+                reason: "allow local write smoke".to_string(),
+                scope_json: serde_json::json!({
+                    "environment": "local",
+                    "capability_kinds": ["filesystem"]
+                }),
+                policy_json: serde_json::json!({
+                    "policy_mode": "trusted_writes"
+                }),
+                expires_at: Some("9999999999999".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let listed = store
+            .list_permission_grants(Some("active"), 50)
+            .await
+            .unwrap();
+        let revoked = store
+            .revoke_permission_grant(
+                &grant.id,
+                Some("tester".to_string()),
+                Some("done".to_string()),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(grant.status, "active");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "grant_test");
+        assert_eq!(revoked.status, "revoked");
+        assert_eq!(revoked.revoked_by.as_deref(), Some("tester"));
+        assert!(store
+            .list_permission_grants(Some("active"), 50)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn persists_and_filters_audit_events() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_audit");
+        let run_id = RunId::new("run_audit");
+
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "audit".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "audit task".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "queued".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+
+        let created = store
+            .create_audit_event(CreateAuditEvent {
+                id: "aud_1".to_string(),
+                kind: "permission_grant.used".to_string(),
+                actor: Some("agent:local-worker".to_string()),
+                resource_kind: "permission_grant".to_string(),
+                resource_id: "pgrant_1".to_string(),
+                run_id: Some(run_id.clone()),
+                payload_json: serde_json::json!({"grant_id": "pgrant_1"}),
+            })
+            .await
+            .unwrap();
+        let by_resource = store
+            .list_audit_events(Some("permission_grant"), Some("pgrant_1"), None, 50)
+            .await
+            .unwrap();
+        let by_run = store
+            .list_audit_events(None, None, Some(&run_id), 50)
+            .await
+            .unwrap();
+
+        assert_eq!(created.kind, "permission_grant.used");
+        assert_eq!(by_resource.len(), 1);
+        assert_eq!(by_run[0].payload_json["grant_id"], "pgrant_1");
     }
 }

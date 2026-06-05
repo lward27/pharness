@@ -10,7 +10,22 @@
 - Approval resume now persists the exact reviewed action and transcript, exposes `POST /api/runs/:id/approvals`, emits `approval.decided` and `run.resumed`, and resumes by executing the stored action payload.
 - The live approval smoke test passed with a real Fireworks run: `write_file` paused at policy, approval resumed the exact reviewed action, the file was written, the model finished, and denial left its target file absent.
 - API access logging is enabled with `tracing` and `tower-http`; `pharness-cli run --follow-events` tails durable run events to stderr while preserving final JSON on stdout.
-- `GET /api/approvals` and `pharness-cli approvals list|approve|deny` exist. Approval decisions remain run-scoped for now and produce machine-readable JSON.
+- `GET /api/runs`, `GET /api/runs/summary`, `pharness-cli runs list`, and `pharness-cli runs summary` expose the durable run queue with status, run-scope, start-time, limit, offset, and summary rollup support.
+- `pharness-cli runs cancel` wraps `POST /api/runs/:id/cancel`; `--with-events` returns the cancelled run plus durable event log for smoke tests and operator scripts.
+- Successful cluster, Tekton, Argo, Prometheus, and Loki tool events now persist run-scoped `Observation` records with compact resource facts and artifact pointers.
+- `GET /api/observations` and `pharness-cli observations list` now expose those observations as a cross-run index with source, kind, subject, observed-time, limit, and offset filters.
+- Observations now persist normalized `resource_namespace`, `resource_kind`, and `resource_name` fields and expose matching API/CLI filters for machine lookup without parsing compact JSON payloads.
+- Tekton `pipeline_run_analysis` observations can now create read-only `Incident` candidates when build, deployment, Argo, or image-alignment signals indicate risk. Incident candidates are exposed through `GET /api/incidents` and `pharness-cli incidents`.
+- Candidate incidents now create conservative, durable `RemediationPlan` drafts. Plans are API/CLI queryable and include read-only review steps plus explicit approval gates, but no executable mutation path.
+- RemediationPlan drafts can now create idempotent, non-executable `WorkPlan` records through `POST /api/work-plans/from-remediation-plan` and `pharness-cli work-plans create-from-remediation-plan`.
+- RemediationPlan approval gates now persist as first-class `ApprovalGate` records exposed through API/CLI. They are descriptive queue state, not authorization or execution state.
+- Approval gates now support `satisfied`, `waived`, and `rejected` lifecycle transitions with durable audit events. These decisions do not execute plans or approve tools.
+- Approval gate summaries are exposed through `GET /api/approval-gates/summary` and `pharness-cli approval-gates summary`, grouped by status, gate kind, risk, age, resource identity, incident, and remediation plan.
+- Fireworks native tool requests now send `parallel_tool_calls = false`. If a model still returns multiple tool calls, the client keeps the first call and lets the one-action runtime continue instead of failing the run.
+- `GET /api/approvals`, `GET /api/approvals/:id`, approval-id approve/deny routes, and `pharness-cli approvals list|get|approve|deny` exist. Approval decisions can be made by run id or approval id and produce machine-readable JSON.
+- Approval queue listing supports run-scope filters, requested-time filters, and basic `limit`/`offset` pagination so machine consumers can narrow lower-environment or stale queues without scraping all pending approvals.
+- Pending write approvals now persist preview JSON. `write_file` and `patch_file` previews include generated diffs before execution when the path is safe to preview; secret-shaped paths produce an error preview instead of content.
+- Approval queue summaries are exposed through `GET /api/approvals/summary` and `pharness-cli approvals summary`. They share list filter dimensions and return grouped counts, including stable age buckets, without action payloads.
 - `GET /api/runs/:id/events/stream` streams durable events as SSE with `Last-Event-ID` replay. The implementation intentionally polls SQLite first instead of introducing a broadcast bus.
 - `write_file` tool results now persist file diffs into `file_changes`, and `GET /api/runs/:id/diff` returns both structured changes and combined diff text.
 - `patch_file` uses a structured exact replacement payload and persists diffs through the same file-change path as `write_file`.
@@ -20,14 +35,21 @@
 - `argo_get_app` now reads Argo CD Application CRDs through `kubectl` instead of requiring the local `argocd` CLI.
 - `POST /api/capabilities/execute` and `pharness-cli capabilities` now provide a model-free smoke path for typed read-only Kubernetes, Argo, and Prometheus actions.
 - Direct capability execution returns policy and execution state as structured JSON: allowed actions execute, denied actions do not execute, and tool failures return `status: tool_error` instead of HTTP 500.
+- Direct capability execution now emits durable audit rows for executed, failed, and denied outcomes. Successful audit rows keep compact result summaries instead of full tool payloads.
+- Direct capability execution accepts `timeout_ms`. API timeout returns `status: cancelled`, marks the response as cancelled, and emits `direct_capability.cancelled`.
 - Prometheus live success dogfood uses a local loopback URL created through `kubectl port-forward` to `service/prometheus-server` in `monitoring`; this keeps V1 local while avoiding cluster mutation.
 - Prometheus responses are compacted before entering events/model context: `result_count`, `results_truncated`, and bounded sample results.
+- Empty run scope is now normalized to `null` in event and result JSON, while non-empty run scope remains a structured object. This keeps the machine contract consistent across run fetches, event streams, and CLI output.
+- `prometheus_inventory` is now a separate bounded read-only LGTM action for targets, rules, and active alerts. It omits rule query bodies and alert annotations.
+- `loki_log_summary` is now a separate bounded read-only LGTM action for compacted log reads. It clamps the requested window and line limit, allowlists stream labels, redacts secret-shaped log lines, and uses `PHARNESS_LOKI_URL` or `[cluster].loki_url`.
 - Cluster and observability tool results are now persisted as artifacts and exposed through `GET /api/runs/:id/artifacts` and `GET /api/artifacts/:id`.
 
 # Backlog
 
 - Add a fallback model protocol setting only if a chosen Fireworks model rejects native required tool calls.
 - Add a real-time event fanout only if SQLite polling becomes a measured bottleneck.
-- Add general artifact retrieval after the diff path is stable.
-- Add CLI artifact list/get commands only if operator workflow needs them; the machine-facing API is already enough for Codex.
-- Add patch preview only if operator review needs generated diff before approval.
+- Add typed namespace/pod/container filters on top of Loki logs after confirming the deployed label shape.
+- Add richer preview rendering only in the future UI. The machine-facing API already exposes persisted preview JSON.
+- Add asynchronous direct capability request IDs only if synchronous timeout cancellation proves insufficient.
+- Add an explicit event/audit field for ignored parallel tool calls if this becomes common enough to affect operator trust.
+- Add WorkPlan execution only after lifecycle transitions, gate decisions, rollback, and provenance are first-class enough to review.

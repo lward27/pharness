@@ -1,0 +1,15 @@
+[package]
+name = "pharness-config"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+pharness-core = { path = "../pharness-core" }
+pharness-fireworks = { path = "../pharness-fireworks" }
+secrecy.workspace = true
+serde.workspace = true
+toml.workspace = true

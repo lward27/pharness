@@ -17,14 +17,16 @@
 - Direct analysis smoke passed for control flow: a missing PipelineRun returned `status: tool_error` after an allowed read-only policy decision.
 - Live analysis smoke passed for `finance-frontend-run-6mwcl`: status `succeeded`, 3 succeeded TaskRuns, commit captured, image digest captured, deployment target captured, Deployment rollout observed as healthy, and Argo app correlation available.
 - Live analysis smoke passed for `finance-app-db-service-run-jkx6k`: status moved from `running` during first analysis to `succeeded` after completion, 3 succeeded TaskRuns, commit captured, image digest captured, Deployment rollout observed as healthy, and Argo app correlation available.
-- Both live PipelineRun analyses currently report `image_alignment.status: mismatch` because the Tekton output image uses the in-cluster registry host while the Deployment image uses the external registry host. Treat that as evidence worth surfacing, not a pharness failure.
+- Without registry aliases, both live PipelineRun analyses reported `image_alignment.status: registry_mismatch` because the Tekton output image uses the in-cluster registry host while the Deployment image uses the external registry host. Treat that as evidence worth surfacing, not a pharness failure.
+- Registry aliases are now supported through `PHARNESS_REGISTRY_ALIASES`. With the homelab alias configured, equivalent internal/external registry hostnames should report `image_alignment.status: registry_alias_match`.
 - Direct local API smoke passed after Argo correlation was added: both Finance PipelineRuns returned `status: ok`, `executed: true`, `summary.status: succeeded`, `deployment.status: healthy`, `argo_sync_status: Synced`, and `argo_health_status: Healthy`.
+- Direct local API smoke passed after registry alias normalization was added: `finance-frontend-run-6mwcl` returned `image_alignment.status: registry_alias_match` with parsed expected and deployed image references.
 - Secret-shaped analysis smoke passed: name `token-build` returned `status: denied`, `executed: false`, and did not call the tool.
 - Secret-shaped direct smoke passed: namespace `token-store` returned `status: denied`, `executed: false`, and did not call the tool.
 
 # Backlog
 
-- Add compact Tekton fields only when dogfooding shows they are needed. Current analysis includes status, reason, timing, task identity, pod name, commit, image URL/digest, deployment target, Deployment rollout, image alignment, and Argo sync/health.
+- Add compact Tekton fields only when dogfooding shows they are needed. Current analysis includes status, reason, timing, task identity, pod name, commit, image URL/digest, deployment target, Deployment rollout, registry-aware image alignment, and Argo sync/health.
 - Extend `PipelineRunAnalysis` once pharness can safely combine bounded logs and Prometheus signals.
 - Add mutating `PipelineIntent` execution later as a separate approved capability. It should never be hidden inside `run_shell`.
 - Consider a Kubernetes service-account mode for in-cluster execution so V2 can stop depending on a local kubeconfig.

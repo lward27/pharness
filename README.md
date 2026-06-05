@@ -4,6 +4,8 @@ Pharness is a lightweight, Fireworks-first agent harness for local coding workfl
 
 V1 runs locally from a project root. It focuses on the agent loop, explicit tool actions, file and shell tooling, policy checks, approvals, event streaming, and durable sessions. V2 moves execution into a homelab Kubernetes cluster with isolated worker pods. V3 adds first-class typed capabilities for registry, Tekton, Argo CD, database operators, LGTM observability, and RAG-backed long-lived context.
 
+MCP is a future adapter option for obvious external workflow integrations such as Jira or Slack, but it is not a V1 dependency and should not become a plugin marketplace by accident.
+
 ## V1 Scope
 
 - Rust core runtime and state machine.
@@ -18,7 +20,7 @@ V1 runs locally from a project root. It focuses on the agent loop, explicit tool
 
 - No plugin marketplace.
 - No third-party integration ecosystem.
-- No MCP.
+- No MCP dependency in the core V1 loop.
 - No remote execution.
 - No direct Kubernetes mutation tools.
 - No assumption that `kubectl`, `argocd`, `tkn`, `helm`, registry clients, or database CLIs are safe just because they are installed.
@@ -60,6 +62,40 @@ The API reads provider configuration at startup. Restart `pharness-api` after ch
 
 ```sh
 cargo run -p pharness-cli -- config
+```
+
+## Runtime Config
+
+By default the API uses local defaults and env overrides. If `config/pharness.toml` exists, it is loaded automatically; set `PHARNESS_CONFIG` to point at a different TOML file.
+
+```sh
+cp config/pharness.example.toml config/pharness.toml
+cargo run -p pharness-cli -- config validate --file config/pharness.toml
+PHARNESS_CONFIG=config/pharness.toml cargo run -p pharness-api
+```
+
+Env overrides still win over TOML for the runtime-critical fields: `PHARNESS_BIND`, `PHARNESS_DB_PATH`, `PHARNESS_FIREWORKS_MODEL`, `PHARNESS_FIREWORKS_BASE_URL`, `PHARNESS_KUBECTL_BIN`, `PHARNESS_ARGOCD_NAMESPACE`, `PHARNESS_PROMETHEUS_URL`, `PHARNESS_LOKI_URL`, `PHARNESS_REGISTRY_ALIASES`, `PHARNESS_CLUSTER_TOOL_TIMEOUT_MS`, `PHARNESS_CLUSTER_TOOL_MAX_OUTPUT_BYTES`, `PHARNESS_POLICY_SUBJECT`, `PHARNESS_POLICY_ENVIRONMENT`, `PHARNESS_POLICY_MODE`, `PHARNESS_ALLOW_READ_ONLY_SHELL`, `PHARNESS_REQUIRE_APPROVAL_FOR_WRITES`, `PHARNESS_REQUIRE_APPROVAL_FOR_NETWORK`, `PHARNESS_REQUIRE_APPROVAL_FOR_DESTRUCTIVE`, `PHARNESS_DENY_PRIVILEGED`, and `PHARNESS_DENY_SECRET_ACCESS`.
+
+Policy defaults are intentionally conservative. `default` asks for local file writes, asks for destructive and network shell commands, and denies privileged or secret-accessing commands. `trusted_writes` can be selected in config or per run for local write autonomy:
+
+```sh
+cargo run -p pharness-cli -- run \
+  --policy-mode trusted_writes \
+  --task "Create a small local scratch file, then finish with a summary." \
+  --cwd "$PWD"
+```
+
+The selected policy is persisted on the run execution target and reused when a run resumes after approval.
+
+Runs can carry SDLC metadata for later audit and policy work. These fields are metadata-only in V1; they do not grant production mutation or change policy decisions by themselves:
+
+```sh
+cargo run -p pharness-cli -- run \
+  --task "Inspect this repo and finish with one sentence." \
+  --cwd "$PWD" \
+  --namespace apps-dev \
+  --repo git@example.test/team/app.git \
+  --branch feature/pharness
 ```
 
 ## Live Logs
@@ -134,11 +170,43 @@ cargo run -p pharness-cli -- artifacts list --run-id "$RUN_ID"
 cargo run -p pharness-cli -- artifacts get --artifact-id "$ARTIFACT_ID"
 ```
 
+Manage durable permission grants:
+
+```sh
+cargo run -p pharness-cli -- permission-grants create \
+  --subject agent:local-worker \
+  --created-by "$USER" \
+  --reason "trusted local write smoke" \
+  --policy-mode trusted_writes \
+  --scope-json '{"environment":"local","capability_kinds":["filesystem"],"actions":["write_file","patch_file"],"max_risk":"medium"}'
+
+cargo run -p pharness-cli -- permission-grants list
+cargo run -p pharness-cli -- permission-grants get --grant-id "$GRANT_ID"
+cargo run -p pharness-cli -- permission-grants revoke \
+  --grant-id "$GRANT_ID" \
+  --revoked-by lucas \
+  --reason "smoke complete"
+```
+
+Active permission grants are snapshotted onto new runs and can convert matching local file-write approval requests into allows when the grant subject, environment, capability kind, action, and risk ceiling match the run policy. Matching policy events include `decision.grant_id`. Grants do not override denials and do not grant shell, network, privileged, secret, destructive, or production-impacting actions.
+
 Approval decisions can also wait for the resumed run to finish:
 
 ```sh
 cargo run -p pharness-cli -- approvals approve \
   --run-id "$RUN_ID" \
+  --decided-by lucas \
+  --reason "approved" \
+  --wait \
+  --follow-events
+```
+
+Approvals can also be fetched and decided directly by approval id:
+
+```sh
+cargo run -p pharness-cli -- approvals get --approval-id "$APPROVAL_ID"
+cargo run -p pharness-cli -- approvals approve \
+  --approval-id "$APPROVAL_ID" \
   --decided-by lucas \
   --reason "approved" \
   --wait \
@@ -211,7 +279,15 @@ cargo run -p pharness-cli -- capabilities tekton-analyze-pipeline-run \
   --name build-app
 ```
 
-The analysis response includes PipelineRun status, TaskRun status counts, task identities, pod names, repo URL, image reference, deployment target, commit SHA, image digest/image URL, Deployment rollout status, image alignment, and Argo sync/health when those related resources can be read safely.
+The analysis response includes PipelineRun status, TaskRun status counts, task identities, pod names, repo URL, image reference, deployment target, commit SHA, image digest/image URL, Deployment rollout status, registry-aware image alignment, and Argo sync/health when those related resources can be read safely.
+
+If Tekton and Deployments refer to the same registry through different hostnames, configure aliases on the API process or in `[cluster].registry_aliases`:
+
+```sh
+PHARNESS_REGISTRY_ALIASES=docker-registry.registry.svc.cluster.local:5000=registry.lucas.engineering
+```
+
+Configured host-equivalent image matches report `image_alignment.status` as `registry_alias_match`; unconfigured registry differences remain visible as `registry_mismatch`.
 
 Secret-shaped reads should be denied before tool execution:
 
@@ -221,16 +297,22 @@ cargo run -p pharness-cli -- capabilities kubernetes-get \
   --namespace argocd
 ```
 
-For local Prometheus smoke tests, create a temporary loopback URL with port-forwarding:
+For local Prometheus and Loki smoke tests, create temporary loopback URLs with port-forwarding:
 
 ```sh
 kubectl -n monitoring port-forward svc/prometheus-server 19090:80
 ```
 
+```sh
+kubectl -n monitoring port-forward svc/loki 13100:3100
+```
+
 Start the API with:
 
 ```sh
-PHARNESS_PROMETHEUS_URL=http://127.0.0.1:19090 cargo run -p pharness-api
+PHARNESS_PROMETHEUS_URL=http://127.0.0.1:19090 \
+PHARNESS_LOKI_URL=http://127.0.0.1:13100 \
+cargo run -p pharness-api
 ```
 
 Then run:
@@ -238,6 +320,21 @@ Then run:
 ```sh
 cargo run -p pharness-cli -- capabilities prometheus-query \
   --query up
+```
+
+Read bounded Prometheus target, rule, and alert inventory:
+
+```sh
+cargo run -p pharness-cli -- capabilities prometheus-inventory
+```
+
+Read bounded Loki log lines:
+
+```sh
+cargo run -p pharness-cli -- capabilities loki-log-summary \
+  --query '{namespace="argocd"}' \
+  --since-seconds 900 \
+  --limit 25
 ```
 
 Model-backed Tekton read:
@@ -280,6 +377,23 @@ List pending approvals:
 cargo run -p pharness-cli -- approvals list
 ```
 
+Filter approval queues by run scope:
+
+```sh
+cargo run -p pharness-cli -- approvals list \
+  --namespace apps-dev \
+  --repo git@example.test/team/pharness.git \
+  --branch smoke/write-approval \
+  --limit 25 \
+  --offset 0
+```
+
+Fetch one approval:
+
+```sh
+cargo run -p pharness-cli -- approvals get --approval-id "$APPROVAL_ID"
+```
+
 Approve or deny the pending approval for a run:
 
 ```sh
@@ -296,6 +410,22 @@ cargo run -p pharness-cli -- approvals deny \
   --reason "not approved"
 ```
 
+Approve or deny a specific pending approval:
+
+```sh
+cargo run -p pharness-cli -- approvals approve \
+  --approval-id "$APPROVAL_ID" \
+  --decided-by "$USER" \
+  --reason "approved local write"
+```
+
+```sh
+cargo run -p pharness-cli -- approvals deny \
+  --approval-id "$APPROVAL_ID" \
+  --decided-by "$USER" \
+  --reason "not approved"
+```
+
 ## Current Status
 
-The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/Tekton paths. See [planning/current-build-review.md](planning/current-build-review.md) for the current reviewed state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.
+The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/LGTM/Tekton paths. See [planning/current-build-review.md](planning/current-build-review.md) for the current reviewed state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.

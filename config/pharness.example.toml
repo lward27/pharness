@@ -25,12 +25,24 @@ target = "local_process" # local_process | kubernetes_job
 environment = "local"
 
 [cluster]
-# Future V2/V3 fields. Ignored by V1 unless explicitly enabled.
+# V1 reads the tool configuration fields below; the remaining fields keep the
+# config shape aligned with the future in-cluster runtime.
 name = "homelab"
 namespace = "pharness"
 service_account = "pharness-worker"
+kubectl_bin = "kubectl"
+argocd_namespace = "argocd"
+prometheus_url = ""
+loki_url = ""
+tool_timeout_ms = 15000
+tool_max_output_bytes = 524288
 gitops_source_of_truth = true
 default_delivery_mode = "gitops" # gitops | direct_apply_break_glass
+# Runtime env equivalent: PHARNESS_REGISTRY_ALIASES.
+# Comma-separated registry host aliases used when comparing Tekton output images
+# to deployed images, for example:
+# docker-registry.registry.svc.cluster.local:5000=registry.example.com
+registry_aliases = []
 
 [rag]
 enabled = false
@@ -38,6 +50,9 @@ endpoint_env = "PHARNESS_RAG_ENDPOINT"
 collection = "pharness-memory"
 
 [policy]
+# Runtime env equivalent for mode: PHARNESS_POLICY_MODE.
+subject = "agent:local-worker"
+environment = "local"
 mode = "default" # default | trusted_writes | plan | deny_all_writes
 allow_read_only_shell = true
 require_approval_for_writes = true

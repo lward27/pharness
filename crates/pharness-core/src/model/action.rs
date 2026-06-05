@@ -78,6 +78,17 @@ pub enum AgentAction {
         reason: String,
         query: String,
     },
+    PrometheusInventory {
+        id: ActionId,
+        reason: String,
+    },
+    LokiLogSummary {
+        id: ActionId,
+        reason: String,
+        query: String,
+        since_seconds: Option<u64>,
+        limit: Option<u32>,
+    },
     TektonGetPipelineRuns {
         id: ActionId,
         reason: String,
@@ -137,6 +148,8 @@ impl AgentAction {
             | Self::KubernetesGet { id, .. }
             | Self::ArgoGetApp { id, .. }
             | Self::PrometheusQuery { id, .. }
+            | Self::PrometheusInventory { id, .. }
+            | Self::LokiLogSummary { id, .. }
             | Self::TektonGetPipelineRuns { id, .. }
             | Self::TektonGetTaskRuns { id, .. }
             | Self::TektonAnalyzePipelineRun { id, .. }
@@ -159,6 +172,8 @@ impl AgentAction {
             Self::KubernetesGet { .. } => "kubernetes_get",
             Self::ArgoGetApp { .. } => "argo_get_app",
             Self::PrometheusQuery { .. } => "prometheus_query",
+            Self::PrometheusInventory { .. } => "prometheus_inventory",
+            Self::LokiLogSummary { .. } => "loki_log_summary",
             Self::TektonGetPipelineRuns { .. } => "tekton_get_pipeline_runs",
             Self::TektonGetTaskRuns { .. } => "tekton_get_task_runs",
             Self::TektonAnalyzePipelineRun { .. } => "tekton_analyze_pipeline_run",
@@ -365,6 +380,25 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(prom.kind_name(), "prometheus_query");
+
+        let prom_inventory: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "prometheus_inventory",
+            "id": "act_prom_inventory",
+            "reason": "check observability health"
+        }))
+        .unwrap();
+        assert_eq!(prom_inventory.kind_name(), "prometheus_inventory");
+
+        let loki: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "loki_log_summary",
+            "id": "act_loki",
+            "reason": "check recent app logs",
+            "query": "{namespace=\"apps-dev\"}",
+            "since_seconds": 900,
+            "limit": 25
+        }))
+        .unwrap();
+        assert_eq!(loki.kind_name(), "loki_log_summary");
 
         let tekton: AgentAction = serde_json::from_value(serde_json::json!({
             "action": "tekton_get_pipeline_runs",
