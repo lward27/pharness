@@ -52,3 +52,6 @@ kubeconfig.*
 *.swp
 *.swo
 *~
+
+# Generated presentation and artifact outputs
+/outputs/
