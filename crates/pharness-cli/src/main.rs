@@ -10,6 +10,45 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Build the API client, attaching `Authorization: Bearer $PHARNESS_API_TOKEN`
+/// when the operator token env is set. Deployed APIs require it; local
+/// loopback APIs ignore it.
+fn api_client() -> reqwest::Client {
+    api_client_builder(reqwest::Client::builder())
+}
+
+fn api_client_with_timeout(timeout: Duration) -> reqwest::Client {
+    api_client_builder(reqwest::Client::builder().timeout(timeout))
+}
+
+fn api_client_builder(builder: reqwest::ClientBuilder) -> reqwest::Client {
+    let builder = match operator_token_from_env() {
+        Some(token) => {
+            let mut headers = reqwest::header::HeaderMap::new();
+            match reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")) {
+                Ok(mut value) => {
+                    value.set_sensitive(true);
+                    headers.insert(reqwest::header::AUTHORIZATION, value);
+                }
+                Err(_) => eprintln!("warning: PHARNESS_API_TOKEN is not a valid header value"),
+            }
+            builder.default_headers(headers)
+        }
+        None => builder,
+    };
+
+    builder
+        .build()
+        .expect("reqwest client construction must succeed")
+}
+
+fn operator_token_from_env() -> Option<String> {
+    std::env::var("PHARNESS_API_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 const DEFAULT_CAPABILITY_TIMEOUT_MS: u64 = 60_000;
 
 #[derive(Debug, Parser)]
@@ -2381,10 +2420,7 @@ async fn execute_capability(
     action: serde_json::Value,
     timeout_ms: u64,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_millis(timeout_ms.saturating_add(5_000)))
-        .build()
-        .context("failed to build HTTP client")?;
+    let http = api_client_with_timeout(Duration::from_millis(timeout_ms.saturating_add(5_000)));
     let response = http
         .post(api_url(api_url_base, "/api/capabilities/execute"))
         .json(&serde_json::json!({
@@ -2412,7 +2448,7 @@ async fn config(args: ConfigArgs) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let http = reqwest::Client::new();
+    let http = api_client();
     let config = http
         .get(api_url(&args.api_url, "/api/config/effective"))
         .send()
@@ -2438,7 +2474,7 @@ fn validate_config(args: ConfigValidateArgs) -> anyhow::Result<()> {
 }
 
 async fn fireworks_models(args: FireworksModelsArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let url = format!(
         "https://api.fireworks.ai/v1/accounts/{}/models",
         args.account
@@ -2474,7 +2510,7 @@ async fn fireworks_models(args: FireworksModelsArgs) -> anyhow::Result<()> {
 }
 
 async fn list_approvals(args: ApprovalListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("status".to_string(), args.status),
         ("limit".to_string(), args.limit.to_string()),
@@ -2524,7 +2560,7 @@ async fn list_approvals(args: ApprovalListArgs) -> anyhow::Result<()> {
 }
 
 async fn summarize_approvals(args: ApprovalSummaryArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![("status".to_string(), args.status)];
     if let Some(namespace) = args.namespace {
         query.push(("namespace".to_string(), namespace));
@@ -2570,7 +2606,7 @@ async fn summarize_approvals(args: ApprovalSummaryArgs) -> anyhow::Result<()> {
 }
 
 async fn get_approval(args: ApprovalGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -2590,7 +2626,7 @@ async fn get_approval(args: ApprovalGetArgs) -> anyhow::Result<()> {
 }
 
 async fn decide_approval(args: ApprovalDecisionArgs, decision: &str) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let api_url_base = args.api_url.clone();
     let endpoint = approval_decision_endpoint(&args, decision)?;
     let wait = args.wait;
@@ -2653,7 +2689,7 @@ async fn decide_approval(args: ApprovalDecisionArgs, decision: &str) -> anyhow::
 }
 
 async fn get_run(args: RunGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let run = fetch_run(&args.api_url, &http, &args.run_id).await?;
     if args.with_events {
         let events = fetch_events(&args.api_url, &http, &args.run_id).await?;
@@ -2675,7 +2711,7 @@ async fn get_run(args: RunGetArgs) -> anyhow::Result<()> {
 }
 
 async fn list_runs(args: RunListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -2724,7 +2760,7 @@ async fn list_runs(args: RunListArgs) -> anyhow::Result<()> {
 }
 
 async fn summarize_runs(args: RunSummaryArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(status) = args.status {
         query.push(("status".to_string(), status));
@@ -2770,7 +2806,7 @@ async fn summarize_runs(args: RunSummaryArgs) -> anyhow::Result<()> {
 }
 
 async fn cancel_run(args: RunCancelArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let run = http
         .post(api_url(
             &args.api_url,
@@ -2805,7 +2841,7 @@ async fn get_run_events_command(args: RunEventsArgs) -> anyhow::Result<()> {
     if args.stream {
         stream_run_events(args).await
     } else {
-        let http = reqwest::Client::new();
+        let http = api_client();
         let mut events = fetch_events(&args.api_url, &http, &args.run_id).await?;
         if let Some(after_seq) = args.after_seq {
             events.retain(|event| event_seq(event).is_some_and(|seq| seq > after_seq));
@@ -2819,7 +2855,7 @@ async fn get_run_events_command(args: RunEventsArgs) -> anyhow::Result<()> {
 }
 
 async fn stream_run_events(args: RunEventsArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut request = http.get(api_url(
         &args.api_url,
         &format!("/api/runs/{}/events/stream", args.run_id),
@@ -2867,7 +2903,7 @@ async fn stream_run_events(args: RunEventsArgs) -> anyhow::Result<()> {
 }
 
 async fn get_run_diff(args: RunDiffArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -2887,7 +2923,7 @@ async fn get_run_diff(args: RunDiffArgs) -> anyhow::Result<()> {
 }
 
 async fn list_artifacts(args: ArtifactListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -2907,7 +2943,7 @@ async fn list_artifacts(args: ArtifactListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_artifact(args: ArtifactGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -2927,7 +2963,7 @@ async fn get_artifact(args: ArtifactGetArgs) -> anyhow::Result<()> {
 }
 
 async fn list_permission_grants(args: PermissionGrantListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(&args.api_url, "/api/permission-grants"))
         .query(&[
@@ -2948,7 +2984,7 @@ async fn list_permission_grants(args: PermissionGrantListArgs) -> anyhow::Result
 }
 
 async fn list_observations(args: ObservationListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -3004,7 +3040,7 @@ async fn list_observations(args: ObservationListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_observation(args: ObservationGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3026,7 +3062,7 @@ async fn get_observation(args: ObservationGetArgs) -> anyhow::Result<()> {
 async fn create_observation(args: ObservationCreateArgs) -> anyhow::Result<()> {
     let resource_ref = parse_optional_json_object(args.resource_ref_json, "--resource-ref-json")?;
     let data_json = parse_optional_json_object(args.data_json, "--data-json")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(&args.api_url, "/api/observations"))
         .json(&serde_json::json!({
@@ -3060,7 +3096,7 @@ async fn create_observation(args: ObservationCreateArgs) -> anyhow::Result<()> {
 }
 
 async fn list_incidents(args: IncidentListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -3110,7 +3146,7 @@ async fn list_incidents(args: IncidentListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_incident(args: IncidentGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3131,7 +3167,7 @@ async fn get_incident(args: IncidentGetArgs) -> anyhow::Result<()> {
 
 async fn create_incident(args: IncidentCreateArgs) -> anyhow::Result<()> {
     let data_json = parse_optional_json_object(args.data_json, "--data-json")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(&args.api_url, "/api/incidents"))
         .json(&serde_json::json!({
@@ -3162,7 +3198,7 @@ async fn create_incident(args: IncidentCreateArgs) -> anyhow::Result<()> {
 }
 
 async fn list_remediation_plans(args: RemediationPlanListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -3215,7 +3251,7 @@ async fn list_remediation_plans(args: RemediationPlanListArgs) -> anyhow::Result
 }
 
 async fn get_remediation_plan(args: RemediationPlanGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3236,7 +3272,7 @@ async fn get_remediation_plan(args: RemediationPlanGetArgs) -> anyhow::Result<()
 
 async fn create_remediation_plan(args: RemediationPlanCreateArgs) -> anyhow::Result<()> {
     let plan_json = parse_optional_json_object(args.plan_json, "--plan-json")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(&args.api_url, "/api/remediation-plans"))
         .json(&serde_json::json!({
@@ -3268,7 +3304,7 @@ async fn create_remediation_plan(args: RemediationPlanCreateArgs) -> anyhow::Res
 }
 
 async fn list_work_plans(args: WorkPlanListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -3324,7 +3360,7 @@ async fn list_work_plans(args: WorkPlanListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_work_plan(args: WorkPlanGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3344,7 +3380,7 @@ async fn get_work_plan(args: WorkPlanGetArgs) -> anyhow::Result<()> {
 }
 
 async fn get_work_plan_readiness(args: WorkPlanReadinessArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3364,7 +3400,7 @@ async fn get_work_plan_readiness(args: WorkPlanReadinessArgs) -> anyhow::Result<
 }
 
 async fn get_work_plan_flow(args: WorkPlanFlowArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3386,7 +3422,7 @@ async fn get_work_plan_flow(args: WorkPlanFlowArgs) -> anyhow::Result<()> {
 async fn create_work_plan_from_remediation_plan(
     args: WorkPlanCreateFromRemediationPlanArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3411,7 +3447,7 @@ async fn create_work_plan_from_remediation_plan(
 async fn revise_work_plan(args: WorkPlanReviseArgs) -> anyhow::Result<()> {
     let work_plan_json = parse_json_object(&args.work_plan_json, "--work-plan-json")
         .context("failed to parse --work-plan-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3441,7 +3477,7 @@ async fn revise_work_plan(args: WorkPlanReviseArgs) -> anyhow::Result<()> {
 }
 
 async fn transition_work_plan(args: WorkPlanTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3468,7 +3504,7 @@ async fn transition_work_plan(args: WorkPlanTransitionArgs) -> anyhow::Result<()
 async fn create_work_plan_trusted_envelope(
     args: WorkPlanCreateTrustedEnvelopeArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3499,7 +3535,7 @@ async fn create_work_plan_trusted_envelope(
 }
 
 async fn list_change_sets(args: ChangeSetListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(value) = args.work_plan_id {
         query.push(("work_plan_id", value));
@@ -3554,7 +3590,7 @@ async fn list_change_sets(args: ChangeSetListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_change_set(args: ChangeSetGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3574,7 +3610,7 @@ async fn get_change_set(args: ChangeSetGetArgs) -> anyhow::Result<()> {
 }
 
 async fn get_change_set_readiness(args: ChangeSetReadinessArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3594,7 +3630,7 @@ async fn get_change_set_readiness(args: ChangeSetReadinessArgs) -> anyhow::Resul
 }
 
 async fn get_change_set_flow(args: ChangeSetFlowArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3616,7 +3652,7 @@ async fn get_change_set_flow(args: ChangeSetFlowArgs) -> anyhow::Result<()> {
 async fn create_change_set(args: ChangeSetCreateArgs) -> anyhow::Result<()> {
     let change_set_json = parse_json_object(&args.change_set_json, "--change-set-json")
         .context("failed to parse --change-set-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(&args.api_url, "/api/change-sets"))
         .json(&serde_json::json!({
@@ -3644,7 +3680,7 @@ async fn create_change_set(args: ChangeSetCreateArgs) -> anyhow::Result<()> {
 async fn revise_change_set(args: ChangeSetReviseArgs) -> anyhow::Result<()> {
     let change_set_json = parse_json_object(&args.change_set_json, "--change-set-json")
         .context("failed to parse --change-set-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3673,7 +3709,7 @@ async fn revise_change_set(args: ChangeSetReviseArgs) -> anyhow::Result<()> {
 }
 
 async fn transition_change_set(args: ChangeSetTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3700,7 +3736,7 @@ async fn transition_change_set(args: ChangeSetTransitionArgs) -> anyhow::Result<
 async fn create_change_set_trusted_envelope(
     args: ChangeSetCreateTrustedEnvelopeArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3731,7 +3767,7 @@ async fn create_change_set_trusted_envelope(
 }
 
 async fn list_pipeline_intents(args: PipelineIntentListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(value) = args.change_set_id {
         query.push(("change_set_id", value));
@@ -3792,7 +3828,7 @@ async fn list_pipeline_intents(args: PipelineIntentListArgs) -> anyhow::Result<(
 }
 
 async fn get_pipeline_intent(args: PipelineIntentGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -3820,7 +3856,7 @@ async fn create_pipeline_intent_from_change_set(
         .map(|value| parse_json_object(value, "--intent-json"))
         .transpose()
         .context("failed to parse --intent-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3850,7 +3886,7 @@ async fn create_pipeline_intent_from_change_set(
 }
 
 async fn transition_pipeline_intent(args: PipelineIntentTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3880,7 +3916,7 @@ async fn transition_pipeline_intent(args: PipelineIntentTransitionArgs) -> anyho
 async fn attach_pipeline_intent_evidence(
     args: PipelineIntentAttachEvidenceArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -3905,7 +3941,7 @@ async fn attach_pipeline_intent_evidence(
 }
 
 async fn list_deployment_intents(args: DeploymentIntentListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(value) = args.pipeline_intent_id {
         query.push(("pipeline_intent_id", value));
@@ -3978,7 +4014,7 @@ async fn list_deployment_intents(args: DeploymentIntentListArgs) -> anyhow::Resu
 }
 
 async fn get_deployment_intent(args: DeploymentIntentGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -4006,7 +4042,7 @@ async fn create_deployment_intent_from_pipeline_intent(
         .map(|value| parse_json_object(value, "--intent-json"))
         .transpose()
         .context("failed to parse --intent-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4039,7 +4075,7 @@ async fn create_deployment_intent_from_pipeline_intent(
 }
 
 async fn transition_deployment_intent(args: DeploymentIntentTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4069,7 +4105,7 @@ async fn transition_deployment_intent(args: DeploymentIntentTransitionArgs) -> a
 async fn attach_deployment_intent_evidence(
     args: DeploymentIntentAttachEvidenceArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4097,7 +4133,7 @@ async fn attach_deployment_intent_evidence(
 }
 
 async fn list_releases(args: ReleaseListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(value) = args.deployment_intent_id {
         query.push(("deployment_intent_id", value));
@@ -4173,7 +4209,7 @@ async fn list_releases(args: ReleaseListArgs) -> anyhow::Result<()> {
 }
 
 async fn get_release(args: ReleaseGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -4201,7 +4237,7 @@ async fn create_release_from_deployment_intent(
         .map(|value| parse_json_object(value, "--release-json"))
         .transpose()
         .context("failed to parse --release-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4235,7 +4271,7 @@ async fn create_release_from_deployment_intent(
 }
 
 async fn transition_release(args: ReleaseTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4260,7 +4296,7 @@ async fn transition_release(args: ReleaseTransitionArgs) -> anyhow::Result<()> {
 }
 
 async fn attach_release_evidence(args: ReleaseAttachEvidenceArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4285,7 +4321,7 @@ async fn attach_release_evidence(args: ReleaseAttachEvidenceArgs) -> anyhow::Res
 }
 
 async fn list_registry_evidence(args: RegistryEvidenceListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = Vec::new();
     if let Some(value) = args.release_id {
         query.push(("release_id", value));
@@ -4364,7 +4400,7 @@ async fn list_registry_evidence(args: RegistryEvidenceListArgs) -> anyhow::Resul
 }
 
 async fn get_registry_evidence(args: RegistryEvidenceGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -4392,7 +4428,7 @@ async fn create_registry_evidence_from_release(
         .map(|value| parse_json_object(value, "--evidence-json"))
         .transpose()
         .context("failed to parse --evidence-json as a JSON object")?;
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4430,7 +4466,7 @@ async fn create_registry_evidence_from_release(
 async fn create_registry_evidence_from_inspection(
     args: RegistryEvidenceCreateFromInspectionArgs,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4461,7 +4497,7 @@ async fn create_registry_evidence_from_inspection(
 }
 
 async fn transition_registry_evidence(args: RegistryEvidenceTransitionArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4486,7 +4522,7 @@ async fn transition_registry_evidence(args: RegistryEvidenceTransitionArgs) -> a
 }
 
 async fn list_approval_gates(args: ApprovalGateListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
@@ -4545,7 +4581,7 @@ async fn list_approval_gates(args: ApprovalGateListArgs) -> anyhow::Result<()> {
 }
 
 async fn summarize_approval_gates(args: ApprovalGateSummaryArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![("status".to_string(), args.status)];
     if let Some(remediation_plan_id) = args.remediation_plan_id {
         query.push(("remediation_plan_id".to_string(), remediation_plan_id));
@@ -4598,7 +4634,7 @@ async fn summarize_approval_gates(args: ApprovalGateSummaryArgs) -> anyhow::Resu
 }
 
 async fn get_approval_gate(args: ApprovalGateGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -4621,7 +4657,7 @@ async fn decide_approval_gate(
     args: ApprovalGateDecisionArgs,
     decision: &str,
 ) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4645,7 +4681,7 @@ async fn decide_approval_gate(
 }
 
 async fn create_permission_grant(args: PermissionGrantCreateArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let scope = parse_json_object(&args.scope_json, "scope-json")?;
     let response = http
         .post(api_url(&args.api_url, "/api/permission-grants"))
@@ -4673,7 +4709,7 @@ async fn create_permission_grant(args: PermissionGrantCreateArgs) -> anyhow::Res
 }
 
 async fn get_permission_grant(args: PermissionGrantGetArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .get(api_url(
             &args.api_url,
@@ -4693,7 +4729,7 @@ async fn get_permission_grant(args: PermissionGrantGetArgs) -> anyhow::Result<()
 }
 
 async fn revoke_permission_grant(args: PermissionGrantRevokeArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let response = http
         .post(api_url(
             &args.api_url,
@@ -4717,7 +4753,7 @@ async fn revoke_permission_grant(args: PermissionGrantRevokeArgs) -> anyhow::Res
 }
 
 async fn list_audit_events(args: AuditEventListArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let mut query = vec![("limit".to_string(), args.limit.to_string())];
     if let Some(resource_kind) = args.resource_kind {
         query.push(("resource_kind".to_string(), resource_kind));
@@ -4746,7 +4782,7 @@ async fn list_audit_events(args: AuditEventListArgs) -> anyhow::Result<()> {
 }
 
 async fn run(args: RunArgs) -> anyhow::Result<()> {
-    let http = reqwest::Client::new();
+    let http = api_client();
     let create_url = api_url(&args.api_url, "/api/runs");
     let scope = run_scope_from_args(&args);
     let run = http

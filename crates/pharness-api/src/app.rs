@@ -38,7 +38,7 @@ use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use pharness_core::{
     AgentAction, AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy,
@@ -86,6 +86,7 @@ pub struct AppState {
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
     worker_token: Option<String>,
+    operator_tokens: Arc<Vec<(String, String)>>,
 }
 
 pub fn router(
@@ -94,6 +95,7 @@ pub fn router(
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
     worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
 ) -> Router {
     let state = AppState {
         store,
@@ -101,6 +103,7 @@ pub fn router(
         cluster_tools,
         policy,
         worker_token,
+        operator_tokens: Arc::new(operator_tokens),
     };
 
     let internal = Router::new()
@@ -302,6 +305,10 @@ pub fn router(
             "/api/permission-grants/:grant_id/revoke",
             post(revoke_permission_grant),
         )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_operator_token,
+        ))
         .merge(internal)
         .layer(
             TraceLayer::new_for_http()
@@ -346,6 +353,46 @@ fn token_matches(provided: &str, expected: &str) -> bool {
     let provided = Sha256::digest(provided.as_bytes());
     let expected = Sha256::digest(expected.as_bytes());
     provided == expected
+}
+
+/// Authenticated operator identity resolved from the bearer token.
+#[derive(Debug, Clone)]
+pub struct OperatorIdentity(pub String);
+
+/// Gate operator routes behind `PHARNESS_OPERATOR_TOKENS` when configured.
+///
+/// `/health` stays open for probes. With no operator tokens configured the
+/// API keeps its loopback-trusting local behavior.
+async fn require_operator_token(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if state.operator_tokens.is_empty() || request.uri().path() == "/health" {
+        return next.run(request).await;
+    }
+
+    let provided = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "));
+
+    let matched = provided.and_then(|token| {
+        state
+            .operator_tokens
+            .iter()
+            .find(|(_, expected)| token_matches(token, expected))
+            .map(|(name, _)| name.clone())
+    });
+
+    match matched {
+        Some(name) => {
+            request.extensions_mut().insert(OperatorIdentity(name));
+            next.run(request).await
+        }
+        None => ApiError::unauthorized("invalid or missing operator token").into_response(),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -481,8 +528,15 @@ async fn internal_run_control(
     })))
 }
 
-async fn config_effective(State(state): State<AppState>) -> Json<serde_json::Value> {
+async fn config_effective(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+) -> Json<serde_json::Value> {
     let worker = state.worker.config_json();
+    let operator = json!({
+        "auth_required": !state.operator_tokens.is_empty(),
+        "name": identity.map(|Extension(OperatorIdentity(name))| name),
+    });
 
     Json(json!({
         "api": {
@@ -497,6 +551,7 @@ async fn config_effective(State(state): State<AppState>) -> Json<serde_json::Val
         },
         "policy": policy_json(&state.policy),
         "worker": worker,
+        "operator": operator,
     }))
 }
 
@@ -7894,6 +7949,7 @@ mod tests {
             cluster_tools: ReadOnlyClusterTools::default(),
             policy: SafetyPolicy::default(),
             worker_token: None,
+            operator_tokens: Arc::new(Vec::new()),
         }
     }
 
@@ -7904,6 +7960,7 @@ mod tests {
             cluster_tools,
             policy: SafetyPolicy::default(),
             worker_token: None,
+            operator_tokens: Arc::new(Vec::new()),
         }
     }
 
@@ -8110,6 +8167,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn operator_auth_gates_api_routes_and_resolves_identity() {
+        use tower::ServiceExt;
+
+        let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
+        let app = router(
+            store,
+            RunDispatcher::Disabled,
+            ReadOnlyClusterTools::default(),
+            SafetyPolicy::default(),
+            None,
+            vec![("lucas".to_string(), "op-secret".to_string())],
+        );
+
+        let health = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/health")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(health.status(), StatusCode::OK);
+
+        let unauthenticated = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/runs")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+
+        let wrong = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/runs")
+                    .header("authorization", "Bearer nope")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
+
+        let authed = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/config/effective")
+                    .header("authorization", "Bearer op-secret")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(authed.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(authed.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["operator"]["auth_required"], true);
+        assert_eq!(payload["operator"]["name"], "lucas");
+    }
+
+    #[tokio::test]
     async fn internal_routes_are_disabled_without_worker_token() {
         use tower::ServiceExt;
 
@@ -8120,6 +8248,7 @@ mod tests {
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             None,
+            Vec::new(),
         );
 
         let response = app
@@ -8146,6 +8275,7 @@ mod tests {
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
+            Vec::new(),
         );
 
         let missing = app
@@ -8209,6 +8339,7 @@ mod tests {
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
+            Vec::new(),
         );
 
         let context = app
@@ -8303,6 +8434,7 @@ mod tests {
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             None,
+            Vec::new(),
         );
     }
 
@@ -8577,7 +8709,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
     async fn reports_disabled_worker_config() {
         let state = test_state().await;
 
-        let Json(config) = config_effective(State(state)).await;
+        let Json(config) = config_effective(State(state), None).await;
 
         assert_eq!(config["worker"]["enabled"], false);
         assert!(config["worker"]["model"].is_null());

@@ -2,6 +2,18 @@ const JSON_HEADERS = {
   accept: "application/json",
 };
 
+let operatorName = "console-operator";
+
+export function setOperatorName(name) {
+  if (typeof name === "string" && name.trim() !== "") {
+    operatorName = name.trim();
+  }
+}
+
+export function getOperatorName() {
+  return operatorName;
+}
+
 const WRITE_HEADERS = {
   ...JSON_HEADERS,
   "content-type": "application/json",
@@ -90,6 +102,8 @@ export async function loadDashboardData() {
     loadFlow(),
   ]);
 
+  setOperatorName(config?.operator?.name);
+
   return {
     health,
     config,
@@ -112,7 +126,7 @@ export async function loadWorkPlanFlow(workPlanId) {
 export async function decideApproval(approvalId, decision) {
   const endpoint = decision === "approved" ? "approve" : "deny";
   return postJson(`/api/approvals/${encodeURIComponent(approvalId)}/${endpoint}`, {
-    decided_by: "lucas",
+    decided_by: operatorName,
     reason: `operator ${decision} from pharness ui`,
   });
 }
@@ -128,7 +142,7 @@ export async function decideApprovalGate(gateId, decision) {
     throw new Error(`unsupported approval gate decision: ${decision}`);
   }
   return postJson(`/api/approval-gates/${encodeURIComponent(gateId)}/${endpoint}`, {
-    decided_by: "lucas",
+    decided_by: operatorName,
     reason: `operator ${decision} from pharness ui`,
   });
 }

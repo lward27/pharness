@@ -28,6 +28,12 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          env:
+            - name: PHARNESS_UI_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.operatorTokenSecretName }}
+                  key: console-token
           readinessProbe:
             httpGet:
               path: /

@@ -5,6 +5,12 @@ nameOverride: pharness
 #     --from-literal=api-key=<fireworks api key> -n pharness
 #   kubectl create secret generic pharness-worker-token \
 #     --from-literal=token=<random worker token> -n pharness
+#   kubectl create secret generic pharness-operator-token \
+#     --from-literal=tokens=<name>=<token> \
+#     --from-literal=console-token=<token> -n pharness
+#   htpasswd basic-auth secret for the console ingress:
+#   kubectl create secret generic pharness-console-basic-auth \
+#     --from-literal=auth=<htpasswd line> -n pharness
 
 api:
   image:
@@ -20,6 +26,7 @@ api:
     size: 2Gi
   fireworksSecretName: pharness-fireworks
   workerTokenSecretName: pharness-worker-token
+  operatorTokenSecretName: pharness-operator-token
   model: accounts/fireworks/models/kimi-k2p5
   policy:
     subject: agent:pharness-worker
@@ -59,14 +66,14 @@ ui:
       memory: 256Mi
 
 ingress:
-  # Keep disabled until operator auth lands; the console mutates the
-  # control plane and must not be public without it.
-  enabled: false
+  enabled: true
   apiEnabled: false
   className: nginx
   clusterIssuer: letsencrypt-prod
   uiTlsSecretName: pharness-lucas-engineering-tls
   apiTlsSecretName: pharness-api-lucas-engineering-tls
+  # htpasswd secret gating the public console; ingress renders only when set.
+  basicAuthSecretName: pharness-console-basic-auth
 
 networkPolicy:
   enabled: true

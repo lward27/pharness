@@ -70,7 +70,22 @@ async fn main() -> anyhow::Result<()> {
     if worker_token.is_some() {
         tracing::info!("worker ingest routes enabled");
     }
-    let app = app::router(store, dispatcher, cluster_tools, policy, worker_token);
+    let operator_tokens =
+        parse_operator_tokens(std::env::var("PHARNESS_OPERATOR_TOKENS").ok().as_deref())?;
+    if !operator_tokens.is_empty() {
+        tracing::info!(
+            operators = operator_tokens.len(),
+            "operator token auth enabled"
+        );
+    }
+    let app = app::router(
+        store,
+        dispatcher,
+        cluster_tools,
+        policy,
+        worker_token,
+        operator_tokens,
+    );
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "pharness-api listening");
@@ -126,6 +141,28 @@ fn worker_job_env(config: &ApiRuntimeConfig) -> Vec<(String, String)> {
     }
 
     env
+}
+
+/// Parse `PHARNESS_OPERATOR_TOKENS` as comma-separated `name=token` pairs.
+fn parse_operator_tokens(raw: Option<&str>) -> anyhow::Result<Vec<(String, String)>> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+
+    let mut tokens = Vec::new();
+    for entry in raw.split(',').map(str::trim).filter(|e| !e.is_empty()) {
+        let Some((name, token)) = entry.split_once('=') else {
+            anyhow::bail!("PHARNESS_OPERATOR_TOKENS entries must be name=token pairs");
+        };
+        let name = name.trim();
+        let token = token.trim();
+        if name.is_empty() || token.is_empty() {
+            anyhow::bail!("PHARNESS_OPERATOR_TOKENS entries must not have blank names or tokens");
+        }
+        tokens.push((name.to_string(), token.to_string()));
+    }
+
+    Ok(tokens)
 }
 
 fn init_tracing() -> anyhow::Result<()> {

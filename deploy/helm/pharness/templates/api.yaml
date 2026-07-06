@@ -138,6 +138,11 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.api.workerTokenSecretName }}
                   key: token
+            - name: PHARNESS_OPERATOR_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.operatorTokenSecretName }}
+                  key: tokens
           volumeMounts:
             - name: data
               mountPath: /data

@@ -1,4 +1,4 @@
-{{- if .Values.ingress.enabled }}
+{{- if and .Values.ingress.enabled .Values.ingress.basicAuthSecretName }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/part-of: pharness
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    # The console injects the operator bearer server-side, so the public
+    # surface must carry its own authentication.
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .Values.ingress.basicAuthSecretName }}
+    nginx.ingress.kubernetes.io/auth-realm: "Pharness Console"
     # SSE through the operator console proxy.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
