@@ -429,6 +429,57 @@ cargo run -p pharness-cli -- approvals deny \
   --reason "not approved"
 ```
 
+## Cluster Runtime (V2)
+
+The runtime also deploys into the homelab Kubernetes cluster with one worker
+Job per run attempt. The API stays the sole SQLite writer; worker attempts
+report events and outcomes through token-gated `/api/internal/*` ingest
+routes.
+
+Worker dispatch is selected by `PHARNESS_WORKER_MODE`:
+
+- `local` (default): the in-process worker, exactly as before.
+- `kubernetes_job`: each run attempt executes in an isolated Job with a
+  non-root security context, read-only root filesystem, an emptyDir
+  workspace, and the read-only observer service account. Attempts exit at
+  terminal states or approval pauses; approvals launch a resume Job that
+  rehydrates from the persisted approval transcript.
+
+Deployment lives in `deploy/`:
+
+- `deploy/docker/Dockerfile.runtime` builds `pharness-api` + `pharness-worker`.
+- `deploy/docker/Dockerfile.ui` builds the operator console behind nginx with
+  same-origin `/api` proxying and server-side operator identity injection.
+- `deploy/helm/pharness` is deployed by the Argo CD Application registered in
+  the `lucas_engineering` app-of-apps; images build through the shared Tekton
+  `clone-build-push` pipeline.
+
+Secrets are created out-of-band in the `pharness` namespace: see the header
+comment in `deploy/helm/pharness/values.yaml`.
+
+### Auth
+
+When `PHARNESS_OPERATOR_TOKENS` (comma-separated `name=token` pairs) is set,
+every operator route requires `Authorization: Bearer <token>`; `/health`
+stays open and worker ingest uses its own `PHARNESS_WORKER_TOKEN`. The CLI
+sends `PHARNESS_API_TOKEN` automatically:
+
+```sh
+PHARNESS_API_URL=http://127.0.0.1:14777 PHARNESS_API_TOKEN=<operator token> cargo run -p pharness-cli -- runs summary
+```
+
+Loopback local mode without configured tokens keeps the previous
+auth-free behavior.
+
+### Cluster Smoke
+
+```sh
+scripts/pharness-cluster-runtime-smoke.sh
+```
+
+Validates the deployed control plane end to end; see
+[planning/v2-cluster-smoke-playbook.md](planning/v2-cluster-smoke-playbook.md).
+
 ## Current Status
 
-The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/LGTM/Tekton paths. See [planning/current-build-review.md](planning/current-build-review.md) for the current reviewed state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.
+The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/LGTM/Tekton paths. The V2 cluster runtime (worker Jobs, GitOps deployment, operator auth) is deploying per [planning/v2-cluster-runtime-plan.md](planning/v2-cluster-runtime-plan.md). See [planning/current-build-review.md](planning/current-build-review.md) for the reviewed V1 state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.
