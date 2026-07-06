@@ -1162,11 +1162,13 @@ name = "pharness-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "futures",
  "pharness-config",
  "pharness-core",
  "pharness-fireworks",
+ "pharness-runhost",
  "pharness-store",
  "secrecy",
  "serde",
@@ -1174,6 +1176,7 @@ dependencies = [
  "sha2",
  "tokio",
  "toml",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -1238,6 +1241,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pharness-runhost"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "pharness-core",
+ "pharness-fireworks",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "pharness-store"
 version = "0.1.0"
 dependencies = [
@@ -1247,6 +1263,24 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "pharness-worker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "pharness-config",
+ "pharness-core",
+ "pharness-fireworks",
+ "pharness-runhost",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

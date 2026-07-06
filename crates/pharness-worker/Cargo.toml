@@ -1,5 +1,5 @@
 [package]
-name = "pharness-api"
+name = "pharness-worker"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,22 +9,13 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-axum.workspace = true
-futures.workspace = true
-pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
+pharness-core = { path = "../pharness-core" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-runhost = { path = "../pharness-runhost" }
-pharness-store = { path = "../pharness-store" }
-secrecy.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 tokio.workspace = true
-toml.workspace = true
-tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-
-[dev-dependencies]
-tower = { version = "0.5", features = ["util"] }

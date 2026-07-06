@@ -30,13 +30,17 @@ use crate::dto::{
     TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkPlanRequest,
     TransitionWorkPlanResponse, TrustedEnvelopeResponse, WorkPlanResponse, WorkPlansResponse,
 };
-use crate::worker::LocalWorker;
-use axum::extract::{Path, Query, State};
+use crate::worker::{
+    attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event, LocalWorker,
+};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use pharness_runhost::AttemptOutcome;
 use futures::stream::{self, Stream};
 use pharness_core::{
     AgentAction, AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy,
@@ -82,6 +86,7 @@ pub struct AppState {
     worker: Option<LocalWorker>,
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
+    worker_token: Option<String>,
 }
 
 pub fn router(
@@ -89,13 +94,41 @@ pub fn router(
     worker: Option<LocalWorker>,
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
+    worker_token: Option<String>,
 ) -> Router {
     let state = AppState {
         store,
         worker,
         cluster_tools,
         policy,
+        worker_token,
     };
+
+    let internal = Router::new()
+        .route(
+            "/api/internal/runs/:run_id/attempt-context",
+            get(internal_attempt_context),
+        )
+        .route(
+            "/api/internal/runs/:run_id/mark-running",
+            post(internal_mark_running),
+        )
+        .route(
+            "/api/internal/runs/:run_id/events",
+            post(internal_ingest_events),
+        )
+        .route(
+            "/api/internal/runs/:run_id/outcome",
+            post(internal_ingest_outcome),
+        )
+        .route(
+            "/api/internal/runs/:run_id/control",
+            get(internal_run_control),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_worker_token,
+        ));
 
     Router::new()
         .route("/health", get(health))
@@ -270,6 +303,7 @@ pub fn router(
             "/api/permission-grants/:grant_id/revoke",
             post(revoke_permission_grant),
         )
+        .merge(internal)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
@@ -280,6 +314,165 @@ pub fn router(
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "ok": true }))
+}
+
+/// Gate `/api/internal/*` behind the configured worker token.
+///
+/// Worker ingest is disabled entirely when no token is configured, so a
+/// loopback-only local deployment exposes no unauthenticated write surface
+/// for remote workers.
+async fn require_worker_token(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let Some(expected) = state.worker_token.as_deref() else {
+        return ApiError::conflict("worker ingest is disabled: no worker token is configured")
+            .into_response();
+    };
+
+    let provided = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "));
+
+    match provided {
+        Some(token) if token_matches(token, expected) => next.run(request).await,
+        _ => ApiError::unauthorized("invalid or missing worker token").into_response(),
+    }
+}
+
+fn token_matches(provided: &str, expected: &str) -> bool {
+    let provided = Sha256::digest(provided.as_bytes());
+    let expected = Sha256::digest(expected.as_bytes());
+    provided == expected
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InternalAttemptContextQuery {
+    approval_id: Option<String>,
+}
+
+async fn internal_attempt_context(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    Query(query): Query<InternalAttemptContextQuery>,
+) -> Result<Json<pharness_runhost::AttemptSpec>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    let approval = match &query.approval_id {
+        Some(approval_id) => {
+            let approval = state
+                .store
+                .get_approval(approval_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("approval", approval_id))?;
+            if approval.run_id != run_id {
+                return Err(ApiError::conflict(
+                    "approval does not belong to the requested run",
+                ));
+            }
+            if approval.status != "approved" {
+                return Err(ApiError::conflict(
+                    "attempt resume requires an approved approval",
+                ));
+            }
+            Some(approval)
+        }
+        None => None,
+    };
+
+    let cwd = std::path::PathBuf::from(&run.cwd);
+    let spec = attempt_spec_for_run(&state.store, &run, &cwd, approval.as_ref())
+        .await
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+
+    Ok(Json(spec))
+}
+
+async fn internal_mark_running(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<RunResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state.store.mark_run_running(&run_id).await?;
+
+    Ok(Json(run.into()))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InternalIngestEventsRequest {
+    events: Vec<AgentEvent>,
+}
+
+async fn internal_ingest_events(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    Json(request): Json<InternalIngestEventsRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let mut ingested = 0usize;
+    for event in &request.events {
+        if event.run_id != run_id {
+            return Err(ApiError::conflict(
+                "event run_id does not match the ingest route",
+            ));
+        }
+        ingest_agent_event(&state.store, event).await?;
+        ingested += 1;
+    }
+
+    Ok(Json(json!({ "ingested": ingested })))
+}
+
+async fn internal_ingest_outcome(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    Json(outcome): Json<AttemptOutcome>,
+) -> Result<Json<RunResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    finish_run_from_attempt(&state.store, &run, outcome)
+        .await
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    Ok(Json(run.into()))
+}
+
+async fn internal_run_control(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    let cancel_requested = run.cancel_requested_at.is_some() || run.status == "cancelled";
+
+    Ok(Json(json!({
+        "cancel_requested": cancel_requested,
+        "status": run.status,
+    })))
 }
 
 async fn config_effective(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -7608,6 +7801,13 @@ impl ApiError {
         }
     }
 
+    fn unauthorized(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            message: message.into(),
+        }
+    }
+
     fn conflict(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::CONFLICT,
@@ -7695,7 +7895,8 @@ mod tests {
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
     use axum::Json;
     use pharness_core::{
-        AgentAction, PolicyMode, ReadOnlyClusterTools, RunId, RunScope, SafetyPolicy, SessionId,
+        AgentAction, AgentEvent, EventId, EventKind, PolicyMode, ReadOnlyClusterTools, RunId,
+        RunScope, SafetyPolicy, SessionId,
     };
     use pharness_store::{
         ApprovalGateListFilter, CreateApproval, CreateApprovalGate, CreateArtifact,
@@ -7715,6 +7916,7 @@ mod tests {
             worker: None,
             cluster_tools: ReadOnlyClusterTools::default(),
             policy: SafetyPolicy::default(),
+            worker_token: None,
         }
     }
 
@@ -7724,6 +7926,7 @@ mod tests {
             worker: None,
             cluster_tools,
             policy: SafetyPolicy::default(),
+            worker_token: None,
         }
     }
 
@@ -7930,6 +8133,188 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn internal_routes_are_disabled_without_worker_token() {
+        use tower::ServiceExt;
+
+        let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
+        let app = router(
+            store,
+            None,
+            ReadOnlyClusterTools::default(),
+            SafetyPolicy::default(),
+            None,
+        );
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/internal/runs/run_x/control")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn internal_routes_reject_missing_or_wrong_worker_token() {
+        use tower::ServiceExt;
+
+        let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
+        let app = router(
+            store,
+            None,
+            ReadOnlyClusterTools::default(),
+            SafetyPolicy::default(),
+            Some("worker-secret".to_string()),
+        );
+
+        let missing = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/internal/runs/run_x/control")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+        let wrong = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/internal/runs/run_x/control")
+                    .header("authorization", "Bearer not-the-token")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn internal_worker_contract_marks_running_and_finishes_run() {
+        use tower::ServiceExt;
+
+        let state = test_state().await;
+        let session_id = SessionId::new("ses_internal_contract");
+        let run_id = RunId::new("run_internal_contract");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "internal contract".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "internal contract".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 5,
+                initial_status: "queued".to_string(),
+                execution_target_json: json!({ "kind": "kubernetes_job" }),
+            })
+            .await
+            .unwrap();
+
+        let app = router(
+            state.store.clone(),
+            None,
+            ReadOnlyClusterTools::default(),
+            SafetyPolicy::default(),
+            Some("worker-secret".to_string()),
+        );
+
+        let context = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/internal/runs/run_internal_contract/attempt-context")
+                    .header("authorization", "Bearer worker-secret")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(context.status(), StatusCode::OK);
+
+        let marked = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/internal/runs/run_internal_contract/mark-running")
+                    .header("authorization", "Bearer worker-secret")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(marked.status(), StatusCode::OK);
+
+        let event = AgentEvent {
+            event_id: EventId::new("evt_run_internal_contract_2"),
+            session_id: session_id.clone(),
+            run_id: run_id.clone(),
+            seq: 2,
+            kind: EventKind::RunStarted,
+            payload: json!({ "source": "worker" }),
+        };
+        let ingested = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/internal/runs/run_internal_contract/events")
+                    .header("authorization", "Bearer worker-secret")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::to_vec(&json!({ "events": [event] })).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ingested.status(), StatusCode::OK);
+
+        let outcome = json!({
+            "status": "completed",
+            "turns": 1,
+            "summary": "done",
+            "error": null,
+            "approval": null,
+        });
+        let finished = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/internal/runs/run_internal_contract/outcome")
+                    .header("authorization", "Bearer worker-secret")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(serde_json::to_vec(&outcome).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(finished.status(), StatusCode::OK);
+
+        let run = state.store.get_run(&run_id).await.unwrap().unwrap();
+        assert_eq!(run.status, "completed");
+        let events = state.store.list_events(&run_id).await.unwrap();
+        assert_eq!(events.len(), 1);
+    }
+
+    #[tokio::test]
     async fn router_mounts_static_and_dynamic_run_routes() {
         let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
 
@@ -7938,6 +8323,7 @@ mod tests {
             None,
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
+            None,
         );
     }
 

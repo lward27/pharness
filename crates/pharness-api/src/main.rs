@@ -42,7 +42,14 @@ async fn main() -> anyhow::Result<()> {
         },
     )
     .context("failed to configure local worker")?;
-    let app = app::router(store, worker, cluster_tools, policy);
+    let worker_token = std::env::var("PHARNESS_WORKER_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if worker_token.is_some() {
+        tracing::info!("worker ingest routes enabled");
+    }
+    let app = app::router(store, worker, cluster_tools, policy, worker_token);
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "pharness-api listening");

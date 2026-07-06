@@ -5,7 +5,9 @@ members = [
     "crates/pharness-config",
     "crates/pharness-core",
     "crates/pharness-fireworks",
+    "crates/pharness-runhost",
     "crates/pharness-store",
+    "crates/pharness-worker",
 ]
 resolver = "2"
 
