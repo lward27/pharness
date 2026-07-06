@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PHarness UI QA Comparison</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #071013;
+        color: #f2f7f8;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      figure {
+        margin: 0;
+        border: 1px solid rgba(151, 176, 186, 0.28);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #0b171c;
+      }
+
+      figcaption {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(151, 176, 186, 0.22);
+        color: #c6d2d6;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="comparison">
+      <figure>
+        <figcaption>Source visual target</figcaption>
+        <img src="/pharness-source-mock.png" alt="Source PHarness mockup" />
+      </figure>
+      <figure>
+        <figcaption>Rendered prototype</figcaption>
+        <img src="/pharness-prototype-flow.png" alt="Rendered PHarness prototype" />
+      </figure>
+    </main>
+  </body>
+</html>
