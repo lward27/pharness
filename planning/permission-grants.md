@@ -18,8 +18,9 @@
 - Enforce namespace, repo, branch, and production-impacting grant scope when those fields are present. Empty lists mean unrestricted for that dimension; non-empty lists require an exact run-scope match. `production_impacting` requires an exact boolean match when set.
 - Enforce WorkPlan and ChangeSet grant scope when `work_plan_ids` or `change_set_ids` are present. Empty lists mean unrestricted for that dimension; non-empty lists require an exact run-scope id match.
 - Add trusted-envelope factory commands for WorkPlan and ChangeSet resources so operators do not need to hand-author grant scope JSON for common SDLC envelopes.
+- Require trusted-envelope factories to target approved WorkPlans. ChangeSet trusted envelopes also require the parent WorkPlan and target ChangeSet to both be approved. Draft/proposed resources cannot mint grants.
 - Emit the matching grant as `decision.grant_id` on allowed policy decisions. Machines should not parse policy prose to prove why an action was allowed.
-- Record grant lifecycle and use in durable audit events: `permission_grant.created`, `permission_grant.revoked`, and `permission_grant.used`.
+- Record grant lifecycle and use in durable audit events: `permission_grant.created`, `permission_grant.stale`, `permission_grant.revoked`, and `permission_grant.used`.
 - Accept optional `created_by` on grant creation and use it as the `permission_grant.created` audit actor. The grant row remains policy state; actor attribution belongs in the audit event.
 - Do not let grants override denials. Secret-accessing, privileged, destructive, network, shell, registry, deployment, and production mutation paths remain gated by the base policy.
 - Treat `expires_at` as Unix milliseconds for now. Invalid expiry values are rejected at create time or ignored during snapshotting if older data exists.

@@ -4,12 +4,13 @@
 - Run it after the main smoke playbook has produced at least one remediation plan, or after any live run that created a draft remediation plan. This slice intentionally does not add fixture-only API state.
 - Use `change-sets create-trusted-envelope` for the actual no-approval write smoke because it is narrower than a WorkPlan-only envelope.
 - Keep the negative mismatch smoke manual-safe: it should pause at approval instead of writing, then the pending approval is denied.
+- Material ChangeSet and WorkPlan revisions should mark matching trusted envelopes `stale`. Stale grants should not be snapshotted onto future runs.
+- Trusted envelopes require the WorkPlan or ChangeSet to be `approved` first.
+- Readiness commands should expose whether a WorkPlan or ChangeSet is currently ready for autonomous trusted-envelope execution.
 
 # Backlog
 
 - Add a fixture-backed control-plane seed command when we want this smoke to run from an empty database without a live cluster or model-backed remediation plan.
-- Add automatic stale-envelope checks after WorkPlan or ChangeSet material revisions.
-- Require approved WorkPlan or ChangeSet status before trusted-envelope creation once status gates become policy, not just review metadata.
 
 # Trusted Envelope Smoke Playbook
 
@@ -60,6 +61,25 @@ Expected signal:
 - `WORK_PLAN_ID` is non-empty.
 - The WorkPlan is returned with a lifecycle `status` and `revision`.
 
+## Approve The WorkPlan
+
+```sh
+cargo run -p pharness-cli -- work-plans transition \
+  --work-plan-id "$WORK_PLAN_ID" \
+  --target-status proposed \
+  --actor lucas \
+  --reason "trusted envelope smoke ready for WorkPlan review" | tee target/pharness-envelope-work-plan-proposed.json
+cargo run -p pharness-cli -- work-plans transition \
+  --work-plan-id "$WORK_PLAN_ID" \
+  --target-status approved \
+  --actor lucas \
+  --reason "trusted envelope smoke WorkPlan approved" | tee target/pharness-envelope-work-plan-approved.json
+```
+
+Expected signal:
+
+- The final WorkPlan status is `approved`.
+
 ## Smoke The WorkPlan Envelope Factory
 
 ```sh
@@ -87,6 +107,20 @@ Expected signal:
 - `grant.scope.work_plan_ids[0]` equals `WORK_PLAN_ID`.
 - `grant.scope.change_set_ids` is absent or `null`.
 - WorkPlan audit events include `work_plan.trusted_envelope_created`.
+
+## Inspect WorkPlan Readiness
+
+```sh
+cargo run -p pharness-cli -- work-plans readiness \
+  --work-plan-id "$WORK_PLAN_ID" | tee target/pharness-work-plan-readiness.json | jq '{ready, summary, blocker_codes: [.blockers[].code], warning_codes: [.warnings[].code], active_grants: (.trusted_envelopes.active | length)}'
+```
+
+Expected signal:
+
+- `active_grants` is `1`.
+- `warning_codes` may include `missing_change_set` until the ChangeSet exists.
+- `ready` is `true` only if the remediation path has no pending, stale, or rejected approval gates.
+- If `blocker_codes` includes `approval_gate_pending`, satisfy or waive the gate in the normal approval-gate flow before treating the WorkPlan as executable.
 
 ## Create And Approve A ChangeSet
 
@@ -157,6 +191,19 @@ Expected signal:
 - The grant status is `active`.
 - The grant scope includes both `WORK_PLAN_ID` and `CHANGE_SET_ID`.
 - ChangeSet audit events include `change_set.trusted_envelope_created`.
+
+## Inspect ChangeSet Readiness
+
+```sh
+cargo run -p pharness-cli -- change-sets readiness \
+  --change-set-id "$CHANGE_SET_ID" | tee target/pharness-change-set-readiness.json | jq '{ready, summary, blocker_codes: [.blockers[].code], warning_codes: [.warnings[].code], active_grants: (.trusted_envelopes.active | length)}'
+```
+
+Expected signal:
+
+- `active_grants` is `1`.
+- `ready` is `true` only if the parent WorkPlan is approved, the ChangeSet is approved, the active trusted envelope exists, and the remediation path has no pending, stale, or rejected approval gates.
+- If `blocker_codes` includes `approval_gate_pending`, satisfy or waive the gate in the normal approval-gate flow before treating the ChangeSet as executable.
 
 ## Run A Matching Scoped Write
 
@@ -229,6 +276,129 @@ Expected signal:
 - There is at least one `approval.required` event.
 - The mismatch file is not created after denying the approval.
 
+## Stale The ChangeSet Envelope
+
+```sh
+cargo run -p pharness-cli -- change-sets revise \
+  --change-set-id "$CHANGE_SET_ID" \
+  --summary "Trusted envelope smoke changed source payload" \
+  --actor lucas \
+  --reason "trusted envelope smoke material ChangeSet revision" \
+  --material-change true \
+  --change-set-json '{"changes":[{"path":"pharness-envelope-write-smoke.txt","operation":"create","summary":"Create smoke-test marker file with changed content marker"}],"rollback":"rm -f pharness-envelope-write-smoke.txt"}' \
+  | tee target/pharness-envelope-change-set-stale-revision.json
+```
+
+```sh
+cargo run -p pharness-cli -- permission-grants get \
+  --grant-id "$GRANT_ID" | tee target/pharness-change-set-envelope-stale-grant.json | jq '{id, status, revoked_by, revoke_reason}'
+cargo run -p pharness-cli -- audit-events \
+  --resource-kind permission_grant \
+  --resource-id "$GRANT_ID" | tee target/pharness-change-set-envelope-stale-audit.json | jq '[.events[].kind]'
+```
+
+Expected signal:
+
+- The grant status is `stale`.
+- `revoked_by` is `lucas`.
+- `revoke_reason` is `trusted envelope smoke material ChangeSet revision`.
+- PermissionGrant audit includes `permission_grant.stale`.
+
+## Inspect Stale ChangeSet Readiness
+
+```sh
+cargo run -p pharness-cli -- change-sets readiness \
+  --change-set-id "$CHANGE_SET_ID" | tee target/pharness-change-set-stale-readiness.json | jq '{ready, summary, blocker_codes: [.blockers[].code], warning_codes: [.warnings[].code], active_grants: (.trusted_envelopes.active | length), stale_grants: (.trusted_envelopes.stale | length)}'
+```
+
+Expected signal:
+
+- `ready` is `false`.
+- `blocker_codes` includes `change_set_not_approved` and `missing_active_trusted_envelope`.
+- `warning_codes` includes `stale_trusted_envelope`.
+- `active_grants` is `0`.
+- `stale_grants` is at least `1`.
+
+## Verify Stale ChangeSet Grant No Longer Authorizes Writes
+
+```sh
+rm -f pharness-envelope-stale-smoke.txt
+cargo run -p pharness-cli -- run \
+  --follow-events \
+  --task "Create a file named pharness-envelope-stale-smoke.txt in the workspace containing exactly: pharness stale envelope smoke test. Then finish with a short summary." \
+  --cwd "$PWD" \
+  --namespace apps-dev \
+  --repo git@example.test/team/pharness.git \
+  --branch smoke/trusted-envelope \
+  --work-plan-id "$WORK_PLAN_ID" \
+  --change-set-id "$CHANGE_SET_ID" \
+  --timeout-ms 180000 | tee target/pharness-envelope-stale-write.json
+```
+
+```sh
+jq '{wait_status, run_status: .run.status, scope: .run.scope, result: .run.result}' target/pharness-envelope-stale-write.json
+jq '[.events[] | select(.type == "approval.required")] | length' target/pharness-envelope-stale-write.json
+STALE_APPROVAL_ID="$(jq -r '.run.result.approval_id // empty' target/pharness-envelope-stale-write.json)"
+if [ -n "$STALE_APPROVAL_ID" ]; then
+  cargo run -p pharness-cli -- approvals deny \
+    --approval-id "$STALE_APPROVAL_ID" \
+    --decided-by lucas \
+    --reason "trusted envelope stale smoke cleanup" \
+    --wait \
+    --timeout-ms 180000 | tee target/pharness-envelope-stale-denied.json
+fi
+test ! -f pharness-envelope-stale-smoke.txt
+```
+
+Expected signal:
+
+- The stale-envelope run stops at `approval_required`.
+- There is at least one `approval.required` event.
+- The stale smoke file is not created after denying the approval.
+
+## Stale The WorkPlan Envelope
+
+```sh
+cargo run -p pharness-cli -- work-plans revise \
+  --work-plan-id "$WORK_PLAN_ID" \
+  --summary "Trusted envelope smoke changed WorkPlan" \
+  --actor lucas \
+  --reason "trusted envelope smoke material WorkPlan revision" \
+  --material-change true \
+  --work-plan-json '{"steps":[{"id":"inspect"},{"id":"prepare_revised_changeset"}],"execution":{"enabled":false}}' \
+  | tee target/pharness-envelope-work-plan-stale-revision.json
+```
+
+```sh
+cargo run -p pharness-cli -- permission-grants get \
+  --grant-id "$WORK_PLAN_GRANT_ID" | tee target/pharness-work-plan-envelope-stale-grant.json | jq '{id, status, revoked_by, revoke_reason}'
+cargo run -p pharness-cli -- audit-events \
+  --resource-kind permission_grant \
+  --resource-id "$WORK_PLAN_GRANT_ID" | tee target/pharness-work-plan-envelope-stale-audit.json | jq '[.events[].kind]'
+```
+
+Expected signal:
+
+- The WorkPlan grant status is `stale`.
+- `revoked_by` is `lucas`.
+- `revoke_reason` is `trusted envelope smoke material WorkPlan revision`.
+- PermissionGrant audit includes `permission_grant.stale`.
+
+## Inspect Stale WorkPlan Readiness
+
+```sh
+cargo run -p pharness-cli -- work-plans readiness \
+  --work-plan-id "$WORK_PLAN_ID" | tee target/pharness-work-plan-stale-readiness.json | jq '{ready, summary, blocker_codes: [.blockers[].code], warning_codes: [.warnings[].code], active_grants: (.trusted_envelopes.active | length), stale_grants: (.trusted_envelopes.stale | length)}'
+```
+
+Expected signal:
+
+- `ready` is `false`.
+- `blocker_codes` includes `work_plan_not_approved` and `missing_active_trusted_envelope`.
+- `warning_codes` includes `stale_trusted_envelope`.
+- `active_grants` is `0`.
+- `stale_grants` is at least `1`.
+
 ## Revoke Grants And Inspect Audit
 
 ```sh
@@ -247,11 +417,11 @@ cargo run -p pharness-cli -- audit-events \
 
 Expected signal:
 
-- Both grants return `status = revoked`.
-- PermissionGrant audit includes `permission_grant.created`, `permission_grant.used`, and `permission_grant.revoked` for the ChangeSet grant.
+- Both grants return `status = revoked`, even if they were previously `stale`.
+- PermissionGrant audit includes `permission_grant.created`, `permission_grant.used`, `permission_grant.stale`, and `permission_grant.revoked` for the ChangeSet grant.
 
 ## Cleanup
 
 ```sh
-rm -f pharness-envelope-write-smoke.txt pharness-envelope-mismatch-smoke.txt
+rm -f pharness-envelope-write-smoke.txt pharness-envelope-mismatch-smoke.txt pharness-envelope-stale-smoke.txt
 ```

@@ -2,9 +2,11 @@
 
 use anyhow::{bail, Context};
 use clap::{Parser, Subcommand};
+use futures::StreamExt;
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{PolicyMode, RunScope};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -69,6 +71,26 @@ enum Command {
         #[command(subcommand)]
         command: ChangeSetCommand,
     },
+    /// Inspect durable pipeline intents.
+    PipelineIntents {
+        #[command(subcommand)]
+        command: PipelineIntentCommand,
+    },
+    /// Inspect durable deployment intents.
+    DeploymentIntents {
+        #[command(subcommand)]
+        command: DeploymentIntentCommand,
+    },
+    /// Inspect durable releases.
+    Releases {
+        #[command(subcommand)]
+        command: ReleaseCommand,
+    },
+    /// Inspect durable registry evidence.
+    RegistryEvidence {
+        #[command(subcommand)]
+        command: RegistryEvidenceCommand,
+    },
     /// Inspect durable approval gates.
     ApprovalGates {
         #[command(subcommand)]
@@ -112,6 +134,8 @@ enum RunCommand {
     Cancel(RunCancelArgs),
     /// Fetch one run by id.
     Get(RunGetArgs),
+    /// Fetch or stream durable events for one run.
+    Events(RunEventsArgs),
     /// Fetch stored file diffs for one run.
     Diff(RunDiffArgs),
 }
@@ -130,6 +154,8 @@ enum ObservationCommand {
     List(ObservationListArgs),
     /// Fetch one observation by id.
     Get(ObservationGetArgs),
+    /// Create an observation record.
+    Create(ObservationCreateArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -138,6 +164,8 @@ enum IncidentCommand {
     List(IncidentListArgs),
     /// Fetch one incident candidate by id.
     Get(IncidentGetArgs),
+    /// Create an incident candidate from an observation.
+    Create(IncidentCreateArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -146,6 +174,8 @@ enum RemediationPlanCommand {
     List(RemediationPlanListArgs),
     /// Fetch one remediation plan draft by id.
     Get(RemediationPlanGetArgs),
+    /// Create a remediation plan draft from an incident.
+    Create(RemediationPlanCreateArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -154,6 +184,10 @@ enum WorkPlanCommand {
     List(Box<WorkPlanListArgs>),
     /// Fetch one work plan by id.
     Get(WorkPlanGetArgs),
+    /// Summarize whether one WorkPlan is ready for trusted-envelope execution.
+    Readiness(WorkPlanReadinessArgs),
+    /// Fetch one compact SDLC flow rooted at a WorkPlan.
+    Flow(WorkPlanFlowArgs),
     /// Create or fetch a WorkPlan from one remediation plan.
     CreateFromRemediationPlan(WorkPlanCreateFromRemediationPlanArgs),
     /// Revise a WorkPlan and stale prior satisfied or waived gates on material changes.
@@ -170,6 +204,10 @@ enum ChangeSetCommand {
     List(Box<ChangeSetListArgs>),
     /// Fetch one change set by id.
     Get(ChangeSetGetArgs),
+    /// Summarize whether one ChangeSet is ready for trusted-envelope execution.
+    Readiness(ChangeSetReadinessArgs),
+    /// Fetch one compact SDLC flow rooted at a ChangeSet.
+    Flow(ChangeSetFlowArgs),
     /// Create or fetch a ChangeSet for one WorkPlan.
     Create(ChangeSetCreateArgs),
     /// Revise a ChangeSet and stale prior satisfied or waived gates on material changes.
@@ -178,6 +216,62 @@ enum ChangeSetCommand {
     Transition(ChangeSetTransitionArgs),
     /// Create a bounded trusted write envelope for one ChangeSet.
     CreateTrustedEnvelope(ChangeSetCreateTrustedEnvelopeArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum PipelineIntentCommand {
+    /// List durable pipeline intents.
+    List(Box<PipelineIntentListArgs>),
+    /// Fetch one pipeline intent by id.
+    Get(PipelineIntentGetArgs),
+    /// Create or fetch a proposed PipelineIntent for one approved ChangeSet.
+    CreateFromChangeSet(PipelineIntentCreateFromChangeSetArgs),
+    /// Move a PipelineIntent through its lifecycle state machine.
+    Transition(PipelineIntentTransitionArgs),
+    /// Attach a Tekton PipelineRunAnalysis observation as PipelineIntent evidence.
+    AttachEvidence(PipelineIntentAttachEvidenceArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum DeploymentIntentCommand {
+    /// List durable deployment intents.
+    List(Box<DeploymentIntentListArgs>),
+    /// Fetch one deployment intent by id.
+    Get(DeploymentIntentGetArgs),
+    /// Create or fetch a proposed DeploymentIntent for one approved PipelineIntent.
+    CreateFromPipelineIntent(DeploymentIntentCreateFromPipelineIntentArgs),
+    /// Move a DeploymentIntent through its lifecycle state machine.
+    Transition(DeploymentIntentTransitionArgs),
+    /// Attach an Argo CD Application observation as DeploymentIntent evidence.
+    AttachEvidence(DeploymentIntentAttachEvidenceArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseCommand {
+    /// List durable releases.
+    List(Box<ReleaseListArgs>),
+    /// Fetch one release by id.
+    Get(ReleaseGetArgs),
+    /// Create or fetch a proposed Release for one approved DeploymentIntent.
+    CreateFromDeploymentIntent(ReleaseCreateFromDeploymentIntentArgs),
+    /// Move a Release through its lifecycle state machine.
+    Transition(ReleaseTransitionArgs),
+    /// Attach a Prometheus or Loki observation as Release observability evidence.
+    AttachEvidence(ReleaseAttachEvidenceArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum RegistryEvidenceCommand {
+    /// List durable registry evidence records.
+    List(Box<RegistryEvidenceListArgs>),
+    /// Fetch one registry evidence record by id.
+    Get(RegistryEvidenceGetArgs),
+    /// Create or fetch proposed RegistryEvidence for one approved Release.
+    CreateFromRelease(Box<RegistryEvidenceCreateFromReleaseArgs>),
+    /// Inspect an image and record the result as RegistryEvidence for one approved Release.
+    CreateFromInspection(Box<RegistryEvidenceCreateFromInspectionArgs>),
+    /// Move RegistryEvidence through its lifecycle state machine.
+    Transition(RegistryEvidenceTransitionArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -226,6 +320,8 @@ enum CapabilityCommand {
     TektonGetTaskRuns(TektonGetRunsArgs),
     /// Analyze one Tekton PipelineRun and related TaskRuns.
     TektonAnalyzePipelineRun(TektonAnalyzePipelineRunArgs),
+    /// Inspect an OCI/Docker registry image manifest anonymously.
+    RegistryInspectImage(RegistryInspectImageArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -292,6 +388,27 @@ struct RunGetArgs {
     run_id: String,
     #[arg(long)]
     with_events: bool,
+}
+
+#[derive(Debug, Parser)]
+struct RunEventsArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    run_id: String,
+    /// Return only events with seq greater than this cursor.
+    #[arg(long)]
+    after_seq: Option<u64>,
+    /// Use the Server-Sent Events endpoint and print newline-delimited event JSON.
+    #[arg(long)]
+    stream: bool,
+    /// Maximum time to wait for the next streamed event before failing.
+    #[arg(long, default_value_t = 300_000)]
+    timeout_ms: u64,
 }
 
 #[derive(Debug, Parser)]
@@ -524,6 +641,24 @@ struct TektonAnalyzePipelineRunArgs {
 }
 
 #[derive(Debug, Parser)]
+struct RegistryInspectImageArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    image_ref: String,
+    /// Optional registry base URL. Must not include credentials.
+    #[arg(long)]
+    registry_base_url: Option<String>,
+    /// Cancel direct capability execution if the API does not finish in this many milliseconds.
+    #[arg(long, default_value_t = DEFAULT_CAPABILITY_TIMEOUT_MS)]
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Parser)]
 struct ApprovalListArgs {
     #[arg(
         long,
@@ -690,6 +825,46 @@ struct ObservationGetArgs {
 }
 
 #[derive(Debug, Parser)]
+struct ObservationCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    id: Option<String>,
+    #[arg(long)]
+    session_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    source: String,
+    #[arg(long)]
+    kind: String,
+    #[arg(long)]
+    subject: String,
+    #[arg(long)]
+    summary: String,
+    #[arg(long)]
+    resource_namespace: Option<String>,
+    #[arg(long)]
+    resource_kind: Option<String>,
+    #[arg(long)]
+    resource_name: Option<String>,
+    #[arg(long)]
+    resource_ref_json: Option<String>,
+    #[arg(long)]
+    artifact_id: Option<String>,
+    #[arg(long)]
+    data_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct IncidentListArgs {
     #[arg(
         long,
@@ -731,6 +906,40 @@ struct IncidentGetArgs {
     api_url: String,
     #[arg(long)]
     incident_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct IncidentCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    id: Option<String>,
+    #[arg(long)]
+    observation_id: String,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    severity: String,
+    #[arg(long)]
+    title: String,
+    #[arg(long)]
+    summary: String,
+    #[arg(long)]
+    resource_namespace: Option<String>,
+    #[arg(long)]
+    resource_kind: Option<String>,
+    #[arg(long)]
+    resource_name: Option<String>,
+    #[arg(long)]
+    data_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -780,6 +989,42 @@ struct RemediationPlanGetArgs {
 }
 
 #[derive(Debug, Parser)]
+struct RemediationPlanCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    id: Option<String>,
+    #[arg(long)]
+    incident_id: String,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    title: String,
+    #[arg(long)]
+    summary: String,
+    #[arg(long)]
+    risk_level: String,
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    requires_approval: bool,
+    #[arg(long)]
+    resource_namespace: Option<String>,
+    #[arg(long)]
+    resource_kind: Option<String>,
+    #[arg(long)]
+    resource_name: Option<String>,
+    #[arg(long)]
+    plan_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct WorkPlanListArgs {
     #[arg(
         long,
@@ -817,6 +1062,30 @@ struct WorkPlanListArgs {
 
 #[derive(Debug, Parser)]
 struct WorkPlanGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_plan_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct WorkPlanReadinessArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_plan_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct WorkPlanFlowArgs {
     #[arg(
         long,
         env = "PHARNESS_API_URL",
@@ -966,6 +1235,30 @@ struct ChangeSetGetArgs {
 }
 
 #[derive(Debug, Parser)]
+struct ChangeSetReadinessArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct ChangeSetFlowArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+}
+
+#[derive(Debug, Parser)]
 struct ChangeSetCreateArgs {
     #[arg(
         long,
@@ -1061,6 +1354,536 @@ struct ChangeSetCreateTrustedEnvelopeArgs {
     production_impacting: bool,
     #[arg(long)]
     expires_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: Option<String>,
+    #[arg(long)]
+    work_plan_id: Option<String>,
+    #[arg(long)]
+    remediation_plan_id: Option<String>,
+    #[arg(long)]
+    incident_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    intent_kind: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    resource_namespace: Option<String>,
+    #[arg(long)]
+    resource_kind: Option<String>,
+    #[arg(long)]
+    resource_name: Option<String>,
+    /// Include pipeline intents created at or after this Unix epoch millisecond.
+    #[arg(long)]
+    created_after_ms: Option<i64>,
+    /// Include pipeline intents created at or before this Unix epoch millisecond.
+    #[arg(long)]
+    created_before_ms: Option<i64>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentCreateFromChangeSetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    intent_kind: Option<String>,
+    #[arg(long)]
+    intent_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentAttachEvidenceArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    observation_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: Option<String>,
+    #[arg(long)]
+    change_set_id: Option<String>,
+    #[arg(long)]
+    work_plan_id: Option<String>,
+    #[arg(long)]
+    remediation_plan_id: Option<String>,
+    #[arg(long)]
+    incident_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    intent_kind: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    target_environment: Option<String>,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    argo_application: Option<String>,
+    #[arg(long)]
+    resource_namespace: Option<String>,
+    #[arg(long)]
+    resource_kind: Option<String>,
+    #[arg(long)]
+    resource_name: Option<String>,
+    /// Include deployment intents created at or after this Unix epoch millisecond.
+    #[arg(long)]
+    created_after_ms: Option<i64>,
+    /// Include deployment intents created at or before this Unix epoch millisecond.
+    #[arg(long)]
+    created_before_ms: Option<i64>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentCreateFromPipelineIntentArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    intent_kind: Option<String>,
+    #[arg(long)]
+    target_environment: Option<String>,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    argo_application: Option<String>,
+    #[arg(long)]
+    intent_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentAttachEvidenceArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    #[arg(long)]
+    observation_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: Option<String>,
+    #[arg(long)]
+    pipeline_intent_id: Option<String>,
+    #[arg(long)]
+    change_set_id: Option<String>,
+    #[arg(long)]
+    work_plan_id: Option<String>,
+    #[arg(long)]
+    remediation_plan_id: Option<String>,
+    #[arg(long)]
+    incident_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    release_kind: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    target_environment: Option<String>,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    argo_application: Option<String>,
+    #[arg(long)]
+    version: Option<String>,
+    #[arg(long)]
+    commit_sha: Option<String>,
+    #[arg(long)]
+    image_digest: Option<String>,
+    /// Include releases created at or after this Unix epoch millisecond.
+    #[arg(long)]
+    created_after_ms: Option<i64>,
+    /// Include releases created at or before this Unix epoch millisecond.
+    #[arg(long)]
+    created_before_ms: Option<i64>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseCreateFromDeploymentIntentArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    release_kind: Option<String>,
+    #[arg(long)]
+    version: Option<String>,
+    #[arg(long)]
+    commit_sha: Option<String>,
+    #[arg(long)]
+    image_digest: Option<String>,
+    #[arg(long)]
+    rollback_ref: Option<String>,
+    #[arg(long)]
+    release_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseAttachEvidenceArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    observation_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct RegistryEvidenceListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: Option<String>,
+    #[arg(long)]
+    deployment_intent_id: Option<String>,
+    #[arg(long)]
+    pipeline_intent_id: Option<String>,
+    #[arg(long)]
+    change_set_id: Option<String>,
+    #[arg(long)]
+    work_plan_id: Option<String>,
+    #[arg(long)]
+    remediation_plan_id: Option<String>,
+    #[arg(long)]
+    incident_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    registry: Option<String>,
+    #[arg(long)]
+    repository: Option<String>,
+    #[arg(long)]
+    image_ref: Option<String>,
+    #[arg(long)]
+    image_digest: Option<String>,
+    #[arg(long)]
+    tag: Option<String>,
+    #[arg(long)]
+    source: Option<String>,
+    #[arg(long)]
+    verification_status: Option<String>,
+    /// Include evidence created at or after this Unix epoch millisecond.
+    #[arg(long)]
+    created_after_ms: Option<i64>,
+    /// Include evidence created at or before this Unix epoch millisecond.
+    #[arg(long)]
+    created_before_ms: Option<i64>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct RegistryEvidenceGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    evidence_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct RegistryEvidenceCreateFromReleaseArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    registry: Option<String>,
+    #[arg(long)]
+    repository: Option<String>,
+    #[arg(long)]
+    image_ref: Option<String>,
+    #[arg(long)]
+    image_digest: Option<String>,
+    #[arg(long)]
+    tag: Option<String>,
+    #[arg(long)]
+    source: Option<String>,
+    #[arg(long)]
+    verification_status: Option<String>,
+    #[arg(long)]
+    evidence_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct RegistryEvidenceCreateFromInspectionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    image_ref: String,
+    #[arg(long)]
+    registry_base_url: Option<String>,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+    #[arg(long)]
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Parser)]
+struct RegistryEvidenceTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    evidence_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -1268,6 +2091,7 @@ async fn main() -> anyhow::Result<()> {
             RunCommand::Summary(args) => summarize_runs(args).await?,
             RunCommand::Cancel(args) => cancel_run(args).await?,
             RunCommand::Get(args) => get_run(args).await?,
+            RunCommand::Events(args) => get_run_events_command(args).await?,
             RunCommand::Diff(args) => get_run_diff(args).await?,
         },
         Command::Config(args) => config(args).await?,
@@ -1284,6 +2108,7 @@ async fn main() -> anyhow::Result<()> {
             CapabilityCommand::TektonAnalyzePipelineRun(args) => {
                 tekton_analyze_pipeline_run(args).await?
             }
+            CapabilityCommand::RegistryInspectImage(args) => registry_inspect_image(args).await?,
         },
         Command::Approvals { command } => match command {
             ApprovalCommand::List(args) => list_approvals(args).await?,
@@ -1299,18 +2124,23 @@ async fn main() -> anyhow::Result<()> {
         Command::Observations { command } => match command {
             ObservationCommand::List(args) => list_observations(args).await?,
             ObservationCommand::Get(args) => get_observation(args).await?,
+            ObservationCommand::Create(args) => create_observation(args).await?,
         },
         Command::Incidents { command } => match command {
             IncidentCommand::List(args) => list_incidents(args).await?,
             IncidentCommand::Get(args) => get_incident(args).await?,
+            IncidentCommand::Create(args) => create_incident(args).await?,
         },
         Command::RemediationPlans { command } => match command {
             RemediationPlanCommand::List(args) => list_remediation_plans(args).await?,
             RemediationPlanCommand::Get(args) => get_remediation_plan(args).await?,
+            RemediationPlanCommand::Create(args) => create_remediation_plan(args).await?,
         },
         Command::WorkPlans { command } => match command {
             WorkPlanCommand::List(args) => list_work_plans(*args).await?,
             WorkPlanCommand::Get(args) => get_work_plan(args).await?,
+            WorkPlanCommand::Readiness(args) => get_work_plan_readiness(args).await?,
+            WorkPlanCommand::Flow(args) => get_work_plan_flow(args).await?,
             WorkPlanCommand::CreateFromRemediationPlan(args) => {
                 create_work_plan_from_remediation_plan(args).await?
             }
@@ -1323,12 +2153,56 @@ async fn main() -> anyhow::Result<()> {
         Command::ChangeSets { command } => match command {
             ChangeSetCommand::List(args) => list_change_sets(*args).await?,
             ChangeSetCommand::Get(args) => get_change_set(args).await?,
+            ChangeSetCommand::Readiness(args) => get_change_set_readiness(args).await?,
+            ChangeSetCommand::Flow(args) => get_change_set_flow(args).await?,
             ChangeSetCommand::Create(args) => create_change_set(args).await?,
             ChangeSetCommand::Revise(args) => revise_change_set(args).await?,
             ChangeSetCommand::Transition(args) => transition_change_set(args).await?,
             ChangeSetCommand::CreateTrustedEnvelope(args) => {
                 create_change_set_trusted_envelope(args).await?
             }
+        },
+        Command::PipelineIntents { command } => match command {
+            PipelineIntentCommand::List(args) => list_pipeline_intents(*args).await?,
+            PipelineIntentCommand::Get(args) => get_pipeline_intent(args).await?,
+            PipelineIntentCommand::CreateFromChangeSet(args) => {
+                create_pipeline_intent_from_change_set(args).await?
+            }
+            PipelineIntentCommand::Transition(args) => transition_pipeline_intent(args).await?,
+            PipelineIntentCommand::AttachEvidence(args) => {
+                attach_pipeline_intent_evidence(args).await?
+            }
+        },
+        Command::DeploymentIntents { command } => match command {
+            DeploymentIntentCommand::List(args) => list_deployment_intents(*args).await?,
+            DeploymentIntentCommand::Get(args) => get_deployment_intent(args).await?,
+            DeploymentIntentCommand::CreateFromPipelineIntent(args) => {
+                create_deployment_intent_from_pipeline_intent(args).await?
+            }
+            DeploymentIntentCommand::Transition(args) => transition_deployment_intent(args).await?,
+            DeploymentIntentCommand::AttachEvidence(args) => {
+                attach_deployment_intent_evidence(args).await?
+            }
+        },
+        Command::Releases { command } => match command {
+            ReleaseCommand::List(args) => list_releases(*args).await?,
+            ReleaseCommand::Get(args) => get_release(args).await?,
+            ReleaseCommand::CreateFromDeploymentIntent(args) => {
+                create_release_from_deployment_intent(args).await?
+            }
+            ReleaseCommand::Transition(args) => transition_release(args).await?,
+            ReleaseCommand::AttachEvidence(args) => attach_release_evidence(args).await?,
+        },
+        Command::RegistryEvidence { command } => match command {
+            RegistryEvidenceCommand::List(args) => list_registry_evidence(*args).await?,
+            RegistryEvidenceCommand::Get(args) => get_registry_evidence(args).await?,
+            RegistryEvidenceCommand::CreateFromRelease(args) => {
+                create_registry_evidence_from_release(*args).await?
+            }
+            RegistryEvidenceCommand::CreateFromInspection(args) => {
+                create_registry_evidence_from_inspection(*args).await?
+            }
+            RegistryEvidenceCommand::Transition(args) => transition_registry_evidence(args).await?,
         },
         Command::ApprovalGates { command } => match command {
             ApprovalGateCommand::List(args) => list_approval_gates(*args).await?,
@@ -1481,6 +2355,21 @@ async fn tekton_analyze_pipeline_run(args: TektonAnalyzePipelineRunArgs) -> anyh
             "reason": "direct CLI capability execution",
             "namespace": args.namespace,
             "name": args.name,
+        }),
+        args.timeout_ms,
+    )
+    .await
+}
+
+async fn registry_inspect_image(args: RegistryInspectImageArgs) -> anyhow::Result<()> {
+    execute_capability(
+        &args.api_url,
+        serde_json::json!({
+            "action": "registry_inspect_image",
+            "id": "cli.registry_inspect_image",
+            "reason": "direct CLI capability execution",
+            "image_ref": args.image_ref,
+            "registry_base_url": args.registry_base_url,
         }),
         args.timeout_ms,
     )
@@ -1912,6 +2801,71 @@ async fn cancel_run(args: RunCancelArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn get_run_events_command(args: RunEventsArgs) -> anyhow::Result<()> {
+    if args.stream {
+        stream_run_events(args).await
+    } else {
+        let http = reqwest::Client::new();
+        let mut events = fetch_events(&args.api_url, &http, &args.run_id).await?;
+        if let Some(after_seq) = args.after_seq {
+            events.retain(|event| event_seq(event).is_some_and(|seq| seq > after_seq));
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&EventsResponse { events })?
+        );
+        Ok(())
+    }
+}
+
+async fn stream_run_events(args: RunEventsArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut request = http.get(api_url(
+        &args.api_url,
+        &format!("/api/runs/{}/events/stream", args.run_id),
+    ));
+    if let Some(after_seq) = args.after_seq {
+        request = request.query(&[("after_seq", after_seq)]);
+    }
+
+    let response = request
+        .send()
+        .await
+        .context("failed to stream run events")?
+        .error_for_status()
+        .context("pharness API rejected run event stream")?;
+    let mut chunks = response.bytes_stream();
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(args.timeout_ms);
+    let mut buffer = String::new();
+
+    loop {
+        let remaining = deadline
+            .checked_duration_since(tokio::time::Instant::now())
+            .unwrap_or_default();
+        let next = tokio::time::timeout(remaining, chunks.next())
+            .await
+            .with_context(|| {
+                format!(
+                    "timed out waiting for streamed run events after {} ms",
+                    args.timeout_ms
+                )
+            })?;
+
+        match next {
+            Some(Ok(chunk)) => {
+                let text = std::str::from_utf8(&chunk)
+                    .context("run event stream returned non-UTF-8 data")?;
+                buffer.push_str(&text.replace("\r\n", "\n"));
+                emit_sse_event_frames(&mut buffer)?;
+            }
+            Some(Err(error)) => return Err(error).context("run event stream failed"),
+            None => break,
+        }
+    }
+
+    Ok(())
+}
+
 async fn get_run_diff(args: RunDiffArgs) -> anyhow::Result<()> {
     let http = reqwest::Client::new();
     let response = http
@@ -2069,6 +3023,42 @@ async fn get_observation(args: ObservationGetArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn create_observation(args: ObservationCreateArgs) -> anyhow::Result<()> {
+    let resource_ref = parse_optional_json_object(args.resource_ref_json, "--resource-ref-json")?;
+    let data_json = parse_optional_json_object(args.data_json, "--data-json")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(&args.api_url, "/api/observations"))
+        .json(&serde_json::json!({
+            "id": args.id,
+            "session_id": args.session_id,
+            "run_id": args.run_id,
+            "source": args.source,
+            "kind": args.kind,
+            "subject": args.subject,
+            "summary": args.summary,
+            "resource_namespace": args.resource_namespace,
+            "resource_kind": args.resource_kind,
+            "resource_name": args.resource_name,
+            "resource_ref": resource_ref,
+            "artifact_id": args.artifact_id,
+            "data_json": data_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create observation")?
+        .error_for_status()
+        .context("pharness API rejected observation creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode observation creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_incidents(args: IncidentListArgs) -> anyhow::Result<()> {
     let http = reqwest::Client::new();
     let mut query = vec![
@@ -2134,6 +3124,38 @@ async fn get_incident(args: IncidentGetArgs) -> anyhow::Result<()> {
         .json::<serde_json::Value>()
         .await
         .context("failed to decode incident")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_incident(args: IncidentCreateArgs) -> anyhow::Result<()> {
+    let data_json = parse_optional_json_object(args.data_json, "--data-json")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(&args.api_url, "/api/incidents"))
+        .json(&serde_json::json!({
+            "id": args.id,
+            "observation_id": args.observation_id,
+            "status": args.status,
+            "severity": args.severity,
+            "title": args.title,
+            "summary": args.summary,
+            "resource_namespace": args.resource_namespace,
+            "resource_kind": args.resource_kind,
+            "resource_name": args.resource_name,
+            "data_json": data_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create incident")?
+        .error_for_status()
+        .context("pharness API rejected incident creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode incident creation")?;
 
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
@@ -2212,6 +3234,39 @@ async fn get_remediation_plan(args: RemediationPlanGetArgs) -> anyhow::Result<()
     Ok(())
 }
 
+async fn create_remediation_plan(args: RemediationPlanCreateArgs) -> anyhow::Result<()> {
+    let plan_json = parse_optional_json_object(args.plan_json, "--plan-json")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(&args.api_url, "/api/remediation-plans"))
+        .json(&serde_json::json!({
+            "id": args.id,
+            "incident_id": args.incident_id,
+            "status": args.status,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "requires_approval": args.requires_approval,
+            "resource_namespace": args.resource_namespace,
+            "resource_kind": args.resource_kind,
+            "resource_name": args.resource_name,
+            "plan_json": plan_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create remediation plan")?
+        .error_for_status()
+        .context("pharness API rejected remediation plan creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode remediation plan creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_work_plans(args: WorkPlanListArgs) -> anyhow::Result<()> {
     let http = reqwest::Client::new();
     let mut query = vec![
@@ -2283,6 +3338,46 @@ async fn get_work_plan(args: WorkPlanGetArgs) -> anyhow::Result<()> {
         .json::<serde_json::Value>()
         .await
         .context("failed to decode work plan")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_work_plan_readiness(args: WorkPlanReadinessArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/work-plans/{}/readiness", args.work_plan_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch work plan readiness")?
+        .error_for_status()
+        .context("pharness API rejected work plan readiness fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode work plan readiness")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_work_plan_flow(args: WorkPlanFlowArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/work-plans/{}/flow", args.work_plan_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch work plan flow")?
+        .error_for_status()
+        .context("pharness API rejected work plan flow fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode work plan flow")?;
 
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
@@ -2478,6 +3573,46 @@ async fn get_change_set(args: ChangeSetGetArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn get_change_set_readiness(args: ChangeSetReadinessArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/change-sets/{}/readiness", args.change_set_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch change set readiness")?
+        .error_for_status()
+        .context("pharness API rejected change set readiness fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode change set readiness")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_change_set_flow(args: ChangeSetFlowArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/change-sets/{}/flow", args.change_set_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch change set flow")?
+        .error_for_status()
+        .context("pharness API rejected change set flow fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode change set flow")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn create_change_set(args: ChangeSetCreateArgs) -> anyhow::Result<()> {
     let change_set_json = parse_json_object(&args.change_set_json, "--change-set-json")
         .context("failed to parse --change-set-json as a JSON object")?;
@@ -2590,6 +3725,761 @@ async fn create_change_set_trusted_envelope(
         .json::<serde_json::Value>()
         .await
         .context("failed to decode ChangeSet trusted envelope creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_pipeline_intents(args: PipelineIntentListArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut query = Vec::new();
+    if let Some(value) = args.change_set_id {
+        query.push(("change_set_id", value));
+    }
+    if let Some(value) = args.work_plan_id {
+        query.push(("work_plan_id", value));
+    }
+    if let Some(value) = args.remediation_plan_id {
+        query.push(("remediation_plan_id", value));
+    }
+    if let Some(value) = args.incident_id {
+        query.push(("incident_id", value));
+    }
+    if let Some(value) = args.run_id {
+        query.push(("run_id", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    if let Some(value) = args.intent_kind {
+        query.push(("intent_kind", value));
+    }
+    if let Some(value) = args.risk_level {
+        query.push(("risk_level", value));
+    }
+    if let Some(value) = args.resource_namespace {
+        query.push(("resource_namespace", value));
+    }
+    if let Some(value) = args.resource_kind {
+        query.push(("resource_kind", value));
+    }
+    if let Some(value) = args.resource_name {
+        query.push(("resource_name", value));
+    }
+    if let Some(value) = args.created_after_ms {
+        query.push(("created_after_ms", value.to_string()));
+    }
+    if let Some(value) = args.created_before_ms {
+        query.push(("created_before_ms", value.to_string()));
+    }
+    query.push(("limit", args.limit.to_string()));
+    query.push(("offset", args.offset.to_string()));
+
+    let response = http
+        .get(api_url(&args.api_url, "/api/pipeline-intents"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch pipeline intents")?
+        .error_for_status()
+        .context("pharness API rejected pipeline intent list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode pipeline intent list")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_pipeline_intent(args: PipelineIntentGetArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/pipeline-intents/{}", args.pipeline_intent_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch pipeline intent")?
+        .error_for_status()
+        .context("pharness API rejected pipeline intent fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode pipeline intent")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_pipeline_intent_from_change_set(
+    args: PipelineIntentCreateFromChangeSetArgs,
+) -> anyhow::Result<()> {
+    let intent_json = args
+        .intent_json
+        .as_deref()
+        .map(|value| parse_json_object(value, "--intent-json"))
+        .transpose()
+        .context("failed to parse --intent-json as a JSON object")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            "/api/pipeline-intents/from-change-set",
+        ))
+        .json(&serde_json::json!({
+            "change_set_id": args.change_set_id,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "intent_kind": args.intent_kind,
+            "intent_json": intent_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create pipeline intent")?
+        .error_for_status()
+        .context("pharness API rejected pipeline intent creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode pipeline intent creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn transition_pipeline_intent(args: PipelineIntentTransitionArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/pipeline-intents/{}/transition",
+                args.pipeline_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition pipeline intent")?
+        .error_for_status()
+        .context("pharness API rejected pipeline intent transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode pipeline intent transition")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn attach_pipeline_intent_evidence(
+    args: PipelineIntentAttachEvidenceArgs,
+) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/pipeline-intents/{}/evidence", args.pipeline_intent_id),
+        ))
+        .json(&serde_json::json!({
+            "observation_id": args.observation_id,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to attach pipeline intent evidence")?
+        .error_for_status()
+        .context("pharness API rejected pipeline intent evidence attachment")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode pipeline intent evidence attachment")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_deployment_intents(args: DeploymentIntentListArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut query = Vec::new();
+    if let Some(value) = args.pipeline_intent_id {
+        query.push(("pipeline_intent_id", value));
+    }
+    if let Some(value) = args.change_set_id {
+        query.push(("change_set_id", value));
+    }
+    if let Some(value) = args.work_plan_id {
+        query.push(("work_plan_id", value));
+    }
+    if let Some(value) = args.remediation_plan_id {
+        query.push(("remediation_plan_id", value));
+    }
+    if let Some(value) = args.incident_id {
+        query.push(("incident_id", value));
+    }
+    if let Some(value) = args.run_id {
+        query.push(("run_id", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    if let Some(value) = args.intent_kind {
+        query.push(("intent_kind", value));
+    }
+    if let Some(value) = args.risk_level {
+        query.push(("risk_level", value));
+    }
+    if let Some(value) = args.target_environment {
+        query.push(("target_environment", value));
+    }
+    if let Some(value) = args.target_namespace {
+        query.push(("target_namespace", value));
+    }
+    if let Some(value) = args.argo_application {
+        query.push(("argo_application", value));
+    }
+    if let Some(value) = args.resource_namespace {
+        query.push(("resource_namespace", value));
+    }
+    if let Some(value) = args.resource_kind {
+        query.push(("resource_kind", value));
+    }
+    if let Some(value) = args.resource_name {
+        query.push(("resource_name", value));
+    }
+    if let Some(value) = args.created_after_ms {
+        query.push(("created_after_ms", value.to_string()));
+    }
+    if let Some(value) = args.created_before_ms {
+        query.push(("created_before_ms", value.to_string()));
+    }
+    query.push(("limit", args.limit.to_string()));
+    query.push(("offset", args.offset.to_string()));
+
+    let response = http
+        .get(api_url(&args.api_url, "/api/deployment-intents"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch deployment intents")?
+        .error_for_status()
+        .context("pharness API rejected deployment intent list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode deployment intent list")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_deployment_intent(args: DeploymentIntentGetArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/deployment-intents/{}", args.deployment_intent_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch deployment intent")?
+        .error_for_status()
+        .context("pharness API rejected deployment intent fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode deployment intent")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_deployment_intent_from_pipeline_intent(
+    args: DeploymentIntentCreateFromPipelineIntentArgs,
+) -> anyhow::Result<()> {
+    let intent_json = args
+        .intent_json
+        .as_deref()
+        .map(|value| parse_json_object(value, "--intent-json"))
+        .transpose()
+        .context("failed to parse --intent-json as a JSON object")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            "/api/deployment-intents/from-pipeline-intent",
+        ))
+        .json(&serde_json::json!({
+            "pipeline_intent_id": args.pipeline_intent_id,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "intent_kind": args.intent_kind,
+            "target_environment": args.target_environment,
+            "target_namespace": args.target_namespace,
+            "argo_application": args.argo_application,
+            "intent_json": intent_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create deployment intent")?
+        .error_for_status()
+        .context("pharness API rejected deployment intent creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode deployment intent creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn transition_deployment_intent(args: DeploymentIntentTransitionArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/deployment-intents/{}/transition",
+                args.deployment_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition deployment intent")?
+        .error_for_status()
+        .context("pharness API rejected deployment intent transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode deployment intent transition")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn attach_deployment_intent_evidence(
+    args: DeploymentIntentAttachEvidenceArgs,
+) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/deployment-intents/{}/evidence",
+                args.deployment_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "observation_id": args.observation_id,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to attach deployment intent evidence")?
+        .error_for_status()
+        .context("pharness API rejected deployment intent evidence attachment")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode deployment intent evidence attachment")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_releases(args: ReleaseListArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut query = Vec::new();
+    if let Some(value) = args.deployment_intent_id {
+        query.push(("deployment_intent_id", value));
+    }
+    if let Some(value) = args.pipeline_intent_id {
+        query.push(("pipeline_intent_id", value));
+    }
+    if let Some(value) = args.change_set_id {
+        query.push(("change_set_id", value));
+    }
+    if let Some(value) = args.work_plan_id {
+        query.push(("work_plan_id", value));
+    }
+    if let Some(value) = args.remediation_plan_id {
+        query.push(("remediation_plan_id", value));
+    }
+    if let Some(value) = args.incident_id {
+        query.push(("incident_id", value));
+    }
+    if let Some(value) = args.run_id {
+        query.push(("run_id", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    if let Some(value) = args.release_kind {
+        query.push(("release_kind", value));
+    }
+    if let Some(value) = args.risk_level {
+        query.push(("risk_level", value));
+    }
+    if let Some(value) = args.target_environment {
+        query.push(("target_environment", value));
+    }
+    if let Some(value) = args.target_namespace {
+        query.push(("target_namespace", value));
+    }
+    if let Some(value) = args.argo_application {
+        query.push(("argo_application", value));
+    }
+    if let Some(value) = args.version {
+        query.push(("version", value));
+    }
+    if let Some(value) = args.commit_sha {
+        query.push(("commit_sha", value));
+    }
+    if let Some(value) = args.image_digest {
+        query.push(("image_digest", value));
+    }
+    if let Some(value) = args.created_after_ms {
+        query.push(("created_after_ms", value.to_string()));
+    }
+    if let Some(value) = args.created_before_ms {
+        query.push(("created_before_ms", value.to_string()));
+    }
+    query.push(("limit", args.limit.to_string()));
+    query.push(("offset", args.offset.to_string()));
+
+    let response = http
+        .get(api_url(&args.api_url, "/api/releases"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch releases")?
+        .error_for_status()
+        .context("pharness API rejected release list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release list")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_release(args: ReleaseGetArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/releases/{}", args.release_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch release")?
+        .error_for_status()
+        .context("pharness API rejected release fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_release_from_deployment_intent(
+    args: ReleaseCreateFromDeploymentIntentArgs,
+) -> anyhow::Result<()> {
+    let release_json = args
+        .release_json
+        .as_deref()
+        .map(|value| parse_json_object(value, "--release-json"))
+        .transpose()
+        .context("failed to parse --release-json as a JSON object")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            "/api/releases/from-deployment-intent",
+        ))
+        .json(&serde_json::json!({
+            "deployment_intent_id": args.deployment_intent_id,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "release_kind": args.release_kind,
+            "version": args.version,
+            "commit_sha": args.commit_sha,
+            "image_digest": args.image_digest,
+            "rollback_ref": args.rollback_ref,
+            "release_json": release_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create release")?
+        .error_for_status()
+        .context("pharness API rejected release creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn transition_release(args: ReleaseTransitionArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/releases/{}/transition", args.release_id),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition release")?
+        .error_for_status()
+        .context("pharness API rejected release transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release transition")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn attach_release_evidence(args: ReleaseAttachEvidenceArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/releases/{}/evidence", args.release_id),
+        ))
+        .json(&serde_json::json!({
+            "observation_id": args.observation_id,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to attach release evidence")?
+        .error_for_status()
+        .context("pharness API rejected release evidence attachment")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release evidence attachment")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_registry_evidence(args: RegistryEvidenceListArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut query = Vec::new();
+    if let Some(value) = args.release_id {
+        query.push(("release_id", value));
+    }
+    if let Some(value) = args.deployment_intent_id {
+        query.push(("deployment_intent_id", value));
+    }
+    if let Some(value) = args.pipeline_intent_id {
+        query.push(("pipeline_intent_id", value));
+    }
+    if let Some(value) = args.change_set_id {
+        query.push(("change_set_id", value));
+    }
+    if let Some(value) = args.work_plan_id {
+        query.push(("work_plan_id", value));
+    }
+    if let Some(value) = args.remediation_plan_id {
+        query.push(("remediation_plan_id", value));
+    }
+    if let Some(value) = args.incident_id {
+        query.push(("incident_id", value));
+    }
+    if let Some(value) = args.run_id {
+        query.push(("run_id", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    if let Some(value) = args.risk_level {
+        query.push(("risk_level", value));
+    }
+    if let Some(value) = args.registry {
+        query.push(("registry", value));
+    }
+    if let Some(value) = args.repository {
+        query.push(("repository", value));
+    }
+    if let Some(value) = args.image_ref {
+        query.push(("image_ref", value));
+    }
+    if let Some(value) = args.image_digest {
+        query.push(("image_digest", value));
+    }
+    if let Some(value) = args.tag {
+        query.push(("tag", value));
+    }
+    if let Some(value) = args.source {
+        query.push(("source", value));
+    }
+    if let Some(value) = args.verification_status {
+        query.push(("verification_status", value));
+    }
+    if let Some(value) = args.created_after_ms {
+        query.push(("created_after_ms", value.to_string()));
+    }
+    if let Some(value) = args.created_before_ms {
+        query.push(("created_before_ms", value.to_string()));
+    }
+    query.push(("limit", args.limit.to_string()));
+    query.push(("offset", args.offset.to_string()));
+
+    let response = http
+        .get(api_url(&args.api_url, "/api/registry-evidence"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch registry evidence")?
+        .error_for_status()
+        .context("pharness API rejected registry evidence list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode registry evidence list")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_registry_evidence(args: RegistryEvidenceGetArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/registry-evidence/{}", args.evidence_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch registry evidence")?
+        .error_for_status()
+        .context("pharness API rejected registry evidence fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode registry evidence")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_registry_evidence_from_release(
+    args: RegistryEvidenceCreateFromReleaseArgs,
+) -> anyhow::Result<()> {
+    let evidence_json = args
+        .evidence_json
+        .as_deref()
+        .map(|value| parse_json_object(value, "--evidence-json"))
+        .transpose()
+        .context("failed to parse --evidence-json as a JSON object")?;
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            "/api/registry-evidence/from-release",
+        ))
+        .json(&serde_json::json!({
+            "release_id": args.release_id,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "registry": args.registry,
+            "repository": args.repository,
+            "image_ref": args.image_ref,
+            "image_digest": args.image_digest,
+            "tag": args.tag,
+            "source": args.source,
+            "verification_status": args.verification_status,
+            "evidence_json": evidence_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create registry evidence")?
+        .error_for_status()
+        .context("pharness API rejected registry evidence creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode registry evidence creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_registry_evidence_from_inspection(
+    args: RegistryEvidenceCreateFromInspectionArgs,
+) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            "/api/registry-evidence/from-registry-inspection",
+        ))
+        .json(&serde_json::json!({
+            "release_id": args.release_id,
+            "image_ref": args.image_ref,
+            "registry_base_url": args.registry_base_url,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "actor": args.actor,
+            "reason": args.reason,
+            "timeout_ms": args.timeout_ms,
+        }))
+        .send()
+        .await
+        .context("failed to create registry evidence from inspection")?
+        .error_for_status()
+        .context("pharness API rejected registry evidence inspection creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode registry evidence inspection creation")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn transition_registry_evidence(args: RegistryEvidenceTransitionArgs) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/registry-evidence/{}/transition", args.evidence_id),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition registry evidence")?
+        .error_for_status()
+        .context("pharness API rejected registry evidence transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode registry evidence transition")?;
 
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
@@ -3016,6 +4906,38 @@ async fn fetch_events(
         .events)
 }
 
+fn event_seq(event: &serde_json::Value) -> Option<u64> {
+    event.get("seq").and_then(serde_json::Value::as_u64)
+}
+
+fn emit_sse_event_frames(buffer: &mut String) -> anyhow::Result<()> {
+    while let Some(frame_end) = buffer.find("\n\n") {
+        let frame = buffer[..frame_end].to_string();
+        buffer.drain(..frame_end + 2);
+        if let Some(event) = sse_frame_event(&frame)? {
+            println!("{}", serde_json::to_string(&event)?);
+            std::io::stdout().flush()?;
+        }
+    }
+
+    Ok(())
+}
+
+fn sse_frame_event(frame: &str) -> anyhow::Result<Option<serde_json::Value>> {
+    let data = frame
+        .lines()
+        .filter_map(|line| line.strip_prefix("data:"))
+        .map(str::trim_start)
+        .collect::<Vec<_>>();
+    if data.is_empty() {
+        return Ok(None);
+    }
+
+    serde_json::from_str(&data.join("\n"))
+        .map(Some)
+        .context("failed to decode SSE event data")
+}
+
 fn print_json(output: &CliRunOutput) -> anyhow::Result<()> {
     println!("{}", serde_json::to_string_pretty(output)?);
     Ok(())
@@ -3117,6 +5039,16 @@ fn parse_json_object(value: &str, label: &str) -> anyhow::Result<serde_json::Val
     }
 }
 
+fn parse_optional_json_object(
+    value: Option<String>,
+    label: &str,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    value
+        .as_deref()
+        .map(|value| parse_json_object(value, label))
+        .transpose()
+}
+
 fn extract_model_summaries(body: &serde_json::Value) -> Vec<ModelSummary> {
     let Some(models) = body
         .get("models")
@@ -3212,7 +5144,7 @@ struct RunResponse {
     result: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct EventsResponse {
     events: Vec<serde_json::Value>,
 }
@@ -3348,8 +5280,9 @@ mod tests {
     use super::{
         api_url, approval_decision_endpoint, event_log_line, extract_model_summaries, is_terminal,
         parse_json_object, run_scope_from_args, ApprovalDecisionArgs, ApprovalGateCommand,
-        ChangeSetCommand, ConfigValidationOutput, IncidentCommand, ObservationCommand,
-        RemediationPlanCommand, RunArgs, RunCommand, WorkPlanCommand,
+        CapabilityCommand, ChangeSetCommand, ConfigValidationOutput, DeploymentIntentCommand,
+        IncidentCommand, ObservationCommand, PipelineIntentCommand, RegistryEvidenceCommand,
+        ReleaseCommand, RemediationPlanCommand, RunArgs, RunCommand, WorkPlanCommand,
     };
     use crate::{Cli, Command};
     use clap::Parser;
@@ -3385,6 +5318,65 @@ mod tests {
                 assert!(args.with_events);
             }
             _ => panic!("expected runs cancel command"),
+        }
+    }
+
+    #[test]
+    fn parses_run_events_stream_command() {
+        let cli = Cli::try_parse_from([
+            "pharness",
+            "runs",
+            "events",
+            "--run-id",
+            "run_1",
+            "--after-seq",
+            "4",
+            "--stream",
+            "--timeout-ms",
+            "1000",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Command::Runs {
+                command: RunCommand::Events(args),
+            } => {
+                assert_eq!(args.run_id, "run_1");
+                assert_eq!(args.after_seq, Some(4));
+                assert!(args.stream);
+                assert_eq!(args.timeout_ms, 1_000);
+            }
+            _ => panic!("expected runs events command"),
+        }
+    }
+
+    #[test]
+    fn parses_registry_inspect_image_capability_command() {
+        let cli = Cli::try_parse_from([
+            "pharness",
+            "capabilities",
+            "registry-inspect-image",
+            "--image-ref",
+            "registry.example.test/team/checkout-api:v1",
+            "--registry-base-url",
+            "https://registry.example.test",
+            "--timeout-ms",
+            "10000",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Command::Capabilities {
+                command: CapabilityCommand::RegistryInspectImage(args),
+            } => {
+                assert_eq!(args.image_ref, "registry.example.test/team/checkout-api:v1");
+                assert_eq!(
+                    args.registry_base_url.as_deref(),
+                    Some("https://registry.example.test")
+                );
+                assert_eq!(args.timeout_ms, 10_000);
+            }
+            _ => panic!("expected registry-inspect-image capability command"),
         }
     }
 
@@ -3503,6 +5495,93 @@ mod tests {
     }
 
     #[test]
+    fn parses_sdlc_root_create_commands() {
+        let observation = Cli::try_parse_from([
+            "pharness",
+            "observations",
+            "create",
+            "--source",
+            "smoke",
+            "--kind",
+            "pipeline_run_analysis",
+            "--subject",
+            "checkout-api",
+            "--summary",
+            "pipeline pending",
+            "--resource-namespace",
+            "apps-dev",
+            "--resource-kind",
+            "PipelineRun",
+            "--resource-name",
+            "pr-smoke",
+            "--data-json",
+            "{\"status\":\"running\"}",
+        ])
+        .unwrap();
+        match observation.command {
+            Command::Observations {
+                command: ObservationCommand::Create(args),
+            } => {
+                assert_eq!(args.source, "smoke");
+                assert_eq!(args.kind, "pipeline_run_analysis");
+                assert_eq!(args.data_json.as_deref(), Some("{\"status\":\"running\"}"));
+            }
+            _ => panic!("expected observation create command"),
+        }
+
+        let incident = Cli::try_parse_from([
+            "pharness",
+            "incidents",
+            "create",
+            "--observation-id",
+            "obs_1",
+            "--severity",
+            "medium",
+            "--title",
+            "Pipeline needs review",
+            "--summary",
+            "Pipeline is running",
+        ])
+        .unwrap();
+        match incident.command {
+            Command::Incidents {
+                command: IncidentCommand::Create(args),
+            } => {
+                assert_eq!(args.observation_id, "obs_1");
+                assert_eq!(args.severity, "medium");
+            }
+            _ => panic!("expected incident create command"),
+        }
+
+        let remediation_plan = Cli::try_parse_from([
+            "pharness",
+            "remediation-plans",
+            "create",
+            "--incident-id",
+            "inc_1",
+            "--title",
+            "Review pipeline",
+            "--summary",
+            "Collect evidence",
+            "--risk-level",
+            "medium",
+            "--plan-json",
+            "{\"steps\":[\"inspect pipeline\"]}",
+        ])
+        .unwrap();
+        match remediation_plan.command {
+            Command::RemediationPlans {
+                command: RemediationPlanCommand::Create(args),
+            } => {
+                assert_eq!(args.incident_id, "inc_1");
+                assert_eq!(args.risk_level, "medium");
+                assert!(args.requires_approval);
+            }
+            _ => panic!("expected remediation plan create command"),
+        }
+    }
+
+    #[test]
     fn parses_work_plan_commands() {
         let list = Cli::try_parse_from([
             "pharness",
@@ -3527,6 +5606,22 @@ mod tests {
         let get =
             Cli::try_parse_from(["pharness", "work-plans", "get", "--work-plan-id", "wplan_1"])
                 .unwrap();
+        let readiness = Cli::try_parse_from([
+            "pharness",
+            "work-plans",
+            "readiness",
+            "--work-plan-id",
+            "wplan_1",
+        ])
+        .unwrap();
+        let flow = Cli::try_parse_from([
+            "pharness",
+            "work-plans",
+            "flow",
+            "--work-plan-id",
+            "wplan_1",
+        ])
+        .unwrap();
         let create = Cli::try_parse_from([
             "pharness",
             "work-plans",
@@ -3574,6 +5669,18 @@ mod tests {
             } => assert_eq!(args.work_plan_id, "wplan_1"),
             _ => panic!("expected work-plans get command"),
         }
+        match readiness.command {
+            Command::WorkPlans {
+                command: WorkPlanCommand::Readiness(args),
+            } => assert_eq!(args.work_plan_id, "wplan_1"),
+            _ => panic!("expected work-plans readiness command"),
+        }
+        match flow.command {
+            Command::WorkPlans {
+                command: WorkPlanCommand::Flow(args),
+            } => assert_eq!(args.work_plan_id, "wplan_1"),
+            _ => panic!("expected work-plans flow command"),
+        }
         match create.command {
             Command::WorkPlans {
                 command: WorkPlanCommand::CreateFromRemediationPlan(args),
@@ -3612,6 +5719,22 @@ mod tests {
             "pharness",
             "change-sets",
             "get",
+            "--change-set-id",
+            "cset_1",
+        ])
+        .unwrap();
+        let readiness = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "readiness",
+            "--change-set-id",
+            "cset_1",
+        ])
+        .unwrap();
+        let flow = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "flow",
             "--change-set-id",
             "cset_1",
         ])
@@ -3684,6 +5807,18 @@ mod tests {
             } => assert_eq!(args.change_set_id, "cset_1"),
             _ => panic!("expected change-sets get command"),
         }
+        match readiness.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::Readiness(args),
+            } => assert_eq!(args.change_set_id, "cset_1"),
+            _ => panic!("expected change-sets readiness command"),
+        }
+        match flow.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::Flow(args),
+            } => assert_eq!(args.change_set_id, "cset_1"),
+            _ => panic!("expected change-sets flow command"),
+        }
         match create.command {
             Command::ChangeSets {
                 command: ChangeSetCommand::Create(args),
@@ -3720,6 +5855,512 @@ mod tests {
                 assert_eq!(args.branch.as_deref(), Some("feature/pharness"));
             }
             _ => panic!("expected change-sets create-trusted-envelope command"),
+        }
+    }
+
+    #[test]
+    fn parses_pipeline_intent_commands() {
+        let list = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "list",
+            "--change-set-id",
+            "cset_1",
+            "--work-plan-id",
+            "wplan_1",
+            "--status",
+            "proposed",
+            "--intent-kind",
+            "tekton_build_test_package",
+            "--limit",
+            "5",
+        ])
+        .unwrap();
+        let get = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "get",
+            "--pipeline-intent-id",
+            "pint_1",
+        ])
+        .unwrap();
+        let create = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "create-from-change-set",
+            "--change-set-id",
+            "cset_1",
+            "--intent-kind",
+            "tekton_build_test_package",
+            "--intent-json",
+            r#"{"execution":{"enabled":false}}"#,
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let transition = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "transition",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--target-status",
+            "approved",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let attach_evidence = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "attach-evidence",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--observation-id",
+            "obs_1",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+
+        match list.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::List(args),
+            } => {
+                assert_eq!(args.change_set_id.as_deref(), Some("cset_1"));
+                assert_eq!(args.work_plan_id.as_deref(), Some("wplan_1"));
+                assert_eq!(args.status.as_deref(), Some("proposed"));
+                assert_eq!(
+                    args.intent_kind.as_deref(),
+                    Some("tekton_build_test_package")
+                );
+                assert_eq!(args.limit, 5);
+            }
+            _ => panic!("expected pipeline-intents list command"),
+        }
+        match get.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::Get(args),
+            } => assert_eq!(args.pipeline_intent_id, "pint_1"),
+            _ => panic!("expected pipeline-intents get command"),
+        }
+        match create.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::CreateFromChangeSet(args),
+            } => {
+                assert_eq!(args.change_set_id, "cset_1");
+                assert_eq!(
+                    args.intent_kind.as_deref(),
+                    Some("tekton_build_test_package")
+                );
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(
+                    args.intent_json.as_deref(),
+                    Some(r#"{"execution":{"enabled":false}}"#)
+                );
+            }
+            _ => panic!("expected pipeline-intents create-from-change-set command"),
+        }
+        match transition.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::Transition(args),
+            } => {
+                assert_eq!(args.pipeline_intent_id, "pint_1");
+                assert_eq!(args.target_status, "approved");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected pipeline-intents transition command"),
+        }
+        match attach_evidence.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::AttachEvidence(args),
+            } => {
+                assert_eq!(args.pipeline_intent_id, "pint_1");
+                assert_eq!(args.observation_id, "obs_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected pipeline-intents attach-evidence command"),
+        }
+    }
+
+    #[test]
+    fn parses_deployment_intent_commands() {
+        let list = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "list",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--status",
+            "proposed",
+            "--intent-kind",
+            "argo_sync_deploy",
+            "--target-environment",
+            "dev",
+            "--argo-application",
+            "checkout-api",
+            "--limit",
+            "5",
+        ])
+        .unwrap();
+        let get = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "get",
+            "--deployment-intent-id",
+            "dint_1",
+        ])
+        .unwrap();
+        let create = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "create-from-pipeline-intent",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--target-environment",
+            "dev",
+            "--target-namespace",
+            "apps-dev",
+            "--argo-application",
+            "checkout-api",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let transition = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "transition",
+            "--deployment-intent-id",
+            "dint_1",
+            "--target-status",
+            "approved",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let attach_evidence = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "attach-evidence",
+            "--deployment-intent-id",
+            "dint_1",
+            "--observation-id",
+            "obs_1",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+
+        match list.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::List(args),
+            } => {
+                assert_eq!(args.pipeline_intent_id.as_deref(), Some("pint_1"));
+                assert_eq!(args.status.as_deref(), Some("proposed"));
+                assert_eq!(args.intent_kind.as_deref(), Some("argo_sync_deploy"));
+                assert_eq!(args.target_environment.as_deref(), Some("dev"));
+                assert_eq!(args.argo_application.as_deref(), Some("checkout-api"));
+                assert_eq!(args.limit, 5);
+            }
+            _ => panic!("expected deployment-intents list command"),
+        }
+        match get.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::Get(args),
+            } => assert_eq!(args.deployment_intent_id, "dint_1"),
+            _ => panic!("expected deployment-intents get command"),
+        }
+        match create.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::CreateFromPipelineIntent(args),
+            } => {
+                assert_eq!(args.pipeline_intent_id, "pint_1");
+                assert_eq!(args.target_environment.as_deref(), Some("dev"));
+                assert_eq!(args.target_namespace.as_deref(), Some("apps-dev"));
+                assert_eq!(args.argo_application.as_deref(), Some("checkout-api"));
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected deployment-intents create-from-pipeline-intent command"),
+        }
+        match transition.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::Transition(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert_eq!(args.target_status, "approved");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected deployment-intents transition command"),
+        }
+        match attach_evidence.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::AttachEvidence(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert_eq!(args.observation_id, "obs_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected deployment-intents attach-evidence command"),
+        }
+    }
+
+    #[test]
+    fn parses_release_commands() {
+        let list = Cli::try_parse_from([
+            "pharness",
+            "releases",
+            "list",
+            "--deployment-intent-id",
+            "dint_1",
+            "--status",
+            "proposed",
+            "--release-kind",
+            "gitops_release",
+            "--target-environment",
+            "dev",
+            "--version",
+            "v0.1.0",
+            "--commit-sha",
+            "abc1234",
+            "--image-digest",
+            "sha256:deadbeef",
+            "--limit",
+            "5",
+        ])
+        .unwrap();
+        let get =
+            Cli::try_parse_from(["pharness", "releases", "get", "--release-id", "rel_1"]).unwrap();
+        let create = Cli::try_parse_from([
+            "pharness",
+            "releases",
+            "create-from-deployment-intent",
+            "--deployment-intent-id",
+            "dint_1",
+            "--version",
+            "v0.1.0",
+            "--commit-sha",
+            "abc1234",
+            "--image-digest",
+            "sha256:deadbeef",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let transition = Cli::try_parse_from([
+            "pharness",
+            "releases",
+            "transition",
+            "--release-id",
+            "rel_1",
+            "--target-status",
+            "approved",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let attach_evidence = Cli::try_parse_from([
+            "pharness",
+            "releases",
+            "attach-evidence",
+            "--release-id",
+            "rel_1",
+            "--observation-id",
+            "obs_1",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+
+        match list.command {
+            Command::Releases {
+                command: ReleaseCommand::List(args),
+            } => {
+                assert_eq!(args.deployment_intent_id.as_deref(), Some("dint_1"));
+                assert_eq!(args.status.as_deref(), Some("proposed"));
+                assert_eq!(args.release_kind.as_deref(), Some("gitops_release"));
+                assert_eq!(args.target_environment.as_deref(), Some("dev"));
+                assert_eq!(args.version.as_deref(), Some("v0.1.0"));
+                assert_eq!(args.commit_sha.as_deref(), Some("abc1234"));
+                assert_eq!(args.image_digest.as_deref(), Some("sha256:deadbeef"));
+                assert_eq!(args.limit, 5);
+            }
+            _ => panic!("expected releases list command"),
+        }
+        match get.command {
+            Command::Releases {
+                command: ReleaseCommand::Get(args),
+            } => assert_eq!(args.release_id, "rel_1"),
+            _ => panic!("expected releases get command"),
+        }
+        match create.command {
+            Command::Releases {
+                command: ReleaseCommand::CreateFromDeploymentIntent(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert_eq!(args.version.as_deref(), Some("v0.1.0"));
+                assert_eq!(args.commit_sha.as_deref(), Some("abc1234"));
+                assert_eq!(args.image_digest.as_deref(), Some("sha256:deadbeef"));
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected releases create-from-deployment-intent command"),
+        }
+        match transition.command {
+            Command::Releases {
+                command: ReleaseCommand::Transition(args),
+            } => {
+                assert_eq!(args.release_id, "rel_1");
+                assert_eq!(args.target_status, "approved");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected releases transition command"),
+        }
+        match attach_evidence.command {
+            Command::Releases {
+                command: ReleaseCommand::AttachEvidence(args),
+            } => {
+                assert_eq!(args.release_id, "rel_1");
+                assert_eq!(args.observation_id, "obs_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected releases attach-evidence command"),
+        }
+    }
+
+    #[test]
+    fn parses_registry_evidence_commands() {
+        let list = Cli::try_parse_from([
+            "pharness",
+            "registry-evidence",
+            "list",
+            "--release-id",
+            "rel_1",
+            "--status",
+            "proposed",
+            "--verification-status",
+            "verified",
+            "--registry",
+            "registry.example.test",
+            "--repository",
+            "checkout-api",
+            "--image-digest",
+            "sha256:deadbeef",
+            "--limit",
+            "5",
+        ])
+        .unwrap();
+        let get = Cli::try_parse_from([
+            "pharness",
+            "registry-evidence",
+            "get",
+            "--evidence-id",
+            "regev_1",
+        ])
+        .unwrap();
+        let create = Cli::try_parse_from([
+            "pharness",
+            "registry-evidence",
+            "create-from-release",
+            "--release-id",
+            "rel_1",
+            "--registry",
+            "registry.example.test",
+            "--repository",
+            "checkout-api",
+            "--image-digest",
+            "sha256:deadbeef",
+            "--verification-status",
+            "verified",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let create_from_inspection = Cli::try_parse_from([
+            "pharness",
+            "registry-evidence",
+            "create-from-inspection",
+            "--release-id",
+            "rel_1",
+            "--image-ref",
+            "registry.example.test/checkout-api:v0.1.0",
+            "--registry-base-url",
+            "https://registry.example.test",
+            "--actor",
+            "lucas",
+            "--timeout-ms",
+            "5000",
+        ])
+        .unwrap();
+        let transition = Cli::try_parse_from([
+            "pharness",
+            "registry-evidence",
+            "transition",
+            "--evidence-id",
+            "regev_1",
+            "--target-status",
+            "verified",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+
+        match list.command {
+            Command::RegistryEvidence {
+                command: RegistryEvidenceCommand::List(args),
+            } => {
+                assert_eq!(args.release_id.as_deref(), Some("rel_1"));
+                assert_eq!(args.status.as_deref(), Some("proposed"));
+                assert_eq!(args.verification_status.as_deref(), Some("verified"));
+                assert_eq!(args.registry.as_deref(), Some("registry.example.test"));
+                assert_eq!(args.repository.as_deref(), Some("checkout-api"));
+                assert_eq!(args.image_digest.as_deref(), Some("sha256:deadbeef"));
+                assert_eq!(args.limit, 5);
+            }
+            _ => panic!("expected registry-evidence list command"),
+        }
+        match get.command {
+            Command::RegistryEvidence {
+                command: RegistryEvidenceCommand::Get(args),
+            } => assert_eq!(args.evidence_id, "regev_1"),
+            _ => panic!("expected registry-evidence get command"),
+        }
+        match create.command {
+            Command::RegistryEvidence {
+                command: RegistryEvidenceCommand::CreateFromRelease(args),
+            } => {
+                assert_eq!(args.release_id, "rel_1");
+                assert_eq!(args.registry.as_deref(), Some("registry.example.test"));
+                assert_eq!(args.repository.as_deref(), Some("checkout-api"));
+                assert_eq!(args.image_digest.as_deref(), Some("sha256:deadbeef"));
+                assert_eq!(args.verification_status.as_deref(), Some("verified"));
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected registry-evidence create-from-release command"),
+        }
+        match create_from_inspection.command {
+            Command::RegistryEvidence {
+                command: RegistryEvidenceCommand::CreateFromInspection(args),
+            } => {
+                assert_eq!(args.release_id, "rel_1");
+                assert_eq!(args.image_ref, "registry.example.test/checkout-api:v0.1.0");
+                assert_eq!(
+                    args.registry_base_url.as_deref(),
+                    Some("https://registry.example.test")
+                );
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.timeout_ms, Some(5000));
+            }
+            _ => panic!("expected registry-evidence create-from-inspection command"),
+        }
+        match transition.command {
+            Command::RegistryEvidence {
+                command: RegistryEvidenceCommand::Transition(args),
+            } => {
+                assert_eq!(args.evidence_id, "regev_1");
+                assert_eq!(args.target_status, "verified");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected registry-evidence transition command"),
         }
     }
 

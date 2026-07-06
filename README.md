@@ -130,19 +130,22 @@ cargo run -p pharness-cli -- runs get --run-id "$RUN_ID"
 cargo run -p pharness-cli -- runs get --run-id "$RUN_ID" --with-events
 ```
 
-The API also exposes a Server-Sent Events stream for machine consumers:
+Fetch just the durable event log through the CLI:
 
 ```sh
-curl -N "http://127.0.0.1:4777/api/runs/$RUN_ID/events/stream"
+cargo run -p pharness-cli -- runs events --run-id "$RUN_ID"
 ```
 
-Resume after a known event with `Last-Event-ID`:
+Stream new events after a known durable sequence:
 
 ```sh
-curl -N \
-  -H "Last-Event-ID: evt_${RUN_ID}_1" \
-  "http://127.0.0.1:4777/api/runs/$RUN_ID/events/stream"
+cargo run -p pharness-cli -- runs events \
+  --run-id "$RUN_ID" \
+  --after-seq 1 \
+  --stream
 ```
+
+The CLI stream prints newline-delimited event JSON. Underneath, the API exposes `GET /api/runs/:run_id/events/stream?after_seq=N` as Server-Sent Events for browser and machine consumers.
 
 Fetch stored file diffs for a run:
 

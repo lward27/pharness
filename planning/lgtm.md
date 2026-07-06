@@ -15,12 +15,15 @@
   - `pharness-cli capabilities loki-log-summary`
   - Fireworks worker tool schema
 - Configure Loki separately through `PHARNESS_LOKI_URL` or `[cluster].loki_url`. The capability should fail as structured tool JSON when the URL is not configured.
+- Prometheus inventory/query and Loki log summary observations can now be attached to a Release as V1 observability evidence.
+- Keep Release observability evidence attached by observation id instead of introducing a broad LGTM abstraction. The normalized LGTM model should wait until there are at least two concrete runtime verification policies that need it.
+- Release-attached observability evidence now promotes `attention_required` findings into durable Incident candidates. Clean and unknown evidence remains evidence-only.
+- Release observability incidents now create conservative draft remediation plans that start with read-only Prometheus/Loki/Argo rechecks and require approval before any file, pipeline, cluster, or production-impacting mutation.
 
 # Backlog
 
 - Add typed namespace/pod/container filters on top of `loki_log_summary` once the common cluster log labels are stable.
 - Add Tempo trace lookup only after there is a stable service/request correlation shape.
 - Add Prometheus target/rule filtering if full inventory becomes too large for common homelab use.
-- Consider persisting normalized Observation records once CRD/controller work starts.
-- Add live smoke evidence for `prometheus_inventory` after the next Prometheus port-forward run.
-- Add live smoke evidence for `loki_log_summary` after the next Loki port-forward run.
+- Inspect Loki summaries for suspicious but successful log patterns before promoting them to incidents; V1 only promotes explicit error status.
+- Add live smoke evidence for `prometheus_inventory` and `loki_log_summary` after the next Prometheus/Loki port-forward run.

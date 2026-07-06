@@ -1,0 +1,5 @@
+task mode: create
+primary deck-profile: engineering-platform
+required proof objects: SDLC resource model, runtime loop, UI screenshot, policy/approval surfaces, typed capability examples
+source requirements: local pharness and pharness-ui artifacts already reviewed
+QA gates: editable PPTX export, preview render, contact sheet check

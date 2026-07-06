@@ -4,8 +4,11 @@
 - V1 incidents are read-only candidates derived from observations. They do not assign ownership, trigger remediation, mutate clusters, or open external tickets.
 - Store incidents with `status`, `severity`, source observation id, run id, normalized resource identity, summary, and compact data JSON.
 - Create incident candidates from Tekton `pipeline_run_analysis` observations when PipelineRun status, Deployment rollout status, Argo sync/health, or image alignment indicate risk.
+- Create incident candidates from Release-attached observability evidence when Prometheus/Loki evidence is classified as `attention_required`.
+- Release observability incident creation is deterministic by release id plus observation id, so re-attaching the same risky evidence returns the existing candidate instead of duplicating noise.
 - Expose incidents through `GET /api/incidents`, `GET /api/incidents/:incident_id`, `pharness-cli incidents list`, and `pharness-cli incidents get`.
 - Candidate incidents can now produce conservative draft `RemediationPlan` records for operator review.
+- Release observability Incident candidates now produce idempotent draft `RemediationPlan` records with approval gates for file writes, pipeline mutation, cluster mutation, and production-impacting work.
 
 # Backlog
 
@@ -13,3 +16,4 @@
 - Add lifecycle transitions such as acknowledged, linked, resolved, and ignored after operator workflows need them.
 - Add direct capability incident derivation after direct capability calls have a durable request/session owner.
 - Add incident noise controls before generating any executable remediation from candidate plans.
+- Split Incident source-specific remediation builders into smaller modules once there are more than two durable sources.

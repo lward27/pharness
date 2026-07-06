@@ -212,6 +212,14 @@ impl SafetyPolicy {
                 action.kind_name(),
                 [Some(namespace.as_str()), Some(name.as_str()), None],
             ),
+            AgentAction::RegistryInspectImage {
+                image_ref,
+                registry_base_url,
+                ..
+            } => self.evaluate_cluster_read(
+                action.kind_name(),
+                [Some(image_ref.as_str()), registry_base_url.as_deref(), None],
+            ),
             AgentAction::WriteFile { path, .. } | AgentAction::PatchFile { path, .. } => {
                 self.evaluate_write_action(path.as_str())
             }
@@ -482,6 +490,7 @@ fn capability_kind_for_action(action: &AgentAction) -> CapabilityKind {
         AgentAction::TektonGetPipelineRuns { .. }
         | AgentAction::TektonGetTaskRuns { .. }
         | AgentAction::TektonAnalyzePipelineRun { .. } => CapabilityKind::TektonRead,
+        AgentAction::RegistryInspectImage { .. } => CapabilityKind::RegistryRead,
     }
 }
 
@@ -803,6 +812,37 @@ mod tests {
             decision,
             PolicyDecision::Allow {
                 risk: RiskLevel::Low,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn allows_registry_image_inspection_and_denies_secret_shaped_refs() {
+        let allowed = SafetyPolicy::default().evaluate_action(&AgentAction::RegistryInspectImage {
+            id: "act_registry".into(),
+            reason: "inspect image evidence".to_string(),
+            image_ref: "registry.example.test/team/checkout-api:v1".to_string(),
+            registry_base_url: Some("https://registry.example.test".to_string()),
+        });
+        let denied = SafetyPolicy::default().evaluate_action(&AgentAction::RegistryInspectImage {
+            id: "act_registry_secret".into(),
+            reason: "inspect image evidence".to_string(),
+            image_ref: "registry.example.test/team/secret-token:v1".to_string(),
+            registry_base_url: None,
+        });
+
+        assert!(matches!(
+            allowed,
+            PolicyDecision::Allow {
+                risk: RiskLevel::Low,
+                ..
+            }
+        ));
+        assert!(matches!(
+            denied,
+            PolicyDecision::Deny {
+                risk: RiskLevel::Critical,
                 ..
             }
         ));

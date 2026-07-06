@@ -3,13 +3,18 @@ use crate::{
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
     ApprovalSummary, ApprovalSummaryFilter, BooleanCountBucket, ChangeSetListFilter, CountBucket,
     CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
-    CreateFileChange, CreateIncident, CreateObservation, CreatePermissionGrant,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, IncidentListFilter,
-    ObservationListFilter, RemediationPlanListFilter, RunListFilter, RunSummary, RunSummaryFilter,
-    StoredApproval, StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
-    StoredFileChange, StoredIncident, StoredObservation, StoredPermissionGrant,
-    StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
-    UpdateWorkPlanRevision, WorkPlanListFilter,
+    CreateDeploymentIntent, CreateFileChange, CreateIncident, CreateObservation,
+    CreatePermissionGrant, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, DeploymentIntentListFilter,
+    IncidentListFilter, ObservationListFilter, PipelineIntentListFilter,
+    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter, RunListFilter,
+    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
+    StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange, StoredIncident,
+    StoredObservation, StoredPermissionGrant, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
+    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
+    UpdatePipelineIntentEvidence, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
+    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -1352,6 +1357,1002 @@ impl SqliteStore {
             })
     }
 
+    pub async fn create_pipeline_intent(
+        &self,
+        intent: CreatePipelineIntent,
+    ) -> Result<StoredPipelineIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&intent.intent_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO pipeline_intents (
+              id, change_set_id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+              status, title, summary, risk_level, intent_kind, resource_namespace, resource_kind,
+              resource_name, intent_json, created_at, updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            "#,
+        )
+        .bind(&intent.id)
+        .bind(&intent.change_set_id)
+        .bind(&intent.work_plan_id)
+        .bind(&intent.remediation_plan_id)
+        .bind(&intent.incident_id)
+        .bind(intent.session_id.as_str())
+        .bind(intent.run_id.as_ref().map(RunId::as_str))
+        .bind(&intent.status)
+        .bind(&intent.title)
+        .bind(&intent.summary)
+        .bind(&intent.risk_level)
+        .bind(&intent.intent_kind)
+        .bind(intent.resource_namespace)
+        .bind(intent.resource_kind)
+        .bind(intent.resource_name)
+        .bind(intent_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_intent(&intent.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_intent".to_string(),
+                id: intent.id,
+            })
+    }
+
+    pub async fn get_pipeline_intent(
+        &self,
+        intent_id: &str,
+    ) -> Result<Option<StoredPipelineIntent>, StoreError> {
+        let row = sqlx::query(pipeline_intent_select_sql("WHERE id = ?1"))
+            .bind(intent_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_pipeline_intent).transpose()
+    }
+
+    pub async fn get_pipeline_intent_by_change_set(
+        &self,
+        change_set_id: &str,
+    ) -> Result<Option<StoredPipelineIntent>, StoreError> {
+        let row = sqlx::query(pipeline_intent_select_sql("WHERE change_set_id = ?1"))
+            .bind(change_set_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_pipeline_intent).transpose()
+    }
+
+    pub async fn list_pipeline_intents(
+        &self,
+        filter: PipelineIntentListFilter,
+    ) -> Result<Vec<StoredPipelineIntent>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, change_set_id, work_plan_id, remediation_plan_id, incident_id, session_id,
+                   run_id, status, title, summary, risk_level, intent_kind, resource_namespace,
+                   resource_kind, resource_name, intent_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM pipeline_intents
+            WHERE (?1 IS NULL OR change_set_id = ?1)
+              AND (?2 IS NULL OR work_plan_id = ?2)
+              AND (?3 IS NULL OR remediation_plan_id = ?3)
+              AND (?4 IS NULL OR incident_id = ?4)
+              AND (?5 IS NULL OR run_id = ?5)
+              AND (?6 IS NULL OR status = ?6)
+              AND (?7 IS NULL OR intent_kind = ?7)
+              AND (?8 IS NULL OR risk_level = ?8)
+              AND (?9 IS NULL OR resource_namespace = ?9)
+              AND (?10 IS NULL OR resource_kind = ?10)
+              AND (?11 IS NULL OR resource_name = ?11)
+              AND (?12 IS NULL OR CAST(created_at AS INTEGER) >= ?12)
+              AND (?13 IS NULL OR CAST(created_at AS INTEGER) <= ?13)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?14 OFFSET ?15
+            "#,
+        )
+        .bind(filter.change_set_id)
+        .bind(filter.work_plan_id)
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.intent_kind)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_pipeline_intent).collect()
+    }
+
+    pub async fn update_pipeline_intent_status(
+        &self,
+        intent_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredPipelineIntent, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE pipeline_intents
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn revise_pipeline_intent_draft(
+        &self,
+        intent_id: &str,
+        revision: UpdatePipelineIntentDraft,
+    ) -> Result<StoredPipelineIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&revision.intent_json)?;
+        sqlx::query(
+            r#"
+            UPDATE pipeline_intents
+            SET status = 'proposed',
+                title = ?2,
+                summary = ?3,
+                risk_level = ?4,
+                intent_kind = ?5,
+                resource_namespace = ?6,
+                resource_kind = ?7,
+                resource_name = ?8,
+                intent_json = ?9,
+                updated_at = ?10,
+                status_changed_at = ?10,
+                status_changed_by = ?11,
+                status_reason = ?12
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(revision.intent_kind)
+        .bind(revision.resource_namespace)
+        .bind(revision.resource_kind)
+        .bind(revision.resource_name)
+        .bind(intent_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn update_pipeline_intent_evidence(
+        &self,
+        intent_id: &str,
+        update: UpdatePipelineIntentEvidence,
+    ) -> Result<StoredPipelineIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&update.intent_json)?;
+        sqlx::query(
+            r#"
+            UPDATE pipeline_intents
+            SET intent_json = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(intent_json)
+        .bind(now)
+        .bind(update.actor)
+        .bind(update.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn create_deployment_intent(
+        &self,
+        intent: CreateDeploymentIntent,
+    ) -> Result<StoredDeploymentIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&intent.intent_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO deployment_intents (
+              id, pipeline_intent_id, change_set_id, work_plan_id, remediation_plan_id,
+              incident_id, session_id, run_id, status, title, summary, risk_level, intent_kind,
+              target_environment, target_namespace, argo_application, resource_namespace,
+              resource_kind, resource_name, intent_json, created_at, updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            "#,
+        )
+        .bind(&intent.id)
+        .bind(&intent.pipeline_intent_id)
+        .bind(&intent.change_set_id)
+        .bind(&intent.work_plan_id)
+        .bind(&intent.remediation_plan_id)
+        .bind(&intent.incident_id)
+        .bind(intent.session_id.as_str())
+        .bind(intent.run_id.as_ref().map(RunId::as_str))
+        .bind(&intent.status)
+        .bind(&intent.title)
+        .bind(&intent.summary)
+        .bind(&intent.risk_level)
+        .bind(&intent.intent_kind)
+        .bind(intent.target_environment)
+        .bind(intent.target_namespace)
+        .bind(intent.argo_application)
+        .bind(intent.resource_namespace)
+        .bind(intent.resource_kind)
+        .bind(intent.resource_name)
+        .bind(intent_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_deployment_intent(&intent.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_intent".to_string(),
+                id: intent.id,
+            })
+    }
+
+    pub async fn get_deployment_intent(
+        &self,
+        intent_id: &str,
+    ) -> Result<Option<StoredDeploymentIntent>, StoreError> {
+        let row = sqlx::query(deployment_intent_select_sql("WHERE id = ?1"))
+            .bind(intent_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_deployment_intent).transpose()
+    }
+
+    pub async fn get_deployment_intent_by_pipeline_intent(
+        &self,
+        pipeline_intent_id: &str,
+    ) -> Result<Option<StoredDeploymentIntent>, StoreError> {
+        let row = sqlx::query(deployment_intent_select_sql(
+            "WHERE pipeline_intent_id = ?1",
+        ))
+        .bind(pipeline_intent_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(row_to_deployment_intent).transpose()
+    }
+
+    pub async fn list_deployment_intents(
+        &self,
+        filter: DeploymentIntentListFilter,
+    ) -> Result<Vec<StoredDeploymentIntent>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, pipeline_intent_id, change_set_id, work_plan_id, remediation_plan_id,
+                   incident_id, session_id, run_id, status, title, summary, risk_level,
+                   intent_kind, target_environment, target_namespace, argo_application,
+                   resource_namespace, resource_kind, resource_name, intent_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM deployment_intents
+            WHERE (?1 IS NULL OR pipeline_intent_id = ?1)
+              AND (?2 IS NULL OR change_set_id = ?2)
+              AND (?3 IS NULL OR work_plan_id = ?3)
+              AND (?4 IS NULL OR remediation_plan_id = ?4)
+              AND (?5 IS NULL OR incident_id = ?5)
+              AND (?6 IS NULL OR run_id = ?6)
+              AND (?7 IS NULL OR status = ?7)
+              AND (?8 IS NULL OR intent_kind = ?8)
+              AND (?9 IS NULL OR risk_level = ?9)
+              AND (?10 IS NULL OR target_environment = ?10)
+              AND (?11 IS NULL OR target_namespace = ?11)
+              AND (?12 IS NULL OR argo_application = ?12)
+              AND (?13 IS NULL OR resource_namespace = ?13)
+              AND (?14 IS NULL OR resource_kind = ?14)
+              AND (?15 IS NULL OR resource_name = ?15)
+              AND (?16 IS NULL OR CAST(created_at AS INTEGER) >= ?16)
+              AND (?17 IS NULL OR CAST(created_at AS INTEGER) <= ?17)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?18 OFFSET ?19
+            "#,
+        )
+        .bind(filter.pipeline_intent_id)
+        .bind(filter.change_set_id)
+        .bind(filter.work_plan_id)
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.intent_kind)
+        .bind(filter.risk_level)
+        .bind(filter.target_environment)
+        .bind(filter.target_namespace)
+        .bind(filter.argo_application)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_deployment_intent).collect()
+    }
+
+    pub async fn update_deployment_intent_status(
+        &self,
+        intent_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredDeploymentIntent, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE deployment_intents
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_deployment_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn revise_deployment_intent_draft(
+        &self,
+        intent_id: &str,
+        revision: UpdateDeploymentIntentDraft,
+    ) -> Result<StoredDeploymentIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&revision.intent_json)?;
+        sqlx::query(
+            r#"
+            UPDATE deployment_intents
+            SET status = 'proposed',
+                title = ?2,
+                summary = ?3,
+                risk_level = ?4,
+                intent_kind = ?5,
+                target_environment = ?6,
+                target_namespace = ?7,
+                argo_application = ?8,
+                resource_namespace = ?9,
+                resource_kind = ?10,
+                resource_name = ?11,
+                intent_json = ?12,
+                updated_at = ?13,
+                status_changed_at = ?13,
+                status_changed_by = ?14,
+                status_reason = ?15
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(revision.intent_kind)
+        .bind(revision.target_environment)
+        .bind(revision.target_namespace)
+        .bind(revision.argo_application)
+        .bind(revision.resource_namespace)
+        .bind(revision.resource_kind)
+        .bind(revision.resource_name)
+        .bind(intent_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_deployment_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn update_deployment_intent_evidence(
+        &self,
+        intent_id: &str,
+        update: UpdateDeploymentIntentEvidence,
+    ) -> Result<StoredDeploymentIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&update.intent_json)?;
+        sqlx::query(
+            r#"
+            UPDATE deployment_intents
+            SET intent_json = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(intent_json)
+        .bind(now)
+        .bind(update.actor)
+        .bind(update.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_deployment_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn create_release(
+        &self,
+        release: CreateRelease,
+    ) -> Result<StoredRelease, StoreError> {
+        let now = now_string();
+        let release_json = serde_json::to_string(&release.release_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO releases (
+              id, deployment_intent_id, pipeline_intent_id, change_set_id, work_plan_id,
+              remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
+              risk_level, release_kind, target_environment, target_namespace, argo_application,
+              version, commit_sha, image_digest, rollback_ref, release_json, created_at,
+              updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+            "#,
+        )
+        .bind(&release.id)
+        .bind(&release.deployment_intent_id)
+        .bind(&release.pipeline_intent_id)
+        .bind(&release.change_set_id)
+        .bind(&release.work_plan_id)
+        .bind(&release.remediation_plan_id)
+        .bind(&release.incident_id)
+        .bind(release.session_id.as_str())
+        .bind(release.run_id.as_ref().map(RunId::as_str))
+        .bind(&release.status)
+        .bind(&release.title)
+        .bind(&release.summary)
+        .bind(&release.risk_level)
+        .bind(&release.release_kind)
+        .bind(release.target_environment)
+        .bind(release.target_namespace)
+        .bind(release.argo_application)
+        .bind(release.version)
+        .bind(release.commit_sha)
+        .bind(release.image_digest)
+        .bind(release.rollback_ref)
+        .bind(release_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_release(&release.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "release".to_string(),
+                id: release.id,
+            })
+    }
+
+    pub async fn get_release(&self, release_id: &str) -> Result<Option<StoredRelease>, StoreError> {
+        let row = sqlx::query(release_select_sql("WHERE id = ?1"))
+            .bind(release_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_release).transpose()
+    }
+
+    pub async fn get_release_by_deployment_intent(
+        &self,
+        deployment_intent_id: &str,
+    ) -> Result<Option<StoredRelease>, StoreError> {
+        let row = sqlx::query(release_select_sql("WHERE deployment_intent_id = ?1"))
+            .bind(deployment_intent_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_release).transpose()
+    }
+
+    pub async fn list_releases(
+        &self,
+        filter: ReleaseListFilter,
+    ) -> Result<Vec<StoredRelease>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, deployment_intent_id, pipeline_intent_id, change_set_id, work_plan_id,
+                   remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
+                   risk_level, release_kind, target_environment, target_namespace,
+                   argo_application, version, commit_sha, image_digest, rollback_ref,
+                   release_json, created_at, updated_at, status_changed_at, status_changed_by,
+                   status_reason
+            FROM releases
+            WHERE (?1 IS NULL OR deployment_intent_id = ?1)
+              AND (?2 IS NULL OR pipeline_intent_id = ?2)
+              AND (?3 IS NULL OR change_set_id = ?3)
+              AND (?4 IS NULL OR work_plan_id = ?4)
+              AND (?5 IS NULL OR remediation_plan_id = ?5)
+              AND (?6 IS NULL OR incident_id = ?6)
+              AND (?7 IS NULL OR run_id = ?7)
+              AND (?8 IS NULL OR status = ?8)
+              AND (?9 IS NULL OR release_kind = ?9)
+              AND (?10 IS NULL OR risk_level = ?10)
+              AND (?11 IS NULL OR target_environment = ?11)
+              AND (?12 IS NULL OR target_namespace = ?12)
+              AND (?13 IS NULL OR argo_application = ?13)
+              AND (?14 IS NULL OR version = ?14)
+              AND (?15 IS NULL OR commit_sha = ?15)
+              AND (?16 IS NULL OR image_digest = ?16)
+              AND (?17 IS NULL OR CAST(created_at AS INTEGER) >= ?17)
+              AND (?18 IS NULL OR CAST(created_at AS INTEGER) <= ?18)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?19 OFFSET ?20
+            "#,
+        )
+        .bind(filter.deployment_intent_id)
+        .bind(filter.pipeline_intent_id)
+        .bind(filter.change_set_id)
+        .bind(filter.work_plan_id)
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.release_kind)
+        .bind(filter.risk_level)
+        .bind(filter.target_environment)
+        .bind(filter.target_namespace)
+        .bind(filter.argo_application)
+        .bind(filter.version)
+        .bind(filter.commit_sha)
+        .bind(filter.image_digest)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_release).collect()
+    }
+
+    pub async fn update_release_status(
+        &self,
+        release_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredRelease, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE releases
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(release_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_release(release_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "release".to_string(),
+                id: release_id.to_string(),
+            })
+    }
+
+    pub async fn revise_release_draft(
+        &self,
+        release_id: &str,
+        revision: UpdateReleaseDraft,
+    ) -> Result<StoredRelease, StoreError> {
+        let now = now_string();
+        let release_json = serde_json::to_string(&revision.release_json)?;
+        sqlx::query(
+            r#"
+            UPDATE releases
+            SET status = 'proposed',
+                title = ?2,
+                summary = ?3,
+                risk_level = ?4,
+                release_kind = ?5,
+                target_environment = ?6,
+                target_namespace = ?7,
+                argo_application = ?8,
+                version = ?9,
+                commit_sha = ?10,
+                image_digest = ?11,
+                rollback_ref = ?12,
+                release_json = ?13,
+                updated_at = ?14,
+                status_changed_at = ?14,
+                status_changed_by = ?15,
+                status_reason = ?16
+            WHERE id = ?1
+            "#,
+        )
+        .bind(release_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(revision.release_kind)
+        .bind(revision.target_environment)
+        .bind(revision.target_namespace)
+        .bind(revision.argo_application)
+        .bind(revision.version)
+        .bind(revision.commit_sha)
+        .bind(revision.image_digest)
+        .bind(revision.rollback_ref)
+        .bind(release_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_release(release_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "release".to_string(),
+                id: release_id.to_string(),
+            })
+    }
+
+    pub async fn update_release_evidence(
+        &self,
+        release_id: &str,
+        update: UpdateReleaseEvidence,
+    ) -> Result<StoredRelease, StoreError> {
+        let now = now_string();
+        let release_json = serde_json::to_string(&update.release_json)?;
+        sqlx::query(
+            r#"
+            UPDATE releases
+            SET release_json = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(release_id)
+        .bind(release_json)
+        .bind(now)
+        .bind(update.actor)
+        .bind(update.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_release(release_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "release".to_string(),
+                id: release_id.to_string(),
+            })
+    }
+
+    pub async fn create_registry_evidence(
+        &self,
+        evidence: CreateRegistryEvidence,
+    ) -> Result<StoredRegistryEvidence, StoreError> {
+        let now = now_string();
+        let evidence_json = serde_json::to_string(&evidence.evidence_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO registry_evidence (
+              id, release_id, deployment_intent_id, pipeline_intent_id, change_set_id,
+              work_plan_id, remediation_plan_id, incident_id, session_id, run_id, status,
+              title, summary, risk_level, registry, repository, image_ref, image_digest, tag,
+              source, verification_status, evidence_json, created_at, updated_at,
+              status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+            "#,
+        )
+        .bind(&evidence.id)
+        .bind(&evidence.release_id)
+        .bind(&evidence.deployment_intent_id)
+        .bind(&evidence.pipeline_intent_id)
+        .bind(&evidence.change_set_id)
+        .bind(&evidence.work_plan_id)
+        .bind(&evidence.remediation_plan_id)
+        .bind(&evidence.incident_id)
+        .bind(evidence.session_id.as_str())
+        .bind(evidence.run_id.as_ref().map(RunId::as_str))
+        .bind(&evidence.status)
+        .bind(&evidence.title)
+        .bind(&evidence.summary)
+        .bind(&evidence.risk_level)
+        .bind(evidence.registry)
+        .bind(evidence.repository)
+        .bind(evidence.image_ref)
+        .bind(evidence.image_digest)
+        .bind(evidence.tag)
+        .bind(&evidence.source)
+        .bind(&evidence.verification_status)
+        .bind(evidence_json)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_registry_evidence(&evidence.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "registry_evidence".to_string(),
+                id: evidence.id,
+            })
+    }
+
+    pub async fn get_registry_evidence(
+        &self,
+        evidence_id: &str,
+    ) -> Result<Option<StoredRegistryEvidence>, StoreError> {
+        let row = sqlx::query(registry_evidence_select_sql("WHERE id = ?1"))
+            .bind(evidence_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_registry_evidence).transpose()
+    }
+
+    pub async fn get_registry_evidence_by_release(
+        &self,
+        release_id: &str,
+    ) -> Result<Option<StoredRegistryEvidence>, StoreError> {
+        let row = sqlx::query(registry_evidence_select_sql("WHERE release_id = ?1"))
+            .bind(release_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_registry_evidence).transpose()
+    }
+
+    pub async fn list_registry_evidence(
+        &self,
+        filter: RegistryEvidenceListFilter,
+    ) -> Result<Vec<StoredRegistryEvidence>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, release_id, deployment_intent_id, pipeline_intent_id, change_set_id,
+                   work_plan_id, remediation_plan_id, incident_id, session_id, run_id, status,
+                   title, summary, risk_level, registry, repository, image_ref, image_digest,
+                   tag, source, verification_status, evidence_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM registry_evidence
+            WHERE (?1 IS NULL OR release_id = ?1)
+              AND (?2 IS NULL OR deployment_intent_id = ?2)
+              AND (?3 IS NULL OR pipeline_intent_id = ?3)
+              AND (?4 IS NULL OR change_set_id = ?4)
+              AND (?5 IS NULL OR work_plan_id = ?5)
+              AND (?6 IS NULL OR remediation_plan_id = ?6)
+              AND (?7 IS NULL OR incident_id = ?7)
+              AND (?8 IS NULL OR run_id = ?8)
+              AND (?9 IS NULL OR status = ?9)
+              AND (?10 IS NULL OR risk_level = ?10)
+              AND (?11 IS NULL OR registry = ?11)
+              AND (?12 IS NULL OR repository = ?12)
+              AND (?13 IS NULL OR image_ref = ?13)
+              AND (?14 IS NULL OR image_digest = ?14)
+              AND (?15 IS NULL OR tag = ?15)
+              AND (?16 IS NULL OR source = ?16)
+              AND (?17 IS NULL OR verification_status = ?17)
+              AND (?18 IS NULL OR CAST(created_at AS INTEGER) >= ?18)
+              AND (?19 IS NULL OR CAST(created_at AS INTEGER) <= ?19)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?20 OFFSET ?21
+            "#,
+        )
+        .bind(filter.release_id)
+        .bind(filter.deployment_intent_id)
+        .bind(filter.pipeline_intent_id)
+        .bind(filter.change_set_id)
+        .bind(filter.work_plan_id)
+        .bind(filter.remediation_plan_id)
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.risk_level)
+        .bind(filter.registry)
+        .bind(filter.repository)
+        .bind(filter.image_ref)
+        .bind(filter.image_digest)
+        .bind(filter.tag)
+        .bind(filter.source)
+        .bind(filter.verification_status)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_registry_evidence).collect()
+    }
+
+    pub async fn update_registry_evidence_status(
+        &self,
+        evidence_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredRegistryEvidence, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE registry_evidence
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(evidence_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_registry_evidence(evidence_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "registry_evidence".to_string(),
+                id: evidence_id.to_string(),
+            })
+    }
+
+    pub async fn revise_registry_evidence_draft(
+        &self,
+        evidence_id: &str,
+        revision: UpdateRegistryEvidenceDraft,
+    ) -> Result<StoredRegistryEvidence, StoreError> {
+        let now = now_string();
+        let evidence_json = serde_json::to_string(&revision.evidence_json)?;
+        sqlx::query(
+            r#"
+            UPDATE registry_evidence
+            SET status = 'proposed',
+                title = ?2,
+                summary = ?3,
+                risk_level = ?4,
+                registry = ?5,
+                repository = ?6,
+                image_ref = ?7,
+                image_digest = ?8,
+                tag = ?9,
+                source = ?10,
+                verification_status = ?11,
+                evidence_json = ?12,
+                updated_at = ?13,
+                status_changed_at = ?13,
+                status_changed_by = ?14,
+                status_reason = ?15
+            WHERE id = ?1
+            "#,
+        )
+        .bind(evidence_id)
+        .bind(revision.title)
+        .bind(revision.summary)
+        .bind(revision.risk_level)
+        .bind(revision.registry)
+        .bind(revision.repository)
+        .bind(revision.image_ref)
+        .bind(revision.image_digest)
+        .bind(revision.tag)
+        .bind(revision.source)
+        .bind(revision.verification_status)
+        .bind(evidence_json)
+        .bind(now)
+        .bind(revision.actor)
+        .bind(revision.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_registry_evidence(evidence_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "registry_evidence".to_string(),
+                id: evidence_id.to_string(),
+            })
+    }
+
     pub async fn create_approval_gate(
         &self,
         gate: CreateApprovalGate,
@@ -1705,6 +2706,38 @@ impl SqliteStore {
             })
     }
 
+    pub async fn stale_permission_grant(
+        &self,
+        grant_id: &str,
+        stale_by: Option<String>,
+        stale_reason: Option<String>,
+    ) -> Result<StoredPermissionGrant, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE permission_grants
+            SET status = 'stale',
+                revoked_at = ?2,
+                revoked_by = ?3,
+                revoke_reason = ?4
+            WHERE id = ?1
+            "#,
+        )
+        .bind(grant_id)
+        .bind(now)
+        .bind(stale_by)
+        .bind(stale_reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_permission_grant(grant_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "permission grant".to_string(),
+                id: grant_id.to_string(),
+            })
+    }
+
     pub async fn create_audit_event(
         &self,
         event: CreateAuditEvent,
@@ -1941,6 +2974,140 @@ fn row_to_change_set(row: sqlx::sqlite::SqliteRow) -> Result<StoredChangeSet, St
     })
 }
 
+fn row_to_pipeline_intent(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredPipelineIntent, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let intent_json: String = row.try_get("intent_json")?;
+    Ok(StoredPipelineIntent {
+        id: row.try_get("id")?,
+        change_set_id: row.try_get("change_set_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        intent_kind: row.try_get("intent_kind")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        intent_json: serde_json::from_str(&intent_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_deployment_intent(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredDeploymentIntent, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let intent_json: String = row.try_get("intent_json")?;
+    Ok(StoredDeploymentIntent {
+        id: row.try_get("id")?,
+        pipeline_intent_id: row.try_get("pipeline_intent_id")?,
+        change_set_id: row.try_get("change_set_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        intent_kind: row.try_get("intent_kind")?,
+        target_environment: row.try_get("target_environment")?,
+        target_namespace: row.try_get("target_namespace")?,
+        argo_application: row.try_get("argo_application")?,
+        resource_namespace: row.try_get("resource_namespace")?,
+        resource_kind: row.try_get("resource_kind")?,
+        resource_name: row.try_get("resource_name")?,
+        intent_json: serde_json::from_str(&intent_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_release(row: sqlx::sqlite::SqliteRow) -> Result<StoredRelease, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let release_json: String = row.try_get("release_json")?;
+    Ok(StoredRelease {
+        id: row.try_get("id")?,
+        deployment_intent_id: row.try_get("deployment_intent_id")?,
+        pipeline_intent_id: row.try_get("pipeline_intent_id")?,
+        change_set_id: row.try_get("change_set_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        release_kind: row.try_get("release_kind")?,
+        target_environment: row.try_get("target_environment")?,
+        target_namespace: row.try_get("target_namespace")?,
+        argo_application: row.try_get("argo_application")?,
+        version: row.try_get("version")?,
+        commit_sha: row.try_get("commit_sha")?,
+        image_digest: row.try_get("image_digest")?,
+        rollback_ref: row.try_get("rollback_ref")?,
+        release_json: serde_json::from_str(&release_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_registry_evidence(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredRegistryEvidence, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let evidence_json: String = row.try_get("evidence_json")?;
+    Ok(StoredRegistryEvidence {
+        id: row.try_get("id")?,
+        release_id: row.try_get("release_id")?,
+        deployment_intent_id: row.try_get("deployment_intent_id")?,
+        pipeline_intent_id: row.try_get("pipeline_intent_id")?,
+        change_set_id: row.try_get("change_set_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        remediation_plan_id: row.try_get("remediation_plan_id")?,
+        incident_id: row.try_get("incident_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        registry: row.try_get("registry")?,
+        repository: row.try_get("repository")?,
+        image_ref: row.try_get("image_ref")?,
+        image_digest: row.try_get("image_digest")?,
+        tag: row.try_get("tag")?,
+        source: row.try_get("source")?,
+        verification_status: row.try_get("verification_status")?,
+        evidence_json: serde_json::from_str(&evidence_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
 fn row_to_approval_gate(row: sqlx::sqlite::SqliteRow) -> Result<StoredApprovalGate, StoreError> {
     let run_id: Option<String> = row.try_get("run_id")?;
     let gate_json: String = row.try_get("gate_json")?;
@@ -2096,6 +3263,118 @@ fn change_set_select_sql(where_clause: &str) -> &'static str {
             "#
         }
         _ => unreachable!("change set select SQL only supports known static clauses"),
+    }
+}
+
+fn pipeline_intent_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, change_set_id, work_plan_id, remediation_plan_id, incident_id, session_id,
+                   run_id, status, title, summary, risk_level, intent_kind, resource_namespace,
+                   resource_kind, resource_name, intent_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM pipeline_intents
+            WHERE id = ?1
+            "#
+        }
+        "WHERE change_set_id = ?1" => {
+            r#"
+            SELECT id, change_set_id, work_plan_id, remediation_plan_id, incident_id, session_id,
+                   run_id, status, title, summary, risk_level, intent_kind, resource_namespace,
+                   resource_kind, resource_name, intent_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM pipeline_intents
+            WHERE change_set_id = ?1
+            "#
+        }
+        _ => unreachable!("pipeline intent select SQL only supports known static clauses"),
+    }
+}
+
+fn deployment_intent_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, pipeline_intent_id, change_set_id, work_plan_id, remediation_plan_id,
+                   incident_id, session_id, run_id, status, title, summary, risk_level,
+                   intent_kind, target_environment, target_namespace, argo_application,
+                   resource_namespace, resource_kind, resource_name, intent_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM deployment_intents
+            WHERE id = ?1
+            "#
+        }
+        "WHERE pipeline_intent_id = ?1" => {
+            r#"
+            SELECT id, pipeline_intent_id, change_set_id, work_plan_id, remediation_plan_id,
+                   incident_id, session_id, run_id, status, title, summary, risk_level,
+                   intent_kind, target_environment, target_namespace, argo_application,
+                   resource_namespace, resource_kind, resource_name, intent_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM deployment_intents
+            WHERE pipeline_intent_id = ?1
+            "#
+        }
+        _ => unreachable!("deployment intent select SQL only supports known static clauses"),
+    }
+}
+
+fn release_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, deployment_intent_id, pipeline_intent_id, change_set_id, work_plan_id,
+                   remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
+                   risk_level, release_kind, target_environment, target_namespace,
+                   argo_application, version, commit_sha, image_digest, rollback_ref,
+                   release_json, created_at, updated_at, status_changed_at, status_changed_by,
+                   status_reason
+            FROM releases
+            WHERE id = ?1
+            "#
+        }
+        "WHERE deployment_intent_id = ?1" => {
+            r#"
+            SELECT id, deployment_intent_id, pipeline_intent_id, change_set_id, work_plan_id,
+                   remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
+                   risk_level, release_kind, target_environment, target_namespace,
+                   argo_application, version, commit_sha, image_digest, rollback_ref,
+                   release_json, created_at, updated_at, status_changed_at, status_changed_by,
+                   status_reason
+            FROM releases
+            WHERE deployment_intent_id = ?1
+            "#
+        }
+        _ => unreachable!("release select SQL only supports known static clauses"),
+    }
+}
+
+fn registry_evidence_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, release_id, deployment_intent_id, pipeline_intent_id, change_set_id,
+                   work_plan_id, remediation_plan_id, incident_id, session_id, run_id, status,
+                   title, summary, risk_level, registry, repository, image_ref, image_digest,
+                   tag, source, verification_status, evidence_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM registry_evidence
+            WHERE id = ?1
+            "#
+        }
+        "WHERE release_id = ?1" => {
+            r#"
+            SELECT id, release_id, deployment_intent_id, pipeline_intent_id, change_set_id,
+                   work_plan_id, remediation_plan_id, incident_id, session_id, run_id, status,
+                   title, summary, risk_level, registry, repository, image_ref, image_digest,
+                   tag, source, verification_status, evidence_json, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM registry_evidence
+            WHERE release_id = ?1
+            "#
+        }
+        _ => unreachable!("registry evidence select SQL only supports known static clauses"),
     }
 }
 
@@ -3695,6 +4974,444 @@ mod tests {
             .as_bool()
             .unwrap());
 
+        let change_set = store
+            .create_change_set(crate::CreateChangeSet {
+                id: "cset_test".to_string(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "ChangeSet: build config".to_string(),
+                summary: "Review build config changes".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "hash_test".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                change_set_json: serde_json::json!({
+                    "changes": [{"path": "tekton/pipeline.yaml"}]
+                }),
+            })
+            .await
+            .unwrap();
+        let pipeline_intent = store
+            .create_pipeline_intent(crate::CreatePipelineIntent {
+                id: "pint_test".to_string(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "proposed".to_string(),
+                title: "Run build/test/package".to_string(),
+                summary: "Propose Tekton build/test/package for approved ChangeSet".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                intent_json: serde_json::json!({
+                    "execution": {"enabled": false},
+                    "pipeline": {"tasks": ["test", "build", "package"]}
+                }),
+            })
+            .await
+            .unwrap();
+        let listed_pipeline_intents = store
+            .list_pipeline_intents(crate::PipelineIntentListFilter {
+                change_set_id: Some(change_set.id.clone()),
+                work_plan_id: Some(work_plan.id.clone()),
+                status: Some("proposed".to_string()),
+                intent_kind: Some("tekton_build_test_package".to_string()),
+                limit: 10,
+                offset: 0,
+                ..crate::PipelineIntentListFilter::default()
+            })
+            .await
+            .unwrap();
+        let approved_pipeline_intent = store
+            .update_pipeline_intent_status(
+                &pipeline_intent.id,
+                "approved",
+                Some("tester".to_string()),
+                Some("pipeline intent reviewed".to_string()),
+            )
+            .await
+            .unwrap();
+        let stale_pipeline_intent = store
+            .update_pipeline_intent_status(
+                &pipeline_intent.id,
+                "stale",
+                Some("tester".to_string()),
+                Some("source changed".to_string()),
+            )
+            .await
+            .unwrap();
+        let reproposed_pipeline_intent = store
+            .revise_pipeline_intent_draft(
+                &pipeline_intent.id,
+                crate::UpdatePipelineIntentDraft {
+                    title: "Run build/test/package again".to_string(),
+                    summary: "Re-propose Tekton build/test/package after source change".to_string(),
+                    risk_level: "medium".to_string(),
+                    intent_kind: "tekton_build_test_package".to_string(),
+                    resource_namespace: Some("ci".to_string()),
+                    resource_kind: Some("PipelineRun".to_string()),
+                    resource_name: Some("build-app".to_string()),
+                    intent_json: serde_json::json!({
+                        "execution": {"enabled": false},
+                        "source": {"material_hash": "hash_test_2"},
+                        "pipeline": {"tasks": ["test", "build", "package"]}
+                    }),
+                    actor: Some("tester".to_string()),
+                    reason: Some("pipeline intent reproposed".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(pipeline_intent.change_set_id, "cset_test");
+        assert!(!pipeline_intent.intent_json["execution"]["enabled"]
+            .as_bool()
+            .unwrap());
+        assert_eq!(listed_pipeline_intents.len(), 1);
+        assert_eq!(listed_pipeline_intents[0].id, "pint_test");
+        assert_eq!(approved_pipeline_intent.status, "approved");
+        assert_eq!(
+            approved_pipeline_intent.status_changed_by.as_deref(),
+            Some("tester")
+        );
+        assert_eq!(stale_pipeline_intent.status, "stale");
+        assert_eq!(reproposed_pipeline_intent.status, "proposed");
+        assert_eq!(
+            reproposed_pipeline_intent.intent_json["source"]["material_hash"],
+            serde_json::json!("hash_test_2")
+        );
+
+        let deployment_intent = store
+            .create_deployment_intent(crate::CreateDeploymentIntent {
+                id: "dint_test".to_string(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "proposed".to_string(),
+                title: "Deploy checkout-api".to_string(),
+                summary: "Propose Argo sync for approved PipelineIntent".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "argo_sync_deploy".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-app".to_string()),
+                intent_json: serde_json::json!({
+                    "execution": {"enabled": false},
+                    "deployment": {"provider": "argo_cd", "operation": "sync"}
+                }),
+            })
+            .await
+            .unwrap();
+        let listed_deployment_intents = store
+            .list_deployment_intents(crate::DeploymentIntentListFilter {
+                pipeline_intent_id: Some(pipeline_intent.id.clone()),
+                change_set_id: Some(change_set.id.clone()),
+                work_plan_id: Some(work_plan.id.clone()),
+                status: Some("proposed".to_string()),
+                intent_kind: Some("argo_sync_deploy".to_string()),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                limit: 10,
+                offset: 0,
+                ..crate::DeploymentIntentListFilter::default()
+            })
+            .await
+            .unwrap();
+        let approved_deployment_intent = store
+            .update_deployment_intent_status(
+                &deployment_intent.id,
+                "approved",
+                Some("tester".to_string()),
+                Some("deployment intent reviewed".to_string()),
+            )
+            .await
+            .unwrap();
+        let stale_deployment_intent = store
+            .update_deployment_intent_status(
+                &deployment_intent.id,
+                "stale",
+                Some("tester".to_string()),
+                Some("pipeline intent changed".to_string()),
+            )
+            .await
+            .unwrap();
+        let reproposed_deployment_intent = store
+            .revise_deployment_intent_draft(
+                &deployment_intent.id,
+                crate::UpdateDeploymentIntentDraft {
+                    title: "Deploy checkout-api again".to_string(),
+                    summary: "Re-propose Argo sync after pipeline intent changed".to_string(),
+                    risk_level: "medium".to_string(),
+                    intent_kind: "argo_sync_deploy".to_string(),
+                    target_environment: Some("dev".to_string()),
+                    target_namespace: Some("apps-dev".to_string()),
+                    argo_application: Some("checkout-api".to_string()),
+                    resource_namespace: Some("ci".to_string()),
+                    resource_kind: Some("PipelineRun".to_string()),
+                    resource_name: Some("build-app".to_string()),
+                    intent_json: serde_json::json!({
+                        "execution": {"enabled": false},
+                        "source": {"pipeline_intent_id": pipeline_intent.id},
+                    }),
+                    actor: Some("tester".to_string()),
+                    reason: Some("deployment intent reproposed".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(deployment_intent.pipeline_intent_id, "pint_test");
+        assert!(!deployment_intent.intent_json["execution"]["enabled"]
+            .as_bool()
+            .unwrap());
+        assert_eq!(listed_deployment_intents.len(), 1);
+        assert_eq!(listed_deployment_intents[0].id, "dint_test");
+        assert_eq!(approved_deployment_intent.status, "approved");
+        assert_eq!(
+            approved_deployment_intent.status_changed_by.as_deref(),
+            Some("tester")
+        );
+        assert_eq!(stale_deployment_intent.status, "stale");
+        assert_eq!(reproposed_deployment_intent.status, "proposed");
+        assert_eq!(
+            reproposed_deployment_intent.intent_json["source"]["pipeline_intent_id"],
+            serde_json::json!("pint_test")
+        );
+
+        let release = store
+            .create_release(crate::CreateRelease {
+                id: "rel_test".to_string(),
+                deployment_intent_id: deployment_intent.id.clone(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "proposed".to_string(),
+                title: "Release checkout-api".to_string(),
+                summary: "Propose release after approved deployment intent".to_string(),
+                risk_level: "medium".to_string(),
+                release_kind: "gitops_release".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                version: Some("v0.1.0-smoke".to_string()),
+                commit_sha: Some("abc1234".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                rollback_ref: Some("previous-release".to_string()),
+                release_json: serde_json::json!({
+                    "execution": {"enabled": false},
+                    "verification": {"required": ["argo", "lgtm"]}
+                }),
+            })
+            .await
+            .unwrap();
+        let listed_releases = store
+            .list_releases(crate::ReleaseListFilter {
+                deployment_intent_id: Some(deployment_intent.id.clone()),
+                pipeline_intent_id: Some(pipeline_intent.id.clone()),
+                change_set_id: Some(change_set.id.clone()),
+                work_plan_id: Some(work_plan.id.clone()),
+                status: Some("proposed".to_string()),
+                release_kind: Some("gitops_release".to_string()),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                version: Some("v0.1.0-smoke".to_string()),
+                commit_sha: Some("abc1234".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                limit: 10,
+                offset: 0,
+                ..crate::ReleaseListFilter::default()
+            })
+            .await
+            .unwrap();
+        let approved_release = store
+            .update_release_status(
+                &release.id,
+                "approved",
+                Some("tester".to_string()),
+                Some("release reviewed".to_string()),
+            )
+            .await
+            .unwrap();
+        let stale_release = store
+            .update_release_status(
+                &release.id,
+                "stale",
+                Some("tester".to_string()),
+                Some("deployment intent changed".to_string()),
+            )
+            .await
+            .unwrap();
+        let reproposed_release = store
+            .revise_release_draft(
+                &release.id,
+                crate::UpdateReleaseDraft {
+                    title: "Release checkout-api again".to_string(),
+                    summary: "Re-propose release after deployment intent changed".to_string(),
+                    risk_level: "medium".to_string(),
+                    release_kind: "gitops_release".to_string(),
+                    target_environment: Some("dev".to_string()),
+                    target_namespace: Some("apps-dev".to_string()),
+                    argo_application: Some("checkout-api".to_string()),
+                    version: Some("v0.1.1-smoke".to_string()),
+                    commit_sha: Some("def5678".to_string()),
+                    image_digest: Some("sha256:feedface".to_string()),
+                    rollback_ref: Some("rel_test".to_string()),
+                    release_json: serde_json::json!({
+                        "execution": {"enabled": false},
+                        "source": {"deployment_intent_id": deployment_intent.id},
+                    }),
+                    actor: Some("tester".to_string()),
+                    reason: Some("release reproposed".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(release.deployment_intent_id, "dint_test");
+        assert!(!release.release_json["execution"]["enabled"]
+            .as_bool()
+            .unwrap());
+        assert_eq!(listed_releases.len(), 1);
+        assert_eq!(listed_releases[0].id, "rel_test");
+        assert_eq!(approved_release.status, "approved");
+        assert_eq!(
+            approved_release.status_changed_by.as_deref(),
+            Some("tester")
+        );
+        assert_eq!(stale_release.status, "stale");
+        assert_eq!(reproposed_release.status, "proposed");
+        assert_eq!(reproposed_release.version.as_deref(), Some("v0.1.1-smoke"));
+
+        let registry_evidence = store
+            .create_registry_evidence(crate::CreateRegistryEvidence {
+                id: "regev_test".to_string(),
+                release_id: release.id.clone(),
+                deployment_intent_id: deployment_intent.id.clone(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: incident.id.clone(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "proposed".to_string(),
+                title: "Registry evidence checkout-api".to_string(),
+                summary: "Manual image verification evidence".to_string(),
+                risk_level: "medium".to_string(),
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: Some("registry.example.test/checkout-api:v0.1.0-smoke".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                tag: Some("v0.1.0-smoke".to_string()),
+                source: "manual".to_string(),
+                verification_status: "verified".to_string(),
+                evidence_json: serde_json::json!({
+                    "image": {"digest": "sha256:deadbeef"},
+                    "verification": {"status": "verified"}
+                }),
+            })
+            .await
+            .unwrap();
+        let listed_registry_evidence = store
+            .list_registry_evidence(crate::RegistryEvidenceListFilter {
+                release_id: Some(release.id.clone()),
+                deployment_intent_id: Some(deployment_intent.id.clone()),
+                pipeline_intent_id: Some(pipeline_intent.id.clone()),
+                change_set_id: Some(change_set.id.clone()),
+                work_plan_id: Some(work_plan.id.clone()),
+                status: Some("proposed".to_string()),
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                source: Some("manual".to_string()),
+                verification_status: Some("verified".to_string()),
+                limit: 10,
+                offset: 0,
+                ..crate::RegistryEvidenceListFilter::default()
+            })
+            .await
+            .unwrap();
+        let verified_registry_evidence = store
+            .update_registry_evidence_status(
+                &registry_evidence.id,
+                "verified",
+                Some("tester".to_string()),
+                Some("image metadata verified".to_string()),
+            )
+            .await
+            .unwrap();
+        let stale_registry_evidence = store
+            .update_registry_evidence_status(
+                &registry_evidence.id,
+                "stale",
+                Some("tester".to_string()),
+                Some("release changed".to_string()),
+            )
+            .await
+            .unwrap();
+        let reproposed_registry_evidence = store
+            .revise_registry_evidence_draft(
+                &registry_evidence.id,
+                crate::UpdateRegistryEvidenceDraft {
+                    title: "Registry evidence checkout-api again".to_string(),
+                    summary: "Re-propose image verification evidence".to_string(),
+                    risk_level: "medium".to_string(),
+                    registry: Some("registry.example.test".to_string()),
+                    repository: Some("checkout-api".to_string()),
+                    image_ref: Some("registry.example.test/checkout-api:v0.1.1-smoke".to_string()),
+                    image_digest: Some("sha256:feedface".to_string()),
+                    tag: Some("v0.1.1-smoke".to_string()),
+                    source: "manual".to_string(),
+                    verification_status: "unverified".to_string(),
+                    evidence_json: serde_json::json!({
+                        "source": {"release_id": release.id},
+                        "verification": {"status": "unverified"}
+                    }),
+                    actor: Some("tester".to_string()),
+                    reason: Some("registry evidence reproposed".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(registry_evidence.release_id, "rel_test");
+        assert_eq!(listed_registry_evidence.len(), 1);
+        assert_eq!(listed_registry_evidence[0].id, "regev_test");
+        assert_eq!(verified_registry_evidence.status, "verified");
+        assert_eq!(
+            verified_registry_evidence.status_changed_by.as_deref(),
+            Some("tester")
+        );
+        assert_eq!(stale_registry_evidence.status, "stale");
+        assert_eq!(reproposed_registry_evidence.status, "proposed");
+        assert_eq!(
+            reproposed_registry_evidence.image_digest.as_deref(),
+            Some("sha256:feedface")
+        );
+
         let gate = store
             .create_approval_gate(crate::CreateApprovalGate {
                 id: "agate_test".to_string(),
@@ -3856,6 +5573,42 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+
+        let stale_seed = store
+            .create_permission_grant(crate::CreatePermissionGrant {
+                id: "grant_stale".to_string(),
+                subject: "agent:local-worker".to_string(),
+                reason: "allow bounded plan".to_string(),
+                scope_json: serde_json::json!({
+                    "environment": "local",
+                    "capability_kinds": ["filesystem"],
+                    "work_plan_ids": ["wplan_1"]
+                }),
+                policy_json: serde_json::json!({
+                    "policy_mode": "trusted_writes"
+                }),
+                expires_at: None,
+            })
+            .await
+            .unwrap();
+        let staled = store
+            .stale_permission_grant(
+                &stale_seed.id,
+                Some("planner".to_string()),
+                Some("work plan changed".to_string()),
+            )
+            .await
+            .unwrap();
+        let stale_grants = store
+            .list_permission_grants(Some("stale"), 50)
+            .await
+            .unwrap();
+
+        assert_eq!(staled.status, "stale");
+        assert_eq!(staled.revoked_by.as_deref(), Some("planner"));
+        assert_eq!(staled.revoke_reason.as_deref(), Some("work plan changed"));
+        assert_eq!(stale_grants.len(), 1);
+        assert_eq!(stale_grants[0].id, "grant_stale");
     }
 
     #[tokio::test]

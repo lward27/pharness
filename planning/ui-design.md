@@ -17,6 +17,7 @@
 - Keep pipeline status, policy status, and gate status as separate state axes in the resource detail panel.
 - Treat Registry, Database, RAG, and Release as future-backed states until the corresponding capabilities are implemented; the UI should degrade gracefully rather than implying live support.
 - Keep assistant/chat affordances secondary so the product center of gravity remains runs, evidence, policy, and audit.
+- Reconciled the recovered prototype backup by keeping `pharness-ui/` as the only active UI app, promoting useful screenshots and QA artifacts into that app, and removing the duplicate `ui-old-backup/` folder.
 
 # Backlog
 

@@ -1,17 +1,33 @@
 use crate::dto::{
     ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
     ApprovalSummaryResponse, ApprovalsResponse, ArtifactResponse, ArtifactsResponse,
-    AuditEventsResponse, ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest,
-    CreateChangeSetResponse, CreatePermissionGrantRequest, CreateRunRequest,
-    CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse,
-    DecideApprovalGateRequest, DecideApprovalGateResponse, DecideApprovalRequest,
-    DecideApprovalResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
+    AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
+    AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
+    AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
+    ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest, CreateChangeSetResponse,
+    CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
+    CreateIncidentRequest, CreateObservationRequest, CreatePermissionGrantRequest,
+    CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
+    CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromInspectionResponse,
+    CreateRegistryEvidenceFromReleaseRequest, CreateRegistryEvidenceResponse,
+    CreateReleaseFromDeploymentIntentRequest, CreateReleaseResponse, CreateRemediationPlanRequest,
+    CreateRunRequest, CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest,
+    CreateWorkPlanResponse, DecideApprovalGateRequest, DecideApprovalGateResponse,
+    DecideApprovalRequest, DecideApprovalResponse, DeploymentIntentResponse,
+    DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
     FileChangeResponse, IncidentResponse, IncidentsResponse, ObservationResponse,
     ObservationsResponse, PermissionGrantResponse, PermissionGrantsResponse,
-    RemediationPlanResponse, RemediationPlansResponse, ReviewApprovalRequest,
-    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
+    PipelineIntentResponse, PipelineIntentsResponse, RegistryEvidenceListResponse,
+    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
+    RemediationPlansResponse, ReviewApprovalRequest, ReviseChangeSetRequest,
+    ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
     RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
-    TransitionChangeSetRequest, TransitionChangeSetResponse, TransitionWorkPlanRequest,
+    SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
+    SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
+    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
+    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
+    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
+    TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkPlanRequest,
     TransitionWorkPlanResponse, TrustedEnvelopeResponse, WorkPlanResponse, WorkPlansResponse,
 };
 use crate::worker::LocalWorker;
@@ -29,17 +45,25 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
-    ChangeSetListFilter, IncidentListFilter, ObservationListFilter, RemediationPlanListFilter,
-    RunListFilter, RunSummaryFilter, StoredApprovalGate, StoredChangeSet, StoredPermissionGrant,
-    StoredRemediationPlan, StoredWorkPlan, UpdateChangeSetRevision, UpdateWorkPlanRevision,
-    WorkPlanListFilter,
+    ChangeSetListFilter, DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
+    PipelineIntentListFilter, RegistryEvidenceListFilter, ReleaseListFilter,
+    RemediationPlanListFilter, RunListFilter, RunSummaryFilter, StoredApprovalGate,
+    StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredIncident, StoredObservation,
+    StoredPermissionGrant, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
+    StoredRemediationPlan, StoredWorkPlan, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
+    UpdatePipelineIntentDraft, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
+    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_store::{
-    CreateAuditEvent, CreateChangeSet, CreatePermissionGrant, CreateRun, CreateSession,
-    CreateWorkPlan, SqliteStore, StoreError,
+    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateDeploymentIntent,
+    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineIntent,
+    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
+    CreateWorkPlan, SqliteStore, StoreError, UpdateDeploymentIntentEvidence,
+    UpdatePipelineIntentEvidence,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -88,11 +112,17 @@ pub fn router(
         .route("/api/runs/:run_id/cancel", post(cancel_run))
         .route("/api/runs/:run_id/approvals", post(decide_run_approval))
         .route("/api/artifacts/:artifact_id", get(get_artifact))
-        .route("/api/observations", get(list_observations))
+        .route(
+            "/api/observations",
+            get(list_observations).post(create_observation),
+        )
         .route("/api/observations/:observation_id", get(get_observation))
-        .route("/api/incidents", get(list_incidents))
+        .route("/api/incidents", get(list_incidents).post(create_incident))
         .route("/api/incidents/:incident_id", get(get_incident))
-        .route("/api/remediation-plans", get(list_remediation_plans))
+        .route(
+            "/api/remediation-plans",
+            get(list_remediation_plans).post(create_remediation_plan),
+        )
         .route("/api/remediation-plans/:plan_id", get(get_remediation_plan))
         .route(
             "/api/work-plans/from-remediation-plan",
@@ -100,6 +130,11 @@ pub fn router(
         )
         .route("/api/work-plans", get(list_work_plans))
         .route("/api/work-plans/:work_plan_id", get(get_work_plan))
+        .route(
+            "/api/work-plans/:work_plan_id/readiness",
+            get(work_plan_readiness),
+        )
+        .route("/api/work-plans/:work_plan_id/flow", get(work_plan_flow))
         .route(
             "/api/work-plans/:work_plan_id/revise",
             post(revise_work_plan),
@@ -118,6 +153,11 @@ pub fn router(
         )
         .route("/api/change-sets/:change_set_id", get(get_change_set))
         .route(
+            "/api/change-sets/:change_set_id/readiness",
+            get(change_set_readiness),
+        )
+        .route("/api/change-sets/:change_set_id/flow", get(change_set_flow))
+        .route(
             "/api/change-sets/:change_set_id/revise",
             post(revise_change_set),
         )
@@ -128,6 +168,71 @@ pub fn router(
         .route(
             "/api/change-sets/:change_set_id/trusted-envelope",
             post(create_change_set_trusted_envelope),
+        )
+        .route("/api/pipeline-intents", get(list_pipeline_intents))
+        .route(
+            "/api/pipeline-intents/from-change-set",
+            post(create_pipeline_intent_from_change_set),
+        )
+        .route(
+            "/api/pipeline-intents/:pipeline_intent_id",
+            get(get_pipeline_intent),
+        )
+        .route(
+            "/api/pipeline-intents/:pipeline_intent_id/transition",
+            post(transition_pipeline_intent),
+        )
+        .route(
+            "/api/pipeline-intents/:pipeline_intent_id/evidence",
+            post(attach_pipeline_intent_evidence),
+        )
+        .route("/api/deployment-intents", get(list_deployment_intents))
+        .route(
+            "/api/deployment-intents/from-pipeline-intent",
+            post(create_deployment_intent_from_pipeline_intent),
+        )
+        .route(
+            "/api/deployment-intents/:deployment_intent_id",
+            get(get_deployment_intent),
+        )
+        .route(
+            "/api/deployment-intents/:deployment_intent_id/transition",
+            post(transition_deployment_intent),
+        )
+        .route(
+            "/api/deployment-intents/:deployment_intent_id/evidence",
+            post(attach_deployment_intent_evidence),
+        )
+        .route("/api/releases", get(list_releases))
+        .route(
+            "/api/releases/from-deployment-intent",
+            post(create_release_from_deployment_intent),
+        )
+        .route("/api/releases/:release_id", get(get_release))
+        .route(
+            "/api/releases/:release_id/transition",
+            post(transition_release),
+        )
+        .route(
+            "/api/releases/:release_id/evidence",
+            post(attach_release_evidence),
+        )
+        .route("/api/registry-evidence", get(list_registry_evidence))
+        .route(
+            "/api/registry-evidence/from-release",
+            post(create_registry_evidence_from_release),
+        )
+        .route(
+            "/api/registry-evidence/from-registry-inspection",
+            post(create_registry_evidence_from_registry_inspection),
+        )
+        .route(
+            "/api/registry-evidence/:evidence_id",
+            get(get_registry_evidence),
+        )
+        .route(
+            "/api/registry-evidence/:evidence_id/transition",
+            post(transition_registry_evidence),
         )
         .route("/api/approval-gates", get(list_approval_gates))
         .route("/api/approval-gates/summary", get(approval_gate_summary))
@@ -215,8 +320,17 @@ async fn execute_capability(
     State(state): State<AppState>,
     Json(request): Json<ExecuteCapabilityRequest>,
 ) -> Result<Json<ExecuteCapabilityResponse>, ApiError> {
-    let action = request.action;
-    let timeout_ms = direct_capability_timeout_ms(request.timeout_ms);
+    execute_direct_capability(&state, request.action, request.timeout_ms)
+        .await
+        .map(Json)
+}
+
+async fn execute_direct_capability(
+    state: &AppState,
+    action: AgentAction,
+    requested_timeout_ms: Option<u64>,
+) -> Result<ExecuteCapabilityResponse, ApiError> {
+    let timeout_ms = direct_capability_timeout_ms(requested_timeout_ms);
     if !is_direct_capability_action(&action) {
         return Err(ApiError::bad_request(format!(
             "{} is not exposed through direct capability execution",
@@ -235,6 +349,9 @@ async fn execute_capability(
             .await
             {
                 Ok(Ok(result)) => {
+                    let evidence =
+                        persist_direct_capability_evidence(&state.store, &action_name, &result)
+                            .await?;
                     append_direct_capability_audit_event(
                         &state.store,
                         DirectCapabilityAuditInput {
@@ -256,6 +373,8 @@ async fn execute_capability(
                         executed: true,
                         cancelled: false,
                         timeout_ms,
+                        artifact_id: evidence.artifact_id,
+                        observation_id: evidence.observation_id,
                         result: Some(result),
                         error: None,
                     }
@@ -283,6 +402,8 @@ async fn execute_capability(
                         executed: true,
                         cancelled: false,
                         timeout_ms,
+                        artifact_id: None,
+                        observation_id: None,
                         result: None,
                         error: Some(error),
                     }
@@ -310,6 +431,8 @@ async fn execute_capability(
                         executed: true,
                         cancelled: true,
                         timeout_ms,
+                        artifact_id: None,
+                        observation_id: None,
                         result: None,
                         error: Some(error),
                     }
@@ -323,6 +446,8 @@ async fn execute_capability(
             executed: false,
             cancelled: false,
             timeout_ms,
+            artifact_id: None,
+            observation_id: None,
             result: None,
             error: None,
         },
@@ -333,6 +458,8 @@ async fn execute_capability(
             executed: false,
             cancelled: false,
             timeout_ms,
+            artifact_id: None,
+            observation_id: None,
             result: None,
             error: Some(summary.clone()),
         },
@@ -354,7 +481,233 @@ async fn execute_capability(
         .await?;
     }
 
-    Ok(Json(response))
+    Ok(response)
+}
+
+#[derive(Debug, Default)]
+struct DirectCapabilityEvidence {
+    artifact_id: Option<String>,
+    observation_id: Option<String>,
+}
+
+async fn persist_direct_capability_evidence(
+    store: &SqliteStore,
+    action_name: &str,
+    result: &ToolResult,
+) -> Result<DirectCapabilityEvidence, ApiError> {
+    let Some(source) = direct_evidence_source(result) else {
+        return Ok(DirectCapabilityEvidence::default());
+    };
+
+    let (session_id, run_id) =
+        root_session_for_request(store, None, None, "direct capability evidence").await?;
+    let artifact_kind = direct_artifact_kind(&result.content, source);
+    let artifact_id = format!("art_direct_{}_{}", action_name, unique_suffix());
+    let artifact = store
+        .create_artifact(CreateArtifact {
+            id: artifact_id.clone(),
+            session_id: session_id.clone(),
+            run_id: run_id.clone(),
+            kind: artifact_kind,
+            label: result.summary.clone(),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(result.content.clone()),
+        })
+        .await?;
+
+    let kind = direct_observation_kind(&result.content, source);
+    let subject = direct_observation_subject(&result.content, source, &kind);
+    let observation = store
+        .create_observation(CreateObservation {
+            id: format!("obs_direct_{}_{}", action_name, unique_suffix()),
+            session_id,
+            run_id,
+            source: source.to_string(),
+            kind: kind.clone(),
+            subject: subject.clone(),
+            summary: result.summary.clone(),
+            resource_namespace: direct_observation_namespace(&result.content),
+            resource_kind: direct_observation_resource_kind(&result.content, source, &kind),
+            resource_name: direct_observation_resource_name(
+                &result.content,
+                source,
+                &kind,
+                &subject,
+            ),
+            resource_ref_json: Some(direct_observation_resource_ref(
+                action_name,
+                source,
+                &kind,
+                &subject,
+            )),
+            artifact_id: Some(artifact.id.clone()),
+            data_json: direct_observation_data(&result.content),
+        })
+        .await?;
+    append_observation_audit_event(
+        store,
+        &observation,
+        "observation.created",
+        Some("api".to_string()),
+        Some(format!("direct capability {action_name}")),
+    )
+    .await?;
+
+    Ok(DirectCapabilityEvidence {
+        artifact_id: Some(artifact.id),
+        observation_id: Some(observation.id),
+    })
+}
+
+fn direct_evidence_source(result: &ToolResult) -> Option<&str> {
+    let source = result.content.get("source")?.as_str()?;
+    matches!(
+        source,
+        "kubernetes" | "argocd" | "prometheus" | "loki" | "tekton"
+    )
+    .then_some(source)
+}
+
+fn direct_artifact_kind(content: &Value, source: &str) -> String {
+    if source == "tekton"
+        && content.get("resource").and_then(Value::as_str) == Some("pipeline_run_analysis")
+    {
+        "pipeline_run_analysis".to_string()
+    } else {
+        format!("{source}_tool_result")
+    }
+}
+
+fn direct_observation_kind(content: &Value, source: &str) -> String {
+    content
+        .get("resource")
+        .and_then(Value::as_str)
+        .or_else(|| content.get("action").and_then(Value::as_str))
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("{source}_read"))
+}
+
+fn direct_observation_subject(content: &Value, source: &str, kind: &str) -> String {
+    if source == "tekton" && kind == "pipeline_run_analysis" {
+        if let (Some(namespace), Some(name)) = (
+            content
+                .pointer("/analysis/pipeline_run/namespace")
+                .and_then(Value::as_str),
+            content
+                .pointer("/analysis/pipeline_run/name")
+                .and_then(Value::as_str),
+        ) {
+            return format!("{namespace}/{name}");
+        }
+    }
+    if let Some(query) = content.get("query").and_then(Value::as_str) {
+        return query.to_string();
+    }
+    if let Some(name) = content.get("name").and_then(Value::as_str) {
+        return name.to_string();
+    }
+    if let Some(namespace) = content.get("namespace").and_then(Value::as_str) {
+        return format!("{namespace}/{kind}");
+    }
+    format!("{source}/{kind}")
+}
+
+fn direct_observation_namespace(content: &Value) -> Option<String> {
+    first_direct_string(&[
+        content.pointer("/namespace"),
+        content.pointer("/output/metadata/namespace"),
+        content.pointer("/analysis/pipeline_run/namespace"),
+    ])
+}
+
+fn direct_observation_resource_kind(content: &Value, source: &str, kind: &str) -> Option<String> {
+    let output_kind = content.pointer("/output/kind").and_then(Value::as_str);
+    if output_kind.is_some_and(|value| value != "List") {
+        return output_kind.map(str::to_string);
+    }
+    if source == "tekton" && kind == "pipeline_run_analysis" {
+        return Some("PipelineRun".to_string());
+    }
+
+    first_direct_string(&[
+        content.pointer("/analysis/pipeline_run/kind"),
+        content.pointer("/resource"),
+    ])
+    .or_else(|| match (source, kind) {
+        ("argocd", _) => Some("Application".to_string()),
+        ("prometheus", "inventory") => Some("inventory".to_string()),
+        ("prometheus", _) => Some("query".to_string()),
+        ("loki", "log_summary") => Some("log_summary".to_string()),
+        (_, value) if !value.trim().is_empty() => Some(value.to_string()),
+        _ => None,
+    })
+}
+
+fn direct_observation_resource_name(
+    content: &Value,
+    source: &str,
+    kind: &str,
+    subject: &str,
+) -> Option<String> {
+    first_direct_string(&[
+        content.pointer("/name"),
+        content.pointer("/output/metadata/name"),
+        content.pointer("/analysis/pipeline_run/name"),
+    ])
+    .or_else(|| match (source, kind) {
+        ("prometheus", "inventory") => Some("inventory".to_string()),
+        ("loki", "log_summary") => Some("log_summary".to_string()),
+        _ if !subject.trim().is_empty() && !subject.contains('/') => Some(subject.to_string()),
+        _ => None,
+    })
+}
+
+fn first_direct_string(values: &[Option<&Value>]) -> Option<String> {
+    values
+        .iter()
+        .filter_map(|value| value.and_then(Value::as_str))
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn direct_observation_resource_ref(
+    action_name: &str,
+    source: &str,
+    kind: &str,
+    subject: &str,
+) -> Value {
+    json!({
+        "source": source,
+        "kind": kind,
+        "name": subject,
+        "metadata": {
+            "capability": action_name,
+            "direct": true,
+        },
+    })
+}
+
+fn direct_observation_data(content: &Value) -> Value {
+    let mut data = Map::new();
+    for key in [
+        "source",
+        "resource",
+        "namespace",
+        "name",
+        "query",
+        "output",
+        "response",
+        "inventory",
+        "analysis",
+    ] {
+        if let Some(value) = content.get(key) {
+            data.insert(key.to_string(), value.clone());
+        }
+    }
+    Value::Object(data)
 }
 
 fn direct_capability_timeout_ms(requested: Option<u64>) -> u64 {
@@ -374,6 +727,7 @@ fn is_direct_capability_action(action: &AgentAction) -> bool {
             | AgentAction::TektonGetPipelineRuns { .. }
             | AgentAction::TektonGetTaskRuns { .. }
             | AgentAction::TektonAnalyzePipelineRun { .. }
+            | AgentAction::RegistryInspectImage { .. }
     )
 }
 
@@ -774,6 +1128,65 @@ async fn get_observation(
     Ok(Json(observation.into()))
 }
 
+async fn create_observation(
+    State(state): State<AppState>,
+    Json(request): Json<CreateObservationRequest>,
+) -> Result<Json<ObservationResponse>, ApiError> {
+    let source = required_text(request.source, "source")?;
+    let kind = required_text(request.kind, "kind")?;
+    let subject = required_text(request.subject, "subject")?;
+    let summary = required_text(request.summary, "summary")?;
+    let data_json = request.data_json.unwrap_or_else(|| json!({}));
+    ensure_json_object(&data_json, "data_json")?;
+    if let Some(resource_ref) = &request.resource_ref {
+        ensure_json_object(resource_ref, "resource_ref")?;
+    }
+    if let Some(artifact_id) = clean_optional_text(request.artifact_id.clone()) {
+        state
+            .store
+            .get_artifact(&artifact_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("artifact", &artifact_id))?;
+    }
+
+    let (session_id, run_id) = root_session_for_request(
+        &state.store,
+        clean_optional_text(request.session_id),
+        request.run_id,
+        "control-plane observation",
+    )
+    .await?;
+    let observation = state
+        .store
+        .create_observation(CreateObservation {
+            id: clean_optional_text(request.id)
+                .unwrap_or_else(|| format!("obs_{}", unique_suffix())),
+            session_id,
+            run_id,
+            source,
+            kind,
+            subject,
+            summary,
+            resource_namespace: clean_optional_text(request.resource_namespace),
+            resource_kind: clean_optional_text(request.resource_kind),
+            resource_name: clean_optional_text(request.resource_name),
+            resource_ref_json: request.resource_ref,
+            artifact_id: clean_optional_text(request.artifact_id),
+            data_json,
+        })
+        .await?;
+    append_observation_audit_event(
+        &state.store,
+        &observation,
+        "observation.created",
+        clean_optional_text(request.actor),
+        clean_optional_text(request.reason),
+    )
+    .await?;
+
+    Ok(Json(observation.into()))
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListIncidentsQuery {
     run_id: Option<String>,
@@ -831,6 +1244,69 @@ async fn get_incident(
         .get_incident(&incident_id)
         .await?
         .ok_or_else(|| ApiError::not_found("incident", &incident_id))?;
+
+    Ok(Json(incident.into()))
+}
+
+async fn create_incident(
+    State(state): State<AppState>,
+    Json(request): Json<CreateIncidentRequest>,
+) -> Result<Json<IncidentResponse>, ApiError> {
+    let observation_id = required_text(request.observation_id, "observation_id")?;
+    let observation = state
+        .store
+        .get_observation(&observation_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("observation", &observation_id))?;
+    let status = clean_optional_text(request.status).unwrap_or_else(|| "candidate".to_string());
+    validate_allowed_value(
+        "status",
+        &status,
+        &[
+            "candidate",
+            "open",
+            "investigating",
+            "mitigated",
+            "resolved",
+            "dismissed",
+        ],
+    )?;
+    let severity = required_text(request.severity, "severity")?;
+    validate_allowed_value(
+        "severity",
+        &severity,
+        &["info", "low", "medium", "high", "critical"],
+    )?;
+    let data_json = request.data_json.unwrap_or_else(|| json!({}));
+    ensure_json_object(&data_json, "data_json")?;
+
+    let incident = state
+        .store
+        .create_incident(CreateIncident {
+            id: clean_optional_text(request.id)
+                .unwrap_or_else(|| format!("inc_{}", unique_suffix())),
+            observation_id: observation.id.clone(),
+            session_id: observation.session_id.clone(),
+            run_id: observation.run_id.clone(),
+            status,
+            severity,
+            title: required_text(request.title, "title")?,
+            summary: required_text(request.summary, "summary")?,
+            resource_namespace: clean_optional_text(request.resource_namespace)
+                .or(observation.resource_namespace),
+            resource_kind: clean_optional_text(request.resource_kind).or(observation.resource_kind),
+            resource_name: clean_optional_text(request.resource_name).or(observation.resource_name),
+            data_json,
+        })
+        .await?;
+    append_incident_audit_event(
+        &state.store,
+        &incident,
+        "incident.created",
+        clean_optional_text(request.actor),
+        clean_optional_text(request.reason),
+    )
+    .await?;
 
     Ok(Json(incident.into()))
 }
@@ -898,6 +1374,72 @@ async fn get_remediation_plan(
     Ok(Json(plan.into()))
 }
 
+async fn create_remediation_plan(
+    State(state): State<AppState>,
+    Json(request): Json<CreateRemediationPlanRequest>,
+) -> Result<Json<RemediationPlanResponse>, ApiError> {
+    let incident_id = required_text(request.incident_id, "incident_id")?;
+    let incident = state
+        .store
+        .get_incident(&incident_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("incident", &incident_id))?;
+    let status = clean_optional_text(request.status).unwrap_or_else(|| "draft".to_string());
+    validate_allowed_value(
+        "status",
+        &status,
+        &[
+            "draft",
+            "proposed",
+            "approved",
+            "executing",
+            "blocked",
+            "completed",
+            "rejected",
+            "stale",
+        ],
+    )?;
+    let risk_level = required_text(request.risk_level, "risk_level")?;
+    validate_allowed_value(
+        "risk_level",
+        &risk_level,
+        &["low", "medium", "high", "critical"],
+    )?;
+    let plan_json = request.plan_json.unwrap_or_else(|| json!({}));
+    ensure_json_object(&plan_json, "plan_json")?;
+
+    let plan = state
+        .store
+        .create_remediation_plan(CreateRemediationPlan {
+            id: clean_optional_text(request.id)
+                .unwrap_or_else(|| format!("rplan_{}", unique_suffix())),
+            incident_id: incident.id.clone(),
+            session_id: incident.session_id.clone(),
+            run_id: incident.run_id.clone(),
+            status,
+            title: required_text(request.title, "title")?,
+            summary: required_text(request.summary, "summary")?,
+            risk_level,
+            requires_approval: request.requires_approval.unwrap_or(true),
+            resource_namespace: clean_optional_text(request.resource_namespace)
+                .or(incident.resource_namespace),
+            resource_kind: clean_optional_text(request.resource_kind).or(incident.resource_kind),
+            resource_name: clean_optional_text(request.resource_name).or(incident.resource_name),
+            plan_json,
+        })
+        .await?;
+    append_remediation_plan_audit_event(
+        &state.store,
+        &plan,
+        "remediation_plan.created",
+        clean_optional_text(request.actor),
+        clean_optional_text(request.reason),
+    )
+    .await?;
+
+    Ok(Json(plan.into()))
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListWorkPlansQuery {
     remediation_plan_id: Option<String>,
@@ -961,6 +1503,57 @@ async fn get_work_plan(
         .ok_or_else(|| ApiError::not_found("work_plan", &work_plan_id))?;
 
     Ok(Json(work_plan.into()))
+}
+
+async fn work_plan_readiness(
+    State(state): State<AppState>,
+    Path(work_plan_id): Path<String>,
+) -> Result<Json<SdlcReadinessResponse>, ApiError> {
+    let work_plan = state
+        .store
+        .get_work_plan(&work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &work_plan_id))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?;
+    let resource_id = work_plan.id.clone();
+
+    build_sdlc_readiness(
+        &state.store,
+        "work_plan",
+        &resource_id,
+        work_plan,
+        change_set,
+    )
+    .await
+    .map(Json)
+}
+
+async fn work_plan_flow(
+    State(state): State<AppState>,
+    Path(work_plan_id): Path<String>,
+) -> Result<Json<SdlcFlowResponse>, ApiError> {
+    let work_plan = state
+        .store
+        .get_work_plan(&work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &work_plan_id))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?;
+    let resource_id = work_plan.id.clone();
+    build_sdlc_flow(
+        &state.store,
+        "work_plan",
+        &resource_id,
+        work_plan,
+        change_set,
+    )
+    .await
+    .map(Json)
 }
 
 async fn transition_work_plan(
@@ -1056,6 +1649,22 @@ async fn revise_work_plan(
         append_approval_gate_audit_event(&state.store, gate, "approval_gate.stale", "stale")
             .await?;
     }
+    let invalidated_trusted_envelopes = if request.material_change {
+        stale_trusted_envelopes_for_work_plan(
+            &state.store,
+            &work_plan.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "work plan {} revised from revision {} to {}",
+                    work_plan.id, current.revision, work_plan.revision
+                ))
+            }),
+        )
+        .await?
+    } else {
+        Vec::new()
+    };
     let invalidated_change_set = if request.material_change {
         stale_change_set_for_work_plan(
             &state.store,
@@ -1104,6 +1713,10 @@ async fn revise_work_plan(
             "invalidated_change_set_id": invalidated_change_set
                 .as_ref()
                 .map(|change_set| change_set.id.clone()),
+            "invalidated_permission_grant_ids": invalidated_trusted_envelopes
+                .iter()
+                .map(|grant| grant.id.clone())
+                .collect::<Vec<_>>(),
         }),
     )
     .await?;
@@ -1135,6 +1748,210 @@ async fn stale_change_set_for_work_plan(
         .update_change_set_status(&change_set.id, "stale", actor, reason)
         .await
         .map(Some)
+}
+
+async fn stale_trusted_envelopes_for_work_plan(
+    store: &SqliteStore,
+    work_plan_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Vec<StoredPermissionGrant>, ApiError> {
+    stale_trusted_envelopes_matching(store, actor, reason, |scope| {
+        !scope.work_plan_ids.is_empty() && scope.work_plan_ids.iter().any(|id| id == work_plan_id)
+    })
+    .await
+}
+
+async fn stale_trusted_envelopes_for_change_set(
+    store: &SqliteStore,
+    change_set_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Vec<StoredPermissionGrant>, ApiError> {
+    stale_trusted_envelopes_matching(store, actor, reason, |scope| {
+        !scope.change_set_ids.is_empty()
+            && scope.change_set_ids.iter().any(|id| id == change_set_id)
+    })
+    .await
+}
+
+async fn stale_pipeline_intent_for_change_set(
+    store: &SqliteStore,
+    change_set_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Option<StoredPipelineIntent>, ApiError> {
+    let Some(intent) = store
+        .get_pipeline_intent_by_change_set(change_set_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    if intent.status == "stale" {
+        return Ok(None);
+    }
+
+    let previous_status = intent.status.clone();
+    let intent = store
+        .update_pipeline_intent_status(&intent.id, "stale", actor.clone(), reason.clone())
+        .await?;
+    append_pipeline_intent_audit_event(
+        store,
+        &intent,
+        "pipeline_intent.stale",
+        actor,
+        reason,
+        json!({
+            "previous_status": previous_status,
+            "source": "change_set_revision",
+            "change_set_id": change_set_id,
+        }),
+    )
+    .await?;
+
+    Ok(Some(intent))
+}
+
+async fn stale_deployment_intent_for_pipeline_intent(
+    store: &SqliteStore,
+    pipeline_intent_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    source: &'static str,
+) -> Result<Option<StoredDeploymentIntent>, ApiError> {
+    let Some(intent) = store
+        .get_deployment_intent_by_pipeline_intent(pipeline_intent_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    if intent.status == "stale" {
+        return Ok(None);
+    }
+
+    let previous_status = intent.status.clone();
+    let intent = store
+        .update_deployment_intent_status(&intent.id, "stale", actor.clone(), reason.clone())
+        .await?;
+    append_deployment_intent_audit_event(
+        store,
+        &intent,
+        "deployment_intent.stale",
+        actor,
+        reason,
+        json!({
+            "previous_status": previous_status,
+            "source": source,
+            "pipeline_intent_id": pipeline_intent_id,
+        }),
+    )
+    .await?;
+
+    Ok(Some(intent))
+}
+
+async fn stale_release_for_deployment_intent(
+    store: &SqliteStore,
+    deployment_intent_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    source: &'static str,
+) -> Result<Option<StoredRelease>, ApiError> {
+    let Some(release) = store
+        .get_release_by_deployment_intent(deployment_intent_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    if release.status == "stale" {
+        return Ok(None);
+    }
+
+    let previous_status = release.status.clone();
+    let release = store
+        .update_release_status(&release.id, "stale", actor.clone(), reason.clone())
+        .await?;
+    append_release_audit_event(
+        store,
+        &release,
+        "release.stale",
+        actor,
+        reason,
+        json!({
+            "previous_status": previous_status,
+            "source": source,
+            "deployment_intent_id": deployment_intent_id,
+        }),
+    )
+    .await?;
+
+    Ok(Some(release))
+}
+
+async fn stale_registry_evidence_for_release(
+    store: &SqliteStore,
+    release_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    source: &'static str,
+) -> Result<Option<StoredRegistryEvidence>, ApiError> {
+    let Some(evidence) = store.get_registry_evidence_by_release(release_id).await? else {
+        return Ok(None);
+    };
+    if evidence.status == "stale" {
+        return Ok(None);
+    }
+
+    let previous_status = evidence.status.clone();
+    let evidence = store
+        .update_registry_evidence_status(&evidence.id, "stale", actor.clone(), reason.clone())
+        .await?;
+    append_registry_evidence_audit_event(
+        store,
+        &evidence,
+        "registry_evidence.stale",
+        actor,
+        reason,
+        json!({
+            "previous_status": previous_status,
+            "source": source,
+            "release_id": release_id,
+        }),
+    )
+    .await?;
+
+    Ok(Some(evidence))
+}
+
+async fn stale_trusted_envelopes_matching(
+    store: &SqliteStore,
+    actor: Option<String>,
+    reason: Option<String>,
+    matches_scope: impl Fn(&PermissionGrantScope) -> bool,
+) -> Result<Vec<StoredPermissionGrant>, ApiError> {
+    let active_grants = store.list_permission_grants(Some("active"), 200).await?;
+    let mut staled = Vec::new();
+    for grant in active_grants {
+        let scope = serde_json::from_value::<PermissionGrantScope>(grant.scope_json.clone())
+            .map_err(|error| {
+                ApiError::internal(format!(
+                    "permission grant {} has invalid scope: {error}",
+                    grant.id
+                ))
+            })?;
+        if !matches_scope(&scope) {
+            continue;
+        }
+
+        let grant = store
+            .stale_permission_grant(&grant.id, actor.clone(), reason.clone())
+            .await?;
+        append_permission_grant_audit_event(store, "permission_grant.stale", &grant, actor.clone())
+            .await?;
+        staled.push(grant);
+    }
+
+    Ok(staled)
 }
 
 async fn create_work_plan_from_remediation_plan(
@@ -1293,6 +2110,97 @@ struct ListChangeSetsQuery {
     offset: Option<u32>,
 }
 
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListPipelineIntentsQuery {
+    change_set_id: Option<String>,
+    work_plan_id: Option<String>,
+    remediation_plan_id: Option<String>,
+    incident_id: Option<String>,
+    run_id: Option<String>,
+    status: Option<String>,
+    intent_kind: Option<String>,
+    risk_level: Option<String>,
+    resource_namespace: Option<String>,
+    resource_kind: Option<String>,
+    resource_name: Option<String>,
+    created_after_ms: Option<i64>,
+    created_before_ms: Option<i64>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListDeploymentIntentsQuery {
+    pipeline_intent_id: Option<String>,
+    change_set_id: Option<String>,
+    work_plan_id: Option<String>,
+    remediation_plan_id: Option<String>,
+    incident_id: Option<String>,
+    run_id: Option<String>,
+    status: Option<String>,
+    intent_kind: Option<String>,
+    risk_level: Option<String>,
+    target_environment: Option<String>,
+    target_namespace: Option<String>,
+    argo_application: Option<String>,
+    resource_namespace: Option<String>,
+    resource_kind: Option<String>,
+    resource_name: Option<String>,
+    created_after_ms: Option<i64>,
+    created_before_ms: Option<i64>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListReleasesQuery {
+    deployment_intent_id: Option<String>,
+    pipeline_intent_id: Option<String>,
+    change_set_id: Option<String>,
+    work_plan_id: Option<String>,
+    remediation_plan_id: Option<String>,
+    incident_id: Option<String>,
+    run_id: Option<String>,
+    status: Option<String>,
+    release_kind: Option<String>,
+    risk_level: Option<String>,
+    target_environment: Option<String>,
+    target_namespace: Option<String>,
+    argo_application: Option<String>,
+    version: Option<String>,
+    commit_sha: Option<String>,
+    image_digest: Option<String>,
+    created_after_ms: Option<i64>,
+    created_before_ms: Option<i64>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListRegistryEvidenceQuery {
+    release_id: Option<String>,
+    deployment_intent_id: Option<String>,
+    pipeline_intent_id: Option<String>,
+    change_set_id: Option<String>,
+    work_plan_id: Option<String>,
+    remediation_plan_id: Option<String>,
+    incident_id: Option<String>,
+    run_id: Option<String>,
+    status: Option<String>,
+    risk_level: Option<String>,
+    registry: Option<String>,
+    repository: Option<String>,
+    image_ref: Option<String>,
+    image_digest: Option<String>,
+    tag: Option<String>,
+    source: Option<String>,
+    verification_status: Option<String>,
+    created_after_ms: Option<i64>,
+    created_before_ms: Option<i64>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
 async fn list_change_sets(
     State(state): State<AppState>,
     Query(query): Query<ListChangeSetsQuery>,
@@ -1341,6 +2249,3360 @@ async fn get_change_set(
         .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
 
     Ok(Json(change_set.into()))
+}
+
+async fn change_set_readiness(
+    State(state): State<AppState>,
+    Path(change_set_id): Path<String>,
+) -> Result<Json<SdlcReadinessResponse>, ApiError> {
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    let resource_id = change_set.id.clone();
+
+    build_sdlc_readiness(
+        &state.store,
+        "change_set",
+        &resource_id,
+        work_plan,
+        Some(change_set),
+    )
+    .await
+    .map(Json)
+}
+
+async fn change_set_flow(
+    State(state): State<AppState>,
+    Path(change_set_id): Path<String>,
+) -> Result<Json<SdlcFlowResponse>, ApiError> {
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    let resource_id = change_set.id.clone();
+    build_sdlc_flow(
+        &state.store,
+        "change_set",
+        &resource_id,
+        work_plan,
+        Some(change_set),
+    )
+    .await
+    .map(Json)
+}
+
+async fn build_sdlc_flow(
+    store: &SqliteStore,
+    resource_kind: &str,
+    resource_id: &str,
+    work_plan: StoredWorkPlan,
+    change_set: Option<StoredChangeSet>,
+) -> Result<SdlcFlowResponse, ApiError> {
+    let pipeline_intent = if let Some(change_set) = &change_set {
+        store
+            .get_pipeline_intent_by_change_set(&change_set.id)
+            .await?
+    } else {
+        None
+    };
+    let deployment_intent = if let Some(pipeline_intent) = &pipeline_intent {
+        store
+            .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+            .await?
+    } else {
+        None
+    };
+    let release = if let Some(deployment_intent) = &deployment_intent {
+        store
+            .get_release_by_deployment_intent(&deployment_intent.id)
+            .await?
+    } else {
+        None
+    };
+    let registry_evidence = if let Some(release) = &release {
+        store.get_registry_evidence_by_release(&release.id).await?
+    } else {
+        None
+    };
+    let readiness = build_sdlc_readiness(
+        store,
+        resource_kind,
+        resource_id,
+        work_plan.clone(),
+        change_set.clone(),
+    )
+    .await?;
+    let incidents =
+        collect_sdlc_flow_incidents(store, &work_plan.incident_id, release.as_ref()).await?;
+    let remediation_plans =
+        collect_sdlc_flow_remediation_plans(store, &work_plan, &incidents).await?;
+    let approval_gates = collect_sdlc_flow_approval_gates(store, &remediation_plans).await?;
+    let audit_events = collect_sdlc_flow_audit_events(
+        store,
+        &work_plan,
+        change_set.as_ref(),
+        pipeline_intent.as_ref(),
+        deployment_intent.as_ref(),
+        release.as_ref(),
+        registry_evidence.as_ref(),
+        &incidents,
+        &remediation_plans,
+        &approval_gates,
+    )
+    .await?;
+
+    Ok(SdlcFlowResponse {
+        resource_kind: resource_kind.to_string(),
+        resource_id: resource_id.to_string(),
+        readiness,
+        work_plan: work_plan.into(),
+        change_set: change_set.map(Into::into),
+        pipeline_intent: pipeline_intent.map(Into::into),
+        deployment_intent: deployment_intent.map(Into::into),
+        release: release.map(Into::into),
+        registry_evidence: registry_evidence.map(Into::into),
+        incidents: incidents.into_iter().map(Into::into).collect(),
+        remediation_plans: remediation_plans.into_iter().map(Into::into).collect(),
+        approval_gates: approval_gates.into_iter().map(Into::into).collect(),
+        audit_events: audit_events.into_iter().map(Into::into).collect(),
+    })
+}
+
+async fn collect_sdlc_flow_incidents(
+    store: &SqliteStore,
+    root_incident_id: &str,
+    release: Option<&StoredRelease>,
+) -> Result<Vec<StoredIncident>, ApiError> {
+    let mut incident_ids = BTreeSet::new();
+    incident_ids.insert(root_incident_id.to_string());
+
+    if let Some(release) = release {
+        if let Some(evidence) = release
+            .release_json
+            .get("observability_evidence")
+            .and_then(Value::as_array)
+        {
+            for item in evidence {
+                let Some(observation_id) = item.get("observation_id").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                incident_ids.insert(release_observability_incident_id_for_ids(
+                    &release.id,
+                    observation_id,
+                ));
+            }
+        }
+    }
+
+    let mut incidents = Vec::new();
+    for incident_id in incident_ids {
+        if let Some(incident) = store.get_incident(&incident_id).await? {
+            incidents.push(incident);
+        }
+    }
+    Ok(incidents)
+}
+
+async fn collect_sdlc_flow_remediation_plans(
+    store: &SqliteStore,
+    work_plan: &StoredWorkPlan,
+    incidents: &[StoredIncident],
+) -> Result<Vec<StoredRemediationPlan>, ApiError> {
+    let mut plan_ids = BTreeSet::new();
+    plan_ids.insert(work_plan.remediation_plan_id.clone());
+    for incident in incidents {
+        for plan in store
+            .list_remediation_plans(RemediationPlanListFilter {
+                incident_id: Some(incident.id.clone()),
+                limit: 50,
+                ..RemediationPlanListFilter::default()
+            })
+            .await?
+        {
+            plan_ids.insert(plan.id);
+        }
+    }
+
+    let mut plans = Vec::new();
+    for plan_id in plan_ids {
+        if let Some(plan) = store.get_remediation_plan(&plan_id).await? {
+            plans.push(plan);
+        }
+    }
+    Ok(plans)
+}
+
+async fn collect_sdlc_flow_approval_gates(
+    store: &SqliteStore,
+    remediation_plans: &[StoredRemediationPlan],
+) -> Result<Vec<StoredApprovalGate>, ApiError> {
+    let mut gates = Vec::new();
+    let mut seen_gate_ids = BTreeSet::new();
+    for plan in remediation_plans {
+        for gate in store
+            .list_approval_gates(ApprovalGateListFilter {
+                remediation_plan_id: Some(plan.id.clone()),
+                limit: 100,
+                ..ApprovalGateListFilter::default()
+            })
+            .await?
+        {
+            if seen_gate_ids.insert(gate.id.clone()) {
+                gates.push(gate);
+            }
+        }
+    }
+    Ok(gates)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn collect_sdlc_flow_audit_events(
+    store: &SqliteStore,
+    work_plan: &StoredWorkPlan,
+    change_set: Option<&StoredChangeSet>,
+    pipeline_intent: Option<&StoredPipelineIntent>,
+    deployment_intent: Option<&StoredDeploymentIntent>,
+    release: Option<&StoredRelease>,
+    registry_evidence: Option<&StoredRegistryEvidence>,
+    incidents: &[StoredIncident],
+    remediation_plans: &[StoredRemediationPlan],
+    approval_gates: &[StoredApprovalGate],
+) -> Result<Vec<StoredAuditEvent>, ApiError> {
+    let mut resources = vec![("work_plan", work_plan.id.clone())];
+    if let Some(change_set) = change_set {
+        resources.push(("change_set", change_set.id.clone()));
+    }
+    if let Some(pipeline_intent) = pipeline_intent {
+        resources.push(("pipeline_intent", pipeline_intent.id.clone()));
+    }
+    if let Some(deployment_intent) = deployment_intent {
+        resources.push(("deployment_intent", deployment_intent.id.clone()));
+    }
+    if let Some(release) = release {
+        resources.push(("release", release.id.clone()));
+    }
+    if let Some(registry_evidence) = registry_evidence {
+        resources.push(("registry_evidence", registry_evidence.id.clone()));
+    }
+    resources.extend(
+        incidents
+            .iter()
+            .map(|incident| ("incident", incident.id.clone())),
+    );
+    resources.extend(
+        remediation_plans
+            .iter()
+            .map(|plan| ("remediation_plan", plan.id.clone())),
+    );
+    resources.extend(
+        approval_gates
+            .iter()
+            .map(|gate| ("approval_gate", gate.id.clone())),
+    );
+
+    let mut events = Vec::new();
+    let mut seen_event_ids = BTreeSet::new();
+    for (resource_kind, resource_id) in resources {
+        for event in store
+            .list_audit_events(Some(resource_kind), Some(&resource_id), None, 25)
+            .await?
+        {
+            if seen_event_ids.insert(event.id.clone()) {
+                events.push(event);
+            }
+        }
+    }
+    events.sort_by(|left, right| {
+        left.created_at
+            .cmp(&right.created_at)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    if events.len() > 200 {
+        events.drain(0..events.len() - 200);
+    }
+    Ok(events)
+}
+
+async fn build_sdlc_readiness(
+    store: &SqliteStore,
+    resource_kind: &str,
+    resource_id: &str,
+    work_plan: StoredWorkPlan,
+    change_set: Option<StoredChangeSet>,
+) -> Result<SdlcReadinessResponse, ApiError> {
+    let pipeline_intent = if let Some(change_set) = &change_set {
+        store
+            .get_pipeline_intent_by_change_set(&change_set.id)
+            .await?
+    } else {
+        None
+    };
+    let deployment_intent = if let Some(pipeline_intent) = &pipeline_intent {
+        store
+            .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+            .await?
+    } else {
+        None
+    };
+    let release = if let Some(deployment_intent) = &deployment_intent {
+        store
+            .get_release_by_deployment_intent(&deployment_intent.id)
+            .await?
+    } else {
+        None
+    };
+    let registry_evidence = if let Some(release) = &release {
+        store.get_registry_evidence_by_release(&release.id).await?
+    } else {
+        None
+    };
+    let gates = readiness_gate_summary(store, &work_plan.remediation_plan_id).await?;
+    let grants = readiness_grant_summary(store, resource_kind, resource_id).await?;
+    let mut blockers = Vec::new();
+    let mut warnings = Vec::new();
+
+    add_status_findings(
+        &mut blockers,
+        &mut warnings,
+        resource_kind,
+        resource_id,
+        &work_plan,
+        change_set.as_ref(),
+    );
+    add_pipeline_intent_findings(&mut warnings, change_set.as_ref(), pipeline_intent.as_ref());
+    add_deployment_intent_findings(
+        &mut warnings,
+        pipeline_intent.as_ref(),
+        deployment_intent.as_ref(),
+    );
+    add_release_findings(&mut warnings, deployment_intent.as_ref(), release.as_ref());
+    add_registry_evidence_findings(&mut warnings, release.as_ref(), registry_evidence.as_ref());
+    add_gate_findings(&mut blockers, &gates);
+    add_grant_findings(
+        &mut blockers,
+        &mut warnings,
+        resource_kind,
+        resource_id,
+        &grants,
+    );
+
+    let ready = blockers.is_empty();
+    let summary = readiness_summary(ready, blockers.len(), warnings.len());
+
+    Ok(SdlcReadinessResponse {
+        resource_kind: resource_kind.to_string(),
+        resource_id: resource_id.to_string(),
+        ready,
+        summary,
+        work_plan: work_plan.into(),
+        change_set: change_set.map(Into::into),
+        pipeline_intent: pipeline_intent.map(Into::into),
+        deployment_intent: deployment_intent.map(Into::into),
+        release: release.map(Into::into),
+        registry_evidence: registry_evidence.map(Into::into),
+        blockers,
+        warnings,
+        approval_gates: gates,
+        trusted_envelopes: grants,
+    })
+}
+
+fn add_status_findings(
+    blockers: &mut Vec<SdlcReadinessFinding>,
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    resource_kind: &str,
+    resource_id: &str,
+    work_plan: &StoredWorkPlan,
+    change_set: Option<&StoredChangeSet>,
+) {
+    if work_plan.status != "approved" {
+        blockers.push(readiness_finding(
+            "work_plan_not_approved",
+            format!(
+                "WorkPlan {} is {}, not approved",
+                work_plan.id, work_plan.status
+            ),
+            "work_plan",
+            &work_plan.id,
+        ));
+    }
+
+    match (resource_kind, change_set) {
+        ("change_set", Some(change_set)) if change_set.status != "approved" => {
+            blockers.push(readiness_finding(
+                "change_set_not_approved",
+                format!(
+                    "ChangeSet {} is {}, not approved",
+                    change_set.id, change_set.status
+                ),
+                "change_set",
+                &change_set.id,
+            ));
+        }
+        ("work_plan", Some(change_set)) if change_set.status != "approved" => {
+            blockers.push(readiness_finding(
+                "current_change_set_not_approved",
+                format!(
+                    "Current ChangeSet {} is {}, not approved",
+                    change_set.id, change_set.status
+                ),
+                "change_set",
+                &change_set.id,
+            ));
+        }
+        ("work_plan", None) => warnings.push(readiness_finding(
+            "missing_change_set",
+            "No ChangeSet exists; a WorkPlan trusted envelope is broader than source-change execution",
+            "work_plan",
+            resource_id,
+        )),
+        _ => {}
+    }
+}
+
+fn add_pipeline_intent_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    change_set: Option<&StoredChangeSet>,
+    pipeline_intent: Option<&StoredPipelineIntent>,
+) {
+    let Some(change_set) = change_set else {
+        return;
+    };
+    match pipeline_intent {
+        None => warnings.push(readiness_finding(
+            "missing_pipeline_intent",
+            format!("ChangeSet {} has no PipelineIntent", change_set.id),
+            "change_set",
+            &change_set.id,
+        )),
+        Some(intent) if intent.status == "stale" => warnings.push(readiness_finding(
+            "stale_pipeline_intent",
+            format!("PipelineIntent {} is stale after source changes", intent.id),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some(intent) if intent.status != "approved" => warnings.push(readiness_finding(
+            "pipeline_intent_not_approved",
+            format!(
+                "PipelineIntent {} is {}, not approved",
+                intent.id, intent.status
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some(intent) => add_pipeline_evidence_findings(warnings, intent),
+    }
+}
+
+fn add_pipeline_evidence_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    intent: &StoredPipelineIntent,
+) {
+    match pipeline_intent_attached_evidence_status(intent) {
+        Some("satisfied") => {}
+        Some("running") => warnings.push(readiness_finding(
+            "pipeline_evidence_running",
+            format!(
+                "PipelineIntent {} has attached evidence, but the pipeline is still running",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some("attention_required") => warnings.push(readiness_finding(
+            "pipeline_evidence_attention_required",
+            format!(
+                "PipelineIntent {} has attached evidence that requires review before deployment",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some("failed") => warnings.push(readiness_finding(
+            "pipeline_evidence_failed",
+            format!(
+                "PipelineIntent {} has attached evidence from a failed pipeline",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some(_) => warnings.push(readiness_finding(
+            "pipeline_evidence_unknown",
+            format!(
+                "PipelineIntent {} has attached evidence with an unknown status",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        None => warnings.push(readiness_finding(
+            "missing_pipeline_evidence",
+            format!(
+                "PipelineIntent {} is approved but has no attached PipelineRunAnalysis evidence",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+    }
+}
+
+fn add_deployment_intent_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    pipeline_intent: Option<&StoredPipelineIntent>,
+    deployment_intent: Option<&StoredDeploymentIntent>,
+) {
+    let Some(pipeline_intent) = pipeline_intent else {
+        return;
+    };
+    if pipeline_intent.status != "approved" {
+        return;
+    }
+
+    match deployment_intent {
+        None => warnings.push(readiness_finding(
+            "missing_deployment_intent",
+            format!(
+                "PipelineIntent {} has no DeploymentIntent",
+                pipeline_intent.id
+            ),
+            "pipeline_intent",
+            &pipeline_intent.id,
+        )),
+        Some(intent) if intent.status == "stale" => warnings.push(readiness_finding(
+            "stale_deployment_intent",
+            format!(
+                "DeploymentIntent {} is stale after upstream intent changes",
+                intent.id
+            ),
+            "deployment_intent",
+            &intent.id,
+        )),
+        Some(intent) if intent.status != "approved" => warnings.push(readiness_finding(
+            "deployment_intent_not_approved",
+            format!(
+                "DeploymentIntent {} is {}, not approved",
+                intent.id, intent.status
+            ),
+            "deployment_intent",
+            &intent.id,
+        )),
+        Some(intent) => add_deployment_evidence_findings(warnings, intent),
+    }
+}
+
+fn add_deployment_evidence_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    intent: &StoredDeploymentIntent,
+) {
+    match deployment_intent_attached_evidence_status(intent) {
+        Some("satisfied") => {}
+        Some("attention_required") => warnings.push(readiness_finding(
+            "deployment_evidence_attention_required",
+            format!(
+                "DeploymentIntent {} has attached Argo evidence that requires review before release",
+                intent.id
+            ),
+            "deployment_intent",
+            &intent.id,
+        )),
+        Some(_) => warnings.push(readiness_finding(
+            "deployment_evidence_unknown",
+            format!(
+                "DeploymentIntent {} has attached Argo evidence with an unknown status",
+                intent.id
+            ),
+            "deployment_intent",
+            &intent.id,
+        )),
+        None => warnings.push(readiness_finding(
+            "missing_deployment_evidence",
+            format!(
+                "DeploymentIntent {} is approved but has no attached Argo Application evidence",
+                intent.id
+            ),
+            "deployment_intent",
+            &intent.id,
+        )),
+    }
+}
+
+fn add_release_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    deployment_intent: Option<&StoredDeploymentIntent>,
+    release: Option<&StoredRelease>,
+) {
+    let Some(deployment_intent) = deployment_intent else {
+        return;
+    };
+    if deployment_intent.status != "approved" {
+        return;
+    }
+
+    match release {
+        None => warnings.push(readiness_finding(
+            "missing_release",
+            format!("DeploymentIntent {} has no Release", deployment_intent.id),
+            "deployment_intent",
+            &deployment_intent.id,
+        )),
+        Some(release) if release.status == "stale" => warnings.push(readiness_finding(
+            "stale_release",
+            format!(
+                "Release {} is stale after upstream deployment changes",
+                release.id
+            ),
+            "release",
+            &release.id,
+        )),
+        Some(release) if release.status != "approved" => warnings.push(readiness_finding(
+            "release_not_approved",
+            format!("Release {} is {}, not approved", release.id, release.status),
+            "release",
+            &release.id,
+        )),
+        Some(release) => add_release_observability_findings(warnings, release),
+    }
+}
+
+fn add_release_observability_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    release: &StoredRelease,
+) {
+    match release_observability_evidence_status(release) {
+        None => warnings.push(readiness_finding(
+            "missing_release_observability_evidence",
+            format!(
+                "Release {} has no attached Prometheus or Loki observability evidence",
+                release.id
+            ),
+            "release",
+            &release.id,
+        )),
+        Some("attention_required") => warnings.push(readiness_finding(
+            "release_observability_attention_required",
+            format!(
+                "Release {} has attached observability evidence that requires review",
+                release.id
+            ),
+            "release",
+            &release.id,
+        )),
+        Some("unknown") => warnings.push(readiness_finding(
+            "release_observability_unknown",
+            format!(
+                "Release {} has attached observability evidence with unknown status",
+                release.id
+            ),
+            "release",
+            &release.id,
+        )),
+        Some(_) => {}
+    }
+}
+
+fn add_registry_evidence_findings(
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    release: Option<&StoredRelease>,
+    registry_evidence: Option<&StoredRegistryEvidence>,
+) {
+    let Some(release) = release else {
+        return;
+    };
+    if release.status != "approved" {
+        return;
+    }
+
+    let Some(evidence) = registry_evidence else {
+        warnings.push(readiness_finding(
+            "missing_registry_evidence",
+            format!("Release {} has no RegistryEvidence", release.id),
+            "release",
+            &release.id,
+        ));
+        return;
+    };
+    if evidence.status == "stale" {
+        warnings.push(readiness_finding(
+            "stale_registry_evidence",
+            format!(
+                "RegistryEvidence {} is stale after upstream release changes",
+                evidence.id
+            ),
+            "registry_evidence",
+            &evidence.id,
+        ));
+        return;
+    }
+    if evidence.status != "verified" {
+        warnings.push(readiness_finding(
+            "registry_evidence_not_verified",
+            format!(
+                "RegistryEvidence {} is {}, not verified",
+                evidence.id, evidence.status
+            ),
+            "registry_evidence",
+            &evidence.id,
+        ));
+    }
+    if evidence.verification_status != "verified" {
+        warnings.push(readiness_finding(
+            "registry_evidence_verification_not_verified",
+            format!(
+                "RegistryEvidence {} verification status is {}",
+                evidence.id, evidence.verification_status
+            ),
+            "registry_evidence",
+            &evidence.id,
+        ));
+    }
+    if evidence.status == "verified"
+        && evidence.verification_status == "verified"
+        && registry_evidence_is_inspection_backed(evidence)
+        && !registry_evidence_has_supply_chain_verification(evidence)
+    {
+        warnings.push(readiness_finding(
+            "registry_evidence_supply_chain_not_verified",
+            format!(
+                "RegistryEvidence {} is verified but lacks signature, SBOM, provenance, or vulnerability evidence",
+                evidence.id
+            ),
+            "registry_evidence",
+            &evidence.id,
+        ));
+    }
+}
+
+fn registry_evidence_is_inspection_backed(evidence: &StoredRegistryEvidence) -> bool {
+    evidence.source == "registry_inspect_image"
+        || evidence
+            .evidence_json
+            .pointer("/execution/capability")
+            .and_then(Value::as_str)
+            == Some("registry_inspect_image")
+}
+
+fn registry_evidence_has_supply_chain_verification(evidence: &StoredRegistryEvidence) -> bool {
+    if matches!(
+        evidence.source.as_str(),
+        "cosign"
+            | "signature"
+            | "sbom"
+            | "provenance"
+            | "slsa_provenance"
+            | "vulnerability_scan"
+            | "supply_chain"
+    ) {
+        return true;
+    }
+
+    if evidence
+        .evidence_json
+        .pointer("/verification/supply_chain_verified")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return true;
+    }
+
+    evidence
+        .evidence_json
+        .pointer("/verification/checks")
+        .and_then(Value::as_array)
+        .is_some_and(|checks| checks.iter().any(is_supply_chain_check))
+}
+
+fn is_supply_chain_check(check: &Value) -> bool {
+    let name = check
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let status = check
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let supply_chain_check = [
+        "signature",
+        "cosign",
+        "sbom",
+        "provenance",
+        "slsa",
+        "attestation",
+        "vulnerability",
+        "vuln",
+    ]
+    .iter()
+    .any(|needle| name.contains(needle));
+    let verified_status = ["verified", "pass", "passed", "ok", "success"]
+        .iter()
+        .any(|allowed| status == *allowed);
+
+    supply_chain_check && verified_status
+}
+
+fn add_gate_findings(blockers: &mut Vec<SdlcReadinessFinding>, gates: &SdlcReadinessGateSummary) {
+    for gate in &gates.pending {
+        blockers.push(readiness_finding(
+            "approval_gate_pending",
+            format!("ApprovalGate {} is pending", gate.id),
+            "approval_gate",
+            &gate.id,
+        ));
+    }
+    for gate in &gates.stale {
+        blockers.push(readiness_finding(
+            "approval_gate_stale",
+            format!("ApprovalGate {} is stale", gate.id),
+            "approval_gate",
+            &gate.id,
+        ));
+    }
+    for gate in &gates.rejected {
+        blockers.push(readiness_finding(
+            "approval_gate_rejected",
+            format!("ApprovalGate {} is rejected", gate.id),
+            "approval_gate",
+            &gate.id,
+        ));
+    }
+}
+
+fn add_grant_findings(
+    blockers: &mut Vec<SdlcReadinessFinding>,
+    warnings: &mut Vec<SdlcReadinessFinding>,
+    resource_kind: &str,
+    resource_id: &str,
+    grants: &SdlcReadinessGrantSummary,
+) {
+    if grants.active.is_empty() {
+        blockers.push(readiness_finding(
+            "missing_active_trusted_envelope",
+            format!("{resource_kind} {resource_id} has no active trusted envelope"),
+            resource_kind,
+            resource_id,
+        ));
+    }
+    for grant in &grants.stale {
+        warnings.push(readiness_finding(
+            "stale_trusted_envelope",
+            format!("PermissionGrant {} is stale", grant.id),
+            "permission_grant",
+            &grant.id,
+        ));
+    }
+}
+
+async fn readiness_gate_summary(
+    store: &SqliteStore,
+    remediation_plan_id: &str,
+) -> Result<SdlcReadinessGateSummary, ApiError> {
+    let gates = store
+        .list_approval_gates(ApprovalGateListFilter {
+            remediation_plan_id: Some(remediation_plan_id.to_string()),
+            limit: 200,
+            ..ApprovalGateListFilter::default()
+        })
+        .await?;
+    let mut pending = Vec::new();
+    let mut stale = Vec::new();
+    let mut rejected = Vec::new();
+
+    for gate in gates {
+        match gate.status.as_str() {
+            "pending" => pending.push(gate.into()),
+            "stale" => stale.push(gate.into()),
+            "rejected" => rejected.push(gate.into()),
+            _ => {}
+        }
+    }
+
+    Ok(SdlcReadinessGateSummary {
+        pending,
+        stale,
+        rejected,
+    })
+}
+
+async fn readiness_grant_summary(
+    store: &SqliteStore,
+    resource_kind: &str,
+    resource_id: &str,
+) -> Result<SdlcReadinessGrantSummary, ApiError> {
+    let now = current_millis();
+    let grants = store.list_permission_grants(None, 200).await?;
+    let mut active = Vec::new();
+    let mut stale = Vec::new();
+
+    for grant in grants {
+        if !trusted_envelope_matches(&grant, resource_kind, resource_id)? {
+            continue;
+        }
+
+        match grant.status.as_str() {
+            "active" if grant_is_unexpired(&grant, now) => active.push(grant.into()),
+            "stale" => stale.push(grant.into()),
+            _ => {}
+        }
+    }
+
+    Ok(SdlcReadinessGrantSummary { active, stale })
+}
+
+fn trusted_envelope_matches(
+    grant: &StoredPermissionGrant,
+    resource_kind: &str,
+    resource_id: &str,
+) -> Result<bool, ApiError> {
+    let scope = serde_json::from_value::<PermissionGrantScope>(grant.scope_json.clone()).map_err(
+        |error| {
+            ApiError::internal(format!(
+                "permission grant {} has invalid scope: {error}",
+                grant.id
+            ))
+        },
+    )?;
+
+    Ok(match resource_kind {
+        "work_plan" => {
+            !scope.work_plan_ids.is_empty()
+                && scope.work_plan_ids.iter().any(|id| id == resource_id)
+                && scope.change_set_ids.is_empty()
+        }
+        "change_set" => {
+            !scope.change_set_ids.is_empty()
+                && scope.change_set_ids.iter().any(|id| id == resource_id)
+        }
+        _ => false,
+    })
+}
+
+fn readiness_finding(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    resource_kind: impl Into<String>,
+    resource_id: impl Into<String>,
+) -> SdlcReadinessFinding {
+    SdlcReadinessFinding {
+        code: code.into(),
+        message: message.into(),
+        resource_kind: resource_kind.into(),
+        resource_id: resource_id.into(),
+    }
+}
+
+fn readiness_summary(ready: bool, blocker_count: usize, warning_count: usize) -> String {
+    if ready {
+        return format!("ready with {warning_count} warning(s)");
+    }
+
+    format!("blocked by {blocker_count} blocker(s) and {warning_count} warning(s)")
+}
+
+async fn list_pipeline_intents(
+    State(state): State<AppState>,
+    Query(query): Query<ListPipelineIntentsQuery>,
+) -> Result<Json<PipelineIntentsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let pipeline_intents = state
+        .store
+        .list_pipeline_intents(PipelineIntentListFilter {
+            change_set_id: clean_optional_text(query.change_set_id),
+            work_plan_id: clean_optional_text(query.work_plan_id),
+            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+            incident_id: clean_optional_text(query.incident_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            status: clean_optional_text(query.status),
+            intent_kind: clean_optional_text(query.intent_kind),
+            risk_level: clean_optional_text(query.risk_level),
+            resource_namespace: clean_optional_text(query.resource_namespace),
+            resource_kind: clean_optional_text(query.resource_kind),
+            resource_name: clean_optional_text(query.resource_name),
+            created_after_ms: query.created_after_ms,
+            created_before_ms: query.created_before_ms,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = pipeline_intents.len();
+
+    Ok(Json(PipelineIntentsResponse {
+        pipeline_intents,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_pipeline_intent(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+) -> Result<Json<PipelineIntentResponse>, ApiError> {
+    let intent = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+
+    Ok(Json(intent.into()))
+}
+
+async fn create_pipeline_intent_from_change_set(
+    State(state): State<AppState>,
+    Json(request): Json<CreatePipelineIntentFromChangeSetRequest>,
+) -> Result<Json<CreatePipelineIntentResponse>, ApiError> {
+    let CreatePipelineIntentFromChangeSetRequest {
+        change_set_id,
+        title,
+        summary,
+        risk_level,
+        intent_kind,
+        intent_json,
+        actor,
+        reason,
+    } = request;
+    let change_set_id = clean_optional_text(Some(change_set_id))
+        .ok_or_else(|| ApiError::bad_request("change_set_id is required"))?;
+    let existing = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set_id)
+        .await?;
+    if let Some(existing) = existing
+        .as_ref()
+        .filter(|existing| existing.status != "stale")
+    {
+        return Ok(Json(CreatePipelineIntentResponse {
+            pipeline_intent: existing.clone().into(),
+            created: false,
+        }));
+    }
+
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
+    ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
+
+    let actor = clean_optional_text(actor);
+    let reason = clean_optional_text(reason);
+    let draft = pipeline_intent_draft(
+        &change_set,
+        PipelineIntentDraftRequest {
+            title,
+            summary,
+            risk_level,
+            intent_kind,
+            intent_json,
+            actor: actor.clone(),
+            reason: reason.clone(),
+        },
+    )?;
+    if let Some(existing) = existing {
+        let previous_status = existing.status.clone();
+        let pipeline_intent = state
+            .store
+            .revise_pipeline_intent_draft(&existing.id, draft)
+            .await?;
+        append_pipeline_intent_audit_event(
+            &state.store,
+            &pipeline_intent,
+            "pipeline_intent.reproposed",
+            actor,
+            reason,
+            json!({
+                "source": "change_set",
+                "previous_status": previous_status,
+                "change_set_id": pipeline_intent.change_set_id,
+                "work_plan_id": pipeline_intent.work_plan_id,
+                "execution_enabled": false,
+            }),
+        )
+        .await?;
+
+        return Ok(Json(CreatePipelineIntentResponse {
+            pipeline_intent: pipeline_intent.into(),
+            created: false,
+        }));
+    }
+
+    let pipeline_intent = state
+        .store
+        .create_pipeline_intent(CreatePipelineIntent {
+            id: format!("pint_{}", unique_suffix()),
+            change_set_id: change_set.id.clone(),
+            work_plan_id: work_plan.id.clone(),
+            remediation_plan_id: change_set.remediation_plan_id.clone(),
+            incident_id: change_set.incident_id.clone(),
+            session_id: change_set.session_id.clone(),
+            run_id: change_set.run_id.clone(),
+            status: "proposed".to_string(),
+            title: draft.title,
+            summary: draft.summary,
+            risk_level: draft.risk_level,
+            intent_kind: draft.intent_kind,
+            resource_namespace: draft.resource_namespace,
+            resource_kind: draft.resource_kind,
+            resource_name: draft.resource_name,
+            intent_json: draft.intent_json,
+        })
+        .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &pipeline_intent,
+        "pipeline_intent.proposed",
+        actor,
+        reason,
+        json!({
+            "source": "change_set",
+            "change_set_id": pipeline_intent.change_set_id,
+            "work_plan_id": pipeline_intent.work_plan_id,
+            "execution_enabled": false,
+        }),
+    )
+    .await?;
+
+    Ok(Json(CreatePipelineIntentResponse {
+        pipeline_intent: pipeline_intent.into(),
+        created: true,
+    }))
+}
+
+struct PipelineIntentDraftRequest {
+    title: Option<String>,
+    summary: Option<String>,
+    risk_level: Option<String>,
+    intent_kind: Option<String>,
+    intent_json: Option<serde_json::Value>,
+    actor: Option<String>,
+    reason: Option<String>,
+}
+
+fn pipeline_intent_draft(
+    change_set: &StoredChangeSet,
+    request: PipelineIntentDraftRequest,
+) -> Result<UpdatePipelineIntentDraft, ApiError> {
+    let intent_kind = clean_optional_text(request.intent_kind)
+        .unwrap_or_else(|| "tekton_build_test_package".to_string());
+    let intent_json = pipeline_intent_json(change_set, &intent_kind, request.intent_json)?;
+
+    Ok(UpdatePipelineIntentDraft {
+        title: clean_optional_text(request.title)
+            .unwrap_or_else(|| format!("PipelineIntent: {}", change_set.title)),
+        summary: clean_optional_text(request.summary).unwrap_or_else(|| {
+            "Propose Tekton build/test/package for approved ChangeSet".to_string()
+        }),
+        risk_level: clean_optional_text(request.risk_level)
+            .unwrap_or_else(|| change_set.risk_level.clone()),
+        intent_kind,
+        resource_namespace: change_set.resource_namespace.clone(),
+        resource_kind: change_set.resource_kind.clone(),
+        resource_name: change_set.resource_name.clone(),
+        intent_json,
+        actor: request.actor,
+        reason: request.reason,
+    })
+}
+
+async fn transition_pipeline_intent(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<TransitionPipelineIntentRequest>,
+) -> Result<Json<TransitionPipelineIntentResponse>, ApiError> {
+    let current = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    let target = clean_optional_text(Some(request.target_status))
+        .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
+    validate_pipeline_intent_transition(&current.status, &target)?;
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let pipeline_intent = state
+        .store
+        .update_pipeline_intent_status(&pipeline_intent_id, &target, actor.clone(), reason.clone())
+        .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &pipeline_intent,
+        &format!("pipeline_intent.{target}"),
+        actor,
+        reason,
+        json!({
+            "previous_status": current.status,
+            "status": pipeline_intent.status,
+        }),
+    )
+    .await?;
+
+    Ok(Json(TransitionPipelineIntentResponse {
+        pipeline_intent: pipeline_intent.into(),
+    }))
+}
+
+async fn attach_pipeline_intent_evidence(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<AttachPipelineIntentEvidenceRequest>,
+) -> Result<Json<AttachPipelineIntentEvidenceResponse>, ApiError> {
+    let current = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if current.status == "stale" {
+        return Err(ApiError::conflict(format!(
+            "cannot attach evidence to stale pipeline intent {pipeline_intent_id}"
+        )));
+    }
+
+    let observation_id = clean_optional_text(Some(request.observation_id))
+        .ok_or_else(|| ApiError::bad_request("observation_id is required"))?;
+    let observation = state
+        .store
+        .get_observation(&observation_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("observation", &observation_id))?;
+    validate_pipeline_intent_observation(&observation)?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let intent_json = pipeline_intent_json_with_evidence(&current, &observation);
+    let pipeline_intent = state
+        .store
+        .update_pipeline_intent_evidence(
+            &pipeline_intent_id,
+            UpdatePipelineIntentEvidence {
+                intent_json,
+                actor: actor.clone(),
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &pipeline_intent,
+        "pipeline_intent.evidence_attached",
+        actor,
+        reason,
+        json!({
+            "observation_id": observation.id,
+            "artifact_id": observation.artifact_id,
+            "evidence_status": pipeline_intent.intent_json.pointer("/evidence/status"),
+            "resource": {
+                "namespace": observation.resource_namespace,
+                "kind": observation.resource_kind,
+                "name": observation.resource_name,
+            },
+        }),
+    )
+    .await?;
+
+    Ok(Json(AttachPipelineIntentEvidenceResponse {
+        pipeline_intent: pipeline_intent.into(),
+        observation: observation.into(),
+    }))
+}
+
+fn validate_pipeline_intent_observation(observation: &StoredObservation) -> Result<(), ApiError> {
+    if observation.source != "tekton" || observation.kind != "pipeline_run_analysis" {
+        return Err(ApiError::bad_request(
+            "pipeline intent evidence must be a tekton pipeline_run_analysis observation",
+        ));
+    }
+    if observation.data_json.pointer("/analysis").is_none() {
+        return Err(ApiError::bad_request(
+            "pipeline intent evidence observation is missing analysis data",
+        ));
+    }
+
+    Ok(())
+}
+
+fn pipeline_intent_json_with_evidence(
+    current: &StoredPipelineIntent,
+    observation: &StoredObservation,
+) -> Value {
+    let mut intent_json = current.intent_json.clone();
+    let evidence = pipeline_intent_evidence_json(observation);
+    if let Some(object) = intent_json.as_object_mut() {
+        object.insert("evidence".to_string(), evidence);
+    }
+
+    intent_json
+}
+
+fn pipeline_intent_evidence_json(observation: &StoredObservation) -> Value {
+    let analysis = observation
+        .data_json
+        .get("analysis")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    json!({
+        "status": pipeline_intent_evidence_status(&analysis),
+        "source": "observation",
+        "observation_id": observation.id,
+        "artifact_id": observation.artifact_id,
+        "kind": observation.kind,
+        "resource": {
+            "namespace": observation.resource_namespace,
+            "kind": observation.resource_kind,
+            "name": observation.resource_name,
+        },
+        "summary": {
+            "pipeline_run_status": analysis.pointer("/summary/status"),
+            "pipeline_run_reason": analysis.pointer("/summary/reason"),
+            "task_run_count": analysis.pointer("/summary/task_run_count"),
+            "failed_task_run_count": analysis.pointer("/summary/failed_task_run_count"),
+            "running_task_run_count": analysis.pointer("/summary/running_task_run_count"),
+            "succeeded_task_run_count": analysis.pointer("/summary/succeeded_task_run_count"),
+            "argo_sync_status": analysis.pointer("/summary/argo_sync_status"),
+            "argo_health_status": analysis.pointer("/summary/argo_health_status"),
+            "image_alignment_status": analysis.pointer("/summary/image_alignment/status"),
+        }
+    })
+}
+
+fn pipeline_intent_evidence_status(analysis: &Value) -> &'static str {
+    match analysis.pointer("/summary/status").and_then(Value::as_str) {
+        Some("succeeded") => {
+            let failed_tasks = analysis
+                .pointer("/summary/failed_task_run_count")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            if failed_tasks != 0 || pipeline_analysis_needs_attention(analysis) {
+                "attention_required"
+            } else {
+                "satisfied"
+            }
+        }
+        Some("running") => "running",
+        Some("failed" | "cancelled") => "failed",
+        Some(_) => "attention_required",
+        None => "unknown",
+    }
+}
+
+fn pipeline_analysis_needs_attention(analysis: &Value) -> bool {
+    let argo_sync = analysis
+        .pointer("/summary/argo_sync_status")
+        .and_then(Value::as_str);
+    if argo_sync.is_some_and(|status| status != "Synced") {
+        return true;
+    }
+
+    let argo_health = analysis
+        .pointer("/summary/argo_health_status")
+        .and_then(Value::as_str);
+    if argo_health.is_some_and(|status| status != "Healthy") {
+        return true;
+    }
+
+    let image_alignment = analysis
+        .pointer("/summary/image_alignment/status")
+        .and_then(Value::as_str);
+    image_alignment
+        .is_some_and(|status| !matches!(status, "exact_match" | "registry_alias_match" | "unknown"))
+}
+
+fn pipeline_intent_attached_evidence_status(
+    pipeline_intent: &StoredPipelineIntent,
+) -> Option<&str> {
+    pipeline_intent
+        .intent_json
+        .pointer("/evidence/status")
+        .and_then(Value::as_str)
+}
+
+fn deployment_intent_attached_evidence_status(
+    deployment_intent: &StoredDeploymentIntent,
+) -> Option<&str> {
+    deployment_intent
+        .intent_json
+        .pointer("/deployment_evidence/status")
+        .and_then(Value::as_str)
+}
+
+fn release_observability_evidence_status(release: &StoredRelease) -> Option<&str> {
+    let evidence = release
+        .release_json
+        .pointer("/observability_evidence")
+        .and_then(Value::as_array)?;
+    if evidence.is_empty() {
+        return None;
+    }
+    if evidence.iter().any(|item| {
+        item.get("status")
+            .and_then(Value::as_str)
+            .is_some_and(|status| status == "attention_required")
+    }) {
+        return Some("attention_required");
+    }
+    if evidence.iter().any(|item| {
+        item.get("status")
+            .and_then(Value::as_str)
+            .map_or(true, |status| status == "unknown")
+    }) {
+        return Some("unknown");
+    }
+    Some("observed")
+}
+
+fn pipeline_intent_json(
+    change_set: &StoredChangeSet,
+    intent_kind: &str,
+    intent_json: Option<serde_json::Value>,
+) -> Result<serde_json::Value, ApiError> {
+    if let Some(intent_json) = intent_json {
+        if !intent_json.is_object() {
+            return Err(ApiError::bad_request(
+                "pipeline intent intent_json must be a JSON object",
+            ));
+        }
+        return Ok(intent_json);
+    }
+
+    Ok(json!({
+        "execution": {
+            "enabled": false,
+            "reason": "PipelineIntent is review state only in V1"
+        },
+        "source": {
+            "change_set_id": change_set.id,
+            "work_plan_id": change_set.work_plan_id,
+            "material_hash": change_set.material_hash,
+            "revision": change_set.revision
+        },
+        "pipeline": {
+            "provider": "tekton",
+            "intent_kind": intent_kind,
+            "tasks": ["test", "build", "package"]
+        }
+    }))
+}
+
+fn validate_pipeline_intent_transition(current: &str, target: &str) -> Result<(), ApiError> {
+    match (current, target) {
+        ("proposed", "approved" | "rejected") => Ok(()),
+        ("approved", "rejected") => Ok(()),
+        (_, "proposed") if current == target => Ok(()),
+        _ => Err(ApiError::conflict(format!(
+            "cannot transition pipeline intent from {current} to {target}"
+        ))),
+    }
+}
+
+async fn list_deployment_intents(
+    State(state): State<AppState>,
+    Query(query): Query<ListDeploymentIntentsQuery>,
+) -> Result<Json<DeploymentIntentsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let deployment_intents = state
+        .store
+        .list_deployment_intents(DeploymentIntentListFilter {
+            pipeline_intent_id: clean_optional_text(query.pipeline_intent_id),
+            change_set_id: clean_optional_text(query.change_set_id),
+            work_plan_id: clean_optional_text(query.work_plan_id),
+            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+            incident_id: clean_optional_text(query.incident_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            status: clean_optional_text(query.status),
+            intent_kind: clean_optional_text(query.intent_kind),
+            risk_level: clean_optional_text(query.risk_level),
+            target_environment: clean_optional_text(query.target_environment),
+            target_namespace: clean_optional_text(query.target_namespace),
+            argo_application: clean_optional_text(query.argo_application),
+            resource_namespace: clean_optional_text(query.resource_namespace),
+            resource_kind: clean_optional_text(query.resource_kind),
+            resource_name: clean_optional_text(query.resource_name),
+            created_after_ms: query.created_after_ms,
+            created_before_ms: query.created_before_ms,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = deployment_intents.len();
+
+    Ok(Json(DeploymentIntentsResponse {
+        deployment_intents,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_deployment_intent(
+    State(state): State<AppState>,
+    Path(deployment_intent_id): Path<String>,
+) -> Result<Json<DeploymentIntentResponse>, ApiError> {
+    let intent = state
+        .store
+        .get_deployment_intent(&deployment_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+
+    Ok(Json(intent.into()))
+}
+
+async fn create_deployment_intent_from_pipeline_intent(
+    State(state): State<AppState>,
+    Json(request): Json<CreateDeploymentIntentFromPipelineIntentRequest>,
+) -> Result<Json<CreateDeploymentIntentResponse>, ApiError> {
+    let pipeline_intent_id = clean_optional_text(Some(request.pipeline_intent_id))
+        .ok_or_else(|| ApiError::bad_request("pipeline_intent_id is required"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    ensure_approved_for_trusted_envelope(
+        "pipeline_intent",
+        &pipeline_intent.id,
+        &pipeline_intent.status,
+    )?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let intent_kind =
+        clean_optional_text(request.intent_kind).unwrap_or_else(|| "argo_sync_deploy".to_string());
+    let target_environment = clean_optional_text(request.target_environment);
+    let target_namespace = clean_optional_text(request.target_namespace)
+        .or(pipeline_intent.resource_namespace.clone());
+    let argo_application =
+        clean_optional_text(request.argo_application).or(pipeline_intent.resource_name.clone());
+    let intent_json = deployment_intent_json(
+        &pipeline_intent,
+        &intent_kind,
+        target_environment.as_deref(),
+        target_namespace.as_deref(),
+        argo_application.as_deref(),
+        request.intent_json,
+    )?;
+    if let Some(existing) = state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&pipeline_intent_id)
+        .await?
+    {
+        if existing.status == "stale" {
+            let deployment_intent = state
+                .store
+                .revise_deployment_intent_draft(
+                    &existing.id,
+                    UpdateDeploymentIntentDraft {
+                        title: clean_optional_text(request.title).unwrap_or_else(|| {
+                            format!("DeploymentIntent: {}", pipeline_intent.title)
+                        }),
+                        summary: clean_optional_text(request.summary).unwrap_or_else(|| {
+                            "Propose Argo CD sync/deploy after approved pipeline intent".to_string()
+                        }),
+                        risk_level: clean_optional_text(request.risk_level)
+                            .unwrap_or_else(|| pipeline_intent.risk_level.clone()),
+                        intent_kind,
+                        target_environment,
+                        target_namespace,
+                        argo_application,
+                        resource_namespace: pipeline_intent.resource_namespace,
+                        resource_kind: pipeline_intent.resource_kind,
+                        resource_name: pipeline_intent.resource_name,
+                        intent_json,
+                        actor: actor.clone(),
+                        reason: reason.clone(),
+                    },
+                )
+                .await?;
+            append_deployment_intent_audit_event(
+                &state.store,
+                &deployment_intent,
+                "deployment_intent.reproposed",
+                actor,
+                reason,
+                json!({
+                    "source": "pipeline_intent",
+                    "pipeline_intent_id": deployment_intent.pipeline_intent_id,
+                    "previous_status": existing.status,
+                    "execution_enabled": false,
+                    "pipeline_evidence_status": deployment_intent
+                        .intent_json
+                        .pointer("/pipeline_evidence/status"),
+                    "pipeline_deploy_ready": deployment_intent
+                        .intent_json
+                        .pointer("/pipeline_evidence/deploy_ready"),
+                }),
+            )
+            .await?;
+
+            return Ok(Json(CreateDeploymentIntentResponse {
+                deployment_intent: deployment_intent.into(),
+                created: false,
+            }));
+        }
+
+        return Ok(Json(CreateDeploymentIntentResponse {
+            deployment_intent: existing.into(),
+            created: false,
+        }));
+    }
+    let deployment_intent = state
+        .store
+        .create_deployment_intent(CreateDeploymentIntent {
+            id: format!("dint_{}", unique_suffix()),
+            pipeline_intent_id: pipeline_intent.id.clone(),
+            change_set_id: pipeline_intent.change_set_id.clone(),
+            work_plan_id: pipeline_intent.work_plan_id.clone(),
+            remediation_plan_id: pipeline_intent.remediation_plan_id.clone(),
+            incident_id: pipeline_intent.incident_id.clone(),
+            session_id: pipeline_intent.session_id.clone(),
+            run_id: pipeline_intent.run_id.clone(),
+            status: "proposed".to_string(),
+            title: clean_optional_text(request.title)
+                .unwrap_or_else(|| format!("DeploymentIntent: {}", pipeline_intent.title)),
+            summary: clean_optional_text(request.summary).unwrap_or_else(|| {
+                "Propose Argo CD sync/deploy after approved pipeline intent".to_string()
+            }),
+            risk_level: clean_optional_text(request.risk_level)
+                .unwrap_or(pipeline_intent.risk_level),
+            intent_kind,
+            target_environment,
+            target_namespace,
+            argo_application,
+            resource_namespace: pipeline_intent.resource_namespace,
+            resource_kind: pipeline_intent.resource_kind,
+            resource_name: pipeline_intent.resource_name,
+            intent_json,
+        })
+        .await?;
+    append_deployment_intent_audit_event(
+        &state.store,
+        &deployment_intent,
+        "deployment_intent.proposed",
+        actor,
+        reason,
+        json!({
+            "source": "pipeline_intent",
+            "pipeline_intent_id": deployment_intent.pipeline_intent_id,
+            "execution_enabled": false,
+            "pipeline_evidence_status": deployment_intent
+                .intent_json
+                .pointer("/pipeline_evidence/status"),
+            "pipeline_deploy_ready": deployment_intent
+                .intent_json
+                .pointer("/pipeline_evidence/deploy_ready"),
+        }),
+    )
+    .await?;
+
+    Ok(Json(CreateDeploymentIntentResponse {
+        deployment_intent: deployment_intent.into(),
+        created: true,
+    }))
+}
+
+async fn transition_deployment_intent(
+    State(state): State<AppState>,
+    Path(deployment_intent_id): Path<String>,
+    Json(request): Json<TransitionDeploymentIntentRequest>,
+) -> Result<Json<TransitionDeploymentIntentResponse>, ApiError> {
+    let current = state
+        .store
+        .get_deployment_intent(&deployment_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+    let target = clean_optional_text(Some(request.target_status))
+        .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
+    validate_deployment_intent_transition(&current.status, &target)?;
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let deployment_intent = state
+        .store
+        .update_deployment_intent_status(
+            &deployment_intent_id,
+            &target,
+            actor.clone(),
+            reason.clone(),
+        )
+        .await?;
+    append_deployment_intent_audit_event(
+        &state.store,
+        &deployment_intent,
+        &format!("deployment_intent.{target}"),
+        actor,
+        reason,
+        json!({
+            "previous_status": current.status,
+            "status": deployment_intent.status,
+        }),
+    )
+    .await?;
+
+    Ok(Json(TransitionDeploymentIntentResponse {
+        deployment_intent: deployment_intent.into(),
+    }))
+}
+
+async fn attach_deployment_intent_evidence(
+    State(state): State<AppState>,
+    Path(deployment_intent_id): Path<String>,
+    Json(request): Json<AttachDeploymentIntentEvidenceRequest>,
+) -> Result<Json<AttachDeploymentIntentEvidenceResponse>, ApiError> {
+    let current = state
+        .store
+        .get_deployment_intent(&deployment_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+    if current.status == "stale" {
+        return Err(ApiError::conflict(format!(
+            "cannot attach evidence to stale deployment intent {deployment_intent_id}"
+        )));
+    }
+
+    let observation_id = clean_optional_text(Some(request.observation_id))
+        .ok_or_else(|| ApiError::bad_request("observation_id is required"))?;
+    let observation = state
+        .store
+        .get_observation(&observation_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("observation", &observation_id))?;
+    validate_deployment_intent_observation(&observation)?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let intent_json = deployment_intent_json_with_evidence(&current, &observation);
+    let deployment_intent = state
+        .store
+        .update_deployment_intent_evidence(
+            &deployment_intent_id,
+            UpdateDeploymentIntentEvidence {
+                intent_json,
+                actor: actor.clone(),
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+    append_deployment_intent_audit_event(
+        &state.store,
+        &deployment_intent,
+        "deployment_intent.evidence_attached",
+        actor,
+        reason,
+        json!({
+            "observation_id": observation.id,
+            "artifact_id": observation.artifact_id,
+            "evidence_status": deployment_intent.intent_json.pointer("/deployment_evidence/status"),
+            "deploy_ready": deployment_intent.intent_json.pointer("/deployment_evidence/deploy_ready"),
+            "resource": {
+                "namespace": observation.resource_namespace,
+                "kind": observation.resource_kind,
+                "name": observation.resource_name,
+            },
+        }),
+    )
+    .await?;
+
+    Ok(Json(AttachDeploymentIntentEvidenceResponse {
+        deployment_intent: deployment_intent.into(),
+        observation: observation.into(),
+    }))
+}
+
+fn validate_deployment_intent_observation(observation: &StoredObservation) -> Result<(), ApiError> {
+    if observation.source != "argocd" {
+        return Err(ApiError::bad_request(
+            "deployment intent evidence must be an argocd Application observation",
+        ));
+    }
+
+    let looks_like_application = observation.kind == "applications.argoproj.io"
+        || observation.resource_kind.as_deref() == Some("Application")
+        || observation
+            .data_json
+            .pointer("/output/kind")
+            .and_then(Value::as_str)
+            == Some("Application");
+    if !looks_like_application {
+        return Err(ApiError::bad_request(
+            "deployment intent evidence must describe an Argo CD Application",
+        ));
+    }
+    if observation.data_json.pointer("/output/status").is_none() {
+        return Err(ApiError::bad_request(
+            "deployment intent evidence observation is missing Argo Application status",
+        ));
+    }
+
+    Ok(())
+}
+
+fn deployment_intent_json_with_evidence(
+    current: &StoredDeploymentIntent,
+    observation: &StoredObservation,
+) -> Value {
+    let mut intent_json = current.intent_json.clone();
+    let evidence = deployment_intent_evidence_json(observation);
+    if let Some(object) = intent_json.as_object_mut() {
+        object.insert("deployment_evidence".to_string(), evidence);
+    }
+
+    intent_json
+}
+
+fn deployment_intent_evidence_json(observation: &StoredObservation) -> Value {
+    let output = observation
+        .data_json
+        .get("output")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    json!({
+        "status": deployment_intent_evidence_status(&output),
+        "source": "observation",
+        "observation_id": observation.id,
+        "artifact_id": observation.artifact_id,
+        "kind": observation.kind,
+        "deploy_ready": deployment_intent_evidence_status(&output) == "satisfied",
+        "review_required": deployment_intent_evidence_status(&output) != "satisfied",
+        "resource": {
+            "namespace": observation.resource_namespace,
+            "kind": observation.resource_kind,
+            "name": observation.resource_name,
+        },
+        "summary": {
+            "sync_status": output.pointer("/status/sync/status"),
+            "health_status": output.pointer("/status/health/status"),
+            "revision": output.pointer("/status/sync/revision"),
+        }
+    })
+}
+
+fn deployment_intent_evidence_status(output: &Value) -> &'static str {
+    let sync_status = output
+        .pointer("/status/sync/status")
+        .and_then(Value::as_str);
+    let health_status = output
+        .pointer("/status/health/status")
+        .and_then(Value::as_str);
+
+    match (sync_status, health_status) {
+        (Some("Synced"), Some("Healthy")) => "satisfied",
+        (Some(_), Some(_)) => "attention_required",
+        (Some("Synced"), None) | (None, Some("Healthy")) => "unknown",
+        (Some(_), None) | (None, Some(_)) => "attention_required",
+        (None, None) => "unknown",
+    }
+}
+
+fn deployment_intent_json(
+    pipeline_intent: &StoredPipelineIntent,
+    intent_kind: &str,
+    target_environment: Option<&str>,
+    target_namespace: Option<&str>,
+    argo_application: Option<&str>,
+    intent_json: Option<serde_json::Value>,
+) -> Result<serde_json::Value, ApiError> {
+    if let Some(intent_json) = intent_json {
+        if !intent_json.is_object() {
+            return Err(ApiError::bad_request(
+                "deployment intent intent_json must be a JSON object",
+            ));
+        }
+        return Ok(intent_json);
+    }
+
+    Ok(json!({
+        "execution": {
+            "enabled": false,
+            "reason": "DeploymentIntent is review state only in V1"
+        },
+        "source": {
+            "pipeline_intent_id": pipeline_intent.id,
+            "change_set_id": pipeline_intent.change_set_id,
+            "work_plan_id": pipeline_intent.work_plan_id,
+        },
+        "pipeline_evidence": deployment_pipeline_evidence_json(pipeline_intent),
+        "deployment": {
+            "provider": "argo_cd",
+            "intent_kind": intent_kind,
+            "target_environment": target_environment,
+            "target_namespace": target_namespace,
+            "argo_application": argo_application,
+            "operation": "sync"
+        }
+    }))
+}
+
+fn deployment_pipeline_evidence_json(pipeline_intent: &StoredPipelineIntent) -> Value {
+    let Some(evidence) = pipeline_intent.intent_json.get("evidence") else {
+        return json!({
+            "status": "missing",
+            "deploy_ready": false,
+            "review_required": true,
+            "source": "pipeline_intent",
+            "pipeline_intent_id": pipeline_intent.id,
+            "summary": "No PipelineRunAnalysis evidence is attached to the approved PipelineIntent"
+        });
+    };
+
+    let status = evidence
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    json!({
+        "status": status,
+        "deploy_ready": status == "satisfied",
+        "review_required": status != "satisfied",
+        "source": "pipeline_intent.evidence",
+        "pipeline_intent_id": pipeline_intent.id,
+        "observation_id": evidence.get("observation_id").cloned().unwrap_or(Value::Null),
+        "artifact_id": evidence.get("artifact_id").cloned().unwrap_or(Value::Null),
+        "summary": evidence.get("summary").cloned().unwrap_or_else(|| json!({})),
+        "evidence": evidence.clone()
+    })
+}
+
+fn validate_deployment_intent_transition(current: &str, target: &str) -> Result<(), ApiError> {
+    match (current, target) {
+        ("proposed", "approved" | "rejected") => Ok(()),
+        ("approved", "rejected") => Ok(()),
+        (_, "proposed") if current == target => Ok(()),
+        _ => Err(ApiError::conflict(format!(
+            "cannot transition deployment intent from {current} to {target}"
+        ))),
+    }
+}
+
+async fn list_releases(
+    State(state): State<AppState>,
+    Query(query): Query<ListReleasesQuery>,
+) -> Result<Json<ReleasesResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let releases = state
+        .store
+        .list_releases(ReleaseListFilter {
+            deployment_intent_id: clean_optional_text(query.deployment_intent_id),
+            pipeline_intent_id: clean_optional_text(query.pipeline_intent_id),
+            change_set_id: clean_optional_text(query.change_set_id),
+            work_plan_id: clean_optional_text(query.work_plan_id),
+            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+            incident_id: clean_optional_text(query.incident_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            status: clean_optional_text(query.status),
+            release_kind: clean_optional_text(query.release_kind),
+            risk_level: clean_optional_text(query.risk_level),
+            target_environment: clean_optional_text(query.target_environment),
+            target_namespace: clean_optional_text(query.target_namespace),
+            argo_application: clean_optional_text(query.argo_application),
+            version: clean_optional_text(query.version),
+            commit_sha: clean_optional_text(query.commit_sha),
+            image_digest: clean_optional_text(query.image_digest),
+            created_after_ms: query.created_after_ms,
+            created_before_ms: query.created_before_ms,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = releases.len();
+
+    Ok(Json(ReleasesResponse {
+        releases,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_release(
+    State(state): State<AppState>,
+    Path(release_id): Path<String>,
+) -> Result<Json<ReleaseResponse>, ApiError> {
+    let release = state
+        .store
+        .get_release(&release_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("release", &release_id))?;
+
+    Ok(Json(release.into()))
+}
+
+async fn create_release_from_deployment_intent(
+    State(state): State<AppState>,
+    Json(request): Json<CreateReleaseFromDeploymentIntentRequest>,
+) -> Result<Json<CreateReleaseResponse>, ApiError> {
+    let deployment_intent_id = clean_optional_text(Some(request.deployment_intent_id))
+        .ok_or_else(|| ApiError::bad_request("deployment_intent_id is required"))?;
+    let deployment_intent = state
+        .store
+        .get_deployment_intent(&deployment_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+    ensure_approved_for_trusted_envelope(
+        "deployment_intent",
+        &deployment_intent.id,
+        &deployment_intent.status,
+    )?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let release_kind =
+        clean_optional_text(request.release_kind).unwrap_or_else(|| "gitops_release".to_string());
+    let version = clean_optional_text(request.version);
+    let commit_sha = clean_optional_text(request.commit_sha);
+    let image_digest = clean_optional_text(request.image_digest);
+    let rollback_ref = clean_optional_text(request.rollback_ref);
+    let release_json = release_json(
+        &deployment_intent,
+        &release_kind,
+        version.as_deref(),
+        commit_sha.as_deref(),
+        image_digest.as_deref(),
+        rollback_ref.as_deref(),
+        request.release_json,
+    )?;
+    if let Some(existing) = state
+        .store
+        .get_release_by_deployment_intent(&deployment_intent_id)
+        .await?
+    {
+        if existing.status == "stale" {
+            let release = state
+                .store
+                .revise_release_draft(
+                    &existing.id,
+                    UpdateReleaseDraft {
+                        title: clean_optional_text(request.title)
+                            .unwrap_or_else(|| format!("Release: {}", deployment_intent.title)),
+                        summary: clean_optional_text(request.summary).unwrap_or_else(|| {
+                            "Propose release after approved deployment intent".to_string()
+                        }),
+                        risk_level: clean_optional_text(request.risk_level)
+                            .unwrap_or_else(|| deployment_intent.risk_level.clone()),
+                        release_kind,
+                        target_environment: deployment_intent.target_environment,
+                        target_namespace: deployment_intent.target_namespace,
+                        argo_application: deployment_intent.argo_application,
+                        version,
+                        commit_sha,
+                        image_digest,
+                        rollback_ref,
+                        release_json,
+                        actor: actor.clone(),
+                        reason: reason.clone(),
+                    },
+                )
+                .await?;
+            append_release_audit_event(
+                &state.store,
+                &release,
+                "release.reproposed",
+                actor,
+                reason,
+                json!({
+                    "source": "deployment_intent",
+                    "deployment_intent_id": release.deployment_intent_id,
+                    "previous_status": existing.status,
+                    "execution_enabled": false,
+                    "deployment_evidence_status": release
+                        .release_json
+                        .pointer("/deployment_evidence/status"),
+                    "deployment_release_ready": release
+                        .release_json
+                        .pointer("/deployment_evidence/release_ready"),
+                }),
+            )
+            .await?;
+
+            return Ok(Json(CreateReleaseResponse {
+                release: release.into(),
+                created: false,
+            }));
+        }
+
+        return Ok(Json(CreateReleaseResponse {
+            release: existing.into(),
+            created: false,
+        }));
+    }
+    let release = state
+        .store
+        .create_release(CreateRelease {
+            id: format!("rel_{}", unique_suffix()),
+            deployment_intent_id: deployment_intent.id.clone(),
+            pipeline_intent_id: deployment_intent.pipeline_intent_id.clone(),
+            change_set_id: deployment_intent.change_set_id.clone(),
+            work_plan_id: deployment_intent.work_plan_id.clone(),
+            remediation_plan_id: deployment_intent.remediation_plan_id.clone(),
+            incident_id: deployment_intent.incident_id.clone(),
+            session_id: deployment_intent.session_id.clone(),
+            run_id: deployment_intent.run_id.clone(),
+            status: "proposed".to_string(),
+            title: clean_optional_text(request.title)
+                .unwrap_or_else(|| format!("Release: {}", deployment_intent.title)),
+            summary: clean_optional_text(request.summary)
+                .unwrap_or_else(|| "Propose release after approved deployment intent".to_string()),
+            risk_level: clean_optional_text(request.risk_level)
+                .unwrap_or(deployment_intent.risk_level),
+            release_kind,
+            target_environment: deployment_intent.target_environment,
+            target_namespace: deployment_intent.target_namespace,
+            argo_application: deployment_intent.argo_application,
+            version,
+            commit_sha,
+            image_digest,
+            rollback_ref,
+            release_json,
+        })
+        .await?;
+    append_release_audit_event(
+        &state.store,
+        &release,
+        "release.proposed",
+        actor,
+        reason,
+        json!({
+            "source": "deployment_intent",
+            "deployment_intent_id": release.deployment_intent_id,
+            "execution_enabled": false,
+            "deployment_evidence_status": release
+                .release_json
+                .pointer("/deployment_evidence/status"),
+            "deployment_release_ready": release
+                .release_json
+                .pointer("/deployment_evidence/release_ready"),
+        }),
+    )
+    .await?;
+
+    Ok(Json(CreateReleaseResponse {
+        release: release.into(),
+        created: true,
+    }))
+}
+
+async fn transition_release(
+    State(state): State<AppState>,
+    Path(release_id): Path<String>,
+    Json(request): Json<TransitionReleaseRequest>,
+) -> Result<Json<TransitionReleaseResponse>, ApiError> {
+    let current = state
+        .store
+        .get_release(&release_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("release", &release_id))?;
+    let target = clean_optional_text(Some(request.target_status))
+        .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
+    validate_release_transition(&current.status, &target)?;
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let release = state
+        .store
+        .update_release_status(&release_id, &target, actor.clone(), reason.clone())
+        .await?;
+    append_release_audit_event(
+        &state.store,
+        &release,
+        &format!("release.{target}"),
+        actor,
+        reason,
+        json!({
+            "previous_status": current.status,
+            "status": release.status,
+        }),
+    )
+    .await?;
+
+    Ok(Json(TransitionReleaseResponse {
+        release: release.into(),
+    }))
+}
+
+async fn attach_release_evidence(
+    State(state): State<AppState>,
+    Path(release_id): Path<String>,
+    Json(request): Json<AttachReleaseEvidenceRequest>,
+) -> Result<Json<AttachReleaseEvidenceResponse>, ApiError> {
+    let current = state
+        .store
+        .get_release(&release_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("release", &release_id))?;
+    if matches!(current.status.as_str(), "stale" | "rejected") {
+        return Err(ApiError::conflict(format!(
+            "cannot attach evidence to {} release {release_id}",
+            current.status
+        )));
+    }
+
+    let observation_id = clean_optional_text(Some(request.observation_id))
+        .ok_or_else(|| ApiError::bad_request("observation_id is required"))?;
+    let observation = state
+        .store
+        .get_observation(&observation_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("observation", &observation_id))?;
+    validate_release_observation(&observation)?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let release_json = release_json_with_observability_evidence(&current, &observation);
+    let release = state
+        .store
+        .update_release_evidence(
+            &release_id,
+            UpdateReleaseEvidence {
+                release_json,
+                actor: actor.clone(),
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+    append_release_audit_event(
+        &state.store,
+        &release,
+        "release.evidence_attached",
+        actor.clone(),
+        reason.clone(),
+        json!({
+            "observation_id": observation.id,
+            "artifact_id": observation.artifact_id,
+            "evidence_status": release_observability_evidence_status(&release),
+            "resource": {
+                "source": observation.source,
+                "kind": observation.kind,
+                "namespace": observation.resource_namespace,
+                "resource_kind": observation.resource_kind,
+                "name": observation.resource_name,
+            },
+        }),
+    )
+    .await?;
+    let incident = create_release_observability_incident(
+        &state.store,
+        &release,
+        &observation,
+        actor.clone(),
+        reason.clone(),
+    )
+    .await?;
+    let remediation_plan = match incident.as_ref() {
+        Some(incident) => {
+            create_release_observability_remediation_plan(
+                &state.store,
+                incident,
+                actor.clone(),
+                reason.clone(),
+            )
+            .await?
+        }
+        None => None,
+    };
+
+    Ok(Json(AttachReleaseEvidenceResponse {
+        release: release.into(),
+        observation: observation.into(),
+        incident: incident.map(Into::into),
+        remediation_plan: remediation_plan.map(Into::into),
+    }))
+}
+
+fn validate_release_observation(observation: &StoredObservation) -> Result<(), ApiError> {
+    match (observation.source.as_str(), observation.kind.as_str()) {
+        ("prometheus", "inventory" | "prometheus_read") => Ok(()),
+        ("loki", "log_summary") => Ok(()),
+        _ => Err(ApiError::bad_request(
+            "release evidence must be a Prometheus inventory/query or Loki log summary observation",
+        )),
+    }
+}
+
+fn release_json_with_observability_evidence(
+    current: &StoredRelease,
+    observation: &StoredObservation,
+) -> Value {
+    let mut release_json = current.release_json.clone();
+    let evidence = release_observability_evidence_json(observation);
+    if let Some(object) = release_json.as_object_mut() {
+        let items = object
+            .entry("observability_evidence")
+            .or_insert_with(|| Value::Array(Vec::new()));
+        if let Some(items) = items.as_array_mut() {
+            items.retain(|item| {
+                item.get("observation_id").and_then(Value::as_str) != Some(observation.id.as_str())
+            });
+            items.push(evidence);
+        } else {
+            object.insert("observability_evidence".to_string(), json!([evidence]));
+        }
+    }
+    release_json
+}
+
+fn release_observability_evidence_json(observation: &StoredObservation) -> Value {
+    json!({
+        "status": release_observability_status(observation),
+        "source": "observation",
+        "observation_source": observation.source,
+        "observation_kind": observation.kind,
+        "observation_id": observation.id,
+        "artifact_id": observation.artifact_id,
+        "runtime_ready": release_observability_status(observation) == "observed",
+        "review_required": release_observability_status(observation) != "observed",
+        "resource": {
+            "namespace": observation.resource_namespace,
+            "kind": observation.resource_kind,
+            "name": observation.resource_name,
+        },
+        "summary": release_observability_summary(observation),
+    })
+}
+
+fn release_observability_status(observation: &StoredObservation) -> &'static str {
+    match (observation.source.as_str(), observation.kind.as_str()) {
+        ("prometheus", "inventory") => {
+            prometheus_inventory_observability_status(&observation.data_json)
+        }
+        ("prometheus", "prometheus_read") => {
+            prometheus_query_observability_status(&observation.data_json)
+        }
+        ("loki", "log_summary") => loki_observability_status(&observation.data_json),
+        _ => "unknown",
+    }
+}
+
+fn prometheus_inventory_observability_status(data: &Value) -> &'static str {
+    let unhealthy_targets = data
+        .pointer("/inventory/targets/unhealthy_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    let problem_rules = data
+        .pointer("/inventory/rules/problem_rule_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    let alerts = data
+        .pointer("/inventory/alerts/alert_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    if unhealthy_targets > 0 || problem_rules > 0 || alerts > 0 {
+        "attention_required"
+    } else if data.get("inventory").is_some() {
+        "observed"
+    } else {
+        "unknown"
+    }
+}
+
+fn prometheus_query_observability_status(data: &Value) -> &'static str {
+    match data.pointer("/response/status").and_then(Value::as_str) {
+        Some("success") => "observed",
+        Some(_) => "attention_required",
+        None => "unknown",
+    }
+}
+
+fn loki_observability_status(data: &Value) -> &'static str {
+    match data.pointer("/response/status").and_then(Value::as_str) {
+        Some("success") => "observed",
+        Some(_) => "attention_required",
+        None => "unknown",
+    }
+}
+
+fn release_observability_summary(observation: &StoredObservation) -> Value {
+    match (observation.source.as_str(), observation.kind.as_str()) {
+        ("prometheus", "inventory") => json!({
+            "unhealthy_targets": observation.data_json.pointer("/inventory/targets/unhealthy_count"),
+            "problem_rules": observation.data_json.pointer("/inventory/rules/problem_rule_count"),
+            "alerts": observation.data_json.pointer("/inventory/alerts/alert_count"),
+        }),
+        ("prometheus", "prometheus_read") => json!({
+            "query": observation.data_json.get("query"),
+            "status": observation.data_json.pointer("/response/status"),
+            "result_count": observation.data_json.pointer("/response/data/result_count"),
+        }),
+        ("loki", "log_summary") => json!({
+            "query": observation.data_json.get("query"),
+            "status": observation.data_json.pointer("/response/status"),
+            "stream_count": observation.data_json.pointer("/response/data/stream_count"),
+            "entry_count": observation.data_json.pointer("/response/data/entry_count"),
+        }),
+        _ => json!({}),
+    }
+}
+
+async fn create_release_observability_incident(
+    store: &SqliteStore,
+    release: &StoredRelease,
+    observation: &StoredObservation,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Option<StoredIncident>, ApiError> {
+    if release_observability_status(observation) != "attention_required" {
+        return Ok(None);
+    }
+
+    let incident_id = release_observability_incident_id(release, observation);
+    if let Some(existing) = store.get_incident(&incident_id).await? {
+        return Ok(Some(existing));
+    }
+
+    let summary = release_observability_incident_summary(observation);
+    let incident = store
+        .create_incident(CreateIncident {
+            id: incident_id,
+            observation_id: observation.id.clone(),
+            session_id: observation.session_id.clone(),
+            run_id: observation.run_id.clone(),
+            status: "candidate".to_string(),
+            severity: release_observability_incident_severity(observation).to_string(),
+            title: format!(
+                "Release observability issue: {}",
+                release_observability_resource_label(observation)
+            ),
+            summary: summary.clone(),
+            resource_namespace: observation.resource_namespace.clone(),
+            resource_kind: observation.resource_kind.clone(),
+            resource_name: observation.resource_name.clone(),
+            data_json: json!({
+                "source": "release_observability_evidence",
+                "release_id": release.id,
+                "deployment_intent_id": release.deployment_intent_id,
+                "pipeline_intent_id": release.pipeline_intent_id,
+                "change_set_id": release.change_set_id,
+                "work_plan_id": release.work_plan_id,
+                "observation_id": observation.id,
+                "observation_source": observation.source,
+                "observation_kind": observation.kind,
+                "evidence_status": "attention_required",
+                "summary": release_observability_summary(observation),
+            }),
+        })
+        .await?;
+    append_incident_audit_event(
+        store,
+        &incident,
+        "incident.created",
+        actor,
+        reason.or_else(|| Some("release observability evidence requires review".to_string())),
+    )
+    .await?;
+
+    Ok(Some(incident))
+}
+
+async fn create_release_observability_remediation_plan(
+    store: &SqliteStore,
+    incident: &StoredIncident,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Option<StoredRemediationPlan>, ApiError> {
+    if incident.status != "candidate" {
+        return Ok(None);
+    }
+    if incident.data_json.get("source").and_then(Value::as_str)
+        != Some("release_observability_evidence")
+    {
+        return Ok(None);
+    }
+
+    let plan_id = format!("rplan_{}", incident.id);
+    if let Some(existing) = store.get_remediation_plan(&plan_id).await? {
+        return Ok(Some(existing));
+    }
+
+    let resource = incident_resource_label(incident);
+    let plan_json = release_observability_remediation_plan_json(incident, &resource);
+    let plan = store
+        .create_remediation_plan(CreateRemediationPlan {
+            id: plan_id,
+            incident_id: incident.id.clone(),
+            session_id: incident.session_id.clone(),
+            run_id: incident.run_id.clone(),
+            status: "draft".to_string(),
+            title: format!("Draft remediation for release observability issue: {resource}"),
+            summary: "Re-read bounded observability evidence, confirm release health, then require approval before any file, pipeline, or cluster mutation.".to_string(),
+            risk_level: incident.severity.clone(),
+            requires_approval: true,
+            resource_namespace: incident.resource_namespace.clone(),
+            resource_kind: incident.resource_kind.clone(),
+            resource_name: incident.resource_name.clone(),
+            plan_json,
+        })
+        .await?;
+    append_remediation_plan_audit_event(
+        store,
+        &plan,
+        "remediation_plan.created",
+        actor,
+        reason.or_else(|| Some("release observability incident requires review".to_string())),
+    )
+    .await?;
+
+    for gate in approval_gates_from_remediation_plan(&plan) {
+        store.create_approval_gate(gate).await?;
+    }
+
+    Ok(Some(plan))
+}
+
+fn release_observability_remediation_plan_json(incident: &StoredIncident, resource: &str) -> Value {
+    json!({
+        "mode": "read_only_draft",
+        "source": "release_observability_evidence",
+        "incident_id": incident.id,
+        "resource": {
+            "namespace": incident.resource_namespace,
+            "kind": incident.resource_kind,
+            "name": incident.resource_name,
+            "label": resource,
+        },
+        "evidence": {
+            "summary": incident.summary,
+            "release_id": incident.data_json.get("release_id"),
+            "deployment_intent_id": incident.data_json.get("deployment_intent_id"),
+            "pipeline_intent_id": incident.data_json.get("pipeline_intent_id"),
+            "change_set_id": incident.data_json.get("change_set_id"),
+            "observation_id": incident.data_json.get("observation_id"),
+            "observation_source": incident.data_json.get("observation_source"),
+            "observation_kind": incident.data_json.get("observation_kind"),
+            "details": incident.data_json.get("summary"),
+        },
+        "steps": [
+            {
+                "order": 1,
+                "kind": "read_only",
+                "capability": "prometheus_inventory",
+                "summary": "Refresh bounded Prometheus inventory and compare active alerts, unhealthy targets, and problem rules against the attached evidence."
+            },
+            {
+                "order": 2,
+                "kind": "read_only",
+                "capability": "loki_log_summary",
+                "summary": "Inspect bounded, redacted application and controller logs for the affected namespace if Loki is configured."
+            },
+            {
+                "order": 3,
+                "kind": "read_only",
+                "capability": "argocd_get_application",
+                "summary": "Confirm Argo sync and health before proposing release, rollback, or rollout remediation."
+            },
+            {
+                "order": 4,
+                "kind": "proposal",
+                "capability": "worktree_change",
+                "summary": "If evidence points to repo configuration or application code, prepare a ChangeSet and require approval before file writes."
+            },
+            {
+                "order": 5,
+                "kind": "proposal",
+                "capability": "deployment_or_pipeline_intent",
+                "summary": "If evidence points to runtime or delivery state, propose a PipelineIntent or DeploymentIntent and require approval before mutation."
+            }
+        ],
+        "approval_gates": [
+            {
+                "kind": "file_write",
+                "required_before": "creating or patching a ChangeSet"
+            },
+            {
+                "kind": "pipeline_mutation",
+                "required_before": "rerunning or cancelling Tekton resources"
+            },
+            {
+                "kind": "cluster_mutation",
+                "required_before": "Argo sync, rollback, restart, scale, or Kubernetes write"
+            },
+            {
+                "kind": "production_impact",
+                "required_before": "any action against production-impacting scope"
+            }
+        ],
+        "non_goals": [
+            "No automatic mutation in V1",
+            "No secret reads",
+            "No ticket creation",
+            "No notification dispatch"
+        ]
+    })
+}
+
+fn approval_gates_from_remediation_plan(plan: &StoredRemediationPlan) -> Vec<CreateApprovalGate> {
+    let gates = plan
+        .plan_json
+        .get("approval_gates")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    gates
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, gate_json)| {
+            let gate_kind = approval_gate_kind(&gate_json)?;
+            let gate_order = i64::try_from(index).ok()?.saturating_add(1);
+            let required_before = gate_json
+                .get("required_before")
+                .and_then(Value::as_str)
+                .unwrap_or("executing a risky action");
+            Some(CreateApprovalGate {
+                id: format!(
+                    "agate_{}_{}_{}",
+                    plan.id,
+                    gate_order,
+                    safe_id_fragment(&gate_kind)
+                ),
+                remediation_plan_id: plan.id.clone(),
+                incident_id: plan.incident_id.clone(),
+                session_id: plan.session_id.clone(),
+                run_id: plan.run_id.clone(),
+                status: "pending".to_string(),
+                gate_kind: gate_kind.clone(),
+                gate_order,
+                title: format!("Approve {}", gate_kind.replace('_', " ")),
+                summary: format!("Approval required before {required_before}."),
+                risk_level: plan.risk_level.clone(),
+                resource_namespace: plan.resource_namespace.clone(),
+                resource_kind: plan.resource_kind.clone(),
+                resource_name: plan.resource_name.clone(),
+                gate_json,
+            })
+        })
+        .collect()
+}
+
+fn approval_gate_kind(gate_json: &Value) -> Option<String> {
+    gate_json
+        .get("kind")
+        .and_then(Value::as_str)
+        .or_else(|| gate_json.as_str())
+        .map(str::trim)
+        .filter(|kind| !kind.is_empty())
+        .map(str::to_string)
+}
+
+fn incident_resource_label(incident: &StoredIncident) -> String {
+    match (
+        incident.resource_namespace.as_deref(),
+        incident.resource_kind.as_deref(),
+        incident.resource_name.as_deref(),
+    ) {
+        (Some(namespace), Some(kind), Some(name)) => format!("{namespace}/{kind}/{name}"),
+        (Some(namespace), _, Some(name)) => format!("{namespace}/{name}"),
+        (_, Some(kind), Some(name)) => format!("{kind}/{name}"),
+        (_, _, Some(name)) => name.to_string(),
+        (_, Some(kind), _) => kind.to_string(),
+        _ => incident.id.clone(),
+    }
+}
+
+fn safe_id_fragment(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn release_observability_incident_id(
+    release: &StoredRelease,
+    observation: &StoredObservation,
+) -> String {
+    release_observability_incident_id_for_ids(&release.id, &observation.id)
+}
+
+fn release_observability_incident_id_for_ids(release_id: &str, observation_id: &str) -> String {
+    let digest = Sha256::digest(format!("{release_id}:{observation_id}"));
+    let hash = format!("{digest:x}");
+    format!("inc_relobs_{}", &hash[..16])
+}
+
+fn release_observability_incident_summary(observation: &StoredObservation) -> String {
+    match (observation.source.as_str(), observation.kind.as_str()) {
+        ("prometheus", "inventory") => {
+            let unhealthy_targets = observation
+                .data_json
+                .pointer("/inventory/targets/unhealthy_count")
+                .and_then(Value::as_i64)
+                .unwrap_or_default();
+            let problem_rules = observation
+                .data_json
+                .pointer("/inventory/rules/problem_rule_count")
+                .and_then(Value::as_i64)
+                .unwrap_or_default();
+            let alerts = observation
+                .data_json
+                .pointer("/inventory/alerts/alert_count")
+                .and_then(Value::as_i64)
+                .unwrap_or_default();
+            format!(
+                "Prometheus inventory reports {alerts} active alerts, {unhealthy_targets} unhealthy targets, and {problem_rules} problem rules"
+            )
+        }
+        ("prometheus", "prometheus_read") => format!(
+            "Prometheus query returned status {}",
+            observation
+                .data_json
+                .pointer("/response/status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+        ),
+        ("loki", "log_summary") => format!(
+            "Loki log summary returned status {}",
+            observation
+                .data_json
+                .pointer("/response/status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+        ),
+        _ => observation.summary.clone(),
+    }
+}
+
+fn release_observability_incident_severity(observation: &StoredObservation) -> &'static str {
+    if observation
+        .data_json
+        .pointer("/inventory/alerts/alert_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default()
+        > 0
+    {
+        "high"
+    } else {
+        "medium"
+    }
+}
+
+fn release_observability_resource_label(observation: &StoredObservation) -> String {
+    if let Some(namespace) = &observation.resource_namespace {
+        if let Some(name) = &observation.resource_name {
+            return format!("{namespace}/{name}");
+        }
+    }
+    observation
+        .resource_name
+        .clone()
+        .or_else(|| observation.resource_kind.clone())
+        .unwrap_or_else(|| observation.subject.clone())
+}
+
+fn release_json(
+    deployment_intent: &StoredDeploymentIntent,
+    release_kind: &str,
+    version: Option<&str>,
+    commit_sha: Option<&str>,
+    image_digest: Option<&str>,
+    rollback_ref: Option<&str>,
+    release_json: Option<serde_json::Value>,
+) -> Result<serde_json::Value, ApiError> {
+    if let Some(release_json) = release_json {
+        if !release_json.is_object() {
+            return Err(ApiError::bad_request(
+                "release release_json must be a JSON object",
+            ));
+        }
+        return Ok(release_json);
+    }
+
+    Ok(json!({
+        "execution": {
+            "enabled": false,
+            "reason": "Release is review state only in V1"
+        },
+        "source": {
+            "deployment_intent_id": deployment_intent.id,
+            "pipeline_intent_id": deployment_intent.pipeline_intent_id,
+            "change_set_id": deployment_intent.change_set_id,
+            "work_plan_id": deployment_intent.work_plan_id,
+        },
+        "deployment_evidence": release_deployment_evidence_json(deployment_intent),
+        "observability_evidence": [],
+        "release": {
+            "release_kind": release_kind,
+            "target_environment": deployment_intent.target_environment,
+            "target_namespace": deployment_intent.target_namespace,
+            "argo_application": deployment_intent.argo_application,
+            "version": version,
+            "commit_sha": commit_sha,
+            "image_digest": image_digest,
+            "rollback_ref": rollback_ref,
+        },
+        "verification": {
+            "required": ["argo_health", "lgtm_signals", "audit_event"]
+        }
+    }))
+}
+
+fn release_deployment_evidence_json(deployment_intent: &StoredDeploymentIntent) -> Value {
+    let Some(evidence) = deployment_intent.intent_json.get("deployment_evidence") else {
+        return json!({
+            "status": "missing",
+            "release_ready": false,
+            "review_required": true,
+            "source": "deployment_intent",
+            "deployment_intent_id": deployment_intent.id,
+            "summary": "No Argo Application evidence is attached to the approved DeploymentIntent"
+        });
+    };
+
+    let status = evidence
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    json!({
+        "status": status,
+        "release_ready": status == "satisfied",
+        "review_required": status != "satisfied",
+        "source": "deployment_intent.deployment_evidence",
+        "deployment_intent_id": deployment_intent.id,
+        "observation_id": evidence.get("observation_id").cloned().unwrap_or(Value::Null),
+        "artifact_id": evidence.get("artifact_id").cloned().unwrap_or(Value::Null),
+        "summary": evidence.get("summary").cloned().unwrap_or_else(|| json!({})),
+        "evidence": evidence.clone()
+    })
+}
+
+fn validate_release_transition(current: &str, target: &str) -> Result<(), ApiError> {
+    match (current, target) {
+        ("proposed", "approved" | "rejected") => Ok(()),
+        ("approved", "rejected") => Ok(()),
+        (_, "proposed") if current == target => Ok(()),
+        _ => Err(ApiError::conflict(format!(
+            "cannot transition release from {current} to {target}"
+        ))),
+    }
+}
+
+async fn list_registry_evidence(
+    State(state): State<AppState>,
+    Query(query): Query<ListRegistryEvidenceQuery>,
+) -> Result<Json<RegistryEvidenceListResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let registry_evidence = state
+        .store
+        .list_registry_evidence(RegistryEvidenceListFilter {
+            release_id: clean_optional_text(query.release_id),
+            deployment_intent_id: clean_optional_text(query.deployment_intent_id),
+            pipeline_intent_id: clean_optional_text(query.pipeline_intent_id),
+            change_set_id: clean_optional_text(query.change_set_id),
+            work_plan_id: clean_optional_text(query.work_plan_id),
+            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+            incident_id: clean_optional_text(query.incident_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            status: clean_optional_text(query.status),
+            risk_level: clean_optional_text(query.risk_level),
+            registry: clean_optional_text(query.registry),
+            repository: clean_optional_text(query.repository),
+            image_ref: clean_optional_text(query.image_ref),
+            image_digest: clean_optional_text(query.image_digest),
+            tag: clean_optional_text(query.tag),
+            source: clean_optional_text(query.source),
+            verification_status: clean_optional_text(query.verification_status),
+            created_after_ms: query.created_after_ms,
+            created_before_ms: query.created_before_ms,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = registry_evidence.len();
+
+    Ok(Json(RegistryEvidenceListResponse {
+        registry_evidence,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_registry_evidence(
+    State(state): State<AppState>,
+    Path(evidence_id): Path<String>,
+) -> Result<Json<RegistryEvidenceResponse>, ApiError> {
+    let evidence = state
+        .store
+        .get_registry_evidence(&evidence_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("registry_evidence", &evidence_id))?;
+
+    Ok(Json(evidence.into()))
+}
+
+async fn create_registry_evidence_from_release(
+    State(state): State<AppState>,
+    Json(request): Json<CreateRegistryEvidenceFromReleaseRequest>,
+) -> Result<Json<CreateRegistryEvidenceResponse>, ApiError> {
+    let release_id = clean_optional_text(Some(request.release_id.clone()))
+        .ok_or_else(|| ApiError::bad_request("release_id is required"))?;
+    let release = state
+        .store
+        .get_release(&release_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("release", &release_id))?;
+    ensure_approved_for_trusted_envelope("release", &release.id, &release.status)?;
+
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let registry = clean_optional_text(request.registry);
+    let repository = clean_optional_text(request.repository);
+    let image_ref = clean_optional_text(request.image_ref);
+    let image_digest = clean_optional_text(request.image_digest).or(release.image_digest.clone());
+    let tag = clean_optional_text(request.tag);
+    let source = clean_optional_text(request.source).unwrap_or_else(|| "manual".to_string());
+    let verification_status = clean_optional_text(request.verification_status)
+        .unwrap_or_else(|| "unverified".to_string());
+    validate_registry_verification_status(&verification_status)?;
+    let evidence_json = registry_evidence_json(
+        &release,
+        RegistryEvidenceJsonInput {
+            registry: registry.as_deref(),
+            repository: repository.as_deref(),
+            image_ref: image_ref.as_deref(),
+            image_digest: image_digest.as_deref(),
+            tag: tag.as_deref(),
+            source: &source,
+            verification_status: &verification_status,
+            evidence_json: request.evidence_json,
+        },
+    )?;
+    let response = propose_registry_evidence_for_release(
+        &state,
+        &release,
+        RegistryEvidenceDraft {
+            title: clean_optional_text(request.title)
+                .unwrap_or_else(|| format!("Registry evidence: {}", release.title)),
+            summary: clean_optional_text(request.summary)
+                .unwrap_or_else(|| "Propose registry evidence after approved release".to_string()),
+            risk_level: clean_optional_text(request.risk_level)
+                .unwrap_or(release.risk_level.clone()),
+            registry,
+            repository,
+            image_ref,
+            image_digest,
+            tag,
+            source,
+            verification_status,
+            evidence_json,
+            actor,
+            reason,
+            audit_source: "release".to_string(),
+            audit_execution_enabled: false,
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
+async fn create_registry_evidence_from_registry_inspection(
+    State(state): State<AppState>,
+    Json(request): Json<CreateRegistryEvidenceFromInspectionRequest>,
+) -> Result<Json<CreateRegistryEvidenceFromInspectionResponse>, ApiError> {
+    let release_id = clean_optional_text(Some(request.release_id.clone()))
+        .ok_or_else(|| ApiError::bad_request("release_id is required"))?;
+    let image_ref = clean_optional_text(Some(request.image_ref.clone()))
+        .ok_or_else(|| ApiError::bad_request("image_ref is required"))?;
+    let release = state
+        .store
+        .get_release(&release_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("release", &release_id))?;
+    ensure_approved_for_trusted_envelope("release", &release.id, &release.status)?;
+
+    let inspection = execute_direct_capability(
+        &state,
+        AgentAction::RegistryInspectImage {
+            id: "api.registry_inspect_image".into(),
+            reason: clean_optional_text(request.reason.clone()).unwrap_or_else(|| {
+                format!("Create RegistryEvidence from registry inspection for {image_ref}")
+            }),
+            image_ref: image_ref.clone(),
+            registry_base_url: clean_optional_text(request.registry_base_url.clone()),
+        },
+        request.timeout_ms,
+    )
+    .await?;
+    if inspection.status != "ok" {
+        return Ok(Json(CreateRegistryEvidenceFromInspectionResponse {
+            registry_evidence: None,
+            created: false,
+            inspection,
+        }));
+    }
+
+    let Some(result) = inspection.result.as_ref() else {
+        return Ok(Json(CreateRegistryEvidenceFromInspectionResponse {
+            registry_evidence: None,
+            created: false,
+            inspection,
+        }));
+    };
+    let draft = registry_evidence_draft_from_inspection(&release, &request, &image_ref, result)?;
+    let response = propose_registry_evidence_for_release(&state, &release, draft).await?;
+
+    Ok(Json(CreateRegistryEvidenceFromInspectionResponse {
+        registry_evidence: Some(response.registry_evidence),
+        created: response.created,
+        inspection,
+    }))
+}
+
+struct RegistryEvidenceDraft {
+    title: String,
+    summary: String,
+    risk_level: String,
+    registry: Option<String>,
+    repository: Option<String>,
+    image_ref: Option<String>,
+    image_digest: Option<String>,
+    tag: Option<String>,
+    source: String,
+    verification_status: String,
+    evidence_json: serde_json::Value,
+    actor: Option<String>,
+    reason: Option<String>,
+    audit_source: String,
+    audit_execution_enabled: bool,
+}
+
+async fn propose_registry_evidence_for_release(
+    state: &AppState,
+    release: &StoredRelease,
+    draft: RegistryEvidenceDraft,
+) -> Result<CreateRegistryEvidenceResponse, ApiError> {
+    if let Some(existing) = state
+        .store
+        .get_registry_evidence_by_release(&release.id)
+        .await?
+    {
+        if existing.status == "stale" {
+            let evidence = state
+                .store
+                .revise_registry_evidence_draft(
+                    &existing.id,
+                    UpdateRegistryEvidenceDraft {
+                        title: draft.title,
+                        summary: draft.summary,
+                        risk_level: draft.risk_level,
+                        registry: draft.registry,
+                        repository: draft.repository,
+                        image_ref: draft.image_ref,
+                        image_digest: draft.image_digest,
+                        tag: draft.tag,
+                        source: draft.source,
+                        verification_status: draft.verification_status,
+                        evidence_json: draft.evidence_json,
+                        actor: draft.actor.clone(),
+                        reason: draft.reason.clone(),
+                    },
+                )
+                .await?;
+            append_registry_evidence_audit_event(
+                &state.store,
+                &evidence,
+                "registry_evidence.reproposed",
+                draft.actor,
+                draft.reason,
+                json!({
+                    "source": draft.audit_source,
+                    "release_id": evidence.release_id,
+                    "previous_status": existing.status,
+                    "execution_enabled": draft.audit_execution_enabled,
+                }),
+            )
+            .await?;
+
+            return Ok(CreateRegistryEvidenceResponse {
+                registry_evidence: evidence.into(),
+                created: false,
+            });
+        }
+
+        return Ok(CreateRegistryEvidenceResponse {
+            registry_evidence: existing.into(),
+            created: false,
+        });
+    }
+    let evidence = state
+        .store
+        .create_registry_evidence(CreateRegistryEvidence {
+            id: format!("regev_{}", unique_suffix()),
+            release_id: release.id.clone(),
+            deployment_intent_id: release.deployment_intent_id.clone(),
+            pipeline_intent_id: release.pipeline_intent_id.clone(),
+            change_set_id: release.change_set_id.clone(),
+            work_plan_id: release.work_plan_id.clone(),
+            remediation_plan_id: release.remediation_plan_id.clone(),
+            incident_id: release.incident_id.clone(),
+            session_id: release.session_id.clone(),
+            run_id: release.run_id.clone(),
+            status: "proposed".to_string(),
+            title: draft.title,
+            summary: draft.summary,
+            risk_level: draft.risk_level,
+            registry: draft.registry,
+            repository: draft.repository,
+            image_ref: draft.image_ref,
+            image_digest: draft.image_digest,
+            tag: draft.tag,
+            source: draft.source,
+            verification_status: draft.verification_status,
+            evidence_json: draft.evidence_json,
+        })
+        .await?;
+    append_registry_evidence_audit_event(
+        &state.store,
+        &evidence,
+        "registry_evidence.proposed",
+        draft.actor,
+        draft.reason,
+        json!({
+            "source": draft.audit_source,
+            "release_id": evidence.release_id,
+            "execution_enabled": draft.audit_execution_enabled,
+        }),
+    )
+    .await?;
+
+    Ok(CreateRegistryEvidenceResponse {
+        registry_evidence: evidence.into(),
+        created: true,
+    })
+}
+
+fn registry_evidence_draft_from_inspection(
+    release: &StoredRelease,
+    request: &CreateRegistryEvidenceFromInspectionRequest,
+    image_ref: &str,
+    result: &ToolResult,
+) -> Result<RegistryEvidenceDraft, ApiError> {
+    let content = &result.content;
+    let registry = string_at(content, "/image/registry");
+    let repository = string_at(content, "/image/repository");
+    let tag = string_at(content, "/image/tag");
+    let image_digest =
+        string_at(content, "/image/digest").or_else(|| string_at(content, "/probe/digest"));
+    let verification_status =
+        string_at(content, "/verification_status").unwrap_or_else(|| "unknown".to_string());
+    validate_registry_verification_status(&verification_status)?;
+    let source = "registry_inspect_image".to_string();
+    let evidence_json = registry_evidence_json(
+        release,
+        RegistryEvidenceJsonInput {
+            registry: registry.as_deref(),
+            repository: repository.as_deref(),
+            image_ref: Some(image_ref),
+            image_digest: image_digest.as_deref(),
+            tag: tag.as_deref(),
+            source: &source,
+            verification_status: &verification_status,
+            evidence_json: Some(json!({
+                "execution": {
+                    "enabled": true,
+                    "capability": "registry_inspect_image",
+                    "tool_status": result.status,
+                    "summary": result.summary,
+                    "manifest_body_persisted": false,
+                },
+                "source": {
+                    "release_id": release.id,
+                    "deployment_intent_id": release.deployment_intent_id,
+                    "pipeline_intent_id": release.pipeline_intent_id,
+                    "change_set_id": release.change_set_id,
+                    "work_plan_id": release.work_plan_id,
+                    "evidence_source": source,
+                },
+                "image": {
+                    "registry": registry,
+                    "repository": repository,
+                    "image_ref": image_ref,
+                    "image_digest": image_digest,
+                    "tag": tag,
+                    "requested_image_ref": content.get("requested_image_ref"),
+                    "reference": content.get("reference"),
+                },
+                "verification": {
+                    "status": verification_status,
+                    "checks": [{
+                        "name": "anonymous_manifest_probe",
+                        "status": content.pointer("/probe/status"),
+                        "accessible": content.pointer("/probe/accessible"),
+                        "digest": content.pointer("/probe/digest"),
+                        "content_type": content.pointer("/probe/content_type"),
+                    }],
+                },
+            })),
+        },
+    )?;
+
+    Ok(RegistryEvidenceDraft {
+        title: clean_optional_text(request.title.clone())
+            .unwrap_or_else(|| format!("Registry evidence: {}", release.title)),
+        summary: clean_optional_text(request.summary.clone())
+            .unwrap_or_else(|| result.summary.clone()),
+        risk_level: clean_optional_text(request.risk_level.clone())
+            .unwrap_or_else(|| release.risk_level.clone()),
+        registry,
+        repository,
+        image_ref: Some(image_ref.to_string()),
+        image_digest: image_digest.or_else(|| release.image_digest.clone()),
+        tag,
+        source,
+        verification_status,
+        evidence_json,
+        actor: clean_optional_text(request.actor.clone()),
+        reason: clean_optional_text(request.reason.clone()),
+        audit_source: "registry_inspection".to_string(),
+        audit_execution_enabled: true,
+    })
+}
+
+fn string_at(source: &Value, pointer: &str) -> Option<String> {
+    source
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+async fn transition_registry_evidence(
+    State(state): State<AppState>,
+    Path(evidence_id): Path<String>,
+    Json(request): Json<TransitionRegistryEvidenceRequest>,
+) -> Result<Json<TransitionRegistryEvidenceResponse>, ApiError> {
+    let current = state
+        .store
+        .get_registry_evidence(&evidence_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("registry_evidence", &evidence_id))?;
+    let target = clean_optional_text(Some(request.target_status))
+        .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
+    validate_registry_evidence_transition(&current.status, &target)?;
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    let evidence = state
+        .store
+        .update_registry_evidence_status(&evidence_id, &target, actor.clone(), reason.clone())
+        .await?;
+    append_registry_evidence_audit_event(
+        &state.store,
+        &evidence,
+        &format!("registry_evidence.{target}"),
+        actor,
+        reason,
+        json!({
+            "previous_status": current.status,
+            "status": evidence.status,
+        }),
+    )
+    .await?;
+
+    Ok(Json(TransitionRegistryEvidenceResponse {
+        registry_evidence: evidence.into(),
+    }))
+}
+
+struct RegistryEvidenceJsonInput<'a> {
+    registry: Option<&'a str>,
+    repository: Option<&'a str>,
+    image_ref: Option<&'a str>,
+    image_digest: Option<&'a str>,
+    tag: Option<&'a str>,
+    source: &'a str,
+    verification_status: &'a str,
+    evidence_json: Option<serde_json::Value>,
+}
+
+fn registry_evidence_json(
+    release: &StoredRelease,
+    input: RegistryEvidenceJsonInput<'_>,
+) -> Result<serde_json::Value, ApiError> {
+    if let Some(evidence_json) = input.evidence_json {
+        ensure_json_object(&evidence_json, "evidence_json")?;
+        return Ok(evidence_json);
+    }
+
+    Ok(json!({
+        "execution": {
+            "enabled": false,
+            "reason": "RegistryEvidence is manual or API-fed evidence only in V1"
+        },
+        "source": {
+            "release_id": release.id,
+            "deployment_intent_id": release.deployment_intent_id,
+            "pipeline_intent_id": release.pipeline_intent_id,
+            "change_set_id": release.change_set_id,
+            "work_plan_id": release.work_plan_id,
+            "evidence_source": input.source,
+        },
+        "image": {
+            "registry": input.registry,
+            "repository": input.repository,
+            "image_ref": input.image_ref,
+            "image_digest": input.image_digest,
+            "tag": input.tag,
+        },
+        "verification": {
+            "status": input.verification_status,
+            "checks": [],
+        }
+    }))
+}
+
+fn validate_registry_verification_status(status: &str) -> Result<(), ApiError> {
+    match status {
+        "verified" | "unverified" | "mismatch" | "unknown" => Ok(()),
+        _ => Err(ApiError::bad_request(format!(
+            "invalid registry verification status {status}"
+        ))),
+    }
+}
+
+fn validate_registry_evidence_transition(current: &str, target: &str) -> Result<(), ApiError> {
+    match (current, target) {
+        ("proposed", "verified" | "rejected") => Ok(()),
+        ("verified", "rejected") => Ok(()),
+        (_, "proposed") if current == target => Ok(()),
+        _ => Err(ApiError::conflict(format!(
+            "cannot transition registry evidence from {current} to {target}"
+        ))),
+    }
 }
 
 async fn create_change_set(
@@ -1501,6 +5763,89 @@ async fn revise_change_set(
         append_approval_gate_audit_event(&state.store, gate, "approval_gate.stale", "stale")
             .await?;
     }
+    let invalidated_trusted_envelopes = if request.material_change && material_hash_changed {
+        stale_trusted_envelopes_for_change_set(
+            &state.store,
+            &change_set.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "change set {} revised from revision {} to {}",
+                    change_set.id, current.revision, change_set.revision
+                ))
+            }),
+        )
+        .await?
+    } else {
+        Vec::new()
+    };
+    let invalidated_pipeline_intent = if request.material_change && material_hash_changed {
+        stale_pipeline_intent_for_change_set(
+            &state.store,
+            &change_set.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "change set {} revised from revision {} to {}",
+                    change_set.id, current.revision, change_set.revision
+                ))
+            }),
+        )
+        .await?
+    } else {
+        None
+    };
+    let invalidated_deployment_intent = if let Some(intent) = &invalidated_pipeline_intent {
+        stale_deployment_intent_for_pipeline_intent(
+            &state.store,
+            &intent.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "pipeline intent {} staled after change set {} revised",
+                    intent.id, change_set.id
+                ))
+            }),
+            "pipeline_intent_stale",
+        )
+        .await?
+    } else {
+        None
+    };
+    let invalidated_release = if let Some(intent) = &invalidated_deployment_intent {
+        stale_release_for_deployment_intent(
+            &state.store,
+            &intent.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "deployment intent {} staled after change set {} revised",
+                    intent.id, change_set.id
+                ))
+            }),
+            "deployment_intent_stale",
+        )
+        .await?
+    } else {
+        None
+    };
+    let invalidated_registry_evidence = if let Some(release) = &invalidated_release {
+        stale_registry_evidence_for_release(
+            &state.store,
+            &release.id,
+            actor.clone(),
+            reason.clone().or_else(|| {
+                Some(format!(
+                    "release {} staled after change set {} revised",
+                    release.id, change_set.id
+                ))
+            }),
+            "release_stale",
+        )
+        .await?
+    } else {
+        None
+    };
     append_change_set_audit_event(
         &state.store,
         &change_set,
@@ -1518,6 +5863,19 @@ async fn revise_change_set(
                 .iter()
                 .map(|gate| gate.id.clone())
                 .collect::<Vec<_>>(),
+            "invalidated_permission_grant_ids": invalidated_trusted_envelopes
+                .iter()
+                .map(|grant| grant.id.clone())
+                .collect::<Vec<_>>(),
+            "invalidated_pipeline_intent_id": invalidated_pipeline_intent
+                .as_ref()
+                .map(|intent| intent.id.clone()),
+            "invalidated_deployment_intent_id": invalidated_deployment_intent
+                .as_ref()
+                .map(|intent| intent.id.clone()),
+            "invalidated_release_id": invalidated_release
+                .as_ref()
+                .map(|release| release.id.clone()),
         }),
     )
     .await?;
@@ -1526,6 +5884,10 @@ async fn revise_change_set(
         change_set: change_set.into(),
         material_hash_changed,
         invalidated_gates: invalidated_gates.into_iter().map(Into::into).collect(),
+        invalidated_pipeline_intent: invalidated_pipeline_intent.map(Into::into),
+        invalidated_deployment_intent: invalidated_deployment_intent.map(Into::into),
+        invalidated_release: invalidated_release.map(Into::into),
+        invalidated_registry_evidence: invalidated_registry_evidence.map(Into::into),
     }))
 }
 
@@ -1539,6 +5901,7 @@ async fn create_work_plan_trusted_envelope(
         .get_work_plan(&work_plan_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_plan", &work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
     let grant_request = trusted_envelope_grant_request(&work_plan.id, None, &request)?;
     let actor = clean_optional_text(request.created_by.clone());
     let reason = clean_optional_text(Some(request.reason.clone()));
@@ -1571,6 +5934,13 @@ async fn create_change_set_trusted_envelope(
         .get_change_set(&change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
+    ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
     let grant_request =
         trusted_envelope_grant_request(&change_set.work_plan_id, Some(&change_set.id), &request)?;
     let actor = clean_optional_text(request.created_by.clone());
@@ -1593,6 +5963,20 @@ async fn create_change_set_trusted_envelope(
     Ok(Json(TrustedEnvelopeResponse {
         grant: grant.into(),
     }))
+}
+
+fn ensure_approved_for_trusted_envelope(
+    resource_kind: &str,
+    resource_id: &str,
+    status: &str,
+) -> Result<(), ApiError> {
+    if status == "approved" {
+        return Ok(());
+    }
+
+    Err(ApiError::conflict(format!(
+        "{resource_kind} {resource_id} must be approved before creating a trusted envelope"
+    )))
 }
 
 fn trusted_envelope_grant_request(
@@ -1864,6 +6248,7 @@ async fn decide_approval_gate(
 async fn stream_run_events(
     State(state): State<AppState>,
     Path(run_id): Path<String>,
+    Query(query): Query<StreamRunEventsQuery>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let run_id = RunId::new(run_id);
@@ -1873,8 +6258,13 @@ async fn stream_run_events(
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
 
-    let stream = event_stream(state.store, run_id, last_event_seq(&headers));
+    let stream = event_stream(state.store, run_id, stream_start_seq(&headers, &query));
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct StreamRunEventsQuery {
+    after_seq: Option<u64>,
 }
 
 fn event_stream(
@@ -1943,6 +6333,10 @@ fn last_event_seq(headers: &HeaderMap) -> u64 {
         .and_then(|value| value.to_str().ok())
         .and_then(parse_last_event_id)
         .unwrap_or(0)
+}
+
+fn stream_start_seq(headers: &HeaderMap, query: &StreamRunEventsQuery) -> u64 {
+    query.after_seq.unwrap_or_else(|| last_event_seq(headers))
 }
 
 fn parse_last_event_id(value: &str) -> Option<u64> {
@@ -2169,6 +6563,111 @@ async fn revoke_permission_grant(
     Ok(Json(grant.into()))
 }
 
+async fn append_observation_audit_event(
+    store: &SqliteStore,
+    observation: &StoredObservation,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", observation.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "observation".to_string(),
+            resource_id: observation.id.clone(),
+            run_id: observation.run_id.clone(),
+            payload_json: json!({
+                "observation_id": observation.id,
+                "run_id": observation.run_id.as_ref().map(RunId::as_str),
+                "source": observation.source,
+                "kind": observation.kind,
+                "subject": observation.subject,
+                "summary": observation.summary,
+                "reason": reason,
+                "resource": {
+                    "namespace": observation.resource_namespace,
+                    "kind": observation.resource_kind,
+                    "name": observation.resource_name,
+                },
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_incident_audit_event(
+    store: &SqliteStore,
+    incident: &StoredIncident,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", incident.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "incident".to_string(),
+            resource_id: incident.id.clone(),
+            run_id: incident.run_id.clone(),
+            payload_json: json!({
+                "incident_id": incident.id,
+                "observation_id": incident.observation_id,
+                "run_id": incident.run_id.as_ref().map(RunId::as_str),
+                "status": incident.status,
+                "severity": incident.severity,
+                "title": incident.title,
+                "summary": incident.summary,
+                "reason": reason,
+                "resource": {
+                    "namespace": incident.resource_namespace,
+                    "kind": incident.resource_kind,
+                    "name": incident.resource_name,
+                },
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_remediation_plan_audit_event(
+    store: &SqliteStore,
+    plan: &StoredRemediationPlan,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", plan.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "remediation_plan".to_string(),
+            resource_id: plan.id.clone(),
+            run_id: plan.run_id.clone(),
+            payload_json: json!({
+                "remediation_plan_id": plan.id,
+                "incident_id": plan.incident_id,
+                "run_id": plan.run_id.as_ref().map(RunId::as_str),
+                "status": plan.status,
+                "risk_level": plan.risk_level,
+                "requires_approval": plan.requires_approval,
+                "title": plan.title,
+                "summary": plan.summary,
+                "reason": reason,
+                "resource": {
+                    "namespace": plan.resource_namespace,
+                    "kind": plan.resource_kind,
+                    "name": plan.resource_name,
+                },
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
 async fn append_permission_grant_audit_event(
     store: &SqliteStore,
     kind: &str,
@@ -2233,6 +6732,186 @@ async fn append_change_set_audit_event(
                     "kind": change_set.resource_kind,
                     "name": change_set.resource_name,
                 },
+                "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_pipeline_intent_audit_event(
+    store: &SqliteStore,
+    intent: &StoredPipelineIntent,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    extra: serde_json::Value,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", intent.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "pipeline_intent".to_string(),
+            resource_id: intent.id.clone(),
+            run_id: intent.run_id.clone(),
+            payload_json: json!({
+                "pipeline_intent_id": intent.id,
+                "change_set_id": intent.change_set_id,
+                "work_plan_id": intent.work_plan_id,
+                "remediation_plan_id": intent.remediation_plan_id,
+                "incident_id": intent.incident_id,
+                "run_id": intent.run_id.as_ref().map(RunId::as_str),
+                "status": intent.status,
+                "intent_kind": intent.intent_kind,
+                "risk_level": intent.risk_level,
+                "summary": intent.summary,
+                "reason": reason,
+                "resource": {
+                    "namespace": intent.resource_namespace,
+                    "kind": intent.resource_kind,
+                    "name": intent.resource_name,
+                },
+                "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_deployment_intent_audit_event(
+    store: &SqliteStore,
+    intent: &StoredDeploymentIntent,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    extra: serde_json::Value,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", intent.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "deployment_intent".to_string(),
+            resource_id: intent.id.clone(),
+            run_id: intent.run_id.clone(),
+            payload_json: json!({
+                "deployment_intent_id": intent.id,
+                "pipeline_intent_id": intent.pipeline_intent_id,
+                "change_set_id": intent.change_set_id,
+                "work_plan_id": intent.work_plan_id,
+                "remediation_plan_id": intent.remediation_plan_id,
+                "incident_id": intent.incident_id,
+                "run_id": intent.run_id.as_ref().map(RunId::as_str),
+                "status": intent.status,
+                "intent_kind": intent.intent_kind,
+                "risk_level": intent.risk_level,
+                "summary": intent.summary,
+                "target": {
+                    "environment": intent.target_environment,
+                    "namespace": intent.target_namespace,
+                    "argo_application": intent.argo_application,
+                },
+                "reason": reason,
+                "resource": {
+                    "namespace": intent.resource_namespace,
+                    "kind": intent.resource_kind,
+                    "name": intent.resource_name,
+                },
+                "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_release_audit_event(
+    store: &SqliteStore,
+    release: &StoredRelease,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    extra: serde_json::Value,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", release.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "release".to_string(),
+            resource_id: release.id.clone(),
+            run_id: release.run_id.clone(),
+            payload_json: json!({
+                "release_id": release.id,
+                "deployment_intent_id": release.deployment_intent_id,
+                "pipeline_intent_id": release.pipeline_intent_id,
+                "change_set_id": release.change_set_id,
+                "work_plan_id": release.work_plan_id,
+                "remediation_plan_id": release.remediation_plan_id,
+                "incident_id": release.incident_id,
+                "run_id": release.run_id.as_ref().map(RunId::as_str),
+                "status": release.status,
+                "release_kind": release.release_kind,
+                "risk_level": release.risk_level,
+                "summary": release.summary,
+                "target": {
+                    "environment": release.target_environment,
+                    "namespace": release.target_namespace,
+                    "argo_application": release.argo_application,
+                },
+                "artifacts": {
+                    "version": release.version,
+                    "commit_sha": release.commit_sha,
+                    "image_digest": release.image_digest,
+                    "rollback_ref": release.rollback_ref,
+                },
+                "reason": reason,
+                "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_registry_evidence_audit_event(
+    store: &SqliteStore,
+    evidence: &StoredRegistryEvidence,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+    extra: serde_json::Value,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", evidence.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "registry_evidence".to_string(),
+            resource_id: evidence.id.clone(),
+            run_id: evidence.run_id.clone(),
+            payload_json: json!({
+                "registry_evidence_id": evidence.id,
+                "release_id": evidence.release_id,
+                "deployment_intent_id": evidence.deployment_intent_id,
+                "pipeline_intent_id": evidence.pipeline_intent_id,
+                "change_set_id": evidence.change_set_id,
+                "work_plan_id": evidence.work_plan_id,
+                "remediation_plan_id": evidence.remediation_plan_id,
+                "incident_id": evidence.incident_id,
+                "run_id": evidence.run_id.as_ref().map(RunId::as_str),
+                "status": evidence.status,
+                "risk_level": evidence.risk_level,
+                "summary": evidence.summary,
+                "image": {
+                    "registry": evidence.registry,
+                    "repository": evidence.repository,
+                    "image_ref": evidence.image_ref,
+                    "image_digest": evidence.image_digest,
+                    "tag": evidence.tag,
+                },
+                "source": evidence.source,
+                "verification_status": evidence.verification_status,
+                "reason": reason,
                 "extra": extra,
             }),
         })
@@ -2386,6 +7065,50 @@ fn clean_optional_text(value: Option<String>) -> Option<String> {
     value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn required_text(value: String, field: &str) -> Result<String, ApiError> {
+    clean_optional_text(Some(value))
+        .ok_or_else(|| ApiError::bad_request(format!("{field} is required")))
+}
+
+fn validate_allowed_value(field: &str, value: &str, allowed: &[&str]) -> Result<(), ApiError> {
+    if allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(format!(
+            "{field} must be one of: {}",
+            allowed.join(", ")
+        )))
+    }
+}
+
+async fn root_session_for_request(
+    store: &SqliteStore,
+    requested_session_id: Option<String>,
+    requested_run_id: Option<RunId>,
+    title: &str,
+) -> Result<(SessionId, Option<RunId>), ApiError> {
+    if let Some(run_id) = requested_run_id {
+        let run = store
+            .get_run(&run_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+        return Ok((run.session_id, Some(run_id)));
+    }
+
+    let session_id = requested_session_id
+        .map(SessionId::new)
+        .unwrap_or_else(|| SessionId::new(format!("ses_control_{}", unique_suffix())));
+    store
+        .create_session(CreateSession {
+            id: session_id.clone(),
+            title: title.to_string(),
+            cwd: ".".to_string(),
+        })
+        .await?;
+
+    Ok((session_id, None))
 }
 
 fn ensure_json_object(value: &serde_json::Value, field: &str) -> Result<(), ApiError> {
@@ -2727,6 +7450,23 @@ fn direct_capability_result_summary(result: &ToolResult) -> Value {
             ],
         ),
     );
+    insert_object_if_not_empty(
+        &mut summary,
+        "image",
+        select_json_paths(
+            &result.content,
+            &[
+                ("registry", "/image/registry"),
+                ("repository", "/image/repository"),
+                ("tag", "/image/tag"),
+                ("digest", "/image/digest"),
+                ("verification_status", "/verification_status"),
+                ("probe_status", "/probe/status"),
+                ("probe_accessible", "/probe/accessible"),
+                ("probe_digest", "/probe/digest"),
+            ],
+        ),
+    );
 
     Value::Object(summary)
 }
@@ -2910,37 +7650,60 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_gate_summary, approval_summary, cancel_run, config_effective, create_change_set,
-        create_change_set_trusted_envelope, create_run, create_work_plan_from_remediation_plan,
-        create_work_plan_trusted_envelope, decide_run_approval, deny_approval, execute_capability,
-        get_approval, get_approval_gate, get_artifact, get_incident, get_observation,
-        get_permission_grant, get_remediation_plan, get_run, get_run_diff, get_run_events,
-        get_work_plan, last_event_seq, list_approval_gates, list_approvals, list_audit_events,
-        list_change_sets, list_incidents, list_observations, list_permission_grants,
-        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_plans, parse_last_event_id, policy_json, revise_change_set, revise_work_plan,
-        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
-        transition_change_set, transition_work_plan, unique_suffix,
-        validate_permission_grant_request, AppState, ApprovalGateSummaryQuery,
+        approval_gate_summary, approval_summary, attach_deployment_intent_evidence,
+        attach_pipeline_intent_evidence, attach_release_evidence, cancel_run, change_set_flow,
+        change_set_readiness, config_effective, create_change_set,
+        create_change_set_trusted_envelope, create_deployment_intent_from_pipeline_intent,
+        create_incident, create_observation, create_pipeline_intent_from_change_set,
+        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
+        create_release_from_deployment_intent, create_remediation_plan, create_run,
+        create_work_plan_from_remediation_plan, create_work_plan_trusted_envelope,
+        decide_run_approval, deny_approval, execute_capability, get_approval, get_approval_gate,
+        get_artifact, get_deployment_intent, get_incident, get_observation, get_permission_grant,
+        get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
+        get_run_diff, get_run_events, get_work_plan, last_event_seq, list_approval_gates,
+        list_approvals, list_audit_events, list_change_sets, list_deployment_intents,
+        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
+        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
+        list_run_observations, list_runs, list_work_plans, parse_last_event_id, policy_json,
+        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
+        run_summary, satisfy_approval_gate, stream_start_seq, transition_change_set,
+        transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
+        transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
+        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
         ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
-        ListChangeSetsQuery, ListIncidentsQuery, ListObservationsQuery, ListPermissionGrantsQuery,
-        ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
+        ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery, ListObservationsQuery,
+        ListPermissionGrantsQuery, ListPipelineIntentsQuery, ListRegistryEvidenceQuery,
+        ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
+        StreamRunEventsQuery,
     };
     use crate::dto::{
-        ApprovalDecision, CreateChangeSetRequest, CreatePermissionGrantRequest, CreateRunRequest,
-        CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest,
-        DecideApprovalGateRequest, DecideApprovalRequest, ExecuteCapabilityRequest,
-        ReviewApprovalRequest, ReviseChangeSetRequest, ReviseWorkPlanRequest,
-        RevokePermissionGrantRequest, TransitionChangeSetRequest, TransitionWorkPlanRequest,
+        ApprovalDecision, AttachDeploymentIntentEvidenceRequest,
+        AttachPipelineIntentEvidenceRequest, AttachReleaseEvidenceRequest, CreateChangeSetRequest,
+        CreateDeploymentIntentFromPipelineIntentRequest, CreateIncidentRequest,
+        CreateObservationRequest, CreatePermissionGrantRequest,
+        CreatePipelineIntentFromChangeSetRequest, CreateRegistryEvidenceFromInspectionRequest,
+        CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
+        CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
+        CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
+        ExecuteCapabilityRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
+        ReviseWorkPlanRequest, RevokePermissionGrantRequest, TransitionChangeSetRequest,
+        TransitionDeploymentIntentRequest, TransitionPipelineIntentRequest,
+        TransitionRegistryEvidenceRequest, TransitionReleaseRequest, TransitionWorkPlanRequest,
     };
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
     use axum::Json;
-    use pharness_core::{AgentAction, PolicyMode, ReadOnlyClusterTools, RunScope, SafetyPolicy};
-    use pharness_store::{
-        CreateApproval, CreateApprovalGate, CreateArtifact, CreateFileChange, CreateIncident,
-        CreateObservation, CreateRemediationPlan, SqliteStore,
+    use pharness_core::{
+        AgentAction, PolicyMode, ReadOnlyClusterTools, RunId, RunScope, SafetyPolicy, SessionId,
     };
+    use pharness_store::{
+        ApprovalGateListFilter, CreateApproval, CreateApprovalGate, CreateArtifact,
+        CreateChangeSet, CreateDeploymentIntent, CreateFileChange, CreateIncident,
+        CreateObservation, CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun,
+        CreateSession, CreateWorkPlan, SqliteStore,
+    };
+    use serde_json::json;
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
@@ -2962,6 +7725,208 @@ mod tests {
             cluster_tools,
             policy: SafetyPolicy::default(),
         }
+    }
+
+    async fn seed_approved_release(state: &AppState) -> String {
+        let session_id = SessionId::new("ses_registry_inspection");
+        let run_id = RunId::new("run_registry_inspection");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "registry inspection".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "registry inspection".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 1,
+                initial_status: "completed".to_string(),
+                execution_target_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_observation(CreateObservation {
+                id: "obs_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                source: "test".to_string(),
+                kind: "smoke".to_string(),
+                subject: "checkout-api".to_string(),
+                summary: "seed observation".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                resource_ref_json: None,
+                artifact_id: None,
+                data_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_incident(CreateIncident {
+                id: "inc_registry_inspection".to_string(),
+                observation_id: "obs_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "resolved".to_string(),
+                severity: "medium".to_string(),
+                title: "Seed incident".to_string(),
+                summary: "seed incident".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                data_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_remediation_plan(CreateRemediationPlan {
+                id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Seed remediation".to_string(),
+                summary: "seed remediation".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                plan_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: "wplan_registry_inspection".to_string(),
+                remediation_plan_id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Seed work".to_string(),
+                summary: "seed work".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                work_plan_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: "cset_registry_inspection".to_string(),
+                work_plan_id: "wplan_registry_inspection".to_string(),
+                remediation_plan_id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Seed changes".to_string(),
+                summary: "seed changes".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "hash_registry_inspection".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                change_set_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: "pint_registry_inspection".to_string(),
+                change_set_id: "cset_registry_inspection".to_string(),
+                work_plan_id: "wplan_registry_inspection".to_string(),
+                remediation_plan_id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Seed pipeline".to_string(),
+                summary: "seed pipeline".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                intent_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_deployment_intent(CreateDeploymentIntent {
+                id: "dint_registry_inspection".to_string(),
+                pipeline_intent_id: "pint_registry_inspection".to_string(),
+                change_set_id: "cset_registry_inspection".to_string(),
+                work_plan_id: "wplan_registry_inspection".to_string(),
+                remediation_plan_id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Seed deploy".to_string(),
+                summary: "seed deploy".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "argo_sync_deploy".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                intent_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_release(CreateRelease {
+                id: "rel_registry_inspection".to_string(),
+                deployment_intent_id: "dint_registry_inspection".to_string(),
+                pipeline_intent_id: "pint_registry_inspection".to_string(),
+                change_set_id: "cset_registry_inspection".to_string(),
+                work_plan_id: "wplan_registry_inspection".to_string(),
+                remediation_plan_id: "rplan_registry_inspection".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id,
+                run_id: Some(run_id),
+                status: "approved".to_string(),
+                title: "Seed release".to_string(),
+                summary: "seed release".to_string(),
+                risk_level: "medium".to_string(),
+                release_kind: "gitops_release".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                version: Some("v0.1.0-smoke".to_string()),
+                commit_sha: Some("abc1234".to_string()),
+                image_digest: None,
+                rollback_ref: None,
+                release_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+
+        "rel_registry_inspection".to_string()
     }
 
     #[tokio::test]
@@ -3352,8 +8317,44 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(response.status, "ok");
         assert_eq!(response.action, "kubernetes_get");
         assert!(response.executed);
+        let artifact_id = response.artifact_id.clone().unwrap();
+        let observation_id = response.observation_id.clone().unwrap();
+        let Json(artifact) = get_artifact(State(state.clone()), Path(artifact_id.clone()))
+            .await
+            .unwrap();
+        assert_eq!(artifact.id, artifact_id);
+        assert_eq!(artifact.kind, "kubernetes_tool_result");
+        assert!(artifact.run_id.is_none());
+        assert_eq!(
+            artifact.content_json.as_ref().unwrap()["output"]["item_count"],
+            0
+        );
+        let Json(observations) = list_observations(
+            State(state.clone()),
+            Query(ListObservationsQuery {
+                run_id: None,
+                source: Some("kubernetes".to_string()),
+                kind: Some("pods".to_string()),
+                subject: None,
+                resource_namespace: Some("argocd".to_string()),
+                resource_kind: Some("pods".to_string()),
+                resource_name: None,
+                observed_after_ms: None,
+                observed_before_ms: None,
+                limit: Some(50),
+                offset: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(observations.count, 1);
+        assert_eq!(observations.observations[0].id, observation_id);
+        assert_eq!(
+            observations.observations[0].artifact_id.as_deref(),
+            Some(artifact_id.as_str())
+        );
         let Json(audit_events) = list_audit_events(
-            State(state),
+            State(state.clone()),
             Query(ListAuditEventsQuery {
                 resource_kind: Some("capability".to_string()),
                 resource_id: Some("kubernetes_get".to_string()),
@@ -3373,6 +8374,21 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(event.payload["result"]["source"], "kubernetes");
         assert_eq!(event.payload["result"]["output"]["item_count"], 0);
         assert!(!event.payload.to_string().contains("PodList"));
+        let Json(observation_audit_events) = list_audit_events(
+            State(state),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("observation".to_string()),
+                resource_id: Some(observation_id),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(observation_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "observation.created"));
         let _ = fs::remove_file(fake_kubectl);
     }
 
@@ -3602,6 +8618,240 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
     }
 
     #[tokio::test]
+    async fn direct_capability_execution_accepts_registry_inspection() {
+        let state = test_state().await;
+        let Json(response) = execute_capability(
+            State(state.clone()),
+            Json(ExecuteCapabilityRequest {
+                action: AgentAction::RegistryInspectImage {
+                    id: "act_registry".into(),
+                    reason: "inspect image evidence".to_string(),
+                    image_ref: "team/checkout-api:v1".to_string(),
+                    registry_base_url: None,
+                },
+                timeout_ms: None,
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.action, "registry_inspect_image");
+        assert!(response.executed);
+        let result = response.result.unwrap();
+        assert_eq!(result.content["source"], "registry");
+        assert_eq!(result.content["image"]["repository"], "team/checkout-api");
+        assert_eq!(result.content["verification_status"], "unknown");
+
+        let Json(audit_events) = list_audit_events(
+            State(state),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("capability".to_string()),
+                resource_id: Some("registry_inspect_image".to_string()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(audit_events.events.iter().any(|event| {
+            event.kind == "direct_capability.executed"
+                && event.payload["executed"] == true
+                && event.payload["result"]["image"]["repository"] == "team/checkout-api"
+                && event.payload["result"]["image"]["verification_status"] == "unknown"
+        }));
+    }
+
+    #[tokio::test]
+    async fn registry_inspection_records_registry_evidence() {
+        let state = test_state().await;
+        let release_id = seed_approved_release(&state).await;
+        let Json(response) = create_registry_evidence_from_registry_inspection(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromInspectionRequest {
+                release_id: release_id.clone(),
+                image_ref: "team/checkout-api:v0.1.0-smoke".to_string(),
+                registry_base_url: None,
+                title: None,
+                summary: None,
+                risk_level: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("registry inspection smoke".to_string()),
+                timeout_ms: Some(5_000),
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert!(response.created);
+        assert_eq!(response.inspection.status, "ok");
+        assert!(response.inspection.executed);
+        let evidence = response.registry_evidence.unwrap();
+        assert_eq!(evidence.release_id, release_id);
+        assert_eq!(evidence.status, "proposed");
+        assert_eq!(evidence.source, "registry_inspect_image");
+        assert_eq!(evidence.verification_status, "unknown");
+        assert_eq!(evidence.repository.as_deref(), Some("team/checkout-api"));
+        assert_eq!(
+            evidence.image_ref.as_deref(),
+            Some("team/checkout-api:v0.1.0-smoke")
+        );
+        assert_eq!(
+            evidence.evidence_json["execution"]["capability"],
+            "registry_inspect_image"
+        );
+        assert_eq!(
+            evidence.evidence_json["execution"]["manifest_body_persisted"],
+            false
+        );
+
+        let Json(registry_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("registry_evidence".to_string()),
+                resource_id: Some(evidence.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(registry_audit_events.events.iter().any(|event| {
+            event.kind == "registry_evidence.proposed"
+                && event.payload["extra"]["source"] == "registry_inspection"
+                && event.payload["extra"]["execution_enabled"] == true
+        }));
+
+        let Json(capability_audit_events) = list_audit_events(
+            State(state),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("capability".to_string()),
+                resource_id: Some("registry_inspect_image".to_string()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(capability_audit_events.events.iter().any(|event| {
+            event.kind == "direct_capability.executed"
+                && event.payload["executed"] == true
+                && event.payload["result"]["image"]["repository"] == "team/checkout-api"
+        }));
+    }
+
+    #[tokio::test]
+    async fn readiness_distinguishes_identity_evidence_from_supply_chain_evidence() {
+        let state = test_state().await;
+        let release_id = seed_approved_release(&state).await;
+        let Json(identity_evidence) = create_registry_evidence_from_release(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromReleaseRequest {
+                release_id,
+                title: None,
+                summary: None,
+                risk_level: None,
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: Some("registry.example.test/checkout-api:v0.1.0-smoke".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                tag: Some("v0.1.0-smoke".to_string()),
+                source: Some("registry_inspect_image".to_string()),
+                verification_status: Some("verified".to_string()),
+                evidence_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("identity evidence smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(verified_identity_evidence) = transition_registry_evidence(
+            State(state.clone()),
+            Path(identity_evidence.registry_evidence.id.clone()),
+            Json(TransitionRegistryEvidenceRequest {
+                target_status: "verified".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("operator accepted identity evidence".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(identity_readiness) = change_set_readiness(
+            State(state.clone()),
+            Path(
+                verified_identity_evidence
+                    .registry_evidence
+                    .change_set_id
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        assert!(identity_readiness
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "registry_evidence_supply_chain_not_verified"));
+
+        let state = test_state().await;
+        let release_id = seed_approved_release(&state).await;
+        let Json(supply_chain_evidence) = create_registry_evidence_from_release(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromReleaseRequest {
+                release_id,
+                title: None,
+                summary: None,
+                risk_level: None,
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: Some("registry.example.test/checkout-api:v0.1.0-smoke".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                tag: Some("v0.1.0-smoke".to_string()),
+                source: Some("registry_inspect_image".to_string()),
+                verification_status: Some("verified".to_string()),
+                evidence_json: Some(serde_json::json!({
+                    "verification": {
+                        "checks": [
+                            {"name": "cosign_signature", "status": "verified"}
+                        ]
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("signature evidence smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(verified_supply_chain_evidence) = transition_registry_evidence(
+            State(state.clone()),
+            Path(supply_chain_evidence.registry_evidence.id.clone()),
+            Json(TransitionRegistryEvidenceRequest {
+                target_status: "verified".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("operator accepted signature evidence".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(supply_chain_readiness) = change_set_readiness(
+            State(state),
+            Path(
+                verified_supply_chain_evidence
+                    .registry_evidence
+                    .change_set_id
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        assert!(!supply_chain_readiness
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "registry_evidence_supply_chain_not_verified"));
+    }
+
+    #[tokio::test]
     async fn direct_capability_execution_rejects_non_cluster_actions() {
         let error = execute_capability(
             State(test_state().await),
@@ -3637,6 +8887,21 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         headers.insert("last-event-id", HeaderValue::from_static("evt_run_test_4"));
 
         assert_eq!(last_event_seq(&headers), 4);
+    }
+
+    #[test]
+    fn stream_start_seq_prefers_query_cursor() {
+        let mut headers = HeaderMap::new();
+        headers.insert("last-event-id", HeaderValue::from_static("evt_run_test_4"));
+
+        assert_eq!(
+            stream_start_seq(&headers, &StreamRunEventsQuery { after_seq: Some(9) }),
+            9
+        );
+        assert_eq!(
+            stream_start_seq(&headers, &StreamRunEventsQuery { after_seq: None }),
+            4
+        );
     }
 
     #[tokio::test]
@@ -3932,6 +9197,158 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
 
         assert_eq!(error.status, StatusCode::CONFLICT);
         assert!(error.message.contains("current pending approval"));
+    }
+
+    #[tokio::test]
+    async fn creates_sdlc_root_chain_and_audits_each_record() {
+        let state = test_state().await;
+        let Json(run) = create_run(
+            State(state.clone()),
+            Json(CreateRunRequest {
+                task: "seed SDLC roots".to_string(),
+                cwd: Some(".".to_string()),
+                max_turns: Some(1),
+                policy_mode: None,
+                scope: None,
+            }),
+        )
+        .await
+        .unwrap();
+
+        let Json(observation) = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some("obs_public_create".to_string()),
+                session_id: None,
+                run_id: Some(run.id.clone()),
+                source: "smoke".to_string(),
+                kind: "pipeline_run_analysis".to_string(),
+                subject: "checkout-api".to_string(),
+                summary: "pipeline pending approval".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("pr-smoke".to_string()),
+                resource_ref: Some(serde_json::json!({
+                    "apiVersion": "tekton.dev/v1",
+                    "kind": "PipelineRun",
+                    "namespace": "apps-dev",
+                    "name": "pr-smoke"
+                })),
+                artifact_id: None,
+                data_json: Some(serde_json::json!({ "status": "running" })),
+                actor: Some("test".to_string()),
+                reason: Some("root smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(incident) = create_incident(
+            State(state.clone()),
+            Json(CreateIncidentRequest {
+                id: Some("inc_public_create".to_string()),
+                observation_id: observation.id.clone(),
+                status: Some("candidate".to_string()),
+                severity: "medium".to_string(),
+                title: "Pipeline needs review".to_string(),
+                summary: "Pipeline is still running".to_string(),
+                resource_namespace: None,
+                resource_kind: None,
+                resource_name: None,
+                data_json: Some(serde_json::json!({ "reason": "running" })),
+                actor: Some("test".to_string()),
+                reason: Some("root smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(plan) = create_remediation_plan(
+            State(state.clone()),
+            Json(CreateRemediationPlanRequest {
+                id: Some("rplan_public_create".to_string()),
+                incident_id: incident.id.clone(),
+                status: Some("draft".to_string()),
+                title: "Review pipeline".to_string(),
+                summary: "Collect read-only evidence before any mutation".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: Some(true),
+                resource_namespace: None,
+                resource_kind: None,
+                resource_name: None,
+                plan_json: Some(serde_json::json!({ "steps": ["inspect pipeline"] })),
+                actor: Some("test".to_string()),
+                reason: Some("root smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let Json(observations) = list_observations(
+            State(state.clone()),
+            Query(ListObservationsQuery {
+                subject: Some("checkout-api".to_string()),
+                limit: Some(50),
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(incidents) = list_incidents(
+            State(state.clone()),
+            Query(ListIncidentsQuery {
+                status: Some("candidate".to_string()),
+                limit: Some(50),
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(plans) = list_remediation_plans(
+            State(state.clone()),
+            Query(ListRemediationPlansQuery {
+                incident_id: Some(incident.id.clone()),
+                limit: Some(50),
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(observation.run_id, Some(run.id));
+        assert_eq!(incident.resource_namespace.as_deref(), Some("apps-dev"));
+        assert_eq!(plan.incident_id, incident.id);
+        assert_eq!(observations.count, 1);
+        assert_eq!(incidents.count, 1);
+        assert_eq!(plans.count, 1);
+
+        for (resource_kind, resource_id, event_kind) in [
+            (
+                "observation",
+                observation.id.as_str(),
+                "observation.created",
+            ),
+            ("incident", incident.id.as_str(), "incident.created"),
+            (
+                "remediation_plan",
+                plan.id.as_str(),
+                "remediation_plan.created",
+            ),
+        ] {
+            let Json(audit_events) = list_audit_events(
+                State(state.clone()),
+                Query(ListAuditEventsQuery {
+                    resource_kind: Some(resource_kind.to_string()),
+                    resource_id: Some(resource_id.to_string()),
+                    run_id: None,
+                    limit: Some(50),
+                }),
+            )
+            .await
+            .unwrap();
+            assert!(audit_events
+                .events
+                .iter()
+                .any(|event| event.kind == event_kind && event.actor.as_deref() == Some("test")));
+        }
     }
 
     #[tokio::test]
@@ -4446,7 +9863,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .await
         .unwrap();
         let Json(gate_audit_events) = list_audit_events(
-            State(state),
+            State(state.clone()),
             Query(ListAuditEventsQuery {
                 resource_kind: Some("approval_gate".to_string()),
                 resource_id: Some("agate_test".to_string()),
@@ -4628,6 +10045,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .await
         .unwrap();
         let work_plan_id = created_work_plan.work_plan.id.clone();
+        let draft_envelope_error = create_work_plan_trusted_envelope(
+            State(state.clone()),
+            Path(work_plan_id.clone()),
+            Json(CreateTrustedEnvelopeRequest {
+                subject: None,
+                created_by: Some("lucas".to_string()),
+                reason: "premature WorkPlan envelope".to_string(),
+                environment: Some("local".to_string()),
+                namespace: Some("apps-dev".to_string()),
+                repo: Some("git@example.test/team/app.git".to_string()),
+                branch: Some("feature/pharness".to_string()),
+                production_impacting: Some(false),
+                expires_at: None,
+            }),
+        )
+        .await
+        .unwrap_err();
         let Json(proposed) = transition_work_plan(
             State(state.clone()),
             Path(work_plan_id.clone()),
@@ -4677,6 +10111,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let Json(ready_before_revision) =
+            work_plan_readiness(State(state.clone()), Path(work_plan_id.clone()))
+                .await
+                .unwrap();
         let Json(revised) = revise_work_plan(
             State(state.clone()),
             Path(work_plan_id.clone()),
@@ -4695,6 +10133,36 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let staled_grant = state
+            .store
+            .get_permission_grant(&work_plan_envelope.grant.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let Json(future_run) = create_run(
+            State(state.clone()),
+            Json(CreateRunRequest {
+                task: "future scoped write".to_string(),
+                cwd: Some(".".to_string()),
+                max_turns: Some(12),
+                policy_mode: None,
+                scope: Some(RunScope {
+                    namespace: Some("apps-dev".to_string()),
+                    repo: Some("git@example.test/team/app.git".to_string()),
+                    branch: Some("feature/pharness".to_string()),
+                    work_plan_id: Some(approved.work_plan.id.clone()),
+                    change_set_id: None,
+                    production_impacting: false,
+                }),
+            }),
+        )
+        .await
+        .unwrap();
+        let future_run = state.store.get_run(&future_run.id).await.unwrap().unwrap();
+        let Json(blocked_after_revision) =
+            work_plan_readiness(State(state.clone()), Path(approved.work_plan.id.clone()))
+                .await
+                .unwrap();
         let Json(work_plan_audit_events) = list_audit_events(
             State(state.clone()),
             Query(ListAuditEventsQuery {
@@ -4706,8 +10174,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let Json(grant_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("permission_grant".to_string()),
+                resource_id: Some(work_plan_envelope.grant.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
         let Json(gate_audit_events) = list_audit_events(
-            State(state),
+            State(state.clone()),
             Query(ListAuditEventsQuery {
                 resource_kind: Some("approval_gate".to_string()),
                 resource_id: Some("agate_lifecycle".to_string()),
@@ -4718,6 +10197,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .await
         .unwrap();
 
+        assert_eq!(draft_envelope_error.status, StatusCode::CONFLICT);
         assert_eq!(proposed.work_plan.status, "proposed");
         assert_eq!(approved.work_plan.status, "approved");
         assert_eq!(
@@ -4726,8 +10206,39 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         );
         assert!(work_plan_envelope.grant.scope["change_set_ids"].is_null());
         assert_eq!(satisfied_gate.approval_gate.status, "satisfied");
+        assert!(ready_before_revision.ready);
+        assert!(ready_before_revision.blockers.is_empty());
+        assert_eq!(ready_before_revision.trusted_envelopes.active.len(), 1);
+        assert!(ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_change_set"));
         assert_eq!(revised.work_plan.status, "draft");
         assert_eq!(revised.work_plan.revision, 2);
+        assert_eq!(staled_grant.status, "stale");
+        assert_eq!(staled_grant.revoked_by.as_deref(), Some("lucas"));
+        assert_eq!(
+            staled_grant.revoke_reason.as_deref(),
+            Some("new evidence changed execution plan")
+        );
+        assert!(
+            future_run.execution_target_json["policy"]["permission_grants"]
+                .as_array()
+                .is_none_or(Vec::is_empty)
+        );
+        assert!(!blocked_after_revision.ready);
+        assert!(blocked_after_revision
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "work_plan_not_approved"));
+        assert!(blocked_after_revision
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "missing_active_trusted_envelope"));
+        assert!(blocked_after_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_trusted_envelope"));
         assert_eq!(revised.invalidated_gates.len(), 1);
         assert_eq!(revised.invalidated_gates[0].status, "stale");
         assert_eq!(
@@ -4742,6 +10253,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .events
             .iter()
             .any(|event| event.kind == "work_plan.trusted_envelope_created"));
+        assert!(grant_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "permission_grant.stale"));
         assert!(gate_audit_events
             .events
             .iter()
@@ -4854,6 +10369,34 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let Json(proposed_work_plan) = transition_work_plan(
+            State(state.clone()),
+            Path(created_work_plan.work_plan.id.clone()),
+            Json(TransitionWorkPlanRequest {
+                target_status: "proposed".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("ready for source plan review".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(approved_work_plan) = transition_work_plan(
+            State(state.clone()),
+            Path(created_work_plan.work_plan.id.clone()),
+            Json(TransitionWorkPlanRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("source plan approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(work_plan_flow_before_change_set) = work_plan_flow(
+            State(state.clone()),
+            Path(created_work_plan.work_plan.id.clone()),
+        )
+        .await
+        .unwrap();
         let Json(created_change_set) = create_change_set(
             State(state.clone()),
             Json(CreateChangeSetRequest {
@@ -4890,6 +10433,47 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .unwrap();
         let change_set_id = created_change_set.change_set.id.clone();
         let original_hash = created_change_set.change_set.material_hash.clone();
+        assert_eq!(work_plan_flow_before_change_set.resource_kind, "work_plan");
+        assert_eq!(
+            work_plan_flow_before_change_set.resource_id,
+            created_work_plan.work_plan.id
+        );
+        assert_eq!(
+            work_plan_flow_before_change_set.work_plan.id,
+            approved_work_plan.work_plan.id
+        );
+        assert!(work_plan_flow_before_change_set.change_set.is_none());
+        assert!(work_plan_flow_before_change_set.pipeline_intent.is_none());
+        assert!(work_plan_flow_before_change_set
+            .readiness
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_change_set"));
+        assert!(work_plan_flow_before_change_set
+            .incidents
+            .iter()
+            .any(|incident| incident.id == "inc_changeset_lifecycle"));
+        assert!(work_plan_flow_before_change_set
+            .remediation_plans
+            .iter()
+            .any(|plan| plan.id == "rplan_changeset"));
+        let draft_envelope_error = create_change_set_trusted_envelope(
+            State(state.clone()),
+            Path(change_set_id.clone()),
+            Json(CreateTrustedEnvelopeRequest {
+                subject: None,
+                created_by: Some("lucas".to_string()),
+                reason: "premature ChangeSet envelope".to_string(),
+                environment: Some("local".to_string()),
+                namespace: Some("apps-dev".to_string()),
+                repo: Some("git@example.test/team/app.git".to_string()),
+                branch: Some("feature/pharness".to_string()),
+                production_impacting: Some(false),
+                expires_at: None,
+            }),
+        )
+        .await
+        .unwrap_err();
         let Json(listed_change_sets) = list_change_sets(
             State(state.clone()),
             Query(ListChangeSetsQuery {
@@ -4959,6 +10543,578 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let Json(proposed_pipeline_intent) = create_pipeline_intent_from_change_set(
+            State(state.clone()),
+            Json(CreatePipelineIntentFromChangeSetRequest {
+                change_set_id: change_set_id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("pipeline intent smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(existing_pipeline_intent) = create_pipeline_intent_from_change_set(
+            State(state.clone()),
+            Json(CreatePipelineIntentFromChangeSetRequest {
+                change_set_id: change_set_id.clone(),
+                title: Some("ignored duplicate".to_string()),
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: None,
+                actor: None,
+                reason: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(listed_pipeline_intents) = list_pipeline_intents(
+            State(state.clone()),
+            Query(ListPipelineIntentsQuery {
+                change_set_id: Some(change_set_id.clone()),
+                work_plan_id: Some(created_work_plan.work_plan.id.clone()),
+                remediation_plan_id: Some("rplan_changeset".to_string()),
+                incident_id: Some("inc_changeset_lifecycle".to_string()),
+                run_id: Some(created.id.to_string()),
+                status: Some("proposed".to_string()),
+                intent_kind: Some("tekton_build_test_package".to_string()),
+                risk_level: Some("medium".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-api".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(fetched_pipeline_intent) = get_pipeline_intent(
+            State(state.clone()),
+            Path(proposed_pipeline_intent.pipeline_intent.id.clone()),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_pipeline_intent) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_pipeline_intent) = transition_pipeline_intent(
+            State(state.clone()),
+            Path(proposed_pipeline_intent.pipeline_intent.id.clone()),
+            Json(TransitionPipelineIntentRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("pipeline intent approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(pipeline_observation) = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some("obs_pipeline_intent_evidence".to_string()),
+                session_id: None,
+                run_id: None,
+                source: "tekton".to_string(),
+                kind: "pipeline_run_analysis".to_string(),
+                subject: "ci/build-api".to_string(),
+                summary: "PipelineRun build-api succeeded".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-api".to_string()),
+                resource_ref: Some(json!({
+                    "source": "tekton",
+                    "kind": "PipelineRun",
+                    "namespace": "ci",
+                    "name": "build-api",
+                })),
+                artifact_id: None,
+                data_json: Some(json!({
+                    "analysis": {
+                        "kind": "PipelineRunAnalysis",
+                        "summary": {
+                            "status": "succeeded",
+                            "reason": "Succeeded",
+                            "task_run_count": 3,
+                            "failed_task_run_count": 0,
+                            "running_task_run_count": 0,
+                            "succeeded_task_run_count": 3,
+                            "argo_sync_status": "Synced",
+                            "argo_health_status": "Healthy",
+                            "image_alignment": {
+                                "status": "exact_match"
+                            }
+                        }
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("pipeline evidence fixture".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(pipeline_intent_with_evidence) = attach_pipeline_intent_evidence(
+            State(state.clone()),
+            Path(proposed_pipeline_intent.pipeline_intent.id.clone()),
+            Json(AttachPipelineIntentEvidenceRequest {
+                observation_id: pipeline_observation.id.clone(),
+                actor: Some("lucas".to_string()),
+                reason: Some("pipeline evidence reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_deployment_intent) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(proposed_deployment_intent) = create_deployment_intent_from_pipeline_intent(
+            State(state.clone()),
+            Json(CreateDeploymentIntentFromPipelineIntentRequest {
+                pipeline_intent_id: proposed_pipeline_intent.pipeline_intent.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                intent_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("deployment intent smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(existing_deployment_intent) = create_deployment_intent_from_pipeline_intent(
+            State(state.clone()),
+            Json(CreateDeploymentIntentFromPipelineIntentRequest {
+                pipeline_intent_id: proposed_pipeline_intent.pipeline_intent.id.clone(),
+                title: Some("ignored duplicate".to_string()),
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                target_environment: None,
+                target_namespace: None,
+                argo_application: None,
+                intent_json: None,
+                actor: None,
+                reason: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(listed_deployment_intents) = list_deployment_intents(
+            State(state.clone()),
+            Query(ListDeploymentIntentsQuery {
+                pipeline_intent_id: Some(proposed_pipeline_intent.pipeline_intent.id.clone()),
+                change_set_id: Some(change_set_id.clone()),
+                work_plan_id: Some(created_work_plan.work_plan.id.clone()),
+                remediation_plan_id: Some("rplan_changeset".to_string()),
+                incident_id: Some("inc_changeset_lifecycle".to_string()),
+                run_id: Some(created.id.to_string()),
+                status: Some("proposed".to_string()),
+                intent_kind: Some("argo_sync_deploy".to_string()),
+                risk_level: Some("medium".to_string()),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-api".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(fetched_deployment_intent) = get_deployment_intent(
+            State(state.clone()),
+            Path(proposed_deployment_intent.deployment_intent.id.clone()),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_deployment_approval) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_deployment_intent) = transition_deployment_intent(
+            State(state.clone()),
+            Path(proposed_deployment_intent.deployment_intent.id.clone()),
+            Json(TransitionDeploymentIntentRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("deployment intent approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(deployment_observation) = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some("obs_deployment_intent_evidence".to_string()),
+                session_id: None,
+                run_id: None,
+                source: "argocd".to_string(),
+                kind: "applications.argoproj.io".to_string(),
+                subject: "checkout-api".to_string(),
+                summary: "Argo Application checkout-api is synced and healthy".to_string(),
+                resource_namespace: Some("argocd".to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                resource_ref: Some(json!({
+                    "source": "argocd",
+                    "kind": "Application",
+                    "namespace": "argocd",
+                    "name": "checkout-api",
+                })),
+                artifact_id: None,
+                data_json: Some(json!({
+                    "source": "argocd",
+                    "resource": "applications.argoproj.io",
+                    "namespace": "argocd",
+                    "name": "checkout-api",
+                    "output": {
+                        "apiVersion": "argoproj.io/v1alpha1",
+                        "kind": "Application",
+                        "metadata": {
+                            "namespace": "argocd",
+                            "name": "checkout-api"
+                        },
+                        "status": {
+                            "sync": {
+                                "status": "Synced",
+                                "revision": "abc1234"
+                            },
+                            "health": {
+                                "status": "Healthy"
+                            }
+                        }
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("deployment evidence fixture".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(deployment_intent_with_evidence) = attach_deployment_intent_evidence(
+            State(state.clone()),
+            Path(proposed_deployment_intent.deployment_intent.id.clone()),
+            Json(AttachDeploymentIntentEvidenceRequest {
+                observation_id: deployment_observation.id.clone(),
+                actor: Some("lucas".to_string()),
+                reason: Some("deployment evidence reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_release) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(proposed_release) = create_release_from_deployment_intent(
+            State(state.clone()),
+            Json(CreateReleaseFromDeploymentIntentRequest {
+                deployment_intent_id: proposed_deployment_intent.deployment_intent.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                release_kind: None,
+                version: Some("v0.1.0-smoke".to_string()),
+                commit_sha: Some("abc1234".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                rollback_ref: Some("previous-release".to_string()),
+                release_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("release smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(existing_release) = create_release_from_deployment_intent(
+            State(state.clone()),
+            Json(CreateReleaseFromDeploymentIntentRequest {
+                deployment_intent_id: proposed_deployment_intent.deployment_intent.id.clone(),
+                title: Some("ignored duplicate".to_string()),
+                summary: None,
+                risk_level: None,
+                release_kind: None,
+                version: None,
+                commit_sha: None,
+                image_digest: None,
+                rollback_ref: None,
+                release_json: None,
+                actor: None,
+                reason: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(listed_releases) = list_releases(
+            State(state.clone()),
+            Query(ListReleasesQuery {
+                deployment_intent_id: Some(proposed_deployment_intent.deployment_intent.id.clone()),
+                pipeline_intent_id: Some(proposed_pipeline_intent.pipeline_intent.id.clone()),
+                change_set_id: Some(change_set_id.clone()),
+                work_plan_id: Some(created_work_plan.work_plan.id.clone()),
+                remediation_plan_id: Some("rplan_changeset".to_string()),
+                incident_id: Some("inc_changeset_lifecycle".to_string()),
+                run_id: Some(created.id.to_string()),
+                status: Some("proposed".to_string()),
+                release_kind: Some("gitops_release".to_string()),
+                risk_level: Some("medium".to_string()),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                version: Some("v0.1.0-smoke".to_string()),
+                commit_sha: Some("abc1234".to_string()),
+                image_digest: Some("sha256:deadbeef".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(fetched_release) = get_release(
+            State(state.clone()),
+            Path(proposed_release.release.id.clone()),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_release_approval) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_release) = transition_release(
+            State(state.clone()),
+            Path(proposed_release.release.id.clone()),
+            Json(TransitionReleaseRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("release approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(release_observation) = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some("obs_release_observability".to_string()),
+                session_id: None,
+                run_id: None,
+                source: "prometheus".to_string(),
+                kind: "inventory".to_string(),
+                subject: "prometheus/inventory".to_string(),
+                summary: "Prometheus inventory has no active alerts".to_string(),
+                resource_namespace: None,
+                resource_kind: Some("PrometheusInventory".to_string()),
+                resource_name: Some("default".to_string()),
+                resource_ref: Some(json!({
+                    "source": "prometheus",
+                    "kind": "inventory",
+                })),
+                artifact_id: None,
+                data_json: Some(json!({
+                    "source": "prometheus",
+                    "resource": "inventory",
+                    "inventory": {
+                        "targets": {
+                            "active_count": 3,
+                            "unhealthy_count": 0
+                        },
+                        "rules": {
+                            "rule_count": 2,
+                            "problem_rule_count": 0
+                        },
+                        "alerts": {
+                            "alert_count": 0
+                        }
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("release observability fixture".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(release_with_observability) = attach_release_evidence(
+            State(state.clone()),
+            Path(proposed_release.release.id.clone()),
+            Json(AttachReleaseEvidenceRequest {
+                observation_id: release_observation.id.clone(),
+                actor: Some("lucas".to_string()),
+                reason: Some("release observability reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(release_alert_observation) = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some("obs_release_observability_alert".to_string()),
+                session_id: None,
+                run_id: None,
+                source: "prometheus".to_string(),
+                kind: "inventory".to_string(),
+                subject: "prometheus/inventory".to_string(),
+                summary: "Prometheus inventory has active alerts".to_string(),
+                resource_namespace: None,
+                resource_kind: Some("PrometheusInventory".to_string()),
+                resource_name: Some("default".to_string()),
+                resource_ref: Some(json!({
+                    "source": "prometheus",
+                    "kind": "inventory",
+                })),
+                artifact_id: None,
+                data_json: Some(json!({
+                    "source": "prometheus",
+                    "resource": "inventory",
+                    "inventory": {
+                        "targets": {
+                            "active_count": 3,
+                            "unhealthy_count": 1
+                        },
+                        "rules": {
+                            "rule_count": 2,
+                            "problem_rule_count": 1
+                        },
+                        "alerts": {
+                            "alert_count": 1
+                        }
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("release observability alert fixture".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(release_with_observability_incident) = attach_release_evidence(
+            State(state.clone()),
+            Path(proposed_release.release.id.clone()),
+            Json(AttachReleaseEvidenceRequest {
+                observation_id: release_alert_observation.id.clone(),
+                actor: Some("lucas".to_string()),
+                reason: Some("release alert evidence reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_registry_evidence) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(proposed_registry_evidence) = create_registry_evidence_from_release(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromReleaseRequest {
+                release_id: proposed_release.release.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: Some("registry.example.test/checkout-api:v0.1.0-smoke".to_string()),
+                image_digest: None,
+                tag: Some("v0.1.0-smoke".to_string()),
+                source: Some("manual".to_string()),
+                verification_status: Some("verified".to_string()),
+                evidence_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("registry evidence smoke".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(existing_registry_evidence) = create_registry_evidence_from_release(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromReleaseRequest {
+                release_id: proposed_release.release.id.clone(),
+                title: Some("ignored duplicate".to_string()),
+                summary: None,
+                risk_level: None,
+                registry: None,
+                repository: None,
+                image_ref: None,
+                image_digest: None,
+                tag: None,
+                source: None,
+                verification_status: None,
+                evidence_json: None,
+                actor: None,
+                reason: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(listed_registry_evidence) = list_registry_evidence(
+            State(state.clone()),
+            Query(ListRegistryEvidenceQuery {
+                release_id: Some(proposed_release.release.id.clone()),
+                deployment_intent_id: Some(proposed_deployment_intent.deployment_intent.id.clone()),
+                pipeline_intent_id: Some(proposed_pipeline_intent.pipeline_intent.id.clone()),
+                change_set_id: Some(change_set_id.clone()),
+                work_plan_id: Some(created_work_plan.work_plan.id.clone()),
+                remediation_plan_id: Some("rplan_changeset".to_string()),
+                incident_id: Some("inc_changeset_lifecycle".to_string()),
+                run_id: Some(created.id.to_string()),
+                status: Some("proposed".to_string()),
+                risk_level: Some("medium".to_string()),
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: None,
+                image_digest: Some("sha256:deadbeef".to_string()),
+                tag: Some("v0.1.0-smoke".to_string()),
+                source: Some("manual".to_string()),
+                verification_status: Some("verified".to_string()),
+                created_after_ms: Some(0),
+                created_before_ms: None,
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(fetched_registry_evidence) = get_registry_evidence(
+            State(state.clone()),
+            Path(proposed_registry_evidence.registry_evidence.id.clone()),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_registry_evidence_verification) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(verified_registry_evidence) = transition_registry_evidence(
+            State(state.clone()),
+            Path(proposed_registry_evidence.registry_evidence.id.clone()),
+            Json(TransitionRegistryEvidenceRequest {
+                target_status: "verified".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("registry evidence verified".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(ready_before_revision) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(flow_before_revision) =
+            change_set_flow(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
         let Json(revised) = revise_change_set(
             State(state.clone()),
             Path(change_set_id.clone()),
@@ -4976,6 +11132,199 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 actor: Some("lucas".to_string()),
                 reason: Some("source change payload changed".to_string()),
                 material_change: true,
+            }),
+        )
+        .await
+        .unwrap();
+        let staled_grant = state
+            .store
+            .get_permission_grant(&change_set_envelope.grant.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let Json(future_run) = create_run(
+            State(state.clone()),
+            Json(CreateRunRequest {
+                task: "future scoped changeset write".to_string(),
+                cwd: Some(".".to_string()),
+                max_turns: Some(12),
+                policy_mode: None,
+                scope: Some(RunScope {
+                    namespace: Some("apps-dev".to_string()),
+                    repo: Some("git@example.test/team/app.git".to_string()),
+                    branch: Some("feature/pharness".to_string()),
+                    work_plan_id: Some(created_work_plan.work_plan.id.clone()),
+                    change_set_id: Some(change_set_id.clone()),
+                    production_impacting: false,
+                }),
+            }),
+        )
+        .await
+        .unwrap();
+        let future_run = state.store.get_run(&future_run.id).await.unwrap().unwrap();
+        let Json(blocked_after_revision) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(_reproposed_change_set) = transition_change_set(
+            State(state.clone()),
+            Path(change_set_id.clone()),
+            Json(TransitionChangeSetRequest {
+                target_status: "proposed".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("source change ready again".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(_approved_revised_change_set) = transition_change_set(
+            State(state.clone()),
+            Path(change_set_id.clone()),
+            Json(TransitionChangeSetRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("revised source change approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(reproposed_pipeline_intent) = create_pipeline_intent_from_change_set(
+            State(state.clone()),
+            Json(CreatePipelineIntentFromChangeSetRequest {
+                change_set_id: change_set_id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("pipeline intent after source revision".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_pipeline_intent) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_reproposed_pipeline_intent) = transition_pipeline_intent(
+            State(state.clone()),
+            Path(proposed_pipeline_intent.pipeline_intent.id.clone()),
+            Json(TransitionPipelineIntentRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("reproposed pipeline intent approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_deployment_intent) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(reproposed_deployment_intent) = create_deployment_intent_from_pipeline_intent(
+            State(state.clone()),
+            Json(CreateDeploymentIntentFromPipelineIntentRequest {
+                pipeline_intent_id: proposed_pipeline_intent.pipeline_intent.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("checkout-api".to_string()),
+                intent_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("deployment intent after pipeline reproposal".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_deployment_approval) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_reproposed_deployment_intent) = transition_deployment_intent(
+            State(state.clone()),
+            Path(proposed_deployment_intent.deployment_intent.id.clone()),
+            Json(TransitionDeploymentIntentRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("reproposed deployment intent approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_release) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(reproposed_release) = create_release_from_deployment_intent(
+            State(state.clone()),
+            Json(CreateReleaseFromDeploymentIntentRequest {
+                deployment_intent_id: proposed_deployment_intent.deployment_intent.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                release_kind: None,
+                version: Some("v0.1.1-smoke".to_string()),
+                commit_sha: Some("def5678".to_string()),
+                image_digest: Some("sha256:feedface".to_string()),
+                rollback_ref: Some(proposed_release.release.id.clone()),
+                release_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("release after deployment reproposal".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_release_approval) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(approved_reproposed_release) = transition_release(
+            State(state.clone()),
+            Path(proposed_release.release.id.clone()),
+            Json(TransitionReleaseRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("reproposed release approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(waiting_on_reproposed_registry_evidence) =
+            change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
+                .await
+                .unwrap();
+        let Json(reproposed_registry_evidence) = create_registry_evidence_from_release(
+            State(state.clone()),
+            Json(CreateRegistryEvidenceFromReleaseRequest {
+                release_id: proposed_release.release.id.clone(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                registry: Some("registry.example.test".to_string()),
+                repository: Some("checkout-api".to_string()),
+                image_ref: Some("registry.example.test/checkout-api:v0.1.1-smoke".to_string()),
+                image_digest: None,
+                tag: Some("v0.1.1-smoke".to_string()),
+                source: Some("manual".to_string()),
+                verification_status: Some("verified".to_string()),
+                evidence_json: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("registry evidence after release reproposal".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(verified_reproposed_registry_evidence) = transition_registry_evidence(
+            State(state.clone()),
+            Path(proposed_registry_evidence.registry_evidence.id.clone()),
+            Json(TransitionRegistryEvidenceRequest {
+                target_status: "verified".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("reproposed registry evidence verified".to_string()),
             }),
         )
         .await
@@ -5009,8 +11358,63 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        let Json(grant_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("permission_grant".to_string()),
+                resource_id: Some(change_set_envelope.grant.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(pipeline_intent_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("pipeline_intent".to_string()),
+                resource_id: Some(proposed_pipeline_intent.pipeline_intent.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(deployment_intent_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("deployment_intent".to_string()),
+                resource_id: Some(proposed_deployment_intent.deployment_intent.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(release_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("release".to_string()),
+                resource_id: Some(proposed_release.release.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(registry_evidence_audit_events) = list_audit_events(
+            State(state.clone()),
+            Query(ListAuditEventsQuery {
+                resource_kind: Some("registry_evidence".to_string()),
+                resource_id: Some(proposed_registry_evidence.registry_evidence.id.clone()),
+                run_id: None,
+                limit: Some(50),
+            }),
+        )
+        .await
+        .unwrap();
         let Json(gate_audit_events) = list_audit_events(
-            State(state),
+            State(state.clone()),
             Query(ListAuditEventsQuery {
                 resource_kind: Some("approval_gate".to_string()),
                 resource_id: Some("agate_changeset".to_string()),
@@ -5025,6 +11429,9 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(!existing_change_set.created);
         assert_eq!(listed_change_sets.count, 1);
         assert_eq!(listed_change_sets.change_sets[0].revision, 1);
+        assert_eq!(proposed_work_plan.work_plan.status, "proposed");
+        assert_eq!(approved_work_plan.work_plan.status, "approved");
+        assert_eq!(draft_envelope_error.status, StatusCode::CONFLICT);
         assert_eq!(proposed.change_set.status, "proposed");
         assert_eq!(approved.change_set.status, "approved");
         assert_eq!(
@@ -5036,10 +11443,566 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             serde_json::json!(change_set_id.clone())
         );
         assert_eq!(satisfied_gate.approval_gate.status, "satisfied");
+        assert!(proposed_pipeline_intent.created);
+        assert!(!existing_pipeline_intent.created);
+        assert_eq!(
+            existing_pipeline_intent.pipeline_intent.id,
+            proposed_pipeline_intent.pipeline_intent.id
+        );
+        assert_eq!(listed_pipeline_intents.count, 1);
+        assert_eq!(
+            fetched_pipeline_intent.id,
+            proposed_pipeline_intent.pipeline_intent.id
+        );
+        assert_eq!(proposed_pipeline_intent.pipeline_intent.status, "proposed");
+        assert_eq!(
+            proposed_pipeline_intent.pipeline_intent.intent_kind,
+            "tekton_build_test_package"
+        );
+        assert!(
+            !proposed_pipeline_intent.pipeline_intent.intent_json["execution"]["enabled"]
+                .as_bool()
+                .unwrap()
+        );
+        assert!(waiting_on_pipeline_intent.ready);
+        assert!(waiting_on_pipeline_intent
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "pipeline_intent_not_approved"));
+        assert_eq!(approved_pipeline_intent.pipeline_intent.status, "approved");
+        assert_eq!(
+            pipeline_intent_with_evidence
+                .pipeline_intent
+                .intent_json
+                .pointer("/evidence/status"),
+            Some(&json!("satisfied"))
+        );
+        assert_eq!(
+            pipeline_intent_with_evidence
+                .pipeline_intent
+                .intent_json
+                .pointer("/evidence/observation_id"),
+            Some(&json!("obs_pipeline_intent_evidence"))
+        );
+        assert_eq!(
+            pipeline_intent_with_evidence.observation.id,
+            pipeline_observation.id
+        );
+        assert!(waiting_on_deployment_intent.ready);
+        assert!(waiting_on_deployment_intent
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_deployment_intent"));
+        assert!(proposed_deployment_intent.created);
+        assert!(!existing_deployment_intent.created);
+        assert_eq!(
+            existing_deployment_intent.deployment_intent.id,
+            proposed_deployment_intent.deployment_intent.id
+        );
+        assert_eq!(listed_deployment_intents.count, 1);
+        assert_eq!(
+            fetched_deployment_intent.id,
+            proposed_deployment_intent.deployment_intent.id
+        );
+        assert_eq!(
+            proposed_deployment_intent.deployment_intent.status,
+            "proposed"
+        );
+        assert_eq!(
+            proposed_deployment_intent.deployment_intent.intent_kind,
+            "argo_sync_deploy"
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .target_environment
+                .as_deref(),
+            Some("dev")
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .target_namespace
+                .as_deref(),
+            Some("apps-dev")
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .argo_application
+                .as_deref(),
+            Some("checkout-api")
+        );
+        assert!(
+            !proposed_deployment_intent.deployment_intent.intent_json["execution"]["enabled"]
+                .as_bool()
+                .unwrap()
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .intent_json
+                .pointer("/pipeline_evidence/status"),
+            Some(&json!("satisfied"))
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .intent_json
+                .pointer("/pipeline_evidence/deploy_ready"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            proposed_deployment_intent
+                .deployment_intent
+                .intent_json
+                .pointer("/pipeline_evidence/observation_id"),
+            Some(&json!("obs_pipeline_intent_evidence"))
+        );
+        assert!(waiting_on_deployment_approval
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "deployment_intent_not_approved"));
+        assert_eq!(
+            approved_deployment_intent.deployment_intent.status,
+            "approved"
+        );
+        assert_eq!(
+            deployment_intent_with_evidence
+                .deployment_intent
+                .intent_json
+                .pointer("/deployment_evidence/status"),
+            Some(&json!("satisfied"))
+        );
+        assert_eq!(
+            deployment_intent_with_evidence
+                .deployment_intent
+                .intent_json
+                .pointer("/deployment_evidence/deploy_ready"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            deployment_intent_with_evidence
+                .deployment_intent
+                .intent_json
+                .pointer("/deployment_evidence/observation_id"),
+            Some(&json!("obs_deployment_intent_evidence"))
+        );
+        assert_eq!(
+            deployment_intent_with_evidence.observation.id,
+            deployment_observation.id
+        );
+        assert!(waiting_on_release.ready);
+        assert!(waiting_on_release
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_release"));
+        assert!(proposed_release.created);
+        assert!(!existing_release.created);
+        assert_eq!(existing_release.release.id, proposed_release.release.id);
+        assert_eq!(listed_releases.count, 1);
+        assert_eq!(fetched_release.id, proposed_release.release.id);
+        assert_eq!(proposed_release.release.status, "proposed");
+        assert_eq!(proposed_release.release.release_kind, "gitops_release");
+        assert_eq!(
+            proposed_release.release.target_environment.as_deref(),
+            Some("dev")
+        );
+        assert_eq!(
+            proposed_release.release.target_namespace.as_deref(),
+            Some("apps-dev")
+        );
+        assert_eq!(
+            proposed_release.release.argo_application.as_deref(),
+            Some("checkout-api")
+        );
+        assert_eq!(
+            proposed_release.release.version.as_deref(),
+            Some("v0.1.0-smoke")
+        );
+        assert!(
+            !proposed_release.release.release_json["execution"]["enabled"]
+                .as_bool()
+                .unwrap()
+        );
+        assert_eq!(
+            proposed_release
+                .release
+                .release_json
+                .pointer("/deployment_evidence/status"),
+            Some(&json!("satisfied"))
+        );
+        assert_eq!(
+            proposed_release
+                .release
+                .release_json
+                .pointer("/deployment_evidence/release_ready"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            proposed_release
+                .release
+                .release_json
+                .pointer("/deployment_evidence/observation_id"),
+            Some(&json!("obs_deployment_intent_evidence"))
+        );
+        assert!(waiting_on_release_approval
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "release_not_approved"));
+        assert_eq!(approved_release.release.status, "approved");
+        assert_eq!(release_with_observability.release.status, "approved");
+        assert_eq!(
+            release_with_observability
+                .release
+                .release_json
+                .pointer("/observability_evidence/0/observation_id"),
+            Some(&json!("obs_release_observability"))
+        );
+        assert_eq!(
+            release_with_observability
+                .release
+                .release_json
+                .pointer("/observability_evidence/0/status"),
+            Some(&json!("observed"))
+        );
+        assert_eq!(
+            release_with_observability.observation.id,
+            release_observation.id
+        );
+        assert!(release_with_observability.incident.is_none());
+        assert!(release_with_observability.remediation_plan.is_none());
+        let release_incident = release_with_observability_incident
+            .incident
+            .as_ref()
+            .expect("attention-required release observability should create an incident");
+        let release_remediation_plan = release_with_observability_incident
+            .remediation_plan
+            .as_ref()
+            .expect("attention-required release observability should create a remediation plan");
+        let release_remediation_gates = state
+            .store
+            .list_approval_gates(ApprovalGateListFilter {
+                remediation_plan_id: Some(release_remediation_plan.id.clone()),
+                incident_id: Some(release_incident.id.clone()),
+                limit: 20,
+                ..ApprovalGateListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(release_incident.status, "candidate");
+        assert_eq!(release_incident.severity, "high");
+        assert_eq!(
+            release_incident.observation_id,
+            "obs_release_observability_alert"
+        );
+        assert_eq!(release_remediation_plan.status, "draft");
+        assert_eq!(release_remediation_plan.incident_id, release_incident.id);
+        assert!(release_remediation_plan.requires_approval);
+        assert_eq!(
+            release_remediation_plan.plan_json.pointer("/source"),
+            Some(&json!("release_observability_evidence"))
+        );
+        assert_eq!(release_remediation_gates.len(), 4);
+        assert!(release_remediation_gates
+            .iter()
+            .any(|gate| gate.gate_kind == "cluster_mutation"));
+        assert!(release_remediation_gates
+            .iter()
+            .all(|gate| gate.status == "pending"));
+        assert_eq!(
+            release_with_observability_incident
+                .release
+                .release_json
+                .pointer("/observability_evidence/1/status"),
+            Some(&json!("attention_required"))
+        );
+        assert!(waiting_on_registry_evidence
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_registry_evidence"));
+        assert!(!waiting_on_registry_evidence
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_release_observability_evidence"));
+        assert!(waiting_on_registry_evidence
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "release_observability_attention_required"));
+        assert!(proposed_registry_evidence.created);
+        assert!(!existing_registry_evidence.created);
+        assert_eq!(
+            existing_registry_evidence.registry_evidence.id,
+            proposed_registry_evidence.registry_evidence.id
+        );
+        assert_eq!(listed_registry_evidence.count, 1);
+        assert_eq!(
+            fetched_registry_evidence.id,
+            proposed_registry_evidence.registry_evidence.id
+        );
+        assert_eq!(
+            proposed_registry_evidence.registry_evidence.status,
+            "proposed"
+        );
+        assert_eq!(
+            proposed_registry_evidence
+                .registry_evidence
+                .verification_status,
+            "verified"
+        );
+        assert_eq!(
+            proposed_registry_evidence
+                .registry_evidence
+                .image_digest
+                .as_deref(),
+            Some("sha256:deadbeef")
+        );
+        assert!(waiting_on_registry_evidence_verification
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "registry_evidence_not_verified"));
+        assert_eq!(
+            verified_registry_evidence.registry_evidence.status,
+            "verified"
+        );
+        assert!(ready_before_revision.ready);
+        assert!(ready_before_revision.blockers.is_empty());
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "pipeline_intent_not_approved"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_deployment_intent"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "deployment_intent_not_approved"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_release"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "release_not_approved"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "missing_registry_evidence"));
+        assert!(!ready_before_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "registry_evidence_not_verified"));
+        assert_eq!(
+            ready_before_revision
+                .deployment_intent
+                .as_ref()
+                .map(|intent| intent.id.as_str()),
+            Some(approved_deployment_intent.deployment_intent.id.as_str())
+        );
+        assert_eq!(
+            ready_before_revision
+                .release
+                .as_ref()
+                .map(|release| release.id.as_str()),
+            Some(approved_release.release.id.as_str())
+        );
+        assert_eq!(
+            ready_before_revision
+                .registry_evidence
+                .as_ref()
+                .map(|evidence| evidence.id.as_str()),
+            Some(verified_registry_evidence.registry_evidence.id.as_str())
+        );
+        assert_eq!(ready_before_revision.trusted_envelopes.active.len(), 1);
+        assert_eq!(flow_before_revision.resource_kind, "change_set");
+        assert_eq!(flow_before_revision.resource_id, change_set_id);
+        assert!(flow_before_revision.readiness.ready);
+        assert_eq!(
+            flow_before_revision
+                .change_set
+                .as_ref()
+                .map(|change_set| change_set.id.as_str()),
+            Some(approved.change_set.id.as_str())
+        );
+        assert_eq!(
+            flow_before_revision
+                .pipeline_intent
+                .as_ref()
+                .map(|intent| intent.id.as_str()),
+            Some(approved_pipeline_intent.pipeline_intent.id.as_str())
+        );
+        assert_eq!(
+            flow_before_revision
+                .release
+                .as_ref()
+                .map(|release| release.id.as_str()),
+            Some(approved_release.release.id.as_str())
+        );
+        assert!(flow_before_revision
+            .incidents
+            .iter()
+            .any(|incident| incident.id == release_incident.id));
+        assert!(flow_before_revision
+            .remediation_plans
+            .iter()
+            .any(|plan| plan.id == release_remediation_plan.id));
+        assert!(flow_before_revision
+            .approval_gates
+            .iter()
+            .any(
+                |gate| gate.remediation_plan_id == release_remediation_plan.id
+                    && gate.gate_kind == "cluster_mutation"
+            ));
+        assert!(flow_before_revision
+            .audit_events
+            .iter()
+            .any(|event| event.kind == "remediation_plan.created"
+                && event.resource_id == release_remediation_plan.id));
         assert_eq!(revised.change_set.status, "draft");
         assert_eq!(revised.change_set.revision, 2);
         assert!(revised.material_hash_changed);
         assert_ne!(revised.change_set.material_hash, original_hash);
+        assert_eq!(
+            revised
+                .invalidated_pipeline_intent
+                .as_ref()
+                .map(|intent| intent.status.as_str()),
+            Some("stale")
+        );
+        assert_eq!(
+            revised
+                .invalidated_deployment_intent
+                .as_ref()
+                .map(|intent| intent.status.as_str()),
+            Some("stale")
+        );
+        assert_eq!(
+            revised
+                .invalidated_release
+                .as_ref()
+                .map(|release| release.status.as_str()),
+            Some("stale")
+        );
+        assert_eq!(
+            revised
+                .invalidated_registry_evidence
+                .as_ref()
+                .map(|evidence| evidence.status.as_str()),
+            Some("stale")
+        );
+        assert_eq!(staled_grant.status, "stale");
+        assert_eq!(staled_grant.revoked_by.as_deref(), Some("lucas"));
+        assert_eq!(
+            staled_grant.revoke_reason.as_deref(),
+            Some("source change payload changed")
+        );
+        assert!(
+            future_run.execution_target_json["policy"]["permission_grants"]
+                .as_array()
+                .is_none_or(Vec::is_empty)
+        );
+        assert!(!blocked_after_revision.ready);
+        assert!(blocked_after_revision
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "change_set_not_approved"));
+        assert!(blocked_after_revision
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "missing_active_trusted_envelope"));
+        assert!(blocked_after_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_trusted_envelope"));
+        assert!(blocked_after_revision
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_pipeline_intent"));
+        assert!(!reproposed_pipeline_intent.created);
+        assert_eq!(
+            reproposed_pipeline_intent.pipeline_intent.id,
+            proposed_pipeline_intent.pipeline_intent.id
+        );
+        assert_eq!(
+            reproposed_pipeline_intent.pipeline_intent.status,
+            "proposed"
+        );
+        assert_eq!(
+            reproposed_pipeline_intent.pipeline_intent.intent_json["source"]["material_hash"],
+            serde_json::json!(revised.change_set.material_hash)
+        );
+        assert!(waiting_on_reproposed_pipeline_intent
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "pipeline_intent_not_approved"));
+        assert_eq!(
+            approved_reproposed_pipeline_intent.pipeline_intent.status,
+            "approved"
+        );
+        assert!(waiting_on_reproposed_deployment_intent
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_deployment_intent"));
+        assert!(!reproposed_deployment_intent.created);
+        assert_eq!(
+            reproposed_deployment_intent.deployment_intent.id,
+            proposed_deployment_intent.deployment_intent.id
+        );
+        assert_eq!(
+            reproposed_deployment_intent.deployment_intent.status,
+            "proposed"
+        );
+        assert!(waiting_on_reproposed_deployment_approval
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "deployment_intent_not_approved"));
+        assert_eq!(
+            approved_reproposed_deployment_intent
+                .deployment_intent
+                .status,
+            "approved"
+        );
+        assert!(waiting_on_reproposed_release
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_release"));
+        assert!(!reproposed_release.created);
+        assert_eq!(reproposed_release.release.id, proposed_release.release.id);
+        assert_eq!(reproposed_release.release.status, "proposed");
+        assert_eq!(
+            reproposed_release.release.version.as_deref(),
+            Some("v0.1.1-smoke")
+        );
+        assert!(waiting_on_reproposed_release_approval
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "release_not_approved"));
+        assert_eq!(approved_reproposed_release.release.status, "approved");
+        assert!(waiting_on_reproposed_registry_evidence
+            .warnings
+            .iter()
+            .any(|finding| finding.code == "stale_registry_evidence"));
+        assert!(!reproposed_registry_evidence.created);
+        assert_eq!(
+            reproposed_registry_evidence.registry_evidence.id,
+            proposed_registry_evidence.registry_evidence.id
+        );
+        assert_eq!(
+            reproposed_registry_evidence
+                .registry_evidence
+                .image_digest
+                .as_deref(),
+            Some("sha256:feedface")
+        );
+        assert_eq!(
+            verified_reproposed_registry_evidence
+                .registry_evidence
+                .status,
+            "verified"
+        );
         assert_eq!(revised.invalidated_gates.len(), 1);
         assert_eq!(revised.invalidated_gates[0].status, "stale");
         assert_eq!(
@@ -5057,6 +12020,83 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .events
             .iter()
             .any(|event| event.kind == "change_set.trusted_envelope_created"));
+        assert!(grant_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "permission_grant.stale"));
+        assert!(pipeline_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.proposed"));
+        assert!(pipeline_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.approved"));
+        assert!(pipeline_intent_audit_events.events.iter().any(|event| {
+            event.kind == "pipeline_intent.evidence_attached"
+                && event.payload["extra"]["observation_id"] == "obs_pipeline_intent_evidence"
+                && event.payload["extra"]["evidence_status"] == "satisfied"
+        }));
+        assert!(pipeline_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.stale"));
+        assert!(pipeline_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.reproposed"));
+        assert!(deployment_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "deployment_intent.proposed"));
+        assert!(deployment_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "deployment_intent.approved"));
+        assert!(deployment_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "deployment_intent.stale"));
+        assert!(deployment_intent_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "deployment_intent.reproposed"));
+        assert!(release_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "release.proposed"));
+        assert!(release_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "release.approved"));
+        assert!(release_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "release.evidence_attached"));
+        assert!(release_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "release.stale"));
+        assert!(release_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "release.reproposed"));
+        assert!(registry_evidence_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "registry_evidence.proposed"));
+        assert!(registry_evidence_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "registry_evidence.verified"));
+        assert!(registry_evidence_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "registry_evidence.stale"));
+        assert!(registry_evidence_audit_events
+            .events
+            .iter()
+            .any(|event| event.kind == "registry_evidence.reproposed"));
         assert!(gate_audit_events
             .events
             .iter()

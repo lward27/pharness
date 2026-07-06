@@ -1,6 +1,8 @@
 use super::{ToolError, ToolExecutor, ToolResult};
 use crate::AgentAction;
 use async_trait::async_trait;
+use reqwest::header::{HeaderMap, ACCEPT, CONTENT_LENGTH, CONTENT_TYPE};
+use reqwest::{Method, StatusCode, Url};
 use serde_json::Map;
 use serde_json::Value;
 use std::path::Path;
@@ -20,6 +22,12 @@ const MAX_LOKI_LIMIT: u32 = 100;
 const MAX_LOKI_STREAMS: usize = 20;
 const MAX_LOKI_ENTRIES: usize = 50;
 const MAX_LOKI_LINE_BYTES: usize = 512;
+const REGISTRY_MANIFEST_ACCEPT: &str = concat!(
+    "application/vnd.oci.image.index.v1+json,",
+    "application/vnd.oci.image.manifest.v1+json,",
+    "application/vnd.docker.distribution.manifest.list.v2+json,",
+    "application/vnd.docker.distribution.manifest.v2+json"
+);
 
 #[derive(Debug, Clone)]
 pub struct ReadOnlyClusterTools {
@@ -621,6 +629,102 @@ impl ReadOnlyClusterTools {
         ))
     }
 
+    async fn registry_inspect_image(
+        &self,
+        image_ref: &str,
+        registry_base_url: Option<&str>,
+    ) -> Result<ToolResult, ToolError> {
+        reject_secretish("image_ref", image_ref)?;
+        if let Some(registry_base_url) = registry_base_url {
+            reject_secretish("registry_base_url", registry_base_url)?;
+        }
+        let parsed = ImageRef::parse(image_ref).ok_or_else(|| ToolError::InvalidArguments {
+            message: "image_ref must be a valid image reference".to_string(),
+        })?;
+        let registry_base = registry_base_url
+            .map(parse_registry_base_url)
+            .transpose()?
+            .or_else(|| registry_base_url_from_image(&parsed));
+        let reference = parsed
+            .digest
+            .as_deref()
+            .or(parsed.tag.as_deref())
+            .unwrap_or("latest");
+        let probe = if let Some(base) = registry_base {
+            Some(
+                self.registry_probe_manifest(&base, &parsed.repository, reference)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let verification_status = registry_verification_status(&parsed, probe.as_ref());
+        let summary = registry_inspect_summary(&parsed, probe.as_ref(), verification_status);
+
+        Ok(ToolResult::ok(
+            summary,
+            serde_json::json!({
+                "source": "registry",
+                "image": parsed.to_json(),
+                "requested_image_ref": image_ref,
+                "reference": reference,
+                "registry_base_url": probe.as_ref().map(|probe| probe.registry_base_url.as_str()),
+                "verification_status": verification_status,
+                "probe": probe.as_ref().map(RegistryProbe::to_json),
+            }),
+        ))
+    }
+
+    async fn registry_probe_manifest(
+        &self,
+        registry_base_url: &Url,
+        repository: &str,
+        reference: &str,
+    ) -> Result<RegistryProbe, ToolError> {
+        let manifest_url = registry_manifest_url(registry_base_url, repository, reference)?;
+        let head_response = self
+            .registry_manifest_request(Method::HEAD, manifest_url.clone())
+            .await?;
+        let response = if head_response.status == StatusCode::METHOD_NOT_ALLOWED.as_u16() {
+            self.registry_manifest_request(Method::GET, manifest_url)
+                .await?
+        } else {
+            head_response
+        };
+
+        Ok(response)
+    }
+
+    async fn registry_manifest_request(
+        &self,
+        method: Method,
+        url: Url,
+    ) -> Result<RegistryProbe, ToolError> {
+        let registry_base_url = registry_origin(&url);
+        let response = self
+            .http
+            .request(method.clone(), url.clone())
+            .header(ACCEPT, REGISTRY_MANIFEST_ACCEPT)
+            .send()
+            .await
+            .map_err(|error| ToolError::Network {
+                message: format!("registry manifest request failed: {error}"),
+            })?;
+        let status = response.status();
+        let headers = response.headers().clone();
+
+        Ok(RegistryProbe {
+            registry_base_url,
+            manifest_url: sanitized_manifest_url(&url),
+            method: method.as_str().to_string(),
+            status: status.as_u16(),
+            accessible: status.is_success(),
+            digest: header_str(&headers, "docker-content-digest"),
+            content_type: header_str(&headers, CONTENT_TYPE.as_str()),
+            content_length: header_str(&headers, CONTENT_LENGTH.as_str()),
+        })
+    }
+
     async fn loki_get(&self, api_path: &str, query: &[(&str, String)]) -> Result<Value, ToolError> {
         let Some(base_url) = &self.loki_url else {
             return Err(ToolError::InvalidArguments {
@@ -761,6 +865,14 @@ impl ToolExecutor for ReadOnlyClusterTools {
             AgentAction::TektonAnalyzePipelineRun {
                 namespace, name, ..
             } => self.tekton_analyze_pipeline_run(namespace, name).await,
+            AgentAction::RegistryInspectImage {
+                image_ref,
+                registry_base_url,
+                ..
+            } => {
+                self.registry_inspect_image(image_ref, registry_base_url.as_deref())
+                    .await
+            }
             other => Err(ToolError::UnsupportedAction {
                 action: other.kind_name().to_string(),
             }),
@@ -931,6 +1043,148 @@ impl ImageRef {
 enum ImageVersion<'a> {
     Tag(&'a str),
     Digest(&'a str),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RegistryProbe {
+    registry_base_url: String,
+    manifest_url: String,
+    method: String,
+    status: u16,
+    accessible: bool,
+    digest: Option<String>,
+    content_type: Option<String>,
+    content_length: Option<String>,
+}
+
+impl RegistryProbe {
+    fn to_json(&self) -> Value {
+        serde_json::json!({
+            "registry_base_url": self.registry_base_url.as_str(),
+            "manifest_url": self.manifest_url.as_str(),
+            "method": self.method.as_str(),
+            "status": self.status,
+            "accessible": self.accessible,
+            "digest": self.digest.as_deref(),
+            "content_type": self.content_type.as_deref(),
+            "content_length": self.content_length.as_deref(),
+        })
+    }
+}
+
+fn registry_verification_status(image: &ImageRef, probe: Option<&RegistryProbe>) -> &'static str {
+    let Some(probe) = probe else {
+        return "unknown";
+    };
+    if !probe.accessible {
+        return "unknown";
+    }
+    let Some(expected_digest) = image.digest.as_deref() else {
+        return "verified";
+    };
+    match probe.digest.as_deref() {
+        Some(actual) if actual == expected_digest => "verified",
+        Some(_) => "mismatch",
+        None => "unknown",
+    }
+}
+
+fn registry_inspect_summary(
+    image: &ImageRef,
+    probe: Option<&RegistryProbe>,
+    verification_status: &str,
+) -> String {
+    match probe {
+        Some(probe) if probe.accessible => {
+            format!(
+                "registry manifest reachable for {} with verification status {}",
+                image.repository, verification_status
+            )
+        }
+        Some(probe) => format!(
+            "registry manifest probe returned HTTP {} for {}",
+            probe.status, image.repository
+        ),
+        None => format!(
+            "parsed image {} but no registry base URL was available",
+            image.repository
+        ),
+    }
+}
+
+fn parse_registry_base_url(value: &str) -> Result<Url, ToolError> {
+    let url = Url::parse(value).map_err(|error| ToolError::InvalidArguments {
+        message: format!("registry_base_url must be a valid URL: {error}"),
+    })?;
+    validate_registry_base_url(&url)?;
+    Ok(url)
+}
+
+fn registry_base_url_from_image(image: &ImageRef) -> Option<Url> {
+    let registry = image.registry.as_deref()?;
+    let scheme = if registry == "localhost" || registry.starts_with("localhost:") {
+        "http"
+    } else {
+        "https"
+    };
+    let url = Url::parse(&format!("{scheme}://{registry}")).ok()?;
+    validate_registry_base_url(&url).ok()?;
+    Some(url)
+}
+
+fn validate_registry_base_url(url: &Url) -> Result<(), ToolError> {
+    if url.scheme() != "https" && url.scheme() != "http" {
+        return Err(ToolError::InvalidArguments {
+            message: "registry_base_url must use http or https".to_string(),
+        });
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(ToolError::InvalidArguments {
+            message: "registry_base_url must not include credentials".to_string(),
+        });
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(ToolError::InvalidArguments {
+            message: "registry_base_url must not include query or fragment".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn registry_manifest_url(
+    registry_base_url: &Url,
+    repository: &str,
+    reference: &str,
+) -> Result<Url, ToolError> {
+    let mut url = registry_base_url.clone();
+    let base_path = url.path().trim_end_matches('/');
+    let manifest_path = format!("{base_path}/v2/{repository}/manifests/{reference}");
+    url.set_path(&manifest_path);
+    Ok(url)
+}
+
+fn registry_origin(url: &Url) -> String {
+    let Some(host) = url.host_str() else {
+        return url.as_str().trim_end_matches('/').to_string();
+    };
+    match url.port() {
+        Some(port) => format!("{}://{}:{}", url.scheme(), host, port),
+        None => format!("{}://{}", url.scheme(), host),
+    }
+}
+
+fn sanitized_manifest_url(url: &Url) -> String {
+    let mut url = url.clone();
+    url.set_query(None);
+    url.set_fragment(None);
+    url.to_string()
+}
+
+fn header_str(headers: &HeaderMap, key: &str) -> Option<String> {
+    headers
+        .get(key)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
 }
 
 fn normalize_registry(value: &str) -> Option<String> {
@@ -2876,6 +3130,42 @@ mod tests {
                 query: r#"{namespace="apps-dev"}"#.to_string(),
                 since_seconds: Some(900),
                 limit: Some(25),
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, ToolError::InvalidArguments { .. }));
+    }
+
+    #[tokio::test]
+    async fn inspects_registry_image_identity_without_registry_probe() {
+        let tools = ReadOnlyClusterTools::default();
+        let result = tools
+            .execute(&AgentAction::RegistryInspectImage {
+                id: "act_registry".into(),
+                reason: "inspect image identity".to_string(),
+                image_ref: "team/checkout-api:v1".to_string(),
+                registry_base_url: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.content["source"], "registry");
+        assert_eq!(result.content["image"]["repository"], "team/checkout-api");
+        assert_eq!(result.content["image"]["tag"], "v1");
+        assert_eq!(result.content["verification_status"], "unknown");
+        assert!(result.content["probe"].is_null());
+    }
+
+    #[tokio::test]
+    async fn rejects_registry_base_urls_with_credentials() {
+        let tools = ReadOnlyClusterTools::default();
+        let error = tools
+            .execute(&AgentAction::RegistryInspectImage {
+                id: "act_registry".into(),
+                reason: "inspect image identity".to_string(),
+                image_ref: "registry.example.test/team/checkout-api:v1".to_string(),
+                registry_base_url: Some("https://user:pass@registry.example.test".to_string()),
             })
             .await
             .unwrap_err();

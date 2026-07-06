@@ -7,9 +7,13 @@
 - Treat `GET /api/observations` as the V1 machine-facing observation index. It supports optional `run_id`, `source`, `kind`, `subject`, normalized resource identity, observed-time, limit, and offset filters so operators and Codex can find recent cluster/Tekton/LGTM facts without first knowing a run id.
 - Store normalized resource identity as separate `resource_namespace`, `resource_kind`, and `resource_name` columns. This is intentionally duplicated from compact JSON because SDLC automation needs stable query keys before the future `Observation` CRD exists.
 - Do not create observations for local filesystem writes or shell output yet. The immediate value is indexing cluster and LGTM facts that map cleanly to the future `Observation` CRD.
+- Persist successful direct read-only cluster capability results as runless control-plane observations.
+  - Direct calls do not create fake runs.
+  - The response returns `artifact_id` and `observation_id` when the capability result can be persisted.
+  - This gives Codex and future controllers stable handles for live Tekton, Kubernetes, Argo, Prometheus, and Loki evidence.
 
 # Backlog
 
-- Add direct capability observations only after direct capability calls have a session or request identity that can own the record.
 - Add controller-level correlation fields after `Incident` and `RemediationPlan` define what relationship needs to be queried first.
 - Add Observation-to-Incident correlation after the first incident/remediation workflow exists.
+- Add a direct-evidence owner identity once API auth exists, so runless observations can distinguish `codex`, controllers, and human operators.

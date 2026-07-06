@@ -17,12 +17,14 @@
 - Add trusted-envelope factory endpoints for `WorkPlan` and `ChangeSet` resources. They create audited `PermissionGrant` records with `trusted_writes`, filesystem-only capability scope, `write_file`/`patch_file` actions, medium maximum risk, explicit environment, optional namespace/repo/branch, and default `production_impacting = false`.
 - Prefer ChangeSet-scoped trusted envelopes for source-change execution. They carry both `work_plan_ids` and `change_set_ids`; WorkPlan envelopes are broader and should be used only when there is no concrete ChangeSet yet.
 - Keep trusted-envelope creation as an explicit operator/API action in V1. Creating an envelope does not mark a WorkPlan or ChangeSet approved, does not execute changes, and does not mutate cluster state.
+- Mark trusted envelopes `stale` when their approved SDLC resource changes materially. A material WorkPlan revision stales active grants scoped to that WorkPlan. A material ChangeSet revision with a changed material hash stales active grants scoped to that ChangeSet.
+- Keep stale-envelope effects future-facing. New runs snapshot only active grants, so stale grants stop authorizing future work. Existing runs retain their original grant snapshot for reproducibility.
+- Record `permission_grant.stale` audit events with the revision actor and reason so the operator can trace why a trusted envelope stopped applying.
+- Require `approved` status before trusted-envelope creation. Draft, proposed, stale, rejected, executing, completed, and blocked resources cannot mint a new trusted envelope in V1.
 
 # Backlog
 
 - Rename or extend `trusted_writes` into environment-aware modes such as `trusted_local`, `trusted_lower_env`, `supervised_autonomy`, and `break_glass`, with exact allow/ask/deny behavior for each capability.
-- Require approved WorkPlan/ChangeSet status before trusted-envelope creation once status ownership and operator workflow settle.
-- Invalidate or warn on trusted envelopes when a WorkPlan or ChangeSet changes materially after grant creation.
 - Extend trusted envelopes beyond local file edits only after typed `PipelineIntent`, `DeploymentIntent`, and environment-aware mutation policies exist.
 - Add drift detection between approved plan and executed actions. If an agent leaves the approved envelope, pharness should pause and require a new approval.
 - Add summary artifacts that roll up many events into an operator-readable narrative while preserving links to exact event IDs, tool calls, SQL rows, diffs, logs, and policy decisions.

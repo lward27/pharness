@@ -9,6 +9,7 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+futures.workspace = true
 pharness-config = { path = "../pharness-config" }
 pharness-core = { path = "../pharness-core" }
 pharness-fireworks = { path = "../pharness-fireworks" }

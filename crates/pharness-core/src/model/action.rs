@@ -111,6 +111,12 @@ pub enum AgentAction {
         namespace: String,
         name: String,
     },
+    RegistryInspectImage {
+        id: ActionId,
+        reason: String,
+        image_ref: String,
+        registry_base_url: Option<String>,
+    },
     RequestApproval {
         id: ActionId,
         reason: String,
@@ -153,6 +159,7 @@ impl AgentAction {
             | Self::TektonGetPipelineRuns { id, .. }
             | Self::TektonGetTaskRuns { id, .. }
             | Self::TektonAnalyzePipelineRun { id, .. }
+            | Self::RegistryInspectImage { id, .. }
             | Self::RequestApproval { id, .. }
             | Self::Finish { id, .. } => id,
         }
@@ -177,6 +184,7 @@ impl AgentAction {
             Self::TektonGetPipelineRuns { .. } => "tekton_get_pipeline_runs",
             Self::TektonGetTaskRuns { .. } => "tekton_get_task_runs",
             Self::TektonAnalyzePipelineRun { .. } => "tekton_analyze_pipeline_run",
+            Self::RegistryInspectImage { .. } => "registry_inspect_image",
             Self::RequestApproval { .. } => "request_approval",
             Self::Finish { .. } => "finish",
         }
@@ -433,6 +441,16 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(analysis.kind_name(), "tekton_analyze_pipeline_run");
+
+        let registry: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "registry_inspect_image",
+            "id": "act_registry",
+            "reason": "inspect image evidence",
+            "image_ref": "registry.example.test/team/checkout-api:v1",
+            "registry_base_url": "https://registry.example.test"
+        }))
+        .unwrap();
+        assert_eq!(registry.kind_name(), "registry_inspect_image");
     }
 
     #[test]

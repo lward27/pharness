@@ -3,8 +3,9 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
-    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredFileChange, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredRemediationPlan, StoredRun, StoredWorkPlan,
+    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange,
+    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineIntent,
+    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
 };
 use serde::{Deserialize, Serialize};
 
@@ -126,6 +127,25 @@ pub struct ObservationsResponse {
     pub offset: Option<u32>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateObservationRequest {
+    pub id: Option<String>,
+    pub session_id: Option<String>,
+    pub run_id: Option<RunId>,
+    pub source: String,
+    pub kind: String,
+    pub subject: String,
+    pub summary: String,
+    pub resource_namespace: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_name: Option<String>,
+    pub resource_ref: Option<serde_json::Value>,
+    pub artifact_id: Option<String>,
+    pub data_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ObservationResponse {
     pub id: String,
@@ -171,6 +191,22 @@ pub struct IncidentsResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateIncidentRequest {
+    pub id: Option<String>,
+    pub observation_id: String,
+    pub status: Option<String>,
+    pub severity: String,
+    pub title: String,
+    pub summary: String,
+    pub resource_namespace: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_name: Option<String>,
+    pub data_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct IncidentResponse {
     pub id: String,
@@ -212,6 +248,23 @@ pub struct RemediationPlansResponse {
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateRemediationPlanRequest {
+    pub id: Option<String>,
+    pub incident_id: String,
+    pub status: Option<String>,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub requires_approval: Option<bool>,
+    pub resource_namespace: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_name: Option<String>,
+    pub plan_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -356,6 +409,62 @@ pub struct TransitionWorkPlanResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct SdlcReadinessResponse {
+    pub resource_kind: String,
+    pub resource_id: String,
+    pub ready: bool,
+    pub summary: String,
+    pub work_plan: WorkPlanResponse,
+    pub change_set: Option<ChangeSetResponse>,
+    pub pipeline_intent: Option<PipelineIntentResponse>,
+    pub deployment_intent: Option<DeploymentIntentResponse>,
+    pub release: Option<ReleaseResponse>,
+    pub registry_evidence: Option<RegistryEvidenceResponse>,
+    pub blockers: Vec<SdlcReadinessFinding>,
+    pub warnings: Vec<SdlcReadinessFinding>,
+    pub approval_gates: SdlcReadinessGateSummary,
+    pub trusted_envelopes: SdlcReadinessGrantSummary,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SdlcReadinessFinding {
+    pub code: String,
+    pub message: String,
+    pub resource_kind: String,
+    pub resource_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SdlcReadinessGateSummary {
+    pub pending: Vec<ApprovalGateResponse>,
+    pub stale: Vec<ApprovalGateResponse>,
+    pub rejected: Vec<ApprovalGateResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SdlcReadinessGrantSummary {
+    pub active: Vec<PermissionGrantResponse>,
+    pub stale: Vec<PermissionGrantResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SdlcFlowResponse {
+    pub resource_kind: String,
+    pub resource_id: String,
+    pub readiness: SdlcReadinessResponse,
+    pub work_plan: WorkPlanResponse,
+    pub change_set: Option<ChangeSetResponse>,
+    pub pipeline_intent: Option<PipelineIntentResponse>,
+    pub deployment_intent: Option<DeploymentIntentResponse>,
+    pub release: Option<ReleaseResponse>,
+    pub registry_evidence: Option<RegistryEvidenceResponse>,
+    pub incidents: Vec<IncidentResponse>,
+    pub remediation_plans: Vec<RemediationPlanResponse>,
+    pub approval_gates: Vec<ApprovalGateResponse>,
+    pub audit_events: Vec<AuditEventResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ChangeSetsResponse {
     pub change_sets: Vec<ChangeSetResponse>,
     pub count: usize,
@@ -448,6 +557,10 @@ pub struct ReviseChangeSetResponse {
     pub change_set: ChangeSetResponse,
     pub material_hash_changed: bool,
     pub invalidated_gates: Vec<ApprovalGateResponse>,
+    pub invalidated_pipeline_intent: Option<PipelineIntentResponse>,
+    pub invalidated_deployment_intent: Option<DeploymentIntentResponse>,
+    pub invalidated_release: Option<ReleaseResponse>,
+    pub invalidated_registry_evidence: Option<RegistryEvidenceResponse>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -460,6 +573,474 @@ pub struct TransitionChangeSetRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct TransitionChangeSetResponse {
     pub change_set: ChangeSetResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineIntentsResponse {
+    pub pipeline_intents: Vec<PipelineIntentResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineIntentResponse {
+    pub id: String,
+    pub change_set_id: String,
+    pub work_plan_id: String,
+    pub remediation_plan_id: String,
+    pub incident_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub intent_kind: String,
+    pub resource_namespace: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_name: Option<String>,
+    pub intent_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredPipelineIntent> for PipelineIntentResponse {
+    fn from(intent: StoredPipelineIntent) -> Self {
+        Self {
+            id: intent.id,
+            change_set_id: intent.change_set_id,
+            work_plan_id: intent.work_plan_id,
+            remediation_plan_id: intent.remediation_plan_id,
+            incident_id: intent.incident_id,
+            run_id: intent.run_id,
+            status: intent.status,
+            title: intent.title,
+            summary: intent.summary,
+            risk_level: intent.risk_level,
+            intent_kind: intent.intent_kind,
+            resource_namespace: intent.resource_namespace,
+            resource_kind: intent.resource_kind,
+            resource_name: intent.resource_name,
+            intent_json: intent.intent_json,
+            created_at: intent.created_at,
+            updated_at: intent.updated_at,
+            status_changed_at: intent.status_changed_at,
+            status_changed_by: intent.status_changed_by,
+            status_reason: intent.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreatePipelineIntentFromChangeSetRequest {
+    pub change_set_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub intent_kind: Option<String>,
+    #[serde(default)]
+    pub intent_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreatePipelineIntentResponse {
+    pub pipeline_intent: PipelineIntentResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionPipelineIntentRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionPipelineIntentResponse {
+    pub pipeline_intent: PipelineIntentResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AttachPipelineIntentEvidenceRequest {
+    pub observation_id: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachPipelineIntentEvidenceResponse {
+    pub pipeline_intent: PipelineIntentResponse,
+    pub observation: ObservationResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentIntentsResponse {
+    pub deployment_intents: Vec<DeploymentIntentResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentIntentResponse {
+    pub id: String,
+    pub pipeline_intent_id: String,
+    pub change_set_id: String,
+    pub work_plan_id: String,
+    pub remediation_plan_id: String,
+    pub incident_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub intent_kind: String,
+    pub target_environment: Option<String>,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub resource_namespace: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_name: Option<String>,
+    pub intent_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredDeploymentIntent> for DeploymentIntentResponse {
+    fn from(intent: StoredDeploymentIntent) -> Self {
+        Self {
+            id: intent.id,
+            pipeline_intent_id: intent.pipeline_intent_id,
+            change_set_id: intent.change_set_id,
+            work_plan_id: intent.work_plan_id,
+            remediation_plan_id: intent.remediation_plan_id,
+            incident_id: intent.incident_id,
+            run_id: intent.run_id,
+            status: intent.status,
+            title: intent.title,
+            summary: intent.summary,
+            risk_level: intent.risk_level,
+            intent_kind: intent.intent_kind,
+            target_environment: intent.target_environment,
+            target_namespace: intent.target_namespace,
+            argo_application: intent.argo_application,
+            resource_namespace: intent.resource_namespace,
+            resource_kind: intent.resource_kind,
+            resource_name: intent.resource_name,
+            intent_json: intent.intent_json,
+            created_at: intent.created_at,
+            updated_at: intent.updated_at,
+            status_changed_at: intent.status_changed_at,
+            status_changed_by: intent.status_changed_by,
+            status_reason: intent.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateDeploymentIntentFromPipelineIntentRequest {
+    pub pipeline_intent_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub intent_kind: Option<String>,
+    pub target_environment: Option<String>,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    #[serde(default)]
+    pub intent_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateDeploymentIntentResponse {
+    pub deployment_intent: DeploymentIntentResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionDeploymentIntentRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionDeploymentIntentResponse {
+    pub deployment_intent: DeploymentIntentResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachDeploymentIntentEvidenceResponse {
+    pub deployment_intent: DeploymentIntentResponse,
+    pub observation: ObservationResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AttachDeploymentIntentEvidenceRequest {
+    pub observation_id: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReleasesResponse {
+    pub releases: Vec<ReleaseResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReleaseResponse {
+    pub id: String,
+    pub deployment_intent_id: String,
+    pub pipeline_intent_id: String,
+    pub change_set_id: String,
+    pub work_plan_id: String,
+    pub remediation_plan_id: String,
+    pub incident_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub release_kind: String,
+    pub target_environment: Option<String>,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub version: Option<String>,
+    pub commit_sha: Option<String>,
+    pub image_digest: Option<String>,
+    pub rollback_ref: Option<String>,
+    pub release_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredRelease> for ReleaseResponse {
+    fn from(release: StoredRelease) -> Self {
+        Self {
+            id: release.id,
+            deployment_intent_id: release.deployment_intent_id,
+            pipeline_intent_id: release.pipeline_intent_id,
+            change_set_id: release.change_set_id,
+            work_plan_id: release.work_plan_id,
+            remediation_plan_id: release.remediation_plan_id,
+            incident_id: release.incident_id,
+            run_id: release.run_id,
+            status: release.status,
+            title: release.title,
+            summary: release.summary,
+            risk_level: release.risk_level,
+            release_kind: release.release_kind,
+            target_environment: release.target_environment,
+            target_namespace: release.target_namespace,
+            argo_application: release.argo_application,
+            version: release.version,
+            commit_sha: release.commit_sha,
+            image_digest: release.image_digest,
+            rollback_ref: release.rollback_ref,
+            release_json: release.release_json,
+            created_at: release.created_at,
+            updated_at: release.updated_at,
+            status_changed_at: release.status_changed_at,
+            status_changed_by: release.status_changed_by,
+            status_reason: release.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateReleaseFromDeploymentIntentRequest {
+    pub deployment_intent_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub release_kind: Option<String>,
+    pub version: Option<String>,
+    pub commit_sha: Option<String>,
+    pub image_digest: Option<String>,
+    pub rollback_ref: Option<String>,
+    #[serde(default)]
+    pub release_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateReleaseResponse {
+    pub release: ReleaseResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionReleaseRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionReleaseResponse {
+    pub release: ReleaseResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AttachReleaseEvidenceRequest {
+    pub observation_id: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachReleaseEvidenceResponse {
+    pub release: ReleaseResponse,
+    pub observation: ObservationResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incident: Option<IncidentResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation_plan: Option<RemediationPlanResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RegistryEvidenceListResponse {
+    pub registry_evidence: Vec<RegistryEvidenceResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RegistryEvidenceResponse {
+    pub id: String,
+    pub release_id: String,
+    pub deployment_intent_id: String,
+    pub pipeline_intent_id: String,
+    pub change_set_id: String,
+    pub work_plan_id: String,
+    pub remediation_plan_id: String,
+    pub incident_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub registry: Option<String>,
+    pub repository: Option<String>,
+    pub image_ref: Option<String>,
+    pub image_digest: Option<String>,
+    pub tag: Option<String>,
+    pub source: String,
+    pub verification_status: String,
+    pub evidence_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredRegistryEvidence> for RegistryEvidenceResponse {
+    fn from(evidence: StoredRegistryEvidence) -> Self {
+        Self {
+            id: evidence.id,
+            release_id: evidence.release_id,
+            deployment_intent_id: evidence.deployment_intent_id,
+            pipeline_intent_id: evidence.pipeline_intent_id,
+            change_set_id: evidence.change_set_id,
+            work_plan_id: evidence.work_plan_id,
+            remediation_plan_id: evidence.remediation_plan_id,
+            incident_id: evidence.incident_id,
+            run_id: evidence.run_id,
+            status: evidence.status,
+            title: evidence.title,
+            summary: evidence.summary,
+            risk_level: evidence.risk_level,
+            registry: evidence.registry,
+            repository: evidence.repository,
+            image_ref: evidence.image_ref,
+            image_digest: evidence.image_digest,
+            tag: evidence.tag,
+            source: evidence.source,
+            verification_status: evidence.verification_status,
+            evidence_json: evidence.evidence_json,
+            created_at: evidence.created_at,
+            updated_at: evidence.updated_at,
+            status_changed_at: evidence.status_changed_at,
+            status_changed_by: evidence.status_changed_by,
+            status_reason: evidence.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateRegistryEvidenceFromReleaseRequest {
+    pub release_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub registry: Option<String>,
+    pub repository: Option<String>,
+    pub image_ref: Option<String>,
+    pub image_digest: Option<String>,
+    pub tag: Option<String>,
+    pub source: Option<String>,
+    pub verification_status: Option<String>,
+    #[serde(default)]
+    pub evidence_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateRegistryEvidenceResponse {
+    pub registry_evidence: RegistryEvidenceResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateRegistryEvidenceFromInspectionRequest {
+    pub release_id: String,
+    pub image_ref: String,
+    pub registry_base_url: Option<String>,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateRegistryEvidenceFromInspectionResponse {
+    pub registry_evidence: Option<RegistryEvidenceResponse>,
+    pub created: bool,
+    pub inspection: ExecuteCapabilityResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionRegistryEvidenceRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionRegistryEvidenceResponse {
+    pub registry_evidence: RegistryEvidenceResponse,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -652,6 +1233,10 @@ pub struct ExecuteCapabilityResponse {
     pub executed: bool,
     pub cancelled: bool,
     pub timeout_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation_id: Option<String>,
     pub result: Option<ToolResult>,
     pub error: Option<String>,
 }
