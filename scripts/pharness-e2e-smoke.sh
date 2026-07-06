@@ -195,7 +195,11 @@ check_local_contract() {
   fi
 
   run_json runs-summary cargo run -q -p pharness-cli -- runs summary
-  assert_jq "$ARTIFACT_DIR/runs-summary.json" '.summary.total == 0' "fresh smoke database should start with zero runs"
+  if [[ "${PHARNESS_E2E_ALLOW_EXISTING_RUNS:-0}" == "1" ]]; then
+    assert_jq "$ARTIFACT_DIR/runs-summary.json" '.summary.total >= 0' "run summary should be readable on a persistent database"
+  else
+    assert_jq "$ARTIFACT_DIR/runs-summary.json" '.summary.total == 0' "fresh smoke database should start with zero runs"
+  fi
 
   run_json secret-denial cargo run -q -p pharness-cli -- capabilities kubernetes-get \
     --resource secrets \
