@@ -37,7 +37,8 @@
 
 - Dispatch on `ExecutionTarget` inside the API.
   - `LocalProcess` keeps today's in-process behavior for laptop use.
-  - `KubernetesJob` creates, watches, and deletes Jobs through `kube-rs` with a dedicated service account. Worker orchestration is control-plane infrastructure, not an agent capability, so the V1 non-goal of agent-facing Kubernetes mutation tools still holds.
+  - `KubernetesJob` creates, lists, and deletes Jobs by shelling `kubectl` with the pod service account, matching how the typed read-only cluster capabilities already execute instead of pulling in `kube-rs`. Revisit a typed client when watch semantics or manifest complexity demand it.
+  - Worker orchestration is control-plane infrastructure, not an agent capability, so the V1 non-goal of agent-facing Kubernetes mutation tools still holds.
 
 - Ship one runtime image with two entrypoints plus one UI image.
   - `deploy/docker/Dockerfile.runtime` builds a multi-stage image exposing `pharness-api` and `pharness-worker`.
