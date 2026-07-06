@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pharness
+description: Pharness agent harness control plane, operator console, and worker runtime
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

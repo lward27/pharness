@@ -1,0 +1,186 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pharness-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+---
+# The API orchestrates one worker Job per run attempt in its own namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-api-jobs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-api-jobs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+subjects:
+  - kind: ServiceAccount
+    name: pharness-api
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-api-jobs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pharness-api-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.api.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharness-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: pharness-api
+    app.kubernetes.io/part-of: pharness
+spec:
+  replicas: {{ .Values.api.replicas }}
+  strategy:
+    # SQLite on a PVC: never run two API writers at once.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pharness-api
+  template:
+    metadata:
+      labels:
+        app: pharness-api
+        app.kubernetes.io/part-of: pharness
+    spec:
+      serviceAccountName: pharness-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - containerPort: 4777
+              name: http
+          env:
+            - name: PHARNESS_BIND
+              value: "0.0.0.0:4777"
+            - name: PHARNESS_DB_PATH
+              value: {{ .Values.api.dbPath | quote }}
+            - name: HOME
+              value: /tmp
+            - name: PHARNESS_WORKER_MODE
+              value: kubernetes_job
+            - name: PHARNESS_WORKER_K8S_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: PHARNESS_WORKER_K8S_IMAGE
+              value: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+            - name: PHARNESS_WORKER_K8S_SERVICE_ACCOUNT
+              value: {{ .Values.worker.serviceAccount | quote }}
+            - name: PHARNESS_WORKER_K8S_API_URL
+              value: "http://pharness-api.{{ .Release.Namespace }}.svc.cluster.local:4777"
+            - name: PHARNESS_WORKER_K8S_WORKSPACE_DIR
+              value: {{ .Values.worker.workspaceDir | quote }}
+            - name: PHARNESS_WORKER_K8S_FIREWORKS_SECRET
+              value: {{ .Values.api.fireworksSecretName | quote }}
+            - name: PHARNESS_WORKER_K8S_TOKEN_SECRET
+              value: {{ .Values.api.workerTokenSecretName | quote }}
+            - name: PHARNESS_WORKER_K8S_ACTIVE_DEADLINE_SECONDS
+              value: {{ .Values.worker.activeDeadlineSeconds | quote }}
+            - name: PHARNESS_WORKER_K8S_TTL_SECONDS
+              value: {{ .Values.worker.ttlSecondsAfterFinished | quote }}
+            - name: PHARNESS_FIREWORKS_MODEL
+              value: {{ .Values.api.model | quote }}
+            - name: PHARNESS_ARGOCD_NAMESPACE
+              value: {{ .Values.api.cluster.argocdNamespace | quote }}
+            - name: PHARNESS_PROMETHEUS_URL
+              value: {{ .Values.api.cluster.prometheusUrl | quote }}
+            - name: PHARNESS_LOKI_URL
+              value: {{ .Values.api.cluster.lokiUrl | quote }}
+            - name: PHARNESS_REGISTRY_ALIASES
+              value: {{ .Values.api.cluster.registryAliases | quote }}
+            - name: PHARNESS_POLICY_SUBJECT
+              value: {{ .Values.api.policy.subject | quote }}
+            - name: PHARNESS_POLICY_ENVIRONMENT
+              value: {{ .Values.api.policy.environment | quote }}
+            - name: FIREWORKS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.fireworksSecretName }}
+                  key: api-key
+            - name: PHARNESS_WORKER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.workerTokenSecretName }}
+                  key: token
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pharness-api-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: pharness-api
+    app.kubernetes.io/part-of: pharness
+spec:
+  selector:
+    app: pharness-api
+  ports:
+    - name: http
+      port: 4777
+      targetPort: http

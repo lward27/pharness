@@ -1,0 +1,26 @@
+# Pharness runtime image: pharness-api (default entrypoint) and
+# pharness-worker (Job entrypoint) in one image so the control plane and
+# worker attempts stay version-locked.
+FROM rust:1-bookworm AS builder
+WORKDIR /build
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+RUN cargo build --release -p pharness-api -p pharness-worker
+
+FROM debian:bookworm-slim
+ARG KUBECTL_VERSION=v1.34.4
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git curl \
+    && curl -fsSL -o /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && chmod 0755 /usr/local/bin/kubectl \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 65532 --user-group --home-dir /home/pharness --create-home pharness
+
+COPY --from=builder /build/target/release/pharness-api /usr/local/bin/pharness-api
+COPY --from=builder /build/target/release/pharness-worker /usr/local/bin/pharness-worker
+
+USER 65532:65532
+ENTRYPOINT ["pharness-api"]

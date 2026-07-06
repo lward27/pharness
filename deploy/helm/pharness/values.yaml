@@ -1,0 +1,72 @@
+nameOverride: pharness
+
+# Secrets are created out-of-band, never by this chart:
+#   kubectl create secret generic pharness-fireworks \
+#     --from-literal=api-key=<fireworks api key> -n pharness
+#   kubectl create secret generic pharness-worker-token \
+#     --from-literal=token=<random worker token> -n pharness
+
+api:
+  image:
+    repository: registry.lucas.engineering/pharness-runtime
+    tag: latest
+    pullPolicy: Always
+  # SQLite single-writer: keep exactly one API replica.
+  replicas: 1
+  host: pharness-api.lucas.engineering
+  dbPath: /data/pharness.db
+  persistence:
+    storageClass: local-path
+    size: 2Gi
+  fireworksSecretName: pharness-fireworks
+  workerTokenSecretName: pharness-worker-token
+  model: accounts/fireworks/models/kimi-k2p5
+  policy:
+    subject: agent:pharness-worker
+    environment: homelab
+  cluster:
+    argocdNamespace: argocd
+    prometheusUrl: http://prometheus-server.monitoring.svc.cluster.local:80
+    lokiUrl: http://loki.monitoring.svc.cluster.local:3100
+    registryAliases: docker-registry.registry.svc.cluster.local:5000=registry.lucas.engineering
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+worker:
+  serviceAccount: pharness-worker
+  workspaceDir: /workspace
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 3600
+
+ui:
+  image:
+    repository: registry.lucas.engineering/pharness-ui
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  host: pharness.lucas.engineering
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+ingress:
+  # Keep disabled until operator auth lands; the console mutates the
+  # control plane and must not be public without it.
+  enabled: false
+  apiEnabled: false
+  className: nginx
+  clusterIssuer: letsencrypt-prod
+  uiTlsSecretName: pharness-lucas-engineering-tls
+  apiTlsSecretName: pharness-api-lucas-engineering-tls
+
+networkPolicy:
+  enabled: true
