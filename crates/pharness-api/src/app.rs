@@ -1,3 +1,4 @@
+use crate::dispatch::RunDispatcher;
 use crate::dto::{
     ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
     ApprovalSummaryResponse, ApprovalsResponse, ArtifactResponse, ArtifactsResponse,
@@ -30,9 +31,7 @@ use crate::dto::{
     TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkPlanRequest,
     TransitionWorkPlanResponse, TrustedEnvelopeResponse, WorkPlanResponse, WorkPlansResponse,
 };
-use crate::worker::{
-    attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event, LocalWorker,
-};
+use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
@@ -40,13 +39,13 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use pharness_runhost::AttemptOutcome;
 use futures::stream::{self, Stream};
 use pharness_core::{
     AgentAction, AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy,
     PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools, RunId, SafetyPolicy,
     SessionId, ToolExecutor, ToolResult,
 };
+use pharness_runhost::AttemptOutcome;
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
     ChangeSetListFilter, DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
@@ -83,7 +82,7 @@ const DEFAULT_TRUSTED_ENVELOPE_ENVIRONMENT: &str = "local";
 #[derive(Clone)]
 pub struct AppState {
     store: Arc<SqliteStore>,
-    worker: Option<LocalWorker>,
+    worker: RunDispatcher,
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
     worker_token: Option<String>,
@@ -91,7 +90,7 @@ pub struct AppState {
 
 pub fn router(
     store: Arc<SqliteStore>,
-    worker: Option<LocalWorker>,
+    worker: RunDispatcher,
     cluster_tools: ReadOnlyClusterTools,
     policy: SafetyPolicy,
     worker_token: Option<String>,
@@ -443,6 +442,13 @@ async fn internal_ingest_outcome(
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
 
+    if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
+        return Err(ApiError::conflict(format!(
+            "run is already terminal with status {}",
+            run.status
+        )));
+    }
+
     finish_run_from_attempt(&state.store, &run, outcome)
         .await
         .map_err(|error| ApiError::internal(error.to_string()))?;
@@ -476,15 +482,7 @@ async fn internal_run_control(
 }
 
 async fn config_effective(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let worker = state.worker.as_ref().map(|worker| {
-        let config = worker.config();
-        json!({
-            "enabled": config.enabled,
-            "provider": config.provider,
-            "model": config.model,
-            "base_url": config.base_url,
-        })
-    });
+    let worker = state.worker.config_json();
 
     Json(json!({
         "api": {
@@ -498,14 +496,7 @@ async fn config_effective(State(state): State<AppState>) -> Json<serde_json::Val
             "registry_alias_count": state.cluster_tools.registry_alias_count(),
         },
         "policy": policy_json(&state.policy),
-        "worker": worker.unwrap_or_else(|| {
-            json!({
-                "enabled": false,
-                "provider": null,
-                "model": null,
-                "base_url": null,
-            })
-        }),
+        "worker": worker,
     }))
 }
 
@@ -1004,7 +995,9 @@ async fn create_run(
 ) -> Result<Json<RunResponse>, ApiError> {
     let run_id = RunId::new(format!("run_{}", unique_suffix()));
     let session_id = SessionId::new(format!("ses_{}", run_id.as_str()));
-    let cwd = request.cwd.unwrap_or_else(|| ".".to_string());
+    let cwd = state
+        .worker
+        .effective_cwd(&request.cwd.unwrap_or_else(|| ".".to_string()));
     let max_turns = request.max_turns.unwrap_or(40);
     let run_scope = request.scope.unwrap_or_default();
     let run_scope_json = run_scope.to_optional_json();
@@ -1030,36 +1023,23 @@ async fn create_run(
             max_turns,
             initial_status: "queued".to_string(),
             execution_target_json: json!({
-                "kind": "local_process",
+                "kind": state.worker.execution_target_kind(),
                 "policy": &policy,
                 "run_scope": &run_scope_json,
             }),
         })
         .await?;
 
-    let queue_payload = state.worker.as_ref().map_or_else(
-        || {
-            json!({
-                "source": "api",
-                "worker": "disabled",
-                "policy_mode": policy.mode,
-                "policy_environment": &policy.environment,
-                "run_scope": &run_scope_json,
-            })
-        },
-        |worker| {
-            let config = worker.config();
-            json!({
-                "source": "api",
-                "worker": "local",
-                "provider": config.provider,
-                "model": config.model,
-                "policy_mode": policy.mode,
-                "policy_environment": &policy.environment,
-                "run_scope": &run_scope_json,
-            })
-        },
-    );
+    let worker_config = state.worker.config_json();
+    let queue_payload = json!({
+        "source": "api",
+        "worker": state.worker.mode(),
+        "provider": worker_config.get("provider"),
+        "model": worker_config.get("model"),
+        "policy_mode": policy.mode,
+        "policy_environment": &policy.environment,
+        "run_scope": &run_scope_json,
+    });
 
     state
         .store
@@ -1073,9 +1053,7 @@ async fn create_run(
         })
         .await?;
 
-    if let Some(worker) = &state.worker {
-        worker.spawn_run(run.clone(), cwd);
-    }
+    state.worker.spawn_run(run.clone(), cwd);
 
     Ok(Json(run.into()))
 }
@@ -7326,9 +7304,7 @@ async fn cancel_run(
     Path(run_id): Path<String>,
 ) -> Result<Json<RunResponse>, ApiError> {
     let run_id = RunId::new(run_id);
-    if let Some(worker) = &state.worker {
-        worker.cancel(&run_id);
-    }
+    state.worker.cancel(&run_id);
     let run = state.store.cancel_run(&run_id).await?;
     let seq = state.store.list_events(&run_id).await?.len() as u64 + 1;
     state
@@ -7488,11 +7464,11 @@ async fn decide_current_run_approval(
                     "pending approval has no reviewed action to resume",
                 ));
             }
-            let Some(worker) = &state.worker else {
+            if !state.worker.enabled() {
                 return Err(ApiError::conflict(
-                    "cannot approve without an enabled local worker",
+                    "cannot approve without an enabled run worker",
                 ));
-            };
+            }
 
             let approval = state
                 .store
@@ -7509,7 +7485,7 @@ async fn decide_current_run_approval(
             )
             .await?;
             let run = state.store.mark_run_running(&run_id).await?;
-            worker.resume_run(run.clone(), approval.clone());
+            state.worker.resume_run(run.clone(), approval.clone());
 
             Ok(Json(DecideApprovalResponse {
                 approval: approval.into(),
@@ -7877,6 +7853,7 @@ mod tests {
         ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
         StreamRunEventsQuery,
     };
+    use crate::dispatch::RunDispatcher;
     use crate::dto::{
         ApprovalDecision, AttachDeploymentIntentEvidenceRequest,
         AttachPipelineIntentEvidenceRequest, AttachReleaseEvidenceRequest, CreateChangeSetRequest,
@@ -7913,7 +7890,7 @@ mod tests {
     async fn test_state() -> AppState {
         AppState {
             store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
-            worker: None,
+            worker: RunDispatcher::Disabled,
             cluster_tools: ReadOnlyClusterTools::default(),
             policy: SafetyPolicy::default(),
             worker_token: None,
@@ -7923,7 +7900,7 @@ mod tests {
     async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyClusterTools) -> AppState {
         AppState {
             store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
-            worker: None,
+            worker: RunDispatcher::Disabled,
             cluster_tools,
             policy: SafetyPolicy::default(),
             worker_token: None,
@@ -8139,7 +8116,7 @@ mod tests {
         let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
         let app = router(
             store,
-            None,
+            RunDispatcher::Disabled,
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             None,
@@ -8165,7 +8142,7 @@ mod tests {
         let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
         let app = router(
             store,
-            None,
+            RunDispatcher::Disabled,
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
@@ -8228,7 +8205,7 @@ mod tests {
 
         let app = router(
             state.store.clone(),
-            None,
+            RunDispatcher::Disabled,
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
@@ -8301,7 +8278,9 @@ mod tests {
                     .uri("/api/internal/runs/run_internal_contract/outcome")
                     .header("authorization", "Bearer worker-secret")
                     .header("content-type", "application/json")
-                    .body(axum::body::Body::from(serde_json::to_vec(&outcome).unwrap()))
+                    .body(axum::body::Body::from(
+                        serde_json::to_vec(&outcome).unwrap(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -8320,7 +8299,7 @@ mod tests {
 
         let _app = router(
             store,
-            None,
+            RunDispatcher::Disabled,
             ReadOnlyClusterTools::default(),
             SafetyPolicy::default(),
             None,

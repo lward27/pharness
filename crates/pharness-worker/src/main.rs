@@ -11,9 +11,7 @@ use anyhow::Context;
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{AgentEvent, CancellationFlag};
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
-use pharness_runhost::{
-    execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec,
-};
+use pharness_runhost::{execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
@@ -60,10 +58,7 @@ async fn main() -> anyhow::Result<()> {
     prepare_workspace(&spec).await?;
 
     let cancellation = CancellationFlag::default();
-    let control = tokio::spawn(poll_control(
-        backend.clone(),
-        cancellation.clone(),
-    ));
+    let control = tokio::spawn(poll_control(backend.clone(), cancellation.clone()));
 
     tracing::info!(
         run_id = %env.run_id,
@@ -312,11 +307,8 @@ impl AttemptBackend for HttpAttemptBackend {
     }
 
     async fn ingest_event(&self, event: &AgentEvent) -> anyhow::Result<()> {
-        self.post_json_with_retry(
-            "events",
-            &serde_json::json!({ "events": [event] }),
-        )
-        .await
+        self.post_json_with_retry("events", &serde_json::json!({ "events": [event] }))
+            .await
     }
 
     async fn finish(&self, outcome: AttemptOutcome) -> anyhow::Result<()> {

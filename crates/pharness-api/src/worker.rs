@@ -111,8 +111,8 @@ impl LocalWorker {
 
         tokio::spawn(async move {
             let run_id = run.id.clone();
-            let result = run_local_attempt(store.clone(), host, run, cwd, approval, cancellation)
-                .await;
+            let result =
+                run_local_attempt(store.clone(), host, run, cwd, approval, cancellation).await;
 
             cancellations
                 .lock()
@@ -120,7 +120,7 @@ impl LocalWorker {
                 .remove(&run_id);
 
             if let Err(error) = result {
-                let _ = fail_before_runtime(&store, &run_id, error.to_string()).await;
+                let _ = fail_run_from_dispatch(&store, &run_id, error.to_string()).await;
             }
         });
     }
@@ -920,7 +920,7 @@ fn copy_observation_field(
     }
 }
 
-async fn fail_before_runtime(
+pub(crate) async fn fail_run_from_dispatch(
     store: &SqliteStore,
     run_id: &RunId,
     message: String,
@@ -1357,5 +1357,4 @@ mod tests {
             execution_target_json,
         }
     }
-
 }

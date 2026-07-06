@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod dispatch;
 mod dto;
 mod worker;
 
@@ -31,17 +32,37 @@ async fn main() -> anyhow::Result<()> {
             .await
             .with_context(|| format!("failed to open {}", db_path.display()))?,
     );
-    let worker = worker::LocalWorker::from_options(
-        store.clone(),
-        worker::LocalWorkerOptions {
-            api_key: config.model.api_key,
-            model: config.model.model,
-            base_url: config.model.base_url,
-            cluster_tools: cluster_tools.clone(),
-            default_policy: policy.clone(),
-        },
-    )
-    .context("failed to configure local worker")?;
+    let dispatcher = match config.worker.mode {
+        pharness_config::WorkerMode::Local => {
+            let worker = worker::LocalWorker::from_options(
+                store.clone(),
+                worker::LocalWorkerOptions {
+                    api_key: config.model.api_key.clone(),
+                    model: config.model.model.clone(),
+                    base_url: config.model.base_url.clone(),
+                    cluster_tools: cluster_tools.clone(),
+                    default_policy: policy.clone(),
+                },
+            )
+            .context("failed to configure local worker")?;
+            match worker {
+                Some(worker) => dispatch::RunDispatcher::Local(Box::new(worker)),
+                None => dispatch::RunDispatcher::Disabled,
+            }
+        }
+        pharness_config::WorkerMode::KubernetesJob => {
+            let worker_env = worker_job_env(&config);
+            dispatch::RunDispatcher::Kubernetes(dispatch::KubernetesJobDispatcher::new(
+                store.clone(),
+                config.cluster.kubectl_bin.clone(),
+                config.worker.kubernetes.clone(),
+                config.model.model.clone(),
+                config.model.base_url.clone(),
+                worker_env,
+            ))
+        }
+    };
+    tracing::info!(mode = dispatcher.mode(), "run dispatcher configured");
     let worker_token = std::env::var("PHARNESS_WORKER_TOKEN")
         .ok()
         .map(|value| value.trim().to_string())
@@ -49,13 +70,62 @@ async fn main() -> anyhow::Result<()> {
     if worker_token.is_some() {
         tracing::info!("worker ingest routes enabled");
     }
-    let app = app::router(store, worker, cluster_tools, policy, worker_token);
+    let app = app::router(store, dispatcher, cluster_tools, policy, worker_token);
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "pharness-api listening");
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// Environment forwarded from the API's effective config into worker Jobs so
+/// attempts see the same provider, cluster-tool, and policy settings.
+fn worker_job_env(config: &ApiRuntimeConfig) -> Vec<(String, String)> {
+    let mut env = vec![
+        (
+            "PHARNESS_FIREWORKS_MODEL".to_string(),
+            config.model.model.clone(),
+        ),
+        (
+            "PHARNESS_FIREWORKS_BASE_URL".to_string(),
+            config.model.base_url.clone(),
+        ),
+        (
+            "PHARNESS_ARGOCD_NAMESPACE".to_string(),
+            config.cluster.argocd_namespace.clone(),
+        ),
+        (
+            "PHARNESS_CLUSTER_TOOL_TIMEOUT_MS".to_string(),
+            config.cluster.timeout_ms.to_string(),
+        ),
+        (
+            "PHARNESS_CLUSTER_TOOL_MAX_OUTPUT_BYTES".to_string(),
+            config.cluster.max_output_bytes.to_string(),
+        ),
+        (
+            "PHARNESS_POLICY_SUBJECT".to_string(),
+            config.policy.subject.clone(),
+        ),
+        (
+            "PHARNESS_POLICY_ENVIRONMENT".to_string(),
+            config.policy.environment.clone(),
+        ),
+    ];
+    if let Some(url) = &config.cluster.prometheus_url {
+        env.push(("PHARNESS_PROMETHEUS_URL".to_string(), url.clone()));
+    }
+    if let Some(url) = &config.cluster.loki_url {
+        env.push(("PHARNESS_LOKI_URL".to_string(), url.clone()));
+    }
+    if !config.cluster.registry_aliases.is_empty() {
+        env.push((
+            "PHARNESS_REGISTRY_ALIASES".to_string(),
+            config.cluster.registry_aliases.join(","),
+        ));
+    }
+
+    env
 }
 
 fn init_tracing() -> anyhow::Result<()> {

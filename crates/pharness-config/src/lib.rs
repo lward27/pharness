@@ -16,6 +16,15 @@ const DEFAULT_FIREWORKS_API_KEY_ENV: &str = "FIREWORKS_API_KEY";
 const DEFAULT_KUBECTL_BIN: &str = "kubectl";
 const DEFAULT_ARGOCD_NAMESPACE: &str = "argocd";
 const DEFAULT_CLUSTER_TIMEOUT_MS: u64 = 15_000;
+const DEFAULT_WORKER_K8S_NAMESPACE: &str = "pharness";
+const DEFAULT_WORKER_K8S_IMAGE: &str = "registry.lucas.engineering/pharness-runtime:latest";
+const DEFAULT_WORKER_K8S_SERVICE_ACCOUNT: &str = "pharness-worker";
+const DEFAULT_WORKER_K8S_API_URL: &str = "http://pharness-api:4777";
+const DEFAULT_WORKER_K8S_WORKSPACE_DIR: &str = "/workspace";
+const DEFAULT_WORKER_K8S_FIREWORKS_SECRET: &str = "pharness-fireworks";
+const DEFAULT_WORKER_K8S_TOKEN_SECRET: &str = "pharness-worker-token";
+const DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS: u64 = 3_600;
+const DEFAULT_WORKER_K8S_TTL_SECONDS: u64 = 3_600;
 const DEFAULT_CLUSTER_MAX_OUTPUT_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
@@ -25,6 +34,55 @@ pub struct ApiRuntimeConfig {
     pub model: ModelConfig,
     pub cluster: ClusterConfig,
     pub policy: SafetyPolicy,
+    pub worker: WorkerConfig,
+}
+
+#[derive(Clone)]
+pub struct WorkerConfig {
+    pub mode: WorkerMode,
+    pub kubernetes: WorkerKubernetesConfig,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkerMode {
+    Local,
+    KubernetesJob,
+}
+
+impl WorkerMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::KubernetesJob => "kubernetes_job",
+        }
+    }
+}
+
+impl std::str::FromStr for WorkerMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "local" => Ok(Self::Local),
+            "kubernetes_job" => Ok(Self::KubernetesJob),
+            other => Err(format!(
+                "unsupported worker mode {other:?}; expected local or kubernetes_job"
+            )),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct WorkerKubernetesConfig {
+    pub namespace: String,
+    pub image: String,
+    pub service_account: String,
+    pub api_url: String,
+    pub workspace_dir: String,
+    pub fireworks_secret_name: String,
+    pub worker_token_secret_name: String,
+    pub active_deadline_seconds: u64,
+    pub ttl_seconds_after_finished: u64,
 }
 
 #[derive(Clone)]
@@ -131,6 +189,20 @@ impl ApiRuntimeConfig {
                 max_output_bytes: DEFAULT_CLUSTER_MAX_OUTPUT_BYTES,
             },
             policy: SafetyPolicy::default(),
+            worker: WorkerConfig {
+                mode: WorkerMode::Local,
+                kubernetes: WorkerKubernetesConfig {
+                    namespace: DEFAULT_WORKER_K8S_NAMESPACE.to_string(),
+                    image: DEFAULT_WORKER_K8S_IMAGE.to_string(),
+                    service_account: DEFAULT_WORKER_K8S_SERVICE_ACCOUNT.to_string(),
+                    api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
+                    workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
+                    fireworks_secret_name: DEFAULT_WORKER_K8S_FIREWORKS_SECRET.to_string(),
+                    worker_token_secret_name: DEFAULT_WORKER_K8S_TOKEN_SECRET.to_string(),
+                    active_deadline_seconds: DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS,
+                    ttl_seconds_after_finished: DEFAULT_WORKER_K8S_TTL_SECONDS,
+                },
+            },
         })
     }
 
@@ -183,6 +255,43 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = cluster.tool_max_output_bytes {
                 self.cluster.max_output_bytes = value;
+            }
+        }
+
+        if let Some(worker) = file.worker {
+            if let Some(value) = worker.mode {
+                self.worker.mode = value
+                    .parse()
+                    .map_err(|error: String| anyhow::anyhow!("worker.mode {error}"))?;
+            }
+            if let Some(kubernetes) = worker.kubernetes {
+                if let Some(value) = kubernetes.namespace {
+                    self.worker.kubernetes.namespace = value;
+                }
+                if let Some(value) = kubernetes.image {
+                    self.worker.kubernetes.image = value;
+                }
+                if let Some(value) = kubernetes.service_account {
+                    self.worker.kubernetes.service_account = value;
+                }
+                if let Some(value) = kubernetes.api_url {
+                    self.worker.kubernetes.api_url = value;
+                }
+                if let Some(value) = kubernetes.workspace_dir {
+                    self.worker.kubernetes.workspace_dir = value;
+                }
+                if let Some(value) = kubernetes.fireworks_secret_name {
+                    self.worker.kubernetes.fireworks_secret_name = value;
+                }
+                if let Some(value) = kubernetes.worker_token_secret_name {
+                    self.worker.kubernetes.worker_token_secret_name = value;
+                }
+                if let Some(value) = kubernetes.active_deadline_seconds {
+                    self.worker.kubernetes.active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.ttl_seconds_after_finished {
+                    self.worker.kubernetes.ttl_seconds_after_finished = value;
+                }
             }
         }
 
@@ -257,6 +366,40 @@ impl ApiRuntimeConfig {
             self.cluster.max_output_bytes =
                 parse_usize(value, "PHARNESS_CLUSTER_TOOL_MAX_OUTPUT_BYTES")?;
         }
+        if let Some(value) = env.get("PHARNESS_WORKER_MODE") {
+            self.worker.mode = value
+                .parse()
+                .map_err(|error: String| anyhow::anyhow!("PHARNESS_WORKER_MODE {error}"))?;
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_NAMESPACE") {
+            self.worker.kubernetes.namespace = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_IMAGE") {
+            self.worker.kubernetes.image = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_API_URL") {
+            self.worker.kubernetes.api_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_DIR") {
+            self.worker.kubernetes.workspace_dir = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_FIREWORKS_SECRET") {
+            self.worker.kubernetes.fireworks_secret_name = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_TOKEN_SECRET") {
+            self.worker.kubernetes.worker_token_secret_name = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.active_deadline_seconds =
+                parse_u64(value, "PHARNESS_WORKER_K8S_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_TTL_SECONDS") {
+            self.worker.kubernetes.ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_WORKER_K8S_TTL_SECONDS")?;
+        }
         if let Some(value) = env.get("PHARNESS_POLICY_MODE") {
             self.policy.mode = parse_policy_mode(value, "PHARNESS_POLICY_MODE")?;
         }
@@ -309,6 +452,28 @@ struct FileConfig {
     model: Option<FileModelConfig>,
     cluster: Option<FileClusterConfig>,
     policy: Option<FilePolicyConfig>,
+    worker: Option<FileWorkerConfig>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct FileWorkerConfig {
+    mode: Option<String>,
+    kubernetes: Option<FileWorkerKubernetesConfig>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct FileWorkerKubernetesConfig {
+    namespace: Option<String>,
+    image: Option<String>,
+    service_account: Option<String>,
+    api_url: Option<String>,
+    workspace_dir: Option<String>,
+    fireworks_secret_name: Option<String>,
+    worker_token_secret_name: Option<String>,
+    active_deadline_seconds: Option<u64>,
+    ttl_seconds_after_finished: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
