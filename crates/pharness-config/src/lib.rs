@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 const DEFAULT_BIND: &str = "127.0.0.1:4777";
 const DEFAULT_DB_PATH: &str = ".pharness/pharness.db";
-const DEFAULT_FIREWORKS_MODEL: &str = "accounts/fireworks/models/kimi-k2p5";
+const DEFAULT_FIREWORKS_MODEL: &str = "accounts/fireworks/models/kimi-k2p6";
 const DEFAULT_FIREWORKS_BASE_URL: &str = pharness_fireworks::DEFAULT_FIREWORKS_BASE_URL;
 const DEFAULT_FIREWORKS_API_KEY_ENV: &str = "FIREWORKS_API_KEY";
 const DEFAULT_KUBECTL_BIN: &str = "kubectl";
@@ -636,7 +636,7 @@ mod tests {
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4777");
         assert_eq!(config.storage.path, PathBuf::from(".pharness/pharness.db"));
-        assert_eq!(config.model.model, "accounts/fireworks/models/kimi-k2p5");
+        assert_eq!(config.model.model, "accounts/fireworks/models/kimi-k2p6");
         assert_eq!(config.cluster.argocd_namespace, "argocd");
         assert!(config.cluster.prometheus_url.is_none());
         assert!(config.cluster.loki_url.is_none());

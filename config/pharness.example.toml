@@ -6,7 +6,7 @@ additional_write_dirs = []
 
 [model]
 provider = "fireworks"
-model = "accounts/fireworks/models/kimi-k2p5"
+model = "accounts/fireworks/models/kimi-k2p6"
 api_key_env = "FIREWORKS_API_KEY"
 base_url = "https://api.fireworks.ai/inference/v1"
 temperature = 0.1

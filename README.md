@@ -49,13 +49,13 @@ cargo test --workspace
 When `FIREWORKS_API_KEY` is set, the local worker uses Fireworks with this default model:
 
 ```sh
-accounts/fireworks/models/kimi-k2p5
+accounts/fireworks/models/kimi-k2p6
 ```
 
 Override it explicitly when trying another visible model:
 
 ```sh
-PHARNESS_FIREWORKS_MODEL=accounts/fireworks/models/kimi-k2p5 cargo run -p pharness-api
+PHARNESS_FIREWORKS_MODEL=accounts/fireworks/models/kimi-k2p6 cargo run -p pharness-api
 ```
 
 The API reads provider configuration at startup. Restart `pharness-api` after changing `FIREWORKS_API_KEY` or `PHARNESS_FIREWORKS_MODEL`, then confirm with:
