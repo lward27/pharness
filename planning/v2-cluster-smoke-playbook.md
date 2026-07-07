@@ -52,4 +52,17 @@ already exported, and writes artifacts to `target/cluster-smoke/<timestamp>`.
 
 ## Verification
 
-- Pending first full run against the deployed stack.
+- `scripts/pharness-cluster-runtime-smoke.sh` passed against the deployed stack on 2026-07-07.
+  - All eight checks passed: rollout health, operator auth gating, kubernetes_job dispatcher config, the deterministic control-plane contract (all fourteen e2e checks through the deployed API), worker Job lifecycle, worker outcome ingest, cancellation deleting the worker Job, and console shell plus proxy identity.
+  - The worker Job executed with the placeholder Fireworks key and reported `run.queued -> run.started -> model.request_started -> run.failed` with the provider's 401 through token-gated ingest, proving the attempt path end to end without a live model.
+  - Cancellation marked the run cancelled and removed the worker Job within the poll window.
+  - The console proxy authenticated as operator `lucas` without a browser-held token.
+  - Artifact directory: `target/cluster-smoke/20260707T135513Z`.
+
+- Environment note: fresh worker pods initially saw `connection refused` against the API service until kube-router's policy state included the new pod; the worker's startup context fetch now retries through that window. Confirmed by probing from a fresh pod (first attempt refused, second succeeded).
+
+- Known follow-ups after this verification:
+  - Set the real Fireworks key to enable model-backed runs and the approval pause/resume acceptance check:
+    `kubectl -n pharness create secret generic pharness-fireworks --from-literal=api-key=$FIREWORKS_API_KEY --dry-run=client -o yaml | kubectl apply -f -`
+  - Add the `pharness.lucas.engineering` public hostname route in Cloudflare so the console ingress certificate can issue.
+  - Add a GitHub webhook on the pharness repo pointing at the Tekton EventListener for push-triggered image builds; manual PipelineRuns work today.
