@@ -17,8 +17,12 @@ use std::time::Duration;
 use tracing_subscriber::EnvFilter;
 
 const CONTROL_POLL_INTERVAL: Duration = Duration::from_secs(2);
-const INGEST_ATTEMPTS: u32 = 3;
-const INGEST_RETRY_DELAY: Duration = Duration::from_millis(500);
+const INGEST_ATTEMPTS: u32 = 5;
+const INGEST_RETRY_DELAY: Duration = Duration::from_secs(2);
+// Fresh pods can see transient connection refusals until the CNI's network
+// policy state includes the new pod; the startup fetch must ride that out.
+const CONTEXT_FETCH_ATTEMPTS: u32 = 5;
+const CONTEXT_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,8 +54,7 @@ async fn main() -> anyhow::Result<()> {
         env.worker_token.clone(),
     )?);
 
-    let spec = backend
-        .fetch_attempt_spec(env.approval_id.as_deref())
+    let spec = fetch_attempt_spec_with_retry(&backend, env.approval_id.as_deref())
         .await
         .context("failed to fetch attempt context from api")?;
 
@@ -169,6 +172,27 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+async fn fetch_attempt_spec_with_retry(
+    backend: &HttpAttemptBackend,
+    approval_id: Option<&str>,
+) -> anyhow::Result<AttemptSpec> {
+    let mut last_error = None;
+    for attempt in 1..=CONTEXT_FETCH_ATTEMPTS {
+        match backend.fetch_attempt_spec(approval_id).await {
+            Ok(spec) => return Ok(spec),
+            Err(error) => {
+                tracing::warn!(attempt, %error, "attempt context fetch failed");
+                last_error = Some(error);
+            }
+        }
+        if attempt < CONTEXT_FETCH_ATTEMPTS {
+            tokio::time::sleep(CONTEXT_FETCH_RETRY_DELAY).await;
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("attempt context fetch failed")))
 }
 
 async fn poll_control(backend: Arc<HttpAttemptBackend>, cancellation: CancellationFlag) {
