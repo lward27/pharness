@@ -34,17 +34,15 @@ const navItems = [
   { id: "Runs", view: "Queue", icon: Pulse },
   { id: "Approvals", view: "Approvals", icon: ShieldWarning },
   { id: "Approval Gates", view: "Approval Gates", icon: ShieldCheck },
-  { id: "Observations", icon: ChartLineUp, planned: true },
-  { id: "Incidents", icon: Siren, planned: true },
-  { id: "Remediation Plans", icon: ClipboardText, planned: true },
+  { id: "Observations", view: "Observations", icon: ChartLineUp },
+  { id: "Incidents", view: "Incidents", icon: Siren },
+  { id: "Remediation Plans", view: "Remediation Plans", icon: ClipboardText },
   { id: "Capabilities", icon: Cube, planned: true },
   { id: "Audit", view: "Audit", icon: ClockCounterClockwise },
 ];
 
 const plannedCapabilities = [
   "ChangeSet detail views",
-  "Observation detail views",
-  "Incident queues",
   "Capability catalog",
   "Audit search",
   "Cluster mutations",
@@ -54,7 +52,49 @@ const plannedCapabilities = [
   "MCP adapters",
 ];
 
-function usePharnessDashboard() {
+// Hash routing: #/<segment>[/<id>] with Flow roots as #/flow/<kind>/<id>.
+const viewSegments = {
+  Flow: "flow",
+  WorkPlans: "workplans",
+  Queue: "queue",
+  "Run Detail": "runs",
+  Approvals: "approvals",
+  "Approval Gates": "gates",
+  Audit: "audit",
+  Incidents: "incidents",
+  "Remediation Plans": "remediation-plans",
+  Observations: "observations",
+};
+
+function parseHash() {
+  const parts = window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  const [segment, first, second] = parts;
+  const view = Object.keys(viewSegments).find((key) => viewSegments[key] === segment) ?? "Flow";
+  if (view === "Flow" && first && second) {
+    return { view, param: { kind: first, id: second } };
+  }
+  return { view, param: first ?? null };
+}
+
+function hashForRoute(view, param) {
+  const segment = viewSegments[view] ?? "flow";
+  if (view === "Flow" && param?.kind && param?.id) {
+    return `#/${segment}/${encodeURIComponent(param.kind)}/${encodeURIComponent(param.id)}`;
+  }
+  if (param && typeof param === "string") {
+    return `#/${segment}/${encodeURIComponent(param)}`;
+  }
+  return `#/${segment}`;
+}
+
+function navigate(view, param) {
+  const next = hashForRoute(view, param);
+  if (window.location.hash !== next) {
+    window.location.hash = next;
+  }
+}
+
+function usePharnessDashboard(flowRoot) {
   const [state, setState] = useState({
     status: "loading",
     data: null,
@@ -64,7 +104,7 @@ function usePharnessDashboard() {
   const refresh = async () => {
     setState((current) => ({ ...current, status: current.data ? "refreshing" : "loading" }));
     try {
-      const data = await loadDashboardData();
+      const data = await loadDashboardData(flowRoot);
       setState({ status: "ready", data, error: null });
     } catch (error) {
       setState((current) => ({
@@ -75,11 +115,13 @@ function usePharnessDashboard() {
     }
   };
 
+  const flowRootKey = flowRoot ? `${flowRoot.kind}:${flowRoot.id}` : "";
   useEffect(() => {
     refresh();
     const timer = window.setInterval(refresh, 15_000);
     return () => window.clearInterval(timer);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowRootKey]);
 
   return { ...state, refresh };
 }
@@ -311,6 +353,8 @@ function buildEvents(flow) {
     tone: event.kind.includes("audit") ? "audit" : event.kind.includes("gate") ? "policy" : "tool",
     time: formatTimestamp(event.created_at),
     detail: `${event.resource_kind}/${event.resource_id}`,
+    resourceKind: event.resource_kind,
+    resourceId: event.resource_id,
   }));
 }
 
@@ -339,10 +383,13 @@ function badgeForNav(id, data) {
     return data?.auditEvents?.length ?? null;
   }
   if (id === "Incidents") {
-    return data?.flow?.incidents?.length ?? null;
+    return data?.incidents?.length || null;
   }
   if (id === "Remediation Plans") {
-    return data?.flow?.remediation_plans?.length ?? null;
+    return data?.remediationPlans?.length || null;
+  }
+  if (id === "Observations") {
+    return data?.observations?.length || null;
   }
   return null;
 }
@@ -411,10 +458,8 @@ function IconButton({ label, children, onClick, active = false }) {
 }
 
 function AppShell({
-  activeView,
-  setActiveView,
+  route,
   selectedRunId,
-  setSelectedRunId,
   theme,
   setTheme,
   selectedNode,
@@ -427,6 +472,9 @@ function AppShell({
   setActionNotice,
   dashboard,
 }) {
+  const activeView = route.view;
+  const routeParam = typeof route.param === "string" ? route.param : null;
+  const openRun = (runId) => navigate("Run Detail", String(runId));
   const dashboardData = dashboard.data;
   const topologyNodes = useMemo(() => buildTopology(dashboardData?.flow), [dashboardData?.flow]);
   const liveEvidenceRows = useMemo(() => buildEvidenceRows(dashboardData?.flow), [dashboardData?.flow]);
@@ -453,7 +501,7 @@ function AppShell({
                 key={item.id}
                 type="button"
                 disabled={!item.view}
-                onClick={() => item.view && setActiveView(item.view)}
+                onClick={() => item.view && navigate(item.view)}
                 title={item.view ? item.id : `${item.id}: planned UI surface`}
               >
                 <Icon size={20} />
@@ -510,7 +558,7 @@ function AppShell({
                 key={view}
                 className={activeView === view ? "selected" : ""}
                 type="button"
-                onClick={() => setActiveView(view)}
+                onClick={() => navigate(view, view === "Run Detail" ? selectedRunId : undefined)}
               >
                 <Icon size={17} />
                 {view}
@@ -540,26 +588,33 @@ function AppShell({
                 events={liveEvents}
               />
             ) : activeView === "Queue" ? (
-              <QueueView dashboard={dashboard} setActiveView={setActiveView} setSelectedRunId={setSelectedRunId} />
+              <QueueView dashboard={dashboard} openRun={openRun} />
             ) : activeView === "WorkPlans" ? (
-              <WorkPlansView dashboard={dashboard} />
+              <WorkPlansView dashboard={dashboard} selectedId={routeParam} />
             ) : activeView === "Run Detail" ? (
-              <RunDetailView runId={selectedRunId} setActiveView={setActiveView} refreshDashboard={dashboard.refresh} />
+              <RunDetailView runId={selectedRunId} refreshDashboard={dashboard.refresh} />
             ) : activeView === "Approvals" ? (
               <ToolApprovalsView
                 dashboard={dashboard}
+                selectedId={routeParam}
                 toolApprovalState={toolApprovalState}
                 setToolApprovalState={setToolApprovalState}
                 actionNotice={actionNotice}
                 setActionNotice={setActionNotice}
-                setActiveView={setActiveView}
-                setSelectedRunId={setSelectedRunId}
+                openRun={openRun}
               />
             ) : activeView === "Audit" ? (
-              <AuditView dashboard={dashboard} />
+              <AuditView dashboard={dashboard} openRun={openRun} />
+            ) : activeView === "Incidents" ? (
+              <IncidentsView dashboard={dashboard} selectedId={routeParam} openRun={openRun} />
+            ) : activeView === "Remediation Plans" ? (
+              <RemediationPlansView dashboard={dashboard} selectedId={routeParam} />
+            ) : activeView === "Observations" ? (
+              <ObservationsView dashboard={dashboard} selectedId={routeParam} openRun={openRun} />
             ) : (
               <ApprovalGatesView
                 dashboard={dashboard}
+                selectedId={routeParam}
                 gateState={gateState}
                 setGateState={setGateState}
                 actionNotice={actionNotice}
@@ -592,6 +647,9 @@ function ImplementationStrip({ dashboard }) {
     worker?.enabled ? `${worker?.mode ?? "model"} worker` : "Worker disabled",
     "Tool approvals",
     "Approval gates",
+    "Incidents",
+    "Remediation plans",
+    "Observations",
     "Audit log",
   ];
 
@@ -656,6 +714,47 @@ function ScopeSelect({ icon: Icon, label, value }) {
   );
 }
 
+function FlowRootPicker({ dashboard }) {
+  const changeSets = dashboard.data?.changeSets ?? [];
+  const workPlans = dashboard.data?.workPlans ?? [];
+  const current = dashboard.data?.flowRoot;
+  const value = current ? `${current.kind}:${current.id}` : "";
+  const known =
+    (current?.kind === "change_set" && changeSets.some((item) => item.id === current.id)) ||
+    (current?.kind === "work_plan" && workPlans.some((item) => item.id === current.id));
+
+  if (!changeSets.length && !workPlans.length) {
+    return null;
+  }
+
+  return (
+    <label className="root-picker">
+      <span>Root</span>
+      <select
+        value={value}
+        onChange={(event) => {
+          const [kind, ...idParts] = event.target.value.split(":");
+          navigate("Flow", { kind, id: idParts.join(":") });
+        }}
+      >
+        {!known && current ? (
+          <option value={value}>{`${statusText(current.kind)} · ${compactId(current.id)}`}</option>
+        ) : null}
+        {changeSets.map((item) => (
+          <option key={item.id} value={`change_set:${item.id}`}>
+            {`ChangeSet · ${compactId(item.id)} · ${statusText(item.status)}`}
+          </option>
+        ))}
+        {workPlans.map((item) => (
+          <option key={item.id} value={`work_plan:${item.id}`}>
+            {`WorkPlan · ${compactId(item.id)} · ${statusText(item.status)}`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function FlowView({ selectedNode, setSelectedNode, dashboard, topologyNodes, evidenceRows, events }) {
   const flow = dashboard.data?.flow;
   const title = flow
@@ -675,6 +774,7 @@ function FlowView({ selectedNode, setSelectedNode, dashboard, topologyNodes, evi
           <p>{summary}</p>
         </div>
         <div className="legend">
+          <FlowRootPicker dashboard={dashboard} />
           <span><i className="dot healthy" /> Healthy</span>
           <span><i className="dot pending" /> Pending</span>
           <span><i className="dot risk" /> Risk</span>
@@ -707,7 +807,7 @@ function FlowView({ selectedNode, setSelectedNode, dashboard, topologyNodes, evi
               );
             })}
           </div>
-          <EvidenceTable rows={evidenceRows} />
+          <EvidenceTable rows={evidenceRows} onSelectSource={setSelectedNode} />
           <EventTimeline events={events} />
         </>
       ) : (
@@ -720,7 +820,17 @@ function FlowView({ selectedNode, setSelectedNode, dashboard, topologyNodes, evi
   );
 }
 
-function EvidenceTable({ rows }) {
+const evidenceNodeBySource = {
+  WorkPlan: "work-plan",
+  ChangeSet: "change-set",
+  Pipeline: "pipeline-intent",
+  Deployment: "deployment-intent",
+  Release: "release",
+  Registry: "registry-evidence",
+  Readiness: "work-plan",
+};
+
+function EvidenceTable({ rows, onSelectSource }) {
   return (
     <section className="evidence">
       <div className="table-heading">
@@ -742,7 +852,17 @@ function EvidenceTable({ rows }) {
         {rows.map((row) => {
           const Icon = row.icon;
           return (
-            <button className="evidence-row" key={row.source} type="button">
+            <button
+              className="evidence-row"
+              key={row.source}
+              type="button"
+              onClick={() => {
+                const nodeId = evidenceNodeBySource[row.source];
+                if (nodeId && onSelectSource) {
+                  onSelectSource(nodeId);
+                }
+              }}
+            >
               <span className="source"><Icon size={23} /> {row.source}</span>
               <span><i className={`dot ${row.tone}`} /> {row.status}</span>
               <span>{row.resource}<strong>{row.target}</strong></span>
@@ -779,18 +899,22 @@ function EventTimeline({ events }) {
       </div>
       <div className="timeline">
         {events.length ? (
-          events.map((event, index) => (
-            <button
-              className={`event-card event-${event.tone}`}
-              key={`${event.kind}-${event.time}-${index}`}
-              type="button"
-              title={`${event.kind}: ${event.detail}`}
-            >
-              <span className="event-time">{event.time}</span>
-              <strong>{event.kind}</strong>
-              <p>{event.detail}</p>
-            </button>
-          ))
+          events.map((event, index) => {
+            const target = navTargetForResource(event.resourceKind, event.resourceId);
+            return (
+              <button
+                className={`event-card event-${event.tone}`}
+                key={`${event.kind}-${event.time}-${index}`}
+                type="button"
+                title={`${event.kind}: ${event.detail}`}
+                onClick={() => target && navigate(target[0], target[1])}
+              >
+                <span className="event-time">{event.time}</span>
+                <strong>{event.kind}</strong>
+                <p>{event.detail}</p>
+              </button>
+            );
+          })
         ) : (
           <div className="timeline-empty">No audit events are attached to this flow yet.</div>
         )}
@@ -799,7 +923,7 @@ function EventTimeline({ events }) {
   );
 }
 
-function QueueView({ dashboard, setActiveView, setSelectedRunId }) {
+function QueueView({ dashboard, openRun }) {
   const liveRuns = dashboard.data?.runs ?? [];
   const summary = dashboard.data?.runsSummary?.summary;
   const workerEnabled = Boolean(dashboard.data?.config?.worker?.enabled);
@@ -831,8 +955,7 @@ function QueueView({ dashboard, setActiveView, setSelectedRunId }) {
     try {
       const run = await submitRun({ task: trimmedTask, cwd: cwd.trim() || ".", maxTurns });
       setQueueNotice(`Run submitted: ${compactId(String(run.id))}`);
-      setSelectedRunId(run.id);
-      setActiveView("Run Detail");
+      openRun(run.id);
       await dashboard.refresh();
     } catch (error) {
       setQueueNotice(`Run submit failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -908,10 +1031,7 @@ function QueueView({ dashboard, setActiveView, setSelectedRunId }) {
               <span className="row-actions">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedRunId(run.id);
-                    setActiveView("Run Detail");
-                  }}
+                  onClick={() => openRun(run.id)}
                 >
                   Open
                 </button>
@@ -928,12 +1048,11 @@ function QueueView({ dashboard, setActiveView, setSelectedRunId }) {
   );
 }
 
-function WorkPlansView({ dashboard }) {
+function WorkPlansView({ dashboard, selectedId }) {
   const workPlans = dashboard.data?.workPlans ?? [];
-  const [selectedWorkPlanId, setSelectedWorkPlanId] = useState("");
   const [detail, setDetail] = useState({ status: "idle", flow: null, error: null });
   const selectedWorkPlan =
-    workPlans.find((plan) => plan.id === selectedWorkPlanId) ??
+    workPlans.find((plan) => plan.id === selectedId) ??
     workPlans[0] ??
     null;
   const statusBuckets = workPlans.reduce((counts, plan) => {
@@ -1008,7 +1127,7 @@ function WorkPlansView({ dashboard }) {
                 className={`workplan-card ${plan.id === selectedWorkPlan?.id ? "is-active" : ""}`}
                 key={plan.id}
                 type="button"
-                onClick={() => setSelectedWorkPlanId(plan.id)}
+                onClick={() => navigate("WorkPlans", plan.id)}
               >
                 <span>
                   <StatusPill tone={lifecycleTone(plan.status)}>{statusText(plan.status)}</StatusPill>
@@ -1025,6 +1144,15 @@ function WorkPlansView({ dashboard }) {
               <div>
                 <h2>{selectedWorkPlan?.title ?? "WorkPlan detail"}</h2>
                 <p>{selectedWorkPlan?.summary ?? "Select a WorkPlan to inspect its live control-plane flow."}</p>
+                {selectedWorkPlan ? (
+                  <button
+                    className="link-text"
+                    type="button"
+                    onClick={() => navigate("Flow", { kind: "work_plan", id: selectedWorkPlan.id })}
+                  >
+                    Open in Flow
+                  </button>
+                ) : null}
               </div>
               <StatusPill tone={readiness?.ready ? "healthy" : "blocked"}>
                 {detail.status === "loading" ? "Loading" : readiness?.ready ? "Ready" : "Blocked"}
@@ -1091,7 +1219,7 @@ function WorkPlanFlowSummary({ flow, status }) {
   );
 }
 
-function RunDetailView({ runId, setActiveView, refreshDashboard }) {
+function RunDetailView({ runId, refreshDashboard }) {
   const [state, setState] = useState({ status: runId ? "loading" : "empty", detail: null, error: null });
   const [reloadToken, setReloadToken] = useState(0);
   const [streamState, setStreamState] = useState({ status: "idle", error: null });
@@ -1222,7 +1350,7 @@ function RunDetailView({ runId, setActiveView, refreshDashboard }) {
             <i className={`dot ${streamState.status === "error" ? "blocked" : streamState.status === "live" ? "running" : "future"}`} />
             {streamLabel(streamState)}
           </span>
-          <button className="primary-action" type="button" onClick={() => setActiveView("Queue")}><Rows size={17} /> Queue</button>
+          <button className="primary-action" type="button" onClick={() => navigate("Queue")}><Rows size={17} /> Queue</button>
           <button className="primary-action" type="button" onClick={() => setReloadToken((value) => value + 1)}><ArrowsClockwise size={17} /> Reload</button>
           <button className="primary-action deny" type="button" disabled={!cancelAllowed} onClick={handleCancelSelectedRun}><X size={17} /> Cancel</button>
         </div>
@@ -1371,23 +1499,25 @@ function RunArtifacts({ artifacts }) {
 
 function ToolApprovalsView({
   dashboard,
+  selectedId,
   toolApprovalState,
   setToolApprovalState,
   actionNotice,
   setActionNotice,
-  setActiveView,
-  setSelectedRunId,
+  openRun,
 }) {
   const allApprovals = dashboard.data?.approvals ?? [];
   const pendingCount = allApprovals.filter((approval) => approval.status === "pending").length;
-  const [approvalFilter, setApprovalFilter] = useState("pending");
+  const routeSelected = allApprovals.find((approval) => approval.id === selectedId) ?? null;
+  const [approvalFilter, setApprovalFilter] = useState(
+    routeSelected && routeSelected.status !== "pending" ? "all" : "pending",
+  );
   const approvals =
     approvalFilter === "pending"
       ? allApprovals.filter((approval) => approval.status === "pending")
       : allApprovals;
-  const [selectedApprovalId, setSelectedApprovalId] = useState("");
   const selectedApproval =
-    approvals.find((approval) => approval.id === selectedApprovalId) ??
+    routeSelected ??
     approvals.find((approval) => approval.status === "pending") ??
     approvals[0];
 
@@ -1410,8 +1540,7 @@ function ToolApprovalsView({
     if (!selectedApproval?.run_id) {
       return;
     }
-    setSelectedRunId(String(selectedApproval.run_id));
-    setActiveView("Run Detail");
+    openRun(selectedApproval.run_id);
   };
 
   return (
@@ -1449,7 +1578,7 @@ function ToolApprovalsView({
                 className={`approval-card ${approval.id === selectedApproval?.id ? "is-active" : ""}`}
                 type="button"
                 key={approval.id}
-                onClick={() => setSelectedApprovalId(approval.id)}
+                onClick={() => navigate("Approvals", approval.id)}
               >
                 <span>{approval.kind} · {statusText(approval.status)}</span>
                 <strong>{approval.summary}</strong>
@@ -1494,17 +1623,24 @@ function ToolApprovalsView({
   );
 }
 
-function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, setActionNotice }) {
+function ApprovalGatesView({ dashboard, selectedId, gateState, setGateState, actionNotice, setActionNotice }) {
   const allGates = dashboard.data?.approvalGates ?? [];
   const pendingGateCount = allGates.filter((gate) => gate.status === "pending").length;
-  const [gateFilter, setGateFilter] = useState("pending");
+  const routeSelected = allGates.find((gate) => gate.id === selectedId) ?? null;
+  const [gateFilter, setGateFilter] = useState(
+    routeSelected && routeSelected.status !== "pending" ? "all" : "pending",
+  );
   const gates =
     gateFilter === "pending"
       ? allGates.filter((gate) => gate.status === "pending")
       : allGates;
-  const [selectedGateId, setSelectedGateId] = useState("");
+  const gateGroups = gates.reduce((groups, gate) => {
+    const key = gate.remediation_plan_id ?? "ungrouped";
+    (groups[key] = groups[key] ?? []).push(gate);
+    return groups;
+  }, {});
   const selectedGate =
-    gates.find((gate) => gate.id === selectedGateId) ??
+    routeSelected ??
     gates.find((gate) => gate.status === "pending") ??
     gates[0];
 
@@ -1553,18 +1689,30 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
       {gates.length ? (
         <div className="gate-layout">
           <div className="approval-stack">
-            {gates.map((gate) => (
-              <button
-                className={`approval-card ${gate.id === selectedGate?.id ? "is-active" : ""}`}
-                type="button"
-                key={gate.id}
-                onClick={() => setSelectedGateId(gate.id)}
-              >
-                <span>{gate.gate_kind}</span>
-                <strong>{gate.title}</strong>
-                <small>{resourceLabel(gate)} · {compactId(gate.id)}</small>
-                <b>{gate.risk_level}</b>
-              </button>
+            {Object.entries(gateGroups).map(([planId, planGates]) => (
+              <div className="gate-group" key={planId}>
+                <button
+                  className="gate-group-title"
+                  type="button"
+                  title={planId}
+                  onClick={() => planId !== "ungrouped" && navigate("Remediation Plans", planId)}
+                >
+                  plan {compactId(planId)} · {planGates.length} gate{planGates.length === 1 ? "" : "s"}
+                </button>
+                {planGates.map((gate) => (
+                  <button
+                    className={`approval-card ${gate.id === selectedGate?.id ? "is-active" : ""}`}
+                    type="button"
+                    key={gate.id}
+                    onClick={() => navigate("Approval Gates", gate.id)}
+                  >
+                    <span>{gate.gate_kind} · {statusText(gate.status)}</span>
+                    <strong>{gate.title}</strong>
+                    <small>{resourceLabel(gate)} · {compactId(gate.id)}</small>
+                    <b>{gate.risk_level}</b>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
           <div className="review-surface">
@@ -1577,8 +1725,22 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
               <ReviewItem label="Gate order" value={selectedGate?.gate_order ?? "unknown"} />
               <ReviewItem label="Resource" value={resourceLabel(selectedGate)} />
               <ReviewItem label="Requested" value={formatTimestamp(selectedGate?.created_at)} />
-              <ReviewItem label="Remediation plan" value={compactId(selectedGate?.remediation_plan_id)} />
-              <ReviewItem label="Incident" value={compactId(selectedGate?.incident_id)} />
+              <ReviewItem
+                label="Remediation plan"
+                value={
+                  <button className="link-text" type="button" onClick={() => navigate("Remediation Plans", selectedGate?.remediation_plan_id)}>
+                    {compactId(selectedGate?.remediation_plan_id)}
+                  </button>
+                }
+              />
+              <ReviewItem
+                label="Incident"
+                value={
+                  <button className="link-text" type="button" onClick={() => navigate("Incidents", selectedGate?.incident_id)}>
+                    {compactId(selectedGate?.incident_id)}
+                  </button>
+                }
+              />
               {selectedGate?.decided_at ? (
                 <ReviewItem label="Decided" value={`${selectedGate?.decided_by ?? "unknown"} · ${formatTimestamp(selectedGate?.decided_at)}`} />
               ) : null}
@@ -1609,7 +1771,21 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
   );
 }
 
-function AuditView({ dashboard }) {
+function navTargetForResource(resourceKind, resourceId) {
+  const targets = {
+    run: ["Run Detail", String(resourceId)],
+    approval: ["Approvals", resourceId],
+    approval_gate: ["Approval Gates", resourceId],
+    remediation_plan: ["Remediation Plans", resourceId],
+    incident: ["Incidents", resourceId],
+    observation: ["Observations", resourceId],
+    work_plan: ["Flow", { kind: "work_plan", id: resourceId }],
+    change_set: ["Flow", { kind: "change_set", id: resourceId }],
+  };
+  return targets[resourceKind] ?? null;
+}
+
+function AuditView({ dashboard, openRun }) {
   const events = dashboard.data?.auditEvents ?? [];
   const latest = events[0];
   const resourceKinds = new Set(events.map((event) => event.resource_kind).filter(Boolean));
@@ -1651,24 +1827,347 @@ function AuditView({ dashboard }) {
             <span>Payload</span>
             <span>Time</span>
           </div>
-          {events.map((event) => (
-            <div className="audit-row" key={event.id}>
-              <span>
-                <i className={`dot ${eventTone(event.kind)}`} />
-                <strong title={event.kind}>{event.kind}</strong>
-              </span>
-              <span title={`${event.resource_kind}/${event.resource_id}`}>
-                {event.resource_kind}/{compactId(event.resource_id)}
-              </span>
-              <span>{event.actor ?? "system"}</span>
-              <span>{event.run_id ? compactId(String(event.run_id)) : "none"}</span>
-              <span title={JSON.stringify(event.payload ?? {})}>{eventPayloadSummary(event.payload)}</span>
-              <span>{formatTimestamp(event.created_at)}</span>
-            </div>
-          ))}
+          {events.map((event) => {
+            const target = navTargetForResource(event.resource_kind, event.resource_id);
+            return (
+              <div className="audit-row" key={event.id}>
+                <span>
+                  <i className={`dot ${eventTone(event.kind)}`} />
+                  <strong title={event.kind}>{event.kind}</strong>
+                </span>
+                <span title={`${event.resource_kind}/${event.resource_id}`}>
+                  {target ? (
+                    <button className="link-text" type="button" onClick={() => navigate(target[0], target[1])}>
+                      {event.resource_kind}/{compactId(event.resource_id)}
+                    </button>
+                  ) : (
+                    <>{event.resource_kind}/{compactId(event.resource_id)}</>
+                  )}
+                </span>
+                <span>{event.actor ?? "system"}</span>
+                <span>
+                  {event.run_id ? (
+                    <button className="link-text" type="button" onClick={() => openRun(event.run_id)}>
+                      {compactId(String(event.run_id))}
+                    </button>
+                  ) : (
+                    "none"
+                  )}
+                </span>
+                <span title={JSON.stringify(event.payload ?? {})}>{eventPayloadSummary(event.payload)}</span>
+                <span>{formatTimestamp(event.created_at)}</span>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyState title="No audit events" body="Policy decisions, approval decisions, permission grants, and SDLC state changes will appear here after control-plane activity." />
+      )}
+    </section>
+  );
+}
+
+function IncidentsView({ dashboard, selectedId, openRun }) {
+  const incidents = dashboard.data?.incidents ?? [];
+  const plans = dashboard.data?.remediationPlans ?? [];
+  const selected = incidents.find((incident) => incident.id === selectedId) ?? incidents[0] ?? null;
+  const linkedPlan = selected ? plans.find((plan) => plan.incident_id === selected.id) : null;
+  const highSeverity = incidents.filter((incident) => ["high", "critical"].includes(incident.severity)).length;
+  const candidates = incidents.filter((incident) => incident.status === "candidate").length;
+  const reasons = selected?.data_json?.reasons;
+  const metrics = [
+    ["Incidents", String(incidents.length), "latest page"],
+    ["Candidates", String(candidates), "awaiting triage"],
+    ["High severity", String(highSeverity), "operator attention"],
+    ["Run-linked", String(incidents.filter((incident) => incident.run_id).length), "execution context"],
+  ];
+
+  return (
+    <section className="gate-view">
+      <div className="section-heading">
+        <div>
+          <h1>Incidents</h1>
+          <p>Read-only incident candidates derived from Tekton and Release observability evidence.</p>
+        </div>
+        <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
+          <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
+        </button>
+      </div>
+      <div className="summary-grid">
+        {metrics.map(([label, value, note]) => (
+          <div className="metric" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{note}</small>
+          </div>
+        ))}
+      </div>
+      {incidents.length ? (
+        <div className="gate-layout">
+          <div className="approval-stack">
+            {incidents.map((incident) => (
+              <button
+                className={`approval-card ${incident.id === selected?.id ? "is-active" : ""}`}
+                type="button"
+                key={incident.id}
+                onClick={() => navigate("Incidents", incident.id)}
+              >
+                <span>{incident.severity} · {statusText(incident.status)}</span>
+                <strong>{incident.title}</strong>
+                <small>{resourceLabel(incident)} · {compactId(incident.id)}</small>
+                <b>{incident.severity}</b>
+              </button>
+            ))}
+          </div>
+          <div className="review-surface">
+            <h2>{selected?.title ?? "Incident"}</h2>
+            <p>{selected?.summary ?? "Select an incident to review its evidence."}</p>
+            <div className="review-grid">
+              <ReviewItem label="Status" value={statusText(selected?.status)} tone={selected?.status === "candidate" ? "pending" : undefined} />
+              <ReviewItem label="Severity" value={statusText(selected?.severity, "Unknown")} tone={riskTone(selected?.severity) === "high" ? "risk" : "pending"} />
+              <ReviewItem label="Resource" value={resourceLabel(selected)} />
+              <ReviewItem label="Created" value={formatTimestamp(selected?.created_at)} />
+              <ReviewItem
+                label="Observation"
+                value={
+                  <button className="link-text" type="button" onClick={() => navigate("Observations", selected?.observation_id)}>
+                    {compactId(selected?.observation_id)}
+                  </button>
+                }
+              />
+              {linkedPlan ? (
+                <ReviewItem
+                  label="Remediation plan"
+                  value={
+                    <button className="link-text" type="button" onClick={() => navigate("Remediation Plans", linkedPlan.id)}>
+                      {compactId(linkedPlan.id)}
+                    </button>
+                  }
+                />
+              ) : null}
+              {selected?.run_id ? (
+                <ReviewItem
+                  label="Run"
+                  value={
+                    <button className="link-text" type="button" onClick={() => openRun(selected.run_id)}>
+                      {compactId(String(selected.run_id))}
+                    </button>
+                  }
+                />
+              ) : null}
+            </div>
+            <div className="diff-box">
+              <div><Siren size={18} /> incident evidence</div>
+              <pre>{JSON.stringify(Array.isArray(reasons) ? { reasons } : selected?.data_json ?? {}, null, 2)}</pre>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <EmptyState title="No incidents" body="Incident candidates appear when attached Tekton or Release observability evidence needs attention." />
+      )}
+    </section>
+  );
+}
+
+function RemediationPlansView({ dashboard, selectedId }) {
+  const plans = dashboard.data?.remediationPlans ?? [];
+  const gates = dashboard.data?.approvalGates ?? [];
+  const selected = plans.find((plan) => plan.id === selectedId) ?? plans[0] ?? null;
+  const linkedGates = selected ? gates.filter((gate) => gate.remediation_plan_id === selected.id) : [];
+  const steps = Array.isArray(selected?.plan_json?.steps) ? selected.plan_json.steps : [];
+  const metrics = [
+    ["Plans", String(plans.length), "latest page"],
+    ["Drafts", String(plans.filter((plan) => plan.status === "draft").length), "awaiting review"],
+    ["Require approval", String(plans.filter((plan) => plan.requires_approval).length), "gated execution"],
+    ["High risk", String(plans.filter((plan) => ["high", "critical"].includes(plan.risk_level)).length), "operator attention"],
+  ];
+
+  return (
+    <section className="gate-view">
+      <div className="section-heading">
+        <div>
+          <h1>Remediation Plans</h1>
+          <p>Read-only remediation drafts. Execution stays behind approval gates; no mutation runs from this view.</p>
+        </div>
+        <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
+          <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
+        </button>
+      </div>
+      <div className="summary-grid">
+        {metrics.map(([label, value, note]) => (
+          <div className="metric" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{note}</small>
+          </div>
+        ))}
+      </div>
+      {plans.length ? (
+        <div className="gate-layout">
+          <div className="approval-stack">
+            {plans.map((plan) => (
+              <button
+                className={`approval-card ${plan.id === selected?.id ? "is-active" : ""}`}
+                type="button"
+                key={plan.id}
+                onClick={() => navigate("Remediation Plans", plan.id)}
+              >
+                <span>{plan.risk_level} · {statusText(plan.status)}</span>
+                <strong>{plan.title}</strong>
+                <small>{resourceLabel(plan)} · {compactId(plan.id)}</small>
+                <b>{plan.requires_approval ? "gated" : "ungated"}</b>
+              </button>
+            ))}
+          </div>
+          <div className="review-surface">
+            <h2>{selected?.title ?? "Remediation plan"}</h2>
+            <p>{selected?.summary ?? "Select a plan to review its steps and gates."}</p>
+            <div className="review-grid">
+              <ReviewItem label="Status" value={statusText(selected?.status)} tone={selected?.status === "draft" ? "pending" : undefined} />
+              <ReviewItem label="Risk" value={statusText(selected?.risk_level, "Unknown")} tone={riskTone(selected?.risk_level) === "high" ? "risk" : "pending"} />
+              <ReviewItem label="Requires approval" value={String(selected?.requires_approval ?? false)} />
+              <ReviewItem label="Resource" value={resourceLabel(selected)} />
+              <ReviewItem
+                label="Incident"
+                value={
+                  <button className="link-text" type="button" onClick={() => navigate("Incidents", selected?.incident_id)}>
+                    {compactId(selected?.incident_id)}
+                  </button>
+                }
+              />
+            </div>
+            {steps.length ? (
+              <div className="plan-steps">
+                {steps.map((step) => (
+                  <div className="plan-step" key={`${step.order}-${step.capability}`}>
+                    <b>{step.order}</b>
+                    <span>{step.kind}</span>
+                    <strong>{step.capability}</strong>
+                    <p>{step.summary}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {linkedGates.length ? (
+              <div className="resource-chips">
+                {linkedGates.map((gate) => (
+                  <button
+                    className={`chip-${gate.status === "pending" ? "pending" : "settled"}`}
+                    type="button"
+                    key={gate.id}
+                    onClick={() => navigate("Approval Gates", gate.id)}
+                  >
+                    {gate.gate_kind} · {statusText(gate.status)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <EmptyState title="No remediation plans" body="Draft remediation plans appear when incident candidates are created from observability evidence." />
+      )}
+    </section>
+  );
+}
+
+function ObservationsView({ dashboard, selectedId, openRun }) {
+  const observations = dashboard.data?.observations ?? [];
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const sources = ["all", ...new Set(observations.map((observation) => observation.source))];
+  const filtered =
+    sourceFilter === "all"
+      ? observations
+      : observations.filter((observation) => observation.source === sourceFilter);
+  const selected =
+    observations.find((observation) => observation.id === selectedId) ??
+    filtered[0] ??
+    null;
+  const metrics = [
+    ["Observations", String(observations.length), "latest page"],
+    ["Sources", String(new Set(observations.map((observation) => observation.source)).size), "evidence origins"],
+    ["Run-linked", String(observations.filter((observation) => observation.run_id).length), "execution context"],
+    ["With artifacts", String(observations.filter((observation) => observation.artifact_id).length), "durable payloads"],
+  ];
+
+  return (
+    <section className="gate-view">
+      <div className="section-heading">
+        <div>
+          <h1>Observations</h1>
+          <p>Normalized read-only facts persisted from typed cluster reads and control-plane activity.</p>
+        </div>
+        <div className="detail-actions">
+          <div className="filter-row" role="tablist" aria-label="Observation source filter">
+            {sources.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={sourceFilter === option ? "selected" : ""}
+                onClick={() => setSourceFilter(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+          <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
+            <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
+          </button>
+        </div>
+      </div>
+      <div className="summary-grid">
+        {metrics.map(([label, value, note]) => (
+          <div className="metric" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{note}</small>
+          </div>
+        ))}
+      </div>
+      {filtered.length ? (
+        <div className="gate-layout">
+          <div className="approval-stack">
+            {filtered.map((observation) => (
+              <button
+                className={`approval-card ${observation.id === selected?.id ? "is-active" : ""}`}
+                type="button"
+                key={observation.id}
+                onClick={() => navigate("Observations", observation.id)}
+              >
+                <span>{observation.source} · {observation.kind}</span>
+                <strong>{observation.subject}</strong>
+                <small>{resourceLabel(observation)} · {compactId(observation.id)}</small>
+                <b>{observation.artifact_id ? "artifact" : "inline"}</b>
+              </button>
+            ))}
+          </div>
+          <div className="review-surface">
+            <h2>{selected?.subject ?? "Observation"}</h2>
+            <p>{selected?.summary ?? "Select an observation to review its normalized data."}</p>
+            <div className="review-grid">
+              <ReviewItem label="Source" value={selected?.source ?? "unknown"} />
+              <ReviewItem label="Kind" value={selected?.kind ?? "unknown"} />
+              <ReviewItem label="Resource" value={resourceLabel(selected)} />
+              <ReviewItem label="Artifact" value={selected?.artifact_id ? compactId(selected.artifact_id) : "none"} />
+              {selected?.run_id ? (
+                <ReviewItem
+                  label="Run"
+                  value={
+                    <button className="link-text" type="button" onClick={() => openRun(selected.run_id)}>
+                      {compactId(String(selected.run_id))}
+                    </button>
+                  }
+                />
+              ) : null}
+            </div>
+            <div className="diff-box">
+              <div><ChartLineUp size={18} /> normalized observation data</div>
+              <pre>{JSON.stringify(selected?.data_json ?? {}, null, 2)}</pre>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <EmptyState title="No observations" body="Typed cluster reads and control-plane activity persist observations here." />
       )}
     </section>
   );
@@ -2005,21 +2504,34 @@ function Disclosure({ title, badge, children, defaultOpen = false }) {
 }
 
 export function App() {
-  const [activeView, setActiveView] = useState("Flow");
-  const [selectedRunId, setSelectedRunId] = useState(null);
+  const [route, setRoute] = useState(parseHash);
+  const [lastRunId, setLastRunId] = useState(null);
   const [theme, setTheme] = useState("dark");
   const [selectedNode, setSelectedNode] = useState("pipeline-analysis");
   const [gateState, setGateState] = useState("pending");
   const [toolApprovalState, setToolApprovalState] = useState("pending");
   const [actionNotice, setActionNotice] = useState("");
-  const dashboard = usePharnessDashboard();
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(parseHash());
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const routeRunId = route.view === "Run Detail" && typeof route.param === "string" ? route.param : null;
+  useEffect(() => {
+    if (routeRunId) {
+      setLastRunId(routeRunId);
+    }
+  }, [routeRunId]);
+
+  const flowRoot = route.view === "Flow" && route.param?.kind ? route.param : null;
+  const dashboard = usePharnessDashboard(flowRoot);
 
   return (
     <AppShell
-      activeView={activeView}
-      setActiveView={setActiveView}
-      selectedRunId={selectedRunId}
-      setSelectedRunId={setSelectedRunId}
+      route={route}
+      selectedRunId={routeRunId ?? lastRunId}
       theme={theme}
       setTheme={setTheme}
       selectedNode={selectedNode}

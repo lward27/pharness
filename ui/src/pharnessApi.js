@@ -69,7 +69,21 @@ async function firstListItem(path, key) {
   return items[0] ?? null;
 }
 
-async function loadFlow() {
+function flowPathForRoot(root) {
+  if (root?.kind === "work_plan") {
+    return `/api/work-plans/${encodeURIComponent(root.id)}/flow`;
+  }
+  return `/api/change-sets/${encodeURIComponent(root.id)}/flow`;
+}
+
+async function loadFlow(rootOverride) {
+  if (rootOverride?.kind && rootOverride?.id) {
+    return {
+      root: rootOverride,
+      flow: await fetchJson(flowPathForRoot(rootOverride)),
+    };
+  }
+
   const changeSet = await firstListItem("/api/change-sets", "change_sets");
   if (changeSet?.id) {
     return {
@@ -89,17 +103,35 @@ async function loadFlow() {
   return { root: null, flow: null };
 }
 
-export async function loadDashboardData() {
-  const [health, config, runs, runsSummary, approvals, approvalGates, auditEvents, workPlans, flowResult] = await Promise.all([
+export async function loadDashboardData(flowRootOverride) {
+  const [
+    health,
+    config,
+    runs,
+    runsSummary,
+    approvals,
+    approvalGates,
+    auditEvents,
+    workPlans,
+    changeSets,
+    incidents,
+    remediationPlans,
+    observations,
+    flowResult,
+  ] = await Promise.all([
     fetchJson("/health"),
     fetchJson("/api/config/effective"),
     fetchJson("/api/runs?limit=25"),
     fetchJson("/api/runs/summary"),
-    fetchJson("/api/approvals?limit=25"),
-    fetchJson("/api/approval-gates?limit=25"),
+    fetchJson("/api/approvals?limit=50"),
+    fetchJson("/api/approval-gates?limit=50"),
     fetchJson("/api/audit-events?limit=50"),
     fetchJson("/api/work-plans?limit=50"),
-    loadFlow(),
+    fetchJson("/api/change-sets?limit=25"),
+    fetchJson("/api/incidents?limit=50"),
+    fetchJson("/api/remediation-plans?limit=50"),
+    fetchJson("/api/observations?limit=50"),
+    loadFlow(flowRootOverride),
   ]);
 
   setOperatorName(config?.operator?.name);
@@ -113,6 +145,10 @@ export async function loadDashboardData() {
     approvalGates: Array.isArray(approvalGates?.approval_gates) ? approvalGates.approval_gates : [],
     auditEvents: Array.isArray(auditEvents?.events) ? auditEvents.events : [],
     workPlans: Array.isArray(workPlans?.work_plans) ? workPlans.work_plans : [],
+    changeSets: Array.isArray(changeSets?.change_sets) ? changeSets.change_sets : [],
+    incidents: Array.isArray(incidents?.incidents) ? incidents.incidents : [],
+    remediationPlans: Array.isArray(remediationPlans?.remediation_plans) ? remediationPlans.remediation_plans : [],
+    observations: Array.isArray(observations?.observations) ? observations.observations : [],
     flowRoot: flowResult.root,
     flow: flowResult.flow,
     loadedAt: new Date().toLocaleTimeString(),
