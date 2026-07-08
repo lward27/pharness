@@ -109,6 +109,26 @@ no-decorative-controls rules there still govern.
 
 ## Verification
 
+- The P1 pass shipped on 2026-07-08 and was verified against the deployed
+  API's live data before shipping and on the deployed console after
+  rollout (bundle hash matched the local build exactly).
+  - Hash deep links restore every surface across a hard reload
+    (`#/incidents`, `#/observations`, `#/gates/<id>`, ...).
+  - The Flow root picker lists recent ChangeSets and WorkPlans, switches
+    the flow read model, and encodes the root in the URL
+    (`#/flow/change_set/<id>`); WorkPlans open into Flow.
+  - Incidents (8), Remediation Plans (8), and Observations (15) render
+    live smoke-generated data with metrics, source filters, and detail
+    panels; the incident -> plan -> gate link graph navigates end to end,
+    and plan detail showed live gate statuses (two satisfied by the
+    operator, two pending).
+  - Approval gates group under remediation-plan headers that link to the
+    owning plan; audit rows and timeline cards navigate to their owning
+    surfaces.
+  - `scripts/pharness-build.sh` (bash, literal image references) shipped
+    the image; the deployed bundle hash matched the local build,
+    confirming the mistagged-push failure mode is closed.
+
 - The P0 pass shipped on 2026-07-08 and was verified twice: against the
   deployed API's live data through the dev proxy before shipping (queue
   summary reads real counts, run rows show turns, both approval surfaces
