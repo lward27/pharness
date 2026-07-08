@@ -107,6 +107,28 @@ no-decorative-controls rules there still govern.
 - No chat/assistant surface; runs, evidence, policy, and audit stay primary.
 - Keep the dark operational console visual grammar.
 
+## Verification
+
+- The P0 pass shipped on 2026-07-08 and was verified twice: against the
+  deployed API's live data through the dev proxy before shipping (queue
+  summary reads real counts, run rows show turns, both approval surfaces
+  filter pending/decided with real count pills, the gate panel renders
+  order/requested/plan/incident, the inspector's hardcoded count is gone,
+  planned nav items lost their badges, worker mode reads kubernetes_job),
+  and again on the deployed console through the tunnel after rollout.
+  The approvals API now returns requested/decided metadata, shown for the
+  finance-app approval decided by `lucas`.
+
+- Deployment note: the first attempt to ship these images silently landed
+  in `pharness-uiatest` / `pharness-runtimeatest` registry repositories.
+  Cause: an ad-hoc zsh heredoc expanded `$IMG:latest` as the `${IMG:l}`
+  lowercase modifier plus `atest`. Kaniko reported success because the
+  push genuinely succeeded, at the wrong name; rollouts then re-pulled the
+  old `latest`. Recovered with an in-cluster skopeo copy to the correct
+  repositories. Keep image references literal or brace-quoted in shells,
+  and prefer `scripts/trigger-build.sh` (bash, unaffected). The two junk
+  repositories remain in the registry until a garbage-collection pass.
+
 ## Sequencing
 
 1. P0 is a single focused pass; every item has a located cause.
