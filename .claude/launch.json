@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pharness-ui-dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PHARNESS_API_PROXY=http://127.0.0.1:24777", "PHARNESS_API_PROXY_TOKEN=b279dbdb95fcf44cb496ffcd4d036ff439acfb465deddf0bb6fbf15a4c7ab711", "node_modules/.bin/vite", "--host", "127.0.0.1", "--port", "5199"],
+      "port": 5199,
+      "cwd": "ui"
+    }
+  ]
+}

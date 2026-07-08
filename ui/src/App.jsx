@@ -333,7 +333,7 @@ function badgeForNav(id, data) {
     return data?.approvalGates?.filter((gate) => gate.status === "pending").length ?? 0;
   }
   if (id === "Runs") {
-    return data?.runsSummary?.summary?.running ?? null;
+    return statusCount(data?.runsSummary?.summary, "running") || null;
   }
   if (id === "Audit") {
     return data?.auditEvents?.length ?? null;
@@ -348,7 +348,7 @@ function badgeForNav(id, data) {
 }
 
 function statusCount(summary, status) {
-  const bucket = summary?.by_status?.find((item) => item.label === status);
+  const bucket = summary?.by_status?.find((item) => item.value === status);
   return bucket?.count ?? 0;
 }
 
@@ -446,7 +446,7 @@ function AppShell({
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.view === activeView;
-            const badge = badgeForNav(item.id, dashboardData) ?? item.badge;
+            const badge = item.view ? badgeForNav(item.id, dashboardData) ?? item.badge : null;
             return (
               <button
                 className={`nav-item ${active ? "is-active" : ""}`}
@@ -475,7 +475,11 @@ function AppShell({
             <Pulse size={18} />
             <div>
               <span>Worker</span>
-              <strong>{dashboardData?.config?.worker?.enabled ? "Enabled" : "Disabled"}</strong>
+              <strong>
+                {dashboardData?.config?.worker?.enabled
+                  ? dashboardData?.config?.worker?.mode ?? "enabled"
+                  : "Disabled"}
+              </strong>
             </div>
           </div>
           <div className="health-row muted">
@@ -567,12 +571,10 @@ function AppShell({
             selectedNode={selectedNode}
             topologyNodes={topologyNodes}
             flow={dashboardData?.flow}
-            gateState={gateState}
-            setGateState={setGateState}
-            toolApprovalState={toolApprovalState}
-            setToolApprovalState={setToolApprovalState}
+            pendingToolApprovals={
+              dashboardData?.approvals?.filter((approval) => approval.status === "pending").length ?? 0
+            }
             actionNotice={actionNotice}
-            setActionNotice={setActionNotice}
           />
         </section>
       </main>
@@ -581,13 +583,13 @@ function AppShell({
 }
 
 function ImplementationStrip({ dashboard }) {
-  const workerEnabled = Boolean(dashboard.data?.config?.worker?.enabled);
+  const worker = dashboard.data?.config?.worker;
   const liveSurfaces = [
     "Flow read model",
     "WorkPlan list",
     "Run queue",
     "Run detail live events",
-    workerEnabled ? "Fireworks worker" : "Worker disabled",
+    worker?.enabled ? `${worker?.mode ?? "model"} worker` : "Worker disabled",
     "Tool approvals",
     "Approval gates",
     "Audit log",
@@ -901,7 +903,7 @@ function QueueView({ dashboard, setActiveView, setSelectedRunId }) {
               </span>
               <span>{runScopeLabel(run.scope)}</span>
               <StatusPill tone={run.status === "approval_required" ? "pending" : lifecycleTone(run.status)}>{statusText(run.status)}</StatusPill>
-              <span className={`risk-${riskTone(run.result?.risk_level)}`}>{run.result?.risk_level ?? "unknown"}</span>
+              <span>{run.result?.turns != null ? `${run.result.turns} turns` : "\u2014"}</span>
               <span>{formatTimestamp(run.started_at)}</span>
               <span className="row-actions">
                 <button
@@ -1376,7 +1378,13 @@ function ToolApprovalsView({
   setActiveView,
   setSelectedRunId,
 }) {
-  const approvals = dashboard.data?.approvals ?? [];
+  const allApprovals = dashboard.data?.approvals ?? [];
+  const pendingCount = allApprovals.filter((approval) => approval.status === "pending").length;
+  const [approvalFilter, setApprovalFilter] = useState("pending");
+  const approvals =
+    approvalFilter === "pending"
+      ? allApprovals.filter((approval) => approval.status === "pending")
+      : allApprovals;
   const [selectedApprovalId, setSelectedApprovalId] = useState("");
   const selectedApproval =
     approvals.find((approval) => approval.id === selectedApprovalId) ??
@@ -1414,7 +1422,19 @@ function ToolApprovalsView({
           <p>Execution decisions for proposed tool actions. These authorize or deny a paused run action.</p>
         </div>
         <div className="detail-actions">
-          <StatusPill tone={toolApprovalState === "pending" ? "pending" : toolApprovalState === "approved" ? "healthy" : "blocked"}>{toolApprovalState}</StatusPill>
+          <StatusPill tone={pendingCount ? "pending" : "healthy"}>{pendingCount} pending</StatusPill>
+          <div className="filter-row" role="tablist" aria-label="Approval status filter">
+            {["pending", "all"].map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={approvalFilter === option ? "selected" : ""}
+                onClick={() => setApprovalFilter(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
           <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
             <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
           </button>
@@ -1431,7 +1451,7 @@ function ToolApprovalsView({
                 key={approval.id}
                 onClick={() => setSelectedApprovalId(approval.id)}
               >
-                <span>{approval.kind}</span>
+                <span>{approval.kind} · {statusText(approval.status)}</span>
                 <strong>{approval.summary}</strong>
                 <small>{compactId(approval.id)} · {compactId(String(approval.run_id))}</small>
                 <b>{approval.risk_level}</b>
@@ -1446,6 +1466,13 @@ function ToolApprovalsView({
               <ReviewItem label="Run" value={compactId(String(selectedApproval?.run_id))} />
               <ReviewItem label="Risk" value={statusText(selectedApproval?.risk_level, "Unknown")} tone={riskTone(selectedApproval?.risk_level) === "high" ? "risk" : "pending"} />
               <ReviewItem label="Status" value={statusText(selectedApproval?.status)} tone={selectedApproval?.status === "pending" ? "pending" : undefined} />
+              <ReviewItem label="Requested" value={formatTimestamp(selectedApproval?.requested_at)} />
+              {selectedApproval?.decided_at ? (
+                <ReviewItem label="Decided" value={`${selectedApproval?.decided_by ?? "unknown"} · ${formatTimestamp(selectedApproval?.decided_at)}`} />
+              ) : null}
+              {selectedApproval?.decision_reason ? (
+                <ReviewItem label="Reason" value={selectedApproval.decision_reason} />
+              ) : null}
             </div>
             <div className="diff-box">
               <div><FileText size={18} /> {approvalPreviewPath(selectedApproval)}</div>
@@ -1458,6 +1485,8 @@ function ToolApprovalsView({
             </div>
           </div>
         </div>
+      ) : approvalFilter === "pending" && allApprovals.length ? (
+        <EmptyState title="No pending tool approvals" body="Decided approvals are available under the all filter." />
       ) : (
         <EmptyState title="No tool approvals pending" body="Paused write, shell, and network actions will appear here when a run requests human review." />
       )}
@@ -1466,7 +1495,13 @@ function ToolApprovalsView({
 }
 
 function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, setActionNotice }) {
-  const gates = dashboard.data?.approvalGates ?? [];
+  const allGates = dashboard.data?.approvalGates ?? [];
+  const pendingGateCount = allGates.filter((gate) => gate.status === "pending").length;
+  const [gateFilter, setGateFilter] = useState("pending");
+  const gates =
+    gateFilter === "pending"
+      ? allGates.filter((gate) => gate.status === "pending")
+      : allGates;
   const [selectedGateId, setSelectedGateId] = useState("");
   const selectedGate =
     gates.find((gate) => gate.id === selectedGateId) ??
@@ -1496,7 +1531,19 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
           <p>Governance and release-state review. Gates do not authorize tool execution by themselves.</p>
         </div>
         <div className="detail-actions">
-          <StatusPill tone={gateState === "pending" ? "pending" : gateState === "satisfied" ? "healthy" : "blocked"}>{gateState}</StatusPill>
+          <StatusPill tone={pendingGateCount ? "pending" : "healthy"}>{pendingGateCount} pending</StatusPill>
+          <div className="filter-row" role="tablist" aria-label="Gate status filter">
+            {["pending", "all"].map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={gateFilter === option ? "selected" : ""}
+                onClick={() => setGateFilter(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
           <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
             <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
           </button>
@@ -1527,10 +1574,23 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
               <ReviewItem label="Status" value={statusText(selectedGate?.status)} tone={selectedGate?.status === "pending" ? "pending" : undefined} />
               <ReviewItem label="Risk" value={statusText(selectedGate?.risk_level, "Unknown")} tone={riskTone(selectedGate?.risk_level) === "high" ? "risk" : "pending"} />
               <ReviewItem label="Gate kind" value={selectedGate?.gate_kind ?? "unknown"} />
+              <ReviewItem label="Gate order" value={selectedGate?.gate_order ?? "unknown"} />
               <ReviewItem label="Resource" value={resourceLabel(selectedGate)} />
+              <ReviewItem label="Requested" value={formatTimestamp(selectedGate?.created_at)} />
+              <ReviewItem label="Remediation plan" value={compactId(selectedGate?.remediation_plan_id)} />
+              <ReviewItem label="Incident" value={compactId(selectedGate?.incident_id)} />
+              {selectedGate?.decided_at ? (
+                <ReviewItem label="Decided" value={`${selectedGate?.decided_by ?? "unknown"} · ${formatTimestamp(selectedGate?.decided_at)}`} />
+              ) : null}
+              {selectedGate?.decision_reason ? (
+                <ReviewItem label="Reason" value={selectedGate.decision_reason} />
+              ) : null}
+              {selectedGate?.stale_at ? (
+                <ReviewItem label="Stale" value={`${selectedGate?.stale_reason ?? "superseded"} · ${formatTimestamp(selectedGate?.stale_at)}`} tone="pending" />
+              ) : null}
             </div>
             <div className="diff-box">
-              <div><FileText size={18} /> {compactId(selectedGate?.remediation_plan_id)}</div>
+              <div><FileText size={18} /> gate payload · plan {compactId(selectedGate?.remediation_plan_id)}</div>
               <pre>{JSON.stringify(selectedGate?.gate_json ?? {}, null, 2)}</pre>
             </div>
             <div className="decision-row">
@@ -1540,6 +1600,8 @@ function ApprovalGatesView({ dashboard, gateState, setGateState, actionNotice, s
             </div>
           </div>
         </div>
+      ) : gateFilter === "pending" && allGates.length ? (
+        <EmptyState title="No pending approval gates" body="Decided and stale gates are available under the all filter." />
       ) : (
         <EmptyState title="No approval gates" body="Release, deployment, and remediation gates will appear here when governance state exists." />
       )}
@@ -1634,8 +1696,7 @@ function Inspector({
   selectedNode,
   topologyNodes,
   flow,
-  gateState,
-  toolApprovalState,
+  pendingToolApprovals,
   actionNotice,
 }) {
   const node = useMemo(
@@ -1716,15 +1777,15 @@ function Inspector({
           {resourceChips(flow).map((resource) => <span key={resource}>{resource}</span>)}
         </div>
       </Disclosure>
-      <Disclosure title="Approval Gates" badge={`${gateCounts.pending} pending`}>
-        <p className="compact-copy">Governance gates are decided in the Approval Gates tab. This panel is read-only.</p>
+      <Disclosure title="Approval Gates (this flow)" badge={`${gateCounts.pending} pending`}>
+        <p className="compact-copy">Gates scoped to the selected flow root. Governance gates are decided in the Approval Gates tab; the global count lives in the navigation badge.</p>
         <div className="radius-list">
           <div><span>Pending</span><strong>{gateCounts.pending}</strong></div>
           <div><span>Stale</span><strong>{gateCounts.stale}</strong></div>
           <div><span>Rejected</span><strong>{gateCounts.rejected}</strong></div>
         </div>
       </Disclosure>
-      <Disclosure title="Tool Approvals" badge={toolApprovalState === "pending" ? "2 pending" : toolApprovalState}>
+      <Disclosure title="Tool Approvals" badge={`${pendingToolApprovals ?? 0} pending`}>
         <p className="compact-copy">Tool approvals are live in the Approvals tab when a run pauses for write, shell, network, or destructive actions.</p>
       </Disclosure>
       <Disclosure title="Audit Events" badge={auditEvents.length ? "latest" : "none"}>

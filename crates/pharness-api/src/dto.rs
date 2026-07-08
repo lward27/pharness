@@ -1185,6 +1185,13 @@ pub struct ApprovalResponse {
     pub summary: String,
     pub risk_level: String,
     pub turns_completed: u32,
+    pub requested_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decided_by: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decision_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<RunScope>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1202,6 +1209,10 @@ impl From<StoredApproval> for ApprovalResponse {
             summary: approval.summary,
             risk_level: approval.risk_level,
             turns_completed: approval.turns_completed,
+            requested_at: approval.requested_at,
+            decided_at: approval.decided_at,
+            decided_by: approval.decided_by,
+            decision_reason: approval.decision_reason,
             scope: approval
                 .run_scope_json
                 .and_then(|value| serde_json::from_value::<RunScope>(value).ok())

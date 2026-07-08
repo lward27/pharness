@@ -1659,6 +1659,7 @@ dd {
 .review-surface {
   display: grid;
   gap: 14px;
+  align-content: start;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2086,4 +2087,32 @@ dd {
   .run-submit-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.filter-row {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.filter-row button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.filter-row button.selected {
+  background: rgba(50, 215, 223, 0.14);
+  color: var(--text);
+}
+
+.row-actions button:disabled {
+  opacity: 0.3;
+  filter: grayscale(0.8);
 }
