@@ -8,7 +8,7 @@
   smoke. It performs one bounded mutation only after a successful preflight.
 - The test fixture is GitOps-managed. Do not use `kubectl apply` to create it
   during a smoke run; a missing fixture is a deployment failure to resolve.
-- An applied intent records its submission, then a terminal `completed` or
+- An applied intent records its submission, then a terminal `succeeded` or
   `failed` execution receipt. Submission alone is not a successful mutation.
 - A terminal receipt is not a deployment approval. A matching satisfied
   PipelineRunAnalysis remains required before a DeploymentIntent can approve.
@@ -47,7 +47,7 @@ actual PipelineRun identity.
 4. Confirm the durable-record panel reports `Preflight Passed`. At this point
    Pharness has not created a PipelineRun.
 5. Choose **Dispatch inert PipelineRun**.
-6. Wait for the status to become `Completed`, then choose **Open delivery
+6. Wait for the status to become `Succeeded`, then choose **Open delivery
    flow** to inspect the WorkPlan, ChangeSet, PipelineIntent, approval gates,
    audit events, and terminal PipelineRun receipt.
 

@@ -220,7 +220,7 @@ main() {
   wait_for_terminal_execution "$PIPELINE_INTENT_ID"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
     '.execution_evidence.status == "succeeded" and .execution_evidence.pipeline_run.name != null' \
-    "executor must report durable completed evidence"
+    "executor must report durable successful evidence"
   PIPELINE_RUN_NAME="$(jq -r '.execution_evidence.pipeline_run.name' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
   kubectl -n "$TEKTON_NAMESPACE" get pipelinerun "$PIPELINE_RUN_NAME" -o json >"$ARTIFACT_DIR/pipeline-run.json"
   assert_jq "$ARTIFACT_DIR/pipeline-run.json" \
