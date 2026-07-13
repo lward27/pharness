@@ -1,20 +1,22 @@
 use crate::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
-    ApprovalSummary, ApprovalSummaryFilter, BooleanCountBucket, ChangeSetListFilter, CountBucket,
-    CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
-    CreateDeploymentIntent, CreateFileChange, CreateIncident, CreateObservation,
-    CreatePermissionGrant, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, DeploymentIntentListFilter,
-    IncidentListFilter, ObservationListFilter, PipelineIntentListFilter,
-    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter, RunListFilter,
+    ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
+    ChangeSetListFilter, CountBucket, CreateApproval, CreateApprovalGate, CreateArtifact,
+    CreateAuditEvent, CreateChangeSet, CreateDeploymentIntent, CreateFileChange, CreateIncident,
+    CreateObservation, CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent,
+    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
+    CreateWorkPlan, DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
+    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
+    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
     RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
     StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredPipelineIntent, StoredRegistryEvidence,
-    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
-    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
-    UpdatePipelineIntentEvidence, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
+    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
+    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
+    UpdateChangeSetRevision, UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence,
+    UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution,
+    UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
+    WorkPlanListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -1478,6 +1480,183 @@ impl SqliteStore {
         rows.into_iter().map(row_to_pipeline_intent).collect()
     }
 
+    pub async fn create_pipeline_contract(
+        &self,
+        contract: CreatePipelineContract,
+    ) -> Result<StoredPipelineContract, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO pipeline_contracts (
+              id, status, namespace, pipeline_ref, version, contract_json, created_at,
+              updated_at, status_changed_at, status_changed_by, status_reason
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&contract.id)
+        .bind(&contract.status)
+        .bind(&contract.namespace)
+        .bind(&contract.pipeline_ref)
+        .bind(&contract.version)
+        .bind(serde_json::to_string(&contract.contract_json)?)
+        .bind(now)
+        .bind(contract.actor)
+        .bind(contract.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_contract(&contract.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_contract".to_string(),
+                id: contract.id,
+            })
+    }
+
+    pub async fn get_pipeline_contract(
+        &self,
+        contract_id: &str,
+    ) -> Result<Option<StoredPipelineContract>, StoreError> {
+        let row = sqlx::query(pipeline_contract_select_sql("WHERE id = ?1"))
+            .bind(contract_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_pipeline_contract).transpose()
+    }
+
+    pub async fn list_pipeline_contracts(
+        &self,
+        filter: PipelineContractListFilter,
+    ) -> Result<Vec<StoredPipelineContract>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, status, namespace, pipeline_ref, version, contract_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM pipeline_contracts
+            WHERE (?1 IS NULL OR namespace = ?1)
+              AND (?2 IS NULL OR pipeline_ref = ?2)
+              AND (?3 IS NULL OR status = ?3)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?4 OFFSET ?5
+            "#,
+        )
+        .bind(filter.namespace)
+        .bind(filter.pipeline_ref)
+        .bind(filter.status)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_pipeline_contract).collect()
+    }
+
+    pub async fn update_pipeline_contract_status(
+        &self,
+        contract_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredPipelineContract, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE pipeline_contracts
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(contract_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_pipeline_contract(contract_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_contract".to_string(),
+                id: contract_id.to_string(),
+            })
+    }
+
+    /// Atomically retire one active contract and activate its replacement.
+    /// No committed state contains two active versions or an empty contract slot.
+    pub async fn replace_pipeline_contract(
+        &self,
+        current_contract_id: &str,
+        replacement: ReplacePipelineContract,
+    ) -> Result<(StoredPipelineContract, StoredPipelineContract), StoreError> {
+        let now = now_string();
+        let mut transaction = self.pool.begin().await?;
+        let retired = sqlx::query(
+            r#"
+            UPDATE pipeline_contracts
+            SET status = 'retired',
+                updated_at = ?2,
+                status_changed_at = ?2,
+                status_changed_by = ?3,
+                status_reason = ?4
+            WHERE id = ?1 AND status = 'active'
+            "#,
+        )
+        .bind(current_contract_id)
+        .bind(&now)
+        .bind(&replacement.actor)
+        .bind(&replacement.reason)
+        .execute(&mut *transaction)
+        .await?;
+        if retired.rows_affected() != 1 {
+            return Err(StoreError::NotFound {
+                entity: "active pipeline_contract".to_string(),
+                id: current_contract_id.to_string(),
+            });
+        }
+        sqlx::query(
+            r#"
+            INSERT INTO pipeline_contracts (
+              id, status, namespace, pipeline_ref, version, contract_json, created_at,
+              updated_at, status_changed_at, status_changed_by, status_reason
+            )
+            VALUES (?1, 'active', ?2, ?3, ?4, ?5, ?6, ?6, ?6, ?7, ?8)
+            "#,
+        )
+        .bind(&replacement.id)
+        .bind(&replacement.namespace)
+        .bind(&replacement.pipeline_ref)
+        .bind(&replacement.version)
+        .bind(serde_json::to_string(&replacement.contract_json)?)
+        .bind(&now)
+        .bind(&replacement.actor)
+        .bind(&replacement.reason)
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+
+        let retired = self
+            .get_pipeline_contract(current_contract_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_contract".to_string(),
+                id: current_contract_id.to_string(),
+            })?;
+        let active = self
+            .get_pipeline_contract(&replacement.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_contract".to_string(),
+                id: replacement.id,
+            })?;
+        Ok((retired, active))
+    }
+
     pub async fn update_pipeline_intent_status(
         &self,
         intent_id: &str,
@@ -1581,6 +1760,42 @@ impl SqliteStore {
             "#,
         )
         .bind(intent_id)
+        .bind(intent_json)
+        .bind(now)
+        .bind(update.actor)
+        .bind(update.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_pipeline_intent(intent_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "pipeline_intent".to_string(),
+                id: intent_id.to_string(),
+            })
+    }
+
+    pub async fn update_pipeline_intent_execution(
+        &self,
+        intent_id: &str,
+        update: UpdatePipelineIntentExecution,
+    ) -> Result<StoredPipelineIntent, StoreError> {
+        let now = now_string();
+        let intent_json = serde_json::to_string(&update.intent_json)?;
+        sqlx::query(
+            r#"
+            UPDATE pipeline_intents
+            SET status = ?2,
+                intent_json = ?3,
+                updated_at = ?4,
+                status_changed_at = ?4,
+                status_changed_by = ?5,
+                status_reason = ?6
+            WHERE id = ?1
+            "#,
+        )
+        .bind(intent_id)
+        .bind(update.status)
         .bind(intent_json)
         .bind(now)
         .bind(update.actor)
@@ -2818,6 +3033,92 @@ impl SqliteStore {
 
         rows.into_iter().map(row_to_audit_event).collect()
     }
+
+    pub async fn query_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> Result<Vec<StoredAuditEvent>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let production_impacting = filter.production_impacting.map(i64::from);
+        let rows = sqlx::query(
+            r#"
+            SELECT ae.id, ae.kind, ae.actor, ae.resource_kind, ae.resource_id, ae.run_id,
+                   ae.payload_json, ae.created_at
+            FROM audit_events ae
+            LEFT JOIN runs r ON r.id = ae.run_id
+            WHERE (?1 IS NULL OR ae.kind = ?1)
+              AND (?2 IS NULL OR ae.actor = ?2)
+              AND (?3 IS NULL OR ae.resource_kind = ?3)
+              AND (?4 IS NULL OR ae.resource_id = ?4)
+              AND (?5 IS NULL OR ae.run_id = ?5)
+              AND (?6 IS NULL OR COALESCE(
+                    json_extract(ae.payload_json, '$.run_scope.namespace'),
+                    json_extract(ae.payload_json, '$.scope.namespace'),
+                    json_extract(ae.payload_json, '$.resource_namespace'),
+                    json_extract(r.execution_target_json, '$.scope.namespace'),
+                    CASE ae.resource_kind
+                      WHEN 'work_plan' THEN (SELECT resource_namespace FROM work_plans WHERE id = ae.resource_id)
+                      WHEN 'change_set' THEN (SELECT resource_namespace FROM change_sets WHERE id = ae.resource_id)
+                      WHEN 'pipeline_intent' THEN (SELECT resource_namespace FROM pipeline_intents WHERE id = ae.resource_id)
+                      WHEN 'deployment_intent' THEN (SELECT COALESCE(target_namespace, resource_namespace) FROM deployment_intents WHERE id = ae.resource_id)
+                      WHEN 'release' THEN (SELECT target_namespace FROM releases WHERE id = ae.resource_id)
+                      WHEN 'approval_gate' THEN (SELECT resource_namespace FROM approval_gates WHERE id = ae.resource_id)
+                      WHEN 'observation' THEN (SELECT resource_namespace FROM observations WHERE id = ae.resource_id)
+                      WHEN 'incident' THEN (SELECT resource_namespace FROM incidents WHERE id = ae.resource_id)
+                      WHEN 'remediation_plan' THEN (SELECT resource_namespace FROM remediation_plans WHERE id = ae.resource_id)
+                      WHEN 'permission_grant' THEN (SELECT json_extract(scope_json, '$.namespaces[0]') FROM permission_grants WHERE id = ae.resource_id)
+                    END
+                  ) = ?6)
+              AND (?7 IS NULL OR COALESCE(
+                    json_extract(ae.payload_json, '$.run_scope.repo'),
+                    json_extract(ae.payload_json, '$.scope.repo'),
+                    json_extract(r.execution_target_json, '$.scope.repo'),
+                    CASE ae.resource_kind
+                      WHEN 'permission_grant' THEN (SELECT json_extract(scope_json, '$.repos[0]') FROM permission_grants WHERE id = ae.resource_id)
+                    END
+                  ) = ?7)
+              AND (?8 IS NULL OR COALESCE(
+                    json_extract(ae.payload_json, '$.run_scope.branch'),
+                    json_extract(ae.payload_json, '$.scope.branch'),
+                    json_extract(r.execution_target_json, '$.scope.branch'),
+                    CASE ae.resource_kind
+                      WHEN 'permission_grant' THEN (SELECT json_extract(scope_json, '$.branches[0]') FROM permission_grants WHERE id = ae.resource_id)
+                    END
+                  ) = ?8)
+              AND (?9 IS NULL OR COALESCE(
+                    json_extract(ae.payload_json, '$.run_scope.production_impacting'),
+                    json_extract(ae.payload_json, '$.scope.production_impacting'),
+                    json_extract(r.execution_target_json, '$.scope.production_impacting'),
+                    CASE ae.resource_kind
+                      WHEN 'permission_grant' THEN (SELECT json_extract(scope_json, '$.production_impacting') FROM permission_grants WHERE id = ae.resource_id)
+                    END
+                  ) = ?9)
+              AND (?10 IS NULL OR ae.kind LIKE '%' || ?10 || '%' COLLATE NOCASE
+                    OR COALESCE(ae.actor, '') LIKE '%' || ?10 || '%' COLLATE NOCASE
+                    OR ae.resource_kind LIKE '%' || ?10 || '%' COLLATE NOCASE
+                    OR ae.resource_id LIKE '%' || ?10 || '%' COLLATE NOCASE
+                    OR COALESCE(ae.run_id, '') LIKE '%' || ?10 || '%' COLLATE NOCASE
+                    OR ae.payload_json LIKE '%' || ?10 || '%' COLLATE NOCASE)
+            ORDER BY ae.created_at DESC, ae.id DESC
+            LIMIT ?11
+            "#,
+        )
+        .bind(filter.kind)
+        .bind(filter.actor)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.namespace)
+        .bind(filter.repo)
+        .bind(filter.branch)
+        .bind(production_impacting)
+        .bind(filter.search)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_audit_event).collect()
+    }
 }
 
 fn row_to_file_change(row: sqlx::sqlite::SqliteRow) -> Result<StoredFileChange, StoreError> {
@@ -2996,6 +3297,25 @@ fn row_to_pipeline_intent(
         resource_kind: row.try_get("resource_kind")?,
         resource_name: row.try_get("resource_name")?,
         intent_json: serde_json::from_str(&intent_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_pipeline_contract(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredPipelineContract, StoreError> {
+    let contract_json: String = row.try_get("contract_json")?;
+    Ok(StoredPipelineContract {
+        id: row.try_get("id")?,
+        status: row.try_get("status")?,
+        namespace: row.try_get("namespace")?,
+        pipeline_ref: row.try_get("pipeline_ref")?,
+        version: row.try_get("version")?,
+        contract_json: serde_json::from_str(&contract_json)?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
         status_changed_at: row.try_get("status_changed_at")?,
@@ -3289,6 +3609,20 @@ fn pipeline_intent_select_sql(where_clause: &str) -> &'static str {
             "#
         }
         _ => unreachable!("pipeline intent select SQL only supports known static clauses"),
+    }
+}
+
+fn pipeline_contract_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, status, namespace, pipeline_ref, version, contract_json, created_at,
+                   updated_at, status_changed_at, status_changed_by, status_reason
+            FROM pipeline_contracts
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("pipeline contract select SQL only supports known static clauses"),
     }
 }
 
@@ -5646,7 +5980,15 @@ mod tests {
                 resource_kind: "permission_grant".to_string(),
                 resource_id: "pgrant_1".to_string(),
                 run_id: Some(run_id.clone()),
-                payload_json: serde_json::json!({"grant_id": "pgrant_1"}),
+                payload_json: serde_json::json!({
+                    "grant_id": "pgrant_1",
+                    "run_scope": {
+                        "namespace": "apps-dev",
+                        "repo": "team/pharness",
+                        "branch": "main",
+                        "production_impacting": false
+                    }
+                }),
             })
             .await
             .unwrap();
@@ -5658,9 +6000,23 @@ mod tests {
             .list_audit_events(None, None, Some(&run_id), 50)
             .await
             .unwrap();
+        let searched = store
+            .query_audit_events(crate::AuditEventListFilter {
+                actor: Some("agent:local-worker".to_string()),
+                namespace: Some("apps-dev".to_string()),
+                repo: Some("team/pharness".to_string()),
+                branch: Some("main".to_string()),
+                production_impacting: Some(false),
+                search: Some("pgrant_1".to_string()),
+                limit: 50,
+                ..crate::AuditEventListFilter::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(created.kind, "permission_grant.used");
         assert_eq!(by_resource.len(), 1);
         assert_eq!(by_run[0].payload_json["grant_id"], "pgrant_1");
+        assert_eq!(searched.len(), 1);
     }
 }

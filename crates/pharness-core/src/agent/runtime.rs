@@ -972,6 +972,7 @@ mod tests {
                 branches: Vec::new(),
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
+                pipeline_intent_ids: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

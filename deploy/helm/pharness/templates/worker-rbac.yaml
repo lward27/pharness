@@ -73,3 +73,44 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: pharness-readonly-observer
+---
+# The executor has no model credentials and no broad ClusterRole. It can create
+# PipelineRuns only in the explicit target namespaces below.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.tektonExecutor.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: tekton-executor
+{{- range .Values.worker.tektonExecutor.allowedNamespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-tekton-runner
+  namespace: {{ . }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns"]
+    verbs: ["create", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-tekton-runner
+  namespace: {{ . }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+subjects:
+  - kind: ServiceAccount
+    name: {{ $.Values.worker.tektonExecutor.serviceAccount }}
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-tekton-runner
+{{- end }}

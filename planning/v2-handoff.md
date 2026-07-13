@@ -1,5 +1,10 @@
 # V2 Hand-Off (2026-07-06 through 2026-07-08)
 
+Follow-up (2026-07-10): the first P2 console slice now exists locally. Scope
+selectors drive server-side filters, audit search/filtering is live, and audit
+payloads expand in place. See [v2-continuation.md](v2-continuation.md). Cluster
+rollout is still pending.
+
 One-page summary of the work that took Pharness from a laptop-only V1 to the
 deployed, verified V2 cluster runtime plus the first two console improvement
 passes. Deeper detail lives in the linked planning docs.
@@ -95,7 +100,9 @@ passes. Deeper detail lives in the linked planning docs.
 - GitHub webhook on this repo → Tekton EventListener for push-triggered
   builds (TriggerTemplates already live; manual builds work today).
 - Registry GC for the two mistagged repositories; node 1 disk headroom.
-- Console P2/P3 per [ui-v2-improvements.md](ui-v2-improvements.md).
+- Finish the remaining console P2 cluster-mode affordances and P3 module split
+  per [ui-v2-improvements.md](ui-v2-improvements.md); deploy the completed P2
+  scope/search slice.
 - Next phase: first typed mutation slice (`tekton_trigger_pipeline` for
   approved PipelineIntents behind gates and envelopes), per the follow-on in
   [v2-cluster-runtime-plan.md](v2-cluster-runtime-plan.md). The worker RBAC

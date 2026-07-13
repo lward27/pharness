@@ -294,11 +294,26 @@ check_sdlc_roots() {
     --title "Review pipeline evidence" \
     --summary "Collect read-only pipeline evidence before any mutation" \
     --risk-level medium \
-    --plan-json '{"steps":["inspect PipelineRun","inspect TaskRuns","review policy gates"]}' \
+    --plan-json '{"steps":["inspect PipelineRun","inspect TaskRuns","review policy gates"],"approval_gates":[{"kind":"pipeline_mutation","required_before":"starting a Tekton PipelineRun"},{"kind":"cluster_mutation","required_before":"creating a cluster build resource"}]}' \
     --actor smoke \
     --reason "e2e smoke root chain"
   assert_jq "$ARTIFACT_DIR/remediation-plan-create.json" '.incident_id == "'"$INCIDENT_ID"'" and .status == "draft" and .requires_approval == true' "remediation plan create should produce an approval-requiring draft"
   REMEDIATION_PLAN_ID="$(jq -r '.id' "$ARTIFACT_DIR/remediation-plan-create.json")"
+
+  run_json pipeline-execution-gates cargo run -q -p pharness-cli -- approval-gates list \
+    --remediation-plan-id "$REMEDIATION_PLAN_ID" \
+    --limit 10
+  assert_jq "$ARTIFACT_DIR/pipeline-execution-gates.json" '(.approval_gates | length) == 2 and ([.approval_gates[] | select(.gate_kind == "pipeline_mutation" or .gate_kind == "cluster_mutation")] | length) == 2' "remediation plan should create the Tekton execution gates"
+  PIPELINE_MUTATION_GATE_ID="$(jq -r '.approval_gates[] | select(.gate_kind == "pipeline_mutation") | .id' "$ARTIFACT_DIR/pipeline-execution-gates.json")"
+  CLUSTER_MUTATION_GATE_ID="$(jq -r '.approval_gates[] | select(.gate_kind == "cluster_mutation") | .id' "$ARTIFACT_DIR/pipeline-execution-gates.json")"
+  run_json pipeline-mutation-gate-satisfy cargo run -q -p pharness-cli -- approval-gates satisfy \
+    --gate-id "$PIPELINE_MUTATION_GATE_ID" \
+    --decided-by smoke \
+    --reason "e2e smoke pipeline mutation gate"
+  run_json cluster-mutation-gate-satisfy cargo run -q -p pharness-cli -- approval-gates satisfy \
+    --gate-id "$CLUSTER_MUTATION_GATE_ID" \
+    --decided-by smoke \
+    --reason "e2e smoke cluster mutation gate"
 
   run_json remediation-plan-list cargo run -q -p pharness-cli -- remediation-plans list \
     --incident-id "$INCIDENT_ID" \
@@ -387,6 +402,7 @@ check_sdlc_downstream() {
 
   run_json pipeline-intent-create cargo run -q -p pharness-cli -- pipeline-intents create-from-change-set \
     --change-set-id "$CHANGE_SET_ID" \
+    --intent-json '{"execution":{"enabled":true,"namespace":"tekton-pipelines","pipeline_ref":"clone-build-push","production_impacting":false,"params":{},"workspaces":[]}}' \
     --actor smoke \
     --reason "e2e smoke pipeline intent"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-create.json" '.created == true and .pipeline_intent.change_set_id == "'"$CHANGE_SET_ID"'" and .pipeline_intent.status == "proposed"' "pipeline intent create should produce proposed intent"
@@ -399,7 +415,61 @@ check_sdlc_downstream() {
     --reason "e2e smoke pipeline intent approved"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-approve.json" '.pipeline_intent.id == "'"$PIPELINE_INTENT_ID"'" and .pipeline_intent.status == "approved"' "pipeline intent should transition to approved"
 
+  run_json pipeline-contract-create cargo run -q -p pharness-cli -- pipeline-contracts create \
+    --namespace tekton-pipelines \
+    --pipeline-ref clone-build-push \
+    --version v1 \
+    --contract-json '{"params":[],"workspaces":[]}' \
+    --actor smoke \
+    --reason "e2e smoke Pipeline contract"
+  assert_jq "$ARTIFACT_DIR/pipeline-contract-create.json" '.status == "active" and .namespace == "tekton-pipelines" and .pipeline_ref == "clone-build-push"' "Pipeline contract should permit the smoke PipelineIntent inputs"
+  PIPELINE_CONTRACT_ID="$(jq -r '.id' "$ARTIFACT_DIR/pipeline-contract-create.json")"
+
+  run_json pipeline-contract-get cargo run -q -p pharness-cli -- pipeline-contracts get \
+    --pipeline-contract-id "$PIPELINE_CONTRACT_ID"
+  assert_jq "$ARTIFACT_DIR/pipeline-contract-get.json" '.id == "'"$PIPELINE_CONTRACT_ID"'" and .contract_json.params == [] and .contract_json.workspaces == []' "Pipeline contract should round-trip through the API"
+
+  run_json pipeline-intent-envelope cargo run -q -p pharness-cli -- pipeline-intents create-trusted-envelope \
+    --pipeline-intent-id "$PIPELINE_INTENT_ID" \
+    --created-by smoke \
+    --reason "e2e smoke Tekton execution envelope"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-envelope.json" '.grant.status == "active" and (.grant.scope.pipeline_intent_ids | index("'"$PIPELINE_INTENT_ID"'")) != null and .grant.policy.policy_mode == "supervised_autonomy"' "approved PipelineIntent should create a supervised execution envelope"
+
+  run_json pipeline-intent-execution-preview cargo run -q -p pharness-cli -- pipeline-intents execute \
+    --pipeline-intent-id "$PIPELINE_INTENT_ID" \
+    --actor smoke \
+    --reason "e2e smoke dry run"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-execution-preview.json" '.status == "ready" and .ready == true and .dry_run == true and .manifest.kind == "PipelineRun" and .manifest.metadata.namespace == "tekton-pipelines" and .pipeline_intent.status == "approved" and ([.checks[] | select(.code == "active_pipeline_contract" and .passed)] | length) == 1 and ([.checks[] | select(.code == "pipeline_contract_inputs" and .passed)] | length) == 1' "PipelineIntent preview should validate contract inputs without creating a PipelineRun"
+
+  run_json pipeline-contract-replace cargo run -q -p pharness-cli -- pipeline-contracts replace \
+    --pipeline-contract-id "$PIPELINE_CONTRACT_ID" \
+    --version v2 \
+    --contract-json '{"params":[],"workspaces":[]}' \
+    --actor smoke \
+    --reason "e2e smoke atomic contract replacement"
+  assert_jq "$ARTIFACT_DIR/pipeline-contract-replace.json" '.retired_contract.status == "retired" and .retired_contract.version == "v1" and .pipeline_contract.status == "active" and .pipeline_contract.version == "v2"' "Pipeline contract replacement should retire v1 and activate v2 atomically"
+  PIPELINE_CONTRACT_ID="$(jq -r '.pipeline_contract.id' "$ARTIFACT_DIR/pipeline-contract-replace.json")"
+
+  run_json pipeline-intent-execution-replacement-contract cargo run -q -p pharness-cli -- pipeline-intents execute \
+    --pipeline-intent-id "$PIPELINE_INTENT_ID" \
+    --actor smoke \
+    --reason "e2e smoke replacement contract preflight"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-execution-replacement-contract.json" '.status == "ready" and .ready == true and ([.checks[] | select(.code == "active_pipeline_contract" and .passed and (.summary | contains("version v2")))] | length) == 1' "replacement Pipeline contract should keep the matching intent ready"
+
+  run_json pipeline-contract-retire cargo run -q -p pharness-cli -- pipeline-contracts retire \
+    --pipeline-contract-id "$PIPELINE_CONTRACT_ID" \
+    --actor smoke \
+    --reason "e2e smoke contract lifecycle"
+  assert_jq "$ARTIFACT_DIR/pipeline-contract-retire.json" '.id == "'"$PIPELINE_CONTRACT_ID"'" and .status == "retired"' "Pipeline contract retirement should preserve the durable record"
+
+  run_json pipeline-intent-execution-retired-contract cargo run -q -p pharness-cli -- pipeline-intents execute \
+    --pipeline-intent-id "$PIPELINE_INTENT_ID" \
+    --actor smoke \
+    --reason "e2e smoke retired contract preflight"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-execution-retired-contract.json" '.status == "blocked" and .ready == false and ([.checks[] | select(.code == "active_pipeline_contract" and (.passed | not) and (.summary | contains("retired")))] | length) == 1' "retired Pipeline contract should block execution preflight"
+
   check_cluster_capabilities
+  ensure_deploy_ready_pipeline_evidence
 
   run_json deployment-intent-create cargo run -q -p pharness-cli -- deployment-intents create-from-pipeline-intent \
     --pipeline-intent-id "$PIPELINE_INTENT_ID" \
@@ -473,7 +543,7 @@ check_sdlc_downstream() {
 
   run_json readiness-after-revision cargo run -q -p pharness-cli -- change-sets readiness \
     --change-set-id "$CHANGE_SET_ID"
-  assert_jq "$ARTIFACT_DIR/readiness-after-revision.json" '.ready == false and ([.blockers[] | select(.code == "change_set_not_approved")] | length) == 1 and ([.blockers[] | select(.code == "missing_active_trusted_envelope")] | length) == 1 and ([.warnings[] | select(.code == "stale_trusted_envelope")] | length) == 1 and .pipeline_intent.status == "stale" and .deployment_intent.status == "stale" and .release.status == "stale" and .registry_evidence.status == "stale"' "material change should block readiness and expose stale trusted envelope plus stale downstream evidence"
+  assert_jq "$ARTIFACT_DIR/readiness-after-revision.json" '.ready == false and ([.blockers[] | select(.code == "change_set_not_approved")] | length) == 1 and ([.blockers[] | select(.code == "missing_active_trusted_envelope")] | length) == 1 and ([.warnings[] | select(.code == "stale_trusted_envelope")] | length) >= 2 and .pipeline_intent.status == "stale" and .deployment_intent.status == "stale" and .release.status == "stale" and .registry_evidence.status == "stale"' "material change should block readiness and expose stale filesystem and Tekton execution envelopes plus stale downstream evidence"
 
   run_json audit-stale-envelope cargo run -q -p pharness-cli -- audit-events \
     --resource-kind permission_grant \
@@ -692,6 +762,40 @@ check_cluster_capabilities() {
   fi
 }
 
+ensure_deploy_ready_pipeline_evidence() {
+  if [[ "$PIPELINE_EVIDENCE_STATUS" == "satisfied" ]]; then
+    return
+  fi
+
+  if [[ "$RUN_CLUSTER" == "1" ]]; then
+    echo "cluster PipelineRunAnalysis evidence is not satisfied; refusing to approve a downstream DeploymentIntent" >&2
+    return 1
+  fi
+
+  run_json pipeline-evidence-fixture cargo run -q -p pharness-cli -- observations create \
+    --id "obs_e2e_pipeline_analysis" \
+    --source tekton \
+    --kind pipeline_run_analysis \
+    --subject clone-build-push \
+    --summary "Deterministic successful PipelineRunAnalysis fixture" \
+    --resource-namespace tekton-pipelines \
+    --resource-kind PipelineRun \
+    --resource-name pharness-e2e-pipeline \
+    --resource-ref-json '{"apiVersion":"tekton.dev/v1","kind":"PipelineRun","namespace":"tekton-pipelines","name":"pharness-e2e-pipeline"}' \
+    --data-json '{"analysis":{"summary":{"status":"succeeded","failed_task_run_count":0,"running_task_run_count":0,"succeeded_task_run_count":1,"image_alignment":{"status":"exact_match"}}}}' \
+    --actor smoke \
+    --reason "deterministic PipelineRunAnalysis fixture"
+  assert_jq "$ARTIFACT_DIR/pipeline-evidence-fixture.json" '.id == "obs_e2e_pipeline_analysis" and .source == "tekton" and .kind == "pipeline_run_analysis"' "deterministic smoke should create a successful PipelineRunAnalysis fixture"
+
+  run_json pipeline-intent-attach-fixture-evidence cargo run -q -p pharness-cli -- pipeline-intents attach-evidence \
+    --pipeline-intent-id "$PIPELINE_INTENT_ID" \
+    --observation-id obs_e2e_pipeline_analysis \
+    --actor smoke \
+    --reason "deterministic pipeline evidence attached"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-attach-fixture-evidence.json" '.pipeline_intent.intent_json.evidence.status == "satisfied" and .observation.id == "obs_e2e_pipeline_analysis"' "successful PipelineRunAnalysis fixture should make downstream deployment eligible"
+  PIPELINE_EVIDENCE_STATUS="satisfied"
+}
+
 check_model_run() {
   if [[ "$RUN_MODEL" == "never" ]]; then
     echo "==> model-run skipped by --no-model"
@@ -748,6 +852,7 @@ write_manifest() {
         "event_stream_cursor",
         "sdlc_root_chain",
         "sdlc_downstream_chain",
+        "pipeline_evidence_gate",
         "work_plan_flow",
         "release_observability_evidence",
         "release_observability_remediation",

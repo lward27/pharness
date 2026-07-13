@@ -19,12 +19,14 @@ const DEFAULT_CLUSTER_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_WORKER_K8S_NAMESPACE: &str = "pharness";
 const DEFAULT_WORKER_K8S_IMAGE: &str = "registry.lucas.engineering/pharness-runtime:latest";
 const DEFAULT_WORKER_K8S_SERVICE_ACCOUNT: &str = "pharness-worker";
+const DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-tekton-runner";
 const DEFAULT_WORKER_K8S_API_URL: &str = "http://pharness-api:4777";
 const DEFAULT_WORKER_K8S_WORKSPACE_DIR: &str = "/workspace";
 const DEFAULT_WORKER_K8S_FIREWORKS_SECRET: &str = "pharness-fireworks";
 const DEFAULT_WORKER_K8S_TOKEN_SECRET: &str = "pharness-worker-token";
 const DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS: u64 = 3_600;
 const DEFAULT_WORKER_K8S_TTL_SECONDS: u64 = 3_600;
+const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_CLUSTER_MAX_OUTPUT_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
@@ -77,6 +79,9 @@ pub struct WorkerKubernetesConfig {
     pub namespace: String,
     pub image: String,
     pub service_account: String,
+    pub tekton_executor_service_account: String,
+    pub tekton_allowed_namespaces: Vec<String>,
+    pub tekton_executor_poll_seconds: u64,
     pub api_url: String,
     pub workspace_dir: String,
     pub fireworks_secret_name: String,
@@ -195,6 +200,10 @@ impl ApiRuntimeConfig {
                     namespace: DEFAULT_WORKER_K8S_NAMESPACE.to_string(),
                     image: DEFAULT_WORKER_K8S_IMAGE.to_string(),
                     service_account: DEFAULT_WORKER_K8S_SERVICE_ACCOUNT.to_string(),
+                    tekton_executor_service_account: DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT
+                        .to_string(),
+                    tekton_allowed_namespaces: Vec::new(),
+                    tekton_executor_poll_seconds: DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS,
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
                     fireworks_secret_name: DEFAULT_WORKER_K8S_FIREWORKS_SECRET.to_string(),
@@ -273,6 +282,15 @@ impl ApiRuntimeConfig {
                 }
                 if let Some(value) = kubernetes.service_account {
                     self.worker.kubernetes.service_account = value;
+                }
+                if let Some(value) = kubernetes.tekton_executor_service_account {
+                    self.worker.kubernetes.tekton_executor_service_account = value;
+                }
+                if let Some(value) = kubernetes.tekton_allowed_namespaces {
+                    self.worker.kubernetes.tekton_allowed_namespaces = value;
+                }
+                if let Some(value) = kubernetes.tekton_executor_poll_seconds {
+                    self.worker.kubernetes.tekton_executor_poll_seconds = value;
                 }
                 if let Some(value) = kubernetes.api_url {
                     self.worker.kubernetes.api_url = value;
@@ -380,6 +398,21 @@ impl ApiRuntimeConfig {
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_SERVICE_ACCOUNT") {
             self.worker.kubernetes.service_account = value.clone();
         }
+        if let Some(value) = env.get("PHARNESS_TEKTON_EXECUTOR_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.tekton_executor_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_TEKTON_ALLOWED_NAMESPACES") {
+            self.worker.kubernetes.tekton_allowed_namespaces = value
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+                .collect();
+        }
+        if let Some(value) = env.get("PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS") {
+            self.worker.kubernetes.tekton_executor_poll_seconds =
+                parse_u64(value, "PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS")?;
+        }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_API_URL") {
             self.worker.kubernetes.api_url = value.clone();
         }
@@ -468,6 +501,9 @@ struct FileWorkerKubernetesConfig {
     namespace: Option<String>,
     image: Option<String>,
     service_account: Option<String>,
+    tekton_executor_service_account: Option<String>,
+    tekton_allowed_namespaces: Option<Vec<String>>,
+    tekton_executor_poll_seconds: Option<u64>,
     api_url: Option<String>,
     workspace_dir: Option<String>,
     fireworks_secret_name: Option<String>,
@@ -671,6 +707,9 @@ registry_aliases = ["internal.registry=external.registry"]
 tool_timeout_ms = 2222
 tool_max_output_bytes = 3333
 
+[worker.kubernetes]
+tekton_executor_poll_seconds = 9
+
 [policy]
 subject = "agent:config-test"
 environment = "dev"
@@ -712,6 +751,7 @@ deny_secret_access = true
         );
         assert_eq!(config.cluster.timeout_ms, 2222);
         assert_eq!(config.cluster.max_output_bytes, 3333);
+        assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 9);
         assert_eq!(config.policy.subject, "agent:config-test");
         assert_eq!(config.policy.environment, "dev");
         assert_eq!(config.policy.mode, PolicyMode::TrustedWrites);
@@ -770,6 +810,10 @@ registry_aliases = ["file.registry=public.registry"]
             "PHARNESS_REGISTRY_ALIASES".to_string(),
             "env.registry=public.registry".to_string(),
         );
+        env.insert(
+            "PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS".to_string(),
+            "11".to_string(),
+        );
         env.insert("PHARNESS_POLICY_MODE".to_string(), "plan".to_string());
         env.insert(
             "PHARNESS_POLICY_SUBJECT".to_string(),
@@ -802,6 +846,7 @@ registry_aliases = ["file.registry=public.registry"]
             config.cluster.registry_aliases,
             vec!["env.registry=public.registry"]
         );
+        assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 11);
         assert_eq!(config.policy.subject, "agent:env");
         assert_eq!(config.policy.environment, "ci");
         assert_eq!(config.policy.mode, PolicyMode::Plan);

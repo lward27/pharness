@@ -23,10 +23,15 @@ const INGEST_RETRY_DELAY: Duration = Duration::from_secs(2);
 // policy state includes the new pod; the startup fetch must ride that out.
 const CONTEXT_FETCH_ATTEMPTS: u32 = 5;
 const CONTEXT_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
+const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing()?;
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
+        return execute_tekton_trigger().await;
+    }
 
     let env = WorkerEnv::from_env()?;
     let config = ApiRuntimeConfig::load_from_env()?;
@@ -87,6 +92,223 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+/// Submit and observe one prevalidated PipelineRun. This mode deliberately
+/// does not load model credentials or run an agent loop.
+async fn execute_tekton_trigger() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let pipeline_intent_id = required_env("PHARNESS_PIPELINE_INTENT_ID")?;
+    let execution_id = required_env("PHARNESS_EXECUTION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let poll_interval = tekton_poll_interval()?;
+    let manifest_text = required_env("PHARNESS_TEKTON_PIPELINERUN_JSON")?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_text)
+        .context("PHARNESS_TEKTON_PIPELINERUN_JSON must be valid JSON")?;
+    let namespace = manifest
+        .pointer("/metadata/namespace")
+        .and_then(serde_json::Value::as_str)
+        .context("PipelineRun manifest metadata.namespace is required")?
+        .to_string();
+    let name = manifest
+        .pointer("/metadata/name")
+        .and_then(serde_json::Value::as_str)
+        .context("PipelineRun manifest metadata.name is required")?
+        .to_string();
+
+    match submit_pipeline_run(&manifest_text).await {
+        Ok(()) => {
+            post_tekton_outcome_with_retry(
+                &api_url,
+                &pipeline_intent_id,
+                &worker_token,
+                &serde_json::json!({
+                    "execution_id": execution_id,
+                    "status": "submitted",
+                    "pipeline_run_namespace": namespace,
+                    "pipeline_run_name": name,
+                    "error": null,
+                }),
+            )
+            .await
+            .context("failed to report submitted PipelineRun to api")?;
+
+            let outcome = match wait_for_pipeline_run(&namespace, &name, poll_interval).await {
+                Ok(PipelineRunTerminal::Succeeded) => serde_json::json!({
+                    "execution_id": execution_id,
+                    "status": "completed",
+                    "pipeline_run_namespace": namespace,
+                    "pipeline_run_name": name,
+                    "error": null,
+                }),
+                Ok(PipelineRunTerminal::Failed(reason)) => serde_json::json!({
+                    "execution_id": execution_id,
+                    "status": "failed",
+                    "pipeline_run_namespace": namespace,
+                    "pipeline_run_name": name,
+                    "error": reason,
+                }),
+                Err(error) => {
+                    tracing::error!(pipeline_intent_id = %pipeline_intent_id, %error, "Tekton PipelineRun observation failed");
+                    serde_json::json!({
+                        "execution_id": execution_id,
+                        "status": "failed",
+                        "pipeline_run_namespace": namespace,
+                        "pipeline_run_name": name,
+                        "error": "unable to observe PipelineRun to terminal state",
+                    })
+                }
+            };
+            post_tekton_outcome_with_retry(&api_url, &pipeline_intent_id, &worker_token, &outcome)
+                .await
+                .context("failed to report terminal PipelineRun outcome to api")
+        }
+        Err(error) => {
+            tracing::error!(pipeline_intent_id = %pipeline_intent_id, %error, "Tekton execution failed");
+            post_tekton_outcome_with_retry(
+                &api_url,
+                &pipeline_intent_id,
+                &worker_token,
+                &serde_json::json!({
+                    "execution_id": execution_id,
+                    "status": "failed",
+                    "pipeline_run_namespace": namespace,
+                    "pipeline_run_name": name,
+                    "error": "unable to create PipelineRun",
+                }),
+            )
+            .await
+            .context("failed to report PipelineRun creation failure to api")
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PipelineRunTerminal {
+    Succeeded,
+    Failed(String),
+}
+
+fn tekton_poll_interval() -> anyhow::Result<Duration> {
+    let seconds = std::env::var("PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS")
+        .ok()
+        .map(|value| value.parse::<u64>())
+        .transpose()
+        .context("PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS must be an integer")?
+        .unwrap_or(DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS);
+    if seconds == 0 {
+        anyhow::bail!("PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS must be greater than zero");
+    }
+    Ok(Duration::from_secs(seconds))
+}
+
+async fn wait_for_pipeline_run(
+    namespace: &str,
+    name: &str,
+    poll_interval: Duration,
+) -> anyhow::Result<PipelineRunTerminal> {
+    loop {
+        let output = tokio::process::Command::new("kubectl")
+            .args(["get", "pipelinerun", name, "-n", namespace, "-o", "json"])
+            .output()
+            .await
+            .context("failed to spawn kubectl while observing PipelineRun")?;
+        if !output.status.success() {
+            anyhow::bail!("kubectl could not read the submitted PipelineRun");
+        }
+        let pipeline_run: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .context("kubectl returned invalid PipelineRun JSON")?;
+        if let Some(terminal) = pipeline_run_terminal(&pipeline_run) {
+            return Ok(terminal);
+        }
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
+fn pipeline_run_terminal(pipeline_run: &serde_json::Value) -> Option<PipelineRunTerminal> {
+    let condition = pipeline_run
+        .pointer("/status/conditions")
+        .and_then(serde_json::Value::as_array)?
+        .iter()
+        .find(|condition| {
+            condition.get("type").and_then(serde_json::Value::as_str) == Some("Succeeded")
+        })?;
+    match condition.get("status").and_then(serde_json::Value::as_str) {
+        Some("True") => Some(PipelineRunTerminal::Succeeded),
+        Some("False") => {
+            let reason = condition
+                .get("reason")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("PipelineRunFailed");
+            Some(PipelineRunTerminal::Failed(format!(
+                "PipelineRun completed unsuccessfully: {reason}"
+            )))
+        }
+        _ => None,
+    }
+}
+
+async fn submit_pipeline_run(manifest: &str) -> anyhow::Result<()> {
+    let mut child = tokio::process::Command::new("kubectl")
+        .args(["create", "-f", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("failed to spawn kubectl for PipelineRun")?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use tokio::io::AsyncWriteExt;
+        stdin.write_all(manifest.as_bytes()).await?;
+    }
+    let output = child.wait_with_output().await?;
+    if output.status.success() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "kubectl create PipelineRun failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )
+}
+
+async fn post_tekton_outcome_with_retry(
+    api_url: &str,
+    pipeline_intent_id: &str,
+    token: &str,
+    outcome: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("failed to build Tekton executor http client")?;
+    let url =
+        format!("{api_url}/api/internal/pipeline-intents/{pipeline_intent_id}/execution-outcome");
+    let mut last_error = None;
+    for attempt in 1..=INGEST_ATTEMPTS {
+        match client
+            .post(&url)
+            .bearer_auth(token)
+            .json(outcome)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) if response.status().is_client_error() => {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                anyhow::bail!("{url} rejected execution outcome: {status} {body}");
+            }
+            Ok(response) => {
+                last_error = Some(anyhow::anyhow!("{url} returned {}", response.status()))
+            }
+            Err(error) => last_error = Some(error.into()),
+        }
+        if attempt < INGEST_ATTEMPTS {
+            tokio::time::sleep(INGEST_RETRY_DELAY).await;
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("{url} failed")))
 }
 
 struct WorkerEnv {
@@ -349,4 +571,55 @@ fn init_tracing() -> anyhow::Result<()> {
         .compact()
         .try_init()
         .map_err(|error| anyhow::anyhow!("failed to initialize tracing: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pipeline_run_terminal, PipelineRunTerminal};
+    use serde_json::json;
+
+    #[test]
+    fn recognizes_a_successful_pipeline_run() {
+        let pipeline_run = json!({
+            "status": {
+                "conditions": [{ "type": "Succeeded", "status": "True" }]
+            }
+        });
+
+        assert_eq!(
+            pipeline_run_terminal(&pipeline_run),
+            Some(PipelineRunTerminal::Succeeded)
+        );
+    }
+
+    #[test]
+    fn recognizes_a_failed_pipeline_run_with_a_safe_reason() {
+        let pipeline_run = json!({
+            "status": {
+                "conditions": [{
+                    "type": "Succeeded",
+                    "status": "False",
+                    "reason": "TasksFailed"
+                }]
+            }
+        });
+
+        assert_eq!(
+            pipeline_run_terminal(&pipeline_run),
+            Some(PipelineRunTerminal::Failed(
+                "PipelineRun completed unsuccessfully: TasksFailed".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn keeps_observing_a_non_terminal_pipeline_run() {
+        let pipeline_run = json!({
+            "status": {
+                "conditions": [{ "type": "Succeeded", "status": "Unknown" }]
+            }
+        });
+
+        assert_eq!(pipeline_run_terminal(&pipeline_run), None);
+    }
 }

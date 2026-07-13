@@ -4,8 +4,9 @@ use pharness_core::{
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
     StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange,
-    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineIntent,
-    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
+    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
+    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
+    StoredWorkPlan,
 };
 use serde::{Deserialize, Serialize};
 
@@ -584,6 +585,78 @@ pub struct PipelineIntentsResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct PipelineContractsResponse {
+    pub pipeline_contracts: Vec<PipelineContractResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineContractResponse {
+    pub id: String,
+    pub status: String,
+    pub namespace: String,
+    pub pipeline_ref: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredPipelineContract> for PipelineContractResponse {
+    fn from(contract: StoredPipelineContract) -> Self {
+        Self {
+            id: contract.id,
+            status: contract.status,
+            namespace: contract.namespace,
+            pipeline_ref: contract.pipeline_ref,
+            version: contract.version,
+            contract_json: contract.contract_json,
+            created_at: contract.created_at,
+            updated_at: contract.updated_at,
+            status_changed_at: contract.status_changed_at,
+            status_changed_by: contract.status_changed_by,
+            status_reason: contract.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreatePipelineContractRequest {
+    pub namespace: String,
+    pub pipeline_ref: String,
+    pub version: Option<String>,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionPipelineContractRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReplacePipelineContractRequest {
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplacePipelineContractResponse {
+    pub retired_contract: PipelineContractResponse,
+    pub pipeline_contract: PipelineContractResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct PipelineIntentResponse {
     pub id: String,
     pub change_set_id: String,
@@ -600,6 +673,8 @@ pub struct PipelineIntentResponse {
     pub resource_kind: Option<String>,
     pub resource_name: Option<String>,
     pub intent_json: serde_json::Value,
+    pub execution_state: Option<serde_json::Value>,
+    pub execution_evidence: Option<serde_json::Value>,
     pub created_at: String,
     pub updated_at: Option<String>,
     pub status_changed_at: Option<String>,
@@ -624,6 +699,8 @@ impl From<StoredPipelineIntent> for PipelineIntentResponse {
             resource_namespace: intent.resource_namespace,
             resource_kind: intent.resource_kind,
             resource_name: intent.resource_name,
+            execution_state: intent.intent_json.get("execution_state").cloned(),
+            execution_evidence: intent.intent_json.get("execution_evidence").cloned(),
             intent_json: intent.intent_json,
             created_at: intent.created_at,
             updated_at: intent.updated_at,
@@ -676,6 +753,48 @@ pub struct AttachPipelineIntentEvidenceRequest {
 pub struct AttachPipelineIntentEvidenceResponse {
     pub pipeline_intent: PipelineIntentResponse,
     pub observation: ObservationResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreatePipelineIntentTrustedEnvelopeRequest {
+    pub subject: Option<String>,
+    pub created_by: Option<String>,
+    pub reason: String,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecutePipelineIntentRequest {
+    #[serde(default = "default_dry_run")]
+    pub dry_run: bool,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+fn default_dry_run() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecutePipelineIntentResponse {
+    pub status: String,
+    pub ready: bool,
+    pub dry_run: bool,
+    pub pipeline_intent: PipelineIntentResponse,
+    pub manifest: Option<serde_json::Value>,
+    pub checks: Vec<serde_json::Value>,
+    pub permission_grant_id: Option<String>,
+    pub execution_id: Option<String>,
+    pub executor_job_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PipelineIntentExecutionOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    pub pipeline_run_namespace: Option<String>,
+    pub pipeline_run_name: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,4 +1,4 @@
-use crate::dispatch::RunDispatcher;
+use crate::dispatch::{RunDispatcher, TektonExecutionRequest};
 use crate::dto::{
     ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
     ApprovalSummaryResponse, ApprovalsResponse, ArtifactResponse, ArtifactsResponse,
@@ -8,7 +8,8 @@ use crate::dto::{
     ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest, CreateChangeSetResponse,
     CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
     CreateIncidentRequest, CreateObservationRequest, CreatePermissionGrantRequest,
-    CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
+    CreatePipelineContractRequest, CreatePipelineIntentFromChangeSetRequest,
+    CreatePipelineIntentResponse, CreatePipelineIntentTrustedEnvelopeRequest,
     CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromInspectionResponse,
     CreateRegistryEvidenceFromReleaseRequest, CreateRegistryEvidenceResponse,
     CreateReleaseFromDeploymentIntentRequest, CreateReleaseResponse, CreateRemediationPlanRequest,
@@ -16,20 +17,23 @@ use crate::dto::{
     CreateWorkPlanResponse, DecideApprovalGateRequest, DecideApprovalGateResponse,
     DecideApprovalRequest, DecideApprovalResponse, DeploymentIntentResponse,
     DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
-    FileChangeResponse, IncidentResponse, IncidentsResponse, ObservationResponse,
-    ObservationsResponse, PermissionGrantResponse, PermissionGrantsResponse,
-    PipelineIntentResponse, PipelineIntentsResponse, RegistryEvidenceListResponse,
-    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
-    RemediationPlansResponse, ReviewApprovalRequest, ReviseChangeSetRequest,
-    ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
+    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, FileChangeResponse,
+    IncidentResponse, IncidentsResponse, ObservationResponse, ObservationsResponse,
+    PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
+    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest, PipelineIntentResponse,
+    PipelineIntentsResponse, RegistryEvidenceListResponse, RegistryEvidenceResponse,
+    ReleaseResponse, ReleasesResponse, RemediationPlanResponse, RemediationPlansResponse,
+    ReplacePipelineContractRequest, ReplacePipelineContractResponse, ReviewApprovalRequest,
+    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
     RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
     SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
     SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
     TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
-    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
-    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
-    TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkPlanRequest,
-    TransitionWorkPlanResponse, TrustedEnvelopeResponse, WorkPlanResponse, WorkPlansResponse,
+    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
+    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
+    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
+    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TrustedEnvelopeResponse,
+    WorkPlanResponse, WorkPlansResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use axum::extract::{Path, Query, Request, State};
@@ -41,32 +45,33 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use pharness_core::{
-    AgentAction, AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy,
-    PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools, RunId, SafetyPolicy,
-    SessionId, ToolExecutor, ToolResult,
+    AgentAction, AgentEvent, CapabilityKind, EventId, EventKind, PermissionGrant,
+    PermissionGrantPolicy, PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools,
+    RiskLevel, RunId, SafetyPolicy, SessionId, ToolExecutor, ToolResult,
 };
 use pharness_runhost::AttemptOutcome;
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
-    ChangeSetListFilter, DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
-    PipelineIntentListFilter, RegistryEvidenceListFilter, ReleaseListFilter,
-    RemediationPlanListFilter, RunListFilter, RunSummaryFilter, StoredApprovalGate,
-    StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredIncident, StoredObservation,
-    StoredPermissionGrant, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
+    AuditEventListFilter, ChangeSetListFilter, DeploymentIntentListFilter, IncidentListFilter,
+    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
+    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter, RunListFilter,
+    RunSummaryFilter, StoredApprovalGate, StoredAuditEvent, StoredChangeSet,
+    StoredDeploymentIntent, StoredIncident, StoredObservation, StoredPermissionGrant,
+    StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
     StoredRemediationPlan, StoredWorkPlan, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
-    UpdatePipelineIntentDraft, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
+    UpdatePipelineIntentDraft, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
+    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_store::{
     CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateDeploymentIntent,
-    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineIntent,
-    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
-    CreateWorkPlan, SqliteStore, StoreError, UpdateDeploymentIntentEvidence,
-    UpdatePipelineIntentEvidence,
+    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineContract,
+    CreatePipelineIntent, CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun,
+    CreateSession, CreateWorkPlan, ReplacePipelineContract, SqliteStore, StoreError,
+    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -126,6 +131,10 @@ pub fn router(
         .route(
             "/api/internal/runs/:run_id/control",
             get(internal_run_control),
+        )
+        .route(
+            "/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome",
+            post(internal_pipeline_intent_execution_outcome),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -206,6 +215,22 @@ pub fn router(
         )
         .route("/api/pipeline-intents", get(list_pipeline_intents))
         .route(
+            "/api/pipeline-contracts",
+            get(list_pipeline_contracts).post(create_pipeline_contract),
+        )
+        .route(
+            "/api/pipeline-contracts/:pipeline_contract_id",
+            get(get_pipeline_contract),
+        )
+        .route(
+            "/api/pipeline-contracts/:pipeline_contract_id/transition",
+            post(transition_pipeline_contract),
+        )
+        .route(
+            "/api/pipeline-contracts/:pipeline_contract_id/replace",
+            post(replace_pipeline_contract),
+        )
+        .route(
             "/api/pipeline-intents/from-change-set",
             post(create_pipeline_intent_from_change_set),
         )
@@ -220,6 +245,14 @@ pub fn router(
         .route(
             "/api/pipeline-intents/:pipeline_intent_id/evidence",
             post(attach_pipeline_intent_evidence),
+        )
+        .route(
+            "/api/pipeline-intents/:pipeline_intent_id/trusted-envelope",
+            post(create_pipeline_intent_trusted_envelope),
+        )
+        .route(
+            "/api/pipeline-intents/:pipeline_intent_id/execute",
+            post(execute_pipeline_intent),
         )
         .route("/api/deployment-intents", get(list_deployment_intents))
         .route(
@@ -1662,6 +1695,11 @@ async fn create_remediation_plan(
         clean_optional_text(request.reason),
     )
     .await?;
+    for gate in approval_gates_from_remediation_plan(&plan) {
+        let gate = state.store.create_approval_gate(gate).await?;
+        append_approval_gate_audit_event(&state.store, &gate, "approval_gate.created", "created")
+            .await?;
+    }
 
     Ok(Json(plan.into()))
 }
@@ -2921,15 +2959,35 @@ fn add_pipeline_intent_findings(
             "pipeline_intent",
             &intent.id,
         )),
-        Some(intent) if intent.status != "approved" => warnings.push(readiness_finding(
-            "pipeline_intent_not_approved",
+        Some(intent) if intent.status == "executing" => warnings.push(readiness_finding(
+            "pipeline_execution_running",
             format!(
-                "PipelineIntent {} is {}, not approved",
-                intent.id, intent.status
+                "PipelineIntent {} has a PipelineRun execution in progress",
+                intent.id
             ),
             "pipeline_intent",
             &intent.id,
         )),
+        Some(intent) if intent.status == "failed" => warnings.push(readiness_finding(
+            "pipeline_execution_failed",
+            format!(
+                "PipelineIntent {} has a failed PipelineRun execution",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some(intent) if !pipeline_intent_is_deployment_eligible(&intent.status) => {
+            warnings.push(readiness_finding(
+                "pipeline_intent_not_approved",
+                format!(
+                    "PipelineIntent {} is {}, not approved",
+                    intent.id, intent.status
+                ),
+                "pipeline_intent",
+                &intent.id,
+            ))
+        }
         Some(intent) => add_pipeline_evidence_findings(warnings, intent),
     }
 }
@@ -2938,6 +2996,28 @@ fn add_pipeline_evidence_findings(
     warnings: &mut Vec<SdlcReadinessFinding>,
     intent: &StoredPipelineIntent,
 ) {
+    match pipeline_execution_evidence_status(intent) {
+        Some("failed") => warnings.push(readiness_finding(
+            "pipeline_execution_failed",
+            format!(
+                "PipelineIntent {} has durable execution evidence showing a failed PipelineRun",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+        Some("completed") | None => {}
+        Some(_) => warnings.push(readiness_finding(
+            "pipeline_execution_unknown",
+            format!(
+                "PipelineIntent {} has execution evidence with an unknown terminal state",
+                intent.id
+            ),
+            "pipeline_intent",
+            &intent.id,
+        )),
+    }
+
     match pipeline_intent_attached_evidence_status(intent) {
         Some("satisfied") => {}
         Some("running") => warnings.push(readiness_finding(
@@ -2996,7 +3076,7 @@ fn add_deployment_intent_findings(
     let Some(pipeline_intent) = pipeline_intent else {
         return;
     };
-    if pipeline_intent.status != "approved" {
+    if !pipeline_intent_is_deployment_eligible(&pipeline_intent.status) {
         return;
     }
 
@@ -3441,6 +3521,199 @@ fn readiness_summary(ready: bool, blocker_count: usize, warning_count: usize) ->
     format!("blocked by {blocker_count} blocker(s) and {warning_count} warning(s)")
 }
 
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListPipelineContractsQuery {
+    namespace: Option<String>,
+    pipeline_ref: Option<String>,
+    status: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_pipeline_contracts(
+    State(state): State<AppState>,
+    Query(query): Query<ListPipelineContractsQuery>,
+) -> Result<Json<PipelineContractsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let pipeline_contracts = state
+        .store
+        .list_pipeline_contracts(PipelineContractListFilter {
+            namespace: clean_optional_text(query.namespace),
+            pipeline_ref: clean_optional_text(query.pipeline_ref),
+            status: clean_optional_text(query.status),
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = pipeline_contracts.len();
+    Ok(Json(PipelineContractsResponse {
+        pipeline_contracts,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_pipeline_contract(
+    State(state): State<AppState>,
+    Path(pipeline_contract_id): Path<String>,
+) -> Result<Json<PipelineContractResponse>, ApiError> {
+    let contract = state
+        .store
+        .get_pipeline_contract(&pipeline_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_contract", &pipeline_contract_id))?;
+    Ok(Json(contract.into()))
+}
+
+async fn create_pipeline_contract(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Json(request): Json<CreatePipelineContractRequest>,
+) -> Result<Json<PipelineContractResponse>, ApiError> {
+    let namespace = required_text(request.namespace, "namespace")?;
+    let pipeline_ref = required_text(request.pipeline_ref, "pipeline_ref")?;
+    let version = clean_optional_text(request.version).unwrap_or_else(|| "v1".to_string());
+    validate_kubernetes_name("namespace", &namespace)?;
+    validate_kubernetes_name("pipeline_ref", &pipeline_ref)?;
+    validate_kubernetes_name("version", &version)?;
+    let contract = pipeline_contract_spec(&request.contract_json)?;
+    validate_pipeline_contract_spec(&contract)?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let contract = state
+        .store
+        .create_pipeline_contract(CreatePipelineContract {
+            id: format!("pcontract_{}", unique_suffix()),
+            status: "active".to_string(),
+            namespace,
+            pipeline_ref,
+            version,
+            contract_json: request.contract_json,
+            actor: actor.clone(),
+            reason: reason.clone(),
+        })
+        .await?;
+    append_pipeline_contract_audit_event(
+        &state.store,
+        &contract,
+        "pipeline_contract.created",
+        actor,
+        reason,
+    )
+    .await?;
+    Ok(Json(contract.into()))
+}
+
+async fn transition_pipeline_contract(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(pipeline_contract_id): Path<String>,
+    Json(request): Json<TransitionPipelineContractRequest>,
+) -> Result<Json<PipelineContractResponse>, ApiError> {
+    let current = state
+        .store
+        .get_pipeline_contract(&pipeline_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_contract", &pipeline_contract_id))?;
+    let target = required_text(request.target_status, "target_status")?;
+    if current.status != "active" || target != "retired" {
+        return Err(ApiError::conflict(format!(
+            "PipelineContract can only transition from active to retired, not {} to {}",
+            current.status, target
+        )));
+    }
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let contract = state
+        .store
+        .update_pipeline_contract_status(&current.id, "retired", actor.clone(), reason.clone())
+        .await?;
+    append_pipeline_contract_audit_event(
+        &state.store,
+        &contract,
+        "pipeline_contract.retired",
+        actor,
+        reason,
+    )
+    .await?;
+    Ok(Json(contract.into()))
+}
+
+async fn replace_pipeline_contract(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(pipeline_contract_id): Path<String>,
+    Json(request): Json<ReplacePipelineContractRequest>,
+) -> Result<Json<ReplacePipelineContractResponse>, ApiError> {
+    let current = state
+        .store
+        .get_pipeline_contract(&pipeline_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_contract", &pipeline_contract_id))?;
+    if current.status != "active" {
+        return Err(ApiError::conflict(
+            "only an active PipelineContract can be replaced",
+        ));
+    }
+    let version = required_text(request.version, "version")?;
+    validate_kubernetes_name("version", &version)?;
+    if version == current.version {
+        return Err(ApiError::conflict(
+            "replacement PipelineContract version must differ from the active version",
+        ));
+    }
+    let contract_spec = pipeline_contract_spec(&request.contract_json)?;
+    validate_pipeline_contract_spec(&contract_spec)?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let (retired_contract, pipeline_contract) = state
+        .store
+        .replace_pipeline_contract(
+            &current.id,
+            ReplacePipelineContract {
+                id: format!("pcontract_{}", unique_suffix()),
+                namespace: current.namespace.clone(),
+                pipeline_ref: current.pipeline_ref.clone(),
+                version,
+                contract_json: request.contract_json,
+                actor: actor.clone(),
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+    append_pipeline_contract_audit_event(
+        &state.store,
+        &retired_contract,
+        "pipeline_contract.replaced",
+        actor.clone(),
+        reason.clone(),
+    )
+    .await?;
+    append_pipeline_contract_audit_event(
+        &state.store,
+        &pipeline_contract,
+        "pipeline_contract.created_by_replacement",
+        actor,
+        reason,
+    )
+    .await?;
+    Ok(Json(ReplacePipelineContractResponse {
+        retired_contract: retired_contract.into(),
+        pipeline_contract: pipeline_contract.into(),
+    }))
+}
+
 async fn list_pipeline_intents(
     State(state): State<AppState>,
     Query(query): Query<ListPipelineIntentsQuery>,
@@ -3716,7 +3989,7 @@ async fn attach_pipeline_intent_evidence(
         .get_observation(&observation_id)
         .await?
         .ok_or_else(|| ApiError::not_found("observation", &observation_id))?;
-    validate_pipeline_intent_observation(&observation)?;
+    validate_pipeline_intent_observation(&current, &observation)?;
 
     let actor = clean_optional_text(request.actor);
     let reason = clean_optional_text(request.reason);
@@ -3757,7 +4030,336 @@ async fn attach_pipeline_intent_evidence(
     }))
 }
 
-fn validate_pipeline_intent_observation(observation: &StoredObservation) -> Result<(), ApiError> {
+async fn create_pipeline_intent_trusted_envelope(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<CreatePipelineIntentTrustedEnvelopeRequest>,
+) -> Result<Json<TrustedEnvelopeResponse>, ApiError> {
+    let intent = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    let change_set = state
+        .store
+        .get_change_set(&intent.change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &intent.change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&intent.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &intent.work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
+    ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
+    ensure_approved_for_trusted_envelope("pipeline_intent", &intent.id, &intent.status)?;
+    let execution = tekton_execution_spec(&intent.intent_json)?;
+    let reason = clean_optional_text(Some(request.reason.clone()))
+        .ok_or_else(|| ApiError::bad_request("trusted envelope reason is required"))?;
+    let subject =
+        clean_optional_text(request.subject).unwrap_or_else(|| state.policy.subject.clone());
+    let grant = create_permission_grant_record(
+        &state.store,
+        CreatePermissionGrantRequest {
+            subject,
+            created_by: clean_optional_text(request.created_by.clone()),
+            reason: reason.clone(),
+            scope: json!({
+                "environment": state.policy.environment,
+                "capability_kinds": ["tekton_start_run"],
+                "actions": ["tekton_trigger_pipeline"],
+                "max_risk": "high",
+                "namespaces": [execution.namespace],
+                "work_plan_ids": [intent.work_plan_id],
+                "change_set_ids": [intent.change_set_id],
+                "pipeline_intent_ids": [intent.id],
+                "production_impacting": execution.production_impacting,
+            }),
+            policy: json!({ "policy_mode": "supervised_autonomy" }),
+            expires_at: request.expires_at,
+        },
+    )
+    .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &intent,
+        "pipeline_intent.trusted_envelope_created",
+        clean_optional_text(request.created_by),
+        Some(reason),
+        json!({ "permission_grant_id": grant.id }),
+    )
+    .await?;
+
+    Ok(Json(TrustedEnvelopeResponse {
+        grant: grant.into(),
+    }))
+}
+
+async fn execute_pipeline_intent(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<ExecutePipelineIntentRequest>,
+) -> Result<Json<ExecutePipelineIntentResponse>, ApiError> {
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor.clone()));
+    let reason = clean_optional_text(request.reason.clone());
+    let preflight = pipeline_intent_execution_preflight(&state, &pipeline_intent_id).await?;
+    if !preflight.ready || request.dry_run {
+        return Ok(Json(ExecutePipelineIntentResponse {
+            status: if preflight.ready { "ready" } else { "blocked" }.to_string(),
+            ready: preflight.ready,
+            dry_run: request.dry_run,
+            pipeline_intent: preflight.intent.into(),
+            manifest: preflight.manifest,
+            checks: preflight.checks,
+            permission_grant_id: preflight.grant_id,
+            execution_id: None,
+            executor_job_name: None,
+        }));
+    }
+
+    let execution_id = format!("pexec_{}", unique_suffix());
+    let mut intent_json = preflight.intent.intent_json.clone();
+    let manifest = preflight
+        .manifest
+        .clone()
+        .ok_or_else(|| ApiError::internal("execution preflight omitted a PipelineRun manifest"))?;
+    set_pipeline_execution_state(
+        &mut intent_json,
+        json!({
+            "execution_id": execution_id,
+            "state": "dispatching",
+            "pipeline_run_namespace": preflight.execution.namespace,
+            "pipeline_run_name": pipeline_run_name(&manifest),
+            "permission_grant_id": preflight.grant_id,
+        }),
+    );
+    let intent = state
+        .store
+        .update_pipeline_intent_execution(
+            &preflight.intent.id,
+            UpdatePipelineIntentExecution {
+                status: "executing".to_string(),
+                intent_json,
+                actor: actor.clone(),
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+
+    let dispatch = state
+        .worker
+        .dispatch_tekton_execution(TektonExecutionRequest {
+            pipeline_intent_id: intent.id.clone(),
+            execution_id: execution_id.clone(),
+            target_namespace: preflight.execution.namespace.clone(),
+            pipeline_run_manifest: manifest.clone(),
+        })
+        .await;
+    let (intent, status, executor_job_name) = match dispatch {
+        Ok(receipt) => {
+            let mut intent_json = intent.intent_json.clone();
+            set_pipeline_execution_state(
+                &mut intent_json,
+                json!({
+                    "execution_id": execution_id,
+                    "state": "executor_job_created",
+                    "executor_job_name": receipt.job_name,
+                    "pipeline_run_namespace": preflight.execution.namespace,
+                    "pipeline_run_name": pipeline_run_name(&manifest),
+                    "permission_grant_id": preflight.grant_id,
+                }),
+            );
+            let intent = state
+                .store
+                .update_pipeline_intent_execution(
+                    &intent.id,
+                    UpdatePipelineIntentExecution {
+                        status: "executing".to_string(),
+                        intent_json,
+                        actor: actor.clone(),
+                        reason: reason.clone(),
+                    },
+                )
+                .await?;
+            append_pipeline_intent_audit_event(
+                &state.store,
+                &intent,
+                "pipeline_intent.execution_dispatched",
+                actor.clone(),
+                reason.clone(),
+                json!({
+                    "execution_id": execution_id,
+                    "executor_job_name": receipt.job_name,
+                    "permission_grant_id": preflight.grant_id,
+                }),
+            )
+            .await?;
+            (intent, "dispatched".to_string(), Some(receipt.job_name))
+        }
+        Err(error) => {
+            let mut intent_json = intent.intent_json.clone();
+            set_pipeline_execution_state(
+                &mut intent_json,
+                json!({
+                    "execution_id": execution_id,
+                    "state": "dispatch_failed",
+                    "error": error.to_string(),
+                    "pipeline_run_namespace": preflight.execution.namespace,
+                    "pipeline_run_name": pipeline_run_name(&manifest),
+                    "permission_grant_id": preflight.grant_id,
+                }),
+            );
+            let intent = state
+                .store
+                .update_pipeline_intent_execution(
+                    &intent.id,
+                    UpdatePipelineIntentExecution {
+                        status: "failed".to_string(),
+                        intent_json,
+                        actor: actor.clone(),
+                        reason: reason.clone(),
+                    },
+                )
+                .await?;
+            append_pipeline_intent_audit_event(
+                &state.store,
+                &intent,
+                "pipeline_intent.execution_dispatch_failed",
+                actor.clone(),
+                reason.clone(),
+                json!({ "execution_id": execution_id, "error": error.to_string() }),
+            )
+            .await?;
+            (intent, "failed".to_string(), None)
+        }
+    };
+
+    Ok(Json(ExecutePipelineIntentResponse {
+        status,
+        ready: true,
+        dry_run: false,
+        pipeline_intent: intent.into(),
+        manifest: Some(manifest),
+        checks: preflight.checks,
+        permission_grant_id: preflight.grant_id,
+        execution_id: Some(execution_id),
+        executor_job_name,
+    }))
+}
+
+async fn internal_pipeline_intent_execution_outcome(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<PipelineIntentExecutionOutcomeRequest>,
+) -> Result<Json<PipelineIntentResponse>, ApiError> {
+    let intent = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if intent.status != "executing" {
+        return Err(ApiError::conflict(
+            "execution outcome requires a PipelineIntent in executing status",
+        ));
+    }
+    let current_execution_id = intent
+        .intent_json
+        .pointer("/execution_state/execution_id")
+        .and_then(Value::as_str);
+    if current_execution_id != Some(request.execution_id.as_str()) {
+        return Err(ApiError::conflict(
+            "execution outcome does not match the current PipelineIntent execution",
+        ));
+    }
+    let (status, event_kind, state_name) = match request.status.as_str() {
+        "submitted" => (
+            "executing",
+            "pipeline_intent.execution_submitted",
+            "pipeline_run_created",
+        ),
+        "completed" => (
+            "approved",
+            "pipeline_intent.execution_completed",
+            "pipeline_run_succeeded",
+        ),
+        "failed" => (
+            "failed",
+            "pipeline_intent.execution_failed",
+            if intent
+                .intent_json
+                .pointer("/execution_state/state")
+                .and_then(Value::as_str)
+                == Some("pipeline_run_created")
+            {
+                "pipeline_run_failed"
+            } else {
+                "failed"
+            },
+        ),
+        _ => {
+            return Err(ApiError::bad_request(
+                "execution outcome status must be submitted, completed, or failed",
+            ))
+        }
+    };
+    let terminal_evidence = if matches!(request.status.as_str(), "completed" | "failed") {
+        Some(
+            persist_pipeline_execution_evidence(&state.store, &intent, &request, state_name)
+                .await?,
+        )
+    } else {
+        None
+    };
+    let mut intent_json = intent.intent_json.clone();
+    merge_pipeline_execution_state(
+        &mut intent_json,
+        json!({
+            "execution_id": request.execution_id,
+            "state": state_name,
+            "pipeline_run_namespace": request.pipeline_run_namespace,
+            "pipeline_run_name": request.pipeline_run_name,
+            "error": request.error,
+        }),
+    );
+    if let Some(evidence) = terminal_evidence {
+        set_pipeline_execution_evidence(&mut intent_json, evidence);
+    }
+    let intent = state
+        .store
+        .update_pipeline_intent_execution(
+            &intent.id,
+            UpdatePipelineIntentExecution {
+                status: status.to_string(),
+                intent_json,
+                actor: Some("executor:tekton".to_string()),
+                reason: request.error.clone(),
+            },
+        )
+        .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &intent,
+        event_kind,
+        Some("executor:tekton".to_string()),
+        None,
+        json!({
+            "execution_id": request.execution_id,
+            "pipeline_run_namespace": request.pipeline_run_namespace,
+            "pipeline_run_name": request.pipeline_run_name,
+            "error": request.error,
+        }),
+    )
+    .await?;
+    Ok(Json(intent.into()))
+}
+
+fn validate_pipeline_intent_observation(
+    intent: &StoredPipelineIntent,
+    observation: &StoredObservation,
+) -> Result<(), ApiError> {
     if observation.source != "tekton" || observation.kind != "pipeline_run_analysis" {
         return Err(ApiError::bad_request(
             "pipeline intent evidence must be a tekton pipeline_run_analysis observation",
@@ -3767,6 +4369,29 @@ fn validate_pipeline_intent_observation(observation: &StoredObservation) -> Resu
         return Err(ApiError::bad_request(
             "pipeline intent evidence observation is missing analysis data",
         ));
+    }
+
+    let expected_namespace = intent
+        .intent_json
+        .pointer("/execution_evidence/pipeline_run/namespace")
+        .and_then(Value::as_str);
+    let expected_name = intent
+        .intent_json
+        .pointer("/execution_evidence/pipeline_run/name")
+        .and_then(Value::as_str);
+    if let Some(expected_namespace) = expected_namespace {
+        if observation.resource_namespace.as_deref() != Some(expected_namespace) {
+            return Err(ApiError::bad_request(
+                "pipeline intent evidence must match the executor PipelineRun namespace",
+            ));
+        }
+    }
+    if let Some(expected_name) = expected_name {
+        if observation.resource_name.as_deref() != Some(expected_name) {
+            return Err(ApiError::bad_request(
+                "pipeline intent evidence must match the executor PipelineRun name",
+            ));
+        }
     }
 
     Ok(())
@@ -3867,6 +4492,13 @@ fn pipeline_intent_attached_evidence_status(
         .and_then(Value::as_str)
 }
 
+fn pipeline_execution_evidence_status(pipeline_intent: &StoredPipelineIntent) -> Option<&str> {
+    pipeline_intent
+        .intent_json
+        .pointer("/execution_evidence/status")
+        .and_then(Value::as_str)
+}
+
 fn deployment_intent_attached_evidence_status(
     deployment_intent: &StoredDeploymentIntent,
 ) -> Option<&str> {
@@ -3932,6 +4564,740 @@ fn pipeline_intent_json(
             "tasks": ["test", "build", "package"]
         }
     }))
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TektonExecutionSpec {
+    enabled: bool,
+    namespace: String,
+    pipeline_ref: String,
+    #[serde(default)]
+    production_impacting: bool,
+    #[serde(default)]
+    params: BTreeMap<String, Value>,
+    #[serde(default)]
+    workspaces: Vec<TektonWorkspaceSpec>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TektonWorkspaceSpec {
+    name: String,
+    #[serde(default)]
+    persistent_volume_claim: Option<String>,
+    #[serde(default)]
+    volume_claim_template: Option<TektonVolumeClaimTemplate>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TektonVolumeClaimTemplate {
+    storage: String,
+    #[serde(default = "default_access_modes")]
+    access_modes: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PipelineContractSpec {
+    #[serde(default)]
+    params: Vec<PipelineParameterContract>,
+    #[serde(default)]
+    workspaces: Vec<PipelineWorkspaceContract>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PipelineParameterContract {
+    name: String,
+    #[serde(rename = "type")]
+    value_type: String,
+    #[serde(default)]
+    required: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PipelineWorkspaceContract {
+    name: String,
+    binding: String,
+    #[serde(default)]
+    required: bool,
+}
+
+fn default_access_modes() -> Vec<String> {
+    vec!["ReadWriteOnce".to_string()]
+}
+
+struct PipelineIntentExecutionPreflight {
+    ready: bool,
+    intent: StoredPipelineIntent,
+    execution: TektonExecutionSpec,
+    manifest: Option<Value>,
+    checks: Vec<Value>,
+    grant_id: Option<String>,
+}
+
+async fn pipeline_intent_execution_preflight(
+    state: &AppState,
+    pipeline_intent_id: &str,
+) -> Result<PipelineIntentExecutionPreflight, ApiError> {
+    let intent = state
+        .store
+        .get_pipeline_intent(pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", pipeline_intent_id))?;
+    let change_set = state
+        .store
+        .get_change_set(&intent.change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &intent.change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&intent.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &intent.work_plan_id))?;
+    let execution = tekton_execution_spec(&intent.intent_json)?;
+    let mut checks = vec![
+        execution_check(
+            "pipeline_intent_approved",
+            intent.status == "approved",
+            format!("PipelineIntent status is {}", intent.status),
+        ),
+        execution_check(
+            "change_set_approved",
+            change_set.status == "approved",
+            format!("ChangeSet status is {}", change_set.status),
+        ),
+        execution_check(
+            "work_plan_approved",
+            work_plan.status == "approved",
+            format!("WorkPlan status is {}", work_plan.status),
+        ),
+        execution_check(
+            "execution_enabled",
+            execution.enabled,
+            "Tekton execution is enabled",
+        ),
+    ];
+
+    let contracts = state
+        .store
+        .list_pipeline_contracts(PipelineContractListFilter {
+            namespace: Some(execution.namespace.clone()),
+            pipeline_ref: Some(execution.pipeline_ref.clone()),
+            status: Some("active".to_string()),
+            limit: 10,
+            ..PipelineContractListFilter::default()
+        })
+        .await?;
+    let matching_contract_count = if contracts.is_empty() {
+        state
+            .store
+            .list_pipeline_contracts(PipelineContractListFilter {
+                namespace: Some(execution.namespace.clone()),
+                pipeline_ref: Some(execution.pipeline_ref.clone()),
+                limit: 10,
+                ..PipelineContractListFilter::default()
+            })
+            .await?
+            .len()
+    } else {
+        contracts.len()
+    };
+    let contract = match contracts.as_slice() {
+        [] => {
+            checks.push(execution_check(
+                "active_pipeline_contract",
+                false,
+                if matching_contract_count == 0 {
+                    format!(
+                        "No PipelineContract exists for {}/{}",
+                        execution.namespace, execution.pipeline_ref
+                    )
+                } else {
+                    format!(
+                        "All PipelineContracts for {}/{} are retired",
+                        execution.namespace, execution.pipeline_ref
+                    )
+                },
+            ));
+            None
+        }
+        [contract] => {
+            checks.push(execution_check(
+                "active_pipeline_contract",
+                true,
+                format!(
+                    "Active PipelineContract {} version {} matches",
+                    contract.id, contract.version
+                ),
+            ));
+            Some(contract)
+        }
+        _ => {
+            checks.push(execution_check(
+                "active_pipeline_contract",
+                false,
+                format!(
+                    "Multiple active PipelineContracts match {}/{}; retire the older contract",
+                    execution.namespace, execution.pipeline_ref
+                ),
+            ));
+            None
+        }
+    };
+    if let Some(contract) = contract {
+        match execution_matches_pipeline_contract(&execution, contract) {
+            Ok(()) => checks.push(execution_check(
+                "pipeline_contract_inputs",
+                true,
+                format!(
+                    "PipelineIntent inputs match PipelineContract {}",
+                    contract.id
+                ),
+            )),
+            Err(error) => checks.push(execution_check(
+                "pipeline_contract_inputs",
+                false,
+                error.message,
+            )),
+        }
+    } else {
+        checks.push(execution_check(
+            "pipeline_contract_inputs",
+            false,
+            "PipelineIntent inputs cannot be validated without one active PipelineContract",
+        ));
+    }
+
+    let gates = state
+        .store
+        .list_approval_gates(ApprovalGateListFilter {
+            remediation_plan_id: Some(intent.remediation_plan_id.clone()),
+            limit: 200,
+            ..ApprovalGateListFilter::default()
+        })
+        .await?;
+    let required_kinds = if execution.production_impacting {
+        ["pipeline_mutation", "cluster_mutation", "production_impact"].as_slice()
+    } else {
+        ["pipeline_mutation", "cluster_mutation"].as_slice()
+    };
+    for kind in required_kinds {
+        let matching = gates
+            .iter()
+            .filter(|gate| gate.gate_kind == *kind)
+            .collect::<Vec<_>>();
+        let satisfied = !matching.is_empty()
+            && matching
+                .iter()
+                .all(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
+        checks.push(execution_check(
+            format!("approval_gate_{kind}"),
+            satisfied,
+            if matching.is_empty() {
+                format!("Required {kind} approval gate is missing")
+            } else {
+                format!("{} {kind} gate(s) are satisfied or waived", matching.len())
+            },
+        ));
+    }
+    for gate in gates
+        .iter()
+        .filter(|gate| !required_kinds.contains(&gate.gate_kind.as_str()))
+    {
+        checks.push(execution_check(
+            format!("approval_gate_{}", gate.id),
+            matches!(gate.status.as_str(), "satisfied" | "waived"),
+            format!("{} gate is {}", gate.gate_kind, gate.status),
+        ));
+    }
+
+    let grant =
+        matching_pipeline_execution_grant(&state.store, &state.policy, &intent, &execution).await?;
+    checks.push(execution_check(
+        "trusted_execution_envelope",
+        grant.is_some(),
+        grant
+            .as_ref()
+            .map(|grant| {
+                format!(
+                    "Active supervised-autonomy grant {} matches the PipelineIntent",
+                    grant.id
+                )
+            })
+            .unwrap_or_else(|| {
+                "No active supervised-autonomy grant matches this PipelineIntent".to_string()
+            }),
+    ));
+    let ready = checks
+        .iter()
+        .all(|check| check.get("passed").and_then(Value::as_bool) == Some(true));
+    let manifest = ready
+        .then(|| build_pipeline_run_manifest(&intent, &execution))
+        .transpose()?;
+    Ok(PipelineIntentExecutionPreflight {
+        ready,
+        intent,
+        execution,
+        manifest,
+        checks,
+        grant_id: grant.map(|grant| grant.id),
+    })
+}
+
+fn execution_check(code: impl Into<String>, passed: bool, summary: impl Into<String>) -> Value {
+    json!({ "code": code.into(), "passed": passed, "summary": summary.into() })
+}
+
+async fn matching_pipeline_execution_grant(
+    store: &SqliteStore,
+    policy: &SafetyPolicy,
+    intent: &StoredPipelineIntent,
+    execution: &TektonExecutionSpec,
+) -> Result<Option<StoredPermissionGrant>, ApiError> {
+    let now = unique_suffix();
+    for grant in store.list_permission_grants(Some("active"), 200).await? {
+        if !grant_is_unexpired(&grant, now) {
+            continue;
+        }
+        let scope = serde_json::from_value::<PermissionGrantScope>(grant.scope_json.clone())
+            .map_err(|error| {
+                ApiError::internal(format!(
+                    "permission grant {} has invalid scope: {error}",
+                    grant.id
+                ))
+            })?;
+        let grant_policy = serde_json::from_value::<PermissionGrantPolicy>(
+            grant.policy_json.clone(),
+        )
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "permission grant {} has invalid policy: {error}",
+                grant.id
+            ))
+        })?;
+        let matches = grant.subject == policy.subject
+            && scope.environment.as_deref() == Some(policy.environment.as_str())
+            && grant_policy.policy_mode == PolicyMode::SupervisedAutonomy
+            && scope
+                .capability_kinds
+                .contains(&CapabilityKind::TektonStartRun)
+            && scope
+                .actions
+                .iter()
+                .any(|action| action == "tekton_trigger_pipeline")
+            && scope
+                .max_risk
+                .is_some_and(|risk| risk_rank(risk) >= risk_rank(RiskLevel::High))
+            && scope
+                .namespaces
+                .iter()
+                .any(|namespace| namespace == &execution.namespace)
+            && scope
+                .work_plan_ids
+                .iter()
+                .any(|id| id == &intent.work_plan_id)
+            && scope
+                .change_set_ids
+                .iter()
+                .any(|id| id == &intent.change_set_id)
+            && scope.pipeline_intent_ids.iter().any(|id| id == &intent.id)
+            && scope.production_impacting == Some(execution.production_impacting);
+        if matches {
+            return Ok(Some(grant));
+        }
+    }
+    Ok(None)
+}
+
+fn risk_rank(risk: RiskLevel) -> u8 {
+    match risk {
+        RiskLevel::Low => 1,
+        RiskLevel::Medium => 2,
+        RiskLevel::High => 3,
+        RiskLevel::Critical => 4,
+    }
+}
+
+fn tekton_execution_spec(intent_json: &Value) -> Result<TektonExecutionSpec, ApiError> {
+    let execution = intent_json
+        .get("execution")
+        .cloned()
+        .ok_or_else(|| ApiError::bad_request("pipeline intent execution is required"))?;
+    let execution = serde_json::from_value::<TektonExecutionSpec>(execution).map_err(|error| {
+        ApiError::bad_request(format!("pipeline intent execution is invalid: {error}"))
+    })?;
+    validate_tekton_execution_spec(&execution)?;
+    Ok(execution)
+}
+
+fn pipeline_contract_spec(value: &Value) -> Result<PipelineContractSpec, ApiError> {
+    if !value.is_object() {
+        return Err(ApiError::bad_request(
+            "pipeline contract contract_json must be a JSON object",
+        ));
+    }
+    serde_json::from_value::<PipelineContractSpec>(value.clone()).map_err(|error| {
+        ApiError::bad_request(format!(
+            "pipeline contract contract_json is invalid: {error}"
+        ))
+    })
+}
+
+fn validate_pipeline_contract_spec(contract: &PipelineContractSpec) -> Result<(), ApiError> {
+    let mut names = BTreeSet::new();
+    for parameter in &contract.params {
+        validate_kubernetes_name("pipeline contract params.name", &parameter.name)?;
+        if !matches!(parameter.value_type.as_str(), "scalar" | "array") {
+            return Err(ApiError::bad_request(
+                "pipeline contract params.type must be scalar or array",
+            ));
+        }
+        if !names.insert(parameter.name.as_str()) {
+            return Err(ApiError::bad_request(
+                "pipeline contract params must not repeat a name",
+            ));
+        }
+    }
+    let mut workspace_names = BTreeSet::new();
+    for workspace in &contract.workspaces {
+        validate_kubernetes_name("pipeline contract workspaces.name", &workspace.name)?;
+        if !matches!(
+            workspace.binding.as_str(),
+            "persistent_volume_claim" | "volume_claim_template"
+        ) {
+            return Err(ApiError::bad_request(
+                "pipeline contract workspaces.binding must be persistent_volume_claim or volume_claim_template",
+            ));
+        }
+        if !workspace_names.insert(workspace.name.as_str()) {
+            return Err(ApiError::bad_request(
+                "pipeline contract workspaces must not repeat a name",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn execution_matches_pipeline_contract(
+    execution: &TektonExecutionSpec,
+    stored: &StoredPipelineContract,
+) -> Result<(), ApiError> {
+    let contract = pipeline_contract_spec(&stored.contract_json)?;
+    validate_pipeline_contract_spec(&contract)?;
+    for parameter in &contract.params {
+        let value = execution.params.get(&parameter.name);
+        if parameter.required && value.is_none() {
+            return Err(ApiError::bad_request(format!(
+                "PipelineIntent is missing required pipeline parameter {}",
+                parameter.name
+            )));
+        }
+        if let Some(value) = value {
+            let matches = match parameter.value_type.as_str() {
+                "scalar" => !value.is_array() && !value.is_object() && !value.is_null(),
+                "array" => value.is_array(),
+                _ => false,
+            };
+            if !matches {
+                return Err(ApiError::bad_request(format!(
+                    "PipelineIntent parameter {} does not match contract type {}",
+                    parameter.name, parameter.value_type
+                )));
+            }
+        }
+    }
+    if let Some(parameter) = execution
+        .params
+        .keys()
+        .find(|name| !contract.params.iter().any(|allowed| allowed.name == **name))
+    {
+        return Err(ApiError::bad_request(format!(
+            "PipelineIntent parameter {parameter} is not declared by the active PipelineContract"
+        )));
+    }
+    for workspace in &contract.workspaces {
+        let supplied = execution
+            .workspaces
+            .iter()
+            .find(|candidate| candidate.name == workspace.name);
+        if workspace.required && supplied.is_none() {
+            return Err(ApiError::bad_request(format!(
+                "PipelineIntent is missing required pipeline workspace {}",
+                workspace.name
+            )));
+        }
+        if let Some(supplied) = supplied {
+            let binding = if supplied.persistent_volume_claim.is_some() {
+                "persistent_volume_claim"
+            } else {
+                "volume_claim_template"
+            };
+            if binding != workspace.binding {
+                return Err(ApiError::bad_request(format!(
+                    "PipelineIntent workspace {} requires {} binding",
+                    workspace.name, workspace.binding
+                )));
+            }
+        }
+    }
+    if let Some(workspace) = execution.workspaces.iter().find(|workspace| {
+        !contract
+            .workspaces
+            .iter()
+            .any(|allowed| allowed.name == workspace.name)
+    }) {
+        return Err(ApiError::bad_request(format!(
+            "PipelineIntent workspace {} is not declared by the active PipelineContract",
+            workspace.name
+        )));
+    }
+    Ok(())
+}
+
+fn validate_tekton_execution_spec(execution: &TektonExecutionSpec) -> Result<(), ApiError> {
+    validate_kubernetes_name("execution.namespace", &execution.namespace)?;
+    validate_kubernetes_name("execution.pipeline_ref", &execution.pipeline_ref)?;
+    for (name, value) in &execution.params {
+        validate_kubernetes_name("execution.params key", name)?;
+        if !(value.is_string() || value.is_number() || value.is_boolean() || value.is_array()) {
+            return Err(ApiError::bad_request(
+                "execution.params values must be scalar or arrays",
+            ));
+        }
+    }
+    for workspace in &execution.workspaces {
+        validate_kubernetes_name("execution.workspaces.name", &workspace.name)?;
+        match (&workspace.persistent_volume_claim, &workspace.volume_claim_template) {
+            (Some(pvc), None) => validate_kubernetes_name("execution.workspaces.persistent_volume_claim", pvc)?,
+            (None, Some(template)) => {
+                if template.storage.trim().is_empty() {
+                    return Err(ApiError::bad_request("execution.workspaces.volume_claim_template.storage is required"));
+                }
+                if template.access_modes.is_empty() || template.access_modes.iter().any(|mode| mode != "ReadWriteOnce") {
+                    return Err(ApiError::bad_request("execution workspaces support only ReadWriteOnce volume claim templates"));
+                }
+            }
+            _ => return Err(ApiError::bad_request("each execution workspace requires exactly one persistent_volume_claim or volume_claim_template")),
+        }
+    }
+    Ok(())
+}
+
+fn validate_kubernetes_name(field: &str, value: &str) -> Result<(), ApiError> {
+    let valid = !value.is_empty()
+        && value.len() <= 63
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        && !value.starts_with('-')
+        && !value.ends_with('-');
+    if valid {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(format!(
+            "{field} must be a DNS label"
+        )))
+    }
+}
+
+fn build_pipeline_run_manifest(
+    intent: &StoredPipelineIntent,
+    execution: &TektonExecutionSpec,
+) -> Result<Value, ApiError> {
+    let intent_label = dns_label_fragment(&intent.id);
+    let change_set_label = dns_label_fragment(&intent.change_set_id);
+    let name = format!("pharness-{intent_label}");
+    let params = execution
+        .params
+        .iter()
+        .map(|(name, value)| json!({ "name": name, "value": value }))
+        .collect::<Vec<_>>();
+    let workspaces = execution
+        .workspaces
+        .iter()
+        .map(|workspace| {
+            let mut value = Map::new();
+            value.insert("name".to_string(), json!(workspace.name));
+            if let Some(pvc) = &workspace.persistent_volume_claim {
+                value.insert(
+                    "persistentVolumeClaim".to_string(),
+                    json!({ "claimName": pvc }),
+                );
+            }
+            if let Some(template) = &workspace.volume_claim_template {
+                value.insert(
+                    "volumeClaimTemplate".to_string(),
+                    json!({
+                        "spec": {
+                            "accessModes": template.access_modes,
+                            "resources": { "requests": { "storage": template.storage } },
+                        }
+                    }),
+                );
+            }
+            Value::Object(value)
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "apiVersion": "tekton.dev/v1",
+        "kind": "PipelineRun",
+        "metadata": {
+            "name": name,
+            "namespace": execution.namespace,
+            "labels": {
+                "app.kubernetes.io/part-of": "pharness",
+                "pharness.lucas.engineering/pipeline-intent": intent_label,
+                "pharness.lucas.engineering/change-set": change_set_label,
+            },
+        },
+        "spec": {
+            "pipelineRef": { "name": execution.pipeline_ref },
+            "params": params,
+            "workspaces": workspaces,
+        },
+    }))
+}
+
+fn dns_label_fragment(value: &str) -> String {
+    let normalized = value.replace('_', "-").to_ascii_lowercase();
+    normalized.chars().take(50).collect()
+}
+
+fn set_pipeline_execution_state(intent_json: &mut Value, execution_state: Value) {
+    if let Some(object) = intent_json.as_object_mut() {
+        object.insert("execution_state".to_string(), execution_state);
+    }
+}
+
+fn merge_pipeline_execution_state(intent_json: &mut Value, update: Value) {
+    let Some(intent) = intent_json.as_object_mut() else {
+        return;
+    };
+    let mut execution_state = intent
+        .get("execution_state")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(update) = update.as_object() {
+        for (key, value) in update {
+            execution_state.insert(key.clone(), value.clone());
+        }
+    }
+    intent.insert(
+        "execution_state".to_string(),
+        Value::Object(execution_state),
+    );
+}
+
+fn set_pipeline_execution_evidence(intent_json: &mut Value, evidence: Value) {
+    if let Some(intent) = intent_json.as_object_mut() {
+        intent.insert("execution_evidence".to_string(), evidence);
+    }
+}
+
+async fn persist_pipeline_execution_evidence(
+    store: &SqliteStore,
+    intent: &StoredPipelineIntent,
+    outcome: &PipelineIntentExecutionOutcomeRequest,
+    state_name: &str,
+) -> Result<Value, ApiError> {
+    let artifact_id = format!("art_pipeline_execution_{}", outcome.execution_id);
+    let observation_id = format!("obs_pipeline_execution_{}", outcome.execution_id);
+    let evidence_status = match outcome.status.as_str() {
+        "completed" => "succeeded",
+        "failed" => "failed",
+        _ => {
+            return Err(ApiError::internal(
+                "terminal execution evidence requires a terminal outcome",
+            ))
+        }
+    };
+    let pipeline_run = json!({
+        "namespace": outcome.pipeline_run_namespace,
+        "name": outcome.pipeline_run_name,
+    });
+    let error = outcome
+        .error
+        .as_deref()
+        .map(|value| truncate_audit_text(value, 256));
+    let content = json!({
+        "execution_id": outcome.execution_id,
+        "status": evidence_status,
+        "state": state_name,
+        "pipeline_run": pipeline_run.clone(),
+        "error": error.clone(),
+    });
+    let artifact = match store.get_artifact(&artifact_id).await? {
+        Some(existing) => existing,
+        None => {
+            store
+                .create_artifact(CreateArtifact {
+                    id: artifact_id.clone(),
+                    session_id: intent.session_id.clone(),
+                    run_id: intent.run_id.clone(),
+                    kind: "tekton_pipeline_run_execution".to_string(),
+                    label: format!(
+                        "Tekton PipelineRun {evidence_status}: {}",
+                        outcome.execution_id
+                    ),
+                    mime_type: Some("application/json".to_string()),
+                    path: None,
+                    content_text: None,
+                    content_json: Some(content.clone()),
+                })
+                .await?
+        }
+    };
+    let observation = match store.get_observation(&observation_id).await? {
+        Some(existing) => existing,
+        None => {
+            let namespace = outcome.pipeline_run_namespace.clone();
+            let name = outcome.pipeline_run_name.clone();
+            store
+                .create_observation(CreateObservation {
+                    id: observation_id.clone(),
+                    session_id: intent.session_id.clone(),
+                    run_id: intent.run_id.clone(),
+                    source: "tekton".to_string(),
+                    kind: "pipeline_run_execution".to_string(),
+                    subject: name.clone().unwrap_or_else(|| outcome.execution_id.clone()),
+                    summary: format!(
+                        "PipelineRun execution {evidence_status} for {}",
+                        name.as_deref().unwrap_or(&outcome.execution_id)
+                    ),
+                    resource_namespace: namespace.clone(),
+                    resource_kind: Some("PipelineRun".to_string()),
+                    resource_name: name.clone(),
+                    resource_ref_json: Some(json!({
+                        "apiVersion": "tekton.dev/v1",
+                        "kind": "PipelineRun",
+                        "namespace": namespace,
+                        "name": name,
+                    })),
+                    artifact_id: Some(artifact.id.clone()),
+                    data_json: json!({ "execution": content }),
+                })
+                .await?
+        }
+    };
+
+    Ok(json!({
+        "status": evidence_status,
+        "source": "executor",
+        "execution_id": outcome.execution_id,
+        "artifact_id": artifact.id,
+        "observation_id": observation.id,
+        "pipeline_run": pipeline_run,
+        "error": error,
+    }))
+}
+
+fn pipeline_run_name(manifest: &Value) -> Option<&str> {
+    manifest.pointer("/metadata/name").and_then(Value::as_str)
 }
 
 fn validate_pipeline_intent_transition(current: &str, target: &str) -> Result<(), ApiError> {
@@ -4012,11 +5378,7 @@ async fn create_deployment_intent_from_pipeline_intent(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
-    ensure_approved_for_trusted_envelope(
-        "pipeline_intent",
-        &pipeline_intent.id,
-        &pipeline_intent.status,
-    )?;
+    ensure_pipeline_intent_ready_for_deployment(&pipeline_intent)?;
 
     let actor = clean_optional_text(request.actor);
     let reason = clean_optional_text(request.reason);
@@ -4167,6 +5529,14 @@ async fn transition_deployment_intent(
     let target = clean_optional_text(Some(request.target_status))
         .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
     validate_deployment_intent_transition(&current.status, &target)?;
+    if target == "approved" {
+        let pipeline_intent = state
+            .store
+            .get_pipeline_intent(&current.pipeline_intent_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("pipeline_intent", &current.pipeline_intent_id))?;
+        ensure_pipeline_evidence_ready_for_deployment(&pipeline_intent)?;
+    }
     let actor = clean_optional_text(request.actor);
     let reason = clean_optional_text(request.reason);
     let deployment_intent = state
@@ -4995,7 +6365,8 @@ async fn create_release_observability_remediation_plan(
     .await?;
 
     for gate in approval_gates_from_remediation_plan(&plan) {
-        store.create_approval_gate(gate).await?;
+        let gate = store.create_approval_gate(gate).await?;
+        append_approval_gate_audit_event(store, &gate, "approval_gate.created", "created").await?;
     }
 
     Ok(Some(plan))
@@ -6205,6 +7576,61 @@ fn ensure_approved_for_trusted_envelope(
     )))
 }
 
+fn pipeline_intent_is_deployment_eligible(status: &str) -> bool {
+    matches!(status, "approved" | "completed")
+}
+
+fn ensure_pipeline_intent_ready_for_deployment(
+    intent: &StoredPipelineIntent,
+) -> Result<(), ApiError> {
+    if pipeline_intent_is_deployment_eligible(&intent.status) {
+        return Ok(());
+    }
+
+    Err(ApiError::conflict(format!(
+        "pipeline_intent {} must be approved with successful execution evidence before proposing deployment",
+        intent.id
+    )))
+}
+
+fn ensure_pipeline_evidence_ready_for_deployment(
+    pipeline_intent: &StoredPipelineIntent,
+) -> Result<(), ApiError> {
+    if pipeline_intent_attached_evidence_status(pipeline_intent) != Some("satisfied") {
+        return Err(ApiError::conflict(format!(
+            "pipeline_intent {} needs satisfied PipelineRunAnalysis evidence before approving deployment",
+            pipeline_intent.id
+        )));
+    }
+
+    let expected_namespace = pipeline_intent
+        .intent_json
+        .pointer("/execution_evidence/pipeline_run/namespace")
+        .and_then(Value::as_str);
+    let expected_name = pipeline_intent
+        .intent_json
+        .pointer("/execution_evidence/pipeline_run/name")
+        .and_then(Value::as_str);
+    let evidence_namespace = pipeline_intent
+        .intent_json
+        .pointer("/evidence/resource/namespace")
+        .and_then(Value::as_str);
+    let evidence_name = pipeline_intent
+        .intent_json
+        .pointer("/evidence/resource/name")
+        .and_then(Value::as_str);
+    if expected_namespace.is_some_and(|value| evidence_namespace != Some(value))
+        || expected_name.is_some_and(|value| evidence_name != Some(value))
+    {
+        return Err(ApiError::conflict(format!(
+            "pipeline_intent {} evidence does not match the executed PipelineRun",
+            pipeline_intent.id
+        )));
+    }
+
+    Ok(())
+}
+
 fn trusted_envelope_grant_request(
     work_plan_id: &str,
     change_set_id: Option<&str>,
@@ -6685,9 +8111,16 @@ struct ListPermissionGrantsQuery {
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListAuditEventsQuery {
+    kind: Option<String>,
+    actor: Option<String>,
     resource_kind: Option<String>,
     resource_id: Option<String>,
     run_id: Option<String>,
+    namespace: Option<String>,
+    repo: Option<String>,
+    branch: Option<String>,
+    production_impacting: Option<bool>,
+    search: Option<String>,
     limit: Option<u32>,
 }
 
@@ -6695,15 +8128,21 @@ async fn list_audit_events(
     State(state): State<AppState>,
     Query(query): Query<ListAuditEventsQuery>,
 ) -> Result<Json<AuditEventsResponse>, ApiError> {
-    let run_id = query.run_id.as_deref().map(RunId::new);
     let events = state
         .store
-        .list_audit_events(
-            query.resource_kind.as_deref(),
-            query.resource_id.as_deref(),
-            run_id.as_ref(),
-            query.limit.unwrap_or(50),
-        )
+        .query_audit_events(AuditEventListFilter {
+            kind: clean_optional_text(query.kind),
+            actor: clean_optional_text(query.actor),
+            resource_kind: clean_optional_text(query.resource_kind),
+            resource_id: clean_optional_text(query.resource_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            namespace: clean_optional_text(query.namespace),
+            repo: clean_optional_text(query.repo),
+            branch: clean_optional_text(query.branch),
+            production_impacting: query.production_impacting,
+            search: clean_optional_text(query.search),
+            limit: query.limit.unwrap_or(50),
+        })
         .await?
         .into_iter()
         .map(Into::into)
@@ -6999,6 +8438,34 @@ async fn append_pipeline_intent_audit_event(
                     "name": intent.resource_name,
                 },
                 "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_pipeline_contract_audit_event(
+    store: &SqliteStore,
+    contract: &StoredPipelineContract,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", contract.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "pipeline_contract".to_string(),
+            resource_id: contract.id.clone(),
+            run_id: None,
+            payload_json: json!({
+                "pipeline_contract_id": contract.id,
+                "status": contract.status,
+                "namespace": contract.namespace,
+                "pipeline_ref": contract.pipeline_ref,
+                "version": contract.version,
+                "reason": reason,
             }),
         })
         .await
@@ -7882,23 +9349,25 @@ impl IntoResponse for ApiError {
 mod tests {
     use super::{
         approval_gate_summary, approval_summary, attach_deployment_intent_evidence,
-        attach_pipeline_intent_evidence, attach_release_evidence, cancel_run, change_set_flow,
-        change_set_readiness, config_effective, create_change_set,
+        attach_pipeline_intent_evidence, attach_release_evidence, build_pipeline_run_manifest,
+        cancel_run, change_set_flow, change_set_readiness, config_effective, create_change_set,
         create_change_set_trusted_envelope, create_deployment_intent_from_pipeline_intent,
         create_incident, create_observation, create_pipeline_intent_from_change_set,
         create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
         create_release_from_deployment_intent, create_remediation_plan, create_run,
         create_work_plan_from_remediation_plan, create_work_plan_trusted_envelope,
-        decide_run_approval, deny_approval, execute_capability, get_approval, get_approval_gate,
+        decide_run_approval, deny_approval, ensure_pipeline_evidence_ready_for_deployment,
+        execute_capability, execution_matches_pipeline_contract, get_approval, get_approval_gate,
         get_artifact, get_deployment_intent, get_incident, get_observation, get_permission_grant,
         get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
         get_run_diff, get_run_events, get_work_plan, last_event_seq, list_approval_gates,
         list_approvals, list_audit_events, list_change_sets, list_deployment_intents,
         list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
         list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
-        list_run_observations, list_runs, list_work_plans, parse_last_event_id, policy_json,
-        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
-        run_summary, satisfy_approval_gate, stream_start_seq, transition_change_set,
+        list_run_observations, list_runs, list_work_plans, merge_pipeline_execution_state,
+        parse_last_event_id, persist_pipeline_execution_evidence, policy_json, revise_change_set,
+        revise_work_plan, revoke_permission_grant, router, run_policy, run_summary,
+        satisfy_approval_gate, stream_start_seq, tekton_execution_spec, transition_change_set,
         transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
         transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
         work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
@@ -7918,10 +9387,11 @@ mod tests {
         CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
         CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
-        ExecuteCapabilityRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
-        ReviseWorkPlanRequest, RevokePermissionGrantRequest, TransitionChangeSetRequest,
-        TransitionDeploymentIntentRequest, TransitionPipelineIntentRequest,
-        TransitionRegistryEvidenceRequest, TransitionReleaseRequest, TransitionWorkPlanRequest,
+        ExecuteCapabilityRequest, PipelineIntentExecutionOutcomeRequest, ReviewApprovalRequest,
+        ReviseChangeSetRequest, ReviseWorkPlanRequest, RevokePermissionGrantRequest,
+        TransitionChangeSetRequest, TransitionDeploymentIntentRequest,
+        TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
+        TransitionReleaseRequest, TransitionWorkPlanRequest,
     };
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
@@ -7934,7 +9404,7 @@ mod tests {
         ApprovalGateListFilter, CreateApproval, CreateApprovalGate, CreateArtifact,
         CreateChangeSet, CreateDeploymentIntent, CreateFileChange, CreateIncident,
         CreateObservation, CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun,
-        CreateSession, CreateWorkPlan, SqliteStore,
+        CreateSession, CreateWorkPlan, SqliteStore, StoredPipelineContract, StoredPipelineIntent,
     };
     use serde_json::json;
     use std::fs;
@@ -8775,6 +10245,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("kubernetes_get".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -8857,6 +10328,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("kubernetes_get".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -8878,6 +10350,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(observation_id),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -8929,6 +10402,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("kubernetes_get".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9047,6 +10521,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("prometheus_query".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9147,6 +10622,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("registry_inspect_image".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9209,6 +10685,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(evidence.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9226,6 +10703,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("registry_inspect_image".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9621,6 +11099,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("appr_by_id".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -9837,6 +11316,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                     resource_id: Some(resource_id.to_string()),
                     run_id: None,
                     limit: Some(50),
+                    ..Default::default()
                 }),
             )
             .await
@@ -9899,6 +11379,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(created.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -10366,6 +11847,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("agate_test".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -10667,6 +12149,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(work_plan_id),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -10678,6 +12161,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(work_plan_envelope.grant.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -10689,6 +12173,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("agate_lifecycle".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11715,6 +13200,46 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+        state
+            .store
+            .create_observation(CreateObservation {
+                id: "obs_reproposed_pipeline_evidence".to_string(),
+                session_id: SessionId::new(format!("ses_{}", created.id.as_str())),
+                run_id: Some(created.id.clone()),
+                source: "tekton".to_string(),
+                kind: "pipeline_run_analysis".to_string(),
+                subject: "build-api".to_string(),
+                summary: "Reproposed PipelineRun completed successfully".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("build-api".to_string()),
+                resource_ref_json: None,
+                artifact_id: None,
+                data_json: json!({
+                    "analysis": {
+                        "summary": {
+                            "status": "succeeded",
+                            "failed_task_run_count": 0,
+                            "running_task_run_count": 0,
+                            "succeeded_task_run_count": 1,
+                            "image_alignment": { "status": "exact_match" }
+                        }
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        let Json(_reproposed_pipeline_evidence) = attach_pipeline_intent_evidence(
+            State(state.clone()),
+            Path(proposed_pipeline_intent.pipeline_intent.id.clone()),
+            Json(AttachPipelineIntentEvidenceRequest {
+                observation_id: "obs_reproposed_pipeline_evidence".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("reproposed PipelineRun evidence reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
         let Json(waiting_on_reproposed_deployment_intent) =
             change_set_readiness(State(state.clone()), Path(change_set_id.clone()))
                 .await
@@ -11851,6 +13376,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(change_set_id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11862,6 +13388,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(change_set_envelope.grant.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11873,6 +13400,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(proposed_pipeline_intent.pipeline_intent.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11884,6 +13412,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(proposed_deployment_intent.deployment_intent.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11895,6 +13424,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(proposed_release.release.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11906,6 +13436,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some(proposed_registry_evidence.registry_evidence.id.clone()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -11917,6 +13448,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("agate_changeset".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -12696,6 +14228,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 resource_id: Some("appr_test".to_string()),
                 run_id: None,
                 limit: Some(50),
+                ..Default::default()
             }),
         )
         .await
@@ -12706,5 +14239,256 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 && event.payload["run_scope"]["namespace"] == "apps-dev"
                 && event.payload["action"] == "write_file"
         }));
+    }
+
+    #[test]
+    fn builds_a_constrained_tekton_pipeline_run_manifest() {
+        let intent_json = json!({
+            "execution": {
+                "enabled": true,
+                "namespace": "tekton-pipelines",
+                "pipeline_ref": "clone-build-push",
+                "params": { "repo-url": "https://example.test/team/app.git" },
+                "workspaces": [{
+                    "name": "shared-data",
+                    "volume_claim_template": { "storage": "1Gi" }
+                }]
+            }
+        });
+        let execution = tekton_execution_spec(&intent_json).unwrap();
+        let intent = StoredPipelineIntent {
+            id: "pint_123".to_string(),
+            change_set_id: "cset_456".to_string(),
+            work_plan_id: "wplan_789".to_string(),
+            remediation_plan_id: "rplan_1".to_string(),
+            incident_id: "inc_1".to_string(),
+            session_id: SessionId::new("ses_1"),
+            run_id: None,
+            status: "approved".to_string(),
+            title: "build".to_string(),
+            summary: "build".to_string(),
+            risk_level: "high".to_string(),
+            intent_kind: "tekton_build_test_package".to_string(),
+            resource_namespace: None,
+            resource_kind: None,
+            resource_name: None,
+            intent_json,
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        };
+        let manifest = build_pipeline_run_manifest(&intent, &execution).unwrap();
+
+        assert_eq!(manifest["apiVersion"], "tekton.dev/v1");
+        assert_eq!(manifest["kind"], "PipelineRun");
+        assert_eq!(manifest["metadata"]["namespace"], "tekton-pipelines");
+        assert_eq!(manifest["spec"]["pipelineRef"]["name"], "clone-build-push");
+        assert_eq!(
+            manifest["spec"]["workspaces"][0]["volumeClaimTemplate"]["spec"]["accessModes"][0],
+            "ReadWriteOnce"
+        );
+        assert!(manifest
+            .pointer("/spec/taskRunTemplate/serviceAccountName")
+            .is_none());
+    }
+
+    #[test]
+    fn pipeline_contract_rejects_unknown_or_wrongly_shaped_inputs() {
+        let execution = tekton_execution_spec(&json!({
+            "execution": {
+                "enabled": true,
+                "namespace": "tekton-pipelines",
+                "pipeline_ref": "clone-build-push",
+                "params": { "branches": "main", "unknown": "value" },
+                "workspaces": []
+            }
+        }))
+        .unwrap();
+        let contract = StoredPipelineContract {
+            id: "pcontract_1".to_string(),
+            status: "active".to_string(),
+            namespace: "tekton-pipelines".to_string(),
+            pipeline_ref: "clone-build-push".to_string(),
+            version: "v1".to_string(),
+            contract_json: json!({
+                "params": [{ "name": "branches", "type": "array", "required": true }],
+                "workspaces": []
+            }),
+            created_at: "1".to_string(),
+            updated_at: "1".to_string(),
+            status_changed_at: "1".to_string(),
+            status_changed_by: None,
+            status_reason: None,
+        };
+
+        let error = execution_matches_pipeline_contract(&execution, &contract).unwrap_err();
+        assert!(error.message.contains("branches"));
+    }
+
+    #[test]
+    fn execution_outcome_keeps_dispatch_identity_for_reconciliation() {
+        let mut intent = json!({
+            "execution_state": {
+                "execution_id": "exec_1",
+                "executor_job_name": "pharness-tekton-exec-1",
+                "permission_grant_id": "pgrant_1",
+                "state": "dispatched"
+            }
+        });
+
+        merge_pipeline_execution_state(
+            &mut intent,
+            json!({
+                "execution_id": "exec_1",
+                "state": "pipeline_run_created",
+                "pipeline_run_namespace": "tekton-pipelines",
+                "pipeline_run_name": "build-1",
+                "error": null
+            }),
+        );
+
+        assert_eq!(
+            intent.pointer("/execution_state/executor_job_name"),
+            Some(&json!("pharness-tekton-exec-1"))
+        );
+        assert_eq!(
+            intent.pointer("/execution_state/permission_grant_id"),
+            Some(&json!("pgrant_1"))
+        );
+        assert_eq!(
+            intent.pointer("/execution_state/state"),
+            Some(&json!("pipeline_run_created"))
+        );
+    }
+
+    #[tokio::test]
+    async fn terminal_execution_evidence_is_compact_and_idempotent() {
+        let state = test_state().await;
+        let session_id = SessionId::new("ses_execution_evidence");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "execution evidence".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        let intent = StoredPipelineIntent {
+            id: "pint_execution_evidence".to_string(),
+            change_set_id: "cset_execution_evidence".to_string(),
+            work_plan_id: "wplan_execution_evidence".to_string(),
+            remediation_plan_id: "rplan_execution_evidence".to_string(),
+            incident_id: "inc_execution_evidence".to_string(),
+            session_id,
+            run_id: None,
+            status: "executing".to_string(),
+            title: "execution evidence".to_string(),
+            summary: "execution evidence".to_string(),
+            risk_level: "high".to_string(),
+            intent_kind: "tekton_build_test_package".to_string(),
+            resource_namespace: None,
+            resource_kind: None,
+            resource_name: None,
+            intent_json: json!({}),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        };
+        let outcome = PipelineIntentExecutionOutcomeRequest {
+            execution_id: "pexec_execution_evidence".to_string(),
+            status: "completed".to_string(),
+            pipeline_run_namespace: Some("tekton-pipelines".to_string()),
+            pipeline_run_name: Some("pharness-smoke".to_string()),
+            error: None,
+        };
+
+        let first = persist_pipeline_execution_evidence(
+            &state.store,
+            &intent,
+            &outcome,
+            "pipeline_run_succeeded",
+        )
+        .await
+        .unwrap();
+        let second = persist_pipeline_execution_evidence(
+            &state.store,
+            &intent,
+            &outcome,
+            "pipeline_run_succeeded",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first["status"], "succeeded");
+        assert_eq!(first["pipeline_run"]["namespace"], "tekton-pipelines");
+        let artifact_id = first["artifact_id"].as_str().unwrap();
+        let observation_id = first["observation_id"].as_str().unwrap();
+        assert_eq!(
+            state
+                .store
+                .get_artifact(artifact_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .kind,
+            "tekton_pipeline_run_execution"
+        );
+        assert_eq!(
+            state
+                .store
+                .get_observation(observation_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .kind,
+            "pipeline_run_execution"
+        );
+    }
+
+    #[test]
+    fn deployment_approval_requires_matching_satisfied_pipeline_evidence() {
+        let mut intent = StoredPipelineIntent {
+            id: "pint_deployment_evidence".to_string(),
+            change_set_id: "cset_deployment_evidence".to_string(),
+            work_plan_id: "wplan_deployment_evidence".to_string(),
+            remediation_plan_id: "rplan_deployment_evidence".to_string(),
+            incident_id: "inc_deployment_evidence".to_string(),
+            session_id: SessionId::new("ses_deployment_evidence"),
+            run_id: None,
+            status: "approved".to_string(),
+            title: "deployment evidence".to_string(),
+            summary: "deployment evidence".to_string(),
+            risk_level: "high".to_string(),
+            intent_kind: "tekton_build_test_package".to_string(),
+            resource_namespace: None,
+            resource_kind: None,
+            resource_name: None,
+            intent_json: json!({
+                "execution_evidence": {
+                    "status": "succeeded",
+                    "pipeline_run": { "namespace": "tekton-pipelines", "name": "build-1" }
+                }
+            }),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        };
+
+        assert!(ensure_pipeline_evidence_ready_for_deployment(&intent).is_err());
+        intent.intent_json["evidence"] = json!({
+            "status": "satisfied",
+            "resource": { "namespace": "tekton-pipelines", "name": "other-run" }
+        });
+        assert!(ensure_pipeline_evidence_ready_for_deployment(&intent).is_err());
+        intent.intent_json["evidence"]["resource"]["name"] = json!("build-1");
+        assert!(ensure_pipeline_evidence_ready_for_deployment(&intent).is_ok());
     }
 }

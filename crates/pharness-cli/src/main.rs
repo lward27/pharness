@@ -115,6 +115,11 @@ enum Command {
         #[command(subcommand)]
         command: PipelineIntentCommand,
     },
+    /// Inspect operator-managed Tekton Pipeline contracts.
+    PipelineContracts {
+        #[command(subcommand)]
+        command: PipelineContractCommand,
+    },
     /// Inspect durable deployment intents.
     DeploymentIntents {
         #[command(subcommand)]
@@ -269,6 +274,24 @@ enum PipelineIntentCommand {
     Transition(PipelineIntentTransitionArgs),
     /// Attach a Tekton PipelineRunAnalysis observation as PipelineIntent evidence.
     AttachEvidence(PipelineIntentAttachEvidenceArgs),
+    /// Create a bounded supervised-autonomy envelope for one approved PipelineIntent.
+    CreateTrustedEnvelope(PipelineIntentCreateTrustedEnvelopeArgs),
+    /// Preview a PipelineRun by default; pass --apply to dispatch the dedicated executor Job.
+    Execute(PipelineIntentExecuteArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum PipelineContractCommand {
+    /// List durable Pipeline contracts.
+    List(Box<PipelineContractListArgs>),
+    /// Fetch one Pipeline contract by id.
+    Get(PipelineContractGetArgs),
+    /// Create an active Pipeline contract for one namespace and PipelineRef.
+    Create(PipelineContractCreateArgs),
+    /// Atomically replace one active Pipeline contract with a new version.
+    Replace(PipelineContractReplaceArgs),
+    /// Retire an active Pipeline contract. This never deletes audit history.
+    Retire(PipelineContractRetireArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -1512,6 +1535,135 @@ struct PipelineIntentAttachEvidenceArgs {
 }
 
 #[derive(Debug, Parser)]
+struct PipelineIntentCreateTrustedEnvelopeArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    created_by: Option<String>,
+    #[arg(long)]
+    reason: String,
+    #[arg(long)]
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentExecuteArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+    /// Dispatch the executor Job. Without this flag Pharness only returns a preflight preview.
+    #[arg(long)]
+    apply: bool,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineContractListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    namespace: Option<String>,
+    #[arg(long)]
+    pipeline_ref: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineContractGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_contract_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineContractCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    namespace: String,
+    #[arg(long)]
+    pipeline_ref: String,
+    #[arg(long, default_value = "v1")]
+    version: String,
+    #[arg(long)]
+    contract_json: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineContractRetireArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_contract_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineContractReplaceArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_contract_id: String,
+    #[arg(long)]
+    version: String,
+    #[arg(long)]
+    contract_json: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct DeploymentIntentListArgs {
     #[arg(
         long,
@@ -2211,6 +2363,17 @@ async fn main() -> anyhow::Result<()> {
             PipelineIntentCommand::AttachEvidence(args) => {
                 attach_pipeline_intent_evidence(args).await?
             }
+            PipelineIntentCommand::CreateTrustedEnvelope(args) => {
+                create_pipeline_intent_trusted_envelope(args).await?
+            }
+            PipelineIntentCommand::Execute(args) => execute_pipeline_intent(args).await?,
+        },
+        Command::PipelineContracts { command } => match command {
+            PipelineContractCommand::List(args) => list_pipeline_contracts(*args).await?,
+            PipelineContractCommand::Get(args) => get_pipeline_contract(args).await?,
+            PipelineContractCommand::Create(args) => create_pipeline_contract(args).await?,
+            PipelineContractCommand::Replace(args) => replace_pipeline_contract(args).await?,
+            PipelineContractCommand::Retire(args) => retire_pipeline_contract(args).await?,
         },
         Command::DeploymentIntents { command } => match command {
             DeploymentIntentCommand::List(args) => list_deployment_intents(*args).await?,
@@ -3936,6 +4099,185 @@ async fn attach_pipeline_intent_evidence(
         .await
         .context("failed to decode pipeline intent evidence attachment")?;
 
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_pipeline_intent_trusted_envelope(
+    args: PipelineIntentCreateTrustedEnvelopeArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/pipeline-intents/{}/trusted-envelope",
+                args.pipeline_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "created_by": args.created_by,
+            "reason": args.reason,
+            "expires_at": args.expires_at,
+        }))
+        .send()
+        .await
+        .context("failed to create PipelineIntent trusted envelope")?
+        .error_for_status()
+        .context("pharness API rejected PipelineIntent trusted envelope")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode PipelineIntent trusted envelope")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn execute_pipeline_intent(args: PipelineIntentExecuteArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/pipeline-intents/{}/execute", args.pipeline_intent_id),
+        ))
+        .json(&serde_json::json!({
+            "dry_run": !args.apply,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to execute PipelineIntent")?
+        .error_for_status()
+        .context("pharness API rejected PipelineIntent execution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode PipelineIntent execution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_pipeline_contracts(args: PipelineContractListArgs) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit", args.limit.to_string()),
+        ("offset", args.offset.to_string()),
+    ];
+    if let Some(value) = args.namespace {
+        query.push(("namespace", value));
+    }
+    if let Some(value) = args.pipeline_ref {
+        query.push(("pipeline_ref", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    let response = api_client()
+        .get(api_url(&args.api_url, "/api/pipeline-contracts"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch Pipeline contracts")?
+        .error_for_status()
+        .context("pharness API rejected Pipeline contract list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Pipeline contract list")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_pipeline_contract(args: PipelineContractGetArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/pipeline-contracts/{}", args.pipeline_contract_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch Pipeline contract")?
+        .error_for_status()
+        .context("pharness API rejected Pipeline contract fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Pipeline contract")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_pipeline_contract(args: PipelineContractCreateArgs) -> anyhow::Result<()> {
+    let contract_json = parse_json_object(&args.contract_json, "--contract-json")
+        .context("failed to parse --contract-json as a JSON object")?;
+    let response = api_client()
+        .post(api_url(&args.api_url, "/api/pipeline-contracts"))
+        .json(&serde_json::json!({
+            "namespace": args.namespace,
+            "pipeline_ref": args.pipeline_ref,
+            "version": args.version,
+            "contract_json": contract_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create Pipeline contract")?
+        .error_for_status()
+        .context("pharness API rejected Pipeline contract creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Pipeline contract creation")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn retire_pipeline_contract(args: PipelineContractRetireArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/pipeline-contracts/{}/transition",
+                args.pipeline_contract_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "target_status": "retired",
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to retire Pipeline contract")?
+        .error_for_status()
+        .context("pharness API rejected Pipeline contract retirement")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Pipeline contract retirement")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn replace_pipeline_contract(args: PipelineContractReplaceArgs) -> anyhow::Result<()> {
+    let contract_json = parse_json_object(&args.contract_json, "--contract-json")
+        .context("failed to parse --contract-json as a JSON object")?;
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/pipeline-contracts/{}/replace",
+                args.pipeline_contract_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "version": args.version,
+            "contract_json": contract_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to replace Pipeline contract")?
+        .error_for_status()
+        .context("pharness API rejected Pipeline contract replacement")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Pipeline contract replacement")?;
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
 }
@@ -5958,6 +6300,35 @@ mod tests {
             "lucas",
         ])
         .unwrap();
+        let envelope = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "create-trusted-envelope",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--created-by",
+            "lucas",
+            "--reason",
+            "bounded Tekton execution approved",
+        ])
+        .unwrap();
+        let preview = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "execute",
+            "--pipeline-intent-id",
+            "pint_1",
+        ])
+        .unwrap();
+        let apply = Cli::try_parse_from([
+            "pharness",
+            "pipeline-intents",
+            "execute",
+            "--pipeline-intent-id",
+            "pint_1",
+            "--apply",
+        ])
+        .unwrap();
 
         match list.command {
             Command::PipelineIntents {
@@ -6016,6 +6387,27 @@ mod tests {
                 assert_eq!(args.actor.as_deref(), Some("lucas"));
             }
             _ => panic!("expected pipeline-intents attach-evidence command"),
+        }
+        match envelope.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::CreateTrustedEnvelope(args),
+            } => {
+                assert_eq!(args.pipeline_intent_id, "pint_1");
+                assert_eq!(args.created_by.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected pipeline-intents create-trusted-envelope command"),
+        }
+        match preview.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::Execute(args),
+            } => assert!(!args.apply),
+            _ => panic!("expected pipeline-intents execute command"),
+        }
+        match apply.command {
+            Command::PipelineIntents {
+                command: PipelineIntentCommand::Execute(args),
+            } => assert!(args.apply),
+            _ => panic!("expected pipeline-intents execute apply command"),
         }
     }
 

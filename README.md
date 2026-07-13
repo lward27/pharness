@@ -445,6 +445,48 @@ Worker dispatch is selected by `PHARNESS_WORKER_MODE`:
   terminal states or approval pauses; approvals launch a resume Job that
   rehydrates from the persisted approval transcript.
 
+### Tekton PipelineIntents
+
+The first cluster mutation is intentionally narrow. An approved PipelineIntent
+can create a bounded `supervised_autonomy` envelope, then return a structured
+PipelineRun preview:
+
+```sh
+cargo run -p pharness-cli -- pipeline-intents execute \
+  --pipeline-intent-id "$PIPELINE_INTENT_ID"
+```
+
+The preview is non-mutating. It reports parent-state, approval-gate, and
+envelope checks plus the exact `tekton.dev/v1` manifest. `--apply` dispatches a
+separate executor Job only when every check passes. That Job has no model
+credentials and uses a dedicated service account with PipelineRun access only
+in the namespaces configured by the Helm chart. It acknowledges submission,
+then observes that exact PipelineRun until Tekton reports `Succeeded=True` or
+`Succeeded=False`. A successful execution returns the PipelineIntent to its
+approved authorization state and records terminal execution evidence; a failed
+execution changes the intent to `failed`.
+
+Applied intents expose `execution_state` on their API response. If the executor
+does not report a durable terminal outcome, the API reaper marks the intent
+failed and records the reconciliation in the audit log rather than leaving it
+executing. `PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS` controls the bounded worker's
+observation interval; the executor Job deadline remains the hard upper bound.
+
+Terminal execution evidence is a compact executor receipt, not a substitute
+for a reviewed `PipelineRunAnalysis`. A DeploymentIntent can be drafted before
+that analysis exists, but approval requires satisfied analysis evidence. When
+the executor ran a concrete PipelineRun, the attached analysis must match its
+namespace and name.
+
+Each executable intent must also match exactly one active PipelineContract for
+its namespace and PipelineRef. Contracts are created by an operator through
+the API or CLI and enumerate the permitted parameter shapes and workspace
+bindings; an unknown or missing input blocks execution before a Job is created.
+Contracts can be retired but are never deleted; a retired-only target remains
+blocked until one replacement contract is active.
+Use the replacement command when changing a reviewed Pipeline schema so the
+prior version retires and the next version activates atomically.
+
 Deployment lives in `deploy/`:
 
 - `deploy/docker/Dockerfile.runtime` builds `pharness-api` + `pharness-worker`.

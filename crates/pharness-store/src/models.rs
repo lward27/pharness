@@ -537,6 +537,16 @@ pub struct UpdatePipelineIntentEvidence {
     pub reason: Option<String>,
 }
 
+/// Durable execution state owned by the control plane. The executor reports
+/// submitted, completed, or failed outcomes; it never writes SQLite directly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdatePipelineIntentExecution {
+    pub status: String,
+    pub intent_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredPipelineIntent {
     pub id: String,
@@ -560,6 +570,53 @@ pub struct StoredPipelineIntent {
     pub status_changed_at: Option<String>,
     pub status_changed_by: Option<String>,
     pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatePipelineContract {
+    pub id: String,
+    pub status: String,
+    pub namespace: String,
+    pub pipeline_ref: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredPipelineContract {
+    pub id: String,
+    pub status: String,
+    pub namespace: String,
+    pub pipeline_ref: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct PipelineContractListFilter {
+    pub namespace: Option<String>,
+    pub pipeline_ref: Option<String>,
+    pub status: Option<String>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplacePipelineContract {
+    pub id: String,
+    pub namespace: String,
+    pub pipeline_ref: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1025,4 +1082,19 @@ pub struct StoredAuditEvent {
     pub run_id: Option<RunId>,
     pub payload_json: serde_json::Value,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct AuditEventListFilter {
+    pub kind: Option<String>,
+    pub actor: Option<String>,
+    pub resource_kind: Option<String>,
+    pub resource_id: Option<String>,
+    pub run_id: Option<RunId>,
+    pub namespace: Option<String>,
+    pub repo: Option<String>,
+    pub branch: Option<String>,
+    pub production_impacting: Option<bool>,
+    pub search: Option<String>,
+    pub limit: u32,
 }

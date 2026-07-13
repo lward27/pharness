@@ -102,6 +102,12 @@ spec:
               value: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
             - name: PHARNESS_WORKER_K8S_SERVICE_ACCOUNT
               value: {{ .Values.worker.serviceAccount | quote }}
+            - name: PHARNESS_TEKTON_EXECUTOR_SERVICE_ACCOUNT
+              value: {{ .Values.worker.tektonExecutor.serviceAccount | quote }}
+            - name: PHARNESS_TEKTON_ALLOWED_NAMESPACES
+              value: {{ join "," .Values.worker.tektonExecutor.allowedNamespaces | quote }}
+            - name: PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS
+              value: {{ .Values.worker.tektonExecutor.pollSeconds | quote }}
             - name: PHARNESS_WORKER_K8S_API_URL
               value: "http://pharness-api.{{ .Release.Namespace }}.svc.cluster.local:4777"
             - name: PHARNESS_WORKER_K8S_WORKSPACE_DIR

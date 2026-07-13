@@ -46,9 +46,24 @@ api:
 
 worker:
   serviceAccount: pharness-worker
+  tektonExecutor:
+    serviceAccount: pharness-tekton-runner
+    pollSeconds: 5
+    # The executor cannot dispatch anywhere unless this allowlist is explicit.
+    allowedNamespaces:
+      - tekton-pipelines
   workspaceDir: /workspace
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
+
+# A permanently inert, GitOps-managed Pipeline used only by the bounded
+# execution smoke. Keep this enabled only in environments where Tekton is
+# installed and the executor namespace below is allowlisted.
+tektonE2eSmoke:
+  enabled: true
+  namespace: tekton-pipelines
+  pipelineName: pharness-e2e-noop
+  image: alpine:3.20
 
 ui:
   image:

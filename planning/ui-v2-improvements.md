@@ -77,6 +77,9 @@ no-decorative-controls rules there still govern.
 
 ## P2 — Scope, filtering, and cluster-mode affordances
 
+Status: scope filtering and audit search shipped locally on 2026-07-10; cluster
+rollout remains pending. Queue worker-Job affordances and actor presets remain.
+
 - Wire the topbar scope selector to real API filters.
   - Runs, approvals, gates, and audit endpoints accept namespace, repo,
     branch, and production_impacting filters. Until wired, demote the
@@ -89,6 +92,17 @@ no-decorative-controls rules there still govern.
     show worker mode and image from effective config, and link a running row
     to its worker Job via the `pharness.lucas.engineering/run-id` label.
 - Add actor chips/filters to separate smoke traffic from operator traffic.
+
+The shipped scope/search slice includes:
+
+- Topbar namespace, repository, branch, and production-impact selectors that
+  refetch runs, run summaries, approvals, approval gates, SDLC lists, and audit
+  rows through server-side query parameters.
+- Global audit search that deep-links to `#/audit/<search>`.
+- Audit filters for kind, resource kind, actor, run id, and free text.
+- Expandable audit payload JSON instead of irreversible row truncation.
+- Store-side namespace resolution through referenced SDLC resources when older
+  audit payloads do not contain an embedded run scope.
 
 ## P3 — Structure and polish
 
@@ -156,3 +170,22 @@ no-decorative-controls rules there still govern.
    Incidents/RemediationPlans/Observations are linkable from day one.
 3. Each stage ships through the existing pharness-ui Tekton build and is
    verified against the deployed console, not just the dev server.
+
+## Decisions
+
+- Scope controls are execution filters, not decorative context labels. The
+  environment remains a fixed `homelab` display until environment becomes a
+  first-class list filter across the API.
+- Audit filtering belongs in SQLite/API query contracts. Client-only filtering
+  would silently search only the latest loaded page and produce false results.
+- Namespace-scoped audit reads resolve scope from durable resources when event
+  payloads predate embedded `run_scope` fields.
+
+## Backlog
+
+- Deploy this P2 scope/search slice through `scripts/pharness-build.sh ui` and
+  verify it against the cluster console.
+- Show worker Job identity and link running rows to their Kubernetes Job.
+- Add saved actor presets after real operator identities exceed the current
+  smoke/operator split.
+- Split `App.jsx` after the P2 cluster rollout; keep the split behavior-neutral.

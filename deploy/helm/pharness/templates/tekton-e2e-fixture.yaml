@@ -1,0 +1,25 @@
+{{- if .Values.tektonE2eSmoke.enabled }}
+# This fixture is intentionally inert. It makes no network calls, mounts no
+# workspaces, and has no relationship to application workloads. Its only
+# purpose is exercising the Pharness PipelineIntent execution path.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: {{ .Values.tektonE2eSmoke.pipelineName }}
+  namespace: {{ .Values.tektonE2eSmoke.namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    pharness.lucas.engineering/fixture: tekton-e2e
+spec:
+  description: Bounded Pharness end-to-end execution fixture. It does not touch application resources.
+  tasks:
+    - name: report
+      taskSpec:
+        steps:
+          - name: marker
+            image: {{ .Values.tektonE2eSmoke.image | quote }}
+            script: |
+              #!/bin/sh
+              set -eu
+              printf '%s\n' 'pharness tekton e2e fixture completed; application resources were not changed'
+{{- end }}

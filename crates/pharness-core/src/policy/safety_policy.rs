@@ -64,6 +64,7 @@ pub enum RiskLevel {
 pub enum PolicyMode {
     Default,
     TrustedWrites,
+    SupervisedAutonomy,
     Plan,
     DenyAllWrites,
 }
@@ -73,6 +74,7 @@ impl PolicyMode {
         match self {
             Self::Default => "default",
             Self::TrustedWrites => "trusted_writes",
+            Self::SupervisedAutonomy => "supervised_autonomy",
             Self::Plan => "plan",
             Self::DenyAllWrites => "deny_all_writes",
         }
@@ -92,6 +94,7 @@ impl FromStr for PolicyMode {
         match value {
             "default" => Ok(Self::Default),
             "trusted_writes" => Ok(Self::TrustedWrites),
+            "supervised_autonomy" => Ok(Self::SupervisedAutonomy),
             "plan" => Ok(Self::Plan),
             "deny_all_writes" => Ok(Self::DenyAllWrites),
             other => Err(format!("unsupported policy mode: {other}")),
@@ -272,12 +275,16 @@ impl SafetyPolicy {
                 RiskLevel::Medium,
                 format!("trusted write allowed for {path}"),
             ),
-            PolicyMode::Default if self.require_approval_for_writes => PolicyDecision::Ask {
-                approval_kind: ApprovalKind::FileWrite,
-                risk: RiskLevel::Medium,
-                summary: format!("file write requires approval: {path}"),
-            },
-            PolicyMode::Default => {
+            PolicyMode::Default | PolicyMode::SupervisedAutonomy
+                if self.require_approval_for_writes =>
+            {
+                PolicyDecision::Ask {
+                    approval_kind: ApprovalKind::FileWrite,
+                    risk: RiskLevel::Medium,
+                    summary: format!("file write requires approval: {path}"),
+                }
+            }
+            PolicyMode::Default | PolicyMode::SupervisedAutonomy => {
                 PolicyDecision::allow(RiskLevel::Medium, format!("file write allowed: {path}"))
             }
         }
@@ -418,6 +425,7 @@ pub struct PermissionGrantScope {
     pub branches: Vec<String>,
     pub work_plan_ids: Vec<String>,
     pub change_set_ids: Vec<String>,
+    pub pipeline_intent_ids: Vec<String>,
     pub production_impacting: Option<bool>,
 }
 
@@ -995,6 +1003,7 @@ mod tests {
                 branches: Vec::new(),
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
+                pipeline_intent_ids: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

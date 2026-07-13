@@ -26,12 +26,13 @@ import {
   ToggleRight,
   X,
 } from "@phosphor-icons/react";
-import { cancelRun, decideApproval, decideApprovalGate, loadDashboardData, loadRunDetail, loadWorkPlanFlow, submitRun, subscribeRunEvents } from "./pharnessApi";
+import { cancelRun, decideApproval, decideApprovalGate, dispatchTektonE2eSmoke, loadAuditEvents, loadDashboardData, loadPipelineIntent, loadRunDetail, loadWorkPlanFlow, prepareTektonE2eSmoke, submitRun, subscribeRunEvents } from "./pharnessApi";
 
 const navItems = [
   { id: "Flow", view: "Flow", icon: FlowArrow },
   { id: "WorkPlans", view: "WorkPlans", icon: Kanban },
   { id: "Runs", view: "Queue", icon: Pulse },
+  { id: "Delivery Test", view: "Delivery Test", icon: RocketLaunch },
   { id: "Approvals", view: "Approvals", icon: ShieldWarning },
   { id: "Approval Gates", view: "Approval Gates", icon: ShieldCheck },
   { id: "Observations", view: "Observations", icon: ChartLineUp },
@@ -44,7 +45,6 @@ const navItems = [
 const plannedCapabilities = [
   "ChangeSet detail views",
   "Capability catalog",
-  "Audit search",
   "Cluster mutations",
   "Registry auth",
   "Database operator",
@@ -57,6 +57,7 @@ const viewSegments = {
   Flow: "flow",
   WorkPlans: "workplans",
   Queue: "queue",
+  "Delivery Test": "delivery-test",
   "Run Detail": "runs",
   Approvals: "approvals",
   "Approval Gates": "gates",
@@ -94,7 +95,14 @@ function navigate(view, param) {
   }
 }
 
-function usePharnessDashboard(flowRoot) {
+const EMPTY_SCOPE = {
+  namespace: "",
+  repo: "",
+  branch: "",
+  productionImpacting: "",
+};
+
+function usePharnessDashboard(flowRoot, scope) {
   const [state, setState] = useState({
     status: "loading",
     data: null,
@@ -104,7 +112,7 @@ function usePharnessDashboard(flowRoot) {
   const refresh = async () => {
     setState((current) => ({ ...current, status: current.data ? "refreshing" : "loading" }));
     try {
-      const data = await loadDashboardData(flowRoot);
+      const data = await loadDashboardData(flowRoot, scope);
       setState({ status: "ready", data, error: null });
     } catch (error) {
       setState((current) => ({
@@ -116,12 +124,13 @@ function usePharnessDashboard(flowRoot) {
   };
 
   const flowRootKey = flowRoot ? `${flowRoot.kind}:${flowRoot.id}` : "";
+  const scopeKey = JSON.stringify(scope);
   useEffect(() => {
     refresh();
     const timer = window.setInterval(refresh, 15_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flowRootKey]);
+  }, [flowRootKey, scopeKey]);
 
   return { ...state, refresh };
 }
@@ -233,10 +242,10 @@ function buildTopology(flow) {
       id: "pipeline-analysis",
       label: "PipelineRunAnalysis",
       icon: MagnifyingGlass,
-      status: lifecycleTone(pipelineIntent?.intent_json?.evidence?.status),
-      statusLabel: statusText(pipelineIntent?.intent_json?.evidence?.status, "Missing"),
-      meta: pipelineIntent?.intent_json?.evidence?.summary?.image_alignment_status ?? "no evidence",
-      subline: compactId(pipelineIntent?.intent_json?.evidence?.observation_id ?? "Tekton evidence"),
+      status: lifecycleTone(pipelineIntent?.execution_evidence?.status ?? pipelineIntent?.intent_json?.evidence?.status),
+      statusLabel: statusText(pipelineIntent?.execution_evidence?.status ?? pipelineIntent?.intent_json?.evidence?.status, "Missing"),
+      meta: pipelineIntent?.execution_evidence?.pipeline_run?.name ?? pipelineIntent?.intent_json?.evidence?.summary?.image_alignment_status ?? "no evidence",
+      subline: compactId(pipelineIntent?.execution_evidence?.artifact_id ?? pipelineIntent?.intent_json?.evidence?.observation_id ?? "Tekton evidence"),
     },
     {
       id: "deployment-intent",
@@ -314,7 +323,7 @@ function buildEvidenceRows(flow) {
       tone: flow.pipeline_intent ? lifecycleTone(flow.pipeline_intent.status) : "future",
       resource: "PipelineIntent",
       target: flow.pipeline_intent?.id ?? "not created",
-      finding: summarizeJson(flow.pipeline_intent?.intent_json?.evidence, "pipeline evidence not attached"),
+      finding: summarizeJson(flow.pipeline_intent?.execution_evidence ?? flow.pipeline_intent?.intent_json?.evidence, "pipeline evidence not attached"),
       lastEvent: flow.pipeline_intent?.intent_kind ?? "planned",
       link: "Tekton",
     },
@@ -471,6 +480,8 @@ function AppShell({
   actionNotice,
   setActionNotice,
   dashboard,
+  scope,
+  setScope,
 }) {
   const activeView = route.view;
   const routeParam = typeof route.param === "string" ? route.param : null;
@@ -542,13 +553,14 @@ function AppShell({
       </aside>
 
       <main className="workspace">
-        <TopBar theme={theme} setTheme={setTheme} dashboard={dashboard} />
+        <TopBar theme={theme} setTheme={setTheme} dashboard={dashboard} route={route} scope={scope} setScope={setScope} />
         <div className="mode-bar">
           <div className="view-switcher" role="tablist" aria-label="Operator views">
             {[
               ["Flow", FlowArrow],
               ["WorkPlans", Kanban],
               ["Queue", Rows],
+              ["Delivery Test", RocketLaunch],
               ...(selectedRunId ? [["Run Detail", FileText]] : []),
               ["Approvals", ShieldWarning],
               ["Approval Gates", ShieldCheck],
@@ -589,6 +601,8 @@ function AppShell({
               />
             ) : activeView === "Queue" ? (
               <QueueView dashboard={dashboard} openRun={openRun} />
+            ) : activeView === "Delivery Test" ? (
+              <DeliveryTestView refreshDashboard={dashboard.refresh} />
             ) : activeView === "WorkPlans" ? (
               <WorkPlansView dashboard={dashboard} selectedId={routeParam} />
             ) : activeView === "Run Detail" ? (
@@ -604,7 +618,7 @@ function AppShell({
                 openRun={openRun}
               />
             ) : activeView === "Audit" ? (
-              <AuditView dashboard={dashboard} openRun={openRun} />
+              <AuditView dashboard={dashboard} openRun={openRun} selectedSearch={routeParam} scope={scope} />
             ) : activeView === "Incidents" ? (
               <IncidentsView dashboard={dashboard} selectedId={routeParam} openRun={openRun} />
             ) : activeView === "Remediation Plans" ? (
@@ -667,28 +681,69 @@ function ImplementationStrip({ dashboard }) {
   );
 }
 
-function TopBar({ theme, setTheme, dashboard }) {
-  const flow = dashboard.data?.flow;
-  const namespace =
-    flow?.deployment_intent?.target_namespace ??
-    flow?.work_plan?.resource_namespace ??
-    flow?.change_set?.resource_namespace ??
-    "homelab";
-  const repository = flow?.registry_evidence?.repository ?? "pharness";
-  const branch = flow?.change_set?.change_set_json?.branch ?? "not scoped";
+function scopeOptions(data, key) {
+  const values = [];
+  for (const run of data?.runs ?? []) {
+    values.push(run.scope?.[key]);
+  }
+  for (const approval of data?.approvals ?? []) {
+    values.push(approval.scope?.[key]);
+  }
+  if (key === "namespace") {
+    for (const gate of data?.approvalGates ?? []) {
+      values.push(gate.resource_namespace);
+    }
+    for (const plan of data?.workPlans ?? []) {
+      values.push(plan.resource_namespace);
+    }
+  }
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+function TopBar({ theme, setTheme, dashboard, route, scope, setScope }) {
+  const [search, setSearch] = useState(route.view === "Audit" && typeof route.param === "string" ? route.param : "");
+  const namespaceOptions = scopeOptions(dashboard.data, "namespace");
+  const repoOptions = scopeOptions(dashboard.data, "repo");
+  const branchOptions = scopeOptions(dashboard.data, "branch");
+
+  useEffect(() => {
+    if (route.view === "Audit") {
+      setSearch(typeof route.param === "string" ? route.param : "");
+    }
+  }, [route.view, route.param]);
+
+  const updateScope = (key, value) => {
+    setScope((current) => ({ ...current, [key]: value }));
+  };
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    navigate("Audit", search.trim() || undefined);
+  };
 
   return (
     <header className="topbar">
       <div className="scope-group">
-        <ScopeSelect icon={Stack} label="Environment" value="homelab" />
-        <ScopeSelect icon={Cube} label="Namespace" value={namespace} />
-        <ScopeSelect icon={Cube} label="Repository" value={repository} />
-        <ScopeSelect icon={GitBranch} label="Branch" value={branch} />
+        <ScopeValue icon={Stack} label="Environment" value="homelab" />
+        <ScopeSelect icon={Cube} label="Namespace" value={scope.namespace} options={namespaceOptions} onChange={(value) => updateScope("namespace", value)} />
+        <ScopeSelect icon={Cube} label="Repository" value={scope.repo} options={repoOptions} onChange={(value) => updateScope("repo", value)} />
+        <ScopeSelect icon={GitBranch} label="Branch" value={scope.branch} options={branchOptions} onChange={(value) => updateScope("branch", value)} />
+        <ScopeSelect
+          icon={ShieldCheck}
+          label="Impact"
+          value={scope.productionImpacting}
+          options={[
+            { value: "false", label: "Non-production" },
+            { value: "true", label: "Production" },
+          ]}
+          onChange={(value) => updateScope("productionImpacting", value)}
+        />
       </div>
-      <label className="search">
+      <form className="search" onSubmit={submitSearch}>
         <MagnifyingGlass size={18} />
-        <input aria-label="Search" placeholder="Search runs, resources, actors..." />
-      </label>
+        <input aria-label="Search audit events" placeholder="Search audit events..." value={search} onChange={(event) => setSearch(event.target.value)} />
+        <button type="submit" aria-label="Run audit search" title="Run audit search"><MagnifyingGlass size={16} /></button>
+      </form>
       <div className="theme-toggle" aria-label="Theme">
         <IconButton label="Light theme" onClick={() => setTheme("light")} active={theme === "light"}>
           <CircleHalf size={18} />
@@ -704,13 +759,30 @@ function TopBar({ theme, setTheme, dashboard }) {
   );
 }
 
-function ScopeSelect({ icon: Icon, label, value }) {
+function ScopeValue({ icon: Icon, label, value }) {
   return (
-    <button className="scope-select" type="button" title={`${label}: ${value}`}>
+    <div className="scope-select scope-value" title={`${label}: ${value}`}>
       <Icon size={19} />
       <span>{label}</span>
       <strong>{value}</strong>
-    </button>
+    </div>
+  );
+}
+
+function ScopeSelect({ icon: Icon, label, value, options, onChange }) {
+  const normalized = options.map((option) => typeof option === "string" ? { value: option, label: option } : option);
+  if (value && !normalized.some((option) => option.value === value)) {
+    normalized.unshift({ value, label: value });
+  }
+  return (
+    <label className="scope-select" title={`${label}: ${value || "All"}`}>
+      <Icon size={19} />
+      <span>{label}</span>
+      <select aria-label={`${label} scope`} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">All</option>
+        {normalized.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -1044,6 +1116,106 @@ function QueueView({ dashboard, openRun }) {
       ) : (
         <EmptyState title="No runs yet" body="Submit a run above or from the CLI and it will appear here." />
       )}
+    </section>
+  );
+}
+
+function DeliveryTestView({ refreshDashboard }) {
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [state, setState] = useState({ phase: "idle", data: null, error: null, detail: null });
+
+  const prepare = async () => {
+    setState({ phase: "preparing", data: null, error: null, detail: "Creating the audited delivery chain and validating a dry-run." });
+    try {
+      const data = await prepareTektonE2eSmoke();
+      setState({ phase: "ready", data, error: null, detail: "Preflight passed. No PipelineRun has been created." });
+      refreshDashboard();
+    } catch (error) {
+      setState({ phase: "failed", data: null, error: error instanceof Error ? error.message : String(error), detail: null });
+    }
+  };
+
+  const dispatch = async () => {
+    const pipelineIntentId = state.data?.pipelineIntent?.id;
+    if (!pipelineIntentId) {
+      return;
+    }
+    setState((current) => ({ ...current, phase: "dispatching", error: null, detail: "Dispatching the dedicated executor Job." }));
+    try {
+      const dispatchResult = await dispatchTektonE2eSmoke(pipelineIntentId);
+      setState((current) => ({ ...current, phase: "observing", detail: `Executor ${dispatchResult.executor_job_name} dispatched. Waiting for durable terminal evidence.` }));
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const intent = await loadPipelineIntent(pipelineIntentId);
+        const execution = intent.execution_evidence;
+        if (execution?.status === "completed") {
+          setState((current) => ({ ...current, phase: "completed", detail: `PipelineRun ${execution.pipeline_run?.namespace}/${execution.pipeline_run?.name} completed successfully.`, data: { ...current.data, pipelineIntent: intent } }));
+          refreshDashboard();
+          return;
+        }
+        if (execution?.status === "failed") {
+          throw new Error(execution.error || "The Tekton executor reported failure.");
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 3000));
+      }
+      throw new Error("Timed out waiting for the executor's terminal evidence.");
+    } catch (error) {
+      setState((current) => ({ ...current, phase: "failed", error: error instanceof Error ? error.message : String(error), detail: null }));
+    }
+  };
+
+  const busy = ["preparing", "dispatching", "observing"].includes(state.phase);
+  const intent = state.data?.pipelineIntent;
+  const execution = intent?.execution_evidence;
+
+  return (
+    <section className="delivery-test-view">
+      <header className="delivery-test-heading">
+        <div>
+          <span className="eyebrow">Bounded execution</span>
+          <h1>Tekton Delivery Test</h1>
+          <p>Exercises the real Pharness execution path with one inert Pipeline. It does not read secrets or change finance applications.</p>
+        </div>
+        <span className={`status-chip ${state.phase === "completed" ? "healthy" : state.phase === "failed" ? "blocked" : "pending"}`}>{statusText(state.phase, "Ready")}</span>
+      </header>
+
+      <section className="delivery-test-scope">
+        <ReviewItem label="Fixture" value="tekton-pipelines/pharness-e2e-noop" />
+        <ReviewItem label="Pipeline inputs" value="No parameters or workspaces" />
+        <ReviewItem label="Application impact" value="None" tone="healthy" />
+        <ReviewItem label="Evidence" value="Audit chain and terminal PipelineRun receipt" />
+      </section>
+
+      <section className="delivery-test-actions">
+        <label className="delivery-test-ack">
+          <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy || state.phase === "completed"} />
+          <span>I understand this creates durable smoke records and, after preflight, one inert PipelineRun.</span>
+        </label>
+        <div className="delivery-test-buttons">
+          <button className="primary-action" type="button" onClick={prepare} disabled={!acknowledged || busy || state.phase === "ready" || state.phase === "completed"}>
+            <ShieldCheck size={18} /> {state.phase === "preparing" ? "Preparing" : "Prepare preflight"}
+          </button>
+          <button className="secondary-action" type="button" onClick={dispatch} disabled={state.phase !== "ready" || !acknowledged}>
+            <RocketLaunch size={18} /> Dispatch inert PipelineRun
+          </button>
+        </div>
+        <p className="delivery-test-detail">{state.detail ?? "Preflight is required before the dispatch button becomes available."}</p>
+        {state.error ? <div className="api-banner">Delivery test failed: {state.error}</div> : null}
+      </section>
+
+      {state.data ? (
+        <section className="delivery-test-result">
+          <h2>Durable records</h2>
+          <div className="review-grid">
+            <ReviewItem label="WorkPlan" value={compactId(state.data.workPlan?.id)} />
+            <ReviewItem label="ChangeSet" value={compactId(state.data.changeSet?.id)} />
+            <ReviewItem label="PipelineIntent" value={compactId(intent?.id)} />
+            <ReviewItem label="PipelineContract" value={compactId(state.data.pipelineContract?.id)} />
+            <ReviewItem label="Preflight" value={state.data.preview?.ready ? "Passed" : "Blocked"} tone={state.data.preview?.ready ? "healthy" : "blocked"} />
+            <ReviewItem label="PipelineRun" value={execution?.pipeline_run ? `${execution.pipeline_run.namespace}/${execution.pipeline_run.name}` : "Not dispatched"} tone={execution?.status === "completed" ? "healthy" : undefined} />
+          </div>
+          <button className="text-action" type="button" onClick={() => intent?.id && navigate("Flow", { kind: "change_set", id: state.data.changeSet.id })}>Open delivery flow</button>
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -1785,10 +1957,44 @@ function navTargetForResource(resourceKind, resourceId) {
   return targets[resourceKind] ?? null;
 }
 
-function AuditView({ dashboard, openRun }) {
-  const events = dashboard.data?.auditEvents ?? [];
+function AuditView({ dashboard, openRun, selectedSearch, scope }) {
+  const emptyFilters = { search: selectedSearch ?? "", kind: "", actor: "", resourceKind: "", resourceId: "", runId: "" };
+  const [draftFilters, setDraftFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState(emptyFilters);
+  const [state, setState] = useState({ status: "loading", events: [], error: null });
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    const search = selectedSearch ?? "";
+    setDraftFilters((current) => ({ ...current, search }));
+    setFilters((current) => ({ ...current, search }));
+  }, [selectedSearch]);
+
+  useEffect(() => {
+    let active = true;
+    setState((current) => ({ ...current, status: current.events.length ? "refreshing" : "loading", error: null }));
+    loadAuditEvents(filters, scope)
+      .then((events) => {
+        if (active) {
+          setState({ status: "ready", events, error: null });
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setState((current) => ({ ...current, status: "error", error: error instanceof Error ? error.message : String(error) }));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [filters, scope, reloadToken]);
+
+  const events = state.events;
   const latest = events[0];
   const resourceKinds = new Set(events.map((event) => event.resource_kind).filter(Boolean));
+  const kindOptions = [...new Set((dashboard.data?.auditEvents ?? []).map((event) => event.kind).filter(Boolean))].sort();
+  const actorOptions = [...new Set((dashboard.data?.auditEvents ?? []).map((event) => event.actor).filter(Boolean))].sort();
+  const resourceKindOptions = [...new Set((dashboard.data?.auditEvents ?? []).map((event) => event.resource_kind).filter(Boolean))].sort();
   const runLinked = events.filter((event) => event.run_id).length;
   const metrics = [
     ["Events", String(events.length), "latest page"],
@@ -1804,8 +2010,8 @@ function AuditView({ dashboard, openRun }) {
           <h1>Audit</h1>
           <p>Durable control-plane events from policy, approvals, grants, evidence, and SDLC state changes.</p>
         </div>
-        <button className="primary-action" type="button" onClick={dashboard.refresh} disabled={dashboard.status === "refreshing"}>
-          <ArrowsClockwise size={17} /> {dashboard.status === "refreshing" ? "Refreshing" : "Refresh"}
+        <button className="primary-action" type="button" onClick={() => setReloadToken((value) => value + 1)} disabled={state.status === "refreshing"}>
+          <ArrowsClockwise size={17} /> {state.status === "refreshing" ? "Refreshing" : "Refresh"}
         </button>
       </div>
       <div className="summary-grid">
@@ -1817,6 +2023,42 @@ function AuditView({ dashboard, openRun }) {
           </div>
         ))}
       </div>
+      <form
+        className="audit-filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFilters({ ...draftFilters });
+        }}
+      >
+        <label className="audit-search-field">
+          <span>Search</span>
+          <div><MagnifyingGlass size={16} /><input value={draftFilters.search} onChange={(event) => setDraftFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Event, actor, resource, payload..." /></div>
+        </label>
+        <AuditFilterSelect label="Kind" value={draftFilters.kind} options={kindOptions} onChange={(kind) => setDraftFilters((current) => ({ ...current, kind }))} />
+        <AuditFilterSelect label="Resource" value={draftFilters.resourceKind} options={resourceKindOptions} onChange={(resourceKind) => setDraftFilters((current) => ({ ...current, resourceKind }))} />
+        <AuditFilterSelect label="Actor" value={draftFilters.actor} options={actorOptions} onChange={(actor) => setDraftFilters((current) => ({ ...current, actor }))} />
+        <label>
+          <span>Run ID</span>
+          <input value={draftFilters.runId} onChange={(event) => setDraftFilters((current) => ({ ...current, runId: event.target.value }))} placeholder="run_..." />
+        </label>
+        <div className="audit-filter-actions">
+          <button className="primary-action" type="submit"><MagnifyingGlass size={16} /> Apply</button>
+          <button
+            type="button"
+            onClick={() => {
+              const cleared = { search: "", kind: "", actor: "", resourceKind: "", resourceId: "", runId: "" };
+              setDraftFilters(cleared);
+              setFilters(cleared);
+              if (selectedSearch) {
+                navigate("Audit");
+              }
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </form>
+      {state.error ? <div className="api-banner">Audit query failed: {state.error}</div> : null}
       {events.length ? (
         <div className="audit-list">
           <div className="audit-head">
@@ -1854,16 +2096,31 @@ function AuditView({ dashboard, openRun }) {
                     "none"
                   )}
                 </span>
-                <span title={JSON.stringify(event.payload ?? {})}>{eventPayloadSummary(event.payload)}</span>
+                <details className="audit-payload">
+                  <summary title={JSON.stringify(event.payload ?? {})}>{eventPayloadSummary(event.payload)}</summary>
+                  <pre>{JSON.stringify(event.payload ?? {}, null, 2)}</pre>
+                </details>
                 <span>{formatTimestamp(event.created_at)}</span>
               </div>
             );
           })}
         </div>
       ) : (
-        <EmptyState title="No audit events" body="Policy decisions, approval decisions, permission grants, and SDLC state changes will appear here after control-plane activity." />
+        <EmptyState title="No matching audit events" body="Clear filters or generate control-plane activity, then run the query again." />
       )}
     </section>
+  );
+}
+
+function AuditFilterSelect({ label, value, options, onChange }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">All</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -2511,6 +2768,7 @@ export function App() {
   const [gateState, setGateState] = useState("pending");
   const [toolApprovalState, setToolApprovalState] = useState("pending");
   const [actionNotice, setActionNotice] = useState("");
+  const [scope, setScope] = useState(EMPTY_SCOPE);
 
   useEffect(() => {
     const onHashChange = () => setRoute(parseHash());
@@ -2526,7 +2784,7 @@ export function App() {
   }, [routeRunId]);
 
   const flowRoot = route.view === "Flow" && route.param?.kind ? route.param : null;
-  const dashboard = usePharnessDashboard(flowRoot);
+  const dashboard = usePharnessDashboard(flowRoot, scope);
 
   return (
     <AppShell
@@ -2543,6 +2801,8 @@ export function App() {
       actionNotice={actionNotice}
       setActionNotice={setActionNotice}
       dashboard={dashboard}
+      scope={scope}
+      setScope={setScope}
     />
   );
 }

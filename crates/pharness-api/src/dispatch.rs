@@ -7,15 +7,35 @@
 
 use crate::worker::{fail_run_from_dispatch, LocalWorker};
 use pharness_config::WorkerKubernetesConfig;
-use pharness_store::{SqliteStore, StoredApproval, StoredRun};
+use pharness_store::{
+    CreateAuditEvent, PipelineIntentListFilter, SqliteStore, StoredApproval, StoredPipelineIntent,
+    StoredRun, UpdatePipelineIntentExecution,
+};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
 const JOB_NAME_VALUE: &str = "pharness-run";
+const TEKTON_EXECUTOR_JOB_NAME_VALUE: &str = "pharness-tekton-executor";
+const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
+const PIPELINE_INTENT_ID_ANNOTATION: &str = "pharness.lucas.engineering/pipeline-intent-id";
+const EXECUTION_ID_ANNOTATION: &str = "pharness.lucas.engineering/execution-id";
+
+#[derive(Debug, Clone)]
+pub struct TektonExecutionRequest {
+    pub pipeline_intent_id: String,
+    pub execution_id: String,
+    pub target_namespace: String,
+    pub pipeline_run_manifest: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct TektonExecutionReceipt {
+    pub job_name: String,
+}
 
 #[derive(Clone)]
 pub enum RunDispatcher {
@@ -108,6 +128,19 @@ impl RunDispatcher {
                 dispatcher.clone().delete_jobs_for_run(run_id.as_str());
                 true
             }
+        }
+    }
+
+    /// Create a purpose-built executor Job. Unlike a run worker, this Job has
+    /// no model credentials and can submit exactly one validated PipelineRun.
+    pub async fn dispatch_tekton_execution(
+        &self,
+        request: TektonExecutionRequest,
+    ) -> anyhow::Result<TektonExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_tekton_executor_job(&request).await,
+            Self::Disabled => anyhow::bail!("Tekton execution requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("Tekton execution is unavailable in local worker mode"),
         }
     }
 }
@@ -226,6 +259,130 @@ impl KubernetesJobDispatcher {
         Ok(())
     }
 
+    async fn create_tekton_executor_job(
+        &self,
+        request: &TektonExecutionRequest,
+    ) -> anyhow::Result<TektonExecutionReceipt> {
+        if self.config.tekton_allowed_namespaces.is_empty()
+            || !self
+                .config
+                .tekton_allowed_namespaces
+                .iter()
+                .any(|namespace| namespace == &request.target_namespace)
+        {
+            anyhow::bail!(
+                "Tekton execution target namespace {} is not allowlisted",
+                request.target_namespace
+            );
+        }
+
+        let job_name = tekton_executor_job_name(&request.execution_id);
+        let manifest = self.tekton_executor_job_manifest(request, &job_name);
+        let payload = serde_json::to_vec(&manifest)?;
+        let mut child = tokio::process::Command::new(&self.kubectl_bin)
+            .args(["create", "-n", &self.config.namespace, "-f", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use tokio::io::AsyncWriteExt;
+            stdin.write_all(&payload).await?;
+        }
+        let output = child.wait_with_output().await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl create Tekton executor Job failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        tracing::info!(
+            pipeline_intent_id = %request.pipeline_intent_id,
+            execution_id = %request.execution_id,
+            namespace = %request.target_namespace,
+            job = %job_name,
+            "created Tekton executor job"
+        );
+        Ok(TektonExecutionReceipt { job_name })
+    }
+
+    fn tekton_executor_job_manifest(
+        &self,
+        request: &TektonExecutionRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: TEKTON_EXECUTOR_JOB_NAME_VALUE,
+                    PIPELINE_INTENT_LABEL: job_label_value(&request.pipeline_intent_id),
+                },
+                "annotations": {
+                    PIPELINE_INTENT_ID_ANNOTATION: request.pipeline_intent_id,
+                    EXECUTION_ID_ANNOTATION: request.execution_id,
+                },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: TEKTON_EXECUTOR_JOB_NAME_VALUE,
+                        PIPELINE_INTENT_LABEL: job_label_value(&request.pipeline_intent_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.tekton_executor_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "tekton-executor",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "tekton_trigger" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_PIPELINE_INTENT_ID", "value": request.pipeline_intent_id },
+                                { "name": "PHARNESS_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "PHARNESS_TEKTON_PIPELINERUN_JSON", "value": request.pipeline_run_manifest.to_string() },
+                                { "name": "PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS", "value": self.config.tekton_executor_poll_seconds.to_string() },
+                                { "name": "HOME", "value": "/tmp" },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": {
+                                        "name": self.config.worker_token_secret_name,
+                                        "key": "token",
+                                    }
+                                }},
+                            ],
+                            "volumeMounts": [{ "name": "tmp", "mountPath": "/tmp" }],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "50m", "memory": "64Mi" },
+                                "limits": { "cpu": "250m", "memory": "256Mi" },
+                            },
+                        }],
+                        "volumes": [{ "name": "tmp", "emptyDir": {} }],
+                    },
+                },
+            },
+        })
+    }
+
     fn job_manifest(
         &self,
         run: &StoredRun,
@@ -330,8 +487,8 @@ impl KubernetesJobDispatcher {
         })
     }
 
-    /// Mark runs failed when their worker Job failed or disappeared without
-    /// reporting a durable terminal state.
+    /// Reconcile worker and executor jobs that stopped without reporting a
+    /// durable outcome. The API remains the only SQLite writer.
     fn spawn_reaper(self: Arc<Self>) {
         tokio::spawn(async move {
             loop {
@@ -344,6 +501,11 @@ impl KubernetesJobDispatcher {
     }
 
     async fn reap_once(&self) -> anyhow::Result<()> {
+        self.reap_run_jobs().await?;
+        self.reap_tekton_executor_jobs().await
+    }
+
+    async fn reap_run_jobs(&self) -> anyhow::Result<()> {
         let selector = format!("{JOB_NAME_LABEL}={JOB_NAME_VALUE}");
         let output = tokio::process::Command::new(&self.kubectl_bin)
             .args([
@@ -405,6 +567,258 @@ impl KubernetesJobDispatcher {
 
         Ok(())
     }
+
+    async fn reap_tekton_executor_jobs(&self) -> anyhow::Result<()> {
+        let selector = format!("{JOB_NAME_LABEL}={TEKTON_EXECUTOR_JOB_NAME_VALUE}");
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "get",
+                "jobs",
+                "-n",
+                &self.config.namespace,
+                "-l",
+                &selector,
+                "-o",
+                "json",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl get Tekton executor jobs failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let jobs: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        let jobs = jobs
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut visible_job_names = std::collections::BTreeSet::new();
+        for job in &jobs {
+            if let Some(name) = job
+                .pointer("/metadata/name")
+                .and_then(serde_json::Value::as_str)
+            {
+                visible_job_names.insert(name.to_string());
+            }
+            let Some(intent_id) = job
+                .pointer("/metadata/annotations")
+                .and_then(|annotations| annotations.get(PIPELINE_INTENT_ID_ANNOTATION))
+                .and_then(serde_json::Value::as_str)
+            else {
+                tracing::warn!("Tekton executor Job is missing PipelineIntent annotation");
+                continue;
+            };
+            let Some(execution_id) = job
+                .pointer("/metadata/annotations")
+                .and_then(|annotations| annotations.get(EXECUTION_ID_ANNOTATION))
+                .and_then(serde_json::Value::as_str)
+            else {
+                tracing::warn!(pipeline_intent_id = %intent_id, "Tekton executor Job is missing execution annotation");
+                continue;
+            };
+            let Some(job_name) = job
+                .pointer("/metadata/name")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let terminal = executor_job_terminal_state(job);
+            if terminal == ExecutorJobTerminalState::Active {
+                continue;
+            }
+            let reason = match terminal {
+                ExecutorJobTerminalState::Failed => {
+                    "Tekton executor Job failed before reporting a durable outcome"
+                }
+                ExecutorJobTerminalState::Succeeded => {
+                    "Tekton executor Job completed without reporting a durable outcome"
+                }
+                ExecutorJobTerminalState::Active => unreachable!(),
+            };
+            self.fail_pipeline_intent_execution_if_current(
+                intent_id,
+                execution_id,
+                job_name,
+                reason,
+            )
+            .await?;
+        }
+
+        // A TTL controller or manual deletion can remove the Job before the
+        // reaper sees its terminal state. Reconcile only executions already
+        // dispatched to an executor Job; a freshly dispatching intent is not
+        // considered missing.
+        let executing = self
+            .store
+            .list_pipeline_intents(PipelineIntentListFilter {
+                status: Some("executing".to_string()),
+                limit: 200,
+                ..PipelineIntentListFilter::default()
+            })
+            .await?;
+        for intent in executing {
+            let Some(job_name) = intent
+                .intent_json
+                .pointer("/execution_state/executor_job_name")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            if visible_job_names.contains(job_name) {
+                continue;
+            }
+            let Some(execution_id) = intent
+                .intent_json
+                .pointer("/execution_state/execution_id")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            self.fail_pipeline_intent_execution_if_current(
+                &intent.id,
+                execution_id,
+                job_name,
+                "Tekton executor Job disappeared before reporting a durable outcome",
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn fail_pipeline_intent_execution_if_current(
+        &self,
+        pipeline_intent_id: &str,
+        execution_id: &str,
+        executor_job_name: &str,
+        reason: &str,
+    ) -> anyhow::Result<()> {
+        let Some(intent) = self.store.get_pipeline_intent(pipeline_intent_id).await? else {
+            tracing::warn!(
+                pipeline_intent_id,
+                "Tekton executor Job references an unknown PipelineIntent"
+            );
+            return Ok(());
+        };
+        if !execution_is_current(&intent, execution_id, executor_job_name) {
+            return Ok(());
+        }
+        let mut intent_json = intent.intent_json.clone();
+        replace_execution_state(
+            &mut intent_json,
+            serde_json::json!({
+                "execution_id": execution_id,
+                "state": "executor_job_lost",
+                "executor_job_name": executor_job_name,
+                "pipeline_run_namespace": intent.intent_json.pointer("/execution_state/pipeline_run_namespace"),
+                "pipeline_run_name": intent.intent_json.pointer("/execution_state/pipeline_run_name"),
+                "permission_grant_id": intent.intent_json.pointer("/execution_state/permission_grant_id"),
+                "error": reason,
+            }),
+        );
+        let intent = self
+            .store
+            .update_pipeline_intent_execution(
+                &intent.id,
+                UpdatePipelineIntentExecution {
+                    status: "failed".to_string(),
+                    intent_json,
+                    actor: Some("system:executor-reaper".to_string()),
+                    reason: Some(reason.to_string()),
+                },
+            )
+            .await?;
+        self.store
+            .create_audit_event(CreateAuditEvent {
+                id: format!("aud_{}_reaper_{}", intent.id, time_suffix()),
+                kind: "pipeline_intent.execution_executor_lost".to_string(),
+                actor: Some("system:executor-reaper".to_string()),
+                resource_kind: "pipeline_intent".to_string(),
+                resource_id: intent.id.clone(),
+                run_id: intent.run_id.clone(),
+                payload_json: serde_json::json!({
+                    "pipeline_intent_id": intent.id,
+                    "execution_id": execution_id,
+                    "executor_job_name": executor_job_name,
+                    "status": "failed",
+                    "reason": reason,
+                }),
+            })
+            .await?;
+        tracing::warn!(
+            pipeline_intent_id,
+            execution_id,
+            executor_job_name,
+            reason,
+            "reconciled missing Tekton executor outcome"
+        );
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecutorJobTerminalState {
+    Active,
+    Failed,
+    Succeeded,
+}
+
+fn executor_job_terminal_state(job: &serde_json::Value) -> ExecutorJobTerminalState {
+    if job
+        .pointer("/status/failed")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+        > 0
+    {
+        ExecutorJobTerminalState::Failed
+    } else if job
+        .pointer("/status/succeeded")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+        > 0
+    {
+        ExecutorJobTerminalState::Succeeded
+    } else {
+        ExecutorJobTerminalState::Active
+    }
+}
+
+fn execution_is_current(
+    intent: &StoredPipelineIntent,
+    execution_id: &str,
+    executor_job_name: &str,
+) -> bool {
+    intent.status == "executing"
+        && intent
+            .intent_json
+            .pointer("/execution_state/execution_id")
+            .and_then(serde_json::Value::as_str)
+            == Some(execution_id)
+        && intent
+            .intent_json
+            .pointer("/execution_state/executor_job_name")
+            .and_then(serde_json::Value::as_str)
+            == Some(executor_job_name)
+}
+
+fn replace_execution_state(
+    intent_json: &mut serde_json::Value,
+    execution_state: serde_json::Value,
+) {
+    if let Some(object) = intent_json.as_object_mut() {
+        object.insert("execution_state".to_string(), execution_state);
+    }
+}
+
+fn time_suffix() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
 }
 
 /// Kubernetes object names and label values must be DNS-safe; run ids use
@@ -435,9 +849,23 @@ fn job_name(run_id: &str, approval: Option<&StoredApproval>) -> String {
     }
 }
 
+fn tekton_executor_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-tekton-{suffix}")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{job_label_value, job_name, run_label_to_run_id};
+    use super::{
+        executor_job_terminal_state, job_label_value, job_name, run_label_to_run_id,
+        ExecutorJobTerminalState,
+    };
+    use serde_json::json;
 
     #[test]
     fn job_label_round_trips_run_id() {
@@ -453,5 +881,21 @@ mod tests {
         assert_eq!(initial, "pharness-run-123-i");
         assert!(initial.len() <= 63);
         assert!(!initial.contains('_'));
+    }
+
+    #[test]
+    fn recognizes_terminal_executor_job_states() {
+        assert_eq!(
+            executor_job_terminal_state(&json!({ "status": { "failed": 1 } })),
+            ExecutorJobTerminalState::Failed
+        );
+        assert_eq!(
+            executor_job_terminal_state(&json!({ "status": { "succeeded": 1 } })),
+            ExecutorJobTerminalState::Succeeded
+        );
+        assert_eq!(
+            executor_job_terminal_state(&json!({ "status": { "active": 1 } })),
+            ExecutorJobTerminalState::Active
+        );
     }
 }
