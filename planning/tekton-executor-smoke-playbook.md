@@ -1,34 +1,3 @@
-# Tekton Executor Smoke
-
-## Decisions
-
-- Verify `pipeline-intents execute` in two stages: a deterministic preview
-  first, then one `--apply` against a purpose-built disposable Pipeline in an
-  allowlisted non-production namespace.
-- An applied intent must first record `pipeline_run_created`, then reach either
-  `pipeline_run_succeeded` with PipelineIntent returned to `approved` or
-  `pipeline_run_failed` with PipelineIntent `failed`. Submission alone is not
-  a successful mutation result.
-- Expect exactly one terminal execution artifact and observation per execution
-  identity. They are a bounded receipt, not an approval to deploy: attach a
-  successful PipelineRunAnalysis for that exact PipelineRun before approving a
-  DeploymentIntent.
-- Keep the executor Job alive while it polls the exact PipelineRun at the
-  configured interval. The Job active deadline is the maximum observation
-  period, and the API reaper owns ambiguous worker-loss handling.
-- Treat a failed executor Job as a control-plane outcome, not a reason to retry
-  automatically. The expected result is a failed PipelineIntent with
-  `execution_state.state = executor_job_lost` and a durable audit event.
-
-## Backlog
-
-- Add this apply check to the cluster smoke only after the disposable Pipeline
-  is installed and its inputs are represented by a Pipeline contract record.
-- Add a controlled failure variant that deletes the executor Job after dispatch
-  and proves the reaper transition and late-callback rejection.
-- Add a disposable successful PipelineRun variant that asserts the executor
-  terminal callback, approved intent, PipelineRun identity, artifact, and audit
-  trail.
 # Tekton Executor Smoke Playbook
 
 ## CLI
@@ -39,6 +8,10 @@
   smoke. It performs one bounded mutation only after a successful preflight.
 - The test fixture is GitOps-managed. Do not use `kubectl apply` to create it
   during a smoke run; a missing fixture is a deployment failure to resolve.
+- An applied intent records its submission, then a terminal `completed` or
+  `failed` execution receipt. Submission alone is not a successful mutation.
+- A terminal receipt is not a deployment approval. A matching satisfied
+  PipelineRunAnalysis remains required before a DeploymentIntent can approve.
 
 ### Run
 
@@ -88,3 +61,5 @@ or initiate a deployment.
   PipelineRunAnalysis after that evidence is persisted automatically.
 - Add an operator-reviewed artifact retention workflow before deleting any
   completed fixture PipelineRuns.
+- Add a controlled failure variant that proves executor-loss reconciliation and
+  late-callback rejection.
