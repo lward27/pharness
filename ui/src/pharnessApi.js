@@ -327,7 +327,7 @@ export async function prepareTektonE2eSmoke() {
       });
     }
   }
-  const workPlanResult = await postJson("/api/work-plans", { remediation_plan_id: remediationPlan.id });
+  const workPlanResult = await postJson("/api/work-plans/from-remediation-plan", { remediation_plan_id: remediationPlan.id });
   const workPlan = workPlanResult.work_plan;
   await transition(`/api/work-plans/${encodeURIComponent(workPlan.id)}/transition`, "proposed");
   const approvedWorkPlan = (await transition(`/api/work-plans/${encodeURIComponent(workPlan.id)}/transition`, "approved")).work_plan;

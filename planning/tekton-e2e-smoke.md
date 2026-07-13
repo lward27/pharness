@@ -21,6 +21,10 @@
 - The operator console uses the same public APIs as the script. It first
   creates the chain and validates preflight, then requires a second explicit
   operator action to dispatch the fixture.
+- The WorkPlan creation route is intentionally explicit:
+  `POST /api/work-plans/from-remediation-plan`. The list route is read-only;
+  a 405 during the first live smoke exposed and corrected an invalid client
+  assumption before any PipelineRun was dispatched.
 
 ## Backlog
 

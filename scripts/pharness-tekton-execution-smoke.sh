@@ -171,7 +171,7 @@ main() {
       "gate-$gate_id.json"
   done
 
-  post_json "/api/work-plans" "$(jq -cn --arg remediation_plan_id "$REMEDIATION_PLAN_ID" '{remediation_plan_id:$remediation_plan_id}')" "work-plan.json"
+  post_json "/api/work-plans/from-remediation-plan" "$(jq -cn --arg remediation_plan_id "$REMEDIATION_PLAN_ID" '{remediation_plan_id:$remediation_plan_id}')" "work-plan.json"
   WORK_PLAN_ID="$(jq -r '.work_plan.id' "$ARTIFACT_DIR/work-plan.json")"
   for status in proposed approved; do
     post_json "/api/work-plans/$WORK_PLAN_ID/transition" "$(jq -cn --arg target_status "$status" '{target_status:$target_status,actor:"tekton-e2e-smoke",reason:"bounded e2e workflow"}')" "work-plan-$status.json"
