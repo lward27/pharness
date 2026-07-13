@@ -28,6 +28,14 @@
 - Execution evidence uses the canonical terminal status `succeeded` or
   `failed`. The PipelineIntent itself returns to `approved` after a success so
   its authorization lifecycle stays distinct from the execution receipt.
+- A live applied CLI smoke and a separate live console smoke completed on
+  2026-07-13 against the GitOps-managed fixture. Both produced a successful
+  executor Job, a `Succeeded=True` PipelineRun, and durable terminal evidence;
+  the finance experiment resources were not touched.
+- The flow topology labels executor-produced evidence as `PipelineRun Receipt`.
+  It reserves `PipelineRunAnalysis` for a separately attached typed Tekton
+  analysis, which prevents the console from implying that a terminal receipt
+  satisfied the later deployment-evidence requirement.
 
 ## Backlog
 

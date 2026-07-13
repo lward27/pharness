@@ -47,9 +47,10 @@ actual PipelineRun identity.
 4. Confirm the durable-record panel reports `Preflight Passed`. At this point
    Pharness has not created a PipelineRun.
 5. Choose **Dispatch inert PipelineRun**.
-6. Wait for the status to become `Succeeded`, then choose **Open delivery
-   flow** to inspect the WorkPlan, ChangeSet, PipelineIntent, approval gates,
-   audit events, and terminal PipelineRun receipt.
+6. Wait for the console status to become `Completed`. Its terminal receipt
+   reports `succeeded`; then choose **Open delivery flow** to inspect the
+   WorkPlan, ChangeSet, PipelineIntent, approval gates, audit events, and
+   PipelineRun receipt.
 
 The console path is intentionally equivalent to the CLI smoke. It creates
 durable test records but does not change a finance application, read a secret,

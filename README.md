@@ -522,6 +522,24 @@ scripts/pharness-cluster-runtime-smoke.sh
 Validates the deployed control plane end to end; see
 [planning/v2-cluster-smoke-playbook.md](planning/v2-cluster-smoke-playbook.md).
 
+### Controlled Tekton Execution Smoke
+
+The bounded delivery smoke exercises the first real execution path without
+touching an application. It creates ordinary audited SDLC records, preflights
+an approved PipelineIntent, and, only with `--apply`, runs the GitOps-managed
+`pharness-e2e-noop` Pipeline in `tekton-pipelines`. The fixture has no inputs
+or application references and only writes a completion marker to its own task
+log.
+
+```sh
+export PHARNESS_API_TOKEN='your operator token'
+scripts/pharness-tekton-execution-smoke.sh --apply
+```
+
+The equivalent operator-console walkthrough, including the distinct preflight
+and dispatch actions, is in
+[planning/tekton-executor-smoke-playbook.md](planning/tekton-executor-smoke-playbook.md).
+
 ## Current Status
 
 The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/LGTM/Tekton paths. The V2 cluster runtime (worker Jobs, GitOps deployment, operator auth) is deploying per [planning/v2-cluster-runtime-plan.md](planning/v2-cluster-runtime-plan.md). See [planning/current-build-review.md](planning/current-build-review.md) for the reviewed V1 state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.
