@@ -122,7 +122,7 @@ wait_for_terminal_execution() {
     local status
     status="$(jq -r '.execution_evidence.status // empty' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
     case "$status" in
-      completed) return 0 ;;
+      succeeded) return 0 ;;
       failed) fail "Tekton executor reported failure: $(jq -r '.execution_evidence.error // "unknown failure"' "$ARTIFACT_DIR/pipeline-intent-terminal.json")" ;;
     esac
     sleep 3
@@ -219,7 +219,7 @@ main() {
     "execution should dispatch a dedicated executor Job"
   wait_for_terminal_execution "$PIPELINE_INTENT_ID"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
-    '.execution_evidence.status == "completed" and .execution_evidence.pipeline_run.name != null' \
+    '.execution_evidence.status == "succeeded" and .execution_evidence.pipeline_run.name != null' \
     "executor must report durable completed evidence"
   PIPELINE_RUN_NAME="$(jq -r '.execution_evidence.pipeline_run.name' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
   kubectl -n "$TEKTON_NAMESPACE" get pipelinerun "$PIPELINE_RUN_NAME" -o json >"$ARTIFACT_DIR/pipeline-run.json"

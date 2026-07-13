@@ -55,6 +55,10 @@ The console path is intentionally equivalent to the CLI smoke. It creates
 durable test records but does not change a finance application, read a secret,
 or initiate a deployment.
 
+The PipelineIntent returns to `approved` after a successful run; its execution
+receipt reports `succeeded`. Those are separate authorization and execution
+states.
+
 ## Backlog
 
 - Add a console link from terminal evidence directly to its typed

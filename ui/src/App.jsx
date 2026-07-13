@@ -136,7 +136,7 @@ function usePharnessDashboard(flowRoot, scope) {
 }
 
 function lifecycleTone(status) {
-  if (["completed", "approved", "verified", "satisfied", "ready", "merged"].includes(status)) {
+  if (["completed", "succeeded", "approved", "verified", "satisfied", "ready", "merged"].includes(status)) {
     return "healthy";
   }
   if (["running", "executing", "in_progress"].includes(status)) {
@@ -1147,7 +1147,7 @@ function DeliveryTestView({ refreshDashboard }) {
       for (let attempt = 0; attempt < 80; attempt += 1) {
         const intent = await loadPipelineIntent(pipelineIntentId);
         const execution = intent.execution_evidence;
-        if (execution?.status === "completed") {
+        if (execution?.status === "succeeded") {
           setState((current) => ({ ...current, phase: "completed", detail: `PipelineRun ${execution.pipeline_run?.namespace}/${execution.pipeline_run?.name} completed successfully.`, data: { ...current.data, pipelineIntent: intent } }));
           refreshDashboard();
           return;
@@ -1211,7 +1211,7 @@ function DeliveryTestView({ refreshDashboard }) {
             <ReviewItem label="PipelineIntent" value={compactId(intent?.id)} />
             <ReviewItem label="PipelineContract" value={compactId(state.data.pipelineContract?.id)} />
             <ReviewItem label="Preflight" value={state.data.preview?.ready ? "Passed" : "Blocked"} tone={state.data.preview?.ready ? "healthy" : "blocked"} />
-            <ReviewItem label="PipelineRun" value={execution?.pipeline_run ? `${execution.pipeline_run.namespace}/${execution.pipeline_run.name}` : "Not dispatched"} tone={execution?.status === "completed" ? "healthy" : undefined} />
+            <ReviewItem label="PipelineRun" value={execution?.pipeline_run ? `${execution.pipeline_run.namespace}/${execution.pipeline_run.name}` : "Not dispatched"} tone={execution?.status === "succeeded" ? "healthy" : undefined} />
           </div>
           <button className="text-action" type="button" onClick={() => intent?.id && navigate("Flow", { kind: "change_set", id: state.data.changeSet.id })}>Open delivery flow</button>
         </section>

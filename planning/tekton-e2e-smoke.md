@@ -25,6 +25,9 @@
   `POST /api/work-plans/from-remediation-plan`. The list route is read-only;
   a 405 during the first live smoke exposed and corrected an invalid client
   assumption before any PipelineRun was dispatched.
+- Execution evidence uses the canonical terminal status `succeeded` or
+  `failed`. The PipelineIntent itself returns to `approved` after a success so
+  its authorization lifecycle stays distinct from the execution receipt.
 
 ## Backlog
 

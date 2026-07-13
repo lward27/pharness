@@ -3006,7 +3006,7 @@ fn add_pipeline_evidence_findings(
             "pipeline_intent",
             &intent.id,
         )),
-        Some("completed") | None => {}
+        Some("succeeded") | None => {}
         Some(_) => warnings.push(readiness_finding(
             "pipeline_execution_unknown",
             format!(
