@@ -120,6 +120,11 @@ enum Command {
         #[command(subcommand)]
         command: PipelineContractCommand,
     },
+    /// Inspect operator-managed Argo CD deployment contracts.
+    DeploymentContracts {
+        #[command(subcommand)]
+        command: DeploymentContractCommand,
+    },
     /// Inspect durable deployment intents.
     DeploymentIntents {
         #[command(subcommand)]
@@ -306,6 +311,18 @@ enum DeploymentIntentCommand {
     Transition(DeploymentIntentTransitionArgs),
     /// Attach an Argo CD Application observation as DeploymentIntent evidence.
     AttachEvidence(DeploymentIntentAttachEvidenceArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum DeploymentContractCommand {
+    /// List durable deployment contracts.
+    List(Box<DeploymentContractListArgs>),
+    /// Fetch one deployment contract by id.
+    Get(DeploymentContractGetArgs),
+    /// Create an active deployment contract for one exact Argo CD Application target.
+    Create(DeploymentContractCreateArgs),
+    /// Retire an active deployment contract without deleting its audit history.
+    Retire(DeploymentContractRetireArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -1664,6 +1681,80 @@ struct PipelineContractReplaceArgs {
 }
 
 #[derive(Debug, Parser)]
+struct DeploymentContractListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    target_environment: Option<String>,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    argo_application: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentContractGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_contract_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentContractCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    target_environment: String,
+    #[arg(long)]
+    target_namespace: String,
+    #[arg(long)]
+    argo_application: String,
+    #[arg(long, default_value = "v1")]
+    version: String,
+    #[arg(long)]
+    contract_json: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentContractRetireArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_contract_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct DeploymentIntentListArgs {
     #[arg(
         long,
@@ -2374,6 +2465,12 @@ async fn main() -> anyhow::Result<()> {
             PipelineContractCommand::Create(args) => create_pipeline_contract(args).await?,
             PipelineContractCommand::Replace(args) => replace_pipeline_contract(args).await?,
             PipelineContractCommand::Retire(args) => retire_pipeline_contract(args).await?,
+        },
+        Command::DeploymentContracts { command } => match command {
+            DeploymentContractCommand::List(args) => list_deployment_contracts(*args).await?,
+            DeploymentContractCommand::Get(args) => get_deployment_contract(args).await?,
+            DeploymentContractCommand::Create(args) => create_deployment_contract(args).await?,
+            DeploymentContractCommand::Retire(args) => retire_deployment_contract(args).await?,
         },
         Command::DeploymentIntents { command } => match command {
             DeploymentIntentCommand::List(args) => list_deployment_intents(*args).await?,
@@ -4282,6 +4379,93 @@ async fn replace_pipeline_contract(args: PipelineContractReplaceArgs) -> anyhow:
     Ok(())
 }
 
+async fn list_deployment_contracts(args: DeploymentContractListArgs) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit", args.limit.to_string()),
+        ("offset", args.offset.to_string()),
+    ];
+    if let Some(value) = args.target_environment {
+        query.push(("target_environment", value));
+    }
+    if let Some(value) = args.target_namespace {
+        query.push(("target_namespace", value));
+    }
+    if let Some(value) = args.argo_application {
+        query.push(("argo_application", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    let response = api_client()
+        .get(api_url(&args.api_url, "/api/deployment-contracts"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch Deployment contracts")?
+        .error_for_status()
+        .context("pharness API rejected Deployment contract list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Deployment contract list")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_deployment_contract(args: DeploymentContractGetArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/deployment-contracts/{}", args.deployment_contract_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch Deployment contract")?
+        .error_for_status()
+        .context("pharness API rejected Deployment contract fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Deployment contract")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_deployment_contract(args: DeploymentContractCreateArgs) -> anyhow::Result<()> {
+    let contract_json = parse_json_object(&args.contract_json, "--contract-json")
+        .context("failed to parse --contract-json as a JSON object")?;
+    let response = api_client()
+        .post(api_url(&args.api_url, "/api/deployment-contracts"))
+        .json(&serde_json::json!({
+            "target_environment": args.target_environment,
+            "target_namespace": args.target_namespace,
+            "argo_application": args.argo_application,
+            "version": args.version,
+            "contract_json": contract_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create Deployment contract")?
+        .error_for_status()
+        .context("pharness API rejected Deployment contract creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode Deployment contract creation")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn retire_deployment_contract(args: DeploymentContractRetireArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(&args.api_url, &format!("/api/deployment-contracts/{}/transition", args.deployment_contract_id)))
+        .json(&serde_json::json!({ "target_status": "retired", "actor": args.actor, "reason": args.reason }))
+        .send().await.context("failed to retire Deployment contract")?
+        .error_for_status().context("pharness API rejected Deployment contract retirement")?
+        .json::<serde_json::Value>().await.context("failed to decode Deployment contract retirement")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_deployment_intents(args: DeploymentIntentListArgs) -> anyhow::Result<()> {
     let http = api_client();
     let mut query = Vec::new();
@@ -5658,9 +5842,10 @@ mod tests {
     use super::{
         api_url, approval_decision_endpoint, event_log_line, extract_model_summaries, is_terminal,
         parse_json_object, run_scope_from_args, ApprovalDecisionArgs, ApprovalGateCommand,
-        CapabilityCommand, ChangeSetCommand, ConfigValidationOutput, DeploymentIntentCommand,
-        IncidentCommand, ObservationCommand, PipelineIntentCommand, RegistryEvidenceCommand,
-        ReleaseCommand, RemediationPlanCommand, RunArgs, RunCommand, WorkPlanCommand,
+        CapabilityCommand, ChangeSetCommand, ConfigValidationOutput, DeploymentContractCommand,
+        DeploymentIntentCommand, IncidentCommand, ObservationCommand, PipelineIntentCommand,
+        RegistryEvidenceCommand, ReleaseCommand, RemediationPlanCommand, RunArgs, RunCommand,
+        WorkPlanCommand,
     };
     use crate::{Cli, Command};
     use clap::Parser;
@@ -6530,6 +6715,102 @@ mod tests {
                 assert_eq!(args.actor.as_deref(), Some("lucas"));
             }
             _ => panic!("expected deployment-intents attach-evidence command"),
+        }
+    }
+
+    #[test]
+    fn parses_deployment_contract_commands() {
+        let list = Cli::try_parse_from([
+            "pharness",
+            "deployment-contracts",
+            "list",
+            "--target-environment",
+            "homelab",
+            "--target-namespace",
+            "pharness",
+            "--argo-application",
+            "pharness",
+            "--status",
+            "active",
+        ])
+        .unwrap();
+        let get = Cli::try_parse_from([
+            "pharness",
+            "deployment-contracts",
+            "get",
+            "--deployment-contract-id",
+            "dcontract_1",
+        ])
+        .unwrap();
+        let create = Cli::try_parse_from([
+            "pharness",
+            "deployment-contracts",
+            "create",
+            "--target-environment",
+            "homelab",
+            "--target-namespace",
+            "pharness",
+            "--argo-application",
+            "pharness",
+            "--version",
+            "v1",
+            "--contract-json",
+            r#"{\"operation\":\"sync\",\"prune\":false,\"force\":false}"#,
+            "--actor",
+            "lucas",
+            "--reason",
+            "reviewed target",
+        ])
+        .unwrap();
+        let retire = Cli::try_parse_from([
+            "pharness",
+            "deployment-contracts",
+            "retire",
+            "--deployment-contract-id",
+            "dcontract_1",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+
+        match list.command {
+            Command::DeploymentContracts {
+                command: DeploymentContractCommand::List(args),
+            } => {
+                assert_eq!(args.target_environment.as_deref(), Some("homelab"));
+                assert_eq!(args.target_namespace.as_deref(), Some("pharness"));
+                assert_eq!(args.argo_application.as_deref(), Some("pharness"));
+                assert_eq!(args.status.as_deref(), Some("active"));
+            }
+            _ => panic!("expected deployment-contracts list command"),
+        }
+        match get.command {
+            Command::DeploymentContracts {
+                command: DeploymentContractCommand::Get(args),
+            } => assert_eq!(args.deployment_contract_id, "dcontract_1"),
+            _ => panic!("expected deployment-contracts get command"),
+        }
+        match create.command {
+            Command::DeploymentContracts {
+                command: DeploymentContractCommand::Create(args),
+            } => {
+                assert_eq!(args.target_environment, "homelab");
+                assert_eq!(args.target_namespace, "pharness");
+                assert_eq!(args.argo_application, "pharness");
+                assert_eq!(args.version, "v1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.reason.as_deref(), Some("reviewed target"));
+            }
+            _ => panic!("expected deployment-contracts create command"),
+        }
+        match retire.command {
+            Command::DeploymentContracts {
+                command: DeploymentContractCommand::Retire(args),
+            } => {
+                assert_eq!(args.deployment_contract_id, "dcontract_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected deployment-contracts retire command"),
         }
     }
 

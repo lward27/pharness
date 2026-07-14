@@ -3,10 +3,10 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
-    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange,
-    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
-    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
-    StoredWorkPlan,
+    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
+    StoredDeploymentIntent, StoredFileChange, StoredIncident, StoredObservation,
+    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
 };
 use serde::{Deserialize, Serialize};
 
@@ -623,6 +623,67 @@ impl From<StoredPipelineContract> for PipelineContractResponse {
             status_reason: contract.status_reason,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentContractsResponse {
+    pub deployment_contracts: Vec<DeploymentContractResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentContractResponse {
+    pub id: String,
+    pub status: String,
+    pub target_environment: String,
+    pub target_namespace: String,
+    pub argo_application: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredDeploymentContract> for DeploymentContractResponse {
+    fn from(contract: StoredDeploymentContract) -> Self {
+        Self {
+            id: contract.id,
+            status: contract.status,
+            target_environment: contract.target_environment,
+            target_namespace: contract.target_namespace,
+            argo_application: contract.argo_application,
+            version: contract.version,
+            contract_json: contract.contract_json,
+            created_at: contract.created_at,
+            updated_at: contract.updated_at,
+            status_changed_at: contract.status_changed_at,
+            status_changed_by: contract.status_changed_by,
+            status_reason: contract.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateDeploymentContractRequest {
+    pub target_environment: String,
+    pub target_namespace: String,
+    pub argo_application: String,
+    pub version: Option<String>,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionDeploymentContractRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

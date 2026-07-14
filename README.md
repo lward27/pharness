@@ -486,6 +486,19 @@ handoff, not a sync request: it does not approve or mutate the Application.
 Deployment execution will require its own reviewed contract and executor
 identity.
 
+DeploymentContracts are operator-managed durable policy for one exact Argo CD
+Application target. The initial schema admits only a non-pruning, non-forced
+`sync` operation and has no mutation endpoint or additional Kubernetes RBAC:
+
+```sh
+pharness-cli deployment-contracts create \
+  --target-environment homelab \
+  --target-namespace pharness \
+  --argo-application pharness \
+  --contract-json '{"operation":"sync","prune":false,"force":false}' \
+  --reason 'reviewed future sync boundary'
+```
+
 Each executable intent must also match exactly one active PipelineContract for
 its namespace and PipelineRef. Contracts are created by an operator through
 the API or CLI and enumerate the permitted parameter shapes and workspace

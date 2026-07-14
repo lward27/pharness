@@ -6,28 +6,30 @@ use crate::dto::{
     AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
     AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
     ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest, CreateChangeSetResponse,
-    CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
-    CreateIncidentRequest, CreateObservationRequest, CreatePermissionGrantRequest,
-    CreatePipelineContractRequest, CreatePipelineIntentFromChangeSetRequest,
-    CreatePipelineIntentResponse, CreatePipelineIntentTrustedEnvelopeRequest,
-    CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromInspectionResponse,
-    CreateRegistryEvidenceFromReleaseRequest, CreateRegistryEvidenceResponse,
-    CreateReleaseFromDeploymentIntentRequest, CreateReleaseResponse, CreateRemediationPlanRequest,
-    CreateRunRequest, CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest,
-    CreateWorkPlanResponse, DecideApprovalGateRequest, DecideApprovalGateResponse,
-    DecideApprovalRequest, DecideApprovalResponse, DeploymentIntentResponse,
-    DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
-    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, FileChangeResponse,
-    IncidentResponse, IncidentsResponse, ObservationResponse, ObservationsResponse,
-    PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
-    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest, PipelineIntentResponse,
-    PipelineIntentsResponse, RegistryEvidenceListResponse, RegistryEvidenceResponse,
-    ReleaseResponse, ReleasesResponse, RemediationPlanResponse, RemediationPlansResponse,
-    ReplacePipelineContractRequest, ReplacePipelineContractResponse, ReviewApprovalRequest,
-    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
-    RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
-    SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
-    SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
+    CreateDeploymentContractRequest, CreateDeploymentIntentFromPipelineIntentRequest,
+    CreateDeploymentIntentResponse, CreateIncidentRequest, CreateObservationRequest,
+    CreatePermissionGrantRequest, CreatePipelineContractRequest,
+    CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
+    CreatePipelineIntentTrustedEnvelopeRequest, CreateRegistryEvidenceFromInspectionRequest,
+    CreateRegistryEvidenceFromInspectionResponse, CreateRegistryEvidenceFromReleaseRequest,
+    CreateRegistryEvidenceResponse, CreateReleaseFromDeploymentIntentRequest,
+    CreateReleaseResponse, CreateRemediationPlanRequest, CreateRunRequest,
+    CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse,
+    DecideApprovalGateRequest, DecideApprovalGateResponse, DecideApprovalRequest,
+    DecideApprovalResponse, DeploymentContractResponse, DeploymentContractsResponse,
+    DeploymentIntentResponse, DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest,
+    ExecuteCapabilityResponse, ExecutePipelineIntentRequest, ExecutePipelineIntentResponse,
+    FileChangeResponse, IncidentResponse, IncidentsResponse, ObservationResponse,
+    ObservationsResponse, PermissionGrantResponse, PermissionGrantsResponse,
+    PipelineContractResponse, PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest,
+    PipelineIntentResponse, PipelineIntentsResponse, RegistryEvidenceListResponse,
+    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
+    RemediationPlansResponse, ReplacePipelineContractRequest, ReplacePipelineContractResponse,
+    ReviewApprovalRequest, ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest,
+    ReviseWorkPlanResponse, RevokePermissionGrantRequest, RunDiffResponse, RunResponse,
+    RunSummaryResponse, RunsResponse, SdlcFlowResponse, SdlcReadinessFinding,
+    SdlcReadinessGateSummary, SdlcReadinessGrantSummary, SdlcReadinessResponse,
+    TransitionChangeSetRequest, TransitionChangeSetResponse, TransitionDeploymentContractRequest,
     TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
     TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
     TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
@@ -52,10 +54,11 @@ use pharness_core::{
 use pharness_runhost::AttemptOutcome;
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
-    AuditEventListFilter, ChangeSetListFilter, DeploymentIntentListFilter, IncidentListFilter,
-    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
-    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter, RunListFilter,
-    RunSummaryFilter, StoredApprovalGate, StoredAuditEvent, StoredChangeSet,
+    AuditEventListFilter, ChangeSetListFilter, DeploymentContractListFilter,
+    DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
+    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
+    ReleaseListFilter, RemediationPlanListFilter, RunListFilter, RunSummaryFilter,
+    StoredApprovalGate, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
     StoredDeploymentIntent, StoredIncident, StoredObservation, StoredPermissionGrant,
     StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
     StoredRemediationPlan, StoredWorkPlan, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
@@ -63,11 +66,12 @@ use pharness_store::{
     UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_store::{
-    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateDeploymentIntent,
-    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineContract,
-    CreatePipelineIntent, CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun,
-    CreateSession, CreateWorkPlan, ReplacePipelineContract, SqliteStore, StoreError,
-    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence,
+    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
+    CreateDeploymentContract, CreateDeploymentIntent, CreateIncident, CreateObservation,
+    CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
+    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan,
+    ReplacePipelineContract, SqliteStore, StoreError, UpdateDeploymentIntentEvidence,
+    UpdatePipelineIntentEvidence,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -253,6 +257,18 @@ pub fn router(
         .route(
             "/api/pipeline-intents/:pipeline_intent_id/execute",
             post(execute_pipeline_intent),
+        )
+        .route(
+            "/api/deployment-contracts",
+            get(list_deployment_contracts).post(create_deployment_contract),
+        )
+        .route(
+            "/api/deployment-contracts/:deployment_contract_id",
+            get(get_deployment_contract),
+        )
+        .route(
+            "/api/deployment-contracts/:deployment_contract_id/transition",
+            post(transition_deployment_contract),
         )
         .route("/api/deployment-intents", get(list_deployment_intents))
         .route(
@@ -3714,6 +3730,138 @@ async fn replace_pipeline_contract(
     }))
 }
 
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListDeploymentContractsQuery {
+    target_environment: Option<String>,
+    target_namespace: Option<String>,
+    argo_application: Option<String>,
+    status: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_deployment_contracts(
+    State(state): State<AppState>,
+    Query(query): Query<ListDeploymentContractsQuery>,
+) -> Result<Json<DeploymentContractsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let deployment_contracts = state
+        .store
+        .list_deployment_contracts(DeploymentContractListFilter {
+            target_environment: clean_optional_text(query.target_environment),
+            target_namespace: clean_optional_text(query.target_namespace),
+            argo_application: clean_optional_text(query.argo_application),
+            status: clean_optional_text(query.status),
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = deployment_contracts.len();
+    Ok(Json(DeploymentContractsResponse {
+        deployment_contracts,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_deployment_contract(
+    State(state): State<AppState>,
+    Path(deployment_contract_id): Path<String>,
+) -> Result<Json<DeploymentContractResponse>, ApiError> {
+    let contract = state
+        .store
+        .get_deployment_contract(&deployment_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_contract", &deployment_contract_id))?;
+    Ok(Json(contract.into()))
+}
+
+async fn create_deployment_contract(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Json(request): Json<CreateDeploymentContractRequest>,
+) -> Result<Json<DeploymentContractResponse>, ApiError> {
+    let target_environment = required_text(request.target_environment, "target_environment")?;
+    let target_namespace = required_text(request.target_namespace, "target_namespace")?;
+    let argo_application = required_text(request.argo_application, "argo_application")?;
+    let version = clean_optional_text(request.version).unwrap_or_else(|| "v1".to_string());
+    validate_kubernetes_name("target_environment", &target_environment)?;
+    validate_kubernetes_name("target_namespace", &target_namespace)?;
+    validate_kubernetes_name("argo_application", &argo_application)?;
+    validate_kubernetes_name("version", &version)?;
+    let contract_spec = deployment_contract_spec(&request.contract_json)?;
+    validate_deployment_contract_spec(&contract_spec)?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let contract = state
+        .store
+        .create_deployment_contract(CreateDeploymentContract {
+            id: format!("dcontract_{}", unique_suffix()),
+            status: "active".to_string(),
+            target_environment,
+            target_namespace,
+            argo_application,
+            version,
+            contract_json: request.contract_json,
+            actor: actor.clone(),
+            reason: reason.clone(),
+        })
+        .await?;
+    append_deployment_contract_audit_event(
+        &state.store,
+        &contract,
+        "deployment_contract.created",
+        actor,
+        reason,
+    )
+    .await?;
+    Ok(Json(contract.into()))
+}
+
+async fn transition_deployment_contract(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(deployment_contract_id): Path<String>,
+    Json(request): Json<TransitionDeploymentContractRequest>,
+) -> Result<Json<DeploymentContractResponse>, ApiError> {
+    let current = state
+        .store
+        .get_deployment_contract(&deployment_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("deployment_contract", &deployment_contract_id))?;
+    let target = required_text(request.target_status, "target_status")?;
+    if current.status != "active" || target != "retired" {
+        return Err(ApiError::conflict(format!(
+            "DeploymentContract can only transition from active to retired, not {} to {}",
+            current.status, target
+        )));
+    }
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let contract = state
+        .store
+        .update_deployment_contract_status(&current.id, "retired", actor.clone(), reason.clone())
+        .await?;
+    append_deployment_contract_audit_event(
+        &state.store,
+        &contract,
+        "deployment_contract.retired",
+        actor,
+        reason,
+    )
+    .await?;
+    Ok(Json(contract.into()))
+}
+
 async fn list_pipeline_intents(
     State(state): State<AppState>,
     Query(query): Query<ListPipelineIntentsQuery>,
@@ -4820,6 +4968,16 @@ struct PipelineContractSpec {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+struct DeploymentContractSpec {
+    operation: String,
+    #[serde(default)]
+    prune: bool,
+    #[serde(default)]
+    force: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PipelineParameterContract {
     name: String,
     #[serde(rename = "type")]
@@ -5156,6 +5314,33 @@ fn pipeline_contract_spec(value: &Value) -> Result<PipelineContractSpec, ApiErro
             "pipeline contract contract_json is invalid: {error}"
         ))
     })
+}
+
+fn deployment_contract_spec(value: &Value) -> Result<DeploymentContractSpec, ApiError> {
+    if !value.is_object() {
+        return Err(ApiError::bad_request(
+            "deployment contract contract_json must be a JSON object",
+        ));
+    }
+    serde_json::from_value::<DeploymentContractSpec>(value.clone()).map_err(|error| {
+        ApiError::bad_request(format!(
+            "deployment contract contract_json is invalid: {error}"
+        ))
+    })
+}
+
+fn validate_deployment_contract_spec(contract: &DeploymentContractSpec) -> Result<(), ApiError> {
+    if contract.operation != "sync" {
+        return Err(ApiError::bad_request(
+            "deployment contract operation must be sync",
+        ));
+    }
+    if contract.prune || contract.force {
+        return Err(ApiError::bad_request(
+            "deployment contract prune and force must remain false",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_pipeline_contract_spec(contract: &PipelineContractSpec) -> Result<(), ApiError> {
@@ -8802,6 +8987,35 @@ async fn append_pipeline_contract_audit_event(
         .map(|_| ())
 }
 
+async fn append_deployment_contract_audit_event(
+    store: &SqliteStore,
+    contract: &StoredDeploymentContract,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", contract.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "deployment_contract".to_string(),
+            resource_id: contract.id.clone(),
+            run_id: None,
+            payload_json: json!({
+                "deployment_contract_id": contract.id,
+                "status": contract.status,
+                "target_environment": contract.target_environment,
+                "target_namespace": contract.target_namespace,
+                "argo_application": contract.argo_application,
+                "version": contract.version,
+                "reason": reason,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
 async fn append_deployment_intent_audit_event(
     store: &SqliteStore,
     intent: &StoredDeploymentIntent,
@@ -9682,49 +9896,51 @@ mod tests {
         attach_pipeline_intent_evidence, attach_release_evidence, build_pipeline_run_manifest,
         cancel_run, change_set_flow, change_set_readiness, config_effective, create_change_set,
         create_change_set_trusted_envelope, create_declared_deployment_handoff,
-        create_deployment_intent_from_pipeline_intent, create_incident, create_observation,
-        create_pipeline_intent_from_change_set, create_registry_evidence_from_registry_inspection,
-        create_registry_evidence_from_release, create_release_from_deployment_intent,
-        create_remediation_plan, create_run, create_work_plan_from_remediation_plan,
-        create_work_plan_trusted_envelope, decide_run_approval, deny_approval,
-        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
-        execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
-        get_deployment_intent, get_incident, get_observation, get_permission_grant,
-        get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
-        get_run_diff, get_run_events, get_work_plan, last_event_seq, list_approval_gates,
-        list_approvals, list_audit_events, list_change_sets, list_deployment_intents,
-        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
-        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
-        list_run_observations, list_runs, list_work_plans, merge_pipeline_execution_state,
-        parse_last_event_id, persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
-        policy_json, revise_change_set, revise_work_plan, revoke_permission_grant, router,
-        run_policy, run_summary, satisfy_approval_gate, set_pipeline_intent_evidence,
-        stream_start_seq, tekton_execution_spec, transition_change_set,
+        create_deployment_contract, create_deployment_intent_from_pipeline_intent, create_incident,
+        create_observation, create_pipeline_intent_from_change_set,
+        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
+        create_release_from_deployment_intent, create_remediation_plan, create_run,
+        create_work_plan_from_remediation_plan, create_work_plan_trusted_envelope,
+        decide_run_approval, deny_approval, ensure_pipeline_evidence_ready_for_deployment,
+        execute_capability, execution_matches_pipeline_contract, get_approval, get_approval_gate,
+        get_artifact, get_deployment_contract, get_deployment_intent, get_incident,
+        get_observation, get_permission_grant, get_pipeline_intent, get_registry_evidence,
+        get_release, get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan,
+        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
+        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
+        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
+        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
+        list_work_plans, merge_pipeline_execution_state, parse_last_event_id,
+        persist_pipeline_execution_evidence, persist_pipeline_run_analysis, policy_json,
+        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
+        run_summary, satisfy_approval_gate, set_pipeline_intent_evidence, stream_start_seq,
+        tekton_execution_spec, transition_change_set, transition_deployment_contract,
         transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
         transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
         validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis,
         work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
         ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
-        ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery, ListObservationsQuery,
-        ListPermissionGrantsQuery, ListPipelineIntentsQuery, ListRegistryEvidenceQuery,
-        ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
+        ListChangeSetsQuery, ListDeploymentContractsQuery, ListDeploymentIntentsQuery,
+        ListIncidentsQuery, ListObservationsQuery, ListPermissionGrantsQuery,
+        ListPipelineIntentsQuery, ListRegistryEvidenceQuery, ListReleasesQuery,
+        ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
         PipelineDeploymentHandoffSpec, StreamRunEventsQuery,
     };
     use crate::dispatch::RunDispatcher;
     use crate::dto::{
         ApprovalDecision, AttachDeploymentIntentEvidenceRequest,
         AttachPipelineIntentEvidenceRequest, AttachReleaseEvidenceRequest, CreateChangeSetRequest,
-        CreateDeploymentIntentFromPipelineIntentRequest, CreateIncidentRequest,
-        CreateObservationRequest, CreatePermissionGrantRequest,
+        CreateDeploymentContractRequest, CreateDeploymentIntentFromPipelineIntentRequest,
+        CreateIncidentRequest, CreateObservationRequest, CreatePermissionGrantRequest,
         CreatePipelineIntentFromChangeSetRequest, CreateRegistryEvidenceFromInspectionRequest,
         CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
         CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
         ExecuteCapabilityRequest, PipelineIntentExecutionOutcomeRequest, ReviewApprovalRequest,
         ReviseChangeSetRequest, ReviseWorkPlanRequest, RevokePermissionGrantRequest,
-        TransitionChangeSetRequest, TransitionDeploymentIntentRequest,
-        TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
-        TransitionReleaseRequest, TransitionWorkPlanRequest,
+        TransitionChangeSetRequest, TransitionDeploymentContractRequest,
+        TransitionDeploymentIntentRequest, TransitionPipelineIntentRequest,
+        TransitionRegistryEvidenceRequest, TransitionReleaseRequest, TransitionWorkPlanRequest,
     };
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
@@ -14658,6 +14874,70 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
 
         let error = execution_matches_pipeline_contract(&execution, &contract).unwrap_err();
         assert!(error.message.contains("branches"));
+    }
+
+    #[tokio::test]
+    async fn deployment_contract_is_exact_audited_and_retirable() {
+        let state = test_state().await;
+        let Json(created) = create_deployment_contract(
+            State(state.clone()),
+            None,
+            Json(CreateDeploymentContractRequest {
+                target_environment: "homelab".to_string(),
+                target_namespace: "pharness".to_string(),
+                argo_application: "pharness".to_string(),
+                version: Some("v1".to_string()),
+                contract_json: json!({ "operation": "sync", "prune": false, "force": false }),
+                actor: Some("lucas".to_string()),
+                reason: Some("reviewed bounded Argo target".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(listed) = list_deployment_contracts(
+            State(state.clone()),
+            Query(ListDeploymentContractsQuery {
+                target_environment: Some("homelab".to_string()),
+                target_namespace: Some("pharness".to_string()),
+                argo_application: Some("pharness".to_string()),
+                status: Some("active".to_string()),
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(fetched) = get_deployment_contract(State(state.clone()), Path(created.id.clone()))
+            .await
+            .unwrap();
+        let Json(retired) = transition_deployment_contract(
+            State(state.clone()),
+            None,
+            Path(created.id.clone()),
+            Json(TransitionDeploymentContractRequest {
+                target_status: "retired".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("target withdrawn".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(created.status, "active");
+        assert_eq!(listed.count, 1);
+        assert_eq!(fetched.id, created.id);
+        assert_eq!(retired.status, "retired");
+        let audits = state
+            .store
+            .list_audit_events(Some("deployment_contract"), Some(&created.id), None, 10)
+            .await
+            .unwrap();
+        assert!(audits
+            .iter()
+            .any(|event| event.kind == "deployment_contract.created"));
+        assert!(audits
+            .iter()
+            .any(|event| event.kind == "deployment_contract.retired"));
     }
 
     #[test]

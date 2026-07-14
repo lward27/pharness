@@ -619,6 +619,45 @@ pub struct ReplacePipelineContract {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateDeploymentContract {
+    pub id: String,
+    pub status: String,
+    pub target_environment: String,
+    pub target_namespace: String,
+    pub argo_application: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredDeploymentContract {
+    pub id: String,
+    pub status: String,
+    pub target_environment: String,
+    pub target_namespace: String,
+    pub argo_application: String,
+    pub version: String,
+    pub contract_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct DeploymentContractListFilter {
+    pub target_environment: Option<String>,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub status: Option<String>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct PipelineIntentListFilter {
     pub change_set_id: Option<String>,

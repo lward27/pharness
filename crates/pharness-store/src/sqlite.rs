@@ -3,20 +3,21 @@ use crate::{
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
     ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
     ChangeSetListFilter, CountBucket, CreateApproval, CreateApprovalGate, CreateArtifact,
-    CreateAuditEvent, CreateChangeSet, CreateDeploymentIntent, CreateFileChange, CreateIncident,
-    CreateObservation, CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent,
-    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
-    CreateWorkPlan, DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
+    CreateAuditEvent, CreateChangeSet, CreateDeploymentContract, CreateDeploymentIntent,
+    CreateFileChange, CreateIncident, CreateObservation, CreatePermissionGrant,
+    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, DeploymentContractListFilter,
+    DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
     PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
     ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
     RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
-    StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredFileChange, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
-    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
-    UpdateChangeSetRevision, UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence,
-    UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution,
-    UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
-    WorkPlanListFilter,
+    StoredAuditEvent, StoredChangeSet, StoredDeploymentContract, StoredDeploymentIntent,
+    StoredFileChange, StoredIncident, StoredObservation, StoredPermissionGrant,
+    StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
+    StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
+    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
+    UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
+    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -1811,6 +1812,114 @@ impl SqliteStore {
             })
     }
 
+    pub async fn create_deployment_contract(
+        &self,
+        contract: CreateDeploymentContract,
+    ) -> Result<StoredDeploymentContract, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO deployment_contracts (
+              id, status, target_environment, target_namespace, argo_application, version,
+              contract_json, created_at, updated_at, status_changed_at, status_changed_by,
+              status_reason
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?8, ?9, ?10)
+            "#,
+        )
+        .bind(&contract.id)
+        .bind(&contract.status)
+        .bind(&contract.target_environment)
+        .bind(&contract.target_namespace)
+        .bind(&contract.argo_application)
+        .bind(&contract.version)
+        .bind(serde_json::to_string(&contract.contract_json)?)
+        .bind(now)
+        .bind(contract.actor)
+        .bind(contract.reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_deployment_contract(&contract.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_contract".to_string(),
+                id: contract.id,
+            })
+    }
+
+    pub async fn get_deployment_contract(
+        &self,
+        contract_id: &str,
+    ) -> Result<Option<StoredDeploymentContract>, StoreError> {
+        let row = sqlx::query(deployment_contract_select_sql("WHERE id = ?1"))
+            .bind(contract_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_deployment_contract).transpose()
+    }
+
+    pub async fn list_deployment_contracts(
+        &self,
+        filter: DeploymentContractListFilter,
+    ) -> Result<Vec<StoredDeploymentContract>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, status, target_environment, target_namespace, argo_application, version,
+                   contract_json, created_at, updated_at, status_changed_at, status_changed_by,
+                   status_reason
+            FROM deployment_contracts
+            WHERE (?1 IS NULL OR target_environment = ?1)
+              AND (?2 IS NULL OR target_namespace = ?2)
+              AND (?3 IS NULL OR argo_application = ?3)
+              AND (?4 IS NULL OR status = ?4)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?5 OFFSET ?6
+            "#,
+        )
+        .bind(filter.target_environment)
+        .bind(filter.target_namespace)
+        .bind(filter.argo_application)
+        .bind(filter.status)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_deployment_contract).collect()
+    }
+
+    pub async fn update_deployment_contract_status(
+        &self,
+        contract_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredDeploymentContract, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE deployment_contracts
+            SET status = ?2, updated_at = ?3, status_changed_at = ?3,
+                status_changed_by = ?4, status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(contract_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_deployment_contract(contract_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "deployment_contract".to_string(),
+                id: contract_id.to_string(),
+            })
+    }
+
     pub async fn create_deployment_intent(
         &self,
         intent: CreateDeploymentIntent,
@@ -3324,6 +3433,26 @@ fn row_to_pipeline_contract(
     })
 }
 
+fn row_to_deployment_contract(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredDeploymentContract, StoreError> {
+    let contract_json: String = row.try_get("contract_json")?;
+    Ok(StoredDeploymentContract {
+        id: row.try_get("id")?,
+        status: row.try_get("status")?,
+        target_environment: row.try_get("target_environment")?,
+        target_namespace: row.try_get("target_namespace")?,
+        argo_application: row.try_get("argo_application")?,
+        version: row.try_get("version")?,
+        contract_json: serde_json::from_str(&contract_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
 fn row_to_deployment_intent(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredDeploymentIntent, StoreError> {
@@ -3623,6 +3752,21 @@ fn pipeline_contract_select_sql(where_clause: &str) -> &'static str {
             "#
         }
         _ => unreachable!("pipeline contract select SQL only supports known static clauses"),
+    }
+}
+
+fn deployment_contract_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, status, target_environment, target_namespace, argo_application, version,
+                   contract_json, created_at, updated_at, status_changed_at, status_changed_by,
+                   status_reason
+            FROM deployment_contracts
+            WHERE id = ?1
+        "#
+        }
+        _ => unreachable!("deployment contract select SQL only supports known static clauses"),
     }
 }
 

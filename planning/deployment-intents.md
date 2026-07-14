@@ -28,6 +28,9 @@
 
 # Backlog
 
+- DeploymentContracts now carry exact target policy for a future typed Argo
+  capability. They currently permit only a non-pruning, non-forced `sync`
+  shape and do not grant execution authority.
 - Add DeploymentIntent execution only as a separate approved typed Argo capability. Do not hide Argo mutation behind shell execution.
 - Add production policy gates for blast radius, sync windows, protected namespaces, and rollback evidence before any production-impacting DeploymentIntent can execute.
 - Add Argo preview/diff evidence before approving deploy intent.
