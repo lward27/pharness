@@ -10,8 +10,9 @@
   during a smoke run; a missing fixture is a deployment failure to resolve.
 - An applied intent records its submission, then a terminal `succeeded` or
   `failed` execution receipt. Submission alone is not a successful mutation.
-- A terminal receipt is not a deployment approval. A matching satisfied
-  PipelineRunAnalysis remains required before a DeploymentIntent can approve.
+- A terminal receipt is not by itself a deployment approval. The executor also
+  persists a matching bounded PipelineRunAnalysis; its satisfied evidence is
+  required before a DeploymentIntent can approve.
 
 ### Run
 
@@ -34,8 +35,8 @@ scripts/pharness-tekton-execution-smoke.sh --apply
 ```
 
 The successful manifest reports `application_resources_changed: false`, the
-PipelineIntent identifier, the reused or created PipelineContract, and the
-actual PipelineRun identity.
+PipelineIntent identifier, the reused or created PipelineContract, the actual
+PipelineRun identity, and typed analysis artifact and observation identifiers.
 
 ## Console
 
@@ -62,8 +63,8 @@ states.
 
 ## Backlog
 
-- Add a console link from terminal evidence directly to its typed
-  PipelineRunAnalysis after that evidence is persisted automatically.
+- Add a console link from terminal evidence directly to the typed
+  PipelineRunAnalysis artifact and observation.
 - Add an operator-reviewed artifact retention workflow before deleting any
   completed fixture PipelineRuns.
 - Add a controlled failure variant that proves executor-loss reconciliation and

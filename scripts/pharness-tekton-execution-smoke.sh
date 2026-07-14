@@ -219,9 +219,19 @@ main() {
     "execution should dispatch a dedicated executor Job"
   wait_for_terminal_execution "$PIPELINE_INTENT_ID"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
-    '.execution_evidence.status == "succeeded" and .execution_evidence.pipeline_run.name != null' \
-    "executor must report durable successful evidence"
+    '.execution_evidence.status == "succeeded" and .execution_evidence.pipeline_run.name != null and .intent_json.evidence.status == "satisfied" and .intent_json.evidence.kind == "pipeline_run_analysis"' \
+    "executor must persist and attach a successful PipelineRunAnalysis"
   PIPELINE_RUN_NAME="$(jq -r '.execution_evidence.pipeline_run.name' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
+  PIPELINE_ANALYSIS_ARTIFACT_ID="$(jq -r '.intent_json.evidence.artifact_id' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
+  PIPELINE_ANALYSIS_OBSERVATION_ID="$(jq -r '.intent_json.evidence.observation_id' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
+  api_curl "$API_URL/api/artifacts/$PIPELINE_ANALYSIS_ARTIFACT_ID" | jq . >"$ARTIFACT_DIR/pipeline-analysis-artifact.json"
+  api_curl "$API_URL/api/observations/$PIPELINE_ANALYSIS_OBSERVATION_ID" | jq . >"$ARTIFACT_DIR/pipeline-analysis-observation.json"
+  assert_jq "$ARTIFACT_DIR/pipeline-analysis-artifact.json" \
+    '.kind == "pipeline_run_analysis"' \
+    "terminal analysis artifact must be typed"
+  assert_jq "$ARTIFACT_DIR/pipeline-analysis-observation.json" \
+    '.source == "tekton" and .kind == "pipeline_run_analysis" and .resource_name != null' \
+    "terminal analysis observation must be typed and resource-bound"
   kubectl -n "$TEKTON_NAMESPACE" get pipelinerun "$PIPELINE_RUN_NAME" -o json >"$ARTIFACT_DIR/pipeline-run.json"
   assert_jq "$ARTIFACT_DIR/pipeline-run.json" \
     '.status.conditions[] | select(.type == "Succeeded" and .status == "True")' \
@@ -231,8 +241,10 @@ main() {
     --arg pipeline_intent_id "$PIPELINE_INTENT_ID" \
     --arg pipeline_contract_id "$PIPELINE_CONTRACT_ID" \
     --arg pipeline_run_name "$PIPELINE_RUN_NAME" \
+    --arg pipeline_analysis_artifact_id "$PIPELINE_ANALYSIS_ARTIFACT_ID" \
+    --arg pipeline_analysis_observation_id "$PIPELINE_ANALYSIS_OBSERVATION_ID" \
     --arg namespace "$TEKTON_NAMESPACE" \
-    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},application_resources_changed:false}' \
+    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},pipeline_run_analysis:{artifact_id:$pipeline_analysis_artifact_id,observation_id:$pipeline_analysis_observation_id},application_resources_changed:false}' \
     >"$ARTIFACT_DIR/manifest.json"
   jq . "$ARTIFACT_DIR/manifest.json"
   log "Tekton execution smoke passed; artifacts in $ARTIFACT_ROOT/$RUN_NAME"

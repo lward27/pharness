@@ -472,11 +472,12 @@ failed and records the reconciliation in the audit log rather than leaving it
 executing. `PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS` controls the bounded worker's
 observation interval; the executor Job deadline remains the hard upper bound.
 
-Terminal execution evidence is a compact executor receipt, not a substitute
-for a reviewed `PipelineRunAnalysis`. A DeploymentIntent can be drafted before
-that analysis exists, but approval requires satisfied analysis evidence. When
-the executor ran a concrete PipelineRun, the attached analysis must match its
-namespace and name.
+Terminal execution evidence includes a compact executor receipt plus a bounded
+`PipelineRunAnalysis` for the exact PipelineRun and its TaskRuns. The executor
+does not read deployment, Argo CD, registry, logs, or secrets while collecting
+that analysis. A DeploymentIntent can be drafted before analysis exists, but
+approval requires satisfied analysis evidence. When the executor ran a
+concrete PipelineRun, the attached analysis must match its namespace and name.
 
 Each executable intent must also match exactly one active PipelineContract for
 its namespace and PipelineRef. Contracts are created by an operator through

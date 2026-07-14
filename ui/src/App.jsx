@@ -206,8 +206,10 @@ function buildTopology(flow) {
   const changeSet = flow.change_set;
   const pipelineIntent = flow.pipeline_intent;
   const pipelineEvidence = pipelineIntent?.execution_evidence;
-  const hasPipelineRunAnalysis = pipelineEvidence?.source === "observation"
-    && pipelineEvidence?.kind === "pipeline_run_analysis";
+  const attachedPipelineEvidence = pipelineIntent?.intent_json?.evidence;
+  const hasPipelineRunAnalysis = attachedPipelineEvidence?.source === "observation"
+    && attachedPipelineEvidence?.kind === "pipeline_run_analysis";
+  const pipelineEvidenceNode = hasPipelineRunAnalysis ? attachedPipelineEvidence : pipelineEvidence;
   const deploymentIntent = flow.deployment_intent;
   const release = flow.release;
   const registryEvidence = flow.registry_evidence;
@@ -245,10 +247,16 @@ function buildTopology(flow) {
       id: "pipeline-analysis",
       label: hasPipelineRunAnalysis ? "PipelineRunAnalysis" : "PipelineRun Receipt",
       icon: MagnifyingGlass,
-      status: lifecycleTone(pipelineEvidence?.status ?? pipelineIntent?.intent_json?.evidence?.status),
-      statusLabel: statusText(pipelineEvidence?.status ?? pipelineIntent?.intent_json?.evidence?.status, "Missing"),
-      meta: pipelineEvidence?.pipeline_run?.name ?? pipelineIntent?.intent_json?.evidence?.summary?.image_alignment_status ?? "no evidence",
-      subline: compactId(pipelineEvidence?.artifact_id ?? pipelineIntent?.intent_json?.evidence?.observation_id ?? "Tekton evidence"),
+      status: lifecycleTone(pipelineEvidenceNode?.status),
+      statusLabel: statusText(pipelineEvidenceNode?.status, "Missing"),
+      meta: hasPipelineRunAnalysis
+        ? pipelineEvidenceNode?.resource?.name ?? "no analysis"
+        : pipelineEvidenceNode?.pipeline_run?.name ?? "no evidence",
+      subline: compactId(
+        pipelineEvidenceNode?.artifact_id
+          ?? pipelineEvidenceNode?.observation_id
+          ?? "Tekton evidence",
+      ),
     },
     {
       id: "deployment-intent",
@@ -2573,11 +2581,14 @@ function detailRowsForNode(nodeId, flow) {
 
   if (nodeId === "pipeline-analysis") {
     const intent = flow.pipeline_intent;
-    const evidence = intent?.execution_evidence;
-    const pipelineRun = evidence?.pipeline_run;
+    const attachedEvidence = intent?.intent_json?.evidence;
+    const isAnalysis = attachedEvidence?.source === "observation"
+      && attachedEvidence?.kind === "pipeline_run_analysis";
+    const evidence = isAnalysis ? attachedEvidence : intent?.execution_evidence;
+    const pipelineRun = isAnalysis ? evidence?.resource : evidence?.pipeline_run;
     return [
       { label: "Flow root", value: `${flow.resource_kind}/${flow.resource_id}` },
-      { label: "Receipt", value: evidence?.artifact_id ?? "not recorded" },
+      { label: isAnalysis ? "Analysis artifact" : "Receipt", value: evidence?.artifact_id ?? "not recorded" },
       { label: "Status", value: statusText(evidence?.status, "Missing") },
       { label: "Source", value: evidence?.source ?? "not recorded" },
       { label: "PipelineRun", value: pipelineRun ? `${pipelineRun.namespace}/${pipelineRun.name}` : "not dispatched" },

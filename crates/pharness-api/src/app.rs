@@ -4313,6 +4313,12 @@ async fn internal_pipeline_intent_execution_outcome(
     } else {
         None
     };
+    let pipeline_analysis = match request.pipeline_run_analysis.as_ref() {
+        Some(analysis) => {
+            Some(persist_pipeline_run_analysis(&state.store, &intent, &request, analysis).await?)
+        }
+        None => None,
+    };
     let mut intent_json = intent.intent_json.clone();
     merge_pipeline_execution_state(
         &mut intent_json,
@@ -4326,6 +4332,9 @@ async fn internal_pipeline_intent_execution_outcome(
     );
     if let Some(evidence) = terminal_evidence {
         set_pipeline_execution_evidence(&mut intent_json, evidence);
+    }
+    if let Some(observation) = &pipeline_analysis {
+        set_pipeline_intent_evidence(&mut intent_json, observation);
     }
     let intent = state
         .store
@@ -4350,9 +4359,48 @@ async fn internal_pipeline_intent_execution_outcome(
             "pipeline_run_namespace": request.pipeline_run_namespace,
             "pipeline_run_name": request.pipeline_run_name,
             "error": request.error,
+            "analysis_observation_id": pipeline_analysis.as_ref().map(|observation| &observation.id),
+            "analysis_artifact_id": pipeline_analysis
+                .as_ref()
+                .and_then(|observation| observation.artifact_id.as_ref()),
+            "analysis_error": request.analysis_error,
         }),
     )
     .await?;
+    if let Some(observation) = pipeline_analysis {
+        append_pipeline_intent_audit_event(
+            &state.store,
+            &intent,
+            "pipeline_intent.evidence_attached",
+            Some("executor:tekton".to_string()),
+            Some("attached terminal PipelineRunAnalysis".to_string()),
+            json!({
+                "observation_id": observation.id,
+                "artifact_id": observation.artifact_id,
+                "evidence_status": intent.intent_json.pointer("/evidence/status"),
+                "resource": {
+                    "namespace": observation.resource_namespace,
+                    "kind": observation.resource_kind,
+                    "name": observation.resource_name,
+                },
+            }),
+        )
+        .await?;
+    } else if let Some(error) = request.analysis_error.as_deref() {
+        append_pipeline_intent_audit_event(
+            &state.store,
+            &intent,
+            "pipeline_intent.execution_analysis_failed",
+            Some("executor:tekton".to_string()),
+            Some(truncate_audit_text(error, 256)),
+            json!({
+                "execution_id": request.execution_id,
+                "pipeline_run_namespace": request.pipeline_run_namespace,
+                "pipeline_run_name": request.pipeline_run_name,
+            }),
+        )
+        .await?;
+    }
     Ok(Json(intent.into()))
 }
 
@@ -4402,12 +4450,16 @@ fn pipeline_intent_json_with_evidence(
     observation: &StoredObservation,
 ) -> Value {
     let mut intent_json = current.intent_json.clone();
+    set_pipeline_intent_evidence(&mut intent_json, observation);
+
+    intent_json
+}
+
+fn set_pipeline_intent_evidence(intent_json: &mut Value, observation: &StoredObservation) {
     let evidence = pipeline_intent_evidence_json(observation);
     if let Some(object) = intent_json.as_object_mut() {
         object.insert("evidence".to_string(), evidence);
     }
-
-    intent_json
 }
 
 fn pipeline_intent_evidence_json(observation: &StoredObservation) -> Value {
@@ -5294,6 +5346,125 @@ async fn persist_pipeline_execution_evidence(
         "pipeline_run": pipeline_run,
         "error": error,
     }))
+}
+
+async fn persist_pipeline_run_analysis(
+    store: &SqliteStore,
+    intent: &StoredPipelineIntent,
+    outcome: &PipelineIntentExecutionOutcomeRequest,
+    analysis: &Value,
+) -> Result<StoredObservation, ApiError> {
+    validate_terminal_pipeline_run_analysis(outcome, analysis)?;
+
+    let artifact_id = format!("art_pipeline_analysis_{}", outcome.execution_id);
+    let observation_id = format!("obs_pipeline_analysis_{}", outcome.execution_id);
+    let namespace = outcome.pipeline_run_namespace.clone();
+    let name = outcome.pipeline_run_name.clone();
+    let content = json!({
+        "source": "tekton",
+        "resource": "pipeline_run_analysis",
+        "namespace": namespace,
+        "name": name,
+        "analysis": analysis,
+    });
+    let artifact = match store.get_artifact(&artifact_id).await? {
+        Some(existing) => existing,
+        None => {
+            store
+                .create_artifact(CreateArtifact {
+                    id: artifact_id,
+                    session_id: intent.session_id.clone(),
+                    run_id: intent.run_id.clone(),
+                    kind: "pipeline_run_analysis".to_string(),
+                    label: format!(
+                        "PipelineRunAnalysis: {}",
+                        name.as_deref().unwrap_or(&outcome.execution_id)
+                    ),
+                    mime_type: Some("application/json".to_string()),
+                    path: None,
+                    content_text: None,
+                    content_json: Some(content),
+                })
+                .await?
+        }
+    };
+    match store.get_observation(&observation_id).await? {
+        Some(existing) => Ok(existing),
+        None => Ok(store
+            .create_observation(CreateObservation {
+                id: observation_id,
+                session_id: intent.session_id.clone(),
+                run_id: intent.run_id.clone(),
+                source: "tekton".to_string(),
+                kind: "pipeline_run_analysis".to_string(),
+                subject: name.clone().unwrap_or_else(|| outcome.execution_id.clone()),
+                summary: format!(
+                    "Terminal PipelineRunAnalysis for {}",
+                    name.as_deref().unwrap_or(&outcome.execution_id)
+                ),
+                resource_namespace: namespace.clone(),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: name.clone(),
+                resource_ref_json: Some(json!({
+                    "apiVersion": "tekton.dev/v1",
+                    "kind": "PipelineRun",
+                    "namespace": namespace,
+                    "name": name,
+                })),
+                artifact_id: Some(artifact.id),
+                data_json: json!({ "analysis": analysis }),
+            })
+            .await?),
+    }
+}
+
+fn validate_terminal_pipeline_run_analysis(
+    outcome: &PipelineIntentExecutionOutcomeRequest,
+    analysis: &Value,
+) -> Result<(), ApiError> {
+    if analysis.get("kind").and_then(Value::as_str) != Some("PipelineRunAnalysis") {
+        return Err(ApiError::bad_request(
+            "terminal execution analysis must be a PipelineRunAnalysis",
+        ));
+    }
+    if let Some(namespace) = outcome.pipeline_run_namespace.as_deref() {
+        if analysis
+            .pointer("/pipeline_run/namespace")
+            .and_then(Value::as_str)
+            != Some(namespace)
+        {
+            return Err(ApiError::bad_request(
+                "terminal execution analysis must match the PipelineRun namespace",
+            ));
+        }
+    }
+    if let Some(name) = outcome.pipeline_run_name.as_deref() {
+        if analysis
+            .pointer("/pipeline_run/name")
+            .and_then(Value::as_str)
+            != Some(name)
+        {
+            return Err(ApiError::bad_request(
+                "terminal execution analysis must match the PipelineRun name",
+            ));
+        }
+    }
+    let expected_status = match outcome.status.as_str() {
+        "completed" => "succeeded",
+        "failed" => "failed",
+        _ => {
+            return Err(ApiError::bad_request(
+                "terminal execution analysis requires a completed or failed outcome",
+            ))
+        }
+    };
+    if analysis.pointer("/summary/status").and_then(Value::as_str) != Some(expected_status) {
+        return Err(ApiError::bad_request(
+            "terminal execution analysis status must match the executor outcome",
+        ));
+    }
+
+    Ok(())
 }
 
 fn pipeline_run_name(manifest: &Value) -> Option<&str> {
@@ -9365,17 +9536,18 @@ mod tests {
         list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
         list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
         list_run_observations, list_runs, list_work_plans, merge_pipeline_execution_state,
-        parse_last_event_id, persist_pipeline_execution_evidence, policy_json, revise_change_set,
-        revise_work_plan, revoke_permission_grant, router, run_policy, run_summary,
-        satisfy_approval_gate, stream_start_seq, tekton_execution_spec, transition_change_set,
+        parse_last_event_id, persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
+        policy_json, revise_change_set, revise_work_plan, revoke_permission_grant, router,
+        run_policy, run_summary, satisfy_approval_gate, set_pipeline_intent_evidence,
+        stream_start_seq, tekton_execution_spec, transition_change_set,
         transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
         transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
-        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
-        ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
-        ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery, ListObservationsQuery,
-        ListPermissionGrantsQuery, ListPipelineIntentsQuery, ListRegistryEvidenceQuery,
-        ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
-        StreamRunEventsQuery,
+        validate_terminal_pipeline_run_analysis, work_plan_flow, work_plan_readiness, AppState,
+        ApprovalGateSummaryQuery, ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery,
+        ListAuditEventsQuery, ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
+        ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
+        ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
+        ListWorkPlansQuery, StreamRunEventsQuery,
     };
     use crate::dispatch::RunDispatcher;
     use crate::dto::{
@@ -14405,6 +14577,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             pipeline_run_namespace: Some("tekton-pipelines".to_string()),
             pipeline_run_name: Some("pharness-smoke".to_string()),
             error: None,
+            pipeline_run_analysis: Some(json!({
+                "kind": "PipelineRunAnalysis",
+                "pipeline_run": {
+                    "namespace": "tekton-pipelines",
+                    "name": "pharness-smoke"
+                },
+                "summary": {
+                    "status": "succeeded",
+                    "failed_task_run_count": 0,
+                    "running_task_run_count": 0
+                }
+            })),
+            analysis_error: None,
         };
 
         let first = persist_pipeline_execution_evidence(
@@ -14449,6 +14634,50 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .kind,
             "pipeline_run_execution"
         );
+
+        let analysis = persist_pipeline_run_analysis(
+            &state.store,
+            &intent,
+            &outcome,
+            outcome.pipeline_run_analysis.as_ref().unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(analysis.kind, "pipeline_run_analysis");
+        assert_eq!(analysis.resource_name.as_deref(), Some("pharness-smoke"));
+        let mut intent_json = intent.intent_json.clone();
+        set_pipeline_intent_evidence(&mut intent_json, &analysis);
+        assert_eq!(
+            intent_json.pointer("/evidence/status"),
+            Some(&json!("satisfied"))
+        );
+    }
+
+    #[test]
+    fn terminal_analysis_must_match_the_executor_pipeline_run() {
+        let outcome = PipelineIntentExecutionOutcomeRequest {
+            execution_id: "pexec_analysis_mismatch".to_string(),
+            status: "completed".to_string(),
+            pipeline_run_namespace: Some("tekton-pipelines".to_string()),
+            pipeline_run_name: Some("expected-run".to_string()),
+            error: None,
+            pipeline_run_analysis: None,
+            analysis_error: None,
+        };
+        let error = validate_terminal_pipeline_run_analysis(
+            &outcome,
+            &json!({
+                "kind": "PipelineRunAnalysis",
+                "pipeline_run": {
+                    "namespace": "tekton-pipelines",
+                    "name": "other-run"
+                },
+                "summary": { "status": "succeeded" }
+            }),
+        )
+        .unwrap_err();
+
+        assert!(error.message.contains("PipelineRun name"));
     }
 
     #[test]

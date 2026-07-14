@@ -36,10 +36,10 @@
   It reserves `PipelineRunAnalysis` for a separately attached typed Tekton
   analysis, which prevents the console from implying that a terminal receipt
   satisfied the later deployment-evidence requirement.
+- The execution smoke now requires a typed `pipeline_run_analysis` artifact and
+  observation attached to the PipelineIntent with `satisfied` evidence status.
 
 ## Backlog
 
-- Persist a typed `PipelineRunAnalysis` after the executor callback and attach
-  it to the PipelineIntent automatically once analysis semantics are finalized.
 - Add a retention policy for completed disposable PipelineRuns once durable
   evidence export has an operator-approved archival path.

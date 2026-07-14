@@ -25,9 +25,9 @@
   successful callback returns the intent to `approved` and records
   `pipeline_run_succeeded`; a failed callback marks it `failed`. This keeps
   downstream approval semantics stable without losing execution history.
-- Add `pharness-tekton-runner` with namespaced PipelineRun rights only. The API
-  keeps permission only to create executor Jobs in its own namespace; the
-  normal agent worker remains read-only.
+- Add `pharness-tekton-runner` with namespaced PipelineRun and TaskRun rights
+  only. The API keeps permission only to create executor Jobs in its own
+  namespace; the normal agent worker remains read-only.
 - Reconcile executor Jobs every 30 seconds. A failed Job, a successful Job
   without a callback, or a deleted Job for an execution already dispatched
   changes that exact PipelineIntent to `failed` and appends
@@ -48,6 +48,11 @@
   `pipeline_run_execution` observation for each terminal executor callback.
   They contain only execution identity, terminal status, PipelineRun identity,
   and bounded error text; no Pod logs or full Kubernetes objects are retained.
+- After a terminal callback, collect a bounded `PipelineRunAnalysis` from that
+  exact PipelineRun and its TaskRuns. Persist it as a typed artifact and
+  observation, then attach it to the PipelineIntent as formal deployment
+  evidence. Analysis collection failure is audited and leaves evidence missing;
+  it does not rewrite a successful PipelineRun as a failed build.
 - A DeploymentIntent may be proposed without evidence, but its approval needs
   satisfied `PipelineRunAnalysis` evidence. If Pharness executed the PipelineRun,
   that analysis must match the recorded namespace and name. The terminal receipt

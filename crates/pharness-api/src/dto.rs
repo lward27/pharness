@@ -795,6 +795,8 @@ pub struct PipelineIntentExecutionOutcomeRequest {
     pub pipeline_run_namespace: Option<String>,
     pub pipeline_run_name: Option<String>,
     pub error: Option<String>,
+    pub pipeline_run_analysis: Option<serde_json::Value>,
+    pub analysis_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

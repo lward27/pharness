@@ -36,6 +36,7 @@ pub struct ReadOnlyClusterTools {
     prometheus_url: Option<String>,
     loki_url: Option<String>,
     registry_aliases: RegistryAliases,
+    include_related_resource_lookups: bool,
     timeout_ms: u64,
     max_output_bytes: usize,
     http: reqwest::Client,
@@ -49,6 +50,7 @@ impl Default for ReadOnlyClusterTools {
             prometheus_url: None,
             loki_url: None,
             registry_aliases: RegistryAliases::default(),
+            include_related_resource_lookups: true,
             timeout_ms: DEFAULT_TIMEOUT_MS,
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
             http: reqwest::Client::new(),
@@ -68,6 +70,7 @@ impl ReadOnlyClusterTools {
             registry_aliases: std::env::var("PHARNESS_REGISTRY_ALIASES")
                 .map(|value| RegistryAliases::parse(&value))
                 .unwrap_or_default(),
+            include_related_resource_lookups: true,
             timeout_ms: std::env::var("PHARNESS_CLUSTER_TOOL_TIMEOUT_MS")
                 .ok()
                 .and_then(|value| value.parse().ok())
@@ -107,6 +110,15 @@ impl ReadOnlyClusterTools {
 
     pub fn with_registry_aliases(mut self, aliases: impl AsRef<str>) -> Self {
         self.registry_aliases = RegistryAliases::parse(aliases.as_ref());
+        self
+    }
+
+    /// Restricts Tekton analysis to the PipelineRun and its TaskRuns.
+    ///
+    /// This is used by the executor, whose service account deliberately lacks
+    /// deployment and Argo CD read access.
+    pub fn without_related_resource_lookups(mut self) -> Self {
+        self.include_related_resource_lookups = false;
         self
     }
 
@@ -298,14 +310,21 @@ impl ReadOnlyClusterTools {
         let task_output = self.run_command(&self.kubectl_bin, &task_args).await?;
         let mut task_runs = parse_json_output(&task_output.stdout)?;
         redact_json(&mut task_runs);
-        let deployment_lookup = self.lookup_pipeline_deployment(&pipeline_run).await;
+        let deployment_lookup = if self.include_related_resource_lookups {
+            self.lookup_pipeline_deployment(&pipeline_run).await
+        } else {
+            RelatedResourceLookup::skipped("Related deployment lookup is disabled")
+        };
         let deployment_command = deployment_lookup
             .command
             .as_ref()
             .map(|args| command_summary(&self.kubectl_bin, args));
-        let argo_lookup = self
-            .lookup_related_argo_application(&deployment_lookup.observation)
-            .await;
+        let argo_lookup = if self.include_related_resource_lookups {
+            self.lookup_related_argo_application(&deployment_lookup.observation)
+                .await
+        } else {
+            RelatedResourceLookup::skipped("Related Argo CD lookup is disabled")
+        };
         let argo_command = argo_lookup
             .command
             .as_ref()

@@ -9,7 +9,9 @@
 
 use anyhow::Context;
 use pharness_config::ApiRuntimeConfig;
-use pharness_core::{AgentEvent, CancellationFlag};
+use pharness_core::{
+    AgentAction, AgentEvent, CancellationFlag, ReadOnlyClusterTools, ToolExecutor,
+};
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec};
 use std::sync::Arc;
@@ -136,20 +138,20 @@ async fn execute_tekton_trigger() -> anyhow::Result<()> {
             .context("failed to report submitted PipelineRun to api")?;
 
             let outcome = match wait_for_pipeline_run(&namespace, &name, poll_interval).await {
-                Ok(PipelineRunTerminal::Succeeded) => serde_json::json!({
-                    "execution_id": execution_id,
-                    "status": "completed",
-                    "pipeline_run_namespace": namespace,
-                    "pipeline_run_name": name,
-                    "error": null,
-                }),
-                Ok(PipelineRunTerminal::Failed(reason)) => serde_json::json!({
-                    "execution_id": execution_id,
-                    "status": "failed",
-                    "pipeline_run_namespace": namespace,
-                    "pipeline_run_name": name,
-                    "error": reason,
-                }),
+                Ok(PipelineRunTerminal::Succeeded) => {
+                    terminal_tekton_outcome(&execution_id, "completed", &namespace, &name, None)
+                        .await
+                }
+                Ok(PipelineRunTerminal::Failed(reason)) => {
+                    terminal_tekton_outcome(
+                        &execution_id,
+                        "failed",
+                        &namespace,
+                        &name,
+                        Some(reason),
+                    )
+                    .await
+                }
                 Err(error) => {
                     tracing::error!(pipeline_intent_id = %pipeline_intent_id, %error, "Tekton PipelineRun observation failed");
                     serde_json::json!({
@@ -183,6 +185,55 @@ async fn execute_tekton_trigger() -> anyhow::Result<()> {
             .context("failed to report PipelineRun creation failure to api")
         }
     }
+}
+
+async fn terminal_tekton_outcome(
+    execution_id: &str,
+    status: &str,
+    namespace: &str,
+    name: &str,
+    error: Option<String>,
+) -> serde_json::Value {
+    let mut outcome = serde_json::json!({
+        "execution_id": execution_id,
+        "status": status,
+        "pipeline_run_namespace": namespace,
+        "pipeline_run_name": name,
+        "error": error,
+    });
+
+    match analyze_terminal_pipeline_run(namespace, name).await {
+        Ok(analysis) => outcome["pipeline_run_analysis"] = analysis,
+        Err(error) => {
+            tracing::warn!(namespace, name, %error, "terminal PipelineRun analysis was not persisted");
+            outcome["analysis_error"] = serde_json::Value::String(
+                "unable to collect bounded PipelineRun analysis".to_string(),
+            );
+        }
+    }
+
+    outcome
+}
+
+async fn analyze_terminal_pipeline_run(
+    namespace: &str,
+    name: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let tools = ReadOnlyClusterTools::from_env().without_related_resource_lookups();
+    let result = tools
+        .execute(&AgentAction::TektonAnalyzePipelineRun {
+            id: "executor.pipeline_run_analysis".into(),
+            reason: "persist terminal execution evidence".to_string(),
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+        })
+        .await
+        .context("failed to collect terminal PipelineRun analysis")?;
+    result
+        .content
+        .get("analysis")
+        .cloned()
+        .context("terminal PipelineRun analysis result was missing analysis data")
 }
 
 #[derive(Debug, PartialEq, Eq)]
