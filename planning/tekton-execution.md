@@ -57,6 +57,11 @@
   satisfied `PipelineRunAnalysis` evidence. If Pharness executed the PipelineRun,
   that analysis must match the recorded namespace and name. The terminal receipt
   alone cannot authorize deployment.
+- A PipelineIntent may declare `deployment_handoff` with the exact target
+  environment, namespace, and Argo CD Application. After a successful terminal
+  analysis evaluates as satisfied, Pharness creates one proposed
+  DeploymentIntent and records both sides of the handoff in the audit log. The
+  handoff does not approve, observe, or sync the Application.
 - Require one active PipelineContract before a PipelineIntent becomes ready for
   execution. The contract is operator-managed durable policy data and validates
   parameter shapes and workspace bindings before a manifest is dispatched.
@@ -78,6 +83,9 @@
   data; it is not yet reconciled from the live Pipeline resource.
 - Add a disposable in-cluster PipelineRun apply smoke. Do not use a production
   pipeline for the first mutation verification.
+- Add a DeploymentContract and separate Argo CD executor only after a declared
+  handoff has been reviewed and approved. Do not reuse the Tekton executor or
+  broaden its service account.
 - Surface execution preflight, manifest, executor Job, PipelineRun, and callback
   audit state in the console flow instead of showing them only in JSON.
 - Consider a separate watcher service only after real PipelineRun durations

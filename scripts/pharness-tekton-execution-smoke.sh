@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Executes the narrowest production-shaped delivery path available in V2:
 # an audited SDLC chain -> approved PipelineIntent -> executor Job -> inert
-# Tekton PipelineRun -> durable terminal evidence. It never accesses or
-# changes application resources, including the finance experiments.
+# Tekton PipelineRun -> durable terminal evidence -> proposed deployment
+# handoff. It never accesses or changes application resources, including the
+# finance experiments.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${PHARNESS_NAMESPACE:-pharness}"
@@ -189,7 +190,7 @@ main() {
     "change-set-envelope.json"
 
   post_json "/api/pipeline-intents/from-change-set" \
-    "$(jq -cn --arg change_set_id "$CHANGE_SET_ID" --arg namespace "$TEKTON_NAMESPACE" --arg pipeline_ref "$PIPELINE_NAME" '{change_set_id:$change_set_id,title:"Execute inert Tekton fixture",summary:"No-op pipeline that only emits a marker",risk_level:"medium",intent_kind:"build_test_package",intent_json:{execution:{enabled:true,namespace:$namespace,pipeline_ref:$pipeline_ref,production_impacting:false,params:{},workspaces:[]}},actor:"tekton-e2e-smoke",reason:"create bounded execution smoke"}')" \
+    "$(jq -cn --arg change_set_id "$CHANGE_SET_ID" --arg namespace "$TEKTON_NAMESPACE" --arg pipeline_ref "$PIPELINE_NAME" '{change_set_id:$change_set_id,title:"Execute inert Tekton fixture",summary:"No-op pipeline that only emits a marker",risk_level:"medium",intent_kind:"build_test_package",intent_json:{execution:{enabled:true,namespace:$namespace,pipeline_ref:$pipeline_ref,production_impacting:false,params:{},workspaces:[]},deployment_handoff:{target_environment:"homelab",target_namespace:"pharness",argo_application:"pharness",summary:"Proposed handoff from inert Tekton fixture only"}},actor:"tekton-e2e-smoke",reason:"create bounded execution smoke"}')" \
     "pipeline-intent.json"
   PIPELINE_INTENT_ID="$(jq -r '.pipeline_intent.id' "$ARTIFACT_DIR/pipeline-intent.json")"
   post_json "/api/pipeline-intents/$PIPELINE_INTENT_ID/transition" \
@@ -232,6 +233,15 @@ main() {
   assert_jq "$ARTIFACT_DIR/pipeline-analysis-observation.json" \
     '.source == "tekton" and .kind == "pipeline_run_analysis" and .resource_name != null' \
     "terminal analysis observation must be typed and resource-bound"
+  api_curl "$API_URL/api/deployment-intents?pipeline_intent_id=$PIPELINE_INTENT_ID&limit=10" | jq . >"$ARTIFACT_DIR/deployment-handoff.json"
+  assert_jq "$ARTIFACT_DIR/deployment-handoff.json" \
+    '.count == 1 and .deployment_intents[0].status == "proposed" and .deployment_intents[0].target_environment == "homelab" and .deployment_intents[0].target_namespace == "pharness" and .deployment_intents[0].argo_application == "pharness" and .deployment_intents[0].intent_json.pipeline_evidence.status == "satisfied"' \
+    "terminal analysis must create one proposed declared DeploymentIntent handoff"
+  DEPLOYMENT_INTENT_ID="$(jq -r '.deployment_intents[0].id' "$ARTIFACT_DIR/deployment-handoff.json")"
+  api_curl "$API_URL/api/audit-events?resource_kind=pipeline_intent&resource_id=$PIPELINE_INTENT_ID&limit=50" | jq . >"$ARTIFACT_DIR/pipeline-intent-audit.json"
+  assert_jq "$ARTIFACT_DIR/pipeline-intent-audit.json" \
+    '[.events[] | select(.kind == "pipeline_intent.deployment_handoff_created")] | length == 1' \
+    "handoff creation must be auditable from its PipelineIntent"
   kubectl -n "$TEKTON_NAMESPACE" get pipelinerun "$PIPELINE_RUN_NAME" -o json >"$ARTIFACT_DIR/pipeline-run.json"
   assert_jq "$ARTIFACT_DIR/pipeline-run.json" \
     '.status.conditions[] | select(.type == "Succeeded" and .status == "True")' \
@@ -243,8 +253,9 @@ main() {
     --arg pipeline_run_name "$PIPELINE_RUN_NAME" \
     --arg pipeline_analysis_artifact_id "$PIPELINE_ANALYSIS_ARTIFACT_ID" \
     --arg pipeline_analysis_observation_id "$PIPELINE_ANALYSIS_OBSERVATION_ID" \
+    --arg deployment_intent_id "$DEPLOYMENT_INTENT_ID" \
     --arg namespace "$TEKTON_NAMESPACE" \
-    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},pipeline_run_analysis:{artifact_id:$pipeline_analysis_artifact_id,observation_id:$pipeline_analysis_observation_id},application_resources_changed:false}' \
+    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},pipeline_run_analysis:{artifact_id:$pipeline_analysis_artifact_id,observation_id:$pipeline_analysis_observation_id},deployment_handoff:{deployment_intent_id:$deployment_intent_id,status:"proposed"},application_resources_changed:false}' \
     >"$ARTIFACT_DIR/manifest.json"
   jq . "$ARTIFACT_DIR/manifest.json"
   log "Tekton execution smoke passed; artifacts in $ARTIFACT_ROOT/$RUN_NAME"

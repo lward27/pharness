@@ -38,8 +38,13 @@
   satisfied the later deployment-evidence requirement.
 - The execution smoke now requires a typed `pipeline_run_analysis` artifact and
   observation attached to the PipelineIntent with `satisfied` evidence status.
+- The fixture PipelineIntent declares the Pharness Argo CD target as a test
+  handoff only. A successful terminal analysis must create exactly one proposed
+  DeploymentIntent, but the smoke never approves it or mutates the Application.
 
 ## Backlog
 
 - Add a retention policy for completed disposable PipelineRuns once durable
   evidence export has an operator-approved archival path.
+- Add an explicit DeploymentContract and separate Argo CD execution smoke
+  before allowing the generated DeploymentIntent to request a sync.

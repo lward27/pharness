@@ -479,6 +479,13 @@ that analysis. A DeploymentIntent can be drafted before analysis exists, but
 approval requires satisfied analysis evidence. When the executor ran a
 concrete PipelineRun, the attached analysis must match its namespace and name.
 
+When the PipelineIntent includes a declared `deployment_handoff`, a successful
+matching analysis can create one **proposed** DeploymentIntent for the exact
+environment, namespace, and Argo CD Application. This is a durable planning
+handoff, not a sync request: it does not approve or mutate the Application.
+Deployment execution will require its own reviewed contract and executor
+identity.
+
 Each executable intent must also match exactly one active PipelineContract for
 its namespace and PipelineRef. Contracts are created by an operator through
 the API or CLI and enumerate the permitted parameter shapes and workspace

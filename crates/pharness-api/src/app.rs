@@ -4401,7 +4401,166 @@ async fn internal_pipeline_intent_execution_outcome(
         )
         .await?;
     }
+
+    if request.status == "completed" {
+        match create_declared_deployment_handoff(&state, &intent).await {
+            Ok(Some(deployment_intent)) => {
+                append_pipeline_intent_audit_event(
+                    &state.store,
+                    &intent,
+                    "pipeline_intent.deployment_handoff_created",
+                    Some("executor:tekton".to_string()),
+                    Some(
+                        "created proposed DeploymentIntent from terminal build evidence"
+                            .to_string(),
+                    ),
+                    json!({
+                        "deployment_intent_id": deployment_intent.id,
+                        "target_environment": deployment_intent.target_environment,
+                        "target_namespace": deployment_intent.target_namespace,
+                        "argo_application": deployment_intent.argo_application,
+                    }),
+                )
+                .await?;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                append_pipeline_intent_audit_event(
+                    &state.store,
+                    &intent,
+                    "pipeline_intent.deployment_handoff_failed",
+                    Some("executor:tekton".to_string()),
+                    Some(truncate_audit_text(&error.message, 256)),
+                    json!({ "execution_id": request.execution_id }),
+                )
+                .await?;
+            }
+        }
+    }
     Ok(Json(intent.into()))
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PipelineDeploymentHandoffSpec {
+    target_environment: String,
+    target_namespace: String,
+    argo_application: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    risk_level: Option<String>,
+}
+
+async fn create_declared_deployment_handoff(
+    state: &AppState,
+    pipeline_intent: &StoredPipelineIntent,
+) -> Result<Option<StoredDeploymentIntent>, ApiError> {
+    let Some(raw_handoff) = pipeline_intent.intent_json.get("deployment_handoff") else {
+        return Ok(None);
+    };
+    let handoff = serde_json::from_value::<PipelineDeploymentHandoffSpec>(raw_handoff.clone())
+        .map_err(|error| {
+            ApiError::bad_request(format!("pipeline deployment_handoff is invalid: {error}"))
+        })?;
+    validate_pipeline_deployment_handoff(&handoff)?;
+
+    if pipeline_intent
+        .intent_json
+        .pointer("/evidence/status")
+        .and_then(Value::as_str)
+        != Some("satisfied")
+    {
+        return Err(ApiError::conflict(
+            "pipeline deployment_handoff requires satisfied PipelineRunAnalysis evidence",
+        ));
+    }
+    if state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+        .await?
+        .is_some()
+    {
+        return Ok(None);
+    }
+
+    let title = clean_optional_text(handoff.title)
+        .unwrap_or_else(|| format!("DeploymentIntent: {}", pipeline_intent.title));
+    let summary = clean_optional_text(handoff.summary).unwrap_or_else(|| {
+        format!(
+            "Proposed Argo CD sync for {} after terminal PipelineRunAnalysis",
+            handoff.argo_application
+        )
+    });
+    let risk_level = clean_optional_text(handoff.risk_level)
+        .unwrap_or_else(|| pipeline_intent.risk_level.clone());
+    let intent_json = deployment_intent_json(
+        pipeline_intent,
+        "argo_sync_deploy",
+        Some(&handoff.target_environment),
+        Some(&handoff.target_namespace),
+        Some(&handoff.argo_application),
+        None,
+    )?;
+    let deployment_intent = state
+        .store
+        .create_deployment_intent(CreateDeploymentIntent {
+            id: format!("dint_{}", unique_suffix()),
+            pipeline_intent_id: pipeline_intent.id.clone(),
+            change_set_id: pipeline_intent.change_set_id.clone(),
+            work_plan_id: pipeline_intent.work_plan_id.clone(),
+            remediation_plan_id: pipeline_intent.remediation_plan_id.clone(),
+            incident_id: pipeline_intent.incident_id.clone(),
+            session_id: pipeline_intent.session_id.clone(),
+            run_id: pipeline_intent.run_id.clone(),
+            status: "proposed".to_string(),
+            title,
+            summary,
+            risk_level,
+            intent_kind: "argo_sync_deploy".to_string(),
+            target_environment: Some(handoff.target_environment),
+            target_namespace: Some(handoff.target_namespace),
+            argo_application: Some(handoff.argo_application),
+            resource_namespace: pipeline_intent.resource_namespace.clone(),
+            resource_kind: pipeline_intent.resource_kind.clone(),
+            resource_name: pipeline_intent.resource_name.clone(),
+            intent_json,
+        })
+        .await?;
+    append_deployment_intent_audit_event(
+        &state.store,
+        &deployment_intent,
+        "deployment_intent.auto_proposed",
+        Some("executor:tekton".to_string()),
+        Some("created from declared terminal PipelineIntent handoff".to_string()),
+        json!({
+            "source": "pipeline_intent.deployment_handoff",
+            "pipeline_intent_id": pipeline_intent.id,
+            "pipeline_evidence_status": pipeline_intent.intent_json.pointer("/evidence/status"),
+            "execution_evidence": pipeline_intent.intent_json.get("execution_evidence"),
+        }),
+    )
+    .await?;
+    Ok(Some(deployment_intent))
+}
+
+fn validate_pipeline_deployment_handoff(
+    handoff: &PipelineDeploymentHandoffSpec,
+) -> Result<(), ApiError> {
+    validate_kubernetes_name(
+        "deployment_handoff.target_environment",
+        &handoff.target_environment,
+    )?;
+    validate_kubernetes_name(
+        "deployment_handoff.target_namespace",
+        &handoff.target_namespace,
+    )?;
+    validate_kubernetes_name(
+        "deployment_handoff.argo_application",
+        &handoff.argo_application,
+    )
 }
 
 fn validate_pipeline_intent_observation(
@@ -9522,14 +9681,15 @@ mod tests {
         approval_gate_summary, approval_summary, attach_deployment_intent_evidence,
         attach_pipeline_intent_evidence, attach_release_evidence, build_pipeline_run_manifest,
         cancel_run, change_set_flow, change_set_readiness, config_effective, create_change_set,
-        create_change_set_trusted_envelope, create_deployment_intent_from_pipeline_intent,
-        create_incident, create_observation, create_pipeline_intent_from_change_set,
-        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
-        create_release_from_deployment_intent, create_remediation_plan, create_run,
-        create_work_plan_from_remediation_plan, create_work_plan_trusted_envelope,
-        decide_run_approval, deny_approval, ensure_pipeline_evidence_ready_for_deployment,
-        execute_capability, execution_matches_pipeline_contract, get_approval, get_approval_gate,
-        get_artifact, get_deployment_intent, get_incident, get_observation, get_permission_grant,
+        create_change_set_trusted_envelope, create_declared_deployment_handoff,
+        create_deployment_intent_from_pipeline_intent, create_incident, create_observation,
+        create_pipeline_intent_from_change_set, create_registry_evidence_from_registry_inspection,
+        create_registry_evidence_from_release, create_release_from_deployment_intent,
+        create_remediation_plan, create_run, create_work_plan_from_remediation_plan,
+        create_work_plan_trusted_envelope, decide_run_approval, deny_approval,
+        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
+        execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
+        get_deployment_intent, get_incident, get_observation, get_permission_grant,
         get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
         get_run_diff, get_run_events, get_work_plan, last_event_seq, list_approval_gates,
         list_approvals, list_audit_events, list_change_sets, list_deployment_intents,
@@ -9542,12 +9702,13 @@ mod tests {
         stream_start_seq, tekton_execution_spec, transition_change_set,
         transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
         transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
-        validate_terminal_pipeline_run_analysis, work_plan_flow, work_plan_readiness, AppState,
-        ApprovalGateSummaryQuery, ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery,
-        ListAuditEventsQuery, ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
-        ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
-        ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
-        ListWorkPlansQuery, StreamRunEventsQuery,
+        validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis,
+        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
+        ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
+        ListChangeSetsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery, ListObservationsQuery,
+        ListPermissionGrantsQuery, ListPipelineIntentsQuery, ListRegistryEvidenceQuery,
+        ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
+        PipelineDeploymentHandoffSpec, StreamRunEventsQuery,
     };
     use crate::dispatch::RunDispatcher;
     use crate::dto::{
@@ -14651,6 +14812,148 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             intent_json.pointer("/evidence/status"),
             Some(&json!("satisfied"))
         );
+    }
+
+    #[tokio::test]
+    async fn terminal_pipeline_handoff_creates_one_proposed_deployment_intent() {
+        let state = test_state().await;
+        seed_approved_release(&state).await;
+        let session_id = SessionId::new("ses_registry_inspection");
+        let run_id = RunId::new("run_registry_inspection");
+        state
+            .store
+            .create_remediation_plan(CreateRemediationPlan {
+                id: "rplan_deployment_handoff".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Deployment handoff remediation".to_string(),
+                summary: "handoff fixture".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: "wplan_deployment_handoff".to_string(),
+                remediation_plan_id: "rplan_deployment_handoff".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Deployment handoff work".to_string(),
+                summary: "handoff fixture".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: "cset_deployment_handoff".to_string(),
+                work_plan_id: "wplan_deployment_handoff".to_string(),
+                remediation_plan_id: "rplan_deployment_handoff".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Declared deployment handoff".to_string(),
+                summary: "handoff fixture".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "hash_deployment_handoff".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let pipeline_intent = state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: "pint_deployment_handoff".to_string(),
+                change_set_id: "cset_deployment_handoff".to_string(),
+                work_plan_id: "wplan_deployment_handoff".to_string(),
+                remediation_plan_id: "rplan_deployment_handoff".to_string(),
+                incident_id: "inc_registry_inspection".to_string(),
+                session_id,
+                run_id: Some(run_id),
+                status: "approved".to_string(),
+                title: "Build checkout-api".to_string(),
+                summary: "terminal build evidence attached".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("checkout-api".to_string()),
+                intent_json: json!({
+                    "evidence": { "status": "satisfied" },
+                    "deployment_handoff": {
+                        "target_environment": "dev",
+                        "target_namespace": "apps-dev",
+                        "argo_application": "checkout-api"
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+
+        let created = create_declared_deployment_handoff(&state, &pipeline_intent)
+            .await
+            .unwrap()
+            .expect("declared handoff should create a deployment intent");
+        let duplicate = create_declared_deployment_handoff(&state, &pipeline_intent)
+            .await
+            .unwrap();
+
+        assert_eq!(created.status, "proposed");
+        assert_eq!(created.target_environment.as_deref(), Some("dev"));
+        assert_eq!(created.target_namespace.as_deref(), Some("apps-dev"));
+        assert_eq!(created.argo_application.as_deref(), Some("checkout-api"));
+        assert!(duplicate.is_none());
+        let audit_events = state
+            .store
+            .list_audit_events(Some("deployment_intent"), Some(&created.id), None, 10)
+            .await
+            .unwrap();
+        assert!(audit_events
+            .iter()
+            .any(|event| event.kind == "deployment_intent.auto_proposed"));
+    }
+
+    #[test]
+    fn pipeline_deployment_handoff_requires_exact_target_identifiers() {
+        let valid = PipelineDeploymentHandoffSpec {
+            target_environment: "dev".to_string(),
+            target_namespace: "apps-dev".to_string(),
+            argo_application: "checkout-api".to_string(),
+            title: None,
+            summary: None,
+            risk_level: None,
+        };
+        assert!(validate_pipeline_deployment_handoff(&valid).is_ok());
+
+        let invalid = PipelineDeploymentHandoffSpec {
+            target_environment: "dev".to_string(),
+            target_namespace: "apps-dev".to_string(),
+            argo_application: "checkout api".to_string(),
+            title: None,
+            summary: None,
+            risk_level: None,
+        };
+        assert!(validate_pipeline_deployment_handoff(&invalid).is_err());
     }
 
     #[test]
