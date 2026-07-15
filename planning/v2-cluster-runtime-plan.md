@@ -1,5 +1,9 @@
 # V2 Cluster Runtime Plan (Phase 10 / V2 Alpha)
 
+> Historical V2 delivery plan. The API/UI and isolated worker Job runtime are
+> now deployed. Current autonomous-SDLC status and follow-on work live in
+> [autonomous-sdlc-roadmap.md](autonomous-sdlc-roadmap.md).
+
 ## Why This Is The Next Phase
 
 - Phases 0 through 7 are complete and verified by `scripts/pharness-e2e-smoke.sh` (deterministic, model, and cluster modes).

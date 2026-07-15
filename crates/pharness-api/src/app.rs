@@ -14,28 +14,30 @@ use crate::dto::{
     CreateRegistryEvidenceFromInspectionResponse, CreateRegistryEvidenceFromReleaseRequest,
     CreateRegistryEvidenceResponse, CreateReleaseFromDeploymentIntentRequest,
     CreateReleaseResponse, CreateRemediationPlanRequest, CreateRunRequest,
-    CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse,
-    DecideApprovalGateRequest, DecideApprovalGateResponse, DecideApprovalRequest,
-    DecideApprovalResponse, DeploymentContractResponse, DeploymentContractsResponse,
-    DeploymentIntentResponse, DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest,
-    ExecuteCapabilityResponse, ExecutePipelineIntentRequest, ExecutePipelineIntentResponse,
-    FileChangeResponse, IncidentResponse, IncidentsResponse, ObservationResponse,
-    ObservationsResponse, PermissionGrantResponse, PermissionGrantsResponse,
-    PipelineContractResponse, PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest,
-    PipelineIntentResponse, PipelineIntentsResponse, RegistryEvidenceListResponse,
-    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
-    RemediationPlansResponse, ReplacePipelineContractRequest, ReplacePipelineContractResponse,
-    ReviewApprovalRequest, ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest,
-    ReviseWorkPlanResponse, RevokePermissionGrantRequest, RunDiffResponse, RunResponse,
-    RunSummaryResponse, RunsResponse, SdlcFlowResponse, SdlcReadinessFinding,
-    SdlcReadinessGateSummary, SdlcReadinessGrantSummary, SdlcReadinessResponse,
-    TransitionChangeSetRequest, TransitionChangeSetResponse, TransitionDeploymentContractRequest,
-    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
-    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
-    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
-    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
+    CreateTrustedEnvelopeRequest, CreateWorkItemRequest, CreateWorkPlanFromRemediationPlanRequest,
+    CreateWorkPlanResponse, DecideApprovalGateRequest, DecideApprovalGateResponse,
+    DecideApprovalRequest, DecideApprovalResponse, DeploymentContractResponse,
+    DeploymentContractsResponse, DeploymentIntentResponse, DeploymentIntentsResponse,
+    EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
+    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, FileChangeResponse,
+    IncidentResponse, IncidentsResponse, ObservationResponse, ObservationsResponse,
+    PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
+    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest, PipelineIntentResponse,
+    PipelineIntentsResponse, RegistryEvidenceListResponse, RegistryEvidenceResponse,
+    ReleaseResponse, ReleasesResponse, RemediationPlanResponse, RemediationPlansResponse,
+    ReplacePipelineContractRequest, ReplacePipelineContractResponse, ReviewApprovalRequest,
+    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
+    RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
+    SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
+    SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
+    TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
+    TransitionDeploymentIntentResponse, TransitionPipelineContractRequest,
+    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
+    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
+    TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkItemRequest,
     TransitionWorkPlanRequest, TransitionWorkPlanResponse, TrustedEnvelopeResponse,
-    WorkPlanResponse, WorkPlansResponse,
+    WorkItemResponse, WorkItemsResponse, WorkPlanResponse, WorkPlansResponse, WorkspaceResponse,
+    WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use axum::extract::{Path, Query, Request, State};
@@ -61,17 +63,18 @@ use pharness_store::{
     StoredApprovalGate, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
     StoredDeploymentIntent, StoredIncident, StoredObservation, StoredPermissionGrant,
     StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
-    StoredRemediationPlan, StoredWorkPlan, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
-    UpdatePipelineIntentDraft, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
-    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
+    StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, UpdateChangeSetRevision,
+    UpdateDeploymentIntentDraft, UpdatePipelineIntentDraft, UpdatePipelineIntentExecution,
+    UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
+    WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_store::{
     CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
     CreateDeploymentContract, CreateDeploymentIntent, CreateIncident, CreateObservation,
     CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
-    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan,
-    ReplacePipelineContract, SqliteStore, StoreError, UpdateDeploymentIntentEvidence,
-    UpdatePipelineIntentEvidence,
+    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateWorkspace, ReplacePipelineContract, SqliteStore, StoreError,
+    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -172,6 +175,29 @@ pub fn router(
             get(list_remediation_plans).post(create_remediation_plan),
         )
         .route("/api/remediation-plans/:plan_id", get(get_remediation_plan))
+        .route(
+            "/api/work-items",
+            get(list_work_items).post(create_work_item),
+        )
+        .route("/api/work-items/:work_item_id", get(get_work_item))
+        .route(
+            "/api/work-items/:work_item_id/events",
+            get(list_work_item_events),
+        )
+        .route(
+            "/api/work-items/:work_item_id/work-plan",
+            post(create_work_plan_from_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/transition",
+            post(transition_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/cancel",
+            post(cancel_work_item),
+        )
+        .route("/api/workspaces", get(list_workspaces))
+        .route("/api/workspaces/:workspace_id", get(get_workspace))
         .route(
             "/api/work-plans/from-remediation-plan",
             post(create_work_plan_from_remediation_plan),
@@ -1721,7 +1747,322 @@ async fn create_remediation_plan(
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
+struct ListWorkItemsQuery {
+    status: Option<String>,
+    source_repo: Option<String>,
+    target_environment: Option<String>,
+    target_namespace: Option<String>,
+    production_impacting: Option<bool>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_work_items(
+    State(state): State<AppState>,
+    Query(query): Query<ListWorkItemsQuery>,
+) -> Result<Json<WorkItemsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let work_items = state
+        .store
+        .list_work_items(WorkItemListFilter {
+            status: clean_optional_text(query.status),
+            source_repo: clean_optional_text(query.source_repo),
+            target_environment: clean_optional_text(query.target_environment),
+            target_namespace: clean_optional_text(query.target_namespace),
+            production_impacting: query.production_impacting,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = work_items.len();
+    Ok(Json(WorkItemsResponse {
+        work_items,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_work_item(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<WorkItemResponse>, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    Ok(Json(work_item.into()))
+}
+
+async fn create_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Json(request): Json<CreateWorkItemRequest>,
+) -> Result<Json<WorkItemResponse>, ApiError> {
+    let title = required_text(request.title, "title")?;
+    let intent = required_text(request.intent, "intent")?;
+    let source_repo = required_text(request.source_repo, "source_repo")?;
+    let source_ref = required_text(request.source_ref, "source_ref")?;
+    let target_environment = required_text(request.target_environment, "target_environment")?;
+    let target_namespace = clean_optional_text(request.target_namespace);
+    let argo_application = clean_optional_text(request.argo_application);
+    validate_kubernetes_name("target_environment", &target_environment)?;
+    if let Some(namespace) = &target_namespace {
+        validate_kubernetes_name("target_namespace", namespace)?;
+    }
+    if let Some(application) = &argo_application {
+        validate_kubernetes_name("argo_application", application)?;
+    }
+    let max_attempts = request.max_attempts.unwrap_or(3).clamp(1, 10);
+    let max_elapsed_seconds = request
+        .max_elapsed_seconds
+        .unwrap_or(3_600)
+        .clamp(60, 86_400);
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let work_item = state
+        .store
+        .create_work_item(CreateWorkItem {
+            id: format!("witem_{}", unique_suffix()),
+            status: "submitted".to_string(),
+            title,
+            intent,
+            acceptance_criteria: request
+                .acceptance_criteria
+                .into_iter()
+                .filter_map(|criterion| clean_optional_text(Some(criterion)))
+                .collect(),
+            source_repo,
+            source_ref,
+            gitops_repo: clean_optional_text(request.gitops_repo),
+            gitops_ref: clean_optional_text(request.gitops_ref),
+            target_environment,
+            target_namespace,
+            argo_application,
+            production_impacting: request.production_impacting,
+            max_attempts,
+            max_elapsed_seconds,
+            created_by: actor.clone(),
+        })
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        "work_item.submitted",
+        actor,
+        json!({ "status": "submitted" }),
+    )
+    .await?;
+    Ok(Json(work_item.into()))
+}
+
+async fn list_work_item_events(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<AuditEventsResponse>, ApiError> {
+    state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let events = state
+        .store
+        .list_audit_events(Some("work_item"), Some(&work_item_id), None, 200)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    Ok(Json(AuditEventsResponse { events }))
+}
+
+async fn transition_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<TransitionWorkItemRequest>,
+) -> Result<Json<WorkItemResponse>, ApiError> {
+    let current = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let target = WorkItemStatus::parse(&request.target_status)?;
+    WorkItemStatus::parse(&current.status)?.ensure_can_transition_to(target)?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let work_item = state
+        .store
+        .update_work_item_status(
+            &work_item_id,
+            target.as_str(),
+            actor.clone(),
+            reason.clone(),
+        )
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        &format!("work_item.{}", target.as_str()),
+        actor,
+        json!({
+            "previous_status": current.status,
+            "status": work_item.status,
+            "reason": reason,
+        }),
+    )
+    .await?;
+    Ok(Json(work_item.into()))
+}
+
+async fn cancel_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<TransitionWorkItemRequest>,
+) -> Result<Json<WorkItemResponse>, ApiError> {
+    if request.target_status != "cancelled" {
+        return Err(ApiError::bad_request(
+            "work item cancel requires target_status cancelled",
+        ));
+    }
+    transition_work_item(State(state), identity, Path(work_item_id), Json(request)).await
+}
+
+async fn create_work_plan_from_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<CreateWorkPlanResponse>, ApiError> {
+    if let Some(existing) = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?
+    {
+        return Ok(Json(CreateWorkPlanResponse {
+            work_plan: existing.into(),
+            created: false,
+        }));
+    }
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    if work_item.status != "planning" {
+        return Err(ApiError::conflict(
+            "a WorkItem must be planning before it can create a WorkPlan",
+        ));
+    }
+    let actor = identity.map(|Extension(OperatorIdentity(name))| name);
+    let session_id = SessionId::new(format!("ses_work_item_{}", unique_suffix()));
+    state
+        .store
+        .create_session(CreateSession {
+            id: session_id.clone(),
+            title: format!("WorkItem: {}", work_item.title),
+            cwd: format!("work-item/{}", work_item.id),
+        })
+        .await?;
+    let work_plan = state
+        .store
+        .create_work_plan(work_plan_from_work_item(
+            &work_item,
+            session_id,
+            format!("wplan_{}", unique_suffix()),
+        ))
+        .await?;
+    let workspace = state
+        .store
+        .create_workspace(CreateWorkspace {
+            id: format!("ws_{}", unique_suffix()),
+            work_item_id: work_item.id.clone(),
+            run_id: None,
+            status: "declared".to_string(),
+            source_repo: work_item.source_repo.clone(),
+            source_ref: work_item.source_ref.clone(),
+            resolved_commit: None,
+            branch: None,
+            retention_status: "ephemeral".to_string(),
+            actor: actor.clone(),
+            reason: Some("WorkItem planning declared an isolated workspace".to_string()),
+        })
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        "work_item.work_plan_created",
+        actor.clone(),
+        json!({ "work_plan_id": work_plan.id, "workspace_id": workspace.id }),
+    )
+    .await?;
+    append_workspace_audit_event(&state.store, &workspace, "workspace.declared", actor).await?;
+
+    Ok(Json(CreateWorkPlanResponse {
+        work_plan: work_plan.into(),
+        created: true,
+    }))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListWorkspacesQuery {
+    work_item_id: Option<String>,
+    run_id: Option<String>,
+    status: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_workspaces(
+    State(state): State<AppState>,
+    Query(query): Query<ListWorkspacesQuery>,
+) -> Result<Json<WorkspacesResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let workspaces = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: clean_optional_text(query.work_item_id),
+            run_id: clean_optional_text(query.run_id).map(RunId::new),
+            status: clean_optional_text(query.status),
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = workspaces.len();
+    Ok(Json(WorkspacesResponse {
+        workspaces,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+async fn get_workspace(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspaceResponse>, ApiError> {
+    let workspace = state
+        .store
+        .get_workspace(&workspace_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("workspace", &workspace_id))?;
+    Ok(Json(workspace.into()))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
 struct ListWorkPlansQuery {
+    work_item_id: Option<String>,
     remediation_plan_id: Option<String>,
     incident_id: Option<String>,
     run_id: Option<String>,
@@ -1745,6 +2086,7 @@ async fn list_work_plans(
     let work_plans = state
         .store
         .list_work_plans(WorkPlanListFilter {
+            work_item_id: clean_optional_text(query.work_item_id),
             remediation_plan_id: clean_optional_text(query.remediation_plan_id),
             incident_id: clean_optional_text(query.incident_id),
             run_id: clean_optional_text(query.run_id).map(RunId::new),
@@ -1909,19 +2251,23 @@ async fn revise_work_plan(
         )
         .await?;
     let invalidated_gates = if request.material_change {
-        state
-            .store
-            .stale_approval_gates_for_remediation_plan(
-                &work_plan.remediation_plan_id,
-                actor.clone(),
-                reason.clone().or_else(|| {
-                    Some(format!(
-                        "work plan {} revised from revision {} to {}",
-                        work_plan.id, current.revision, work_plan.revision
-                    ))
-                }),
-            )
-            .await?
+        if let Some(remediation_plan_id) = &work_plan.remediation_plan_id {
+            state
+                .store
+                .stale_approval_gates_for_remediation_plan(
+                    remediation_plan_id,
+                    actor.clone(),
+                    reason.clone().or_else(|| {
+                        Some(format!(
+                            "work plan {} revised from revision {} to {}",
+                            work_plan.id, current.revision, work_plan.revision
+                        ))
+                    }),
+                )
+                .await?
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     };
@@ -2283,8 +2629,9 @@ fn work_plan_from_remediation_plan(plan: &StoredRemediationPlan, id: String) -> 
         .unwrap_or_else(|| json!([]));
     CreateWorkPlan {
         id,
-        remediation_plan_id: plan.id.clone(),
-        incident_id: plan.incident_id.clone(),
+        work_item_id: None,
+        remediation_plan_id: Some(plan.id.clone()),
+        incident_id: Some(plan.incident_id.clone()),
         session_id: plan.session_id.clone(),
         run_id: plan.run_id.clone(),
         status: "draft".to_string(),
@@ -2310,6 +2657,135 @@ fn work_plan_from_remediation_plan(plan: &StoredRemediationPlan, id: String) -> 
             "steps": steps,
             "remediation_plan": plan.plan_json.clone(),
         }),
+    }
+}
+
+fn work_plan_from_work_item(
+    item: &StoredWorkItem,
+    session_id: SessionId,
+    id: String,
+) -> CreateWorkPlan {
+    CreateWorkPlan {
+        id,
+        work_item_id: Some(item.id.clone()),
+        remediation_plan_id: None,
+        incident_id: None,
+        session_id,
+        run_id: None,
+        status: "draft".to_string(),
+        title: format!("WorkPlan: {}", item.title),
+        summary: item.intent.clone(),
+        risk_level: if item.production_impacting {
+            "high".to_string()
+        } else {
+            "medium".to_string()
+        },
+        requires_approval: true,
+        resource_namespace: item.target_namespace.clone(),
+        resource_kind: Some("application".to_string()),
+        resource_name: item.argo_application.clone(),
+        work_plan_json: json!({
+            "source": { "kind": "work_item", "id": item.id },
+            "intent": item.intent,
+            "acceptance_criteria": item.acceptance_criteria,
+            "source_repository": { "repo": item.source_repo, "ref": item.source_ref },
+            "gitops_repository": { "repo": item.gitops_repo, "ref": item.gitops_ref },
+            "target": {
+                "environment": item.target_environment,
+                "namespace": item.target_namespace,
+                "argo_application": item.argo_application,
+                "production_impacting": item.production_impacting,
+            },
+            "execution": {
+                "enabled": false,
+                "reason": "workspace execution requires a real pinned Git workspace",
+            },
+        }),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkItemStatus {
+    Submitted,
+    Planning,
+    AwaitingApproval,
+    Executing,
+    Verifying,
+    Blocked,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl WorkItemStatus {
+    fn parse(value: &str) -> Result<Self, ApiError> {
+        match value {
+            "submitted" => Ok(Self::Submitted),
+            "planning" => Ok(Self::Planning),
+            "awaiting_approval" => Ok(Self::AwaitingApproval),
+            "executing" => Ok(Self::Executing),
+            "verifying" => Ok(Self::Verifying),
+            "blocked" => Ok(Self::Blocked),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            other => Err(ApiError::bad_request(format!(
+                "unsupported work item status: {other}"
+            ))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Submitted => "submitted",
+            Self::Planning => "planning",
+            Self::AwaitingApproval => "awaiting_approval",
+            Self::Executing => "executing",
+            Self::Verifying => "verifying",
+            Self::Blocked => "blocked",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    fn ensure_can_transition_to(self, target: Self) -> Result<(), ApiError> {
+        if self == target {
+            return Ok(());
+        }
+        let allowed = match self {
+            Self::Submitted => matches!(target, Self::Planning | Self::Cancelled),
+            Self::Planning => matches!(
+                target,
+                Self::AwaitingApproval | Self::Blocked | Self::Failed | Self::Cancelled
+            ),
+            Self::AwaitingApproval => matches!(
+                target,
+                Self::Executing | Self::Blocked | Self::Failed | Self::Cancelled
+            ),
+            Self::Executing => matches!(
+                target,
+                Self::Verifying | Self::Blocked | Self::Failed | Self::Cancelled
+            ),
+            Self::Verifying => matches!(
+                target,
+                Self::Completed | Self::Blocked | Self::Failed | Self::Cancelled
+            ),
+            Self::Blocked | Self::Failed => matches!(
+                target,
+                Self::Planning | Self::AwaitingApproval | Self::Cancelled
+            ),
+            Self::Completed | Self::Cancelled => false,
+        };
+        if allowed {
+            Ok(())
+        } else {
+            Err(ApiError::conflict(format!(
+                "cannot transition work item from {} to {}",
+                self.as_str(),
+                target.as_str()
+            )))
+        }
     }
 }
 
@@ -2626,7 +3102,8 @@ async fn build_sdlc_flow(
     )
     .await?;
     let incidents =
-        collect_sdlc_flow_incidents(store, &work_plan.incident_id, release.as_ref()).await?;
+        collect_sdlc_flow_incidents(store, work_plan.incident_id.as_deref(), release.as_ref())
+            .await?;
     let remediation_plans =
         collect_sdlc_flow_remediation_plans(store, &work_plan, &incidents).await?;
     let approval_gates = collect_sdlc_flow_approval_gates(store, &remediation_plans).await?;
@@ -2663,11 +3140,13 @@ async fn build_sdlc_flow(
 
 async fn collect_sdlc_flow_incidents(
     store: &SqliteStore,
-    root_incident_id: &str,
+    root_incident_id: Option<&str>,
     release: Option<&StoredRelease>,
 ) -> Result<Vec<StoredIncident>, ApiError> {
     let mut incident_ids = BTreeSet::new();
-    incident_ids.insert(root_incident_id.to_string());
+    if let Some(root_incident_id) = root_incident_id {
+        incident_ids.insert(root_incident_id.to_string());
+    }
 
     if let Some(release) = release {
         if let Some(evidence) = release
@@ -2703,7 +3182,9 @@ async fn collect_sdlc_flow_remediation_plans(
     incidents: &[StoredIncident],
 ) -> Result<Vec<StoredRemediationPlan>, ApiError> {
     let mut plan_ids = BTreeSet::new();
-    plan_ids.insert(work_plan.remediation_plan_id.clone());
+    if let Some(remediation_plan_id) = &work_plan.remediation_plan_id {
+        plan_ids.insert(remediation_plan_id.clone());
+    }
     for incident in incidents {
         for plan in store
             .list_remediation_plans(RemediationPlanListFilter {
@@ -2850,7 +3331,14 @@ async fn build_sdlc_readiness(
     } else {
         None
     };
-    let gates = readiness_gate_summary(store, &work_plan.remediation_plan_id).await?;
+    let gates = match &work_plan.remediation_plan_id {
+        Some(remediation_plan_id) => readiness_gate_summary(store, remediation_plan_id).await?,
+        None => SdlcReadinessGateSummary {
+            pending: Vec::new(),
+            stale: Vec::new(),
+            rejected: Vec::new(),
+        },
+    };
     let grants = readiness_grant_summary(store, resource_kind, resource_id).await?;
     let mut blockers = Vec::new();
     let mut warnings = Vec::new();
@@ -7739,6 +8227,14 @@ async fn create_change_set(
         .get_work_plan(&work_plan_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_plan", &work_plan_id))?;
+    let (Some(remediation_plan_id), Some(incident_id)) = (
+        work_plan.remediation_plan_id.clone(),
+        work_plan.incident_id.clone(),
+    ) else {
+        return Err(ApiError::conflict(
+            "WorkItem-backed ChangeSets require captured workspace Git diff provenance",
+        ));
+    };
     let actor = clean_optional_text(request.actor);
     let reason = clean_optional_text(request.reason);
     let material_hash = material_hash(&request.change_set_json)?;
@@ -7747,8 +8243,8 @@ async fn create_change_set(
         .create_change_set(CreateChangeSet {
             id: format!("cset_{}", unique_suffix()),
             work_plan_id: work_plan.id.clone(),
-            remediation_plan_id: work_plan.remediation_plan_id.clone(),
-            incident_id: work_plan.incident_id.clone(),
+            remediation_plan_id,
+            incident_id,
             session_id: work_plan.session_id.clone(),
             run_id: work_plan.run_id.clone(),
             status: "draft".to_string(),
@@ -9174,6 +9670,7 @@ async fn append_work_plan_audit_event(
             run_id: plan.run_id.clone(),
             payload_json: json!({
                 "work_plan_id": plan.id,
+                "work_item_id": plan.work_item_id,
                 "remediation_plan_id": plan.remediation_plan_id,
                 "incident_id": plan.incident_id,
                 "run_id": plan.run_id.as_ref().map(RunId::as_str),
@@ -9189,6 +9686,72 @@ async fn append_work_plan_audit_event(
                     "name": plan.resource_name,
                 },
                 "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_work_item_audit_event(
+    store: &SqliteStore,
+    item: &StoredWorkItem,
+    kind: &str,
+    actor: Option<String>,
+    extra: serde_json::Value,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", item.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "work_item".to_string(),
+            resource_id: item.id.clone(),
+            run_id: item.current_run_id.clone(),
+            payload_json: json!({
+                "work_item_id": item.id,
+                "status": item.status,
+                "title": item.title,
+                "intent": item.intent,
+                "source": { "repo": item.source_repo, "ref": item.source_ref },
+                "target": {
+                    "environment": item.target_environment,
+                    "namespace": item.target_namespace,
+                    "argo_application": item.argo_application,
+                    "production_impacting": item.production_impacting,
+                },
+                "budget": {
+                    "attempts": item.max_attempts,
+                    "elapsed_seconds": item.max_elapsed_seconds,
+                },
+                "extra": extra,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
+async fn append_workspace_audit_event(
+    store: &SqliteStore,
+    workspace: &pharness_store::StoredWorkspace,
+    kind: &str,
+    actor: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", workspace.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "workspace".to_string(),
+            resource_id: workspace.id.clone(),
+            run_id: workspace.run_id.clone(),
+            payload_json: json!({
+                "workspace_id": workspace.id,
+                "work_item_id": workspace.work_item_id,
+                "status": workspace.status,
+                "source": { "repo": workspace.source_repo, "ref": workspace.source_ref },
+                "resolved_commit": workspace.resolved_commit,
+                "branch": workspace.branch,
+                "retention_status": workspace.retention_status,
             }),
         })
         .await
@@ -9894,36 +10457,38 @@ mod tests {
     use super::{
         approval_gate_summary, approval_summary, attach_deployment_intent_evidence,
         attach_pipeline_intent_evidence, attach_release_evidence, build_pipeline_run_manifest,
-        cancel_run, change_set_flow, change_set_readiness, config_effective, create_change_set,
-        create_change_set_trusted_envelope, create_declared_deployment_handoff,
+        cancel_run, cancel_work_item, change_set_flow, change_set_readiness, config_effective,
+        create_change_set, create_change_set_trusted_envelope, create_declared_deployment_handoff,
         create_deployment_contract, create_deployment_intent_from_pipeline_intent, create_incident,
         create_observation, create_pipeline_intent_from_change_set,
         create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
         create_release_from_deployment_intent, create_remediation_plan, create_run,
-        create_work_plan_from_remediation_plan, create_work_plan_trusted_envelope,
-        decide_run_approval, deny_approval, ensure_pipeline_evidence_ready_for_deployment,
-        execute_capability, execution_matches_pipeline_contract, get_approval, get_approval_gate,
-        get_artifact, get_deployment_contract, get_deployment_intent, get_incident,
-        get_observation, get_permission_grant, get_pipeline_intent, get_registry_evidence,
-        get_release, get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan,
-        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
+        create_work_item, create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
+        create_work_plan_trusted_envelope, decide_run_approval, deny_approval,
+        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
+        execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
+        get_deployment_contract, get_deployment_intent, get_incident, get_observation,
+        get_permission_grant, get_pipeline_intent, get_registry_evidence, get_release,
+        get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan, last_event_seq,
+        list_approval_gates, list_approvals, list_audit_events, list_change_sets,
         list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
         list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
         list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_plans, merge_pipeline_execution_state, parse_last_event_id,
-        persist_pipeline_execution_evidence, persist_pipeline_run_analysis, policy_json,
-        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
-        run_summary, satisfy_approval_gate, set_pipeline_intent_evidence, stream_start_seq,
-        tekton_execution_spec, transition_change_set, transition_deployment_contract,
-        transition_deployment_intent, transition_pipeline_intent, transition_registry_evidence,
-        transition_release, transition_work_plan, unique_suffix, validate_permission_grant_request,
+        list_work_item_events, list_work_plans, list_workspaces, merge_pipeline_execution_state,
+        parse_last_event_id, persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
+        policy_json, revise_change_set, revise_work_plan, revoke_permission_grant, router,
+        run_policy, run_summary, satisfy_approval_gate, set_pipeline_intent_evidence,
+        stream_start_seq, tekton_execution_spec, transition_change_set,
+        transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
+        transition_registry_evidence, transition_release, transition_work_item,
+        transition_work_plan, unique_suffix, validate_permission_grant_request,
         validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis,
         work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
         ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
         ListChangeSetsQuery, ListDeploymentContractsQuery, ListDeploymentIntentsQuery,
         ListIncidentsQuery, ListObservationsQuery, ListPermissionGrantsQuery,
         ListPipelineIntentsQuery, ListRegistryEvidenceQuery, ListReleasesQuery,
-        ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery,
+        ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery, ListWorkspacesQuery,
         PipelineDeploymentHandoffSpec, StreamRunEventsQuery,
     };
     use crate::dispatch::RunDispatcher;
@@ -9935,12 +10500,13 @@ mod tests {
         CreatePipelineIntentFromChangeSetRequest, CreateRegistryEvidenceFromInspectionRequest,
         CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
         CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
-        CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
-        ExecuteCapabilityRequest, PipelineIntentExecutionOutcomeRequest, ReviewApprovalRequest,
-        ReviseChangeSetRequest, ReviseWorkPlanRequest, RevokePermissionGrantRequest,
-        TransitionChangeSetRequest, TransitionDeploymentContractRequest,
-        TransitionDeploymentIntentRequest, TransitionPipelineIntentRequest,
-        TransitionRegistryEvidenceRequest, TransitionReleaseRequest, TransitionWorkPlanRequest,
+        CreateWorkItemRequest, CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest,
+        DecideApprovalRequest, ExecuteCapabilityRequest, PipelineIntentExecutionOutcomeRequest,
+        ReviewApprovalRequest, ReviseChangeSetRequest, ReviseWorkPlanRequest,
+        RevokePermissionGrantRequest, TransitionChangeSetRequest,
+        TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
+        TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
+        TransitionReleaseRequest, TransitionWorkItemRequest, TransitionWorkPlanRequest,
     };
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
@@ -10068,8 +10634,9 @@ mod tests {
             .store
             .create_work_plan(CreateWorkPlan {
                 id: "wplan_registry_inspection".to_string(),
-                remediation_plan_id: "rplan_registry_inspection".to_string(),
-                incident_id: "inc_registry_inspection".to_string(),
+                work_item_id: None,
+                remediation_plan_id: Some("rplan_registry_inspection".to_string()),
+                incident_id: Some("inc_registry_inspection".to_string()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "approved".to_string(),
@@ -12315,6 +12882,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(listed_work_plans) = list_work_plans(
             State(state.clone()),
             Query(ListWorkPlansQuery {
+                work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(created.id.to_string()),
@@ -12418,8 +12986,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(created_work_plan.created);
         assert!(!existing_work_plan.created);
         assert_eq!(
-            created_work_plan.work_plan.remediation_plan_id,
-            "rplan_test"
+            created_work_plan.work_plan.remediation_plan_id.as_deref(),
+            Some("rplan_test")
         );
         assert_eq!(
             existing_work_plan.work_plan.id,
@@ -12430,7 +12998,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             listed_work_plans.work_plans[0].id,
             created_work_plan.work_plan.id
         );
-        assert_eq!(fetched_work_plan.incident_id, "inc_test");
+        assert_eq!(fetched_work_plan.incident_id.as_deref(), Some("inc_test"));
         assert!(!fetched_work_plan.work_plan_json["execution"]["enabled"]
             .as_bool()
             .unwrap());
@@ -15123,8 +15691,9 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .store
             .create_work_plan(CreateWorkPlan {
                 id: "wplan_deployment_handoff".to_string(),
-                remediation_plan_id: "rplan_deployment_handoff".to_string(),
-                incident_id: "inc_registry_inspection".to_string(),
+                work_item_id: None,
+                remediation_plan_id: Some("rplan_deployment_handoff".to_string()),
+                incident_id: Some("inc_registry_inspection".to_string()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "approved".to_string(),
@@ -15302,5 +15871,119 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(ensure_pipeline_evidence_ready_for_deployment(&intent).is_err());
         intent.intent_json["evidence"]["resource"]["name"] = json!("build-1");
         assert!(ensure_pipeline_evidence_ready_for_deployment(&intent).is_ok());
+    }
+
+    #[tokio::test]
+    async fn work_item_planning_declares_a_work_plan_and_ephemeral_workspace() {
+        let state = test_state().await;
+        let Json(work_item) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Add a finance smoke endpoint".to_string(),
+                intent: "Expose a read-only health endpoint with a focused test.".to_string(),
+                acceptance_criteria: vec!["Endpoint returns a stable response".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: Some("team/finance-gitops".to_string()),
+                gitops_ref: Some("main".to_string()),
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(900),
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(work_item.status, "submitted");
+
+        let Json(planning) = transition_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(TransitionWorkItemRequest {
+                target_status: "planning".to_string(),
+                actor: Some("operator".to_string()),
+                reason: Some("reviewed delivery intent".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(planning.status, "planning");
+
+        let Json(created_plan) =
+            create_work_plan_from_work_item(State(state.clone()), None, Path(work_item.id.clone()))
+                .await
+                .unwrap();
+        assert!(created_plan.created);
+        assert_eq!(
+            created_plan.work_plan.work_item_id.as_deref(),
+            Some(work_item.id.as_str())
+        );
+        assert_eq!(created_plan.work_plan.remediation_plan_id, None);
+        assert_eq!(
+            created_plan.work_plan.work_plan_json["execution"]["enabled"],
+            false
+        );
+
+        let Json(workspaces) = list_workspaces(
+            State(state.clone()),
+            Query(ListWorkspacesQuery {
+                work_item_id: Some(work_item.id.clone()),
+                limit: Some(10),
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(workspaces.count, 1);
+        assert_eq!(workspaces.workspaces[0].status, "declared");
+        assert_eq!(workspaces.workspaces[0].retention_status, "ephemeral");
+
+        let error = create_change_set(
+            State(state.clone()),
+            Json(CreateChangeSetRequest {
+                work_plan_id: created_plan.work_plan.id,
+                title: None,
+                summary: None,
+                risk_level: None,
+                change_set_json: json!({"files": []}),
+                actor: Some("operator".to_string()),
+                reason: Some("must not create synthetic change set".to_string()),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert!(error.message.contains("workspace Git diff provenance"));
+
+        let Json(cancelled) = cancel_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(TransitionWorkItemRequest {
+                target_status: "cancelled".to_string(),
+                actor: Some("operator".to_string()),
+                reason: Some("alpha complete".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+
+        let Json(events) = list_work_item_events(State(state), Path(work_item.id))
+            .await
+            .unwrap();
+        assert!(events
+            .events
+            .iter()
+            .any(|event| event.kind == "work_item.work_plan_created"));
+        assert!(events
+            .events
+            .iter()
+            .any(|event| event.kind == "work_item.cancelled"));
     }
 }

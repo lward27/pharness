@@ -100,6 +100,16 @@ enum Command {
         #[command(subcommand)]
         command: RemediationPlanCommand,
     },
+    /// Submit and manage durable feature or bug work items.
+    WorkItems {
+        #[command(subcommand)]
+        command: WorkItemCommand,
+    },
+    /// Inspect declared isolated source workspaces.
+    Workspaces {
+        #[command(subcommand)]
+        command: WorkspaceCommand,
+    },
     /// Inspect durable work plans.
     WorkPlans {
         #[command(subcommand)]
@@ -245,6 +255,32 @@ enum WorkPlanCommand {
     Transition(WorkPlanTransitionArgs),
     /// Create a bounded trusted write envelope for one WorkPlan.
     CreateTrustedEnvelope(WorkPlanCreateTrustedEnvelopeArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkItemCommand {
+    /// List submitted work items.
+    List(Box<WorkItemListArgs>),
+    /// Fetch one work item by id.
+    Get(WorkItemGetArgs),
+    /// Submit a feature, bug, or delivery outcome.
+    Create(WorkItemCreateArgs),
+    /// Move a work item through its durable lifecycle.
+    Transition(WorkItemTransitionArgs),
+    /// Cancel a work item.
+    Cancel(WorkItemCancelArgs),
+    /// Create the WorkPlan and declared workspace for a planning work item.
+    CreateWorkPlan(WorkItemGetArgs),
+    /// Fetch durable audit events for one work item.
+    Events(WorkItemGetArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkspaceCommand {
+    /// List declared workspaces.
+    List(Box<WorkspaceListArgs>),
+    /// Fetch one workspace by id.
+    Get(WorkspaceGetArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -1104,6 +1140,147 @@ struct RemediationPlanCreateArgs {
 }
 
 #[derive(Debug, Parser)]
+struct WorkItemListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    source_repo: Option<String>,
+    #[arg(long)]
+    target_environment: Option<String>,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    production_impacting: Option<bool>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    title: String,
+    #[arg(long)]
+    intent: String,
+    /// Repeat for each independently testable acceptance criterion.
+    #[arg(long = "acceptance-criterion")]
+    acceptance_criteria: Vec<String>,
+    #[arg(long)]
+    source_repo: String,
+    #[arg(long, default_value = "main")]
+    source_ref: String,
+    #[arg(long)]
+    gitops_repo: Option<String>,
+    #[arg(long)]
+    gitops_ref: Option<String>,
+    #[arg(long)]
+    target_environment: String,
+    #[arg(long)]
+    target_namespace: Option<String>,
+    #[arg(long)]
+    argo_application: Option<String>,
+    #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+    production_impacting: bool,
+    #[arg(long)]
+    max_attempts: Option<u32>,
+    #[arg(long)]
+    max_elapsed_seconds: Option<u64>,
+    #[arg(long)]
+    actor: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemCancelArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkspaceListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: Option<String>,
+    #[arg(long)]
+    run_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct WorkspaceGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    workspace_id: String,
+}
+
+#[derive(Debug, Parser)]
 struct WorkPlanListArgs {
     #[arg(
         long,
@@ -1111,6 +1288,8 @@ struct WorkPlanListArgs {
         default_value = "http://127.0.0.1:4777"
     )]
     api_url: String,
+    #[arg(long)]
+    work_item_id: Option<String>,
     #[arg(long)]
     remediation_plan_id: Option<String>,
     #[arg(long)]
@@ -2418,6 +2597,19 @@ async fn main() -> anyhow::Result<()> {
             RemediationPlanCommand::Get(args) => get_remediation_plan(args).await?,
             RemediationPlanCommand::Create(args) => create_remediation_plan(args).await?,
         },
+        Command::WorkItems { command } => match command {
+            WorkItemCommand::List(args) => list_work_items(*args).await?,
+            WorkItemCommand::Get(args) => get_work_item(args).await?,
+            WorkItemCommand::Create(args) => create_work_item(args).await?,
+            WorkItemCommand::Transition(args) => transition_work_item(args).await?,
+            WorkItemCommand::Cancel(args) => cancel_work_item(args).await?,
+            WorkItemCommand::CreateWorkPlan(args) => create_work_item_work_plan(args).await?,
+            WorkItemCommand::Events(args) => get_work_item_events(args).await?,
+        },
+        Command::Workspaces { command } => match command {
+            WorkspaceCommand::List(args) => list_workspaces(*args).await?,
+            WorkspaceCommand::Get(args) => get_workspace(args).await?,
+        },
         Command::WorkPlans { command } => match command {
             WorkPlanCommand::List(args) => list_work_plans(*args).await?,
             WorkPlanCommand::Get(args) => get_work_plan(args).await?,
@@ -3563,12 +3755,214 @@ async fn create_remediation_plan(args: RemediationPlanCreateArgs) -> anyhow::Res
     Ok(())
 }
 
+async fn list_work_items(args: WorkItemListArgs) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit".to_string(), args.limit.to_string()),
+        ("offset".to_string(), args.offset.to_string()),
+    ];
+    for (key, value) in [
+        ("status", args.status),
+        ("source_repo", args.source_repo),
+        ("target_environment", args.target_environment),
+        ("target_namespace", args.target_namespace),
+    ] {
+        if let Some(value) = value {
+            query.push((key.to_string(), value));
+        }
+    }
+    if let Some(value) = args.production_impacting {
+        query.push(("production_impacting".to_string(), value.to_string()));
+    }
+    print_json_response(
+        api_client()
+            .get(api_url(&args.api_url, "/api/work-items"))
+            .query(&query)
+            .send()
+            .await
+            .context("failed to fetch work items")?
+            .error_for_status()
+            .context("pharness API rejected work item list")?
+            .json()
+            .await
+            .context("failed to decode work item list")?,
+    )
+}
+
+async fn get_work_item(args: WorkItemGetArgs) -> anyhow::Result<()> {
+    get_json(
+        &args.api_url,
+        &format!("/api/work-items/{}", args.work_item_id),
+        "work item",
+    )
+    .await
+}
+
+async fn get_work_item_events(args: WorkItemGetArgs) -> anyhow::Result<()> {
+    get_json(
+        &args.api_url,
+        &format!("/api/work-items/{}/events", args.work_item_id),
+        "work item events",
+    )
+    .await
+}
+
+async fn create_work_item(args: WorkItemCreateArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(&args.api_url, "/api/work-items"))
+        .json(&serde_json::json!({
+            "title": args.title,
+            "intent": args.intent,
+            "acceptance_criteria": args.acceptance_criteria,
+            "source_repo": args.source_repo,
+            "source_ref": args.source_ref,
+            "gitops_repo": args.gitops_repo,
+            "gitops_ref": args.gitops_ref,
+            "target_environment": args.target_environment,
+            "target_namespace": args.target_namespace,
+            "argo_application": args.argo_application,
+            "production_impacting": args.production_impacting,
+            "max_attempts": args.max_attempts,
+            "max_elapsed_seconds": args.max_elapsed_seconds,
+            "actor": args.actor,
+        }))
+        .send()
+        .await
+        .context("failed to create work item")?
+        .error_for_status()
+        .context("pharness API rejected work item creation")?
+        .json()
+        .await
+        .context("failed to decode work item creation")?;
+    print_json_response(response)
+}
+
+async fn transition_work_item(args: WorkItemTransitionArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/transition", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition work item")?
+        .error_for_status()
+        .context("pharness API rejected work item transition")?
+        .json()
+        .await
+        .context("failed to decode work item transition")?;
+    print_json_response(response)
+}
+
+async fn cancel_work_item(args: WorkItemCancelArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/cancel", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "target_status": "cancelled",
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to cancel work item")?
+        .error_for_status()
+        .context("pharness API rejected work item cancellation")?
+        .json()
+        .await
+        .context("failed to decode work item cancellation")?;
+    print_json_response(response)
+}
+
+async fn create_work_item_work_plan(args: WorkItemGetArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/work-plan", args.work_item_id),
+        ))
+        .send()
+        .await
+        .context("failed to create work item WorkPlan")?
+        .error_for_status()
+        .context("pharness API rejected work item WorkPlan creation")?
+        .json()
+        .await
+        .context("failed to decode work item WorkPlan creation")?;
+    print_json_response(response)
+}
+
+async fn list_workspaces(args: WorkspaceListArgs) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit".to_string(), args.limit.to_string()),
+        ("offset".to_string(), args.offset.to_string()),
+    ];
+    for (key, value) in [
+        ("work_item_id", args.work_item_id),
+        ("run_id", args.run_id),
+        ("status", args.status),
+    ] {
+        if let Some(value) = value {
+            query.push((key.to_string(), value));
+        }
+    }
+    print_json_response(
+        api_client()
+            .get(api_url(&args.api_url, "/api/workspaces"))
+            .query(&query)
+            .send()
+            .await
+            .context("failed to fetch workspaces")?
+            .error_for_status()
+            .context("pharness API rejected workspace list")?
+            .json()
+            .await
+            .context("failed to decode workspace list")?,
+    )
+}
+
+async fn get_workspace(args: WorkspaceGetArgs) -> anyhow::Result<()> {
+    get_json(
+        &args.api_url,
+        &format!("/api/workspaces/{}", args.workspace_id),
+        "workspace",
+    )
+    .await
+}
+
+async fn get_json(api_base: &str, path: &str, subject: &str) -> anyhow::Result<()> {
+    let response = api_client()
+        .get(api_url(api_base, path))
+        .send()
+        .await
+        .with_context(|| format!("failed to fetch {subject}"))?
+        .error_for_status()
+        .with_context(|| format!("pharness API rejected {subject} fetch"))?
+        .json()
+        .await
+        .with_context(|| format!("failed to decode {subject}"))?;
+    print_json_response(response)
+}
+
+fn print_json_response(response: serde_json::Value) -> anyhow::Result<()> {
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_work_plans(args: WorkPlanListArgs) -> anyhow::Result<()> {
     let http = api_client();
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
     ];
+    if let Some(work_item_id) = args.work_item_id {
+        query.push(("work_item_id".to_string(), work_item_id));
+    }
     if let Some(remediation_plan_id) = args.remediation_plan_id {
         query.push(("remediation_plan_id".to_string(), remediation_plan_id));
     }
@@ -5845,7 +6239,7 @@ mod tests {
         CapabilityCommand, ChangeSetCommand, ConfigValidationOutput, DeploymentContractCommand,
         DeploymentIntentCommand, IncidentCommand, ObservationCommand, PipelineIntentCommand,
         RegistryEvidenceCommand, ReleaseCommand, RemediationPlanCommand, RunArgs, RunCommand,
-        WorkPlanCommand,
+        WorkItemCommand, WorkPlanCommand, WorkspaceCommand,
     };
     use crate::{Cli, Command};
     use clap::Parser;
@@ -7351,5 +7745,46 @@ mod tests {
         assert_eq!(json["policy"]["deny_secret_access"], true);
         assert_eq!(json["cluster"]["loki_configured"], false);
         assert!(!json.to_string().contains("super-secret"));
+    }
+
+    #[test]
+    fn parses_work_item_and_workspace_commands() {
+        let create = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "create",
+            "--title",
+            "Add health endpoint",
+            "--intent",
+            "Add a tested endpoint",
+            "--source-repo",
+            "team/finance-api",
+            "--target-environment",
+            "dev",
+            "--target-namespace",
+            "apps-dev",
+        ])
+        .unwrap();
+        let workspace = Cli::try_parse_from([
+            "pharness",
+            "workspaces",
+            "list",
+            "--work-item-id",
+            "witem_1",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            create.command,
+            Command::WorkItems {
+                command: WorkItemCommand::Create(_)
+            }
+        ));
+        assert!(matches!(
+            workspace.command,
+            Command::Workspaces {
+                command: WorkspaceCommand::List(_)
+            }
+        ));
     }
 }

@@ -358,8 +358,9 @@ pub struct RemediationPlanListFilter {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateWorkPlan {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -376,8 +377,9 @@ pub struct CreateWorkPlan {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredWorkPlan {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -399,6 +401,7 @@ pub struct StoredWorkPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct WorkPlanListFilter {
+    pub work_item_id: Option<String>,
     pub remediation_plan_id: Option<String>,
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
@@ -409,6 +412,106 @@ pub struct WorkPlanListFilter {
     pub resource_name: Option<String>,
     pub created_after_ms: Option<i64>,
     pub created_before_ms: Option<i64>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateWorkItem {
+    pub id: String,
+    pub status: String,
+    pub title: String,
+    pub intent: String,
+    pub acceptance_criteria: Vec<String>,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub gitops_repo: Option<String>,
+    pub gitops_ref: Option<String>,
+    pub target_environment: String,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub production_impacting: bool,
+    pub max_attempts: u32,
+    pub max_elapsed_seconds: u64,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredWorkItem {
+    pub id: String,
+    pub status: String,
+    pub title: String,
+    pub intent: String,
+    pub acceptance_criteria: Vec<String>,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub gitops_repo: Option<String>,
+    pub gitops_ref: Option<String>,
+    pub target_environment: String,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub production_impacting: bool,
+    pub max_attempts: u32,
+    pub max_elapsed_seconds: u64,
+    pub attempt_count: u32,
+    pub current_run_id: Option<RunId>,
+    pub created_by: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct WorkItemListFilter {
+    pub status: Option<String>,
+    pub source_repo: Option<String>,
+    pub target_environment: Option<String>,
+    pub target_namespace: Option<String>,
+    pub production_impacting: Option<bool>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateWorkspace {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub resolved_commit: Option<String>,
+    pub branch: Option<String>,
+    pub retention_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredWorkspace {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub resolved_commit: Option<String>,
+    pub branch: Option<String>,
+    pub retention_status: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct WorkspaceListFilter {
+    pub work_item_id: Option<String>,
+    pub run_id: Option<RunId>,
+    pub status: Option<String>,
     pub limit: u32,
     pub offset: u32,
 }

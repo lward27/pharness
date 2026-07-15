@@ -563,4 +563,6 @@ and dispatch actions, is in
 
 ## Current Status
 
-The local control-plane slice is running: API, CLI, Fireworks worker, durable events, approvals, SSE, file diffs, artifacts, and typed read-only Kubernetes/Argo/Prometheus/LGTM/Tekton paths. The V2 cluster runtime (worker Jobs, GitOps deployment, operator auth) is deploying per [planning/v2-cluster-runtime-plan.md](planning/v2-cluster-runtime-plan.md). See [planning/current-build-review.md](planning/current-build-review.md) for the reviewed V1 state and [planning/agent-harness-implementation-plan.md](planning/agent-harness-implementation-plan.md) for the full phased plan.
+Pharness is a deployed V2 control plane: authenticated API/UI, isolated Fireworks worker Jobs, cancellation, approvals, durable events/artifacts, typed read-only Kubernetes/Argo/Tekton/Prometheus/Loki/registry capabilities, typed Tekton execution, and declared deployment handoff are implemented. The current autonomous-SDLC alpha also persists `WorkItem` intent, lifecycle/audit history, bounded execution budgets, WorkItem-backed `WorkPlan` records, and ephemeral `Workspace` declarations.
+
+It does not yet clone an application repo, produce a real Git-backed ChangeSet, push a branch or PR, mutate GitOps, or deploy an application. Those actions are deliberately the next gated development-only cut line. See [planning/autonomous-sdlc-roadmap.md](planning/autonomous-sdlc-roadmap.md) for the active plan and [planning/current-build-review.md](planning/current-build-review.md) for earlier validation evidence.

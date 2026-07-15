@@ -6,7 +6,8 @@ use pharness_store::{
     StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
     StoredDeploymentIntent, StoredFileChange, StoredIncident, StoredObservation,
     StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
-    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkPlan,
+    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem, StoredWorkPlan,
+    StoredWorkspace,
 };
 use serde::{Deserialize, Serialize};
 
@@ -316,8 +317,9 @@ pub struct WorkPlansResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkPlanResponse {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -340,6 +342,7 @@ impl From<StoredWorkPlan> for WorkPlanResponse {
     fn from(plan: StoredWorkPlan) -> Self {
         Self {
             id: plan.id,
+            work_item_id: plan.work_item_id,
             remediation_plan_id: plan.remediation_plan_id,
             incident_id: plan.incident_id,
             run_id: plan.run_id,
@@ -360,6 +363,150 @@ impl From<StoredWorkPlan> for WorkPlanResponse {
             status_reason: plan.status_reason,
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateWorkItemRequest {
+    pub title: String,
+    pub intent: String,
+    #[serde(default)]
+    pub acceptance_criteria: Vec<String>,
+    pub source_repo: String,
+    #[serde(default = "default_source_ref")]
+    pub source_ref: String,
+    pub gitops_repo: Option<String>,
+    pub gitops_ref: Option<String>,
+    pub target_environment: String,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    #[serde(default)]
+    pub production_impacting: bool,
+    pub max_attempts: Option<u32>,
+    pub max_elapsed_seconds: Option<u64>,
+    pub actor: Option<String>,
+}
+
+fn default_source_ref() -> String {
+    "main".to_string()
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemResponse {
+    pub id: String,
+    pub status: String,
+    pub title: String,
+    pub intent: String,
+    pub acceptance_criteria: Vec<String>,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub gitops_repo: Option<String>,
+    pub gitops_ref: Option<String>,
+    pub target_environment: String,
+    pub target_namespace: Option<String>,
+    pub argo_application: Option<String>,
+    pub production_impacting: bool,
+    pub max_attempts: u32,
+    pub max_elapsed_seconds: u64,
+    pub attempt_count: u32,
+    pub current_run_id: Option<RunId>,
+    pub created_by: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredWorkItem> for WorkItemResponse {
+    fn from(item: StoredWorkItem) -> Self {
+        Self {
+            id: item.id,
+            status: item.status,
+            title: item.title,
+            intent: item.intent,
+            acceptance_criteria: item.acceptance_criteria,
+            source_repo: item.source_repo,
+            source_ref: item.source_ref,
+            gitops_repo: item.gitops_repo,
+            gitops_ref: item.gitops_ref,
+            target_environment: item.target_environment,
+            target_namespace: item.target_namespace,
+            argo_application: item.argo_application,
+            production_impacting: item.production_impacting,
+            max_attempts: item.max_attempts,
+            max_elapsed_seconds: item.max_elapsed_seconds,
+            attempt_count: item.attempt_count,
+            current_run_id: item.current_run_id,
+            created_by: item.created_by,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status_changed_at: item.status_changed_at,
+            status_changed_by: item.status_changed_by,
+            status_reason: item.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemsResponse {
+    pub work_items: Vec<WorkItemResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionWorkItemRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceResponse {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub resolved_commit: Option<String>,
+    pub branch: Option<String>,
+    pub retention_status: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredWorkspace> for WorkspaceResponse {
+    fn from(workspace: StoredWorkspace) -> Self {
+        Self {
+            id: workspace.id,
+            work_item_id: workspace.work_item_id,
+            run_id: workspace.run_id,
+            status: workspace.status,
+            source_repo: workspace.source_repo,
+            source_ref: workspace.source_ref,
+            resolved_commit: workspace.resolved_commit,
+            branch: workspace.branch,
+            retention_status: workspace.retention_status,
+            created_at: workspace.created_at,
+            updated_at: workspace.updated_at,
+            status_changed_at: workspace.status_changed_at,
+            status_changed_by: workspace.status_changed_by,
+            status_reason: workspace.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspacesResponse {
+    pub workspaces: Vec<WorkspaceResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]

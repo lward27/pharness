@@ -4,6 +4,11 @@ Date: 2026-05-03
 
 Working name: `pharness`
 
+> Historical design plan. Its early phase-status narrative is superseded by
+> [autonomous-sdlc-roadmap.md](autonomous-sdlc-roadmap.md), which records the
+> deployed V2 control plane, the durable WorkItem/Workspace alpha, and the
+> next real-source-change cut line.
+
 ## Executive Summary
 
 Build a local-first coding agent harness with a Rust core runtime, Rust API/CLI, minimal TypeScript UI, and Fireworks AI as the primary model provider. V1 runs on a developer machine against a local project directory, but the core abstractions should assume the primary long-term operating context is a Kubernetes cluster. V2 moves the same runtime into a homelab Kubernetes deployment with per-run workspace sandboxes. V3 makes Kubernetes-native app delivery, observability, build, deploy, database, and long-lived context capabilities first-class.

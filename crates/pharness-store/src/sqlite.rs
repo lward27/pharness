@@ -6,18 +6,20 @@ use crate::{
     CreateAuditEvent, CreateChangeSet, CreateDeploymentContract, CreateDeploymentIntent,
     CreateFileChange, CreateIncident, CreateObservation, CreatePermissionGrant,
     CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkPlan, DeploymentContractListFilter,
-    DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
-    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
-    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
-    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
-    StoredAuditEvent, StoredChangeSet, StoredDeploymentContract, StoredDeploymentIntent,
-    StoredFileChange, StoredIncident, StoredObservation, StoredPermissionGrant,
-    StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
-    StoredRemediationPlan, StoredRun, StoredWorkPlan, UpdateChangeSetRevision,
-    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
-    UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
-    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkPlanListFilter,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter, IncidentListFilter,
+    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
+    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter,
+    ReplacePipelineContract, RunListFilter, RunSummary, RunSummaryFilter, StoredApproval,
+    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
+    StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredIncident,
+    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
+    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem,
+    StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
+    UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
+    UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
+    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkItemListFilter, WorkPlanListFilter,
+    WorkspaceListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -977,14 +979,15 @@ impl SqliteStore {
         sqlx::query(
             r#"
             INSERT INTO work_plans (
-              id, remediation_plan_id, incident_id, session_id, run_id, status, title, summary,
-              risk_level, requires_approval, resource_namespace, resource_kind, resource_name,
-              work_plan_json, created_at, updated_at, status_changed_at
+              id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status,
+              title, summary, risk_level, requires_approval, resource_namespace, resource_kind,
+              resource_name, work_plan_json, created_at, updated_at, status_changed_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
             "#,
         )
         .bind(&plan.id)
+        .bind(&plan.work_item_id)
         .bind(&plan.remediation_plan_id)
         .bind(&plan.incident_id)
         .bind(plan.session_id.as_str())
@@ -1012,6 +1015,216 @@ impl SqliteStore {
             })
     }
 
+    pub async fn create_work_item(
+        &self,
+        item: CreateWorkItem,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        let acceptance_criteria_json = serde_json::to_string(&item.acceptance_criteria)?;
+        sqlx::query(
+            r#"
+            INSERT INTO work_items (
+              id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
+              gitops_repo, gitops_ref, target_environment, target_namespace, argo_application,
+              production_impacting, max_attempts, max_elapsed_seconds, created_by, created_at,
+              updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17, ?17)
+            "#,
+        )
+        .bind(&item.id)
+        .bind(&item.status)
+        .bind(&item.title)
+        .bind(&item.intent)
+        .bind(acceptance_criteria_json)
+        .bind(&item.source_repo)
+        .bind(&item.source_ref)
+        .bind(item.gitops_repo)
+        .bind(item.gitops_ref)
+        .bind(&item.target_environment)
+        .bind(item.target_namespace)
+        .bind(item.argo_application)
+        .bind(if item.production_impacting { 1 } else { 0 })
+        .bind(i64::from(item.max_attempts))
+        .bind(i64::try_from(item.max_elapsed_seconds).unwrap_or(i64::MAX))
+        .bind(item.created_by)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_work_item(&item.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: item.id,
+            })
+    }
+
+    pub async fn get_work_item(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Option<StoredWorkItem>, StoreError> {
+        let row = sqlx::query(work_item_select_sql("WHERE id = ?1"))
+            .bind(work_item_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_work_item).transpose()
+    }
+
+    pub async fn list_work_items(
+        &self,
+        filter: WorkItemListFilter,
+    ) -> Result<Vec<StoredWorkItem>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let production_impacting =
+            filter
+                .production_impacting
+                .map(|value| if value { 1_i64 } else { 0_i64 });
+        let rows = sqlx::query(
+            r#"
+            SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
+                   gitops_repo, gitops_ref, target_environment, target_namespace,
+                   argo_application, production_impacting, max_attempts, max_elapsed_seconds,
+                   attempt_count, current_run_id, created_by, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM work_items
+            WHERE (?1 IS NULL OR status = ?1)
+              AND (?2 IS NULL OR source_repo = ?2)
+              AND (?3 IS NULL OR target_environment = ?3)
+              AND (?4 IS NULL OR target_namespace = ?4)
+              AND (?5 IS NULL OR production_impacting = ?5)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?6 OFFSET ?7
+            "#,
+        )
+        .bind(filter.status)
+        .bind(filter.source_repo)
+        .bind(filter.target_environment)
+        .bind(filter.target_namespace)
+        .bind(production_impacting)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_work_item).collect()
+    }
+
+    pub async fn update_work_item_status(
+        &self,
+        work_item_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET status = ?2,
+                updated_at = ?3,
+                status_changed_at = ?3,
+                status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
+    }
+
+    pub async fn create_workspace(
+        &self,
+        workspace: CreateWorkspace,
+    ) -> Result<StoredWorkspace, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO workspaces (
+              id, work_item_id, run_id, status, source_repo, source_ref, resolved_commit,
+              branch, retention_status, created_at, updated_at, status_changed_at,
+              status_changed_by, status_reason
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10, ?11, ?12)
+            "#,
+        )
+        .bind(&workspace.id)
+        .bind(&workspace.work_item_id)
+        .bind(workspace.run_id.as_ref().map(RunId::as_str))
+        .bind(&workspace.status)
+        .bind(&workspace.source_repo)
+        .bind(&workspace.source_ref)
+        .bind(workspace.resolved_commit)
+        .bind(workspace.branch)
+        .bind(&workspace.retention_status)
+        .bind(now)
+        .bind(workspace.actor)
+        .bind(workspace.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_workspace(&workspace.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "workspace".to_string(),
+                id: workspace.id,
+            })
+    }
+
+    pub async fn get_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Option<StoredWorkspace>, StoreError> {
+        let row = sqlx::query(workspace_select_sql("WHERE id = ?1"))
+            .bind(workspace_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_workspace).transpose()
+    }
+
+    pub async fn list_workspaces(
+        &self,
+        filter: WorkspaceListFilter,
+    ) -> Result<Vec<StoredWorkspace>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_item_id, run_id, status, source_repo, source_ref, resolved_commit,
+                   branch, retention_status, created_at, updated_at, status_changed_at,
+                   status_changed_by, status_reason
+            FROM workspaces
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR run_id = ?2)
+              AND (?3 IS NULL OR status = ?3)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?4 OFFSET ?5
+            "#,
+        )
+        .bind(filter.work_item_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_workspace).collect()
+    }
+
     pub async fn get_work_plan(
         &self,
         work_plan_id: &str,
@@ -1036,6 +1249,18 @@ impl SqliteStore {
         row.map(row_to_work_plan).transpose()
     }
 
+    pub async fn get_work_plan_by_work_item(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Option<StoredWorkPlan>, StoreError> {
+        let row = sqlx::query(work_plan_select_sql("WHERE work_item_id = ?1"))
+            .bind(work_item_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        row.map(row_to_work_plan).transpose()
+    }
+
     pub async fn list_work_plans(
         &self,
         filter: WorkPlanListFilter,
@@ -1044,25 +1269,27 @@ impl SqliteStore {
         let offset = i64::from(filter.offset);
         let rows = sqlx::query(
             r#"
-            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
-                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
-                   resource_name, work_plan_json, created_at, updated_at, revision,
-                   status_changed_at, status_changed_by, status_reason
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, requires_approval, resource_namespace,
+                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
+                   revision, status_changed_at, status_changed_by, status_reason
             FROM work_plans
-            WHERE (?1 IS NULL OR remediation_plan_id = ?1)
-              AND (?2 IS NULL OR incident_id = ?2)
-              AND (?3 IS NULL OR run_id = ?3)
-              AND (?4 IS NULL OR status = ?4)
-              AND (?5 IS NULL OR risk_level = ?5)
-              AND (?6 IS NULL OR resource_namespace = ?6)
-              AND (?7 IS NULL OR resource_kind = ?7)
-              AND (?8 IS NULL OR resource_name = ?8)
-              AND (?9 IS NULL OR CAST(created_at AS INTEGER) >= ?9)
-              AND (?10 IS NULL OR CAST(created_at AS INTEGER) <= ?10)
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR remediation_plan_id = ?2)
+              AND (?3 IS NULL OR incident_id = ?3)
+              AND (?4 IS NULL OR run_id = ?4)
+              AND (?5 IS NULL OR status = ?5)
+              AND (?6 IS NULL OR risk_level = ?6)
+              AND (?7 IS NULL OR resource_namespace = ?7)
+              AND (?8 IS NULL OR resource_kind = ?8)
+              AND (?9 IS NULL OR resource_name = ?9)
+              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
+              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
             ORDER BY created_at DESC, id DESC
-            LIMIT ?11 OFFSET ?12
+            LIMIT ?12 OFFSET ?13
             "#,
         )
+        .bind(filter.work_item_id)
         .bind(filter.remediation_plan_id)
         .bind(filter.incident_id)
         .bind(filter.run_id.as_ref().map(RunId::as_str))
@@ -3334,6 +3561,7 @@ fn row_to_work_plan(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkPlan, Stor
     let work_plan_json: String = row.try_get("work_plan_json")?;
     Ok(StoredWorkPlan {
         id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
         remediation_plan_id: row.try_get("remediation_plan_id")?,
         incident_id: row.try_get("incident_id")?,
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
@@ -3350,6 +3578,62 @@ fn row_to_work_plan(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkPlan, Stor
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
         revision: row.try_get("revision")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, StoreError> {
+    let acceptance_criteria_json: String = row.try_get("acceptance_criteria_json")?;
+    let current_run_id: Option<String> = row.try_get("current_run_id")?;
+    let max_attempts: i64 = row.try_get("max_attempts")?;
+    let max_elapsed_seconds: i64 = row.try_get("max_elapsed_seconds")?;
+    let attempt_count: i64 = row.try_get("attempt_count")?;
+    Ok(StoredWorkItem {
+        id: row.try_get("id")?,
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        intent: row.try_get("intent")?,
+        acceptance_criteria: serde_json::from_str(&acceptance_criteria_json)?,
+        source_repo: row.try_get("source_repo")?,
+        source_ref: row.try_get("source_ref")?,
+        gitops_repo: row.try_get("gitops_repo")?,
+        gitops_ref: row.try_get("gitops_ref")?,
+        target_environment: row.try_get("target_environment")?,
+        target_namespace: row.try_get("target_namespace")?,
+        argo_application: row.try_get("argo_application")?,
+        production_impacting: row.try_get::<i64, _>("production_impacting")? != 0,
+        max_attempts: u32::try_from(max_attempts)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        max_elapsed_seconds: u64::try_from(max_elapsed_seconds)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        attempt_count: u32::try_from(attempt_count)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        current_run_id: current_run_id.map(RunId::new),
+        created_by: row.try_get("created_by")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn row_to_workspace(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkspace, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    Ok(StoredWorkspace {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        source_repo: row.try_get("source_repo")?,
+        source_ref: row.try_get("source_ref")?,
+        resolved_commit: row.try_get("resolved_commit")?,
+        branch: row.try_get("branch")?,
+        retention_status: row.try_get("retention_status")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
         status_changed_at: row.try_get("status_changed_at")?,
         status_changed_by: row.try_get("status_changed_by")?,
         status_reason: row.try_get("status_reason")?,
@@ -3663,26 +3947,68 @@ fn remediation_plan_select_sql(where_clause: &str) -> &'static str {
     }
 }
 
+fn work_item_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
+                   gitops_repo, gitops_ref, target_environment, target_namespace,
+                   argo_application, production_impacting, max_attempts, max_elapsed_seconds,
+                   attempt_count, current_run_id, created_by, created_at, updated_at,
+                   status_changed_at, status_changed_by, status_reason
+            FROM work_items
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("work item select SQL only supports known static clauses"),
+    }
+}
+
+fn workspace_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, work_item_id, run_id, status, source_repo, source_ref, resolved_commit,
+                   branch, retention_status, created_at, updated_at, status_changed_at,
+                   status_changed_by, status_reason
+            FROM workspaces
+            WHERE id = ?1
+            "#
+        }
+        _ => unreachable!("workspace select SQL only supports known static clauses"),
+    }
+}
+
 fn work_plan_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
             r#"
-            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
-                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
-                   resource_name, work_plan_json, created_at, updated_at, revision,
-                   status_changed_at, status_changed_by, status_reason
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, requires_approval, resource_namespace,
+                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
+                   revision, status_changed_at, status_changed_by, status_reason
             FROM work_plans
             WHERE id = ?1
             "#
         }
         "WHERE remediation_plan_id = ?1" => {
             r#"
-            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, title,
-                   summary, risk_level, requires_approval, resource_namespace, resource_kind,
-                   resource_name, work_plan_json, created_at, updated_at, revision,
-                   status_changed_at, status_changed_by, status_reason
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, requires_approval, resource_namespace,
+                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
+                   revision, status_changed_at, status_changed_by, status_reason
             FROM work_plans
             WHERE remediation_plan_id = ?1
+            "#
+        }
+        "WHERE work_item_id = ?1" => {
+            r#"
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
+                   status, title, summary, risk_level, requires_approval, resource_namespace,
+                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
+                   revision, status_changed_at, status_changed_by, status_reason
+            FROM work_plans
+            WHERE work_item_id = ?1
             "#
         }
         _ => unreachable!("work plan select SQL only supports known static clauses"),
@@ -4548,6 +4874,8 @@ pub enum StoreError {
     Migrate(#[from] sqlx::migrate::MigrateError),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invalid stored data: {0}")]
+    InvalidData(String),
     #[error("{entity} not found: {id}")]
     NotFound { entity: String, id: String },
 }
@@ -5400,8 +5728,9 @@ mod tests {
         let work_plan = store
             .create_work_plan(crate::CreateWorkPlan {
                 id: "wplan_test".to_string(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                work_item_id: None,
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "draft".to_string(),
@@ -5428,6 +5757,7 @@ mod tests {
             .unwrap();
         let work_plans = store
             .list_work_plans(crate::WorkPlanListFilter {
+                work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id.clone()),
@@ -5444,7 +5774,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(fetched_work_plan.remediation_plan_id, "rplan_test");
+        assert_eq!(
+            fetched_work_plan.remediation_plan_id.as_deref(),
+            Some("rplan_test")
+        );
         assert_eq!(idempotency_lookup.id, "wplan_test");
         assert_eq!(work_plans.len(), 1);
         assert_eq!(work_plans[0].id, "wplan_test");
@@ -6162,5 +6495,98 @@ mod tests {
         assert_eq!(by_resource.len(), 1);
         assert_eq!(by_run[0].payload_json["grant_id"], "pgrant_1");
         assert_eq!(searched.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn persists_work_item_workspace_and_work_item_backed_work_plan() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let item = store
+            .create_work_item(crate::CreateWorkItem {
+                id: "witem_test".to_string(),
+                status: "planning".to_string(),
+                title: "Test work item".to_string(),
+                intent: "Make a focused change".to_string(),
+                acceptance_criteria: vec!["test passes".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 900,
+                created_by: Some("operator".to_string()),
+            })
+            .await
+            .unwrap();
+        let session_id = SessionId::new("ses_work_item_test");
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "work item test".to_string(),
+                cwd: "work-item/witem_test".to_string(),
+            })
+            .await
+            .unwrap();
+        let work_plan = store
+            .create_work_plan(crate::CreateWorkPlan {
+                id: "wplan_work_item_test".to_string(),
+                work_item_id: Some(item.id.clone()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id,
+                run_id: None,
+                status: "draft".to_string(),
+                title: "work item plan".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                work_plan_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let workspace = store
+            .create_workspace(crate::CreateWorkspace {
+                id: "ws_test".to_string(),
+                work_item_id: item.id.clone(),
+                run_id: None,
+                status: "declared".to_string(),
+                source_repo: item.source_repo.clone(),
+                source_ref: item.source_ref.clone(),
+                resolved_commit: None,
+                branch: None,
+                retention_status: "ephemeral".to_string(),
+                actor: Some("operator".to_string()),
+                reason: Some("test".to_string()),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            store
+                .get_work_plan_by_work_item(&item.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            work_plan.id
+        );
+        assert_eq!(
+            store
+                .list_workspaces(crate::WorkspaceListFilter {
+                    work_item_id: Some(item.id),
+                    limit: 10,
+                    ..crate::WorkspaceListFilter::default()
+                })
+                .await
+                .unwrap()[0]
+                .id,
+            workspace.id
+        );
     }
 }
