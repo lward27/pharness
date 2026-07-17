@@ -64,7 +64,8 @@ worker:
   maxConcurrentRunJobs: 1
   # Exact HTTPS repos permitted for Kubernetes coding workspaces. Keep empty
   # until DNS/egress and the disposable dev target have been reviewed.
-  workspaceAllowedRemoteRepos: []
+  workspaceAllowedRemoteRepos:
+    - https://github.com/lward27/yfinance_wrapper.git
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
 
