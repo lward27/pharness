@@ -517,6 +517,16 @@ pub struct WorkspaceListFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateWorkspaceExecution {
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub resolved_commit: Option<String>,
+    pub branch: Option<String>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateWorkPlanRevision {
     pub title: Option<String>,
     pub summary: Option<String>,
@@ -530,9 +540,10 @@ pub struct UpdateWorkPlanRevision {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateChangeSet {
     pub id: String,
+    pub work_item_id: Option<String>,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -549,9 +560,10 @@ pub struct CreateChangeSet {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredChangeSet {
     pub id: String,
+    pub work_item_id: Option<String>,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -573,6 +585,7 @@ pub struct StoredChangeSet {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ChangeSetListFilter {
+    pub work_item_id: Option<String>,
     pub work_plan_id: Option<String>,
     pub remediation_plan_id: Option<String>,
     pub incident_id: Option<String>,

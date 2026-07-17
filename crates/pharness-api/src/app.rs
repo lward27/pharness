@@ -5,9 +5,10 @@ use crate::dto::{
     AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
     AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
     AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
-    ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest, CreateChangeSetResponse,
-    CreateDeploymentContractRequest, CreateDeploymentIntentFromPipelineIntentRequest,
-    CreateDeploymentIntentResponse, CreateIncidentRequest, CreateObservationRequest,
+    CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest,
+    CreateChangeSetResponse, CreateDeploymentContractRequest,
+    CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
+    CreateGitDeliveryAuthorizationRequest, CreateIncidentRequest, CreateObservationRequest,
     CreatePermissionGrantRequest, CreatePipelineContractRequest,
     CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
     CreatePipelineIntentTrustedEnvelopeRequest, CreateRegistryEvidenceFromInspectionRequest,
@@ -19,27 +20,31 @@ use crate::dto::{
     DecideApprovalRequest, DecideApprovalResponse, DeploymentContractResponse,
     DeploymentContractsResponse, DeploymentIntentResponse, DeploymentIntentsResponse,
     EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
-    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, FileChangeResponse,
-    IncidentResponse, IncidentsResponse, ObservationResponse, ObservationsResponse,
-    PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
-    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest, PipelineIntentResponse,
-    PipelineIntentsResponse, RegistryEvidenceListResponse, RegistryEvidenceResponse,
-    ReleaseResponse, ReleasesResponse, RemediationPlanResponse, RemediationPlansResponse,
-    ReplacePipelineContractRequest, ReplacePipelineContractResponse, ReviewApprovalRequest,
-    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
-    RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
-    SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
-    SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
-    TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
-    TransitionDeploymentIntentResponse, TransitionPipelineContractRequest,
-    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
-    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
-    TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkItemRequest,
-    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TrustedEnvelopeResponse,
-    WorkItemResponse, WorkItemsResponse, WorkPlanResponse, WorkPlansResponse, WorkspaceResponse,
-    WorkspacesResponse,
+    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemRequest,
+    ExecuteWorkItemResponse, FileChangeResponse, GitDeliveryAuthorizationResponse,
+    GitDeliveryFlowResponse, GitDeliveryPlanResponse, GitDeliveryPreflightRequest,
+    GitDeliveryPreflightResponse, IncidentResponse, IncidentsResponse, ObservationResponse,
+    ObservationsResponse, PermissionGrantResponse, PermissionGrantsResponse,
+    PipelineContractResponse, PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest,
+    PipelineIntentResponse, PipelineIntentsResponse, PrepareGitDeliveryRequest,
+    ReconcileWorkItemRequest, ReconcileWorkItemResponse, RegistryEvidenceListResponse,
+    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
+    RemediationPlansResponse, ReplacePipelineContractRequest, ReplacePipelineContractResponse,
+    ReviewApprovalRequest, ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest,
+    ReviseWorkPlanResponse, RevokePermissionGrantRequest, RunDiffResponse, RunResponse,
+    RunSummaryResponse, RunsResponse, SdlcFlowResponse, SdlcReadinessFinding,
+    SdlcReadinessGateSummary, SdlcReadinessGrantSummary, SdlcReadinessResponse,
+    TransitionChangeSetRequest, TransitionChangeSetResponse, TransitionDeploymentContractRequest,
+    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
+    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
+    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
+    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
+    TransitionWorkItemRequest, TransitionWorkPlanRequest, TransitionWorkPlanResponse,
+    TrustedEnvelopeResponse, WorkItemResponse, WorkItemsResponse, WorkPlanResponse,
+    WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
+use crate::workspace::WorkspaceProvisioner;
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
@@ -51,19 +56,19 @@ use futures::stream::{self, Stream};
 use pharness_core::{
     AgentAction, AgentEvent, CapabilityKind, EventId, EventKind, PermissionGrant,
     PermissionGrantPolicy, PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools,
-    RiskLevel, RunId, SafetyPolicy, SessionId, ToolExecutor, ToolResult,
+    RiskLevel, RunId, RunScope, SafetyPolicy, SessionId, ToolExecutor, ToolResult,
 };
-use pharness_runhost::AttemptOutcome;
+use pharness_runhost::{AttemptOutcome, WorkspaceSourceSpec};
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
     AuditEventListFilter, ChangeSetListFilter, DeploymentContractListFilter,
     DeploymentIntentListFilter, IncidentListFilter, ObservationListFilter,
     PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
     ReleaseListFilter, RemediationPlanListFilter, RunListFilter, RunSummaryFilter,
-    StoredApprovalGate, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
-    StoredDeploymentIntent, StoredIncident, StoredObservation, StoredPermissionGrant,
-    StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence, StoredRelease,
-    StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, UpdateChangeSetRevision,
+    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
+    StoredDeploymentContract, StoredDeploymentIntent, StoredIncident, StoredObservation,
+    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, UpdateChangeSetRevision,
     UpdateDeploymentIntentDraft, UpdatePipelineIntentDraft, UpdatePipelineIntentExecution,
     UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
     WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
@@ -74,12 +79,13 @@ use pharness_store::{
     CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
     CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
     CreateWorkspace, ReplacePipelineContract, SqliteStore, StoreError,
-    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence,
+    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence, UpdateWorkspaceExecution,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
+use std::path::Path as FsPath;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::timeout;
@@ -90,6 +96,14 @@ const DEFAULT_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 60_000;
 const MAX_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_POLICY_SUBJECT: &str = "agent:local-worker";
 const DEFAULT_TRUSTED_ENVELOPE_ENVIRONMENT: &str = "local";
+const DEFAULT_GIT_WRITER_SUBJECT: &str = "agent:git-writer";
+const GIT_DELIVERY_ENVIRONMENT: &str = "dev";
+const GIT_DELIVERY_ACTIONS: [&str; 4] = [
+    "git_create_branch",
+    "git_commit",
+    "git_push",
+    "github_create_pull_request",
+];
 
 #[derive(Clone)]
 pub struct AppState {
@@ -99,6 +113,7 @@ pub struct AppState {
     policy: SafetyPolicy,
     worker_token: Option<String>,
     operator_tokens: Arc<Vec<(String, String)>>,
+    workspace: WorkspaceProvisioner,
 }
 
 pub fn router(
@@ -108,6 +123,7 @@ pub fn router(
     policy: SafetyPolicy,
     worker_token: Option<String>,
     operator_tokens: Vec<(String, String)>,
+    workspace: WorkspaceProvisioner,
 ) -> Router {
     let state = AppState {
         store,
@@ -116,6 +132,7 @@ pub fn router(
         policy,
         worker_token,
         operator_tokens: Arc::new(operator_tokens),
+        workspace,
     };
 
     let internal = Router::new()
@@ -126,6 +143,10 @@ pub fn router(
         .route(
             "/api/internal/runs/:run_id/mark-running",
             post(internal_mark_running),
+        )
+        .route(
+            "/api/internal/runs/:run_id/workspace-provisioned",
+            post(internal_workspace_provisioned),
         )
         .route(
             "/api/internal/runs/:run_id/events",
@@ -189,6 +210,18 @@ pub fn router(
             post(create_work_plan_from_work_item),
         )
         .route(
+            "/api/work-items/:work_item_id/reconcile",
+            post(reconcile_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/execute",
+            post(execute_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/capture-change-set",
+            post(capture_work_item_change_set),
+        )
+        .route(
             "/api/work-items/:work_item_id/transition",
             post(transition_work_item),
         )
@@ -242,6 +275,18 @@ pub fn router(
         .route(
             "/api/change-sets/:change_set_id/trusted-envelope",
             post(create_change_set_trusted_envelope),
+        )
+        .route(
+            "/api/change-sets/:change_set_id/git-delivery/prepare",
+            post(prepare_change_set_git_delivery),
+        )
+        .route(
+            "/api/change-sets/:change_set_id/git-delivery/authorize",
+            post(authorize_change_set_git_delivery),
+        )
+        .route(
+            "/api/change-sets/:change_set_id/git-delivery/preflight",
+            post(preflight_change_set_git_delivery),
         )
         .route("/api/pipeline-intents", get(list_pipeline_intents))
         .route(
@@ -513,6 +558,12 @@ async fn internal_attempt_context(
     let spec = attempt_spec_for_run(&state.store, &run, &cwd, approval.as_ref())
         .await
         .map_err(|error| ApiError::internal(error.to_string()))?;
+    if let Some(source) = &spec.run.workspace_source {
+        state
+            .workspace
+            .remote_source_allowed(source)
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
+    }
 
     Ok(Json(spec))
 }
@@ -525,6 +576,103 @@ async fn internal_mark_running(
     let run = state.store.mark_run_running(&run_id).await?;
 
     Ok(Json(run.into()))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InternalWorkspaceProvisionedRequest {
+    workspace_id: String,
+    resolved_commit: String,
+    branch: String,
+}
+
+async fn internal_workspace_provisioned(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    Json(request): Json<InternalWorkspaceProvisionedRequest>,
+) -> Result<Json<WorkspaceResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let mut source = run
+        .execution_target_json
+        .get("workspace_source")
+        .cloned()
+        .ok_or_else(|| ApiError::conflict("run has no typed workspace source"))
+        .and_then(|value| {
+            serde_json::from_value::<pharness_runhost::WorkspaceSourceSpec>(value).map_err(
+                |error| ApiError::conflict(format!("run has invalid workspace source: {error}")),
+            )
+        })?;
+    if source.workspace_id != request.workspace_id || source.branch != request.branch {
+        return Err(ApiError::conflict(
+            "workspace provision report does not match the issued source contract",
+        ));
+    }
+    source.resolved_commit = Some(request.resolved_commit);
+    source
+        .validate()
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    state
+        .workspace
+        .remote_source_allowed(&source)
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+
+    let scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();
+    if scope.workspace_id.as_deref() != Some(source.workspace_id.as_str()) {
+        return Err(ApiError::conflict(
+            "workspace provision report does not match the run scope",
+        ));
+    }
+    let workspace = state
+        .store
+        .get_workspace(&source.workspace_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("workspace", &source.workspace_id))?;
+    if workspace.run_id.as_ref() != Some(&run.id)
+        || scope.work_item_id.as_deref() != Some(workspace.work_item_id.as_str())
+        || workspace.source_repo != source.source_repo
+        || workspace.source_ref != source.source_ref
+    {
+        return Err(ApiError::conflict(
+            "workspace provision report is not authorized for this run",
+        ));
+    }
+    if workspace.status == "executing"
+        && workspace.resolved_commit.as_deref() == source.resolved_commit.as_deref()
+        && workspace.branch.as_deref() == Some(source.branch.as_str())
+    {
+        return Ok(Json(workspace.into()));
+    }
+    if workspace.status != "provisioning" {
+        return Err(ApiError::conflict(
+            "workspace is not awaiting source provisioning",
+        ));
+    }
+    let workspace = state
+        .store
+        .update_workspace_execution(
+            &workspace.id,
+            UpdateWorkspaceExecution {
+                run_id: Some(run.id.clone()),
+                status: "executing".to_string(),
+                resolved_commit: source.resolved_commit.clone(),
+                branch: Some(source.branch.clone()),
+                actor: Some("agent:cluster-worker".to_string()),
+                reason: Some("remote source pinned by worker".to_string()),
+            },
+        )
+        .await?;
+    append_workspace_audit_event(
+        &state.store,
+        &workspace,
+        "workspace.provisioned",
+        Some("agent:cluster-worker".to_string()),
+    )
+    .await?;
+    Ok(Json(workspace.into()))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -626,6 +774,10 @@ async fn config_effective(
         },
         "policy": policy_json(&state.policy),
         "worker": worker,
+        "workspace": {
+            "local_coding_enabled": state.worker.supports_local_workspace() && state.workspace.configured(),
+            "allowed_repo_count": state.workspace.allowed_repo_count(),
+        },
         "operator": operator,
     }))
 }
@@ -2005,10 +2157,909 @@ async fn create_work_plan_from_work_item(
     .await?;
     append_workspace_audit_event(&state.store, &workspace, "workspace.declared", actor).await?;
 
+    let work_item = state
+        .store
+        .update_work_item_status(
+            &work_item.id,
+            "awaiting_approval",
+            None,
+            Some("WorkPlan and workspace are ready for review".to_string()),
+        )
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        "work_item.awaiting_approval",
+        None,
+        json!({ "work_plan_id": work_plan.id, "workspace_id": workspace.id }),
+    )
+    .await?;
+
     Ok(Json(CreateWorkPlanResponse {
         work_plan: work_plan.into(),
         created: true,
     }))
+}
+
+async fn reconcile_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<ReconcileWorkItemRequest>,
+) -> Result<Json<ReconcileWorkItemResponse>, ApiError> {
+    let actor = identity
+        .as_ref()
+        .map(|Extension(OperatorIdentity(name))| name.clone())
+        .or_else(|| clean_optional_text(request.actor.clone()));
+    let reason = clean_optional_text(request.reason.clone());
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?;
+    let change_set = match &work_plan {
+        Some(work_plan) => {
+            state
+                .store
+                .get_change_set_by_work_plan(&work_plan.id)
+                .await?
+        }
+        None => None,
+    };
+
+    let action = work_item_reconcile_action(&work_item, work_plan.as_ref(), change_set.as_ref());
+    if !request.apply {
+        return reconcile_work_item_response(
+            &state,
+            &work_item_id,
+            action,
+            false,
+            None,
+            "preview only; pass apply=true to perform the reported safe transition".to_string(),
+        )
+        .await
+        .map(Json);
+    }
+
+    match action {
+        WorkItemReconcileAction::DeclareWorkPlan => {
+            if work_item.status == "submitted" {
+                let planning = state
+                    .store
+                    .update_work_item_status(
+                        &work_item.id,
+                        "planning",
+                        actor.clone(),
+                        reason.clone().or_else(|| {
+                            Some("controller advanced submitted WorkItem to planning".to_string())
+                        }),
+                    )
+                    .await?;
+                append_work_item_audit_event(
+                    &state.store,
+                    &planning,
+                    "work_item.planning",
+                    actor.clone(),
+                    json!({ "source": "work_item.reconcile" }),
+                )
+                .await?;
+            }
+            let _ = create_work_plan_from_work_item(
+                State(state.clone()),
+                identity.clone(),
+                Path(work_item_id.clone()),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                None,
+                "declared the deterministic WorkPlan and ephemeral workspace; WorkPlan approval is now required"
+                    .to_string(),
+            )
+            .await
+            .map(Json)
+        }
+        WorkItemReconcileAction::StartCodingAttempt => {
+            let Json(execution) = execute_work_item(
+                State(state.clone()),
+                identity,
+                Path(work_item_id.clone()),
+                Json(ExecuteWorkItemRequest {
+                    actor,
+                    reason,
+                    max_turns: request.max_turns,
+                }),
+            )
+            .await?;
+            Ok(Json(ReconcileWorkItemResponse {
+                action: action.as_str().to_string(),
+                applied: true,
+                work_item: execution.work_item,
+                work_plan: state
+                    .store
+                    .get_work_plan_by_work_item(&work_item_id)
+                    .await?
+                    .map(Into::into),
+                workspace: Some(execution.workspace),
+                run: Some(execution.run),
+                change_set: None,
+                git_delivery_preflight: None,
+                message: "started one bounded coding attempt in the declared isolated workspace"
+                    .to_string(),
+            }))
+        }
+        WorkItemReconcileAction::CaptureChangeSet => {
+            let Json(captured) = capture_work_item_change_set(
+                State(state.clone()),
+                identity,
+                Path(work_item_id.clone()),
+                Json(CaptureWorkItemChangeSetRequest { actor, reason }),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                None,
+                format!(
+                    "captured ChangeSet {}; source review is now required",
+                    captured.change_set.id
+                ),
+            )
+            .await
+            .map(Json)
+        }
+        WorkItemReconcileAction::PrepareGitDelivery => {
+            let Json(_) = prepare_change_set_git_delivery(
+                State(state.clone()),
+                Path(
+                    change_set
+                        .as_ref()
+                        .expect("reconcile action requires a ChangeSet")
+                        .id
+                        .clone(),
+                ),
+                Json(PrepareGitDeliveryRequest {
+                    actor: actor.clone(),
+                    reason: reason.clone().or_else(|| {
+                        Some("controller prepared immutable Git delivery plan".to_string())
+                    }),
+                }),
+            )
+            .await?;
+            let Json(preflight) = preflight_change_set_git_delivery(
+                State(state.clone()),
+                identity,
+                Path(
+                    change_set
+                        .as_ref()
+                        .expect("reconcile action requires a ChangeSet")
+                        .id
+                        .clone(),
+                ),
+                Json(GitDeliveryPreflightRequest {
+                    subject: None,
+                    actor,
+                    reason,
+                }),
+            )
+            .await?;
+            let message = if preflight.authorization_ready {
+                "prepared and preflighted Git delivery; it is ready for the isolated Git writer"
+                    .to_string()
+            } else {
+                "prepared and preflighted Git delivery; a matching Git writer grant is required"
+                    .to_string()
+            };
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                Some(preflight),
+                message,
+            )
+            .await
+            .map(Json)
+        }
+        _ => reconcile_work_item_response(
+            &state,
+            &work_item_id,
+            action,
+            false,
+            None,
+            action.message(&work_item, work_plan.as_ref(), change_set.as_ref()),
+        )
+        .await
+        .map(Json),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkItemReconcileAction {
+    DeclareWorkPlan,
+    AwaitingWorkPlanApproval,
+    StartCodingAttempt,
+    WaitForCodingAttempt,
+    CaptureChangeSet,
+    AwaitingChangeSetApproval,
+    PrepareGitDelivery,
+    RequiresReplan,
+    Terminal,
+}
+
+impl WorkItemReconcileAction {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::DeclareWorkPlan => "declare_work_plan",
+            Self::AwaitingWorkPlanApproval => "awaiting_work_plan_approval",
+            Self::StartCodingAttempt => "start_coding_attempt",
+            Self::WaitForCodingAttempt => "wait_for_coding_attempt",
+            Self::CaptureChangeSet => "capture_change_set",
+            Self::AwaitingChangeSetApproval => "awaiting_change_set_approval",
+            Self::PrepareGitDelivery => "prepare_git_delivery",
+            Self::RequiresReplan => "requires_replan",
+            Self::Terminal => "terminal",
+        }
+    }
+
+    fn message(
+        self,
+        work_item: &StoredWorkItem,
+        work_plan: Option<&StoredWorkPlan>,
+        change_set: Option<&StoredChangeSet>,
+    ) -> String {
+        match self {
+            Self::AwaitingWorkPlanApproval => work_plan
+                .map(|plan| format!("WorkPlan {} is {} and requires approval", plan.id, plan.status))
+                .unwrap_or_else(|| "WorkItem requires a WorkPlan".to_string()),
+            Self::WaitForCodingAttempt => "coding attempt is still running or awaiting its durable outcome".to_string(),
+            Self::AwaitingChangeSetApproval => change_set
+                .map(|change_set| {
+                    format!(
+                        "ChangeSet {} is {} and requires source review",
+                        change_set.id, change_set.status
+                    )
+                })
+                .unwrap_or_else(|| "ChangeSet capture is pending".to_string()),
+            Self::RequiresReplan => format!(
+                "WorkItem is {} after {}/{} coding attempts; explicit replan or cancellation is required",
+                work_item.status, work_item.attempt_count, work_item.max_attempts
+            ),
+            Self::Terminal => format!("WorkItem is terminal: {}", work_item.status),
+            _ => format!("next action is {}", self.as_str()),
+        }
+    }
+}
+
+fn work_item_reconcile_action(
+    work_item: &StoredWorkItem,
+    work_plan: Option<&StoredWorkPlan>,
+    change_set: Option<&StoredChangeSet>,
+) -> WorkItemReconcileAction {
+    match work_item.status.as_str() {
+        "submitted" | "planning" => WorkItemReconcileAction::DeclareWorkPlan,
+        "awaiting_approval" => match change_set {
+            Some(change_set) if change_set.status == "approved" => {
+                WorkItemReconcileAction::PrepareGitDelivery
+            }
+            Some(_) => WorkItemReconcileAction::AwaitingChangeSetApproval,
+            None if work_plan.is_some_and(|plan| plan.status == "approved") => {
+                WorkItemReconcileAction::StartCodingAttempt
+            }
+            None => WorkItemReconcileAction::AwaitingWorkPlanApproval,
+        },
+        "executing" => WorkItemReconcileAction::WaitForCodingAttempt,
+        "verifying" => WorkItemReconcileAction::CaptureChangeSet,
+        "blocked" | "failed" => WorkItemReconcileAction::RequiresReplan,
+        "completed" | "cancelled" => WorkItemReconcileAction::Terminal,
+        _ => WorkItemReconcileAction::RequiresReplan,
+    }
+}
+
+async fn reconcile_work_item_response(
+    state: &AppState,
+    work_item_id: &str,
+    action: WorkItemReconcileAction,
+    applied: bool,
+    git_delivery_preflight: Option<GitDeliveryPreflightResponse>,
+    message: String,
+) -> Result<ReconcileWorkItemResponse, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let work_plan = state.store.get_work_plan_by_work_item(work_item_id).await?;
+    let change_set = match &work_plan {
+        Some(work_plan) => {
+            state
+                .store
+                .get_change_set_by_work_plan(&work_plan.id)
+                .await?
+        }
+        None => None,
+    };
+    let workspace = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: Some(work_item_id.to_string()),
+            limit: 50,
+            ..WorkspaceListFilter::default()
+        })
+        .await?
+        .into_iter()
+        .max_by(|left, right| {
+            left.updated_at
+                .cmp(&right.updated_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+    let run = match &work_item.current_run_id {
+        Some(run_id) => state.store.get_run(run_id).await?,
+        None => None,
+    };
+
+    Ok(ReconcileWorkItemResponse {
+        action: action.as_str().to_string(),
+        applied,
+        work_item: work_item.into(),
+        work_plan: work_plan.map(Into::into),
+        workspace: workspace.map(Into::into),
+        run: run.map(Into::into),
+        change_set: change_set.map(Into::into),
+        git_delivery_preflight,
+        message,
+    })
+}
+
+async fn execute_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<ExecuteWorkItemRequest>,
+) -> Result<Json<ExecuteWorkItemResponse>, ApiError> {
+    let local_workspace = state.worker.supports_local_workspace();
+    let remote_workspace = state.worker.supports_remote_workspace();
+    if !local_workspace && !remote_workspace {
+        return Err(ApiError::conflict(
+            "real coding alpha requires a local or Kubernetes worker",
+        ));
+    }
+    if remote_workspace && !state.workspace.remote_configured() {
+        return Err(ApiError::conflict(
+            "Kubernetes coding requires PHARNESS_WORKSPACE_ALLOWED_REMOTE_REPOS",
+        ));
+    }
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    if work_item.production_impacting || work_item.target_environment != "dev" {
+        return Err(ApiError::conflict(
+            "real coding alpha is limited to non-production WorkItems targeting dev",
+        ));
+    }
+    if work_item.status != "awaiting_approval" {
+        return Err(ApiError::conflict(
+            "WorkItem must be awaiting_approval before an execution attempt can start",
+        ));
+    }
+    if work_item.attempt_count >= work_item.max_attempts {
+        return Err(ApiError::conflict("WorkItem attempt budget is exhausted"));
+    }
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem has no WorkPlan"))?;
+    if work_plan.status != "approved" {
+        return Err(ApiError::conflict(
+            "WorkItem WorkPlan must be approved before source execution",
+        ));
+    }
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let workspace = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: Some(work_item_id.clone()),
+            status: Some("declared".to_string()),
+            limit: 1,
+            ..Default::default()
+        })
+        .await?
+        .into_iter()
+        .next();
+    let workspace = match workspace {
+        Some(workspace) => workspace,
+        None => {
+            state
+                .store
+                .create_workspace(CreateWorkspace {
+                    id: format!("ws_{}", unique_suffix()),
+                    work_item_id: work_item.id.clone(),
+                    run_id: None,
+                    status: "declared".to_string(),
+                    source_repo: work_item.source_repo.clone(),
+                    source_ref: work_item.source_ref.clone(),
+                    resolved_commit: None,
+                    branch: None,
+                    retention_status: "ephemeral".to_string(),
+                    actor: actor.clone(),
+                    reason: Some("retry attempt requires a fresh isolated workspace".to_string()),
+                })
+                .await?
+        }
+    };
+    let reason = clean_optional_text(request.reason).unwrap_or_else(|| {
+        if local_workspace {
+            "bounded local coding attempt".to_string()
+        } else {
+            "bounded Kubernetes coding attempt".to_string()
+        }
+    });
+    let attempt = work_item.attempt_count + 1;
+    let (cwd, branch, base_commit, workspace_source, workspace_status, execution_kind) =
+        if local_workspace {
+            let provisioned = state
+                .workspace
+                .provision(
+                    &work_item.id,
+                    attempt,
+                    &work_item.source_repo,
+                    &work_item.source_ref,
+                )
+                .await
+                .map_err(|error| ApiError::conflict(error.to_string()))?;
+            (
+                provisioned.cwd.to_string_lossy().to_string(),
+                provisioned.branch,
+                Some(provisioned.resolved_commit),
+                None,
+                "executing",
+                "local_workspace",
+            )
+        } else {
+            let branch = format!("pharness/{}/attempt-{attempt}", work_item.id);
+            let source = pharness_runhost::WorkspaceSourceSpec {
+                workspace_id: workspace.id.clone(),
+                source_repo: work_item.source_repo.clone(),
+                source_ref: work_item.source_ref.clone(),
+                branch: branch.clone(),
+                resolved_commit: None,
+            };
+            state
+                .workspace
+                .remote_source_allowed(&source)
+                .map_err(|error| ApiError::conflict(error.to_string()))?;
+            (
+                state.worker.effective_cwd("/workspace"),
+                branch,
+                None,
+                Some(source),
+                "provisioning",
+                "kubernetes_workspace",
+            )
+        };
+    let run_id = RunId::new(format!("run_{}", unique_suffix()));
+    let session_id = SessionId::new(format!("ses_{}", run_id.as_str()));
+    let run_scope = RunScope {
+        namespace: work_item.target_namespace.clone(),
+        repo: Some(work_item.source_repo.clone()),
+        branch: Some(branch.clone()),
+        work_item_id: Some(work_item.id.clone()),
+        workspace_id: Some(workspace.id.clone()),
+        work_plan_id: Some(work_plan.id.clone()),
+        change_set_id: None,
+        production_impacting: false,
+    };
+    let mut policy = run_policy(&state.policy, None);
+    policy.permission_grants = active_permission_grants(&state.store).await?;
+    state
+        .store
+        .create_session(CreateSession {
+            id: session_id.clone(),
+            title: format!("WorkItem attempt: {}", work_item.title),
+            cwd: cwd.clone(),
+        })
+        .await?;
+    let run = state
+        .store
+        .create_run(CreateRun {
+            id: run_id.clone(),
+            session_id: session_id.clone(),
+            user_task: coding_task_prompt(&work_item),
+            cwd: cwd.clone(),
+            max_turns: request.max_turns.unwrap_or(24).clamp(1, 40),
+            initial_status: "queued".to_string(),
+            execution_target_json: json!({
+                "kind": execution_kind,
+                "policy": &policy,
+                "run_scope": run_scope.to_optional_json(),
+                "workspace": {
+                    "base_commit": base_commit,
+                    "branch": branch,
+                },
+                "workspace_source": workspace_source,
+            }),
+        })
+        .await?;
+    state
+        .store
+        .append_event(&AgentEvent {
+            event_id: EventId::new(format!("evt_{}_1", run_id.as_str())),
+            session_id: session_id.clone(),
+            run_id: run_id.clone(),
+            seq: 1,
+            kind: EventKind::RunQueued,
+            payload: json!({
+                "source": "work_item.execute",
+                "worker": state.worker.mode(),
+                "provider": state.worker.config_json().get("provider"),
+                "model": state.worker.config_json().get("model"),
+                "run_scope": run_scope.to_optional_json(),
+                "base_commit": base_commit,
+                "branch": branch,
+            }),
+        })
+        .await?;
+    let workspace = state
+        .store
+        .update_workspace_execution(
+            &workspace.id,
+            UpdateWorkspaceExecution {
+                run_id: Some(run_id.clone()),
+                status: workspace_status.to_string(),
+                resolved_commit: base_commit.clone(),
+                branch: Some(branch.clone()),
+                actor: actor.clone(),
+                reason: Some(reason.clone()),
+            },
+        )
+        .await?;
+    let work_item = state
+        .store
+        .start_work_item_attempt(&work_item.id, &run_id, actor.clone(), Some(reason))
+        .await?;
+    append_workspace_audit_event(
+        &state.store,
+        &workspace,
+        if local_workspace {
+            "workspace.provisioned"
+        } else {
+            "workspace.provisioning_requested"
+        },
+        actor.clone(),
+    )
+    .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        "work_item.execution_started",
+        actor,
+        json!({ "workspace_id": workspace.id, "run_id": run_id, "base_commit": workspace.resolved_commit, "branch": workspace.branch, "execution_kind": execution_kind }),
+    )
+    .await?;
+    state.worker.spawn_run(run.clone(), cwd);
+    Ok(Json(ExecuteWorkItemResponse {
+        work_item: work_item.into(),
+        workspace: workspace.into(),
+        run: run.into(),
+    }))
+}
+
+async fn capture_work_item_change_set(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<CaptureWorkItemChangeSetRequest>,
+) -> Result<Json<CreateChangeSetResponse>, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    if !matches!(work_item.status.as_str(), "executing" | "verifying") {
+        return Err(ApiError::conflict(
+            "WorkItem has no completed coding attempt to capture",
+        ));
+    }
+    let workspace = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: Some(work_item_id.clone()),
+            status: Some("verifying".to_string()),
+            limit: 1,
+            ..Default::default()
+        })
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| {
+            ApiError::conflict("WorkItem has no completed workspace ready for capture")
+        })?;
+    let run_id = workspace
+        .run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("workspace has no run"))?;
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    if run.status != "completed" {
+        return Err(ApiError::conflict(
+            "coding run must complete before ChangeSet capture",
+        ));
+    }
+    if state
+        .store
+        .get_change_set_by_work_plan(
+            &state
+                .store
+                .get_work_plan_by_work_item(&work_item_id)
+                .await?
+                .ok_or_else(|| ApiError::conflict("WorkItem has no WorkPlan"))?
+                .id,
+        )
+        .await?
+        .is_some()
+    {
+        return Err(ApiError::conflict(
+            "WorkItem already has a captured ChangeSet",
+        ));
+    }
+    let base_commit = workspace
+        .resolved_commit
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("workspace has no pinned base commit"))?;
+    let (evidence, diff_artifact_id, status_artifact_id, test_events) = if run
+        .execution_target_json
+        .get("workspace_source")
+        .is_some()
+    {
+        worker_workspace_evidence(&state.store, &run, &workspace).await?
+    } else {
+        state
+            .workspace
+            .ensure_managed(FsPath::new(&run.cwd))
+            .await
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
+        let evidence = crate::workspace::collect_git_evidence(FsPath::new(&run.cwd), base_commit)
+            .await
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
+        let artifact = state
+            .store
+            .create_artifact(CreateArtifact {
+                id: format!("art_{}", unique_suffix()),
+                session_id: run.session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "workspace_git_diff".to_string(),
+                label: format!("Git diff for {}", work_item.title),
+                mime_type: Some("text/x-diff".to_string()),
+                path: None,
+                content_text: Some(evidence.diff.clone()),
+                content_json: None,
+            })
+            .await?;
+        let test_events = shell_test_evidence(&state.store.list_events(&run_id).await?);
+        let source_status = state.store.create_artifact(CreateArtifact {
+                id: format!("art_{}", unique_suffix()), session_id: run.session_id.clone(), run_id: Some(run_id.clone()),
+                kind: "workspace_git_status".to_string(), label: "Captured Git status and test summaries".to_string(),
+                mime_type: Some("application/json".to_string()), path: None, content_text: None,
+                content_json: Some(json!({ "status": evidence.status, "changed_paths": evidence.changed_paths, "test_events": test_events })),
+            }).await?;
+        (evidence, artifact.id, source_status.id, test_events)
+    };
+    if evidence.changed_paths.is_empty() || evidence.diff.is_empty() {
+        return Err(ApiError::conflict("coding run produced no source diff"));
+    }
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem has no WorkPlan"))?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let diff_hash = format!("{:x}", Sha256::digest(evidence.diff.as_bytes()));
+    let change_set_json = json!({
+        "source": { "kind": "workspace_git", "work_item_id": work_item.id, "workspace_id": workspace.id, "base_commit": base_commit, "branch": workspace.branch },
+        "evidence": { "git_diff_artifact_id": diff_artifact_id, "git_status_artifact_id": status_artifact_id, "diff_sha256": diff_hash, "changed_paths": evidence.changed_paths },
+        "verification": { "run_id": run_id, "test_event_count": test_events.len() }
+    });
+    let change_set = state
+        .store
+        .create_change_set(CreateChangeSet {
+            id: format!("cset_{}", unique_suffix()),
+            work_item_id: Some(work_item.id.clone()),
+            work_plan_id: work_plan.id.clone(),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: run.session_id.clone(),
+            run_id: Some(run_id.clone()),
+            status: "proposed".to_string(),
+            title: format!("ChangeSet: {}", work_item.title),
+            summary: run
+                .result_json
+                .as_ref()
+                .and_then(|result| result.get("summary"))
+                .and_then(Value::as_str)
+                .unwrap_or(&work_item.intent)
+                .to_string(),
+            risk_level: work_plan.risk_level.clone(),
+            material_hash: material_hash(&change_set_json)?,
+            resource_namespace: work_plan.resource_namespace.clone(),
+            resource_kind: work_plan.resource_kind.clone(),
+            resource_name: work_plan.resource_name.clone(),
+            change_set_json,
+        })
+        .await?;
+    let workspace = state
+        .store
+        .update_workspace_execution(
+            &workspace.id,
+            UpdateWorkspaceExecution {
+                run_id: Some(run_id.clone()),
+                status: "captured".to_string(),
+                resolved_commit: Some(base_commit.to_string()),
+                branch: workspace.branch.clone(),
+                actor: actor.clone(),
+                reason: clean_optional_text(request.reason),
+            },
+        )
+        .await?;
+    let work_item = state
+        .store
+        .update_work_item_status(
+            &work_item.id,
+            "awaiting_approval",
+            actor.clone(),
+            Some("real ChangeSet captured; source review required".to_string()),
+        )
+        .await?;
+    append_change_set_audit_event(&state.store, &change_set, "change_set.captured", actor.clone(), None, json!({ "workspace_id": workspace.id, "run_id": run_id, "git_diff_artifact_id": diff_artifact_id, "git_status_artifact_id": status_artifact_id })).await?;
+    append_workspace_audit_event(
+        &state.store,
+        &workspace,
+        "workspace.change_set_captured",
+        actor.clone(),
+    )
+    .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &work_item,
+        "work_item.awaiting_approval",
+        actor,
+        json!({ "change_set_id": change_set.id }),
+    )
+    .await?;
+    Ok(Json(CreateChangeSetResponse {
+        change_set: change_set.into(),
+        created: true,
+    }))
+}
+
+fn coding_task_prompt(work_item: &StoredWorkItem) -> String {
+    let criteria = work_item
+        .acceptance_criteria
+        .iter()
+        .map(|criterion| format!("- {criterion}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Implement this development-only WorkItem in the current workspace.\n\nIntent:\n{}\n\nAcceptance criteria:\n{}\n\nBoundaries: work only in this workspace; do not read secrets; do not use network access; do not push, commit, create a pull request, deploy, or modify Git configuration other than the isolated workspace's local configuration. Run focused tests when available. Finish with a concise summary of changes and tests.",
+        work_item.intent,
+        if criteria.is_empty() { "- No explicit criteria were supplied." } else { &criteria }
+    )
+}
+
+pub(crate) fn shell_test_evidence(events: &[AgentEvent]) -> Vec<Value> {
+    let mut active_action = None;
+    let mut evidence = Vec::new();
+    for event in events {
+        if event.kind == EventKind::ToolStarted {
+            active_action = event
+                .payload
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            continue;
+        }
+        if event.kind == EventKind::ToolFinished && active_action.as_deref() == Some("run_shell") {
+            evidence.push(json!({
+                "event_id": event.event_id,
+                "status": event.payload.get("status"),
+                "summary": event.payload.get("summary"),
+            }));
+        }
+    }
+    evidence
+}
+
+async fn worker_workspace_evidence(
+    store: &SqliteStore,
+    run: &pharness_store::StoredRun,
+    workspace: &pharness_store::StoredWorkspace,
+) -> Result<(crate::workspace::GitEvidence, String, String, Vec<Value>), ApiError> {
+    let artifacts = store.list_artifacts(&run.id).await?;
+    let diff_artifact = artifacts
+        .iter()
+        .rev()
+        .find(|artifact| artifact.kind == "workspace_git_diff")
+        .ok_or_else(|| ApiError::conflict("worker did not retain workspace Git diff evidence"))?;
+    let status_artifact = artifacts
+        .iter()
+        .rev()
+        .find(|artifact| artifact.kind == "workspace_git_status")
+        .ok_or_else(|| ApiError::conflict("worker did not retain workspace Git status evidence"))?;
+    let diff = diff_artifact
+        .content_text
+        .clone()
+        .ok_or_else(|| ApiError::conflict("workspace Git diff artifact has no text content"))?;
+    let status_json = status_artifact
+        .content_json
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("workspace Git status artifact has no JSON content"))?;
+    let base_commit = status_json
+        .get("base_commit")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("workspace Git status artifact has no base commit"))?;
+    if workspace.resolved_commit.as_deref() != Some(base_commit) {
+        return Err(ApiError::conflict(
+            "workspace Git evidence does not match the pinned base commit",
+        ));
+    }
+    let branch = status_json
+        .get("branch")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("workspace Git status artifact has no branch"))?;
+    if workspace.branch.as_deref() != Some(branch) {
+        return Err(ApiError::conflict(
+            "workspace Git evidence does not match the pinned branch",
+        ));
+    }
+    let status = status_json
+        .get("status")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("workspace Git status artifact has no status"))?
+        .to_string();
+    let changed_paths = status_json
+        .get("changed_paths")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ApiError::conflict("workspace Git status artifact has no changed paths"))?
+        .iter()
+        .map(|path| {
+            path.as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| ApiError::conflict("workspace changed path is not a string"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let test_events = status_json
+        .get("test_events")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok((
+        crate::workspace::GitEvidence {
+            status,
+            diff,
+            changed_paths,
+        },
+        diff_artifact.id.clone(),
+        status_artifact.id.clone(),
+        test_events,
+    ))
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -2851,6 +3902,7 @@ impl WorkPlanStatus {
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListChangeSetsQuery {
+    work_item_id: Option<String>,
     work_plan_id: Option<String>,
     remediation_plan_id: Option<String>,
     incident_id: Option<String>,
@@ -2966,6 +4018,7 @@ async fn list_change_sets(
     let change_sets = state
         .store
         .list_change_sets(ChangeSetListFilter {
+            work_item_id: clean_optional_text(query.work_item_id),
             work_plan_id: clean_optional_text(query.work_plan_id),
             remediation_plan_id: clean_optional_text(query.remediation_plan_id),
             incident_id: clean_optional_text(query.incident_id),
@@ -3093,6 +4146,7 @@ async fn build_sdlc_flow(
     } else {
         None
     };
+    let git_delivery = git_delivery_flow(store, change_set.as_ref()).await?;
     let readiness = build_sdlc_readiness(
         store,
         resource_kind,
@@ -3131,11 +4185,54 @@ async fn build_sdlc_flow(
         deployment_intent: deployment_intent.map(Into::into),
         release: release.map(Into::into),
         registry_evidence: registry_evidence.map(Into::into),
+        git_delivery,
         incidents: incidents.into_iter().map(Into::into).collect(),
         remediation_plans: remediation_plans.into_iter().map(Into::into).collect(),
         approval_gates: approval_gates.into_iter().map(Into::into).collect(),
         audit_events: audit_events.into_iter().map(Into::into).collect(),
     })
+}
+
+async fn git_delivery_flow(
+    store: &SqliteStore,
+    change_set: Option<&StoredChangeSet>,
+) -> Result<Option<GitDeliveryFlowResponse>, ApiError> {
+    let Some(change_set) = change_set else {
+        return Ok(None);
+    };
+    let Some(run_id) = &change_set.run_id else {
+        return Ok(None);
+    };
+    let artifacts = store.list_artifacts(run_id).await?;
+    let Some(plan) = artifacts
+        .iter()
+        .find(|artifact| git_delivery_plan_matches_change_set(artifact, change_set))
+    else {
+        return Ok(None);
+    };
+    let latest_preflight = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "git_delivery_preflight"
+                && artifact.content_json.as_ref().is_some_and(|content| {
+                    content
+                        .get("git_delivery_plan_artifact_id")
+                        .and_then(Value::as_str)
+                        == Some(plan.id.as_str())
+                })
+        })
+        .max_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.id.cmp(&right.id))
+        })
+        .cloned()
+        .map(Into::into);
+
+    Ok(Some(GitDeliveryFlowResponse {
+        plan: plan.clone().into(),
+        latest_preflight,
+    }))
 }
 
 async fn collect_sdlc_flow_incidents(
@@ -4493,8 +5590,12 @@ async fn create_pipeline_intent_from_change_set(
             id: format!("pint_{}", unique_suffix()),
             change_set_id: change_set.id.clone(),
             work_plan_id: work_plan.id.clone(),
-            remediation_plan_id: change_set.remediation_plan_id.clone(),
-            incident_id: change_set.incident_id.clone(),
+            remediation_plan_id: change_set.remediation_plan_id.clone().ok_or_else(|| {
+                ApiError::conflict("PipelineIntent requires incident-backed ChangeSet lineage")
+            })?,
+            incident_id: change_set.incident_id.clone().ok_or_else(|| {
+                ApiError::conflict("PipelineIntent requires incident-backed ChangeSet lineage")
+            })?,
             session_id: change_set.session_id.clone(),
             run_id: change_set.run_id.clone(),
             status: "proposed".to_string(),
@@ -8242,9 +9343,10 @@ async fn create_change_set(
         .store
         .create_change_set(CreateChangeSet {
             id: format!("cset_{}", unique_suffix()),
+            work_item_id: None,
             work_plan_id: work_plan.id.clone(),
-            remediation_plan_id,
-            incident_id,
+            remediation_plan_id: Some(remediation_plan_id),
+            incident_id: Some(incident_id),
             session_id: work_plan.session_id.clone(),
             run_id: work_plan.run_id.clone(),
             status: "draft".to_string(),
@@ -8316,6 +9418,709 @@ async fn transition_change_set(
     }))
 }
 
+async fn prepare_change_set_git_delivery(
+    State(state): State<AppState>,
+    Path(change_set_id): Path<String>,
+    Json(request): Json<PrepareGitDeliveryRequest>,
+) -> Result<Json<GitDeliveryPlanResponse>, ApiError> {
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
+    let work_item_id = change_set.work_item_id.as_deref().ok_or_else(|| {
+        ApiError::conflict("Git delivery preflight requires a WorkItem-backed ChangeSet")
+    })?;
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if work_item.production_impacting || work_item.target_environment != "dev" {
+        return Err(ApiError::conflict(
+            "Git delivery preflight is limited to non-production WorkItems targeting dev",
+        ));
+    }
+    let run_id = change_set
+        .run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no coding run provenance"))?;
+    let source = change_set
+        .change_set_json
+        .get("source")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no workspace Git source provenance"))?;
+    if source.get("kind").and_then(Value::as_str) != Some("workspace_git") {
+        return Err(ApiError::conflict(
+            "Git delivery preflight requires workspace Git source provenance",
+        ));
+    }
+    let workspace_id = required_json_string(source, "workspace_id", "workspace source")?;
+    let base_commit = required_json_string(source, "base_commit", "workspace source")?;
+    let branch = required_json_string(source, "branch", "workspace source")?;
+    WorkspaceSourceSpec {
+        workspace_id: workspace_id.clone(),
+        source_repo: work_item.source_repo.clone(),
+        source_ref: work_item.source_ref.clone(),
+        branch: branch.clone(),
+        resolved_commit: Some(base_commit.clone()),
+    }
+    .validate()
+    .map_err(|error| ApiError::conflict(error.to_string()))?;
+    let workspace = state
+        .store
+        .get_workspace(&workspace_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("ChangeSet workspace provenance is unavailable"))?;
+    if workspace.work_item_id != work_item.id
+        || workspace.run_id.as_ref() != Some(&run_id)
+        || workspace.source_repo != work_item.source_repo
+        || workspace.source_ref != work_item.source_ref
+        || workspace.resolved_commit.as_deref() != Some(base_commit.as_str())
+        || workspace.branch.as_deref() != Some(branch.as_str())
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet source provenance does not match the durable workspace",
+        ));
+    }
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let run_scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();
+    if run_scope.work_item_id.as_deref() != Some(work_item.id.as_str())
+        || run_scope.workspace_id.as_deref() != Some(workspace.id.as_str())
+        || run_scope.repo.as_deref() != Some(work_item.source_repo.as_str())
+        || run_scope.branch.as_deref() != Some(branch.as_str())
+        || run_scope.production_impacting
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet source provenance does not match the coding run scope",
+        ));
+    }
+
+    let evidence = change_set
+        .change_set_json
+        .get("evidence")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no Git evidence provenance"))?;
+    let diff_artifact_id = required_json_string(evidence, "git_diff_artifact_id", "Git evidence")?;
+    let status_artifact_id =
+        required_json_string(evidence, "git_status_artifact_id", "Git evidence")?;
+    let expected_diff_sha256 = required_json_string(evidence, "diff_sha256", "Git evidence")?;
+    let artifacts = state.store.list_artifacts(&run_id).await?;
+    let diff_artifact = artifacts
+        .iter()
+        .find(|artifact| artifact.id == diff_artifact_id && artifact.kind == "workspace_git_diff")
+        .ok_or_else(|| ApiError::conflict("ChangeSet Git diff artifact is unavailable"))?;
+    let diff = diff_artifact
+        .content_text
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::conflict("ChangeSet Git diff artifact has no diff content"))?;
+    if diff.len() > 512 * 1024
+        || format!("{:x}", Sha256::digest(diff.as_bytes())) != expected_diff_sha256
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet Git diff artifact does not match its recorded digest",
+        ));
+    }
+    let status_artifact = artifacts
+        .iter()
+        .find(|artifact| {
+            artifact.id == status_artifact_id && artifact.kind == "workspace_git_status"
+        })
+        .ok_or_else(|| ApiError::conflict("ChangeSet Git status artifact is unavailable"))?;
+    let changed_paths = status_artifact
+        .content_json
+        .as_ref()
+        .and_then(|content| content.get("changed_paths"))
+        .and_then(Value::as_array)
+        .filter(|paths| !paths.is_empty())
+        .ok_or_else(|| ApiError::conflict("ChangeSet Git status artifact has no changed paths"))?;
+    if changed_paths.iter().any(|path| path.as_str().is_none()) {
+        return Err(ApiError::conflict(
+            "ChangeSet Git status artifact has an invalid changed path",
+        ));
+    }
+
+    if let Some(existing) = artifacts.iter().find(|artifact| {
+        artifact.kind == "git_delivery_plan"
+            && artifact.content_json.as_ref().is_some_and(|plan| {
+                plan.get("change_set")
+                    .and_then(|value| value.get("id"))
+                    .and_then(Value::as_str)
+                    == Some(change_set.id.as_str())
+                    && plan
+                        .get("change_set")
+                        .and_then(|value| value.get("revision"))
+                        .and_then(Value::as_i64)
+                        == Some(change_set.revision)
+                    && plan
+                        .get("change_set")
+                        .and_then(|value| value.get("material_hash"))
+                        .and_then(Value::as_str)
+                        == Some(change_set.material_hash.as_str())
+            })
+    }) {
+        return Ok(Json(GitDeliveryPlanResponse {
+            artifact: existing.clone().into(),
+            created: false,
+        }));
+    }
+
+    let title = compact_delivery_subject(&change_set.title);
+    let plan = json!({
+        "kind": "git_delivery_plan",
+        "version": 1,
+        "operation": "branch_and_pull_request",
+        "change_set": {
+            "id": change_set.id,
+            "revision": change_set.revision,
+            "material_hash": change_set.material_hash,
+            "work_plan_id": change_set.work_plan_id,
+            "work_item_id": work_item.id,
+        },
+        "source": {
+            "repository": work_item.source_repo,
+            "base_ref": work_item.source_ref,
+            "base_commit": base_commit,
+            "head_branch": branch,
+            "workspace_id": workspace_id,
+        },
+        "evidence": {
+            "git_diff_artifact_id": diff_artifact.id,
+            "git_status_artifact_id": status_artifact.id,
+            "diff_sha256": expected_diff_sha256,
+            "changed_paths": changed_paths,
+        },
+        "commit": {
+            "subject": title,
+            "body": format!("ChangeSet {} revision {}\n\n{}", change_set.id, change_set.revision, change_set.summary),
+        },
+        "pull_request": {
+            "title": compact_delivery_subject(&change_set.title),
+            "body": format!("{}\n\nPharness ChangeSet: {}\nWorkItem: {}", change_set.summary, change_set.id, work_item.id),
+        },
+        "authorization": {
+            "state": "not_authorized",
+            "reason": "Git writer identity and typed Git delivery grant are required before this plan can execute",
+        },
+    });
+    let artifact = state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_git_delivery", unique_suffix()),
+            session_id: change_set.session_id.clone(),
+            run_id: Some(run_id),
+            kind: "git_delivery_plan".to_string(),
+            label: format!("Git delivery plan for ChangeSet {}", change_set.id),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(plan),
+        })
+        .await?;
+    append_change_set_audit_event(
+        &state.store,
+        &change_set,
+        "change_set.git_delivery_prepared",
+        clean_optional_text(request.actor),
+        clean_optional_text(request.reason),
+        json!({ "git_delivery_plan_artifact_id": artifact.id }),
+    )
+    .await?;
+
+    Ok(Json(GitDeliveryPlanResponse {
+        artifact: artifact.into(),
+        created: true,
+    }))
+}
+
+async fn authorize_change_set_git_delivery(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(change_set_id): Path<String>,
+    Json(request): Json<CreateGitDeliveryAuthorizationRequest>,
+) -> Result<Json<GitDeliveryAuthorizationResponse>, ApiError> {
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    ensure_approved_for_trusted_envelope("work_plan", &work_plan.id, &work_plan.status)?;
+    let work_item_id = change_set.work_item_id.as_deref().ok_or_else(|| {
+        ApiError::conflict("Git delivery authorization requires a WorkItem-backed ChangeSet")
+    })?;
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if work_item.production_impacting || work_item.target_environment != GIT_DELIVERY_ENVIRONMENT {
+        return Err(ApiError::conflict(
+            "Git delivery authorization is limited to non-production WorkItems targeting dev",
+        ));
+    }
+    let run_id = change_set
+        .run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no coding run provenance"))?;
+    let plan = current_git_delivery_plan(&state.store, &run_id, &change_set).await?;
+    let source = git_delivery_plan_source(&plan, &work_item)?;
+    let branch = source.head_branch;
+
+    let subject = clean_optional_text(request.subject)
+        .unwrap_or_else(|| DEFAULT_GIT_WRITER_SUBJECT.to_string());
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.created_by.clone()));
+    let reason = clean_optional_text(Some(request.reason))
+        .ok_or_else(|| ApiError::bad_request("Git delivery authorization reason is required"))?;
+    if let Some(existing) = matching_git_delivery_grant(
+        &state.store,
+        &subject,
+        &change_set,
+        &work_item,
+        &branch,
+        &plan.id,
+    )
+    .await?
+    {
+        return Ok(Json(GitDeliveryAuthorizationResponse {
+            grant: existing.into(),
+            plan: plan.into(),
+            created: false,
+        }));
+    }
+
+    let grant = create_permission_grant_record(
+        &state.store,
+        CreatePermissionGrantRequest {
+            subject,
+            created_by: actor.clone(),
+            reason: reason.clone(),
+            scope: json!({
+                "environment": GIT_DELIVERY_ENVIRONMENT,
+                "capability_kinds": ["git"],
+                "actions": GIT_DELIVERY_ACTIONS,
+                "max_risk": "high",
+                "repos": [work_item.source_repo],
+                "branches": [branch],
+                "work_plan_ids": [change_set.work_plan_id],
+                "change_set_ids": [change_set.id],
+                "git_delivery_plan_artifact_ids": [plan.id],
+                "production_impacting": false,
+            }),
+            policy: json!({ "policy_mode": "supervised_autonomy" }),
+            expires_at: request.expires_at,
+        },
+    )
+    .await?;
+    append_change_set_audit_event(
+        &state.store,
+        &change_set,
+        "change_set.git_delivery_authorized",
+        actor,
+        Some(reason),
+        json!({
+            "permission_grant_id": grant.id,
+            "git_delivery_plan_artifact_id": plan.id,
+            "subject": grant.subject,
+        }),
+    )
+    .await?;
+
+    Ok(Json(GitDeliveryAuthorizationResponse {
+        grant: grant.into(),
+        plan: plan.into(),
+        created: true,
+    }))
+}
+
+async fn preflight_change_set_git_delivery(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(change_set_id): Path<String>,
+    Json(request): Json<GitDeliveryPreflightRequest>,
+) -> Result<Json<GitDeliveryPreflightResponse>, ApiError> {
+    let change_set = state
+        .store
+        .get_change_set(&change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&change_set.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &change_set.work_plan_id))?;
+    let work_item_id = change_set.work_item_id.as_deref().ok_or_else(|| {
+        ApiError::conflict("Git delivery preflight requires a WorkItem-backed ChangeSet")
+    })?;
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let run_id = change_set
+        .run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no coding run provenance"))?;
+    let plan = current_git_delivery_plan(&state.store, &run_id, &change_set).await?;
+    let source = git_delivery_plan_source(&plan, &work_item)?;
+    let subject = clean_optional_text(request.subject)
+        .unwrap_or_else(|| DEFAULT_GIT_WRITER_SUBJECT.to_string());
+    let grant = matching_git_delivery_grant(
+        &state.store,
+        &subject,
+        &change_set,
+        &work_item,
+        &source.head_branch,
+        &plan.id,
+    )
+    .await?;
+    let authorization_ready = grant.is_some();
+    let dispatch_ready = false;
+    let checks = vec![
+        execution_check(
+            "change_set_approved",
+            change_set.status == "approved",
+            format!("ChangeSet status is {}", change_set.status),
+        ),
+        execution_check(
+            "work_plan_approved",
+            work_plan.status == "approved",
+            format!("WorkPlan status is {}", work_plan.status),
+        ),
+        execution_check(
+            "development_target",
+            !work_item.production_impacting && work_item.target_environment == GIT_DELIVERY_ENVIRONMENT,
+            if work_item.production_impacting {
+                "Git delivery preflight only permits non-production WorkItems".to_string()
+            } else {
+                format!(
+                    "WorkItem targets {}",
+                    work_item.target_environment
+                )
+            },
+        ),
+        execution_check(
+            "immutable_source_provenance",
+            true,
+            format!(
+                "Plan pins {} at {} from workspace {}",
+                source.repository, source.base_commit, source.workspace_id
+            ),
+        ),
+        execution_check(
+            "trusted_git_delivery_grant",
+            authorization_ready,
+            grant
+                .as_ref()
+                .map(|grant| {
+                    format!(
+                        "Active supervised-autonomy grant {} matches Git writer {}",
+                        grant.id, subject
+                    )
+                })
+                .unwrap_or_else(|| {
+                    format!(
+                        "No active supervised-autonomy Git delivery grant matches writer {}",
+                        subject
+                    )
+                }),
+        ),
+        execution_check(
+            "git_writer_executor_available",
+            dispatch_ready,
+            "No Git writer executor is configured; remote branch, commit, push, and pull-request creation remain unavailable",
+        ),
+    ];
+    let prerequisites_ready = checks
+        .iter()
+        .filter(|check| {
+            check.get("code").and_then(Value::as_str) != Some("git_writer_executor_available")
+        })
+        .all(|check| check.get("passed").and_then(Value::as_bool) == Some(true));
+    let status = if prerequisites_ready {
+        "ready_for_writer"
+    } else {
+        "blocked"
+    };
+    let grant_id = grant.as_ref().map(|grant| grant.id.clone());
+
+    let artifacts = state.store.list_artifacts(&run_id).await?;
+    if let Some(existing) = artifacts.into_iter().find(|artifact| {
+        artifact.kind == "git_delivery_preflight"
+            && artifact.content_json.as_ref().is_some_and(|content| {
+                content
+                    .get("git_delivery_plan_artifact_id")
+                    .and_then(Value::as_str)
+                    == Some(plan.id.as_str())
+                    && content.get("subject").and_then(Value::as_str) == Some(subject.as_str())
+                    && content.get("permission_grant_id").and_then(Value::as_str)
+                        == grant_id.as_deref()
+            })
+    }) {
+        return Ok(Json(GitDeliveryPreflightResponse {
+            status: status.to_string(),
+            authorization_ready,
+            dispatch_ready,
+            plan: plan.into(),
+            permission_grant: grant.map(Into::into),
+            checks,
+            artifact: existing.into(),
+            created: false,
+        }));
+    }
+
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let artifact = state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_git_delivery_preflight", unique_suffix()),
+            session_id: change_set.session_id.clone(),
+            run_id: Some(run_id),
+            kind: "git_delivery_preflight".to_string(),
+            label: format!("Git delivery preflight for ChangeSet {}", change_set.id),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(json!({
+                "change_set_id": change_set.id,
+                "work_plan_id": change_set.work_plan_id,
+                "work_item_id": work_item.id,
+                "git_delivery_plan_artifact_id": plan.id,
+                "subject": subject,
+                "permission_grant_id": grant_id,
+                "status": status,
+                "authorization_ready": authorization_ready,
+                "dispatch_ready": dispatch_ready,
+                "checks": checks,
+                "dispatch": {
+                    "state": "not_configured",
+                    "summary": "Git writer execution is intentionally unavailable until its isolated identity and executor are configured",
+                },
+                "reason": reason,
+            })),
+        })
+        .await?;
+    append_change_set_audit_event(
+        &state.store,
+        &change_set,
+        "change_set.git_delivery_preflighted",
+        actor,
+        reason,
+        json!({
+            "git_delivery_plan_artifact_id": plan.id,
+            "git_delivery_preflight_artifact_id": artifact.id,
+            "permission_grant_id": grant_id,
+            "subject": subject,
+            "status": status,
+            "authorization_ready": authorization_ready,
+            "dispatch_ready": dispatch_ready,
+        }),
+    )
+    .await?;
+
+    Ok(Json(GitDeliveryPreflightResponse {
+        status: status.to_string(),
+        authorization_ready,
+        dispatch_ready,
+        plan: plan.into(),
+        permission_grant: grant.map(Into::into),
+        checks,
+        artifact: artifact.into(),
+        created: true,
+    }))
+}
+
+#[derive(Debug, Clone)]
+struct GitDeliveryPlanSource {
+    repository: String,
+    base_commit: String,
+    head_branch: String,
+    workspace_id: String,
+}
+
+fn git_delivery_plan_source(
+    plan: &StoredArtifact,
+    work_item: &StoredWorkItem,
+) -> Result<GitDeliveryPlanSource, ApiError> {
+    let plan_json = plan
+        .content_json
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("Git delivery plan has no structured content"))?;
+    if plan_json.get("operation").and_then(Value::as_str) != Some("branch_and_pull_request") {
+        return Err(ApiError::conflict(
+            "Git delivery plan does not describe a branch-and-pull-request operation",
+        ));
+    }
+    let source = plan_json
+        .get("source")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("Git delivery plan has no source provenance"))?;
+    let repository = required_json_string(source, "repository", "Git delivery plan source")?;
+    let base_ref = required_json_string(source, "base_ref", "Git delivery plan source")?;
+    let base_commit = required_json_string(source, "base_commit", "Git delivery plan source")?;
+    let head_branch = required_json_string(source, "head_branch", "Git delivery plan source")?;
+    let workspace_id = required_json_string(source, "workspace_id", "Git delivery plan source")?;
+    WorkspaceSourceSpec {
+        workspace_id: workspace_id.clone(),
+        source_repo: repository.clone(),
+        source_ref: base_ref.clone(),
+        branch: head_branch.clone(),
+        resolved_commit: Some(base_commit.clone()),
+    }
+    .validate()
+    .map_err(|error| ApiError::conflict(error.to_string()))?;
+    if repository != work_item.source_repo || base_ref != work_item.source_ref {
+        return Err(ApiError::conflict(
+            "Git delivery plan source does not match the WorkItem target",
+        ));
+    }
+    Ok(GitDeliveryPlanSource {
+        repository,
+        base_commit,
+        head_branch,
+        workspace_id,
+    })
+}
+
+async fn current_git_delivery_plan(
+    store: &SqliteStore,
+    run_id: &RunId,
+    change_set: &StoredChangeSet,
+) -> Result<StoredArtifact, ApiError> {
+    store
+        .list_artifacts(run_id)
+        .await?
+        .into_iter()
+        .find(|artifact| git_delivery_plan_matches_change_set(artifact, change_set))
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "ChangeSet needs a current immutable Git delivery plan before authorization",
+            )
+        })
+}
+
+fn git_delivery_plan_matches_change_set(
+    artifact: &StoredArtifact,
+    change_set: &StoredChangeSet,
+) -> bool {
+    artifact.kind == "git_delivery_plan"
+        && artifact.content_json.as_ref().is_some_and(|plan| {
+            plan.get("change_set")
+                .and_then(|value| value.get("id"))
+                .and_then(Value::as_str)
+                == Some(change_set.id.as_str())
+                && plan
+                    .get("change_set")
+                    .and_then(|value| value.get("revision"))
+                    .and_then(Value::as_i64)
+                    == Some(change_set.revision)
+                && plan
+                    .get("change_set")
+                    .and_then(|value| value.get("material_hash"))
+                    .and_then(Value::as_str)
+                    == Some(change_set.material_hash.as_str())
+        })
+}
+
+async fn matching_git_delivery_grant(
+    store: &SqliteStore,
+    subject: &str,
+    change_set: &StoredChangeSet,
+    work_item: &StoredWorkItem,
+    branch: &str,
+    plan_artifact_id: &str,
+) -> Result<Option<StoredPermissionGrant>, ApiError> {
+    let now = unique_suffix();
+    for grant in store.list_permission_grants(Some("active"), 200).await? {
+        if !grant_is_unexpired(&grant, now) {
+            continue;
+        }
+        let scope = serde_json::from_value::<PermissionGrantScope>(grant.scope_json.clone())
+            .map_err(|error| {
+                ApiError::internal(format!(
+                    "permission grant {} has invalid scope: {error}",
+                    grant.id
+                ))
+            })?;
+        let policy = serde_json::from_value::<PermissionGrantPolicy>(grant.policy_json.clone())
+            .map_err(|error| {
+                ApiError::internal(format!(
+                    "permission grant {} has invalid policy: {error}",
+                    grant.id
+                ))
+            })?;
+        let has_all_actions = GIT_DELIVERY_ACTIONS
+            .iter()
+            .all(|action| scope.actions.iter().any(|allowed| allowed == action));
+        let matches = grant.subject == subject
+            && policy.policy_mode == PolicyMode::SupervisedAutonomy
+            && scope.environment.as_deref() == Some(GIT_DELIVERY_ENVIRONMENT)
+            && scope.capability_kinds == vec![CapabilityKind::Git]
+            && scope.actions.len() == GIT_DELIVERY_ACTIONS.len()
+            && has_all_actions
+            && scope
+                .max_risk
+                .is_some_and(|risk| risk_rank(risk) >= risk_rank(RiskLevel::High))
+            && scope.repos == vec![work_item.source_repo.clone()]
+            && scope.branches == vec![branch.to_string()]
+            && scope.work_plan_ids == vec![change_set.work_plan_id.clone()]
+            && scope.change_set_ids == vec![change_set.id.clone()]
+            && scope.git_delivery_plan_artifact_ids == vec![plan_artifact_id.to_string()]
+            && scope.production_impacting == Some(false);
+        if matches {
+            return Ok(Some(grant));
+        }
+    }
+    Ok(None)
+}
+
+fn required_json_string(
+    object: &Map<String, Value>,
+    key: &str,
+    label: &str,
+) -> Result<String, ApiError> {
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| ApiError::conflict(format!("{label} is missing {key}")))
+}
+
+fn compact_delivery_subject(value: &str) -> String {
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let subject = if compact.is_empty() {
+        "Pharness ChangeSet".to_string()
+    } else {
+        compact
+    };
+    subject.chars().take(72).collect()
+}
+
 async fn revise_change_set(
     State(state): State<AppState>,
     Path(change_set_id): Path<String>,
@@ -8351,19 +10156,23 @@ async fn revise_change_set(
         )
         .await?;
     let invalidated_gates = if request.material_change && material_hash_changed {
-        state
-            .store
-            .stale_approval_gates_for_remediation_plan(
-                &change_set.remediation_plan_id,
-                actor.clone(),
-                reason.clone().or_else(|| {
-                    Some(format!(
-                        "change set {} revised from revision {} to {}",
-                        change_set.id, current.revision, change_set.revision
-                    ))
-                }),
-            )
-            .await?
+        if let Some(remediation_plan_id) = &change_set.remediation_plan_id {
+            state
+                .store
+                .stale_approval_gates_for_remediation_plan(
+                    remediation_plan_id,
+                    actor.clone(),
+                    reason.clone().or_else(|| {
+                        Some(format!(
+                            "change set {} revised from revision {} to {}",
+                            change_set.id, current.revision, change_set.revision
+                        ))
+                    }),
+                )
+                .await?
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     };
@@ -10456,8 +12265,9 @@ impl IntoResponse for ApiError {
 mod tests {
     use super::{
         approval_gate_summary, approval_summary, attach_deployment_intent_evidence,
-        attach_pipeline_intent_evidence, attach_release_evidence, build_pipeline_run_manifest,
-        cancel_run, cancel_work_item, change_set_flow, change_set_readiness, config_effective,
+        attach_pipeline_intent_evidence, attach_release_evidence,
+        authorize_change_set_git_delivery, build_pipeline_run_manifest, cancel_run,
+        cancel_work_item, change_set_flow, change_set_readiness, config_effective,
         create_change_set, create_change_set_trusted_envelope, create_declared_deployment_handoff,
         create_deployment_contract, create_deployment_intent_from_pipeline_intent, create_incident,
         create_observation, create_pipeline_intent_from_change_set,
@@ -10469,45 +12279,50 @@ mod tests {
         execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
         get_deployment_contract, get_deployment_intent, get_incident, get_observation,
         get_permission_grant, get_pipeline_intent, get_registry_evidence, get_release,
-        get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan, last_event_seq,
-        list_approval_gates, list_approvals, list_audit_events, list_change_sets,
-        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
-        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
-        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_item_events, list_work_plans, list_workspaces, merge_pipeline_execution_state,
-        parse_last_event_id, persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
-        policy_json, revise_change_set, revise_work_plan, revoke_permission_grant, router,
-        run_policy, run_summary, satisfy_approval_gate, set_pipeline_intent_evidence,
-        stream_start_seq, tekton_execution_spec, transition_change_set,
-        transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
-        transition_registry_evidence, transition_release, transition_work_item,
-        transition_work_plan, unique_suffix, validate_permission_grant_request,
-        validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis,
-        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
-        ApprovalSummaryQuery, ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery,
-        ListChangeSetsQuery, ListDeploymentContractsQuery, ListDeploymentIntentsQuery,
-        ListIncidentsQuery, ListObservationsQuery, ListPermissionGrantsQuery,
-        ListPipelineIntentsQuery, ListRegistryEvidenceQuery, ListReleasesQuery,
-        ListRemediationPlansQuery, ListRunsQuery, ListWorkPlansQuery, ListWorkspacesQuery,
-        PipelineDeploymentHandoffSpec, StreamRunEventsQuery,
+        get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan,
+        internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
+        list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
+        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
+        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
+        list_run_observations, list_runs, list_work_item_events, list_work_plans, list_workspaces,
+        merge_pipeline_execution_state, parse_last_event_id, persist_pipeline_execution_evidence,
+        persist_pipeline_run_analysis, policy_json, preflight_change_set_git_delivery,
+        prepare_change_set_git_delivery, reconcile_work_item, revise_change_set, revise_work_plan,
+        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
+        set_pipeline_intent_evidence, stream_start_seq, tekton_execution_spec,
+        transition_change_set, transition_deployment_contract, transition_deployment_intent,
+        transition_pipeline_intent, transition_registry_evidence, transition_release,
+        transition_work_item, transition_work_plan, unique_suffix,
+        validate_permission_grant_request, validate_pipeline_deployment_handoff,
+        validate_terminal_pipeline_run_analysis, work_plan_flow, work_plan_readiness, AppState,
+        ApprovalGateSummaryQuery, ApprovalSummaryQuery, InternalWorkspaceProvisionedRequest,
+        ListApprovalGatesQuery, ListApprovalsQuery, ListAuditEventsQuery, ListChangeSetsQuery,
+        ListDeploymentContractsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
+        ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
+        ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
+        ListWorkPlansQuery, ListWorkspacesQuery, PipelineDeploymentHandoffSpec,
+        StreamRunEventsQuery,
     };
     use crate::dispatch::RunDispatcher;
     use crate::dto::{
         ApprovalDecision, AttachDeploymentIntentEvidenceRequest,
         AttachPipelineIntentEvidenceRequest, AttachReleaseEvidenceRequest, CreateChangeSetRequest,
         CreateDeploymentContractRequest, CreateDeploymentIntentFromPipelineIntentRequest,
-        CreateIncidentRequest, CreateObservationRequest, CreatePermissionGrantRequest,
-        CreatePipelineIntentFromChangeSetRequest, CreateRegistryEvidenceFromInspectionRequest,
-        CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
-        CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
-        CreateWorkItemRequest, CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest,
-        DecideApprovalRequest, ExecuteCapabilityRequest, PipelineIntentExecutionOutcomeRequest,
+        CreateGitDeliveryAuthorizationRequest, CreateIncidentRequest, CreateObservationRequest,
+        CreatePermissionGrantRequest, CreatePipelineIntentFromChangeSetRequest,
+        CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromReleaseRequest,
+        CreateReleaseFromDeploymentIntentRequest, CreateRemediationPlanRequest, CreateRunRequest,
+        CreateTrustedEnvelopeRequest, CreateWorkItemRequest,
+        CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
+        ExecuteCapabilityRequest, GitDeliveryPreflightRequest,
+        PipelineIntentExecutionOutcomeRequest, PrepareGitDeliveryRequest, ReconcileWorkItemRequest,
         ReviewApprovalRequest, ReviseChangeSetRequest, ReviseWorkPlanRequest,
         RevokePermissionGrantRequest, TransitionChangeSetRequest,
         TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
         TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
         TransitionReleaseRequest, TransitionWorkItemRequest, TransitionWorkPlanRequest,
     };
+    use crate::workspace::WorkspaceProvisioner;
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
     use axum::Json;
@@ -10519,9 +12334,11 @@ mod tests {
         ApprovalGateListFilter, CreateApproval, CreateApprovalGate, CreateArtifact,
         CreateChangeSet, CreateDeploymentIntent, CreateFileChange, CreateIncident,
         CreateObservation, CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun,
-        CreateSession, CreateWorkPlan, SqliteStore, StoredPipelineContract, StoredPipelineIntent,
+        CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace, SqliteStore,
+        StoredPipelineContract, StoredPipelineIntent,
     };
     use serde_json::json;
+    use sha2::{Digest, Sha256};
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
@@ -10535,6 +12352,7 @@ mod tests {
             policy: SafetyPolicy::default(),
             worker_token: None,
             operator_tokens: Arc::new(Vec::new()),
+            workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         }
     }
 
@@ -10546,6 +12364,7 @@ mod tests {
             policy: SafetyPolicy::default(),
             worker_token: None,
             operator_tokens: Arc::new(Vec::new()),
+            workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         }
     }
 
@@ -10655,9 +12474,10 @@ mod tests {
             .store
             .create_change_set(CreateChangeSet {
                 id: "cset_registry_inspection".to_string(),
+                work_item_id: None,
                 work_plan_id: "wplan_registry_inspection".to_string(),
-                remediation_plan_id: "rplan_registry_inspection".to_string(),
-                incident_id: "inc_registry_inspection".to_string(),
+                remediation_plan_id: Some("rplan_registry_inspection".to_string()),
+                incident_id: Some("inc_registry_inspection".to_string()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "approved".to_string(),
@@ -10764,6 +12584,7 @@ mod tests {
             SafetyPolicy::default(),
             None,
             vec![("lucas".to_string(), "op-secret".to_string())],
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         );
 
         let health = app
@@ -10835,6 +12656,7 @@ mod tests {
             SafetyPolicy::default(),
             None,
             Vec::new(),
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         );
 
         let response = app
@@ -10862,6 +12684,7 @@ mod tests {
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
             Vec::new(),
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         );
 
         let missing = app
@@ -10926,6 +12749,7 @@ mod tests {
             SafetyPolicy::default(),
             Some("worker-secret".to_string()),
             Vec::new(),
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         );
 
         let context = app
@@ -11021,6 +12845,7 @@ mod tests {
             SafetyPolicy::default(),
             None,
             Vec::new(),
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         );
     }
 
@@ -11167,6 +12992,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
+            work_item_id: None,
+            workspace_id: None,
             work_plan_id: Some("wplan_scope".to_string()),
             change_set_id: Some("cset_scope".to_string()),
             production_impacting: false,
@@ -13246,6 +15073,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                     namespace: Some("apps-dev".to_string()),
                     repo: Some("git@example.test/team/app.git".to_string()),
                     branch: Some("feature/pharness".to_string()),
+                    work_item_id: None,
+                    workspace_id: None,
                     work_plan_id: Some(approved.work_plan.id.clone()),
                     change_set_id: None,
                     production_impacting: false,
@@ -13576,6 +15405,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(listed_change_sets) = list_change_sets(
             State(state.clone()),
             Query(ListChangeSetsQuery {
+                work_item_id: None,
                 work_plan_id: Some(created_work_plan.work_plan.id.clone()),
                 remediation_plan_id: Some("rplan_changeset".to_string()),
                 incident_id: Some("inc_changeset_lifecycle".to_string()),
@@ -14252,6 +16082,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                     namespace: Some("apps-dev".to_string()),
                     repo: Some("git@example.test/team/app.git".to_string()),
                     branch: Some("feature/pharness".to_string()),
+                    work_item_id: None,
+                    workspace_id: None,
                     work_plan_id: Some(created_work_plan.work_plan.id.clone()),
                     change_set_id: Some(change_set_id.clone()),
                     production_impacting: false,
@@ -15712,9 +17544,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .store
             .create_change_set(CreateChangeSet {
                 id: "cset_deployment_handoff".to_string(),
+                work_item_id: None,
                 work_plan_id: "wplan_deployment_handoff".to_string(),
-                remediation_plan_id: "rplan_deployment_handoff".to_string(),
-                incident_id: "inc_registry_inspection".to_string(),
+                remediation_plan_id: Some("rplan_deployment_handoff".to_string()),
+                incident_id: Some("inc_registry_inspection".to_string()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "approved".to_string(),
@@ -15874,6 +17707,104 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
     }
 
     #[tokio::test]
+    async fn work_item_reconcile_previews_then_declares_the_review_boundary() {
+        let state = test_state().await;
+        let Json(work_item) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Add a finance smoke endpoint".to_string(),
+                intent: "Expose a read-only health endpoint with a focused test.".to_string(),
+                acceptance_criteria: vec!["Endpoint returns a stable response".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: Some("team/finance-gitops".to_string()),
+                gitops_ref: Some("main".to_string()),
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(900),
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let Json(preview) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: Some("operator".to_string()),
+                reason: None,
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(preview.action, "declare_work_plan");
+        assert!(!preview.applied);
+        assert_eq!(preview.work_item.status, "submitted");
+        assert!(preview.work_plan.is_none());
+
+        let Json(applied) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: true,
+                actor: Some("operator".to_string()),
+                reason: Some("advance reviewed feature intent".to_string()),
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(applied.action, "declare_work_plan");
+        assert!(applied.applied);
+        assert_eq!(applied.work_item.status, "awaiting_approval");
+        assert!(applied.work_plan.is_some());
+        assert_eq!(
+            applied
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.status.as_str()),
+            Some("declared")
+        );
+
+        let Json(waiting) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: Some("operator".to_string()),
+                reason: None,
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(waiting.action, "awaiting_work_plan_approval");
+        assert!(!waiting.applied);
+
+        let events = state
+            .store
+            .list_audit_events(Some("work_item"), Some(&work_item.id), None, 20)
+            .await
+            .unwrap();
+        assert!(events
+            .iter()
+            .any(|event| event.kind == "work_item.planning"));
+        assert!(events
+            .iter()
+            .any(|event| event.kind == "work_item.work_plan_created"));
+    }
+
+    #[tokio::test]
     async fn work_item_planning_declares_a_work_plan_and_ephemeral_workspace() {
         let state = test_state().await;
         let Json(work_item) = create_work_item(
@@ -15985,5 +17916,516 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .events
             .iter()
             .any(|event| event.kind == "work_item.cancelled"));
+    }
+
+    #[tokio::test]
+    async fn worker_can_only_pin_the_exact_issued_remote_workspace() {
+        let state = AppState {
+            store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
+            worker: RunDispatcher::Disabled,
+            cluster_tools: ReadOnlyClusterTools::default(),
+            policy: SafetyPolicy::default(),
+            worker_token: None,
+            operator_tokens: Arc::new(Vec::new()),
+            workspace: WorkspaceProvisioner::with_remote_repos(
+                std::env::temp_dir(),
+                Vec::new(),
+                vec!["https://github.com/example/finance-app.git".to_string()],
+            ),
+        };
+        let work_item = state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: "witem_remote_pin".to_string(),
+                status: "executing".to_string(),
+                title: "Remote source pin".to_string(),
+                intent: "Change a disposable finance app.".to_string(),
+                acceptance_criteria: vec!["A focused test passes.".to_string()],
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: None,
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 600,
+                created_by: Some("operator".to_string()),
+            })
+            .await
+            .unwrap();
+        let session_id = SessionId::new("ses_remote_pin");
+        let run_id = RunId::new("run_remote_pin");
+        let workspace_id = "ws_remote_pin";
+        let branch = "pharness/witem_remote_pin/attempt-1";
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "remote pin".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "remote pin".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 2,
+                initial_status: "queued".to_string(),
+                execution_target_json: json!({
+                    "kind": "kubernetes_workspace",
+                    "run_scope": {
+                        "work_item_id": work_item.id,
+                        "workspace_id": workspace_id,
+                        "production_impacting": false
+                    },
+                    "workspace_source": {
+                        "workspace_id": workspace_id,
+                        "source_repo": "https://github.com/example/finance-app.git",
+                        "source_ref": "main",
+                        "branch": branch
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_workspace(CreateWorkspace {
+                id: workspace_id.to_string(),
+                work_item_id: work_item.id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "provisioning".to_string(),
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                resolved_commit: None,
+                branch: Some(branch.to_string()),
+                retention_status: "ephemeral".to_string(),
+                actor: Some("operator".to_string()),
+                reason: Some("test".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let mismatch = internal_workspace_provisioned(
+            State(state.clone()),
+            Path(run_id.to_string()),
+            Json(InternalWorkspaceProvisionedRequest {
+                workspace_id: workspace_id.to_string(),
+                resolved_commit: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678".to_string(),
+                branch: "pharness/witem_remote_pin/attempt-2".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(mismatch.status, StatusCode::CONFLICT);
+
+        let Json(pinned) = internal_workspace_provisioned(
+            State(state.clone()),
+            Path(run_id.to_string()),
+            Json(InternalWorkspaceProvisionedRequest {
+                workspace_id: workspace_id.to_string(),
+                resolved_commit: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678".to_string(),
+                branch: branch.to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(pinned.status, "executing");
+        assert_eq!(
+            pinned.resolved_commit.as_deref(),
+            Some("a1b2c3d4e5f60718293a4b5c6d7e8f9012345678")
+        );
+
+        let audit = state
+            .store
+            .list_audit_events(Some("workspace"), Some(workspace_id), None, 10)
+            .await
+            .unwrap();
+        assert!(audit
+            .iter()
+            .any(|event| event.kind == "workspace.provisioned"));
+    }
+
+    #[tokio::test]
+    async fn approved_workspace_change_set_prepares_an_idempotent_git_delivery_plan() {
+        let state = test_state().await;
+        let work_item_id = "witem_git_delivery";
+        let work_plan_id = "wplan_git_delivery";
+        let change_set_id = "cset_git_delivery";
+        let run_id = RunId::new("run_git_delivery");
+        let session_id = SessionId::new("ses_git_delivery");
+        let diff = "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-before\n+after\n";
+        let diff_sha256 = format!("{:x}", Sha256::digest(diff.as_bytes()));
+
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Git delivery".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "Git delivery".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 4,
+                initial_status: "completed".to_string(),
+                execution_target_json: json!({
+                    "run_scope": {
+                        "work_item_id": work_item_id,
+                        "workspace_id": "ws_git_delivery",
+                        "repo": "https://github.com/example/finance-app.git",
+                        "branch": "pharness/witem_git_delivery/attempt-1",
+                        "production_impacting": false
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "awaiting_approval".to_string(),
+                title: "Finance documentation change".to_string(),
+                intent: "Add a small finance documentation note".to_string(),
+                acceptance_criteria: vec!["README is updated".to_string()],
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: None,
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 600,
+                created_by: Some("lucas".to_string()),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_workspace(CreateWorkspace {
+                id: "ws_git_delivery".to_string(),
+                work_item_id: work_item_id.to_string(),
+                run_id: Some(run_id.clone()),
+                status: "captured".to_string(),
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                resolved_commit: Some("a1b2c3d4e5f60718293a4b5c6d7e8f9012345678".to_string()),
+                branch: Some("pharness/witem_git_delivery/attempt-1".to_string()),
+                retention_status: "ephemeral".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("captured source diff".to_string()),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: work_plan_id.to_string(),
+                work_item_id: Some(work_item_id.to_string()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Finance documentation plan".to_string(),
+                summary: "Update the finance README".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: None,
+                resource_name: None,
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_git_delivery_diff".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "workspace_git_diff".to_string(),
+                label: "Workspace diff".to_string(),
+                mime_type: Some("text/x-diff".to_string()),
+                path: None,
+                content_text: Some(diff.to_string()),
+                content_json: None,
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_git_delivery_status".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "workspace_git_status".to_string(),
+                label: "Workspace status".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "status": " M README.md",
+                    "changed_paths": ["README.md"],
+                    "test_events": []
+                })),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: change_set_id.to_string(),
+                work_item_id: Some(work_item_id.to_string()),
+                work_plan_id: work_plan_id.to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id,
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "ChangeSet: finance docs".to_string(),
+                summary: "Add a concise finance documentation note".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "material_git_delivery".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: None,
+                resource_name: None,
+                change_set_json: json!({
+                    "source": {
+                        "kind": "workspace_git",
+                        "workspace_id": "ws_git_delivery",
+                        "base_commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+                        "branch": "pharness/witem_git_delivery/attempt-1"
+                    },
+                    "evidence": {
+                        "git_diff_artifact_id": "art_git_delivery_diff",
+                        "git_status_artifact_id": "art_git_delivery_status",
+                        "diff_sha256": diff_sha256,
+                        "changed_paths": ["README.md"]
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+
+        let missing_plan = authorize_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(CreateGitDeliveryAuthorizationRequest {
+                subject: None,
+                created_by: Some("lucas".to_string()),
+                reason: "must not authorize an unprepared delivery".to_string(),
+                expires_at: None,
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(missing_plan.status, StatusCode::CONFLICT);
+
+        let Json(first) = prepare_change_set_git_delivery(
+            State(state.clone()),
+            Path(change_set_id.to_string()),
+            Json(PrepareGitDeliveryRequest {
+                actor: Some("lucas".to_string()),
+                reason: Some("prepare source review delivery".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(first.created);
+        assert_eq!(
+            first.artifact.content_json.as_ref().unwrap()["source"]["head_branch"],
+            "pharness/witem_git_delivery/attempt-1"
+        );
+        assert_eq!(
+            first.artifact.content_json.as_ref().unwrap()["authorization"]["state"],
+            "not_authorized"
+        );
+
+        let Json(second) = prepare_change_set_git_delivery(
+            State(state.clone()),
+            Path(change_set_id.to_string()),
+            Json(PrepareGitDeliveryRequest {
+                actor: Some("lucas".to_string()),
+                reason: Some("repeat request".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!second.created);
+        assert_eq!(second.artifact.id, first.artifact.id);
+
+        let Json(blocked_preflight) = preflight_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(GitDeliveryPreflightRequest {
+                subject: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("record missing Git writer authorization".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(blocked_preflight.created);
+        assert_eq!(blocked_preflight.status, "blocked");
+        assert!(!blocked_preflight.authorization_ready);
+        assert!(!blocked_preflight.dispatch_ready);
+        assert!(blocked_preflight.permission_grant.is_none());
+        assert!(blocked_preflight.checks.iter().any(|check| {
+            check["code"] == "trusted_git_delivery_grant" && check["passed"] == false
+        }));
+
+        let Json(authorization) = authorize_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(CreateGitDeliveryAuthorizationRequest {
+                subject: None,
+                created_by: Some("lucas".to_string()),
+                reason: "authorize one reviewed Git delivery".to_string(),
+                expires_at: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(authorization.created);
+        assert_eq!(authorization.grant.subject, "agent:git-writer");
+        assert_eq!(
+            authorization.grant.policy["policy_mode"],
+            "supervised_autonomy"
+        );
+        assert_eq!(
+            authorization.grant.scope["capability_kinds"],
+            json!(["git"])
+        );
+        assert_eq!(
+            authorization.grant.scope["git_delivery_plan_artifact_ids"],
+            json!([first.artifact.id])
+        );
+
+        let Json(repeated_authorization) = authorize_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(CreateGitDeliveryAuthorizationRequest {
+                subject: None,
+                created_by: Some("lucas".to_string()),
+                reason: "repeat authorization".to_string(),
+                expires_at: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!repeated_authorization.created);
+        assert_eq!(repeated_authorization.grant.id, authorization.grant.id);
+
+        let Json(ready_preflight) = preflight_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(GitDeliveryPreflightRequest {
+                subject: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("record authorized Git delivery readiness".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(ready_preflight.created);
+        assert_eq!(ready_preflight.status, "ready_for_writer");
+        assert!(ready_preflight.authorization_ready);
+        assert!(!ready_preflight.dispatch_ready);
+        assert_eq!(
+            ready_preflight
+                .permission_grant
+                .as_ref()
+                .map(|grant| grant.id.as_str()),
+            Some(authorization.grant.id.as_str())
+        );
+        assert!(ready_preflight.checks.iter().any(|check| {
+            check["code"] == "git_writer_executor_available" && check["passed"] == false
+        }));
+
+        let Json(repeated_preflight) = preflight_change_set_git_delivery(
+            State(state.clone()),
+            None,
+            Path(change_set_id.to_string()),
+            Json(GitDeliveryPreflightRequest {
+                subject: None,
+                actor: Some("lucas".to_string()),
+                reason: Some("repeat authorized Git delivery readiness".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!repeated_preflight.created);
+        assert_eq!(repeated_preflight.artifact.id, ready_preflight.artifact.id);
+
+        let Json(reconciled) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(ReconcileWorkItemRequest {
+                apply: true,
+                actor: Some("lucas".to_string()),
+                reason: Some("advance approved source delivery".to_string()),
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reconciled.action, "prepare_git_delivery");
+        assert!(reconciled.applied);
+        assert!(reconciled
+            .git_delivery_preflight
+            .as_ref()
+            .is_some_and(|preflight| preflight.authorization_ready));
+
+        let Json(flow) = change_set_flow(State(state.clone()), Path(change_set_id.to_string()))
+            .await
+            .unwrap();
+        let git_delivery = flow
+            .git_delivery
+            .expect("Git delivery flow should be present");
+        assert_eq!(git_delivery.plan.id, first.artifact.id);
+        assert_eq!(
+            git_delivery
+                .latest_preflight
+                .as_ref()
+                .map(|artifact| artifact.id.as_str()),
+            Some(ready_preflight.artifact.id.as_str())
+        );
+
+        let audit = state
+            .store
+            .list_audit_events(Some("change_set"), Some(change_set_id), None, 10)
+            .await
+            .unwrap();
+        assert!(audit
+            .iter()
+            .any(|event| event.kind == "change_set.git_delivery_prepared"));
+        assert!(audit
+            .iter()
+            .any(|event| event.kind == "change_set.git_delivery_authorized"));
+        assert!(audit
+            .iter()
+            .any(|event| event.kind == "change_set.git_delivery_preflighted"));
     }
 }

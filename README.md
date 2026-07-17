@@ -445,6 +445,45 @@ Worker dispatch is selected by `PHARNESS_WORKER_MODE`:
   terminal states or approval pauses; approvals launch a resume Job that
   rehydrates from the persisted approval transcript.
 
+### Kubernetes Coding Alpha
+
+The Kubernetes coding path is intentionally disabled unless
+`PHARNESS_WORKSPACE_ALLOWED_REMOTE_REPOS` contains an exact HTTPS repository
+URL. A permitted WorkItem creates one bounded Job workspace, checks out the
+requested ref, reports the full resolved Git object ID to the API, and only
+then starts the model attempt. The worker cannot push, commit, open a pull
+request, or deploy through a typed capability; it has no Git write identity,
+and secret reads remain denied by policy.
+
+On successful completion, the worker returns bounded Git status and binary
+diff evidence. The API validates it against the issued workspace/repository/
+branch contract and stores `workspace_git_diff` and `workspace_git_status`
+artifacts. ChangeSet capture uses those artifacts, so it never depends on a
+Job workspace surviving after the Job exits. See
+[`planning/kubernetes-coding-alpha-smoke-playbook.md`](planning/kubernetes-coding-alpha-smoke-playbook.md)
+for the reviewed activation path.
+
+`POST /api/work-items/:id/reconcile` is the machine-facing controller step for
+the coding alpha. It previews its exact next action by default and uses
+`apply: true` to advance one safe state transition: declaring a WorkPlan and
+workspace, starting an approved coding attempt, capturing a completed
+ChangeSet, or preparing Git-delivery evidence. It stops at each review and
+authorization boundary rather than treating a WorkItem as an unbounded chat.
+
+An approved source ChangeSet can also produce a durable `git_delivery_plan`
+artifact. It binds a future branch-and-PR operation to the repository, pinned
+base commit, issued branch, and captured diff digest, but it does not perform
+a Git write. An operator can then create a separate, idempotent
+`supervised_autonomy` grant for the exact plan using
+`change-sets authorize-git-delivery`. That grant is constrained to the single
+repository, issued branch, WorkPlan, ChangeSet, and delivery-plan artifact.
+`change-sets preflight-git-delivery` records the current authorization and
+source checks as a durable `git_delivery_preflight` artifact. A preflight can
+be `ready_for_writer` while `dispatch_ready` is `false`: that means the plan
+and grant are correct, while the separate Git writer capability remains
+intentionally absent until it has a scoped identity and revalidates the grant
+immediately before each remote Git operation.
+
 ### Tekton PipelineIntents
 
 The first cluster mutation is intentionally narrow. An approved PipelineIntent

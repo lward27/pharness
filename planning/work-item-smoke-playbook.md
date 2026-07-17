@@ -1,5 +1,11 @@
 # WorkItem and Workspace Smoke Playbook
 
+> Historical manual-path smoke. Prefer
+> [`kubernetes-coding-alpha-smoke-playbook.md`](kubernetes-coding-alpha-smoke-playbook.md)
+> and `work-items reconcile` for the current controller-driven flow. The
+> commands below remain useful for isolating one lifecycle transition during
+> diagnostics.
+
 This validates the autonomous-SDLC alpha boundary without invoking a model,
 cloning a repository, accessing a secret, or changing external Git/cluster
 state. It uses a disposable local SQLite database under `target/`.

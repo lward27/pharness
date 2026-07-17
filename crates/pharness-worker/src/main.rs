@@ -13,7 +13,9 @@ use pharness_core::{
     AgentAction, AgentEvent, CancellationFlag, ReadOnlyClusterTools, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
-use pharness_runhost::{execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec};
+use pharness_runhost::{
+    execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, WorkspaceSourceSpec,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
@@ -61,11 +63,48 @@ async fn main() -> anyhow::Result<()> {
         env.worker_token.clone(),
     )?);
 
-    let spec = fetch_attempt_spec_with_retry(&backend, env.approval_id.as_deref())
+    let mut spec = fetch_attempt_spec_with_retry(&backend, env.approval_id.as_deref())
         .await
         .context("failed to fetch attempt context from api")?;
 
-    prepare_workspace(&spec).await?;
+    let provisioned = match prepare_workspace(&spec).await {
+        Ok(provisioned) => provisioned,
+        Err(error) => {
+            tracing::error!(run_id = %env.run_id, %error, "workspace preparation failed");
+            backend
+                .finish(AttemptOutcome::failed(format!(
+                    "workspace preparation failed: {error}"
+                )))
+                .await
+                .context("failed to report workspace preparation failure")?;
+            return Ok(());
+        }
+    };
+    if let Some(provisioned) = provisioned {
+        let source = spec
+            .run
+            .workspace_source
+            .as_mut()
+            .expect("workspace provisioning requires a source contract");
+        source.resolved_commit = Some(provisioned.resolved_commit.clone());
+        if let Err(error) = backend
+            .report_workspace_provisioned(
+                &source.workspace_id,
+                &provisioned.resolved_commit,
+                &source.branch,
+            )
+            .await
+        {
+            tracing::error!(run_id = %env.run_id, %error, "workspace provisioning report failed");
+            backend
+                .finish(AttemptOutcome::failed(
+                    "workspace provisioning report could not be persisted",
+                ))
+                .await
+                .context("failed to report workspace provisioning failure")?;
+            return Ok(());
+        }
+    }
 
     let cancellation = CancellationFlag::default();
     let control = tokio::spawn(poll_control(backend.clone(), cancellation.clone()));
@@ -397,54 +436,83 @@ fn required_env(name: &str) -> anyhow::Result<String> {
     Ok(value)
 }
 
-/// Ensure the attempt workspace exists. When `PHARNESS_WORKSPACE_REPO` is set
-/// and the workspace is empty, clone that repo (optionally at
-/// `PHARNESS_WORKSPACE_BRANCH`) before the attempt starts.
-async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<()> {
+/// Ensure the attempt workspace exists. The only remote source instructions
+/// accepted here came from the typed API-issued attempt context; ambient
+/// repository environment variables are intentionally ignored.
+struct ProvisionedWorkspace {
+    resolved_commit: String,
+}
+
+async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<ProvisionedWorkspace>> {
     let cwd = std::path::PathBuf::from(&spec.run.cwd);
     tokio::fs::create_dir_all(&cwd)
         .await
         .with_context(|| format!("failed to create workspace {}", cwd.display()))?;
 
-    let Some(repo) = std::env::var("PHARNESS_WORKSPACE_REPO")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(());
+    let Some(source) = spec.run.workspace_source.as_ref() else {
+        return Ok(None);
     };
+    source.validate()?;
 
     let mut entries = tokio::fs::read_dir(&cwd).await?;
     if entries.next_entry().await?.is_some() {
-        tracing::info!(cwd = %cwd.display(), "workspace not empty; skipping clone");
-        return Ok(());
+        anyhow::bail!("typed workspace must be empty before clone");
     }
 
-    let branch = std::env::var("PHARNESS_WORKSPACE_BRANCH")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
+    let resolved_commit = clone_workspace_source(source, &cwd).await?;
 
-    let mut command = tokio::process::Command::new("git");
-    command.arg("clone").arg("--depth").arg("1");
-    if let Some(branch) = &branch {
-        command.arg("--branch").arg(branch);
-    }
-    command.arg(&repo).arg(&cwd);
+    Ok(Some(ProvisionedWorkspace { resolved_commit }))
+}
 
-    tracing::info!(repo = %repo, cwd = %cwd.display(), "cloning workspace repo");
-    let output = command
+async fn clone_workspace_source(
+    source: &WorkspaceSourceSpec,
+    cwd: &std::path::Path,
+) -> anyhow::Result<String> {
+    tracing::info!(workspace_id = %source.workspace_id, cwd = %cwd.display(), "cloning typed workspace source");
+    let cwd_text = cwd.to_string_lossy().to_string();
+    run_git(&[
+        "clone",
+        "--no-checkout",
+        "--depth",
+        "1",
+        &source.source_repo,
+        &cwd_text,
+    ])
+    .await?;
+    run_git(&[
+        "-C",
+        &cwd_text,
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        &source.source_ref,
+    ])
+    .await?;
+    run_git(&["-C", &cwd_text, "switch", "--detach", "FETCH_HEAD"]).await?;
+    run_git(&["-C", &cwd_text, "switch", "--create", &source.branch]).await?;
+    git_stdout(&["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"]).await
+}
+
+async fn run_git(args: &[&str]) -> anyhow::Result<()> {
+    git_output(args).await.map(|_| ())
+}
+
+async fn git_stdout(args: &[&str]) -> anyhow::Result<String> {
+    let output = git_output(args).await?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+async fn git_output(args: &[&str]) -> anyhow::Result<std::process::Output> {
+    let output = tokio::process::Command::new("git")
+        .args(args)
         .output()
         .await
-        .context("failed to spawn git clone for workspace")?;
+        .context("failed to spawn typed Git workspace command")?;
     if !output.status.success() {
-        anyhow::bail!(
-            "workspace clone failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        anyhow::bail!("typed Git workspace command failed")
     }
-
-    Ok(())
+    Ok(output)
 }
 
 async fn fetch_attempt_spec_with_retry(
@@ -548,6 +616,23 @@ impl HttpAttemptBackend {
             .error_for_status()?;
 
         Ok(response.json::<ControlResponse>().await?)
+    }
+
+    async fn report_workspace_provisioned(
+        &self,
+        workspace_id: &str,
+        resolved_commit: &str,
+        branch: &str,
+    ) -> anyhow::Result<()> {
+        self.post_json_with_retry(
+            "workspace-provisioned",
+            &serde_json::json!({
+                "workspace_id": workspace_id,
+                "resolved_commit": resolved_commit,
+                "branch": branch,
+            }),
+        )
+        .await
     }
 
     fn ensure_success(url: &str, status: reqwest::StatusCode) -> anyhow::Result<()> {

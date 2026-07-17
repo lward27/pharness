@@ -21,8 +21,9 @@ use pharness_core::{
 };
 use pharness_fireworks::FireworksClient;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::process::Command;
 use tokio::sync::mpsc;
 
 /// The run fields an attempt needs, independent of the store row shape.
@@ -34,6 +35,41 @@ pub struct RunSpec {
     pub user_task: String,
     pub max_turns: u32,
     pub execution_target_json: serde_json::Value,
+    /// Source checkout instructions issued by the API for a bounded remote
+    /// workspace. Model prompts and ambient environment variables cannot
+    /// supply or alter this contract.
+    pub workspace_source: Option<WorkspaceSourceSpec>,
+}
+
+/// Typed remote source checkout contract for one workspace attempt.
+///
+/// The API validates the repository against its configured allowlist before
+/// issuing this spec. The worker validates the shape again before invoking
+/// Git, providing defense in depth against malformed durable state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkspaceSourceSpec {
+    pub workspace_id: String,
+    pub source_repo: String,
+    pub source_ref: String,
+    pub branch: String,
+    /// Filled by the worker after checkout and before model execution.
+    #[serde(default)]
+    pub resolved_commit: Option<String>,
+}
+
+impl WorkspaceSourceSpec {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.workspace_id.trim().is_empty() {
+            anyhow::bail!("workspace source workspace_id must not be blank");
+        }
+        validate_https_git_url(&self.source_repo)?;
+        validate_git_ref(&self.source_ref, "source_ref")?;
+        validate_git_ref(&self.branch, "branch")?;
+        if let Some(commit) = &self.resolved_commit {
+            validate_commit_id(commit)?;
+        }
+        Ok(())
+    }
 }
 
 /// Resume payload reconstructed from a decided approval.
@@ -76,6 +112,21 @@ pub struct AttemptOutcome {
     pub summary: Option<String>,
     pub error: Option<String>,
     pub approval: Option<ApprovalRequestPayload>,
+    #[serde(default)]
+    pub workspace_evidence: Option<WorkspaceGitEvidence>,
+}
+
+/// Bounded Git evidence collected by the process that owns the workspace.
+/// It is carried to the API with the terminal outcome because the API cannot
+/// inspect a Kubernetes `emptyDir` after its Job exits.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkspaceGitEvidence {
+    pub workspace_id: String,
+    pub base_commit: String,
+    pub branch: String,
+    pub status: String,
+    pub diff: String,
+    pub changed_paths: Vec<String>,
 }
 
 impl AttemptOutcome {
@@ -86,6 +137,7 @@ impl AttemptOutcome {
             summary: None,
             error: Some(error.into()),
             approval: None,
+            workspace_evidence: None,
         }
     }
 }
@@ -132,6 +184,53 @@ pub fn run_scope_for_spec(run: &RunSpec) -> RunScope {
     RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default()
 }
 
+fn validate_https_git_url(value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    let Some(remainder) = value.strip_prefix("https://") else {
+        anyhow::bail!("workspace source repository must use https");
+    };
+    if remainder.is_empty()
+        || remainder.starts_with('/')
+        || remainder.contains('@')
+        || remainder.contains('?')
+        || remainder.contains('#')
+        || remainder
+            .split('/')
+            .any(|part| part.is_empty() || part == "..")
+    {
+        anyhow::bail!("workspace source repository is invalid or contains credentials");
+    }
+    Ok(())
+}
+
+fn validate_git_ref(value: &str, label: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with('/')
+        || value.ends_with('/')
+        || value.contains("..")
+        || value.contains("@{")
+        || value.contains("//")
+        || value.ends_with('.')
+        || value.chars().any(|character| {
+            !(character.is_ascii_alphanumeric() || matches!(character, '/' | '_' | '-' | '.'))
+        })
+    {
+        anyhow::bail!("workspace source {label} is not a safe Git ref");
+    }
+    Ok(())
+}
+
+fn validate_commit_id(value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if !matches!(value.len(), 40 | 64)
+        || !value.bytes().all(|character| character.is_ascii_hexdigit())
+    {
+        anyhow::bail!("workspace source resolved_commit is not an immutable Git object ID");
+    }
+    Ok(())
+}
+
 pub fn json_string<T>(value: T) -> String
 where
     T: serde::Serialize,
@@ -152,6 +251,9 @@ pub async fn execute_attempt<B: AttemptBackend>(
     spec: AttemptSpec,
     cancellation: CancellationFlag,
 ) -> anyhow::Result<()> {
+    if let Some(source) = &spec.run.workspace_source {
+        source.validate()?;
+    }
     backend.mark_running().await?;
 
     let (sender, receiver) = mpsc::unbounded_channel();
@@ -222,15 +324,15 @@ pub async fn execute_attempt<B: AttemptBackend>(
     event_writer.await??;
 
     backend
-        .finish(attempt_outcome(&spec.run.cwd, outcome)?)
+        .finish(attempt_outcome(&spec.run, outcome).await?)
         .await
 }
 
-fn attempt_outcome(cwd: &str, outcome: RunOutcome) -> anyhow::Result<AttemptOutcome> {
+async fn attempt_outcome(run: &RunSpec, outcome: RunOutcome) -> anyhow::Result<AttemptOutcome> {
     let approval = if outcome.status == RunStatus::ApprovalRequired {
         match &outcome.approval {
             Some(approval) => {
-                let preview_json = approval_preview_for_action(cwd, approval.action.as_ref());
+                let preview_json = approval_preview_for_action(&run.cwd, approval.action.as_ref());
                 Some(ApprovalRequestPayload {
                     kind: json_string(approval.approval_kind),
                     risk: json_string(approval.risk),
@@ -251,13 +353,96 @@ fn attempt_outcome(cwd: &str, outcome: RunOutcome) -> anyhow::Result<AttemptOutc
         None
     };
 
+    let status = run_status_str(outcome.status).to_string();
+    let workspace_evidence = match (&run.workspace_source, status.as_str()) {
+        (Some(source), "completed") => {
+            Some(collect_workspace_git_evidence(&run.cwd, source).await?)
+        }
+        _ => None,
+    };
+
     Ok(AttemptOutcome {
-        status: run_status_str(outcome.status).to_string(),
+        status,
         turns: outcome.turns,
         summary: outcome.summary,
         error: outcome.error,
         approval,
+        workspace_evidence,
     })
+}
+
+async fn collect_workspace_git_evidence(
+    cwd: &str,
+    source: &WorkspaceSourceSpec,
+) -> anyhow::Result<WorkspaceGitEvidence> {
+    let base_commit = source
+        .resolved_commit
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("workspace source has no resolved commit"))?;
+    let root = Path::new(cwd);
+    let untracked = git_output(root, &["ls-files", "--others", "--exclude-standard"]).await?;
+    let untracked_paths = nonempty_lines(&untracked);
+    if untracked_paths.iter().any(|path| secret_shaped_path(path)) {
+        anyhow::bail!("workspace contains an untracked secret-shaped path");
+    }
+    if !untracked_paths.is_empty() {
+        let mut args = vec!["add", "--intent-to-add", "--"];
+        args.extend(untracked_paths.iter().map(String::as_str));
+        git_output(root, &args).await?;
+    }
+    let status = git_output(root, &["status", "--short"]).await?;
+    let changed_paths =
+        nonempty_lines(&git_output(root, &["diff", "--name-only", base_commit]).await?);
+    if changed_paths.iter().any(|path| secret_shaped_path(path)) {
+        anyhow::bail!("workspace diff includes a secret-shaped path");
+    }
+    let diff = git_output(root, &["diff", "--no-ext-diff", "--binary", base_commit]).await?;
+    if diff.len() > 512 * 1024 {
+        anyhow::bail!("workspace Git diff exceeds the 512 KiB capture limit");
+    }
+    Ok(WorkspaceGitEvidence {
+        workspace_id: source.workspace_id.clone(),
+        base_commit: base_commit.to_string(),
+        branch: source.branch.clone(),
+        status,
+        diff,
+        changed_paths,
+    })
+}
+
+async fn git_output(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .output()
+        .await
+        .map_err(|error| anyhow::anyhow!("could not execute Git workspace command: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!("Git workspace evidence command failed");
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn nonempty_lines(value: &str) -> Vec<String> {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn secret_shaped_path(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    name == ".env"
+        || name.starts_with(".env.")
+        || name.ends_with(".pem")
+        || name.ends_with(".key")
+        || name.contains("kubeconfig")
+        || name.contains("credential")
+        || name.contains("secret")
+        || name.contains("token")
 }
 
 async fn forward_events<B: AttemptBackend>(
@@ -279,5 +464,93 @@ struct ChannelEventSink {
 impl EventSink for ChannelEventSink {
     fn append(&self, event: AgentEvent) {
         let _ = self.sender.send(event);
+    }
+}
+
+#[cfg(test)]
+mod workspace_source_tests {
+    use super::{collect_workspace_git_evidence, WorkspaceSourceSpec};
+    use std::process::Command;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn accepts_a_safe_https_repository_and_refs() {
+        WorkspaceSourceSpec {
+            workspace_id: "ws_123".to_string(),
+            source_repo: "https://github.com/example/finance-app.git".to_string(),
+            source_ref: "main".to_string(),
+            branch: "pharness/witem-123/attempt-1".to_string(),
+            resolved_commit: None,
+        }
+        .validate()
+        .unwrap();
+    }
+
+    #[test]
+    fn rejects_credentials_and_unsafe_refs() {
+        let mut source = WorkspaceSourceSpec {
+            workspace_id: "ws_123".to_string(),
+            source_repo: "https://token@example.test/team/app.git".to_string(),
+            source_ref: "main".to_string(),
+            branch: "pharness/witem-123/attempt-1".to_string(),
+            resolved_commit: None,
+        };
+        assert!(source.validate().is_err());
+
+        source.source_repo = "https://example.test/team/app.git".to_string();
+        source.source_ref = "main..other".to_string();
+        assert!(source.validate().is_err());
+
+        source.source_ref = "main".to_string();
+        source.resolved_commit = Some("a1b2c3d4".to_string());
+        assert!(source.validate().is_err());
+    }
+
+    #[tokio::test]
+    async fn collects_bounded_evidence_against_the_pinned_commit() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-runhost-evidence-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        git(&root, &["init"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.invalid"]);
+        std::fs::write(root.join("README.md"), "before\n").unwrap();
+        git(&root, &["add", "README.md"]);
+        git(&root, &["commit", "-m", "base"]);
+        let base_commit = git(&root, &["rev-parse", "HEAD"]);
+        std::fs::write(root.join("README.md"), "after\n").unwrap();
+
+        let evidence = collect_workspace_git_evidence(
+            root.to_str().unwrap(),
+            &WorkspaceSourceSpec {
+                workspace_id: "ws_test".to_string(),
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                branch: "pharness/test/attempt-1".to_string(),
+                resolved_commit: Some(base_commit),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(evidence.changed_paths, vec!["README.md"]);
+        assert!(evidence.diff.contains("-before"));
+        assert!(evidence.diff.contains("+after"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn git(cwd: &std::path::Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 }

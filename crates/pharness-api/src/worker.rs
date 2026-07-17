@@ -5,7 +5,7 @@ use pharness_core::{
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
     execute_attempt, ApprovalRequestPayload, AttemptBackend, AttemptHost, AttemptOutcome,
-    AttemptSpec, ResumeSpec, RunSpec,
+    AttemptSpec, ResumeSpec, RunSpec, WorkspaceGitEvidence, WorkspaceSourceSpec,
 };
 use pharness_store::{
     CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateFileChange,
@@ -157,10 +157,23 @@ pub(crate) async fn attempt_spec_for_run(
             user_task: run.user_task.clone(),
             max_turns: run.max_turns,
             execution_target_json: run.execution_target_json.clone(),
+            workspace_source: workspace_source_for_run(&run.execution_target_json)?,
         },
         event_seq_start,
         resume,
     })
+}
+
+fn workspace_source_for_run(
+    execution_target: &serde_json::Value,
+) -> anyhow::Result<Option<WorkspaceSourceSpec>> {
+    let Some(value) = execution_target.get("workspace_source") else {
+        return Ok(None);
+    };
+    let source = serde_json::from_value::<WorkspaceSourceSpec>(value.clone())
+        .map_err(|error| anyhow::anyhow!("run has invalid workspace source: {error}"))?;
+    source.validate()?;
+    Ok(Some(source))
 }
 
 fn resume_spec_from_approval(approval: &StoredApproval) -> anyhow::Result<ResumeSpec> {
@@ -225,6 +238,7 @@ pub(crate) async fn finish_run_from_attempt(
     run: &StoredRun,
     outcome: AttemptOutcome,
 ) -> anyhow::Result<()> {
+    persist_workspace_evidence(store, run, &outcome).await?;
     let error = outcome.error.clone();
     let approval_id = if outcome.status == "approval_required" {
         match &outcome.approval {
@@ -262,6 +276,183 @@ pub(crate) async fn finish_run_from_attempt(
         }
     }
 
+    sync_work_item_attempt(store, run, &outcome).await?;
+
+    Ok(())
+}
+
+async fn persist_workspace_evidence(
+    store: &SqliteStore,
+    run: &StoredRun,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let source = workspace_source_for_run(&run.execution_target_json)?;
+    let Some(source) = source else {
+        if outcome.workspace_evidence.is_some() {
+            anyhow::bail!("run without a workspace source reported workspace evidence");
+        }
+        return Ok(());
+    };
+    if outcome.status != "completed" {
+        return Ok(());
+    }
+    let evidence = outcome
+        .workspace_evidence
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("completed remote workspace run has no Git evidence"))?;
+    validate_workspace_evidence(&source, evidence)?;
+    let scope = run_scope_for_run(run);
+    if scope.workspace_id.as_deref() != Some(evidence.workspace_id.as_str()) {
+        anyhow::bail!("workspace evidence does not match the run scope");
+    }
+    let workspace = store
+        .get_workspace(&evidence.workspace_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("workspace {} no longer exists", evidence.workspace_id))?;
+    if workspace.run_id.as_ref() != Some(&run.id)
+        || workspace.source_repo != source.source_repo
+        || workspace.source_ref != source.source_ref
+        || workspace.resolved_commit.as_deref() != Some(evidence.base_commit.as_str())
+        || workspace.branch.as_deref() != Some(evidence.branch.as_str())
+    {
+        anyhow::bail!("workspace evidence does not match the pinned workspace state");
+    }
+    let test_events = crate::app::shell_test_evidence(&store.list_events(&run.id).await?);
+    let diff_artifact = store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_workspace_diff", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "workspace_git_diff".to_string(),
+            label: format!("Git diff for workspace {}", evidence.workspace_id),
+            mime_type: Some("text/x-diff".to_string()),
+            path: None,
+            content_text: Some(evidence.diff.clone()),
+            content_json: None,
+        })
+        .await?;
+    let status_artifact = store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_workspace_status", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "workspace_git_status".to_string(),
+            label: format!(
+                "Git status and tests for workspace {}",
+                evidence.workspace_id
+            ),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(serde_json::json!({
+                "status": evidence.status,
+                "base_commit": evidence.base_commit,
+                "branch": evidence.branch,
+                "changed_paths": evidence.changed_paths,
+                "test_events": test_events,
+            })),
+        })
+        .await?;
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!(
+                "aud_{}_workspace_evidence_{}",
+                run.id.as_str(),
+                unique_suffix()
+            ),
+            kind: "workspace.evidence_recorded".to_string(),
+            actor: Some("agent:cluster-worker".to_string()),
+            resource_kind: "workspace".to_string(),
+            resource_id: evidence.workspace_id.clone(),
+            run_id: Some(run.id.clone()),
+            payload_json: serde_json::json!({
+                "base_commit": evidence.base_commit,
+                "branch": evidence.branch,
+                "diff_artifact_id": diff_artifact.id,
+                "status_artifact_id": status_artifact.id,
+                "test_event_count": test_events.len(),
+            }),
+        })
+        .await?;
+    Ok(())
+}
+
+fn validate_workspace_evidence(
+    source: &WorkspaceSourceSpec,
+    evidence: &WorkspaceGitEvidence,
+) -> anyhow::Result<()> {
+    if evidence.workspace_id != source.workspace_id || evidence.branch != source.branch {
+        anyhow::bail!("workspace evidence does not match the issued source contract");
+    }
+    if evidence.base_commit.trim().is_empty()
+        || evidence.diff.len() > 512 * 1024
+        || evidence
+            .changed_paths
+            .iter()
+            .any(|path| secret_shaped_path(path))
+    {
+        anyhow::bail!("workspace evidence failed safety validation");
+    }
+    Ok(())
+}
+
+fn secret_shaped_path(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    name == ".env"
+        || name.starts_with(".env.")
+        || name.ends_with(".pem")
+        || name.ends_with(".key")
+        || name.contains("kubeconfig")
+        || name.contains("credential")
+        || name.contains("secret")
+        || name.contains("token")
+}
+
+async fn sync_work_item_attempt(
+    store: &SqliteStore,
+    run: &StoredRun,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let scope = run_scope_for_run(run);
+    let (Some(work_item_id), Some(workspace_id)) = (scope.work_item_id, scope.workspace_id) else {
+        return Ok(());
+    };
+    let (work_item_status, workspace_status) = match outcome.status.as_str() {
+        "completed" => ("verifying", "verifying"),
+        "failed" => ("blocked", "blocked"),
+        "cancelled" => ("cancelled", "cancelled"),
+        "approval_required" => return Ok(()),
+        _ => return Ok(()),
+    };
+    let reason = outcome
+        .summary
+        .clone()
+        .or_else(|| outcome.error.clone())
+        .unwrap_or_else(|| "coding attempt reached a terminal state".to_string());
+    let workspace = store.get_workspace(&workspace_id).await?.ok_or_else(|| {
+        anyhow::anyhow!("workspace {workspace_id} disappeared during run finalization")
+    })?;
+    store
+        .update_workspace_execution(
+            &workspace_id,
+            pharness_store::UpdateWorkspaceExecution {
+                run_id: Some(run.id.clone()),
+                status: workspace_status.to_string(),
+                resolved_commit: workspace.resolved_commit.clone(),
+                branch: workspace.branch.clone(),
+                actor: Some("agent:local-worker".to_string()),
+                reason: Some(reason.clone()),
+            },
+        )
+        .await?;
+    store
+        .finish_work_item_attempt(
+            &work_item_id,
+            work_item_status,
+            Some("agent:local-worker".to_string()),
+            Some(reason),
+        )
+        .await?;
     Ok(())
 }
 
@@ -962,12 +1153,16 @@ pub(crate) async fn fail_run_from_dispatch(
 mod tests {
     use super::{
         approval_gates_from_remediation_plan, artifact_from_event, file_change_from_event,
-        grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
-        remediation_plan_from_incident, result_json_for_attempt,
+        finish_run_from_attempt, grant_used_audit_event_from_event, incident_from_observation,
+        observation_from_event, remediation_plan_from_incident, result_json_for_attempt,
+        validate_workspace_evidence, workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
-    use pharness_runhost::AttemptOutcome;
-    use pharness_store::{StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun};
+    use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
+    use pharness_store::{
+        CreateRun, CreateSession, CreateWorkItem, CreateWorkspace, SqliteStore, StoredIncident,
+        StoredObservation, StoredRemediationPlan, StoredRun,
+    };
 
     #[test]
     fn result_json_uses_null_for_absent_run_scope() {
@@ -981,12 +1176,180 @@ mod tests {
             summary: Some("done".to_string()),
             error: None,
             approval: None,
+            workspace_evidence: None,
         };
 
         let result = result_json_for_attempt(&run, &outcome, None);
 
         assert!(result["run_scope"].is_null());
         assert_eq!(result["status"], "completed");
+    }
+
+    #[test]
+    fn reconstructs_only_valid_workspace_source_from_persisted_target() {
+        let source = workspace_source_for_run(&serde_json::json!({
+            "workspace_source": {
+                "workspace_id": "ws_test",
+                "source_repo": "https://github.com/example/finance-app.git",
+                "source_ref": "main",
+                "branch": "pharness/test/attempt-1"
+            }
+        }))
+        .unwrap()
+        .unwrap();
+        assert_eq!(source.workspace_id, "ws_test");
+
+        assert!(workspace_source_for_run(&serde_json::json!({
+            "workspace_source": {
+                "workspace_id": "ws_test",
+                "source_repo": "https://token@example.test/finance-app.git",
+                "source_ref": "main",
+                "branch": "pharness/test/attempt-1"
+            }
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_workspace_evidence_that_does_not_match_its_source_contract() {
+        let source = WorkspaceSourceSpec {
+            workspace_id: "ws_test".to_string(),
+            source_repo: "https://github.com/example/finance-app.git".to_string(),
+            source_ref: "main".to_string(),
+            branch: "pharness/test/attempt-1".to_string(),
+            resolved_commit: None,
+        };
+        let evidence = WorkspaceGitEvidence {
+            workspace_id: "ws_test".to_string(),
+            base_commit: "a1b2c3d4".to_string(),
+            branch: "pharness/test/attempt-1".to_string(),
+            status: " M README.md".to_string(),
+            diff: "--- a/README.md\n+++ b/README.md".to_string(),
+            changed_paths: vec!["README.md".to_string()],
+        };
+        validate_workspace_evidence(&source, &evidence).unwrap();
+
+        let evidence = WorkspaceGitEvidence {
+            changed_paths: vec![".env".to_string()],
+            ..evidence
+        };
+        assert!(validate_workspace_evidence(&source, &evidence).is_err());
+    }
+
+    #[tokio::test]
+    async fn completed_remote_workspace_run_persists_durable_git_evidence() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let work_item_id = "witem_worker_evidence";
+        let workspace_id = "ws_worker_evidence";
+        let branch = "pharness/witem_worker_evidence/attempt-1";
+        let base_commit = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+        let session_id = SessionId::new("ses_worker_evidence");
+        let run_id = RunId::new("run_worker_evidence");
+        store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "executing".to_string(),
+                title: "worker evidence".to_string(),
+                intent: "make a safe change".to_string(),
+                acceptance_criteria: Vec::new(),
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: None,
+                argo_application: None,
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 600,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "worker evidence".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        let run = store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "worker evidence".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 2,
+                initial_status: "running".to_string(),
+                execution_target_json: serde_json::json!({
+                    "kind": "kubernetes_workspace",
+                    "run_scope": {
+                        "work_item_id": work_item_id,
+                        "workspace_id": workspace_id,
+                        "production_impacting": false
+                    },
+                    "workspace_source": {
+                        "workspace_id": workspace_id,
+                        "source_repo": "https://github.com/example/finance-app.git",
+                        "source_ref": "main",
+                        "branch": branch,
+                        "resolved_commit": base_commit
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        store
+            .create_workspace(CreateWorkspace {
+                id: workspace_id.to_string(),
+                work_item_id: work_item_id.to_string(),
+                run_id: Some(run_id.clone()),
+                status: "executing".to_string(),
+                source_repo: "https://github.com/example/finance-app.git".to_string(),
+                source_ref: "main".to_string(),
+                resolved_commit: Some(base_commit.to_string()),
+                branch: Some(branch.to_string()),
+                retention_status: "ephemeral".to_string(),
+                actor: None,
+                reason: None,
+            })
+            .await
+            .unwrap();
+
+        finish_run_from_attempt(
+            &store,
+            &run,
+            AttemptOutcome {
+                status: "completed".to_string(),
+                turns: 2,
+                summary: Some("changed README".to_string()),
+                error: None,
+                approval: None,
+                workspace_evidence: Some(WorkspaceGitEvidence {
+                    workspace_id: workspace_id.to_string(),
+                    base_commit: base_commit.to_string(),
+                    branch: branch.to_string(),
+                    status: " M README.md".to_string(),
+                    diff: "diff --git a/README.md b/README.md\n+index 1..2 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-before\n+after\n".to_string(),
+                    changed_paths: vec!["README.md".to_string()],
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+        let artifacts = store.list_artifacts(&run_id).await.unwrap();
+        assert!(artifacts
+            .iter()
+            .any(|artifact| artifact.kind == "workspace_git_diff"));
+        assert!(artifacts
+            .iter()
+            .any(|artifact| artifact.kind == "workspace_git_status"));
+        let workspace = store.get_workspace(workspace_id).await.unwrap().unwrap();
+        assert_eq!(workspace.status, "verifying");
+        let work_item = store.get_work_item(work_item_id).await.unwrap().unwrap();
+        assert_eq!(work_item.status, "verifying");
     }
 
     #[test]
@@ -1006,6 +1369,7 @@ mod tests {
             summary: Some("done".to_string()),
             error: None,
             approval: None,
+            workspace_evidence: None,
         };
 
         let result = result_json_for_attempt(&run, &outcome, None);

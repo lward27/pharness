@@ -510,6 +510,51 @@ pub struct WorkspacesResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ExecuteWorkItemRequest {
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+    pub max_turns: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecuteWorkItemResponse {
+    pub work_item: WorkItemResponse,
+    pub workspace: WorkspaceResponse,
+    pub run: RunResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReconcileWorkItemRequest {
+    #[serde(default)]
+    pub apply: bool,
+    #[serde(default)]
+    pub actor: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub max_turns: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReconcileWorkItemResponse {
+    pub action: String,
+    pub applied: bool,
+    pub work_item: WorkItemResponse,
+    pub work_plan: Option<WorkPlanResponse>,
+    pub workspace: Option<WorkspaceResponse>,
+    pub run: Option<RunResponse>,
+    pub change_set: Option<ChangeSetResponse>,
+    pub git_delivery_preflight: Option<GitDeliveryPreflightResponse>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CaptureWorkItemChangeSetRequest {
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateWorkPlanFromRemediationPlanRequest {
     pub remediation_plan_id: String,
 }
@@ -606,6 +651,7 @@ pub struct SdlcFlowResponse {
     pub deployment_intent: Option<DeploymentIntentResponse>,
     pub release: Option<ReleaseResponse>,
     pub registry_evidence: Option<RegistryEvidenceResponse>,
+    pub git_delivery: Option<GitDeliveryFlowResponse>,
     pub incidents: Vec<IncidentResponse>,
     pub remediation_plans: Vec<RemediationPlanResponse>,
     pub approval_gates: Vec<ApprovalGateResponse>,
@@ -623,9 +669,10 @@ pub struct ChangeSetsResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct ChangeSetResponse {
     pub id: String,
+    pub work_item_id: Option<String>,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -648,6 +695,7 @@ impl From<StoredChangeSet> for ChangeSetResponse {
     fn from(change_set: StoredChangeSet) -> Self {
         Self {
             id: change_set.id,
+            work_item_id: change_set.work_item_id,
             work_plan_id: change_set.work_plan_id,
             remediation_plan_id: change_set.remediation_plan_id,
             incident_id: change_set.incident_id,
@@ -686,6 +734,64 @@ pub struct CreateChangeSetRequest {
 pub struct CreateChangeSetResponse {
     pub change_set: ChangeSetResponse,
     pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrepareGitDeliveryRequest {
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryPlanResponse {
+    pub artifact: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateGitDeliveryAuthorizationRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub created_by: Option<String>,
+    pub reason: String,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryAuthorizationResponse {
+    pub grant: PermissionGrantResponse,
+    pub plan: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitDeliveryPreflightRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub actor: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryPreflightResponse {
+    pub status: String,
+    pub authorization_ready: bool,
+    pub dispatch_ready: bool,
+    pub plan: ArtifactResponse,
+    pub permission_grant: Option<PermissionGrantResponse>,
+    pub checks: Vec<serde_json::Value>,
+    pub artifact: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryFlowResponse {
+    pub plan: ArtifactResponse,
+    pub latest_preflight: Option<ArtifactResponse>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

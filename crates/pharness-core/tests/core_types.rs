@@ -79,6 +79,8 @@ fn run_scope_carries_sdlc_metadata() {
         namespace: Some("apps-dev".to_string()),
         repo: Some("git@example.test/team/app.git".to_string()),
         branch: Some("feature/pharness".to_string()),
+        work_item_id: Some("witem_1".to_string()),
+        workspace_id: Some("ws_1".to_string()),
         work_plan_id: Some("wplan_1".to_string()),
         change_set_id: Some("cset_1".to_string()),
         production_impacting: false,

@@ -13,8 +13,8 @@ set -euo pipefail
 #   - cancellation deletes the worker Job and lands run.cancelled
 #   - operator console reachable and proxying with injected identity
 #
-# Model-backed checks run when the in-cluster Fireworks secret holds a real
-# key; otherwise the worker's failure report itself proves the ingest path.
+# Model-backed checks are an explicit operator choice. This script never reads
+# credential values from Kubernetes Secrets.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${PHARNESS_NAMESPACE:-pharness}"
@@ -26,8 +26,7 @@ ARTIFACT_DIR="$ROOT/$ARTIFACT_ROOT/$RUN_NAME"
 API_URL="http://127.0.0.1:$LOCAL_API_PORT"
 UI_URL="http://127.0.0.1:$LOCAL_UI_PORT"
 PF_PIDS=()
-MODEL_STATUS="skipped"
-FIREWORKS_PLACEHOLDER="REPLACE_WITH_REAL_FIREWORKS_KEY"
+MODEL_STATUS="${PHARNESS_SMOKE_MODEL_CHECKS:-skipped}"
 
 log() { printf '==> %s\n' "$*"; }
 fail() {
@@ -92,19 +91,13 @@ kubectl -n "$NAMESPACE" rollout status deployment/pharness-api --timeout=180s
 kubectl -n "$NAMESPACE" rollout status deployment/pharness-ui --timeout=180s
 kubectl -n "$NAMESPACE" get pods -o wide >"$ARTIFACT_DIR/pods.txt"
 
-if [[ -z "${PHARNESS_API_TOKEN:-}" ]]; then
-  PHARNESS_API_TOKEN="$(kubectl -n "$NAMESPACE" get secret pharness-operator-token \
-    -o jsonpath='{.data.tokens}' | base64 -d | cut -d= -f2-)"
-fi
-[[ -n "$PHARNESS_API_TOKEN" ]] || fail "could not resolve an operator token"
+[[ -n "${PHARNESS_API_TOKEN:-}" ]] || fail "PHARNESS_API_TOKEN must be supplied by the operator"
 export PHARNESS_API_TOKEN
 
-fireworks_key="$(kubectl -n "$NAMESPACE" get secret pharness-fireworks \
-  -o jsonpath='{.data.api-key}' | base64 -d)"
-if [[ "$fireworks_key" != "$FIREWORKS_PLACEHOLDER" && -n "$fireworks_key" ]]; then
-  MODEL_STATUS="enabled"
-fi
-unset fireworks_key
+case "$MODEL_STATUS" in
+  enabled|skipped) ;;
+  *) fail "PHARNESS_SMOKE_MODEL_CHECKS must be enabled or skipped" ;;
+esac
 log "model checks: $MODEL_STATUS"
 
 # --- port-forwards ---------------------------------------------------------

@@ -74,6 +74,26 @@ deny_direct_production_apply = true
 [storage]
 kind = "sqlite"
 path = "~/.local/share/pharness/pharness.db"
+# Real coding alpha only clones local repositories listed here. The clone is
+# isolated under workspace_root; Pharness does not push, merge, or touch the
+# listed source checkout.
+workspace_root = "~/.local/share/pharness/workspaces"
+workspace_allowed_repos = []
+# Exact HTTPS Git URLs only. Empty keeps in-cluster source cloning disabled.
+# Credentials in URLs are rejected; private Git access gets a separate
+# read-only identity in a later slice.
+workspace_allowed_remote_repos = []
+
+[worker.kubernetes]
+# Relevant only when PHARNESS_WORKER_MODE=kubernetes_job. Source clones use a
+# bounded per-run emptyDir, never the durable API SQLite volume.
+workspace_dir = "/workspace"
+workspace_size_limit = "4Gi"
+workspace_ephemeral_storage_request = "2Gi"
+workspace_ephemeral_storage_limit = "4Gi"
+# Set after confirming node-local capacity for the target cluster.
+workspace_node_hostname = ""
+max_concurrent_run_jobs = 1
 
 [api]
 bind = "127.0.0.1:4777"

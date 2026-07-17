@@ -36,6 +36,8 @@ pub struct RunScope {
     pub namespace: Option<String>,
     pub repo: Option<String>,
     pub branch: Option<String>,
+    pub work_item_id: Option<String>,
+    pub workspace_id: Option<String>,
     pub work_plan_id: Option<String>,
     pub change_set_id: Option<String>,
     pub production_impacting: bool,
@@ -46,6 +48,8 @@ impl RunScope {
         self.namespace.is_none()
             && self.repo.is_none()
             && self.branch.is_none()
+            && self.work_item_id.is_none()
+            && self.workspace_id.is_none()
             && self.work_plan_id.is_none()
             && self.change_set_id.is_none()
             && !self.production_impacting

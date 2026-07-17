@@ -18,8 +18,8 @@ use crate::{
     StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
     UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
     UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkItemListFilter, WorkPlanListFilter,
-    WorkspaceListFilter,
+    UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution, WorkItemListFilter,
+    WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -1225,6 +1225,103 @@ impl SqliteStore {
         rows.into_iter().map(row_to_workspace).collect()
     }
 
+    pub async fn update_workspace_execution(
+        &self,
+        workspace_id: &str,
+        update: UpdateWorkspaceExecution,
+    ) -> Result<StoredWorkspace, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE workspaces
+            SET run_id = ?2, status = ?3, resolved_commit = ?4, branch = ?5,
+                updated_at = ?6, status_changed_at = ?6, status_changed_by = ?7,
+                status_reason = ?8
+            WHERE id = ?1
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(update.run_id.as_ref().map(RunId::as_str))
+        .bind(update.status)
+        .bind(update.resolved_commit)
+        .bind(update.branch)
+        .bind(now)
+        .bind(update.actor)
+        .bind(update.reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_workspace(workspace_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "workspace".to_string(),
+                id: workspace_id.to_string(),
+            })
+    }
+
+    pub async fn start_work_item_attempt(
+        &self,
+        work_item_id: &str,
+        run_id: &RunId,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET status = 'executing', attempt_count = attempt_count + 1, current_run_id = ?2,
+                updated_at = ?3, status_changed_at = ?3, status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(run_id.as_str())
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
+    }
+
+    pub async fn finish_work_item_attempt(
+        &self,
+        work_item_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET status = ?2, current_run_id = NULL, updated_at = ?3,
+                status_changed_at = ?3, status_changed_by = ?4, status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
+    }
+
     pub async fn get_work_plan(
         &self,
         work_plan_id: &str,
@@ -1400,15 +1497,16 @@ impl SqliteStore {
         sqlx::query(
             r#"
             INSERT INTO change_sets (
-              id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+              id, work_item_id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
               status, title, summary, risk_level, material_hash, resource_namespace,
               resource_kind, resource_name, change_set_json, created_at, updated_at,
               status_changed_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
             "#,
         )
         .bind(&change_set.id)
+        .bind(&change_set.work_item_id)
         .bind(&change_set.work_plan_id)
         .bind(&change_set.remediation_plan_id)
         .bind(&change_set.incident_id)
@@ -1469,26 +1567,28 @@ impl SqliteStore {
         let offset = i64::from(filter.offset);
         let rows = sqlx::query(
             r#"
-            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+            SELECT id, work_item_id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
                    status, title, summary, risk_level, material_hash, revision,
                    resource_namespace, resource_kind, resource_name, change_set_json, created_at,
                    updated_at, status_changed_at, status_changed_by, status_reason
             FROM change_sets
-            WHERE (?1 IS NULL OR work_plan_id = ?1)
-              AND (?2 IS NULL OR remediation_plan_id = ?2)
-              AND (?3 IS NULL OR incident_id = ?3)
-              AND (?4 IS NULL OR run_id = ?4)
-              AND (?5 IS NULL OR status = ?5)
-              AND (?6 IS NULL OR risk_level = ?6)
-              AND (?7 IS NULL OR resource_namespace = ?7)
-              AND (?8 IS NULL OR resource_kind = ?8)
-              AND (?9 IS NULL OR resource_name = ?9)
-              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
-              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR work_plan_id = ?2)
+              AND (?3 IS NULL OR remediation_plan_id = ?3)
+              AND (?4 IS NULL OR incident_id = ?4)
+              AND (?5 IS NULL OR run_id = ?5)
+              AND (?6 IS NULL OR status = ?6)
+              AND (?7 IS NULL OR risk_level = ?7)
+              AND (?8 IS NULL OR resource_namespace = ?8)
+              AND (?9 IS NULL OR resource_kind = ?9)
+              AND (?10 IS NULL OR resource_name = ?10)
+              AND (?11 IS NULL OR CAST(created_at AS INTEGER) >= ?11)
+              AND (?12 IS NULL OR CAST(created_at AS INTEGER) <= ?12)
             ORDER BY created_at DESC, id DESC
-            LIMIT ?12 OFFSET ?13
+            LIMIT ?13 OFFSET ?14
             "#,
         )
+        .bind(filter.work_item_id)
         .bind(filter.work_plan_id)
         .bind(filter.remediation_plan_id)
         .bind(filter.incident_id)
@@ -3645,6 +3745,7 @@ fn row_to_change_set(row: sqlx::sqlite::SqliteRow) -> Result<StoredChangeSet, St
     let change_set_json: String = row.try_get("change_set_json")?;
     Ok(StoredChangeSet {
         id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
         work_plan_id: row.try_get("work_plan_id")?,
         remediation_plan_id: row.try_get("remediation_plan_id")?,
         incident_id: row.try_get("incident_id")?,
@@ -4019,7 +4120,7 @@ fn change_set_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
             r#"
-            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+            SELECT id, work_item_id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
                    status, title, summary, risk_level, material_hash, revision,
                    resource_namespace, resource_kind, resource_name, change_set_json, created_at,
                    updated_at, status_changed_at, status_changed_by, status_reason
@@ -4029,7 +4130,7 @@ fn change_set_select_sql(where_clause: &str) -> &'static str {
         }
         "WHERE work_plan_id = ?1" => {
             r#"
-            SELECT id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
+            SELECT id, work_item_id, work_plan_id, remediation_plan_id, incident_id, session_id, run_id,
                    status, title, summary, risk_level, material_hash, revision,
                    resource_namespace, resource_kind, resource_name, change_set_json, created_at,
                    updated_at, status_changed_at, status_changed_by, status_reason
@@ -5788,9 +5889,10 @@ mod tests {
         let change_set = store
             .create_change_set(crate::CreateChangeSet {
                 id: "cset_test".to_string(),
+                work_item_id: None,
                 work_plan_id: work_plan.id.clone(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "approved".to_string(),

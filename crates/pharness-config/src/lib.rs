@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 const DEFAULT_BIND: &str = "127.0.0.1:4777";
 const DEFAULT_DB_PATH: &str = ".pharness/pharness.db";
+const DEFAULT_WORKSPACE_ROOT: &str = ".pharness/workspaces";
 const DEFAULT_FIREWORKS_MODEL: &str = "accounts/fireworks/models/kimi-k2p6";
 const DEFAULT_FIREWORKS_BASE_URL: &str = pharness_fireworks::DEFAULT_FIREWORKS_BASE_URL;
 const DEFAULT_FIREWORKS_API_KEY_ENV: &str = "FIREWORKS_API_KEY";
@@ -22,6 +23,10 @@ const DEFAULT_WORKER_K8S_SERVICE_ACCOUNT: &str = "pharness-worker";
 const DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-tekton-runner";
 const DEFAULT_WORKER_K8S_API_URL: &str = "http://pharness-api:4777";
 const DEFAULT_WORKER_K8S_WORKSPACE_DIR: &str = "/workspace";
+const DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT: &str = "4Gi";
+const DEFAULT_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST: &str = "2Gi";
+const DEFAULT_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_LIMIT: &str = "4Gi";
+const DEFAULT_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS: u32 = 1;
 const DEFAULT_WORKER_K8S_FIREWORKS_SECRET: &str = "pharness-fireworks";
 const DEFAULT_WORKER_K8S_TOKEN_SECRET: &str = "pharness-worker-token";
 const DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS: u64 = 3_600;
@@ -84,6 +89,14 @@ pub struct WorkerKubernetesConfig {
     pub tekton_executor_poll_seconds: u64,
     pub api_url: String,
     pub workspace_dir: String,
+    /// Per-run source workspace quota, independent of the API's SQLite PVC.
+    pub workspace_size_limit: String,
+    pub workspace_ephemeral_storage_request: String,
+    pub workspace_ephemeral_storage_limit: String,
+    /// Optional hostname pin for node-local workspace capacity.
+    pub workspace_node_hostname: Option<String>,
+    /// Conservative admission cap for model worker Jobs.
+    pub max_concurrent_run_jobs: u32,
     pub fireworks_secret_name: String,
     pub worker_token_secret_name: String,
     pub active_deadline_seconds: u64,
@@ -98,6 +111,13 @@ pub struct ApiConfig {
 #[derive(Clone)]
 pub struct StorageConfig {
     pub path: PathBuf,
+    /// Root for ephemeral local source clones. An empty repository allowlist
+    /// deliberately disables autonomous source execution.
+    pub workspace_root: PathBuf,
+    pub workspace_allowed_repos: Vec<PathBuf>,
+    /// Exact HTTPS source repositories permitted for future Kubernetes
+    /// workspace attempts. Empty keeps remote source execution disabled.
+    pub workspace_allowed_remote_repos: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -164,6 +184,7 @@ impl ApiRuntimeConfig {
         config.apply_env(env)?;
         reject_non_fireworks(&config.model.provider)?;
         reject_blank_policy_identity(&config.policy)?;
+        reject_invalid_kubernetes_workspace(&config.worker.kubernetes)?;
         config.resolve_api_key(env);
 
         Ok(config)
@@ -176,6 +197,9 @@ impl ApiRuntimeConfig {
             },
             storage: StorageConfig {
                 path: PathBuf::from(DEFAULT_DB_PATH),
+                workspace_root: PathBuf::from(DEFAULT_WORKSPACE_ROOT),
+                workspace_allowed_repos: Vec::new(),
+                workspace_allowed_remote_repos: Vec::new(),
             },
             model: ModelConfig {
                 provider: "fireworks".to_string(),
@@ -206,6 +230,13 @@ impl ApiRuntimeConfig {
                     tekton_executor_poll_seconds: DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS,
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
+                    workspace_size_limit: DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT.to_string(),
+                    workspace_ephemeral_storage_request:
+                        DEFAULT_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST.to_string(),
+                    workspace_ephemeral_storage_limit:
+                        DEFAULT_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_LIMIT.to_string(),
+                    workspace_node_hostname: None,
+                    max_concurrent_run_jobs: DEFAULT_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS,
                     fireworks_secret_name: DEFAULT_WORKER_K8S_FIREWORKS_SECRET.to_string(),
                     worker_token_secret_name: DEFAULT_WORKER_K8S_TOKEN_SECRET.to_string(),
                     active_deadline_seconds: DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS,
@@ -225,6 +256,18 @@ impl ApiRuntimeConfig {
         if let Some(storage) = file.storage {
             if let Some(path) = storage.path {
                 self.storage.path = expand_tilde(PathBuf::from(path));
+            }
+            if let Some(path) = storage.workspace_root {
+                self.storage.workspace_root = expand_tilde(PathBuf::from(path));
+            }
+            if let Some(repos) = storage.workspace_allowed_repos {
+                self.storage.workspace_allowed_repos = repos
+                    .into_iter()
+                    .map(|repo| expand_tilde(PathBuf::from(repo)))
+                    .collect();
+            }
+            if let Some(repos) = storage.workspace_allowed_remote_repos {
+                self.storage.workspace_allowed_remote_repos = repos;
             }
         }
 
@@ -298,6 +341,21 @@ impl ApiRuntimeConfig {
                 if let Some(value) = kubernetes.workspace_dir {
                     self.worker.kubernetes.workspace_dir = value;
                 }
+                if let Some(value) = kubernetes.workspace_size_limit {
+                    self.worker.kubernetes.workspace_size_limit = value;
+                }
+                if let Some(value) = kubernetes.workspace_ephemeral_storage_request {
+                    self.worker.kubernetes.workspace_ephemeral_storage_request = value;
+                }
+                if let Some(value) = kubernetes.workspace_ephemeral_storage_limit {
+                    self.worker.kubernetes.workspace_ephemeral_storage_limit = value;
+                }
+                if let Some(value) = kubernetes.workspace_node_hostname {
+                    self.worker.kubernetes.workspace_node_hostname = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.max_concurrent_run_jobs {
+                    self.worker.kubernetes.max_concurrent_run_jobs = value;
+                }
                 if let Some(value) = kubernetes.fireworks_secret_name {
                     self.worker.kubernetes.fireworks_secret_name = value;
                 }
@@ -352,6 +410,25 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_DB_PATH") {
             self.storage.path = expand_tilde(PathBuf::from(value));
+        }
+        if let Some(value) = env.get("PHARNESS_WORKSPACE_ROOT") {
+            self.storage.workspace_root = expand_tilde(PathBuf::from(value));
+        }
+        if let Some(value) = env.get("PHARNESS_WORKSPACE_ALLOWED_REPOS") {
+            self.storage.workspace_allowed_repos = value
+                .split(',')
+                .map(str::trim)
+                .filter(|repo| !repo.is_empty())
+                .map(|repo| expand_tilde(PathBuf::from(repo)))
+                .collect();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKSPACE_ALLOWED_REMOTE_REPOS") {
+            self.storage.workspace_allowed_remote_repos = value
+                .split(',')
+                .map(str::trim)
+                .filter(|repo| !repo.is_empty())
+                .map(ToOwned::to_owned)
+                .collect();
         }
         if let Some(value) = env.get("PHARNESS_FIREWORKS_MODEL") {
             self.model.model = value.clone();
@@ -418,6 +495,26 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_DIR") {
             self.worker.kubernetes.workspace_dir = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_SIZE_LIMIT") {
+            self.worker.kubernetes.workspace_size_limit = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST") {
+            self.worker.kubernetes.workspace_ephemeral_storage_request = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_LIMIT") {
+            self.worker.kubernetes.workspace_ephemeral_storage_limit = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_NODE_HOSTNAME") {
+            self.worker.kubernetes.workspace_node_hostname = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS") {
+            self.worker.kubernetes.max_concurrent_run_jobs =
+                parse_u64(value, "PHARNESS_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS is too large")
+                    })?;
         }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_FIREWORKS_SECRET") {
             self.worker.kubernetes.fireworks_secret_name = value.clone();
@@ -506,6 +603,11 @@ struct FileWorkerKubernetesConfig {
     tekton_executor_poll_seconds: Option<u64>,
     api_url: Option<String>,
     workspace_dir: Option<String>,
+    workspace_size_limit: Option<String>,
+    workspace_ephemeral_storage_request: Option<String>,
+    workspace_ephemeral_storage_limit: Option<String>,
+    workspace_node_hostname: Option<String>,
+    max_concurrent_run_jobs: Option<u32>,
     fireworks_secret_name: Option<String>,
     worker_token_secret_name: Option<String>,
     active_deadline_seconds: Option<u64>,
@@ -522,6 +624,9 @@ struct FileApiConfig {
 #[serde(default)]
 struct FileStorageConfig {
     path: Option<String>,
+    workspace_root: Option<String>,
+    workspace_allowed_repos: Option<Vec<String>>,
+    workspace_allowed_remote_repos: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -653,6 +758,32 @@ fn reject_blank_policy_identity(policy: &SafetyPolicy) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn reject_invalid_kubernetes_workspace(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    for (label, value) in [
+        ("worker.kubernetes.workspace_dir", &config.workspace_dir),
+        (
+            "worker.kubernetes.workspace_size_limit",
+            &config.workspace_size_limit,
+        ),
+        (
+            "worker.kubernetes.workspace_ephemeral_storage_request",
+            &config.workspace_ephemeral_storage_request,
+        ),
+        (
+            "worker.kubernetes.workspace_ephemeral_storage_limit",
+            &config.workspace_ephemeral_storage_limit,
+        ),
+    ] {
+        if value.trim().is_empty() {
+            bail!("{label} must not be blank");
+        }
+    }
+    if config.max_concurrent_run_jobs == 0 {
+        bail!("worker.kubernetes.max_concurrent_run_jobs must be at least one");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{split_registry_aliases, ApiRuntimeConfig};
@@ -672,6 +803,12 @@ mod tests {
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4777");
         assert_eq!(config.storage.path, PathBuf::from(".pharness/pharness.db"));
+        assert_eq!(
+            config.storage.workspace_root,
+            PathBuf::from(".pharness/workspaces")
+        );
+        assert!(config.storage.workspace_allowed_repos.is_empty());
+        assert!(config.storage.workspace_allowed_remote_repos.is_empty());
         assert_eq!(config.model.model, "accounts/fireworks/models/kimi-k2p6");
         assert_eq!(config.cluster.argocd_namespace, "argocd");
         assert!(config.cluster.prometheus_url.is_none());
@@ -681,6 +818,16 @@ mod tests {
         assert_eq!(config.policy.environment, "local");
         assert!(config.policy.require_approval_for_writes);
         assert!(config.model.api_key.is_none());
+        assert_eq!(config.worker.kubernetes.workspace_size_limit, "4Gi");
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_request,
+            "2Gi"
+        );
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_limit,
+            "4Gi"
+        );
+        assert_eq!(config.worker.kubernetes.max_concurrent_run_jobs, 1);
     }
 
     #[test]
@@ -692,6 +839,9 @@ bind = "127.0.0.1:4888"
 
 [storage]
 path = ".pharness/test.db"
+workspace_root = ".pharness/workspaces-test"
+workspace_allowed_repos = ["../finance-app"]
+workspace_allowed_remote_repos = ["https://github.com/example/finance-app.git"]
 
 [model]
 model = "accounts/fireworks/models/test-model"
@@ -709,6 +859,11 @@ tool_max_output_bytes = 3333
 
 [worker.kubernetes]
 tekton_executor_poll_seconds = 9
+workspace_size_limit = "3Gi"
+workspace_ephemeral_storage_request = "1500Mi"
+workspace_ephemeral_storage_limit = "3Gi"
+workspace_node_hostname = "worker-a"
+max_concurrent_run_jobs = 2
 
 [policy]
 subject = "agent:config-test"
@@ -732,6 +887,18 @@ deny_secret_access = true
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4888");
         assert_eq!(config.storage.path, PathBuf::from(".pharness/test.db"));
+        assert_eq!(
+            config.storage.workspace_root,
+            PathBuf::from(".pharness/workspaces-test")
+        );
+        assert_eq!(
+            config.storage.workspace_allowed_repos,
+            vec![PathBuf::from("../finance-app")]
+        );
+        assert_eq!(
+            config.storage.workspace_allowed_remote_repos,
+            vec!["https://github.com/example/finance-app.git"]
+        );
         assert_eq!(config.model.model, "accounts/fireworks/models/test-model");
         assert_eq!(config.model.base_url, "https://example.test/v1");
         assert_eq!(
@@ -752,6 +919,20 @@ deny_secret_access = true
         assert_eq!(config.cluster.timeout_ms, 2222);
         assert_eq!(config.cluster.max_output_bytes, 3333);
         assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 9);
+        assert_eq!(config.worker.kubernetes.workspace_size_limit, "3Gi");
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_request,
+            "1500Mi"
+        );
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_limit,
+            "3Gi"
+        );
+        assert_eq!(
+            config.worker.kubernetes.workspace_node_hostname.as_deref(),
+            Some("worker-a")
+        );
+        assert_eq!(config.worker.kubernetes.max_concurrent_run_jobs, 2);
         assert_eq!(config.policy.subject, "agent:config-test");
         assert_eq!(config.policy.environment, "dev");
         assert_eq!(config.policy.mode, PolicyMode::TrustedWrites);
@@ -791,6 +972,15 @@ registry_aliases = ["file.registry=public.registry"]
             ".pharness/from-env.db".to_string(),
         );
         env.insert(
+            "PHARNESS_WORKSPACE_ALLOWED_REPOS".to_string(),
+            "../finance-app,../other-app".to_string(),
+        );
+        env.insert(
+            "PHARNESS_WORKSPACE_ALLOWED_REMOTE_REPOS".to_string(),
+            "https://github.com/example/finance-app.git,https://github.com/example/other-app.git"
+                .to_string(),
+        );
+        env.insert(
             "PHARNESS_FIREWORKS_MODEL".to_string(),
             "accounts/fireworks/models/from-env".to_string(),
         );
@@ -814,6 +1004,26 @@ registry_aliases = ["file.registry=public.registry"]
             "PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS".to_string(),
             "11".to_string(),
         );
+        env.insert(
+            "PHARNESS_WORKER_K8S_WORKSPACE_SIZE_LIMIT".to_string(),
+            "5Gi".to_string(),
+        );
+        env.insert(
+            "PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST".to_string(),
+            "3Gi".to_string(),
+        );
+        env.insert(
+            "PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_LIMIT".to_string(),
+            "5Gi".to_string(),
+        );
+        env.insert(
+            "PHARNESS_WORKER_K8S_WORKSPACE_NODE_HOSTNAME".to_string(),
+            "worker-b".to_string(),
+        );
+        env.insert(
+            "PHARNESS_WORKER_K8S_MAX_CONCURRENT_RUN_JOBS".to_string(),
+            "3".to_string(),
+        );
         env.insert("PHARNESS_POLICY_MODE".to_string(), "plan".to_string());
         env.insert(
             "PHARNESS_POLICY_SUBJECT".to_string(),
@@ -834,6 +1044,20 @@ registry_aliases = ["file.registry=public.registry"]
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4999");
         assert_eq!(config.storage.path, PathBuf::from(".pharness/from-env.db"));
+        assert_eq!(
+            config.storage.workspace_allowed_repos,
+            vec![
+                PathBuf::from("../finance-app"),
+                PathBuf::from("../other-app")
+            ]
+        );
+        assert_eq!(
+            config.storage.workspace_allowed_remote_repos,
+            vec![
+                "https://github.com/example/finance-app.git",
+                "https://github.com/example/other-app.git"
+            ]
+        );
         assert_eq!(config.model.model, "accounts/fireworks/models/from-env");
         assert_eq!(config.model.base_url, "https://env.example/v1");
         assert_eq!(
@@ -847,6 +1071,20 @@ registry_aliases = ["file.registry=public.registry"]
             vec!["env.registry=public.registry"]
         );
         assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 11);
+        assert_eq!(config.worker.kubernetes.workspace_size_limit, "5Gi");
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_request,
+            "3Gi"
+        );
+        assert_eq!(
+            config.worker.kubernetes.workspace_ephemeral_storage_limit,
+            "5Gi"
+        );
+        assert_eq!(
+            config.worker.kubernetes.workspace_node_hostname.as_deref(),
+            Some("worker-b")
+        );
+        assert_eq!(config.worker.kubernetes.max_concurrent_run_jobs, 3);
         assert_eq!(config.policy.subject, "agent:env");
         assert_eq!(config.policy.environment, "ci");
         assert_eq!(config.policy.mode, PolicyMode::Plan);
@@ -888,6 +1126,24 @@ environment = " "
             .unwrap();
 
         assert!(error.to_string().contains("policy.environment"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_zero_kubernetes_worker_concurrency() {
+        let path = write_temp_config(
+            r#"
+[worker.kubernetes]
+max_concurrent_run_jobs = 0
+"#,
+        );
+
+        let error = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new())
+            .err()
+            .unwrap();
+
+        assert!(error.to_string().contains("max_concurrent_run_jobs"));
 
         let _ = fs::remove_file(path);
     }

@@ -27,9 +27,10 @@ authenticated identity.
 scripts/pharness-cluster-runtime-smoke.sh
 ```
 
-The script port-forwards `svc/pharness-api` and `svc/pharness-ui`, resolves
-the operator token from the cluster secret unless `PHARNESS_API_TOKEN` is
-already exported, and writes artifacts to `target/cluster-smoke/<timestamp>`.
+The script port-forwards `svc/pharness-api` and `svc/pharness-ui`, requires an
+operator-supplied `PHARNESS_API_TOKEN`, and writes artifacts to
+`target/cluster-smoke/<timestamp>`. Set `PHARNESS_SMOKE_MODEL_CHECKS=enabled`
+only when an operator intends to use the configured Fireworks integration.
 
 ## Checks
 

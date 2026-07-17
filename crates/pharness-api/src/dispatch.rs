@@ -49,6 +49,14 @@ impl RunDispatcher {
         !matches!(self, Self::Disabled)
     }
 
+    pub fn supports_local_workspace(&self) -> bool {
+        matches!(self, Self::Local(_))
+    }
+
+    pub fn supports_remote_workspace(&self) -> bool {
+        matches!(self, Self::Kubernetes(_))
+    }
+
     pub fn mode(&self) -> &'static str {
         match self {
             Self::Disabled => "disabled",
@@ -228,6 +236,7 @@ impl KubernetesJobDispatcher {
         run: &StoredRun,
         approval: Option<&StoredApproval>,
     ) -> anyhow::Result<()> {
+        self.ensure_run_job_capacity().await?;
         let manifest = self.job_manifest(run, approval);
         let payload = serde_json::to_vec(&manifest)?;
 
@@ -257,6 +266,35 @@ impl KubernetesJobDispatcher {
         );
 
         Ok(())
+    }
+
+    /// The API is deliberately single-replica while SQLite is the durable
+    /// store, so this read-before-create admission check is sufficient for the
+    /// first bounded coding-worker pool. A future multi-worker controller must
+    /// replace it with durable queue admission.
+    async fn ensure_run_job_capacity(&self) -> anyhow::Result<()> {
+        let selector = format!("{JOB_NAME_LABEL}={JOB_NAME_VALUE}");
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "get",
+                "jobs",
+                "-n",
+                &self.config.namespace,
+                "-l",
+                &selector,
+                "-o",
+                "json",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl get worker jobs for capacity check failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let jobs: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        enforce_run_job_capacity(&jobs, self.config.max_concurrent_run_jobs)
     }
 
     async fn create_tekton_executor_job(
@@ -422,7 +460,7 @@ impl KubernetesJobDispatcher {
             env.push(serde_json::json!({ "name": name, "value": value }));
         }
 
-        serde_json::json!({
+        let mut manifest = serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {
@@ -473,18 +511,45 @@ impl KubernetesJobDispatcher {
                                 "capabilities": { "drop": ["ALL"] },
                             },
                             "resources": {
-                                "requests": { "cpu": "100m", "memory": "256Mi" },
-                                "limits": { "cpu": "1", "memory": "1Gi" },
+                                "requests": {
+                                    "cpu": "100m",
+                                    "memory": "256Mi",
+                                    "ephemeral-storage": self.config.workspace_ephemeral_storage_request,
+                                },
+                                "limits": {
+                                    "cpu": "1",
+                                    "memory": "1Gi",
+                                    "ephemeral-storage": self.config.workspace_ephemeral_storage_limit,
+                                },
                             },
                         }],
                         "volumes": [
-                            { "name": "workspace", "emptyDir": {} },
+                            {
+                                "name": "workspace",
+                                "emptyDir": { "sizeLimit": self.config.workspace_size_limit },
+                            },
                             { "name": "tmp", "emptyDir": {} },
                         ],
                     },
                 },
             },
-        })
+        });
+        if let Some(hostname) = self.config.workspace_node_hostname.as_deref() {
+            manifest["spec"]["template"]["spec"]["affinity"] = serde_json::json!({
+                "nodeAffinity": {
+                    "requiredDuringSchedulingIgnoredDuringExecution": {
+                        "nodeSelectorTerms": [{
+                            "matchExpressions": [{
+                                "key": "kubernetes.io/hostname",
+                                "operator": "In",
+                                "values": [hostname],
+                            }],
+                        }],
+                    },
+                },
+            });
+        }
+        manifest
     }
 
     /// Reconcile worker and executor jobs that stopped without reporting a
@@ -787,6 +852,32 @@ fn executor_job_terminal_state(job: &serde_json::Value) -> ExecutorJobTerminalSt
     }
 }
 
+fn active_run_job_count(jobs: &serde_json::Value) -> u64 {
+    jobs.get("items")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|job| {
+            job.pointer("/status/active")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+        })
+        .sum()
+}
+
+fn enforce_run_job_capacity(
+    jobs: &serde_json::Value,
+    max_concurrent_jobs: u32,
+) -> anyhow::Result<()> {
+    let active = active_run_job_count(jobs);
+    if active >= max_concurrent_jobs as u64 {
+        anyhow::bail!(
+            "worker Job concurrency limit reached: {active} active, limit {max_concurrent_jobs}"
+        );
+    }
+    Ok(())
+}
+
 fn execution_is_current(
     intent: &StoredPipelineIntent,
     execution_id: &str,
@@ -862,10 +953,15 @@ fn tekton_executor_job_name(execution_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        executor_job_terminal_state, job_label_value, job_name, run_label_to_run_id,
-        ExecutorJobTerminalState,
+        active_run_job_count, enforce_run_job_capacity, executor_job_terminal_state,
+        job_label_value, job_name, run_label_to_run_id, ExecutorJobTerminalState,
+        KubernetesJobDispatcher,
     };
+    use pharness_config::WorkerKubernetesConfig;
+    use pharness_core::{RunId, SessionId};
+    use pharness_store::{SqliteStore, StoredRun};
     use serde_json::json;
+    use std::sync::Arc;
 
     #[test]
     fn job_label_round_trips_run_id() {
@@ -897,5 +993,111 @@ mod tests {
             executor_job_terminal_state(&json!({ "status": { "active": 1 } })),
             ExecutorJobTerminalState::Active
         );
+    }
+
+    #[test]
+    fn counts_only_active_worker_jobs() {
+        assert_eq!(
+            active_run_job_count(&json!({
+                "items": [
+                    { "status": { "active": 1 } },
+                    { "status": { "active": 2 } },
+                    { "status": { "succeeded": 1 } },
+                    { "status": {} },
+                ],
+            })),
+            3
+        );
+    }
+
+    #[test]
+    fn rejects_worker_job_at_concurrency_limit() {
+        let jobs = json!({ "items": [{ "status": { "active": 1 } }] });
+
+        let error = enforce_run_job_capacity(&jobs, 1).unwrap_err();
+        assert!(error.to_string().contains("concurrency limit reached"));
+        assert!(enforce_run_job_capacity(&jobs, 2).is_ok());
+    }
+
+    #[tokio::test]
+    async fn worker_manifest_bounds_workspace_and_pins_node() {
+        let dispatcher = test_dispatcher(Some("roomier-node".to_string())).await;
+        let manifest = dispatcher.job_manifest(&test_run(), None);
+
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("4Gi"))
+        );
+        assert_eq!(
+            manifest
+                .pointer("/spec/template/spec/containers/0/resources/requests/ephemeral-storage"),
+            Some(&json!("2Gi"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/resources/limits/ephemeral-storage"),
+            Some(&json!("4Gi"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/key"),
+            Some(&json!("kubernetes.io/hostname"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0"),
+            Some(&json!("roomier-node"))
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_manifest_omits_affinity_when_not_configured() {
+        let dispatcher = test_dispatcher(None).await;
+        let manifest = dispatcher.job_manifest(&test_run(), None);
+
+        assert!(manifest.pointer("/spec/template/spec/affinity").is_none());
+    }
+
+    async fn test_dispatcher(node_hostname: Option<String>) -> KubernetesJobDispatcher {
+        KubernetesJobDispatcher {
+            store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
+            kubectl_bin: "kubectl".to_string(),
+            config: WorkerKubernetesConfig {
+                namespace: "pharness".to_string(),
+                image: "example.test/pharness:latest".to_string(),
+                service_account: "pharness-worker".to_string(),
+                tekton_executor_service_account: "pharness-tekton-runner".to_string(),
+                tekton_allowed_namespaces: Vec::new(),
+                tekton_executor_poll_seconds: 5,
+                api_url: "http://pharness-api:4777".to_string(),
+                workspace_dir: "/workspace".to_string(),
+                workspace_size_limit: "4Gi".to_string(),
+                workspace_ephemeral_storage_request: "2Gi".to_string(),
+                workspace_ephemeral_storage_limit: "4Gi".to_string(),
+                workspace_node_hostname: node_hostname,
+                max_concurrent_run_jobs: 1,
+                fireworks_secret_name: "pharness-fireworks".to_string(),
+                worker_token_secret_name: "pharness-worker-token".to_string(),
+                active_deadline_seconds: 3600,
+                ttl_seconds_after_finished: 3600,
+            },
+            model: "accounts/fireworks/models/test".to_string(),
+            base_url: "https://example.test/v1".to_string(),
+            worker_env: Vec::new(),
+        }
+    }
+
+    fn test_run() -> StoredRun {
+        StoredRun {
+            id: RunId::new("run_123"),
+            session_id: SessionId::new("ses_123"),
+            cwd: "/workspace".to_string(),
+            status: "queued".to_string(),
+            user_task: "test".to_string(),
+            max_turns: 1,
+            started_at: "0".to_string(),
+            finished_at: None,
+            cancel_requested_at: None,
+            error: None,
+            result_json: None,
+            execution_target_json: json!({}),
+        }
     }
 }

@@ -741,6 +741,8 @@ mod tests {
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
+            work_item_id: None,
+            workspace_id: None,
             work_plan_id: None,
             change_set_id: None,
             production_impacting: false,
@@ -973,6 +975,7 @@ mod tests {
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
                 pipeline_intent_ids: Vec::new(),
+                git_delivery_plan_artifact_ids: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

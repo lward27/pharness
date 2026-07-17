@@ -23,8 +23,8 @@ pub use models::{
     StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
     UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
     UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkItemListFilter, WorkPlanListFilter,
-    WorkspaceListFilter,
+    UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution, WorkItemListFilter,
+    WorkPlanListFilter, WorkspaceListFilter,
 };
 pub use sqlite::{SqliteStore, StoreError};
 

@@ -426,6 +426,8 @@ pub struct PermissionGrantScope {
     pub work_plan_ids: Vec<String>,
     pub change_set_ids: Vec<String>,
     pub pipeline_intent_ids: Vec<String>,
+    #[serde(default)]
+    pub git_delivery_plan_artifact_ids: Vec<String>,
     pub production_impacting: Option<bool>,
 }
 
@@ -651,6 +653,8 @@ mod tests {
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
+            work_item_id: None,
+            workspace_id: None,
             work_plan_id: None,
             change_set_id: None,
             production_impacting: false,
@@ -694,6 +698,8 @@ mod tests {
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
+            work_item_id: None,
+            workspace_id: None,
             work_plan_id: Some("wplan_1".to_string()),
             change_set_id: Some("cset_1".to_string()),
             production_impacting: false,
@@ -735,6 +741,7 @@ mod tests {
             "branches": ["feature/pharness"],
             "work_plan_ids": ["wplan_1"],
             "change_set_ids": ["cset_1"],
+            "git_delivery_plan_artifact_ids": ["art_git_delivery_1"],
             "production_impacting": false
         }))
         .unwrap();
@@ -744,6 +751,10 @@ mod tests {
         assert_eq!(scope.branches, vec!["feature/pharness"]);
         assert_eq!(scope.work_plan_ids, vec!["wplan_1"]);
         assert_eq!(scope.change_set_ids, vec!["cset_1"]);
+        assert_eq!(
+            scope.git_delivery_plan_artifact_ids,
+            vec!["art_git_delivery_1"]
+        );
         assert_eq!(scope.production_impacting, Some(false));
     }
 
@@ -1004,6 +1015,7 @@ mod tests {
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
                 pipeline_intent_ids: Vec::new(),
+                git_delivery_plan_artifact_ids: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

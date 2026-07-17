@@ -21,6 +21,17 @@
 - Require trusted-envelope factories to target approved WorkPlans. ChangeSet trusted envelopes also require the parent WorkPlan and target ChangeSet to both be approved. Draft/proposed resources cannot mint grants.
 - Emit the matching grant as `decision.grant_id` on allowed policy decisions. Machines should not parse policy prose to prove why an action was allowed.
 - Record grant lifecycle and use in durable audit events: `permission_grant.created`, `permission_grant.stale`, `permission_grant.revoked`, and `permission_grant.used`.
+- Use `supervised_autonomy`, rather than file-write trust, for typed delivery
+  actions. The Git delivery authorizer mints a grant only for an approved
+  WorkItem-backed ChangeSet with a current immutable delivery-plan artifact.
+  Its scope has the exact Git capability/actions, development environment,
+  repository, issued branch, WorkPlan, ChangeSet, plan-artifact id, and an
+  explicit `production_impacting=false` boundary.
+- Make Git delivery readiness inspectable without issuing a Git operation.
+  `git_delivery_preflight` persists the exact plan, writer subject, matching
+  grant (if any), and checks. It reports `dispatch_ready=false` until the
+  separately scoped writer exists; authorization must never be represented as
+  source-control execution.
 - Accept optional `created_by` on grant creation and use it as the `permission_grant.created` audit actor. The grant row remains policy state; actor attribution belongs in the audit event.
 - Do not let grants override denials. Secret-accessing, privileged, destructive, network, shell, registry, deployment, and production mutation paths remain gated by the base policy.
 - Treat `expires_at` as Unix milliseconds for now. Invalid expiry values are rejected at create time or ignored during snapshotting if older data exists.
@@ -31,3 +42,6 @@
 - Add a negative smoke test that creates a scoped local write grant, runs a mismatched namespace, and confirms the run pauses for approval.
 - Add a negative smoke test that creates a ChangeSet-scoped trusted envelope, runs with a mismatched `--change-set-id`, and confirms the run pauses for approval.
 - Decide whether grant revocation should affect already-created runs. The current snapshot model makes revocation affect future runs only.
+- Add the separate Git writer identity and require it to revalidate the scoped
+  delivery-plan artifact and grant immediately before every remote operation.
+  The grant factory alone does not confer Git credentials or execute Git.

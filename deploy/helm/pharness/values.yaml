@@ -53,6 +53,18 @@ worker:
     allowedNamespaces:
       - tekton-pipelines
   workspaceDir: /workspace
+  # Coding workspaces are per-Job emptyDir volumes. They are not backed by the
+  # API SQLite PVC and are reclaimed with the Job TTL.
+  workspaceSizeLimit: 4Gi
+  workspaceEphemeralStorageRequest: 2Gi
+  workspaceEphemeralStorageLimit: 4Gi
+  # Node-local storage is uneven in the homelab. Keep coding workers on the
+  # roomier node until a storage-aware scheduler/controller is introduced.
+  workspaceNodeHostname: ubuntu-lucas-engineering
+  maxConcurrentRunJobs: 1
+  # Exact HTTPS repos permitted for Kubernetes coding workspaces. Keep empty
+  # until DNS/egress and the disposable dev target have been reviewed.
+  workspaceAllowedRemoteRepos: []
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
 

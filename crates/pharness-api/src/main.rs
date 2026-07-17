@@ -4,6 +4,7 @@ mod app;
 mod dispatch;
 mod dto;
 mod worker;
+mod workspace;
 
 use anyhow::Context;
 use pharness_config::ApiRuntimeConfig;
@@ -85,6 +86,11 @@ async fn main() -> anyhow::Result<()> {
         policy,
         worker_token,
         operator_tokens,
+        workspace::WorkspaceProvisioner::with_remote_repos(
+            config.storage.workspace_root.clone(),
+            config.storage.workspace_allowed_repos.clone(),
+            config.storage.workspace_allowed_remote_repos.clone(),
+        ),
     );
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;

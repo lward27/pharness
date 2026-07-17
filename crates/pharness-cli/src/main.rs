@@ -269,8 +269,14 @@ enum WorkItemCommand {
     Transition(WorkItemTransitionArgs),
     /// Cancel a work item.
     Cancel(WorkItemCancelArgs),
+    /// Preview or apply the next durable WorkItem controller action.
+    Reconcile(WorkItemReconcileArgs),
     /// Create the WorkPlan and declared workspace for a planning work item.
     CreateWorkPlan(WorkItemGetArgs),
+    /// Provision an isolated local clone and start one bounded coding attempt.
+    Execute(WorkItemExecuteArgs),
+    /// Derive a proposed ChangeSet from the latest completed workspace diff.
+    CaptureChangeSet(WorkItemCaptureChangeSetArgs),
     /// Fetch durable audit events for one work item.
     Events(WorkItemGetArgs),
 }
@@ -299,6 +305,12 @@ enum ChangeSetCommand {
     Revise(ChangeSetReviseArgs),
     /// Move a ChangeSet through its lifecycle state machine.
     Transition(ChangeSetTransitionArgs),
+    /// Prepare an immutable branch-and-pull-request delivery plan from approved ChangeSet evidence.
+    PrepareGitDelivery(ChangeSetPrepareGitDeliveryArgs),
+    /// Create or fetch the bounded Git writer grant for a current delivery plan.
+    AuthorizeGitDelivery(ChangeSetAuthorizeGitDeliveryArgs),
+    /// Record whether an immutable Git delivery plan is authorized for a future writer.
+    PreflightGitDelivery(ChangeSetPreflightGitDeliveryArgs),
     /// Create a bounded trusted write envelope for one ChangeSet.
     CreateTrustedEnvelope(ChangeSetCreateTrustedEnvelopeArgs),
 }
@@ -1249,6 +1261,61 @@ struct WorkItemCancelArgs {
 }
 
 #[derive(Debug, Parser)]
+struct WorkItemReconcileArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    /// Apply the reported controller action. Omit for a non-mutating preview.
+    #[arg(long, default_value_t = false)]
+    apply: bool,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+    #[arg(long)]
+    max_turns: Option<u32>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemExecuteArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+    #[arg(long)]
+    max_turns: Option<u32>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemCaptureChangeSetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct WorkspaceListArgs {
     #[arg(
         long,
@@ -1451,6 +1518,8 @@ struct ChangeSetListArgs {
     )]
     api_url: String,
     #[arg(long)]
+    work_item_id: Option<String>,
+    #[arg(long)]
     work_plan_id: Option<String>,
     #[arg(long)]
     remediation_plan_id: Option<String>,
@@ -1578,6 +1647,60 @@ struct ChangeSetTransitionArgs {
     change_set_id: String,
     #[arg(long)]
     target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ChangeSetPrepareGitDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ChangeSetAuthorizeGitDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    created_by: Option<String>,
+    #[arg(long)]
+    reason: String,
+    #[arg(long)]
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ChangeSetPreflightGitDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
     #[arg(long)]
     actor: Option<String>,
     #[arg(long)]
@@ -2603,7 +2726,10 @@ async fn main() -> anyhow::Result<()> {
             WorkItemCommand::Create(args) => create_work_item(args).await?,
             WorkItemCommand::Transition(args) => transition_work_item(args).await?,
             WorkItemCommand::Cancel(args) => cancel_work_item(args).await?,
+            WorkItemCommand::Reconcile(args) => reconcile_work_item(args).await?,
             WorkItemCommand::CreateWorkPlan(args) => create_work_item_work_plan(args).await?,
+            WorkItemCommand::Execute(args) => execute_work_item(args).await?,
+            WorkItemCommand::CaptureChangeSet(args) => capture_work_item_change_set(args).await?,
             WorkItemCommand::Events(args) => get_work_item_events(args).await?,
         },
         Command::Workspaces { command } => match command {
@@ -2632,6 +2758,15 @@ async fn main() -> anyhow::Result<()> {
             ChangeSetCommand::Create(args) => create_change_set(args).await?,
             ChangeSetCommand::Revise(args) => revise_change_set(args).await?,
             ChangeSetCommand::Transition(args) => transition_change_set(args).await?,
+            ChangeSetCommand::PrepareGitDelivery(args) => {
+                prepare_change_set_git_delivery(args).await?
+            }
+            ChangeSetCommand::AuthorizeGitDelivery(args) => {
+                authorize_change_set_git_delivery(args).await?
+            }
+            ChangeSetCommand::PreflightGitDelivery(args) => {
+                preflight_change_set_git_delivery(args).await?
+            }
             ChangeSetCommand::CreateTrustedEnvelope(args) => {
                 create_change_set_trusted_envelope(args).await?
             }
@@ -3880,6 +4015,29 @@ async fn cancel_work_item(args: WorkItemCancelArgs) -> anyhow::Result<()> {
     print_json_response(response)
 }
 
+async fn reconcile_work_item(args: WorkItemReconcileArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/reconcile", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "apply": args.apply,
+            "actor": args.actor,
+            "reason": args.reason,
+            "max_turns": args.max_turns,
+        }))
+        .send()
+        .await
+        .context("failed to reconcile work item")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem reconciliation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem reconciliation")?;
+    print_json_response(response)
+}
+
 async fn create_work_item_work_plan(args: WorkItemGetArgs) -> anyhow::Result<()> {
     let response = api_client()
         .post(api_url(
@@ -3894,6 +4052,46 @@ async fn create_work_item_work_plan(args: WorkItemGetArgs) -> anyhow::Result<()>
         .json()
         .await
         .context("failed to decode work item WorkPlan creation")?;
+    print_json_response(response)
+}
+
+async fn execute_work_item(args: WorkItemExecuteArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/execute", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+            "max_turns": args.max_turns,
+        }))
+        .send()
+        .await
+        .context("failed to execute work item")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem execution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem execution")?;
+    print_json_response(response)
+}
+
+async fn capture_work_item_change_set(args: WorkItemCaptureChangeSetArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/capture-change-set", args.work_item_id),
+        ))
+        .json(&serde_json::json!({ "actor": args.actor, "reason": args.reason }))
+        .send()
+        .await
+        .context("failed to capture WorkItem ChangeSet")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem ChangeSet capture")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem ChangeSet capture")?;
     print_json_response(response)
 }
 
@@ -4191,6 +4389,9 @@ async fn create_work_plan_trusted_envelope(
 async fn list_change_sets(args: ChangeSetListArgs) -> anyhow::Result<()> {
     let http = api_client();
     let mut query = Vec::new();
+    if let Some(value) = args.work_item_id {
+        query.push(("work_item_id", value));
+    }
     if let Some(value) = args.work_plan_id {
         query.push(("work_plan_id", value));
     }
@@ -4383,6 +4584,92 @@ async fn transition_change_set(args: ChangeSetTransitionArgs) -> anyhow::Result<
         .await
         .context("failed to decode change set transition")?;
 
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn prepare_change_set_git_delivery(
+    args: ChangeSetPrepareGitDeliveryArgs,
+) -> anyhow::Result<()> {
+    let http = api_client();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/change-sets/{}/git-delivery/prepare",
+                args.change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to prepare ChangeSet Git delivery")?
+        .error_for_status()
+        .context("pharness API rejected ChangeSet Git delivery preparation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode ChangeSet Git delivery plan")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn authorize_change_set_git_delivery(
+    args: ChangeSetAuthorizeGitDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/change-sets/{}/git-delivery/authorize",
+                args.change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "created_by": args.created_by,
+            "reason": args.reason,
+            "expires_at": args.expires_at,
+        }))
+        .send()
+        .await
+        .context("failed to authorize ChangeSet Git delivery")?
+        .error_for_status()
+        .context("pharness API rejected ChangeSet Git delivery authorization")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode ChangeSet Git delivery authorization")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn preflight_change_set_git_delivery(
+    args: ChangeSetPreflightGitDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/change-sets/{}/git-delivery/preflight",
+                args.change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to preflight ChangeSet Git delivery")?
+        .error_for_status()
+        .context("pharness API rejected ChangeSet Git delivery preflight")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode ChangeSet Git delivery preflight")?;
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
 }
@@ -5755,6 +6042,8 @@ fn run_scope_from_args(args: &RunArgs) -> Option<RunScope> {
         namespace: args.namespace.clone(),
         repo: args.repo.clone(),
         branch: args.branch.clone(),
+        work_item_id: None,
+        workspace_id: None,
         work_plan_id: args.work_plan_id.clone(),
         change_set_id: args.change_set_id.clone(),
         production_impacting: args.production_impacting,
@@ -6728,6 +7017,42 @@ mod tests {
             "proposed",
         ])
         .unwrap();
+        let git_delivery = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "prepare-git-delivery",
+            "--change-set-id",
+            "cset_1",
+            "--actor",
+            "lucas",
+            "--reason",
+            "prepare reviewed source delivery",
+        ])
+        .unwrap();
+        let git_delivery_authorization = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "authorize-git-delivery",
+            "--change-set-id",
+            "cset_1",
+            "--created-by",
+            "lucas",
+            "--reason",
+            "authorize isolated Git delivery",
+        ])
+        .unwrap();
+        let git_delivery_preflight = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "preflight-git-delivery",
+            "--change-set-id",
+            "cset_1",
+            "--actor",
+            "lucas",
+            "--reason",
+            "record delivery readiness",
+        ])
+        .unwrap();
         let envelope = Cli::try_parse_from([
             "pharness",
             "change-sets",
@@ -6802,6 +7127,34 @@ mod tests {
                 assert_eq!(args.target_status, "proposed");
             }
             _ => panic!("expected change-sets transition command"),
+        }
+        match git_delivery.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::PrepareGitDelivery(args),
+            } => {
+                assert_eq!(args.change_set_id, "cset_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected change-sets prepare-git-delivery command"),
+        }
+        match git_delivery_authorization.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::AuthorizeGitDelivery(args),
+            } => {
+                assert_eq!(args.change_set_id, "cset_1");
+                assert_eq!(args.created_by.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected change-sets authorize-git-delivery command"),
+        }
+        match git_delivery_preflight.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::PreflightGitDelivery(args),
+            } => {
+                assert_eq!(args.change_set_id, "cset_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.reason.as_deref(), Some("record delivery readiness"));
+            }
+            _ => panic!("expected change-sets preflight-git-delivery command"),
         }
         match envelope.command {
             Command::ChangeSets {
@@ -7773,6 +8126,19 @@ mod tests {
             "witem_1",
         ])
         .unwrap();
+        let reconcile = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "reconcile",
+            "--work-item-id",
+            "witem_1",
+            "--apply",
+            "--actor",
+            "lucas",
+            "--max-turns",
+            "12",
+        ])
+        .unwrap();
 
         assert!(matches!(
             create.command,
@@ -7786,5 +8152,16 @@ mod tests {
                 command: WorkspaceCommand::List(_)
             }
         ));
+        match reconcile.command {
+            Command::WorkItems {
+                command: WorkItemCommand::Reconcile(args),
+            } => {
+                assert_eq!(args.work_item_id, "witem_1");
+                assert!(args.apply);
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.max_turns, Some(12));
+            }
+            _ => panic!("expected work-items reconcile command"),
+        }
     }
 }
