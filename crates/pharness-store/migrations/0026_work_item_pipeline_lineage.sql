@@ -1,7 +1,8 @@
+-- no-transaction
 -- PipelineIntent originally required remediation/incident lineage. A WorkItem
 -- delivery has equally durable provenance but no incident, so make the legacy
 -- fields nullable while preserving all existing incident-backed rows.
-PRAGMA defer_foreign_keys = ON;
+PRAGMA foreign_keys = OFF;
 
 CREATE TABLE pipeline_intents_v2 (
   id TEXT PRIMARY KEY,
@@ -38,3 +39,5 @@ CREATE INDEX idx_pipeline_intents_run ON pipeline_intents(run_id, created_at DES
 CREATE INDEX idx_pipeline_intents_remediation_plan ON pipeline_intents(remediation_plan_id, created_at DESC);
 CREATE INDEX idx_pipeline_intents_incident ON pipeline_intents(incident_id, created_at DESC);
 CREATE INDEX idx_pipeline_intents_resource_identity ON pipeline_intents(resource_namespace, resource_kind, resource_name, created_at DESC);
+
+PRAGMA foreign_keys = ON;

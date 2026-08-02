@@ -1,6 +1,7 @@
+-- no-transaction
 -- Approval gates have one durable origin: an incident remediation chain or a
 -- WorkItem delivery chain. A null incident is not itself a WorkItem gate.
-PRAGMA defer_foreign_keys = ON;
+PRAGMA foreign_keys = OFF;
 
 CREATE TABLE approval_gates_v2 (
   id TEXT PRIMARY KEY,
@@ -51,3 +52,5 @@ CREATE INDEX idx_approval_gates_plan ON approval_gates(remediation_plan_id, gate
 CREATE INDEX idx_approval_gates_status_created ON approval_gates(status, created_at DESC);
 CREATE INDEX idx_approval_gates_run ON approval_gates(run_id, created_at DESC);
 CREATE INDEX idx_approval_gates_resource_identity ON approval_gates(resource_namespace, resource_kind, resource_name, created_at DESC);
+
+PRAGMA foreign_keys = ON;

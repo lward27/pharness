@@ -1,7 +1,8 @@
+-- no-transaction
 -- A WorkItem pipeline has durable ChangeSet and WorkPlan lineage but no
 -- incident. Preserve the existing foreign-key chain and make only the legacy
 -- incident path nullable so DeploymentIntent can represent either origin.
-PRAGMA defer_foreign_keys = ON;
+PRAGMA foreign_keys = OFF;
 
 CREATE TABLE deployment_intents_v2 (
   id TEXT PRIMARY KEY,
@@ -53,3 +54,5 @@ CREATE INDEX idx_deployment_intents_target
   ON deployment_intents(target_environment, target_namespace, argo_application, created_at DESC);
 CREATE INDEX idx_deployment_intents_resource_identity
   ON deployment_intents(resource_namespace, resource_kind, resource_name, created_at DESC);
+
+PRAGMA foreign_keys = ON;

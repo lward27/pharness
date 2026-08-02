@@ -1,7 +1,8 @@
+-- no-transaction
 -- WorkItem delivery reaches Release and RegistryEvidence through its durable
 -- DeploymentIntent, PipelineIntent, ChangeSet, and WorkPlan lineage. These
 -- records must not require invented incident records.
-PRAGMA defer_foreign_keys = ON;
+PRAGMA foreign_keys = OFF;
 
 CREATE TABLE releases_v2 (
   id TEXT PRIMARY KEY,
@@ -89,3 +90,5 @@ CREATE INDEX idx_registry_evidence_status_created ON registry_evidence(status, c
 CREATE INDEX idx_registry_evidence_run ON registry_evidence(run_id, created_at DESC);
 CREATE INDEX idx_registry_evidence_release_status ON registry_evidence(release_id, status, created_at DESC);
 CREATE INDEX idx_registry_evidence_artifact ON registry_evidence(registry, repository, image_digest, image_ref, tag, created_at DESC);
+
+PRAGMA foreign_keys = ON;

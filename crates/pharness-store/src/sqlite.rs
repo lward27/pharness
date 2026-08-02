@@ -44,16 +44,38 @@ impl SqliteStore {
     }
 
     pub async fn connect_in_memory() -> Result<Self, StoreError> {
-        let options = SqliteConnectOptions::from_str("sqlite::memory:")?;
-        Self::connect_with_options(options).await
+        // An in-memory SQLite database belongs to a single connection. Keep
+        // migrations and runtime I/O on one connection, enabling foreign-key
+        // enforcement immediately after migration completes.
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")?.foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&pool)
+            .await?;
+        Ok(Self { pool })
     }
 
     async fn connect_with_options(options: SqliteConnectOptions) -> Result<Self, StoreError> {
+        // Historical SQLite migrations rebuild parent tables. SQLx executes a
+        // SQLite migration inside a transaction, where foreign_keys cannot be
+        // toggled. Migrate through a dedicated connection with enforcement
+        // disabled, then use the normal foreign-key-enforced pool at runtime.
+        let migration_options = options.clone().foreign_keys(false);
+        let migration_pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(migration_options)
+            .await?;
+        sqlx::migrate!("./migrations").run(&migration_pool).await?;
+        migration_pool.close().await;
+
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect_with(options)
             .await?;
-        sqlx::migrate!("./migrations").run(&pool).await?;
         Ok(Self { pool })
     }
 
