@@ -1,5 +1,7 @@
--- no-transaction
-PRAGMA foreign_keys = OFF;
+-- SQLx runs SQLite migrations in a transaction. Defer constraints while the
+-- parent table is rebuilt so child rows are checked only after the replacement
+-- table has its original name again.
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE change_sets_v2 (
   id TEXT PRIMARY KEY,
@@ -67,5 +69,3 @@ CREATE INDEX idx_change_sets_incident
 
 CREATE INDEX idx_change_sets_resource_identity
   ON change_sets(resource_namespace, resource_kind, resource_name, created_at DESC);
-
-PRAGMA foreign_keys = ON;
