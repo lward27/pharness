@@ -12,16 +12,32 @@
 - `create-from-inspection` runs the read-only `registry_inspect_image` capability and records successful output as proposed RegistryEvidence for an approved Release.
 - ChangeSet readiness reports RegistryEvidence state after the Release is approved. Missing, stale, non-verified, or verification-not-verified evidence is a warning in V1.
 - Inspection-backed evidence is treated as image identity/probe evidence unless it also includes signature, SBOM, provenance, attestation, or vulnerability-check data. Lifecycle-verified inspection evidence without those richer checks emits `registry_evidence_supply_chain_not_verified`.
+- `pipeline_build_output` is distinct from RegistryEvidence. It captures the
+  immutable image identity reported by a terminal Tekton build and its source
+  commit linkage, but does not authenticate to a registry or claim signature,
+  SBOM, provenance-attestation, or vulnerability verification.
 - The e2e SDLC chain now uses `create-from-inspection` instead of manual RegistryEvidence.
   - The portable smoke uses `team/checkout-api:v0.1.0-smoke`, which parses image identity without probing a remote registry.
   - The resulting evidence records `source = registry_inspect_image` and `verification_status = unknown`.
   - Operators can still transition the RegistryEvidence lifecycle to `verified`; readiness remains unblocked but warns that registry verification is not verified.
+- A WorkItem-backed Release can create RegistryEvidence without fabricated
+  incident lineage. The record retains its inherited Release, DeploymentIntent,
+  PipelineIntent, ChangeSet, and WorkPlan provenance.
+- When a Release carries verified `pipeline_build_output` provenance,
+  RegistryEvidence creation defaults to the same digest-pinned image reference
+  and digest and records the source artifact under `evidence_json.build_output`.
+  A supplied image reference or digest must match. The default evidence source
+  becomes `tekton_build_output`, while its verification status remains
+  `unverified`: a build receipt is never mistaken for a registry or supply-chain
+  verification result.
 
 ## Backlog
 
 - Add explicit registry credential management before live private registry verification.
 - Extend registry inspection to signatures, SBOMs, and vulnerability metadata without exposing registry credentials in logs.
 - Support multiple image artifacts per Release once PipelineIntent execution produces structured build outputs.
-- Add provenance checks that link Tekton build output, registry digest, Git commit, and Argo image inputs into one evidence bundle.
+- Extend the current Release-to-RegistryEvidence link into a checked evidence
+  bundle that compares Tekton build output, registry digest, Git commit, and
+  the observed Argo image input.
 - Add policy thresholds for registry evidence, such as blocking production Release execution on unsigned images, digest mismatch, or critical vulnerabilities.
 - Add UI panels for image metadata, verification status, and evidence history.

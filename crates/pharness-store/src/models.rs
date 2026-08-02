@@ -612,13 +612,82 @@ pub struct UpdateChangeSetRevision {
     pub reason: Option<String>,
 }
 
+/// A GitOps manifest change is intentionally distinct from the source-code
+/// ChangeSet that produced the build. It carries its own immutable delivery
+/// target and review lifecycle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateGitOpsChangeSet {
+    pub id: String,
+    pub work_item_id: String,
+    pub work_plan_id: String,
+    pub source_change_set_id: String,
+    pub pipeline_intent_id: String,
+    pub deployment_intent_id: String,
+    pub gitops_update_plan_artifact_id: String,
+    pub session_id: SessionId,
+    pub run_id: RunId,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub material_hash: String,
+    pub gitops_repo: String,
+    pub gitops_ref: String,
+    pub head_branch: String,
+    pub kustomization_path: String,
+    pub image_name: String,
+    pub image_ref: String,
+    pub gitops_change_set_json: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredGitOpsChangeSet {
+    pub id: String,
+    pub work_item_id: String,
+    pub work_plan_id: String,
+    pub source_change_set_id: String,
+    pub pipeline_intent_id: String,
+    pub deployment_intent_id: String,
+    pub gitops_update_plan_artifact_id: String,
+    pub session_id: SessionId,
+    pub run_id: RunId,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub material_hash: String,
+    pub revision: i64,
+    pub gitops_repo: String,
+    pub gitops_ref: String,
+    pub head_branch: String,
+    pub kustomization_path: String,
+    pub image_name: String,
+    pub image_ref: String,
+    pub gitops_change_set_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GitOpsChangeSetListFilter {
+    pub work_item_id: Option<String>,
+    pub pipeline_intent_id: Option<String>,
+    pub deployment_intent_id: Option<String>,
+    pub status: Option<String>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreatePipelineIntent {
     pub id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -668,8 +737,8 @@ pub struct StoredPipelineIntent {
     pub id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -799,8 +868,8 @@ pub struct CreateDeploymentIntent {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -847,8 +916,8 @@ pub struct StoredDeploymentIntent {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -900,8 +969,8 @@ pub struct CreateRelease {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -951,8 +1020,8 @@ pub struct StoredRelease {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -1007,8 +1076,8 @@ pub struct CreateRegistryEvidence {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -1050,8 +1119,8 @@ pub struct StoredRegistryEvidence {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -1101,8 +1170,9 @@ pub struct RegistryEvidenceListFilter {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateApprovalGate {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -1120,8 +1190,9 @@ pub struct CreateApprovalGate {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredApprovalGate {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
@@ -1145,6 +1216,7 @@ pub struct StoredApprovalGate {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ApprovalGateListFilter {
+    pub work_item_id: Option<String>,
     pub remediation_plan_id: Option<String>,
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
@@ -1162,6 +1234,7 @@ pub struct ApprovalGateListFilter {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ApprovalGateSummaryFilter {
+    pub work_item_id: Option<String>,
     pub remediation_plan_id: Option<String>,
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
@@ -1187,6 +1260,7 @@ pub struct ApprovalGateSummary {
     pub by_resource_namespace: Vec<ApprovalGateCountBucket>,
     pub by_resource_kind: Vec<ApprovalGateCountBucket>,
     pub by_resource_name: Vec<ApprovalGateCountBucket>,
+    pub by_work_item_id: Vec<ApprovalGateCountBucket>,
     pub by_incident_id: Vec<ApprovalGateCountBucket>,
     pub by_remediation_plan_id: Vec<ApprovalGateCountBucket>,
 }

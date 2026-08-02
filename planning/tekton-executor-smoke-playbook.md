@@ -61,6 +61,32 @@ The PipelineIntent returns to `approved` after a successful run; its execution
 receipt reports `succeeded`. Those are separate authorization and execution
 states.
 
+## Synthetic Build-Output Fixture
+
+`pharness-e2e-build-output` is a separate GitOps-managed, inert Pipeline that
+proves the `pipeline_build_output` handoff. It has no inputs, workspaces,
+secrets, registry credentials, network calls, source checkout, image build, or
+application references. Its sole task writes these fixed synthetic result
+markers to Tekton result files:
+
+- `IMAGE_URL = example.invalid/pharness/e2e-build-output:synthetic`
+- `IMAGE_DIGEST = sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`
+
+After the chart revision containing this fixture is merged and Argo reports it
+as `Synced` and `Healthy`, run:
+
+```sh
+export PHARNESS_API_TOKEN='your operator token'
+PHARNESS_TEKTON_SMOKE_PIPELINE=pharness-e2e-build-output \
+PHARNESS_TEKTON_SMOKE_EXPECT_BUILD_OUTPUT=1 \
+scripts/pharness-tekton-execution-smoke.sh --apply
+```
+
+The script requires a terminal `Succeeded=True` PipelineRun plus a verified
+digest-pinned `pipeline_build_output` artifact. It records only synthetic
+image identity; it does not establish that the image exists, is accessible,
+signed, scanned, or deployable.
+
 ## Backlog
 
 - Add a console link from terminal evidence directly to the typed

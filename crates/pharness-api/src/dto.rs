@@ -4,10 +4,10 @@ use pharness_core::{
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
     StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
-    StoredDeploymentIntent, StoredFileChange, StoredIncident, StoredObservation,
-    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
-    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem, StoredWorkPlan,
-    StoredWorkspace,
+    StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet, StoredIncident,
+    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
+    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem,
+    StoredWorkPlan, StoredWorkspace,
 };
 use serde::{Deserialize, Serialize};
 
@@ -549,6 +549,20 @@ pub struct ReconcileWorkItemResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ReplanWorkItemRequest {
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplanWorkItemResponse {
+    pub work_item: WorkItemResponse,
+    pub work_plan: WorkPlanResponse,
+    pub attempts_remaining: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct CaptureWorkItemChangeSetRequest {
     pub actor: Option<String>,
     pub reason: Option<String>,
@@ -648,6 +662,8 @@ pub struct SdlcFlowResponse {
     pub work_plan: WorkPlanResponse,
     pub change_set: Option<ChangeSetResponse>,
     pub pipeline_intent: Option<PipelineIntentResponse>,
+    pub gitops_change_set: Option<GitOpsChangeSetResponse>,
+    pub gitops_delivery: Option<GitOpsDeliveryFlowResponse>,
     pub deployment_intent: Option<DeploymentIntentResponse>,
     pub release: Option<ReleaseResponse>,
     pub registry_evidence: Option<RegistryEvidenceResponse>,
@@ -779,6 +795,7 @@ pub struct GitDeliveryPreflightRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct GitDeliveryPreflightResponse {
     pub status: String,
+    pub approval_gate_ready: bool,
     pub authorization_ready: bool,
     pub dispatch_ready: bool,
     pub plan: ArtifactResponse,
@@ -788,10 +805,110 @@ pub struct GitDeliveryPreflightResponse {
     pub created: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecuteGitDeliveryRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecuteGitDeliveryResponse {
+    pub status: String,
+    pub execution: ArtifactResponse,
+    pub plan: ArtifactResponse,
+    pub permission_grant: PermissionGrantResponse,
+    pub job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ObserveGitDeliveryRequest {
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ObserveGitDeliveryResponse {
+    pub status: String,
+    pub execution: ArtifactResponse,
+    pub job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryObservationContextResponse {
+    pub execution_id: String,
+    pub repository: String,
+    pub head_branch: String,
+    pub source_commit_sha: String,
+    pub pull_request_url: String,
+    pub pull_request_number: u64,
+    pub github_api_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitDeliveryObservationOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub pull_request_state: Option<String>,
+    #[serde(default)]
+    pub merged: Option<bool>,
+    #[serde(default)]
+    pub merge_commit_sha: Option<String>,
+    #[serde(default)]
+    pub head_branch: Option<String>,
+    #[serde(default)]
+    pub head_commit_sha: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitDeliveryContextResponse {
+    pub execution_id: String,
+    pub repository: String,
+    pub base_ref: String,
+    pub base_commit: String,
+    pub head_branch: String,
+    pub diff: String,
+    pub commit_subject: String,
+    pub commit_body: String,
+    pub pull_request_title: String,
+    pub pull_request_body: String,
+    pub github_api_url: String,
+    pub author_name: String,
+    pub author_email: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitDeliveryOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub commit_sha: Option<String>,
+    #[serde(default)]
+    pub pull_request_url: Option<String>,
+    #[serde(default)]
+    pub pull_request_number: Option<u64>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct GitDeliveryFlowResponse {
     pub plan: ArtifactResponse,
     pub latest_preflight: Option<ArtifactResponse>,
+    pub latest_execution: Option<ArtifactResponse>,
+    pub latest_result: Option<ArtifactResponse>,
+    pub latest_observation: Option<ArtifactResponse>,
+    pub latest_merge: Option<ArtifactResponse>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -975,8 +1092,8 @@ pub struct PipelineIntentResponse {
     pub id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -1042,6 +1159,320 @@ pub struct CreatePipelineIntentFromChangeSetRequest {
 pub struct CreatePipelineIntentResponse {
     pub pipeline_intent: PipelineIntentResponse,
     pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateGitOpsUpdatePlanRequest {
+    /// Optional explicit digest-pinned image. When omitted, Pharness derives
+    /// it from a verified terminal PipelineRun build-output artifact.
+    #[serde(default)]
+    pub image_ref: Option<String>,
+    pub kustomization_path: String,
+    pub image_name: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsUpdatePlanResponse {
+    pub artifact: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateGitOpsChangeSetRequest {
+    pub pipeline_intent_id: String,
+    pub gitops_update_plan_artifact_id: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionGitOpsChangeSetRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsChangeSetResponse {
+    pub id: String,
+    pub work_item_id: String,
+    pub work_plan_id: String,
+    pub source_change_set_id: String,
+    pub pipeline_intent_id: String,
+    pub deployment_intent_id: String,
+    pub gitops_update_plan_artifact_id: String,
+    pub run_id: RunId,
+    pub status: String,
+    pub title: String,
+    pub summary: String,
+    pub risk_level: String,
+    pub material_hash: String,
+    pub revision: i64,
+    pub gitops_repo: String,
+    pub gitops_ref: String,
+    pub head_branch: String,
+    pub kustomization_path: String,
+    pub image_name: String,
+    pub image_ref: String,
+    pub gitops_change_set_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+    pub status_changed_at: Option<String>,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+impl From<StoredGitOpsChangeSet> for GitOpsChangeSetResponse {
+    fn from(change_set: StoredGitOpsChangeSet) -> Self {
+        Self {
+            id: change_set.id,
+            work_item_id: change_set.work_item_id,
+            work_plan_id: change_set.work_plan_id,
+            source_change_set_id: change_set.source_change_set_id,
+            pipeline_intent_id: change_set.pipeline_intent_id,
+            deployment_intent_id: change_set.deployment_intent_id,
+            gitops_update_plan_artifact_id: change_set.gitops_update_plan_artifact_id,
+            run_id: change_set.run_id,
+            status: change_set.status,
+            title: change_set.title,
+            summary: change_set.summary,
+            risk_level: change_set.risk_level,
+            material_hash: change_set.material_hash,
+            revision: change_set.revision,
+            gitops_repo: change_set.gitops_repo,
+            gitops_ref: change_set.gitops_ref,
+            head_branch: change_set.head_branch,
+            kustomization_path: change_set.kustomization_path,
+            image_name: change_set.image_name,
+            image_ref: change_set.image_ref,
+            gitops_change_set_json: change_set.gitops_change_set_json,
+            created_at: change_set.created_at,
+            updated_at: change_set.updated_at,
+            status_changed_at: change_set.status_changed_at,
+            status_changed_by: change_set.status_changed_by,
+            status_reason: change_set.status_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsChangeSetsResponse {
+    pub gitops_change_sets: Vec<GitOpsChangeSetResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateGitOpsChangeSetResponse {
+    pub gitops_change_set: GitOpsChangeSetResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionGitOpsChangeSetResponse {
+    pub gitops_change_set: GitOpsChangeSetResponse,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResolveGitOpsBaseRevisionRequest {
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResolveGitOpsBaseRevisionResponse {
+    pub status: String,
+    pub execution: ArtifactResponse,
+    pub job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrepareGitOpsDeliveryRequest {
+    #[serde(default)]
+    pub actor: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryPlanResponse {
+    pub artifact: ArtifactResponse,
+    pub base_revision: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateGitOpsDeliveryAuthorizationRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub created_by: Option<String>,
+    pub reason: String,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryAuthorizationResponse {
+    pub grant: PermissionGrantResponse,
+    pub plan: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitOpsDeliveryPreflightRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub actor: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryPreflightResponse {
+    pub status: String,
+    pub approval_gate_ready: bool,
+    pub authorization_ready: bool,
+    pub dispatch_ready: bool,
+    pub plan: ArtifactResponse,
+    pub base_revision: ArtifactResponse,
+    pub permission_grant: Option<PermissionGrantResponse>,
+    pub checks: Vec<serde_json::Value>,
+    pub artifact: ArtifactResponse,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecuteGitOpsDeliveryRequest {
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecuteGitOpsDeliveryResponse {
+    pub status: String,
+    pub execution: ArtifactResponse,
+    pub plan: ArtifactResponse,
+    pub permission_grant: PermissionGrantResponse,
+    pub job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ObserveGitOpsDeliveryRequest {
+    #[serde(default)]
+    pub actor: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ObserveGitOpsDeliveryResponse {
+    pub status: String,
+    pub execution: ArtifactResponse,
+    pub job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryFlowResponse {
+    pub plan: ArtifactResponse,
+    pub base_revision: ArtifactResponse,
+    pub latest_preflight: Option<ArtifactResponse>,
+    pub latest_execution: Option<ArtifactResponse>,
+    pub latest_result: Option<ArtifactResponse>,
+    pub latest_observation: Option<ArtifactResponse>,
+    pub latest_merge: Option<ArtifactResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryContextResponse {
+    pub execution_id: String,
+    pub repository: String,
+    pub base_ref: String,
+    pub base_commit: String,
+    pub head_branch: String,
+    pub kustomization_path: String,
+    pub image_name: String,
+    pub image_ref: String,
+    pub commit_subject: String,
+    pub commit_body: String,
+    pub pull_request_title: String,
+    pub pull_request_body: String,
+    pub github_api_url: String,
+    pub author_name: String,
+    pub author_email: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitOpsDeliveryOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub commit_sha: Option<String>,
+    #[serde(default)]
+    pub pull_request_url: Option<String>,
+    #[serde(default)]
+    pub pull_request_number: Option<u64>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsDeliveryObservationContextResponse {
+    pub execution_id: String,
+    pub repository: String,
+    pub head_branch: String,
+    pub source_commit_sha: String,
+    pub pull_request_url: String,
+    pub pull_request_number: u64,
+    pub github_api_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitOpsDeliveryObservationOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub pull_request_state: Option<String>,
+    #[serde(default)]
+    pub merged: Option<bool>,
+    #[serde(default)]
+    pub merge_commit_sha: Option<String>,
+    #[serde(default)]
+    pub head_branch: Option<String>,
+    #[serde(default)]
+    pub head_commit_sha: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitOpsBaseRevisionContextResponse {
+    pub execution_id: String,
+    pub repository: String,
+    pub base_ref: String,
+    pub github_api_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GitOpsBaseRevisionOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub base_commit: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1127,8 +1558,8 @@ pub struct DeploymentIntentResponse {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -1227,6 +1658,83 @@ pub struct AttachDeploymentIntentEvidenceRequest {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateDeploymentIntentTrustedEnvelopeRequest {
+    pub subject: Option<String>,
+    pub created_by: Option<String>,
+    pub reason: String,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeploymentIntentPreflightRequest {
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentIntentPreflightResponse {
+    pub status: String,
+    pub ready_for_argo_runner: bool,
+    pub dispatch_ready: bool,
+    pub deployment_intent: DeploymentIntentResponse,
+    pub deployment_contract: Option<DeploymentContractResponse>,
+    pub permission_grant: Option<PermissionGrantResponse>,
+    pub checks: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecuteDeploymentIntentRequest {
+    #[serde(default = "default_dry_run")]
+    pub dry_run: bool,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecuteDeploymentIntentResponse {
+    pub status: String,
+    pub ready: bool,
+    pub dry_run: bool,
+    pub deployment_intent: DeploymentIntentResponse,
+    pub deployment_contract: Option<DeploymentContractResponse>,
+    pub permission_grant: Option<PermissionGrantResponse>,
+    pub checks: Vec<serde_json::Value>,
+    pub execution: Option<ArtifactResponse>,
+    pub execution_id: Option<String>,
+    pub executor_job_name: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ArgoSyncContextResponse {
+    pub execution_id: String,
+    pub target_namespace: String,
+    pub argo_application: String,
+    pub poll_seconds: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ArgoSyncControlResponse {
+    pub cancelled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ArgoSyncOutcomeRequest {
+    pub execution_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub sync_status: Option<String>,
+    #[serde(default)]
+    pub health_status: Option<String>,
+    #[serde(default)]
+    pub operation_phase: Option<String>,
+    #[serde(default)]
+    pub revision: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ReleasesResponse {
     pub releases: Vec<ReleaseResponse>,
@@ -1242,8 +1750,8 @@ pub struct ReleaseResponse {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -1350,6 +1858,28 @@ pub struct AttachReleaseEvidenceResponse {
     pub remediation_plan: Option<RemediationPlanResponse>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct VerifyReleaseRequest {
+    #[serde(default)]
+    pub complete: bool,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VerifyReleaseResponse {
+    pub status: String,
+    pub verified: bool,
+    pub completed: bool,
+    pub release: ReleaseResponse,
+    pub argo_observation: ObservationResponse,
+    pub workload_observation: ObservationResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observability_observation: Option<ObservationResponse>,
+    pub checks: Vec<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RegistryEvidenceListResponse {
     pub registry_evidence: Vec<RegistryEvidenceResponse>,
@@ -1366,8 +1896,8 @@ pub struct RegistryEvidenceResponse {
     pub pipeline_intent_id: String,
     pub change_set_id: String,
     pub work_plan_id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
@@ -1494,8 +2024,9 @@ pub struct ApprovalGateSummaryResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalGateResponse {
     pub id: String,
-    pub remediation_plan_id: String,
-    pub incident_id: String,
+    pub work_item_id: Option<String>,
+    pub remediation_plan_id: Option<String>,
+    pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
     pub gate_kind: String,
@@ -1520,6 +2051,7 @@ impl From<StoredApprovalGate> for ApprovalGateResponse {
     fn from(gate: StoredApprovalGate) -> Self {
         Self {
             id: gate.id,
+            work_item_id: gate.work_item_id,
             remediation_plan_id: gate.remediation_plan_id,
             incident_id: gate.incident_id,
             run_id: gate.run_id,

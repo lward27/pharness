@@ -171,12 +171,42 @@ cargo run -q -p pharness-cli -- workspaces list --work-item-id "$WORK_ITEM_ID" |
 cargo run -q -p pharness-cli -- artifacts list --run-id "$RUN_ID" | jq '.artifacts[] | {id,kind,label}'
 cargo run -q -p pharness-cli -- change-sets get --change-set-id "$CHANGE_SET_ID" | jq '.change_set | {id,status,work_item_id,run_id,change_set_json}'
 cargo run -q -p pharness-cli -- audit-events --run-id "$RUN_ID" | jq '.events[] | select(.kind == "workspace.provisioned" or .kind == "workspace.evidence_recorded")'
+cargo run -q -p pharness-cli -- work-items events --work-item-id "$WORK_ITEM_ID" | jq '.events[] | select(.kind == "work_item.attempt_finished") | {kind,actor,classification: .payload.classification}'
 ```
 
 Expected result: `workspace.provisioned` appears before the model action,
 the Workspace reaches `captured`, its `resolved_commit` is a full Git object
 ID, the run owns `workspace_git_diff` and `workspace_git_status` artifacts,
-and the ChangeSet is `proposed`.
+and the ChangeSet is `proposed`. The WorkItem audit includes one
+`work_item.attempt_finished` event classified as `completed` with the
+recommended action `capture_change_set`.
+
+## Bounded Recovery (Only After A Failed Or Blocked Attempt)
+
+Do not retry a WorkItem by manually changing its status. When the coding run
+ends `failed` or `blocked`, no ChangeSet has been captured, and the WorkPlan
+remains approved with attempt budget remaining, explicitly record the retry:
+
+```bash
+cargo run -q -p pharness-cli -- work-items replan \
+  --work-item-id "$WORK_ITEM_ID" \
+  --actor lucas \
+  --reason "retry one bounded coding attempt after reviewing the failure" \
+  | tee target/kubernetes-coding-alpha-replan.json
+
+jq '{status: .work_item.status, attempt_count: .work_item.attempt_count, attempts_remaining, work_plan: (.work_plan | {id,status})}' \
+  target/kubernetes-coding-alpha-replan.json
+
+cargo run -q -p pharness-cli -- work-items reconcile \
+  --work-item-id "$WORK_ITEM_ID" \
+  --actor lucas | jq '{action, applied, message}'
+```
+
+Expected result: replan returns the WorkItem to `awaiting_approval`, preserves
+the approved WorkPlan, and the controller preview reports `start_coding_attempt`.
+It does not start work itself. The next `reconcile --apply` creates a fresh
+workspace attempt. Replan is rejected when the attempt budget is exhausted or
+a ChangeSet already exists; revise and review the WorkPlan instead.
 
 Review the ChangeSet, then ask the controller to prepare and preflight the
 non-mutating Git delivery plan. This does not push, commit, create a remote

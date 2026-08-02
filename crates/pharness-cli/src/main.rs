@@ -120,6 +120,12 @@ enum Command {
         #[command(subcommand)]
         command: ChangeSetCommand,
     },
+    /// Inspect and review durable GitOps change sets.
+    #[command(name = "gitops-change-sets")]
+    GitOpsChangeSets {
+        #[command(subcommand)]
+        command: GitOpsChangeSetCommand,
+    },
     /// Inspect durable pipeline intents.
     PipelineIntents {
         #[command(subcommand)]
@@ -271,6 +277,8 @@ enum WorkItemCommand {
     Cancel(WorkItemCancelArgs),
     /// Preview or apply the next durable WorkItem controller action.
     Reconcile(WorkItemReconcileArgs),
+    /// Schedule one remaining bounded retry after a failed or blocked attempt.
+    Replan(WorkItemReplanArgs),
     /// Create the WorkPlan and declared workspace for a planning work item.
     CreateWorkPlan(WorkItemGetArgs),
     /// Provision an isolated local clone and start one bounded coding attempt.
@@ -311,8 +319,36 @@ enum ChangeSetCommand {
     AuthorizeGitDelivery(ChangeSetAuthorizeGitDeliveryArgs),
     /// Record whether an immutable Git delivery plan is authorized for a future writer.
     PreflightGitDelivery(ChangeSetPreflightGitDeliveryArgs),
+    /// Dispatch one approved immutable Git delivery plan to the isolated writer Job.
+    ExecuteGitDelivery(ChangeSetExecuteGitDeliveryArgs),
+    /// Dispatch the separate read-only GitHub observer for the delivered pull request.
+    ObserveGitDelivery(ChangeSetObserveGitDeliveryArgs),
     /// Create a bounded trusted write envelope for one ChangeSet.
     CreateTrustedEnvelope(ChangeSetCreateTrustedEnvelopeArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum GitOpsChangeSetCommand {
+    /// List reviewable GitOps manifest changes.
+    List(Box<GitOpsChangeSetListArgs>),
+    /// Fetch one GitOps change set.
+    Get(GitOpsChangeSetGetArgs),
+    /// Materialize a GitOps change set from one immutable update-plan artifact.
+    Create(GitOpsChangeSetCreateArgs),
+    /// Move a GitOps change set through review lifecycle states.
+    Transition(GitOpsChangeSetTransitionArgs),
+    /// Resolve the declared GitOps base ref through the read-only observer identity.
+    ResolveBaseRevision(GitOpsChangeSetResolveBaseRevisionArgs),
+    /// Prepare an immutable GitOps writer input from an approved change and resolved base SHA.
+    PrepareDelivery(GitOpsChangeSetPrepareDeliveryArgs),
+    /// Create or fetch a bounded GitOps writer grant for one immutable delivery plan.
+    AuthorizeDelivery(GitOpsChangeSetAuthorizeDeliveryArgs),
+    /// Record whether one immutable GitOps delivery plan is ready for a future writer.
+    PreflightDelivery(GitOpsChangeSetPreflightDeliveryArgs),
+    /// Dispatch one approved immutable GitOps delivery plan to the isolated writer Job.
+    ExecuteDelivery(GitOpsChangeSetExecuteDeliveryArgs),
+    /// Dispatch the read-only observer for one delivered GitOps pull request.
+    ObserveDelivery(GitOpsChangeSetObserveDeliveryArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -331,6 +367,8 @@ enum PipelineIntentCommand {
     CreateTrustedEnvelope(PipelineIntentCreateTrustedEnvelopeArgs),
     /// Preview a PipelineRun by default; pass --apply to dispatch the dedicated executor Job.
     Execute(PipelineIntentExecuteArgs),
+    /// Prepare a digest-pinned, review-only Kustomize GitOps update plan.
+    PrepareGitOpsUpdate(PipelineIntentPrepareGitOpsUpdateArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -359,6 +397,12 @@ enum DeploymentIntentCommand {
     Transition(DeploymentIntentTransitionArgs),
     /// Attach an Argo CD Application observation as DeploymentIntent evidence.
     AttachEvidence(DeploymentIntentAttachEvidenceArgs),
+    /// Create a bounded supervised-autonomy envelope for one approved dev DeploymentIntent.
+    CreateTrustedEnvelope(DeploymentIntentCreateTrustedEnvelopeArgs),
+    /// Dry-run the contract, evidence, gate, and envelope checks for a future Argo runner.
+    Preflight(DeploymentIntentPreflightArgs),
+    /// Dispatch one preflighted dev-only Argo sync. Dry-run unless --apply is supplied.
+    Execute(DeploymentIntentExecuteArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -385,6 +429,8 @@ enum ReleaseCommand {
     Transition(ReleaseTransitionArgs),
     /// Attach a Prometheus or Loki observation as Release observability evidence.
     AttachEvidence(ReleaseAttachEvidenceArgs),
+    /// Read the exact Argo Application and Deployment after a completed dev sync.
+    Verify(ReleaseVerifyArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -1282,6 +1328,22 @@ struct WorkItemReconcileArgs {
 }
 
 #[derive(Debug, Parser)]
+struct WorkItemReplanArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
+}
+
+#[derive(Debug, Parser)]
 struct WorkItemExecuteArgs {
     #[arg(
         long,
@@ -1708,6 +1770,40 @@ struct ChangeSetPreflightGitDeliveryArgs {
 }
 
 #[derive(Debug, Parser)]
+struct ChangeSetExecuteGitDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
+}
+
+#[derive(Debug, Parser)]
+struct ChangeSetObserveGitDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    change_set_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
+}
+
+#[derive(Debug, Parser)]
 struct ChangeSetCreateTrustedEnvelopeArgs {
     #[arg(
         long,
@@ -1890,6 +1986,205 @@ struct PipelineIntentExecuteArgs {
     /// Dispatch the executor Job. Without this flag Pharness only returns a preflight preview.
     #[arg(long)]
     apply: bool,
+}
+
+#[derive(Debug, Parser)]
+struct PipelineIntentPrepareGitOpsUpdateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    /// Optional digest-pinned image override. When omitted, derive it from the terminal PipelineRun output.
+    #[arg(long)]
+    image_ref: Option<String>,
+    /// Repository-relative path to the target kustomization file.
+    #[arg(long)]
+    kustomization_path: String,
+    /// Existing Kustomize image name to replace.
+    #[arg(long)]
+    image_name: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: Option<String>,
+    #[arg(long)]
+    pipeline_intent_id: Option<String>,
+    #[arg(long)]
+    deployment_intent_id: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetGetArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetCreateArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    pipeline_intent_id: String,
+    #[arg(long)]
+    gitops_update_plan_artifact_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetResolveBaseRevisionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetPrepareDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetAuthorizeDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    created_by: Option<String>,
+    #[arg(long)]
+    reason: String,
+    #[arg(long)]
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetPreflightDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetExecuteDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
+}
+
+#[derive(Debug, Parser)]
+struct GitOpsChangeSetObserveDeliveryArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    gitops_change_set_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: String,
 }
 
 #[derive(Debug, Parser)]
@@ -2187,6 +2482,62 @@ struct DeploymentIntentAttachEvidenceArgs {
 }
 
 #[derive(Debug, Parser)]
+struct DeploymentIntentCreateTrustedEnvelopeArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    #[arg(long)]
+    subject: Option<String>,
+    #[arg(long)]
+    created_by: Option<String>,
+    #[arg(long)]
+    reason: String,
+    #[arg(long)]
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentPreflightArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct DeploymentIntentExecuteArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    deployment_intent_id: String,
+    /// Dispatch the isolated runner Job after current preflight succeeds.
+    #[arg(long)]
+    apply: bool,
+    #[arg(long)]
+    actor: Option<String>,
+    /// Required when --apply is supplied.
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct ReleaseListArgs {
     #[arg(
         long,
@@ -2318,6 +2669,28 @@ struct ReleaseAttachEvidenceArgs {
     actor: Option<String>,
     #[arg(long)]
     reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseVerifyArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    release_id: String,
+    /// Mark the approved Release completed only when the read-only checks pass.
+    #[arg(long)]
+    complete: bool,
+    #[arg(long)]
+    actor: Option<String>,
+    /// Required with --complete to preserve an explicit completion audit reason.
+    #[arg(long)]
+    reason: Option<String>,
+    #[arg(long)]
+    timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Parser)]
@@ -2479,6 +2852,8 @@ struct ApprovalGateListArgs {
     )]
     api_url: String,
     #[arg(long)]
+    work_item_id: Option<String>,
+    #[arg(long)]
     remediation_plan_id: Option<String>,
     #[arg(long)]
     incident_id: Option<String>,
@@ -2516,6 +2891,8 @@ struct ApprovalGateSummaryArgs {
         default_value = "http://127.0.0.1:4777"
     )]
     api_url: String,
+    #[arg(long)]
+    work_item_id: Option<String>,
     #[arg(long)]
     remediation_plan_id: Option<String>,
     #[arg(long)]
@@ -2727,6 +3104,7 @@ async fn main() -> anyhow::Result<()> {
             WorkItemCommand::Transition(args) => transition_work_item(args).await?,
             WorkItemCommand::Cancel(args) => cancel_work_item(args).await?,
             WorkItemCommand::Reconcile(args) => reconcile_work_item(args).await?,
+            WorkItemCommand::Replan(args) => replan_work_item(args).await?,
             WorkItemCommand::CreateWorkPlan(args) => create_work_item_work_plan(args).await?,
             WorkItemCommand::Execute(args) => execute_work_item(args).await?,
             WorkItemCommand::CaptureChangeSet(args) => capture_work_item_change_set(args).await?,
@@ -2767,8 +3145,38 @@ async fn main() -> anyhow::Result<()> {
             ChangeSetCommand::PreflightGitDelivery(args) => {
                 preflight_change_set_git_delivery(args).await?
             }
+            ChangeSetCommand::ExecuteGitDelivery(args) => {
+                execute_change_set_git_delivery(args).await?
+            }
+            ChangeSetCommand::ObserveGitDelivery(args) => {
+                observe_change_set_git_delivery(args).await?
+            }
             ChangeSetCommand::CreateTrustedEnvelope(args) => {
                 create_change_set_trusted_envelope(args).await?
+            }
+        },
+        Command::GitOpsChangeSets { command } => match command {
+            GitOpsChangeSetCommand::List(args) => list_gitops_change_sets(*args).await?,
+            GitOpsChangeSetCommand::Get(args) => get_gitops_change_set(args).await?,
+            GitOpsChangeSetCommand::Create(args) => create_gitops_change_set(args).await?,
+            GitOpsChangeSetCommand::Transition(args) => transition_gitops_change_set(args).await?,
+            GitOpsChangeSetCommand::ResolveBaseRevision(args) => {
+                resolve_gitops_base_revision(args).await?
+            }
+            GitOpsChangeSetCommand::PrepareDelivery(args) => {
+                prepare_gitops_change_set_delivery(args).await?
+            }
+            GitOpsChangeSetCommand::AuthorizeDelivery(args) => {
+                authorize_gitops_change_set_delivery(args).await?
+            }
+            GitOpsChangeSetCommand::PreflightDelivery(args) => {
+                preflight_gitops_change_set_delivery(args).await?
+            }
+            GitOpsChangeSetCommand::ExecuteDelivery(args) => {
+                execute_gitops_change_set_delivery(args).await?
+            }
+            GitOpsChangeSetCommand::ObserveDelivery(args) => {
+                observe_gitops_change_set_delivery(args).await?
             }
         },
         Command::PipelineIntents { command } => match command {
@@ -2785,6 +3193,9 @@ async fn main() -> anyhow::Result<()> {
                 create_pipeline_intent_trusted_envelope(args).await?
             }
             PipelineIntentCommand::Execute(args) => execute_pipeline_intent(args).await?,
+            PipelineIntentCommand::PrepareGitOpsUpdate(args) => {
+                prepare_gitops_update_plan(args).await?
+            }
         },
         Command::PipelineContracts { command } => match command {
             PipelineContractCommand::List(args) => list_pipeline_contracts(*args).await?,
@@ -2809,6 +3220,11 @@ async fn main() -> anyhow::Result<()> {
             DeploymentIntentCommand::AttachEvidence(args) => {
                 attach_deployment_intent_evidence(args).await?
             }
+            DeploymentIntentCommand::CreateTrustedEnvelope(args) => {
+                create_deployment_intent_trusted_envelope(args).await?
+            }
+            DeploymentIntentCommand::Preflight(args) => preflight_deployment_intent(args).await?,
+            DeploymentIntentCommand::Execute(args) => execute_deployment_intent(args).await?,
         },
         Command::Releases { command } => match command {
             ReleaseCommand::List(args) => list_releases(*args).await?,
@@ -2818,6 +3234,7 @@ async fn main() -> anyhow::Result<()> {
             }
             ReleaseCommand::Transition(args) => transition_release(args).await?,
             ReleaseCommand::AttachEvidence(args) => attach_release_evidence(args).await?,
+            ReleaseCommand::Verify(args) => verify_release(args).await?,
         },
         Command::RegistryEvidence { command } => match command {
             RegistryEvidenceCommand::List(args) => list_registry_evidence(*args).await?,
@@ -4038,6 +4455,27 @@ async fn reconcile_work_item(args: WorkItemReconcileArgs) -> anyhow::Result<()> 
     print_json_response(response)
 }
 
+async fn replan_work_item(args: WorkItemReplanArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/replan", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to replan work item")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem replan")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem replan")?;
+    print_json_response(response)
+}
+
 async fn create_work_item_work_plan(args: WorkItemGetArgs) -> anyhow::Result<()> {
     let response = api_client()
         .post(api_url(
@@ -4674,6 +5112,61 @@ async fn preflight_change_set_git_delivery(
     Ok(())
 }
 
+async fn execute_change_set_git_delivery(
+    args: ChangeSetExecuteGitDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/change-sets/{}/git-delivery/execute",
+                args.change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to execute ChangeSet Git delivery")?
+        .error_for_status()
+        .context("pharness API rejected ChangeSet Git delivery execution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode ChangeSet Git delivery execution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn observe_change_set_git_delivery(
+    args: ChangeSetObserveGitDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/change-sets/{}/git-delivery/observe",
+                args.change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to observe ChangeSet Git delivery")?
+        .error_for_status()
+        .context("pharness API rejected ChangeSet Git delivery observation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode ChangeSet Git delivery observation")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn create_change_set_trusted_envelope(
     args: ChangeSetCreateTrustedEnvelopeArgs,
 ) -> anyhow::Result<()> {
@@ -4929,6 +5422,296 @@ async fn execute_pipeline_intent(args: PipelineIntentExecuteArgs) -> anyhow::Res
         .json::<serde_json::Value>()
         .await
         .context("failed to decode PipelineIntent execution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn prepare_gitops_update_plan(
+    args: PipelineIntentPrepareGitOpsUpdateArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/pipeline-intents/{}/gitops-update-plan",
+                args.pipeline_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "image_ref": args.image_ref,
+            "kustomization_path": args.kustomization_path,
+            "image_name": args.image_name,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to prepare GitOps update plan")?
+        .error_for_status()
+        .context("pharness API rejected GitOps update planning")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps update plan")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn list_gitops_change_sets(args: GitOpsChangeSetListArgs) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit", args.limit.to_string()),
+        ("offset", args.offset.to_string()),
+    ];
+    if let Some(value) = args.work_item_id {
+        query.push(("work_item_id", value));
+    }
+    if let Some(value) = args.pipeline_intent_id {
+        query.push(("pipeline_intent_id", value));
+    }
+    if let Some(value) = args.deployment_intent_id {
+        query.push(("deployment_intent_id", value));
+    }
+    if let Some(value) = args.status {
+        query.push(("status", value));
+    }
+    let response = api_client()
+        .get(api_url(&args.api_url, "/api/gitops-change-sets"))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to list GitOps change sets")?
+        .error_for_status()
+        .context("pharness API rejected GitOps change set list")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps change set list")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn get_gitops_change_set(args: GitOpsChangeSetGetArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .get(api_url(
+            &args.api_url,
+            &format!("/api/gitops-change-sets/{}", args.gitops_change_set_id),
+        ))
+        .send()
+        .await
+        .context("failed to fetch GitOps change set")?
+        .error_for_status()
+        .context("pharness API rejected GitOps change set fetch")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps change set")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn create_gitops_change_set(args: GitOpsChangeSetCreateArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(&args.api_url, "/api/gitops-change-sets"))
+        .json(&serde_json::json!({
+            "pipeline_intent_id": args.pipeline_intent_id,
+            "gitops_update_plan_artifact_id": args.gitops_update_plan_artifact_id,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create GitOps change set")?
+        .error_for_status()
+        .context("pharness API rejected GitOps change set creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps change set creation")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn transition_gitops_change_set(args: GitOpsChangeSetTransitionArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/transition",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition GitOps change set")?
+        .error_for_status()
+        .context("pharness API rejected GitOps change set transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps change set transition")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn resolve_gitops_base_revision(
+    args: GitOpsChangeSetResolveBaseRevisionArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/resolve-base-revision",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to resolve GitOps base revision")?
+        .error_for_status()
+        .context("pharness API rejected GitOps base revision resolution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps base revision resolution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn prepare_gitops_change_set_delivery(
+    args: GitOpsChangeSetPrepareDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/delivery-plan",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to prepare GitOps delivery plan")?
+        .error_for_status()
+        .context("pharness API rejected GitOps delivery planning")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps delivery plan")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn authorize_gitops_change_set_delivery(
+    args: GitOpsChangeSetAuthorizeDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/delivery/authorize",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "created_by": args.created_by,
+            "reason": args.reason,
+            "expires_at": args.expires_at,
+        }))
+        .send()
+        .await
+        .context("failed to authorize GitOps delivery")?
+        .error_for_status()
+        .context("pharness API rejected GitOps delivery authorization")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps delivery authorization")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn preflight_gitops_change_set_delivery(
+    args: GitOpsChangeSetPreflightDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/delivery/preflight",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to preflight GitOps delivery")?
+        .error_for_status()
+        .context("pharness API rejected GitOps delivery preflight")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps delivery preflight")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn execute_gitops_change_set_delivery(
+    args: GitOpsChangeSetExecuteDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/delivery/execute",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to execute GitOps delivery")?
+        .error_for_status()
+        .context("pharness API rejected GitOps delivery execution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps delivery execution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn observe_gitops_change_set_delivery(
+    args: GitOpsChangeSetObserveDeliveryArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/gitops-change-sets/{}/delivery/observe",
+                args.gitops_change_set_id
+            ),
+        ))
+        .json(&serde_json::json!({ "actor": args.actor, "reason": args.reason }))
+        .send()
+        .await
+        .context("failed to observe GitOps delivery")?
+        .error_for_status()
+        .context("pharness API rejected GitOps delivery observation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode GitOps delivery observation")?;
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
 }
@@ -5339,6 +6122,94 @@ async fn attach_deployment_intent_evidence(
     Ok(())
 }
 
+async fn create_deployment_intent_trusted_envelope(
+    args: DeploymentIntentCreateTrustedEnvelopeArgs,
+) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/deployment-intents/{}/trusted-envelope",
+                args.deployment_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "subject": args.subject,
+            "created_by": args.created_by,
+            "reason": args.reason,
+            "expires_at": args.expires_at,
+        }))
+        .send()
+        .await
+        .context("failed to create DeploymentIntent trusted envelope")?
+        .error_for_status()
+        .context("pharness API rejected DeploymentIntent trusted envelope")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode DeploymentIntent trusted envelope")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn preflight_deployment_intent(args: DeploymentIntentPreflightArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/deployment-intents/{}/preflight",
+                args.deployment_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to preflight DeploymentIntent")?
+        .error_for_status()
+        .context("pharness API rejected DeploymentIntent preflight")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode DeploymentIntent preflight")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn execute_deployment_intent(args: DeploymentIntentExecuteArgs) -> anyhow::Result<()> {
+    if args.apply
+        && args
+            .reason
+            .as_deref()
+            .map_or(true, |reason| reason.trim().is_empty())
+    {
+        anyhow::bail!("--reason is required when --apply dispatches an Argo sync");
+    }
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!(
+                "/api/deployment-intents/{}/execute",
+                args.deployment_intent_id
+            ),
+        ))
+        .json(&serde_json::json!({
+            "dry_run": !args.apply,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to execute DeploymentIntent")?
+        .error_for_status()
+        .context("pharness API rejected DeploymentIntent execution")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode DeploymentIntent execution")?;
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_releases(args: ReleaseListArgs) -> anyhow::Result<()> {
     let http = api_client();
     let mut query = Vec::new();
@@ -5522,6 +6393,40 @@ async fn attach_release_evidence(args: ReleaseAttachEvidenceArgs) -> anyhow::Res
         .json::<serde_json::Value>()
         .await
         .context("failed to decode release evidence attachment")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+async fn verify_release(args: ReleaseVerifyArgs) -> anyhow::Result<()> {
+    if args.complete
+        && args
+            .reason
+            .as_deref()
+            .map_or(true, |reason| reason.trim().is_empty())
+    {
+        anyhow::bail!("--reason is required with --complete");
+    }
+    let http = api_client();
+    let response = http
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/releases/{}/verify", args.release_id),
+        ))
+        .json(&serde_json::json!({
+            "complete": args.complete,
+            "actor": args.actor,
+            "reason": args.reason,
+            "timeout_ms": args.timeout_ms,
+        }))
+        .send()
+        .await
+        .context("failed to verify release")?
+        .error_for_status()
+        .context("pharness API rejected release verification")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode release verification")?;
 
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
@@ -5734,6 +6639,9 @@ async fn list_approval_gates(args: ApprovalGateListArgs) -> anyhow::Result<()> {
         ("limit".to_string(), args.limit.to_string()),
         ("offset".to_string(), args.offset.to_string()),
     ];
+    if let Some(work_item_id) = args.work_item_id {
+        query.push(("work_item_id".to_string(), work_item_id));
+    }
     if let Some(remediation_plan_id) = args.remediation_plan_id {
         query.push(("remediation_plan_id".to_string(), remediation_plan_id));
     }
@@ -5790,6 +6698,9 @@ async fn list_approval_gates(args: ApprovalGateListArgs) -> anyhow::Result<()> {
 async fn summarize_approval_gates(args: ApprovalGateSummaryArgs) -> anyhow::Result<()> {
     let http = api_client();
     let mut query = vec![("status".to_string(), args.status)];
+    if let Some(work_item_id) = args.work_item_id {
+        query.push(("work_item_id".to_string(), work_item_id));
+    }
     if let Some(remediation_plan_id) = args.remediation_plan_id {
         query.push(("remediation_plan_id".to_string(), remediation_plan_id));
     }
@@ -7053,6 +7964,18 @@ mod tests {
             "record delivery readiness",
         ])
         .unwrap();
+        let git_delivery_execute = Cli::try_parse_from([
+            "pharness",
+            "change-sets",
+            "execute-git-delivery",
+            "--change-set-id",
+            "cset_1",
+            "--actor",
+            "lucas",
+            "--reason",
+            "dispatch reviewed source delivery",
+        ])
+        .unwrap();
         let envelope = Cli::try_parse_from([
             "pharness",
             "change-sets",
@@ -7155,6 +8078,16 @@ mod tests {
                 assert_eq!(args.reason.as_deref(), Some("record delivery readiness"));
             }
             _ => panic!("expected change-sets preflight-git-delivery command"),
+        }
+        match git_delivery_execute.command {
+            Command::ChangeSets {
+                command: ChangeSetCommand::ExecuteGitDelivery(args),
+            } => {
+                assert_eq!(args.change_set_id, "cset_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.reason, "dispatch reviewed source delivery");
+            }
+            _ => panic!("expected change-sets execute-git-delivery command"),
         }
         match envelope.command {
             Command::ChangeSets {
@@ -7411,6 +8344,37 @@ mod tests {
             "lucas",
         ])
         .unwrap();
+        let envelope = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "create-trusted-envelope",
+            "--deployment-intent-id",
+            "dint_1",
+            "--reason",
+            "dev sync envelope",
+        ])
+        .unwrap();
+        let preflight = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "preflight",
+            "--deployment-intent-id",
+            "dint_1",
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let execute = Cli::try_parse_from([
+            "pharness",
+            "deployment-intents",
+            "execute",
+            "--deployment-intent-id",
+            "dint_1",
+            "--apply",
+            "--reason",
+            "approved disposable dev sync",
+        ])
+        .unwrap();
 
         match list.command {
             Command::DeploymentIntents {
@@ -7462,6 +8426,34 @@ mod tests {
                 assert_eq!(args.actor.as_deref(), Some("lucas"));
             }
             _ => panic!("expected deployment-intents attach-evidence command"),
+        }
+        match envelope.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::CreateTrustedEnvelope(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert_eq!(args.reason, "dev sync envelope");
+            }
+            _ => panic!("expected deployment-intents create-trusted-envelope command"),
+        }
+        match preflight.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::Preflight(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected deployment-intents preflight command"),
+        }
+        match execute.command {
+            Command::DeploymentIntents {
+                command: DeploymentIntentCommand::Execute(args),
+            } => {
+                assert_eq!(args.deployment_intent_id, "dint_1");
+                assert!(args.apply);
+                assert_eq!(args.reason.as_deref(), Some("approved disposable dev sync"));
+            }
+            _ => panic!("expected deployment-intents execute command"),
         }
     }
 
@@ -7627,6 +8619,19 @@ mod tests {
             "lucas",
         ])
         .unwrap();
+        let verify = Cli::try_parse_from([
+            "pharness",
+            "releases",
+            "verify",
+            "--release-id",
+            "rel_1",
+            "--complete",
+            "--reason",
+            "healthy disposable rollout",
+            "--timeout-ms",
+            "30000",
+        ])
+        .unwrap();
 
         match list.command {
             Command::Releases {
@@ -7680,6 +8685,17 @@ mod tests {
                 assert_eq!(args.actor.as_deref(), Some("lucas"));
             }
             _ => panic!("expected releases attach-evidence command"),
+        }
+        match verify.command {
+            Command::Releases {
+                command: ReleaseCommand::Verify(args),
+            } => {
+                assert_eq!(args.release_id, "rel_1");
+                assert!(args.complete);
+                assert_eq!(args.reason.as_deref(), Some("healthy disposable rollout"));
+                assert_eq!(args.timeout_ms, Some(30_000));
+            }
+            _ => panic!("expected releases verify command"),
         }
     }
 
@@ -8139,6 +9155,18 @@ mod tests {
             "12",
         ])
         .unwrap();
+        let replan = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "replan",
+            "--work-item-id",
+            "witem_1",
+            "--actor",
+            "lucas",
+            "--reason",
+            "retry after test failure",
+        ])
+        .unwrap();
 
         assert!(matches!(
             create.command,
@@ -8162,6 +9190,16 @@ mod tests {
                 assert_eq!(args.max_turns, Some(12));
             }
             _ => panic!("expected work-items reconcile command"),
+        }
+        match replan.command {
+            Command::WorkItems {
+                command: WorkItemCommand::Replan(args),
+            } => {
+                assert_eq!(args.work_item_id, "witem_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(args.reason, "retry after test failure");
+            }
+            _ => panic!("expected work-items replan command"),
         }
     }
 }

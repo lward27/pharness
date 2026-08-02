@@ -470,6 +470,20 @@ workspace, starting an approved coding attempt, capturing a completed
 ChangeSet, or preparing Git-delivery evidence. It stops at each review and
 authorization boundary rather than treating a WorkItem as an unbounded chat.
 
+A failed or blocked development WorkItem does not retry itself. Use
+`POST /api/work-items/:id/replan` or `pharness-cli work-items replan` with a
+non-empty reason to schedule one remaining attempt. Replan requires a still
+approved WorkPlan, available attempt budget, and no captured ChangeSet; it
+returns the WorkItem to `awaiting_approval`, clears any stale run link, and
+records `work_item.replanned`. A subsequent controller reconcile is still the
+operation that starts a fresh isolated workspace attempt.
+
+Every terminal coding attempt also emits a `work_item.attempt_finished` audit
+event. Its bounded classification distinguishes completed work, cancellation,
+policy denial, turn-budget exhaustion, tool failure, missing model responses,
+and unknown failures; it recommends a next operator/controller action without
+starting another attempt.
+
 An approved source ChangeSet can also produce a durable `git_delivery_plan`
 artifact. It binds a future branch-and-PR operation to the repository, pinned
 base commit, issued branch, and captured diff digest, but it does not perform
@@ -483,6 +497,17 @@ be `ready_for_writer` while `dispatch_ready` is `false`: that means the plan
 and grant are correct, while the separate Git writer capability remains
 intentionally absent until it has a scoped identity and revalidates the grant
 immediately before each remote Git operation.
+
+When explicitly enabled, `change-sets execute-git-delivery` dispatches a
+short-lived, purpose-built Kubernetes Job. It receives only the current plan,
+the captured diff, the API worker token, and a GitHub fine-grained token
+mounted from a writer-only Secret. It verifies the pinned base commit, applies
+the reviewed diff, creates the issued branch and commit, pushes without force,
+and opens one GitHub pull request. The API records separate immutable
+`git_delivery_execution` and `git_delivery_result` artifacts; opening a PR
+does not mark a ChangeSet applied or bypass later merge/build/deployment gates.
+The feature is disabled by default and supports GitHub HTTPS repositories
+only. See [`planning/git-writer-pr-executor-smoke.md`](planning/git-writer-pr-executor-smoke.md).
 
 ### Tekton PipelineIntents
 
@@ -542,6 +567,10 @@ Each executable intent must also match exactly one active PipelineContract for
 its namespace and PipelineRef. Contracts are created by an operator through
 the API or CLI and enumerate the permitted parameter shapes and workspace
 bindings; an unknown or missing input blocks execution before a Job is created.
+For WorkItem delivery, the contract must additionally declare
+`source_revision_param` as a required scalar parameter. Its execution value is
+checked against Pharness's observed GitHub merge SHA, so a mutable branch
+cannot be substituted as a build input.
 Contracts can be retired but are never deleted; a retired-only target remains
 blocked until one replacement contract is active.
 Use the replacement command when changing a reviewed Pipeline schema so the
@@ -600,8 +629,20 @@ The equivalent operator-console walkthrough, including the distinct preflight
 and dispatch actions, is in
 [planning/tekton-executor-smoke-playbook.md](planning/tekton-executor-smoke-playbook.md).
 
+The same script can prove the digest-pinned build-output handoff after the
+GitOps-managed synthetic fixture is synced:
+
+```sh
+PHARNESS_TEKTON_SMOKE_PIPELINE=pharness-e2e-build-output \
+PHARNESS_TEKTON_SMOKE_EXPECT_BUILD_OUTPUT=1 \
+scripts/pharness-tekton-execution-smoke.sh --apply
+```
+
+It writes only fixed synthetic `IMAGE_URL` and `IMAGE_DIGEST` result values;
+it does not build, push, pull, inspect, or verify an image.
+
 ## Current Status
 
-Pharness is a deployed V2 control plane: authenticated API/UI, isolated Fireworks worker Jobs, cancellation, approvals, durable events/artifacts, typed read-only Kubernetes/Argo/Tekton/Prometheus/Loki/registry capabilities, typed Tekton execution, and declared deployment handoff are implemented. The current autonomous-SDLC alpha also persists `WorkItem` intent, lifecycle/audit history, bounded execution budgets, WorkItem-backed `WorkPlan` records, and ephemeral `Workspace` declarations.
+Pharness is a deployed V2 control plane: authenticated API/UI, isolated Fireworks worker Jobs, cancellation, approvals, durable events/artifacts, typed read-only Kubernetes/Argo/Tekton/Prometheus/Loki/registry capabilities, typed Tekton execution, and declared deployment handoff are implemented. The autonomous-SDLC alpha also persists `WorkItem` intent, bounded execution/replan budgets, WorkItem-backed `WorkPlan` records, ephemeral `Workspace` declarations, pinned source revisions, and real Git-backed ChangeSets with test evidence.
 
-It does not yet clone an application repo, produce a real Git-backed ChangeSet, push a branch or PR, mutate GitOps, or deploy an application. Those actions are deliberately the next gated development-only cut line. See [planning/autonomous-sdlc-roadmap.md](planning/autonomous-sdlc-roadmap.md) for the active plan and [planning/current-build-review.md](planning/current-build-review.md) for earlier validation evidence.
+It does not yet push a branch or PR, mutate GitOps, or deploy an application. Those actions remain the next gated development-only cut line. See [planning/autonomous-sdlc-roadmap.md](planning/autonomous-sdlc-roadmap.md) for the active plan and [planning/current-build-review.md](planning/current-build-review.md) for earlier validation evidence.

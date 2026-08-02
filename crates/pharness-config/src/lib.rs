@@ -21,6 +21,15 @@ const DEFAULT_WORKER_K8S_NAMESPACE: &str = "pharness";
 const DEFAULT_WORKER_K8S_IMAGE: &str = "registry.lucas.engineering/pharness-runtime:latest";
 const DEFAULT_WORKER_K8S_SERVICE_ACCOUNT: &str = "pharness-worker";
 const DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-tekton-runner";
+const DEFAULT_ARGO_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-argo-runner";
+const DEFAULT_GIT_WRITER_SERVICE_ACCOUNT: &str = "pharness-git-writer";
+const DEFAULT_GITOPS_WRITER_SERVICE_ACCOUNT: &str = "pharness-gitops-writer";
+const DEFAULT_GIT_OBSERVER_SERVICE_ACCOUNT: &str = "pharness-git-observer";
+const DEFAULT_GITHUB_API_URL: &str = "https://api.github.com";
+const DEFAULT_GIT_WRITER_AUTHOR_NAME: &str = "Pharness";
+const DEFAULT_GIT_WRITER_AUTHOR_EMAIL: &str = "pharness@localhost";
+const DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS: u64 = 900;
+const DEFAULT_GIT_WRITER_TTL_SECONDS: u64 = 3_600;
 const DEFAULT_WORKER_K8S_API_URL: &str = "http://pharness-api:4777";
 const DEFAULT_WORKER_K8S_WORKSPACE_DIR: &str = "/workspace";
 const DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT: &str = "4Gi";
@@ -32,6 +41,9 @@ const DEFAULT_WORKER_K8S_TOKEN_SECRET: &str = "pharness-worker-token";
 const DEFAULT_WORKER_K8S_ACTIVE_DEADLINE_SECONDS: u64 = 3_600;
 const DEFAULT_WORKER_K8S_TTL_SECONDS: u64 = 3_600;
 const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
+const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
+const DEFAULT_ARGO_EXECUTOR_ACTIVE_DEADLINE_SECONDS: u64 = 600;
+const DEFAULT_ARGO_EXECUTOR_TTL_SECONDS: u64 = 3_600;
 const DEFAULT_CLUSTER_MAX_OUTPUT_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
@@ -87,6 +99,45 @@ pub struct WorkerKubernetesConfig {
     pub tekton_executor_service_account: String,
     pub tekton_allowed_namespaces: Vec<String>,
     pub tekton_executor_poll_seconds: u64,
+    /// A separately scoped, opt-in Argo CD sync executor. It is disabled by
+    /// default and accepts only exact application names named in configuration.
+    pub argo_executor_enabled: bool,
+    pub argo_executor_service_account: String,
+    pub argo_executor_namespace: String,
+    pub argo_executor_allowed_applications: Vec<String>,
+    pub argo_executor_poll_seconds: u64,
+    pub argo_executor_active_deadline_seconds: u64,
+    pub argo_executor_ttl_seconds_after_finished: u64,
+    /// A separately credentialed, opt-in GitHub branch/PR executor. The API
+    /// never receives this credential; it only references the Secret name in
+    /// a purpose-built Job manifest.
+    pub git_writer_enabled: bool,
+    pub git_writer_service_account: String,
+    pub git_writer_token_secret_name: Option<String>,
+    pub git_writer_allowed_repos: Vec<String>,
+    pub git_writer_github_api_url: String,
+    pub git_writer_author_name: String,
+    pub git_writer_author_email: String,
+    pub git_writer_active_deadline_seconds: u64,
+    pub git_writer_ttl_seconds_after_finished: u64,
+    /// A separately credentialed writer for GitOps manifests. It never shares
+    /// the source-code writer identity or repository allowlist.
+    pub gitops_writer_enabled: bool,
+    pub gitops_writer_service_account: String,
+    pub gitops_writer_token_secret_name: Option<String>,
+    pub gitops_writer_allowed_repos: Vec<String>,
+    pub gitops_writer_github_api_url: String,
+    pub gitops_writer_author_name: String,
+    pub gitops_writer_author_email: String,
+    pub gitops_writer_active_deadline_seconds: u64,
+    pub gitops_writer_ttl_seconds_after_finished: u64,
+    pub git_observer_enabled: bool,
+    pub git_observer_service_account: String,
+    pub git_observer_token_secret_name: Option<String>,
+    pub git_observer_allowed_repos: Vec<String>,
+    pub git_observer_github_api_url: String,
+    pub git_observer_active_deadline_seconds: u64,
+    pub git_observer_ttl_seconds_after_finished: u64,
     pub api_url: String,
     pub workspace_dir: String,
     /// Per-run source workspace quota, independent of the API's SQLite PVC.
@@ -185,6 +236,10 @@ impl ApiRuntimeConfig {
         reject_non_fireworks(&config.model.provider)?;
         reject_blank_policy_identity(&config.policy)?;
         reject_invalid_kubernetes_workspace(&config.worker.kubernetes)?;
+        reject_invalid_argo_executor(&config.worker.kubernetes)?;
+        reject_invalid_git_writer(&config.worker.kubernetes)?;
+        reject_invalid_gitops_writer(&config.worker.kubernetes)?;
+        reject_invalid_git_observer(&config.worker.kubernetes)?;
         config.resolve_api_key(env);
 
         Ok(config)
@@ -228,6 +283,43 @@ impl ApiRuntimeConfig {
                         .to_string(),
                     tekton_allowed_namespaces: Vec::new(),
                     tekton_executor_poll_seconds: DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS,
+                    argo_executor_enabled: false,
+                    argo_executor_service_account: DEFAULT_ARGO_EXECUTOR_SERVICE_ACCOUNT
+                        .to_string(),
+                    argo_executor_namespace: DEFAULT_ARGOCD_NAMESPACE.to_string(),
+                    argo_executor_allowed_applications: Vec::new(),
+                    argo_executor_poll_seconds: DEFAULT_ARGO_EXECUTOR_POLL_SECONDS,
+                    argo_executor_active_deadline_seconds:
+                        DEFAULT_ARGO_EXECUTOR_ACTIVE_DEADLINE_SECONDS,
+                    argo_executor_ttl_seconds_after_finished: DEFAULT_ARGO_EXECUTOR_TTL_SECONDS,
+                    git_writer_enabled: false,
+                    git_writer_service_account: DEFAULT_GIT_WRITER_SERVICE_ACCOUNT.to_string(),
+                    git_writer_token_secret_name: None,
+                    git_writer_allowed_repos: Vec::new(),
+                    git_writer_github_api_url: DEFAULT_GITHUB_API_URL.to_string(),
+                    git_writer_author_name: DEFAULT_GIT_WRITER_AUTHOR_NAME.to_string(),
+                    git_writer_author_email: DEFAULT_GIT_WRITER_AUTHOR_EMAIL.to_string(),
+                    git_writer_active_deadline_seconds: DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
+                    git_writer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
+                    gitops_writer_enabled: false,
+                    gitops_writer_service_account: DEFAULT_GITOPS_WRITER_SERVICE_ACCOUNT
+                        .to_string(),
+                    gitops_writer_token_secret_name: None,
+                    gitops_writer_allowed_repos: Vec::new(),
+                    gitops_writer_github_api_url: DEFAULT_GITHUB_API_URL.to_string(),
+                    gitops_writer_author_name: DEFAULT_GIT_WRITER_AUTHOR_NAME.to_string(),
+                    gitops_writer_author_email: DEFAULT_GIT_WRITER_AUTHOR_EMAIL.to_string(),
+                    gitops_writer_active_deadline_seconds:
+                        DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
+                    gitops_writer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
+                    git_observer_enabled: false,
+                    git_observer_service_account: DEFAULT_GIT_OBSERVER_SERVICE_ACCOUNT.to_string(),
+                    git_observer_token_secret_name: None,
+                    git_observer_allowed_repos: Vec::new(),
+                    git_observer_github_api_url: DEFAULT_GITHUB_API_URL.to_string(),
+                    git_observer_active_deadline_seconds:
+                        DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
+                    git_observer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
                     workspace_size_limit: DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT.to_string(),
@@ -334,6 +426,108 @@ impl ApiRuntimeConfig {
                 }
                 if let Some(value) = kubernetes.tekton_executor_poll_seconds {
                     self.worker.kubernetes.tekton_executor_poll_seconds = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_enabled {
+                    self.worker.kubernetes.argo_executor_enabled = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_service_account {
+                    self.worker.kubernetes.argo_executor_service_account = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_namespace {
+                    self.worker.kubernetes.argo_executor_namespace = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_allowed_applications {
+                    self.worker.kubernetes.argo_executor_allowed_applications = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_poll_seconds {
+                    self.worker.kubernetes.argo_executor_poll_seconds = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_active_deadline_seconds {
+                    self.worker.kubernetes.argo_executor_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.argo_executor_ttl_seconds_after_finished {
+                    self.worker
+                        .kubernetes
+                        .argo_executor_ttl_seconds_after_finished = value;
+                }
+                if let Some(value) = kubernetes.git_writer_enabled {
+                    self.worker.kubernetes.git_writer_enabled = value;
+                }
+                if let Some(value) = kubernetes.git_writer_service_account {
+                    self.worker.kubernetes.git_writer_service_account = value;
+                }
+                if let Some(value) = kubernetes.git_writer_token_secret_name {
+                    self.worker.kubernetes.git_writer_token_secret_name = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.git_writer_allowed_repos {
+                    self.worker.kubernetes.git_writer_allowed_repos = value;
+                }
+                if let Some(value) = kubernetes.git_writer_github_api_url {
+                    self.worker.kubernetes.git_writer_github_api_url = value;
+                }
+                if let Some(value) = kubernetes.git_writer_author_name {
+                    self.worker.kubernetes.git_writer_author_name = value;
+                }
+                if let Some(value) = kubernetes.git_writer_author_email {
+                    self.worker.kubernetes.git_writer_author_email = value;
+                }
+                if let Some(value) = kubernetes.git_writer_active_deadline_seconds {
+                    self.worker.kubernetes.git_writer_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.git_writer_ttl_seconds_after_finished {
+                    self.worker.kubernetes.git_writer_ttl_seconds_after_finished = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_enabled {
+                    self.worker.kubernetes.gitops_writer_enabled = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_service_account {
+                    self.worker.kubernetes.gitops_writer_service_account = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_token_secret_name {
+                    self.worker.kubernetes.gitops_writer_token_secret_name = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.gitops_writer_allowed_repos {
+                    self.worker.kubernetes.gitops_writer_allowed_repos = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_github_api_url {
+                    self.worker.kubernetes.gitops_writer_github_api_url = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_author_name {
+                    self.worker.kubernetes.gitops_writer_author_name = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_author_email {
+                    self.worker.kubernetes.gitops_writer_author_email = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_active_deadline_seconds {
+                    self.worker.kubernetes.gitops_writer_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.gitops_writer_ttl_seconds_after_finished {
+                    self.worker
+                        .kubernetes
+                        .gitops_writer_ttl_seconds_after_finished = value;
+                }
+                if let Some(value) = kubernetes.git_observer_enabled {
+                    self.worker.kubernetes.git_observer_enabled = value;
+                }
+                if let Some(value) = kubernetes.git_observer_service_account {
+                    self.worker.kubernetes.git_observer_service_account = value;
+                }
+                if let Some(value) = kubernetes.git_observer_token_secret_name {
+                    self.worker.kubernetes.git_observer_token_secret_name = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.git_observer_allowed_repos {
+                    self.worker.kubernetes.git_observer_allowed_repos = value;
+                }
+                if let Some(value) = kubernetes.git_observer_github_api_url {
+                    self.worker.kubernetes.git_observer_github_api_url = value;
+                }
+                if let Some(value) = kubernetes.git_observer_active_deadline_seconds {
+                    self.worker.kubernetes.git_observer_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.git_observer_ttl_seconds_after_finished {
+                    self.worker
+                        .kubernetes
+                        .git_observer_ttl_seconds_after_finished = value;
                 }
                 if let Some(value) = kubernetes.api_url {
                     self.worker.kubernetes.api_url = value;
@@ -490,6 +684,126 @@ impl ApiRuntimeConfig {
             self.worker.kubernetes.tekton_executor_poll_seconds =
                 parse_u64(value, "PHARNESS_TEKTON_EXECUTOR_POLL_SECONDS")?;
         }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_ENABLED") {
+            self.worker.kubernetes.argo_executor_enabled =
+                parse_bool(value, "PHARNESS_ARGO_EXECUTOR_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.argo_executor_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_NAMESPACE") {
+            self.worker.kubernetes.argo_executor_namespace = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_ALLOWED_APPLICATIONS") {
+            self.worker.kubernetes.argo_executor_allowed_applications = value
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+                .collect();
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_POLL_SECONDS") {
+            self.worker.kubernetes.argo_executor_poll_seconds =
+                parse_u64(value, "PHARNESS_ARGO_EXECUTOR_POLL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.argo_executor_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_ARGO_EXECUTOR_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_ARGO_EXECUTOR_TTL_SECONDS") {
+            self.worker
+                .kubernetes
+                .argo_executor_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_ARGO_EXECUTOR_TTL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_ENABLED") {
+            self.worker.kubernetes.git_writer_enabled =
+                parse_bool(value, "PHARNESS_GIT_WRITER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.git_writer_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_TOKEN_SECRET") {
+            self.worker.kubernetes.git_writer_token_secret_name = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_ALLOWED_REPOS") {
+            self.worker.kubernetes.git_writer_allowed_repos = split_registry_aliases(value);
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_GITHUB_API_URL") {
+            self.worker.kubernetes.git_writer_github_api_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_AUTHOR_NAME") {
+            self.worker.kubernetes.git_writer_author_name = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_AUTHOR_EMAIL") {
+            self.worker.kubernetes.git_writer_author_email = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.git_writer_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_GIT_WRITER_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_WRITER_TTL_SECONDS") {
+            self.worker.kubernetes.git_writer_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_GIT_WRITER_TTL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_ENABLED") {
+            self.worker.kubernetes.gitops_writer_enabled =
+                parse_bool(value, "PHARNESS_GITOPS_WRITER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.gitops_writer_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_TOKEN_SECRET") {
+            self.worker.kubernetes.gitops_writer_token_secret_name = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_ALLOWED_REPOS") {
+            self.worker.kubernetes.gitops_writer_allowed_repos = split_registry_aliases(value);
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_GITHUB_API_URL") {
+            self.worker.kubernetes.gitops_writer_github_api_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_AUTHOR_NAME") {
+            self.worker.kubernetes.gitops_writer_author_name = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_AUTHOR_EMAIL") {
+            self.worker.kubernetes.gitops_writer_author_email = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.gitops_writer_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_GITOPS_WRITER_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_WRITER_TTL_SECONDS") {
+            self.worker
+                .kubernetes
+                .gitops_writer_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_GITOPS_WRITER_TTL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_ENABLED") {
+            self.worker.kubernetes.git_observer_enabled =
+                parse_bool(value, "PHARNESS_GIT_OBSERVER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.git_observer_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_TOKEN_SECRET") {
+            self.worker.kubernetes.git_observer_token_secret_name = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_ALLOWED_REPOS") {
+            self.worker.kubernetes.git_observer_allowed_repos = split_registry_aliases(value);
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_GITHUB_API_URL") {
+            self.worker.kubernetes.git_observer_github_api_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.git_observer_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_GIT_OBSERVER_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GIT_OBSERVER_TTL_SECONDS") {
+            self.worker
+                .kubernetes
+                .git_observer_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_GIT_OBSERVER_TTL_SECONDS")?;
+        }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_API_URL") {
             self.worker.kubernetes.api_url = value.clone();
         }
@@ -601,6 +915,38 @@ struct FileWorkerKubernetesConfig {
     tekton_executor_service_account: Option<String>,
     tekton_allowed_namespaces: Option<Vec<String>>,
     tekton_executor_poll_seconds: Option<u64>,
+    argo_executor_enabled: Option<bool>,
+    argo_executor_service_account: Option<String>,
+    argo_executor_namespace: Option<String>,
+    argo_executor_allowed_applications: Option<Vec<String>>,
+    argo_executor_poll_seconds: Option<u64>,
+    argo_executor_active_deadline_seconds: Option<u64>,
+    argo_executor_ttl_seconds_after_finished: Option<u64>,
+    git_writer_enabled: Option<bool>,
+    git_writer_service_account: Option<String>,
+    git_writer_token_secret_name: Option<String>,
+    git_writer_allowed_repos: Option<Vec<String>>,
+    git_writer_github_api_url: Option<String>,
+    git_writer_author_name: Option<String>,
+    git_writer_author_email: Option<String>,
+    git_writer_active_deadline_seconds: Option<u64>,
+    git_writer_ttl_seconds_after_finished: Option<u64>,
+    gitops_writer_enabled: Option<bool>,
+    gitops_writer_service_account: Option<String>,
+    gitops_writer_token_secret_name: Option<String>,
+    gitops_writer_allowed_repos: Option<Vec<String>>,
+    gitops_writer_github_api_url: Option<String>,
+    gitops_writer_author_name: Option<String>,
+    gitops_writer_author_email: Option<String>,
+    gitops_writer_active_deadline_seconds: Option<u64>,
+    gitops_writer_ttl_seconds_after_finished: Option<u64>,
+    git_observer_enabled: Option<bool>,
+    git_observer_service_account: Option<String>,
+    git_observer_token_secret_name: Option<String>,
+    git_observer_allowed_repos: Option<Vec<String>>,
+    git_observer_github_api_url: Option<String>,
+    git_observer_active_deadline_seconds: Option<u64>,
+    git_observer_ttl_seconds_after_finished: Option<u64>,
     api_url: Option<String>,
     workspace_dir: Option<String>,
     workspace_size_limit: Option<String>,
@@ -784,6 +1130,165 @@ fn reject_invalid_kubernetes_workspace(config: &WorkerKubernetesConfig) -> anyho
     Ok(())
 }
 
+fn reject_invalid_argo_executor(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.argo_executor_enabled {
+        return Ok(());
+    }
+    if config.argo_executor_allowed_applications.is_empty() {
+        bail!("enabled Argo executor requires at least one allowed application");
+    }
+    if config.argo_executor_service_account.trim().is_empty()
+        || config.argo_executor_service_account.contains(['\n', '\r'])
+    {
+        bail!("worker.kubernetes.argo_executor_service_account must be non-blank and single-line");
+    }
+    if config.argo_executor_namespace.trim().is_empty()
+        || config.argo_executor_namespace.contains(['\n', '\r'])
+    {
+        bail!("worker.kubernetes.argo_executor_namespace must be non-blank and single-line");
+    }
+    if config.argo_executor_poll_seconds == 0 {
+        bail!("worker.kubernetes.argo_executor_poll_seconds must be at least one");
+    }
+    if config.argo_executor_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.argo_executor_active_deadline_seconds must be at least one");
+    }
+    if config.argo_executor_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.argo_executor_ttl_seconds_after_finished must be at least one");
+    }
+    for application in &config.argo_executor_allowed_applications {
+        if application.trim().is_empty() || application.contains(['\n', '\r']) {
+            bail!("worker.kubernetes.argo_executor_allowed_applications must be non-blank and single-line");
+        }
+    }
+    Ok(())
+}
+
+fn reject_invalid_git_writer(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.git_writer_enabled {
+        return Ok(());
+    }
+    if config.git_writer_token_secret_name.is_none() || config.git_writer_allowed_repos.is_empty() {
+        bail!(
+            "enabled Git writer requires a token Secret name and at least one allowed repository"
+        );
+    }
+    for (label, value) in [
+        (
+            "worker.kubernetes.git_writer_service_account",
+            &config.git_writer_service_account,
+        ),
+        (
+            "worker.kubernetes.git_writer_github_api_url",
+            &config.git_writer_github_api_url,
+        ),
+        (
+            "worker.kubernetes.git_writer_author_name",
+            &config.git_writer_author_name,
+        ),
+        (
+            "worker.kubernetes.git_writer_author_email",
+            &config.git_writer_author_email,
+        ),
+    ] {
+        if value.trim().is_empty() || value.contains(['\n', '\r']) {
+            bail!("{label} must be non-blank and single-line");
+        }
+    }
+    if !config.git_writer_github_api_url.starts_with("https://") {
+        bail!("worker.kubernetes.git_writer_github_api_url must use HTTPS");
+    }
+    if config.git_writer_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.git_writer_active_deadline_seconds must be at least one");
+    }
+    if config.git_writer_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.git_writer_ttl_seconds_after_finished must be at least one");
+    }
+    Ok(())
+}
+
+fn reject_invalid_gitops_writer(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.gitops_writer_enabled {
+        return Ok(());
+    }
+    if config.gitops_writer_token_secret_name.is_none()
+        || config.gitops_writer_allowed_repos.is_empty()
+    {
+        bail!(
+            "enabled GitOps writer requires a token Secret name and at least one allowed repository"
+        );
+    }
+    for (label, value) in [
+        (
+            "worker.kubernetes.gitops_writer_service_account",
+            &config.gitops_writer_service_account,
+        ),
+        (
+            "worker.kubernetes.gitops_writer_github_api_url",
+            &config.gitops_writer_github_api_url,
+        ),
+        (
+            "worker.kubernetes.gitops_writer_author_name",
+            &config.gitops_writer_author_name,
+        ),
+        (
+            "worker.kubernetes.gitops_writer_author_email",
+            &config.gitops_writer_author_email,
+        ),
+    ] {
+        if value.trim().is_empty() || value.contains(['\n', '\r']) {
+            bail!("{label} must be non-blank and single-line");
+        }
+    }
+    if !config.gitops_writer_github_api_url.starts_with("https://") {
+        bail!("worker.kubernetes.gitops_writer_github_api_url must use HTTPS");
+    }
+    if config.gitops_writer_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.gitops_writer_active_deadline_seconds must be at least one");
+    }
+    if config.gitops_writer_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.gitops_writer_ttl_seconds_after_finished must be at least one");
+    }
+    Ok(())
+}
+
+fn reject_invalid_git_observer(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.git_observer_enabled {
+        return Ok(());
+    }
+    if config.git_observer_token_secret_name.is_none()
+        || config.git_observer_allowed_repos.is_empty()
+    {
+        bail!(
+            "enabled Git observer requires a token Secret name and at least one allowed repository"
+        );
+    }
+    for (label, value) in [
+        (
+            "worker.kubernetes.git_observer_service_account",
+            &config.git_observer_service_account,
+        ),
+        (
+            "worker.kubernetes.git_observer_github_api_url",
+            &config.git_observer_github_api_url,
+        ),
+    ] {
+        if value.trim().is_empty() || value.contains(['\n', '\r']) {
+            bail!("{label} must be non-blank and single-line");
+        }
+    }
+    if !config.git_observer_github_api_url.starts_with("https://") {
+        bail!("worker.kubernetes.git_observer_github_api_url must use HTTPS");
+    }
+    if config.git_observer_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.git_observer_active_deadline_seconds must be at least one");
+    }
+    if config.git_observer_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.git_observer_ttl_seconds_after_finished must be at least one");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{split_registry_aliases, ApiRuntimeConfig};
@@ -828,6 +1333,12 @@ mod tests {
             "4Gi"
         );
         assert_eq!(config.worker.kubernetes.max_concurrent_run_jobs, 1);
+        assert!(!config.worker.kubernetes.argo_executor_enabled);
+        assert!(config
+            .worker
+            .kubernetes
+            .argo_executor_allowed_applications
+            .is_empty());
     }
 
     #[test]
@@ -1146,6 +1657,123 @@ max_concurrent_run_jobs = 0
         assert!(error.to_string().contains("max_concurrent_run_jobs"));
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn accepts_disabled_argo_executor_without_an_application_allowlist() {
+        let path = write_temp_config(
+            r#"
+[worker.kubernetes]
+argo_executor_enabled = false
+argo_executor_allowed_applications = []
+"#,
+        );
+
+        let config = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new()).unwrap();
+
+        assert!(!config.worker.kubernetes.argo_executor_enabled);
+        assert!(config
+            .worker
+            .kubernetes
+            .argo_executor_allowed_applications
+            .is_empty());
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_enabled_argo_executor_without_an_application_allowlist() {
+        let path = write_temp_config(
+            r#"
+[worker.kubernetes]
+argo_executor_enabled = true
+argo_executor_allowed_applications = []
+"#,
+        );
+
+        let error = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new())
+            .err()
+            .unwrap();
+
+        assert!(error
+            .to_string()
+            .contains("enabled Argo executor requires at least one allowed application"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_enabled_gitops_writer_without_a_scoped_credential() {
+        let path = write_temp_config(
+            r#"
+[worker.kubernetes]
+gitops_writer_enabled = true
+gitops_writer_allowed_repos = ["https://github.com/example/finance-gitops.git"]
+"#,
+        );
+
+        let error = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new())
+            .err()
+            .unwrap();
+
+        assert!(error
+            .to_string()
+            .contains("enabled GitOps writer requires a token Secret name"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn accepts_a_scoped_enabled_gitops_writer_from_environment() {
+        let mut env = BTreeMap::new();
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_ENABLED".to_string(),
+            "true".to_string(),
+        );
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_TOKEN_SECRET".to_string(),
+            "finance-gitops-writer-token".to_string(),
+        );
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_ALLOWED_REPOS".to_string(),
+            "https://github.com/example/finance-gitops.git".to_string(),
+        );
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_SERVICE_ACCOUNT".to_string(),
+            "finance-gitops-writer".to_string(),
+        );
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_AUTHOR_NAME".to_string(),
+            "Pharness GitOps".to_string(),
+        );
+        env.insert(
+            "PHARNESS_GITOPS_WRITER_AUTHOR_EMAIL".to_string(),
+            "pharness-gitops@example.test".to_string(),
+        );
+
+        let config = ApiRuntimeConfig::from_sources(None, &env).unwrap();
+
+        assert!(config.worker.kubernetes.gitops_writer_enabled);
+        assert_eq!(
+            config
+                .worker
+                .kubernetes
+                .gitops_writer_token_secret_name
+                .as_deref(),
+            Some("finance-gitops-writer-token")
+        );
+        assert_eq!(
+            config.worker.kubernetes.gitops_writer_allowed_repos,
+            vec!["https://github.com/example/finance-gitops.git"]
+        );
+        assert_eq!(
+            config.worker.kubernetes.gitops_writer_service_account,
+            "finance-gitops-writer"
+        );
+        assert_eq!(
+            config.worker.kubernetes.gitops_writer_author_name,
+            "Pharness GitOps"
+        );
     }
 
     #[test]

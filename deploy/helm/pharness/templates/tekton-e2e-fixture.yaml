@@ -23,3 +23,39 @@ spec:
               set -eu
               printf '%s\n' 'pharness tekton e2e fixture completed; application resources were not changed'
 {{- end }}
+
+{{- if .Values.tektonE2eBuildOutputSmoke.enabled }}
+---
+# This fixture proves result capture only. The OCI-looking values below are
+# static markers: no image is built, pushed, pulled, inspected, or verified.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: {{ .Values.tektonE2eBuildOutputSmoke.pipelineName }}
+  namespace: {{ .Values.tektonE2eBuildOutputSmoke.namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    pharness.lucas.engineering/fixture: tekton-e2e-build-output
+spec:
+  description: Bounded Pharness build-output fixture. It emits fixed synthetic image provenance and does not touch application resources.
+  results:
+    - name: IMAGE_URL
+      value: $(tasks.report.results.IMAGE_URL)
+    - name: IMAGE_DIGEST
+      value: $(tasks.report.results.IMAGE_DIGEST)
+  tasks:
+    - name: report
+      taskSpec:
+        results:
+          - name: IMAGE_URL
+          - name: IMAGE_DIGEST
+        steps:
+          - name: marker
+            image: {{ .Values.tektonE2eBuildOutputSmoke.image | quote }}
+            script: |
+              #!/bin/sh
+              set -eu
+              printf '%s' {{ .Values.tektonE2eBuildOutputSmoke.imageUrl | quote }} > "$(results.IMAGE_URL.path)"
+              printf '%s' {{ .Values.tektonE2eBuildOutputSmoke.imageDigest | quote }} > "$(results.IMAGE_DIGEST.path)"
+              printf '%s\n' 'pharness build-output fixture completed; provenance values are synthetic and application resources were not changed'
+{{- end }}

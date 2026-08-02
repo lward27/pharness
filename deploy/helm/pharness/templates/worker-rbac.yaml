@@ -7,6 +7,40 @@ metadata:
     app.kubernetes.io/part-of: pharness
     agentic.lucas.engineering/role: readonly-observer
 ---
+# This identity intentionally has no Kubernetes RoleBinding. Its only scoped
+# authority is the GitHub token mounted into a short-lived writer Job.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.gitWriter.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: git-writer
+---
+# This identity deliberately has no Kubernetes RoleBinding. It may receive a
+# GitHub token only in a short-lived GitOps writer Job, never in the API or a
+# model worker.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.gitOpsWriter.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: gitops-writer
+---
+# This identity deliberately has no Kubernetes RoleBinding. Its separately
+# scoped GitHub token can only read PR metadata for exact allowed repos.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.gitObserver.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: git-observer
+---
 # Read-only observation permissions for worker attempts, mirroring the
 # hermes-readonly-observer posture: no Secret access anywhere.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -116,4 +150,52 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: pharness-tekton-runner
+{{- end }}
+{{- if and .Values.worker.argoExecutor.enabled (eq (len .Values.worker.argoExecutor.allowedApplications) 0) }}
+{{- fail "worker.argoExecutor.enabled requires at least one exact allowedApplications entry" }}
+{{- end }}
+{{- if .Values.worker.argoExecutor.enabled }}
+---
+# This identity can patch only the explicitly named Argo Applications below.
+# It has no Secret, Deployment, or generic Kubernetes mutation authority.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.argoExecutor.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: argo-executor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-argo-runner
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    resourceNames:
+{{- range .Values.worker.argoExecutor.allowedApplications }}
+      - {{ . | quote }}
+{{- end }}
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-argo-runner
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.worker.argoExecutor.serviceAccount }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-argo-runner
 {{- end }}

@@ -424,11 +424,14 @@ async fn sync_work_item_attempt(
         "approval_required" => return Ok(()),
         _ => return Ok(()),
     };
+    let events = store.list_events(&run.id).await?;
+    let classification = classify_work_item_attempt(outcome, &events);
     let reason = outcome
         .summary
         .clone()
         .or_else(|| outcome.error.clone())
         .unwrap_or_else(|| "coding attempt reached a terminal state".to_string());
+    let actor = attempt_actor(run);
     let workspace = store.get_workspace(&workspace_id).await?.ok_or_else(|| {
         anyhow::anyhow!("workspace {workspace_id} disappeared during run finalization")
     })?;
@@ -440,20 +443,156 @@ async fn sync_work_item_attempt(
                 status: workspace_status.to_string(),
                 resolved_commit: workspace.resolved_commit.clone(),
                 branch: workspace.branch.clone(),
-                actor: Some("agent:local-worker".to_string()),
+                actor: Some(actor.to_string()),
                 reason: Some(reason.clone()),
             },
         )
         .await?;
-    store
+    let work_item = store
         .finish_work_item_attempt(
             &work_item_id,
             work_item_status,
-            Some("agent:local-worker".to_string()),
+            Some(actor.to_string()),
             Some(reason),
         )
         .await?;
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", work_item.id, unique_suffix()),
+            kind: "work_item.attempt_finished".to_string(),
+            actor: Some(actor.to_string()),
+            resource_kind: "work_item".to_string(),
+            resource_id: work_item.id.clone(),
+            run_id: Some(run.id.clone()),
+            payload_json: serde_json::json!({
+                "work_item_id": work_item.id,
+                "workspace_id": workspace_id,
+                "run_id": run.id,
+                "outcome": {
+                    "status": outcome.status,
+                    "turns": outcome.turns,
+                },
+                "work_item_status": work_item.status,
+                "classification": classification.as_json(),
+            }),
+        })
+        .await?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WorkItemAttemptClassification {
+    code: &'static str,
+    recommended_action: &'static str,
+    evidence_kind: &'static str,
+}
+
+impl WorkItemAttemptClassification {
+    fn as_json(self) -> serde_json::Value {
+        serde_json::json!({
+            "code": self.code,
+            "recommended_action": self.recommended_action,
+            "evidence_kind": self.evidence_kind,
+        })
+    }
+}
+
+fn classify_work_item_attempt(
+    outcome: &AttemptOutcome,
+    events: &[AgentEvent],
+) -> WorkItemAttemptClassification {
+    match outcome.status.as_str() {
+        "completed" => WorkItemAttemptClassification {
+            code: "completed",
+            recommended_action: "capture_change_set",
+            evidence_kind: "terminal_outcome",
+        },
+        "cancelled" => WorkItemAttemptClassification {
+            code: "cancelled",
+            recommended_action: "terminal",
+            evidence_kind: "terminal_outcome",
+        },
+        "failed" => classify_failed_work_item_attempt(outcome, events),
+        _ => WorkItemAttemptClassification {
+            code: "unknown",
+            recommended_action: "inspect_and_block",
+            evidence_kind: "terminal_outcome",
+        },
+    }
+}
+
+fn classify_failed_work_item_attempt(
+    outcome: &AttemptOutcome,
+    events: &[AgentEvent],
+) -> WorkItemAttemptClassification {
+    if events.iter().any(|event| {
+        event.kind == EventKind::PolicyEvaluated
+            && event
+                .payload
+                .pointer("/decision/decision")
+                .and_then(|value| value.as_str())
+                == Some("deny")
+    }) {
+        return WorkItemAttemptClassification {
+            code: "policy_denied",
+            recommended_action: "revise_plan_or_authorization",
+            evidence_kind: "policy_evaluated",
+        };
+    }
+    if outcome
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("run exceeded max_turns="))
+    {
+        return WorkItemAttemptClassification {
+            code: "model_turn_budget_exhausted",
+            recommended_action: "revise_work_plan",
+            evidence_kind: "run_failed",
+        };
+    }
+    if events.iter().any(|event| {
+        event.kind == EventKind::RunFailed
+            && event
+                .payload
+                .get("action")
+                .and_then(|value| value.as_str())
+                .is_some()
+    }) {
+        return WorkItemAttemptClassification {
+            code: "tool_execution_failed",
+            recommended_action: "inspect_and_replan",
+            evidence_kind: "run_failed",
+        };
+    }
+    let requested_model = events
+        .iter()
+        .any(|event| event.kind == EventKind::ModelRequestStarted);
+    let received_model_response = events
+        .iter()
+        .any(|event| event.kind == EventKind::ModelResponseFinished);
+    if requested_model && !received_model_response {
+        return WorkItemAttemptClassification {
+            code: "model_provider_failed",
+            recommended_action: "inspect_and_replan",
+            evidence_kind: "model_request_without_response",
+        };
+    }
+    WorkItemAttemptClassification {
+        code: "unknown_execution_failure",
+        recommended_action: "inspect_and_replan",
+        evidence_kind: "terminal_outcome",
+    }
+}
+
+fn attempt_actor(run: &StoredRun) -> &'static str {
+    match run
+        .execution_target_json
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some("kubernetes_workspace") | Some("kubernetes_job") => "agent:cluster-worker",
+        _ => "agent:local-worker",
+    }
 }
 
 fn run_scope_for_run(run: &StoredRun) -> RunScope {
@@ -980,8 +1119,9 @@ fn approval_gates_from_remediation_plan(plan: &StoredRemediationPlan) -> Vec<Cre
                     gate_order,
                     safe_id_fragment(&gate_kind)
                 ),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: plan.incident_id.clone(),
+                work_item_id: None,
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(plan.incident_id.clone()),
                 session_id: plan.session_id.clone(),
                 run_id: plan.run_id.clone(),
                 status: "pending".to_string(),
@@ -1152,10 +1292,11 @@ pub(crate) async fn fail_run_from_dispatch(
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_gates_from_remediation_plan, artifact_from_event, file_change_from_event,
-        finish_run_from_attempt, grant_used_audit_event_from_event, incident_from_observation,
-        observation_from_event, remediation_plan_from_incident, result_json_for_attempt,
-        validate_workspace_evidence, workspace_source_for_run,
+        approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
+        classify_work_item_attempt, file_change_from_event, finish_run_from_attempt,
+        grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
+        remediation_plan_from_incident, result_json_for_attempt, validate_workspace_evidence,
+        workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
@@ -1183,6 +1324,46 @@ mod tests {
 
         assert!(result["run_scope"].is_null());
         assert_eq!(result["status"], "completed");
+    }
+
+    #[test]
+    fn classifies_terminal_attempts_from_structured_evidence() {
+        let turn_budget = AttemptOutcome::failed("run exceeded max_turns=12");
+        let classification = classify_work_item_attempt(&turn_budget, &[]);
+        assert_eq!(classification.code, "model_turn_budget_exhausted");
+        assert_eq!(classification.recommended_action, "revise_work_plan");
+
+        let policy_event = AgentEvent {
+            event_id: EventId::new("evt_policy_denied"),
+            session_id: SessionId::new("ses_policy_denied"),
+            run_id: RunId::new("run_policy_denied"),
+            seq: 1,
+            kind: EventKind::PolicyEvaluated,
+            payload: serde_json::json!({ "decision": { "decision": "deny" } }),
+        };
+        let policy = AttemptOutcome::failed("policy denied");
+        let classification = classify_work_item_attempt(&policy, &[policy_event]);
+        assert_eq!(classification.code, "policy_denied");
+        assert_eq!(
+            classification.recommended_action,
+            "revise_plan_or_authorization"
+        );
+
+        let model_request = AgentEvent {
+            event_id: EventId::new("evt_model_request"),
+            session_id: SessionId::new("ses_model_request"),
+            run_id: RunId::new("run_model_request"),
+            seq: 1,
+            kind: EventKind::ModelRequestStarted,
+            payload: serde_json::json!({ "turn": 0 }),
+        };
+        let provider = AttemptOutcome::failed("provider unavailable");
+        let classification = classify_work_item_attempt(&provider, &[model_request]);
+        assert_eq!(classification.code, "model_provider_failed");
+        assert_eq!(classification.recommended_action, "inspect_and_replan");
+
+        let cluster_run = stored_run(serde_json::json!({ "kind": "kubernetes_workspace" }));
+        assert_eq!(attempt_actor(&cluster_run), "agent:cluster-worker");
     }
 
     #[test]
@@ -1350,6 +1531,20 @@ mod tests {
         assert_eq!(workspace.status, "verifying");
         let work_item = store.get_work_item(work_item_id).await.unwrap().unwrap();
         assert_eq!(work_item.status, "verifying");
+        let audit = store
+            .list_audit_events(Some("work_item"), Some(work_item_id), None, 10)
+            .await
+            .unwrap();
+        let attempt = audit
+            .iter()
+            .find(|event| event.kind == "work_item.attempt_finished")
+            .expect("terminal coding attempt is auditable");
+        assert_eq!(attempt.actor.as_deref(), Some("agent:cluster-worker"));
+        assert_eq!(attempt.payload_json["classification"]["code"], "completed");
+        assert_eq!(
+            attempt.payload_json["classification"]["recommended_action"],
+            "capture_change_set"
+        );
     }
 
     #[test]

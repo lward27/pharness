@@ -20,7 +20,15 @@ pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
 const JOB_NAME_VALUE: &str = "pharness-run";
 const TEKTON_EXECUTOR_JOB_NAME_VALUE: &str = "pharness-tekton-executor";
+const ARGO_EXECUTOR_JOB_NAME_VALUE: &str = "pharness-argo-executor";
+const GIT_WRITER_JOB_NAME_VALUE: &str = "pharness-git-writer";
+const GITOPS_WRITER_JOB_NAME_VALUE: &str = "pharness-gitops-writer";
+const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
+const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
+const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
+const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
+const GITOPS_CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/gitops-change-set";
 const PIPELINE_INTENT_ID_ANNOTATION: &str = "pharness.lucas.engineering/pipeline-intent-id";
 const EXECUTION_ID_ANNOTATION: &str = "pharness.lucas.engineering/execution-id";
 
@@ -35,6 +43,86 @@ pub struct TektonExecutionRequest {
 #[derive(Debug, Clone)]
 pub struct TektonExecutionReceipt {
     pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArgoSyncExecutionRequest {
+    pub deployment_intent_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArgoSyncExecutionReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitDeliveryExecutionRequest {
+    pub change_set_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitDeliveryExecutionReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitDeliveryObservationRequest {
+    pub change_set_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitDeliveryObservationReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsRevisionResolutionRequest {
+    pub gitops_change_set_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsRevisionResolutionReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsDeliveryExecutionRequest {
+    pub gitops_change_set_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsDeliveryExecutionReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsDeliveryObservationRequest {
+    pub gitops_change_set_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitOpsDeliveryObservationReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitWriterSettings {
+    pub allowed_repos: Vec<String>,
+    pub github_api_url: String,
+    pub author_name: String,
+    pub author_email: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitObserverSettings {
+    pub allowed_repos: Vec<String>,
+    pub github_api_url: String,
 }
 
 #[derive(Clone)]
@@ -108,6 +196,35 @@ impl RunDispatcher {
                 "base_url": dispatcher.base_url,
                 "namespace": dispatcher.config.namespace,
                 "image": dispatcher.config.image,
+                "git_writer": {
+                    "enabled": dispatcher.config.git_writer_enabled,
+                    "available": dispatcher.git_writer_available(),
+                    "service_account": dispatcher.config.git_writer_service_account,
+                    "allowed_repos": dispatcher.config.git_writer_allowed_repos,
+                    "github_api_url": dispatcher.config.git_writer_github_api_url,
+                },
+                "gitops_writer": {
+                    "enabled": dispatcher.config.gitops_writer_enabled,
+                    "available": dispatcher.gitops_writer_available(),
+                    "service_account": dispatcher.config.gitops_writer_service_account,
+                    "allowed_repos": dispatcher.config.gitops_writer_allowed_repos,
+                    "github_api_url": dispatcher.config.gitops_writer_github_api_url,
+                },
+                "git_observer": {
+                    "enabled": dispatcher.config.git_observer_enabled,
+                    "available": dispatcher.git_observer_available(),
+                    "service_account": dispatcher.config.git_observer_service_account,
+                    "allowed_repos": dispatcher.config.git_observer_allowed_repos,
+                    "github_api_url": dispatcher.config.git_observer_github_api_url,
+                },
+                "argo_executor": {
+                    "enabled": dispatcher.config.argo_executor_enabled,
+                    "available": dispatcher.argo_executor_available(),
+                    "service_account": dispatcher.config.argo_executor_service_account,
+                    "namespace": dispatcher.config.argo_executor_namespace,
+                    "allowed_applications": dispatcher.config.argo_executor_allowed_applications,
+                    "poll_seconds": dispatcher.config.argo_executor_poll_seconds,
+                },
             }),
         }
     }
@@ -149,6 +266,146 @@ impl RunDispatcher {
             Self::Kubernetes(dispatcher) => dispatcher.create_tekton_executor_job(&request).await,
             Self::Disabled => anyhow::bail!("Tekton execution requires kubernetes_job worker mode"),
             Self::Local(_) => anyhow::bail!("Tekton execution is unavailable in local worker mode"),
+        }
+    }
+
+    pub fn argo_executor_available(&self) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher) if dispatcher.argo_executor_available())
+    }
+
+    pub fn argo_executor_allows_application(&self, application: &str) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher)
+            if dispatcher.argo_executor_available()
+                && dispatcher.config.argo_executor_allowed_applications.iter()
+                    .any(|allowed| allowed == application))
+    }
+
+    /// Create an isolated Argo worker Job. The worker obtains its exact target
+    /// only through the internal context route after the API has revalidated
+    /// the DeploymentIntent's contract and supervised-autonomy envelope.
+    pub async fn dispatch_argo_sync_execution(
+        &self,
+        request: ArgoSyncExecutionRequest,
+    ) -> anyhow::Result<ArgoSyncExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_argo_executor_job(&request).await,
+            Self::Disabled => anyhow::bail!("Argo execution requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("Argo execution is unavailable in local worker mode"),
+        }
+    }
+
+    pub fn git_writer_available(&self) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher) if dispatcher.git_writer_available())
+    }
+
+    pub fn git_writer_settings(&self) -> Option<GitWriterSettings> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.git_writer_available() => {
+                Some(GitWriterSettings {
+                    allowed_repos: dispatcher.config.git_writer_allowed_repos.clone(),
+                    github_api_url: dispatcher.config.git_writer_github_api_url.clone(),
+                    author_name: dispatcher.config.git_writer_author_name.clone(),
+                    author_email: dispatcher.config.git_writer_author_email.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn gitops_writer_settings(&self) -> Option<GitWriterSettings> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.gitops_writer_available() => {
+                Some(GitWriterSettings {
+                    allowed_repos: dispatcher.config.gitops_writer_allowed_repos.clone(),
+                    github_api_url: dispatcher.config.gitops_writer_github_api_url.clone(),
+                    author_name: dispatcher.config.gitops_writer_author_name.clone(),
+                    author_email: dispatcher.config.gitops_writer_author_email.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub async fn dispatch_git_delivery(
+        &self,
+        request: GitDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_git_writer_job(&request).await,
+            Self::Disabled => anyhow::bail!("Git delivery requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("Git delivery is unavailable in local worker mode"),
+        }
+    }
+
+    /// Dispatch a separate GitOps writer Job. It is intentionally distinct
+    /// from the application source writer and can only receive its own token.
+    pub async fn dispatch_gitops_delivery(
+        &self,
+        request: GitOpsDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitOpsDeliveryExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_gitops_writer_job(&request).await,
+            Self::Disabled => anyhow::bail!("GitOps delivery requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("GitOps delivery is unavailable in local worker mode"),
+        }
+    }
+
+    pub async fn dispatch_gitops_delivery_observation(
+        &self,
+        request: GitOpsDeliveryObservationRequest,
+    ) -> anyhow::Result<GitOpsDeliveryObservationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_gitops_observer_job(&request).await,
+            Self::Disabled => {
+                anyhow::bail!("GitOps observation requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("GitOps observation is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub fn git_observer_settings(&self) -> Option<GitObserverSettings> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.git_observer_available() => {
+                Some(GitObserverSettings {
+                    allowed_repos: dispatcher.config.git_observer_allowed_repos.clone(),
+                    github_api_url: dispatcher.config.git_observer_github_api_url.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub async fn dispatch_git_delivery_observation(
+        &self,
+        request: GitDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_git_observer_job(&request).await,
+            Self::Disabled => anyhow::bail!("Git observation requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("Git observation is unavailable in local worker mode"),
+        }
+    }
+
+    /// Dispatch a read-only GitHub ref resolver through the observer identity.
+    /// This identity has no model or Git write credentials.
+    pub async fn dispatch_gitops_revision_resolution(
+        &self,
+        request: GitOpsRevisionResolutionRequest,
+    ) -> anyhow::Result<GitOpsRevisionResolutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .create_gitops_revision_resolver_job(&request)
+                    .await
+            }
+            Self::Disabled => {
+                anyhow::bail!("GitOps revision resolution requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("GitOps revision resolution is unavailable in local worker mode")
+            }
         }
     }
 }
@@ -196,6 +453,29 @@ impl KubernetesJobDispatcher {
                 .await;
             }
         });
+    }
+
+    fn git_writer_available(&self) -> bool {
+        self.config.git_writer_enabled
+            && self.config.git_writer_token_secret_name.is_some()
+            && !self.config.git_writer_allowed_repos.is_empty()
+    }
+
+    fn gitops_writer_available(&self) -> bool {
+        self.config.gitops_writer_enabled
+            && self.config.gitops_writer_token_secret_name.is_some()
+            && !self.config.gitops_writer_allowed_repos.is_empty()
+    }
+
+    fn argo_executor_available(&self) -> bool {
+        self.config.argo_executor_enabled
+            && !self.config.argo_executor_allowed_applications.is_empty()
+    }
+
+    fn git_observer_available(&self) -> bool {
+        self.config.git_observer_enabled
+            && self.config.git_observer_token_secret_name.is_some()
+            && !self.config.git_observer_allowed_repos.is_empty()
     }
 
     fn delete_jobs_for_run(self: Arc<Self>, run_id: &str) {
@@ -343,6 +623,525 @@ impl KubernetesJobDispatcher {
             "created Tekton executor job"
         );
         Ok(TektonExecutionReceipt { job_name })
+    }
+
+    async fn create_git_writer_job(
+        &self,
+        request: &GitDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        if !self.git_writer_available() {
+            anyhow::bail!("Git writer executor is not configured");
+        }
+        let job_name = git_writer_job_name(&request.execution_id);
+        let manifest = self.git_writer_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            change_set_id = %request.change_set_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created Git writer job"
+        );
+        Ok(GitDeliveryExecutionReceipt { job_name })
+    }
+
+    async fn create_argo_executor_job(
+        &self,
+        request: &ArgoSyncExecutionRequest,
+    ) -> anyhow::Result<ArgoSyncExecutionReceipt> {
+        if !self.argo_executor_available() {
+            anyhow::bail!("Argo executor is not configured");
+        }
+        let job_name = argo_executor_job_name(&request.execution_id);
+        let manifest = self.argo_executor_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            deployment_intent_id = %request.deployment_intent_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created Argo sync executor job"
+        );
+        Ok(ArgoSyncExecutionReceipt { job_name })
+    }
+
+    async fn create_git_observer_job(
+        &self,
+        request: &GitDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        if !self.git_observer_available() {
+            anyhow::bail!("Git observer executor is not configured");
+        }
+        let job_name = git_observer_job_name(&request.execution_id);
+        let manifest = self.git_observer_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            change_set_id = %request.change_set_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created Git observer job"
+        );
+        Ok(GitDeliveryObservationReceipt { job_name })
+    }
+
+    async fn create_gitops_revision_resolver_job(
+        &self,
+        request: &GitOpsRevisionResolutionRequest,
+    ) -> anyhow::Result<GitOpsRevisionResolutionReceipt> {
+        if !self.git_observer_available() {
+            anyhow::bail!(
+                "Git observer identity is not configured for read-only GitOps resolution"
+            );
+        }
+        let job_name = gitops_revision_resolver_job_name(&request.execution_id);
+        let manifest = self.gitops_revision_resolver_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            gitops_change_set_id = %request.gitops_change_set_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created read-only GitOps revision resolver job"
+        );
+        Ok(GitOpsRevisionResolutionReceipt { job_name })
+    }
+
+    async fn create_gitops_writer_job(
+        &self,
+        request: &GitOpsDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitOpsDeliveryExecutionReceipt> {
+        if !self.gitops_writer_available() {
+            anyhow::bail!("GitOps writer executor is not configured");
+        }
+        let job_name = gitops_writer_job_name(&request.execution_id);
+        let manifest = self.gitops_writer_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            gitops_change_set_id = %request.gitops_change_set_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created GitOps writer job"
+        );
+        Ok(GitOpsDeliveryExecutionReceipt { job_name })
+    }
+
+    async fn create_gitops_observer_job(
+        &self,
+        request: &GitOpsDeliveryObservationRequest,
+    ) -> anyhow::Result<GitOpsDeliveryObservationReceipt> {
+        if !self.git_observer_available() {
+            anyhow::bail!("Git observer executor is not configured");
+        }
+        let job_name = gitops_observer_job_name(&request.execution_id);
+        let manifest = self.gitops_observer_job_manifest(request, &job_name);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        Ok(GitOpsDeliveryObservationReceipt { job_name })
+    }
+
+    fn gitops_observer_job_manifest(
+        &self,
+        request: &GitOpsDeliveryObservationRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        let token_secret = self
+            .config
+            .git_observer_token_secret_name
+            .as_deref()
+            .expect("Git observer availability validates token Secret");
+        serde_json::json!({
+            "apiVersion":"batch/v1", "kind":"Job",
+            "metadata":{"name":job_name,"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)},
+                "annotations":{EXECUTION_ID_ANNOTATION:request.execution_id}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.git_observer_active_deadline_seconds,"ttlSecondsAfterFinished":self.config.git_observer_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)}},
+                    "spec":{"serviceAccountName":self.config.git_observer_service_account,"restartPolicy":"Never",
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "containers":[{"name":"gitops-observer","image":self.config.image,"imagePullPolicy":"Always","command":["pharness-worker"],
+                            "env":[
+                                {"name":"PHARNESS_EXECUTION_KIND","value":"gitops_delivery_observe"},
+                                {"name":"PHARNESS_API_URL","value":self.config.api_url},
+                                {"name":"PHARNESS_GITOPS_CHANGE_SET_ID","value":request.gitops_change_set_id},
+                                {"name":"PHARNESS_GITOPS_DELIVERY_OBSERVATION_EXECUTION_ID","value":request.execution_id},
+                                {"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}},
+                                {"name":"PHARNESS_GIT_OBSERVER_TOKEN","valueFrom":{"secretKeyRef":{"name":token_secret,"key":"token"}}}
+                            ],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"128Mi"},"limits":{"cpu":"250m","memory":"256Mi","ephemeral-storage":"256Mi"}}
+                        }]}}}
+        })
+    }
+
+    fn gitops_writer_job_manifest(
+        &self,
+        request: &GitOpsDeliveryExecutionRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        let token_secret = self
+            .config
+            .gitops_writer_token_secret_name
+            .as_deref()
+            .expect("GitOps writer availability validates token Secret");
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: GITOPS_WRITER_JOB_NAME_VALUE,
+                    GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                },
+                "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.gitops_writer_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.gitops_writer_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: GITOPS_WRITER_JOB_NAME_VALUE,
+                        GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.gitops_writer_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "fsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "gitops-writer",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "gitops_delivery" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_GITOPS_CHANGE_SET_ID", "value": request.gitops_change_set_id },
+                                { "name": "PHARNESS_GITOPS_DELIVERY_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "HOME", "value": "/work" },
+                                { "name": "TMPDIR", "value": "/work/tmp" },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+                                }},
+                                { "name": "PHARNESS_GIT_WRITER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": token_secret, "key": "token" }
+                                }},
+                            ],
+                            "volumeMounts": [{ "name": "work", "mountPath": "/work" }],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "100m", "memory": "256Mi", "ephemeral-storage": "1Gi" },
+                                "limits": { "cpu": "1", "memory": "1Gi", "ephemeral-storage": "2Gi" },
+                            },
+                        }],
+                        "volumes": [{ "name": "work", "emptyDir": { "sizeLimit": "2Gi" } }],
+                    },
+                },
+            },
+        })
+    }
+
+    fn git_writer_job_manifest(
+        &self,
+        request: &GitDeliveryExecutionRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        let token_secret = self
+            .config
+            .git_writer_token_secret_name
+            .as_deref()
+            .expect("Git writer availability validates token Secret");
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: GIT_WRITER_JOB_NAME_VALUE,
+                    CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                },
+                "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.git_writer_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.git_writer_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: GIT_WRITER_JOB_NAME_VALUE,
+                        CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.git_writer_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "fsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "git-writer",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "git_delivery" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_CHANGE_SET_ID", "value": request.change_set_id },
+                                { "name": "PHARNESS_GIT_DELIVERY_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "HOME", "value": "/work" },
+                                { "name": "TMPDIR", "value": "/work/tmp" },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+                                }},
+                                { "name": "PHARNESS_GIT_WRITER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": token_secret, "key": "token" }
+                                }},
+                            ],
+                            "volumeMounts": [{ "name": "work", "mountPath": "/work" }],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "100m", "memory": "256Mi", "ephemeral-storage": "1Gi" },
+                                "limits": { "cpu": "1", "memory": "1Gi", "ephemeral-storage": "2Gi" },
+                            },
+                        }],
+                        "volumes": [{ "name": "work", "emptyDir": { "sizeLimit": "2Gi" } }],
+                    },
+                },
+            },
+        })
+    }
+
+    fn argo_executor_job_manifest(
+        &self,
+        request: &ArgoSyncExecutionRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: ARGO_EXECUTOR_JOB_NAME_VALUE,
+                    DEPLOYMENT_INTENT_LABEL: job_label_value(&request.deployment_intent_id),
+                },
+                "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.argo_executor_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.argo_executor_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: ARGO_EXECUTOR_JOB_NAME_VALUE,
+                        DEPLOYMENT_INTENT_LABEL: job_label_value(&request.deployment_intent_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.argo_executor_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "argo-executor",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "argo_sync" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_DEPLOYMENT_INTENT_ID", "value": request.deployment_intent_id },
+                                { "name": "PHARNESS_ARGO_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "PHARNESS_ARGOCD_NAMESPACE", "value": self.config.argo_executor_namespace },
+                                { "name": "PHARNESS_ARGO_EXECUTOR_POLL_SECONDS", "value": self.config.argo_executor_poll_seconds.to_string() },
+                                { "name": "HOME", "value": "/tmp" },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": {
+                                        "name": self.config.worker_token_secret_name,
+                                        "key": "token",
+                                    }
+                                }},
+                            ],
+                            "volumeMounts": [{ "name": "tmp", "mountPath": "/tmp" }],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "50m", "memory": "64Mi" },
+                                "limits": { "cpu": "250m", "memory": "256Mi" },
+                            },
+                        }],
+                        "volumes": [{ "name": "tmp", "emptyDir": {} }],
+                    },
+                },
+            },
+        })
+    }
+
+    fn git_observer_job_manifest(
+        &self,
+        request: &GitDeliveryObservationRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        let token_secret = self
+            .config
+            .git_observer_token_secret_name
+            .as_deref()
+            .expect("Git observer availability validates token Secret");
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: GIT_OBSERVER_JOB_NAME_VALUE,
+                    CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                },
+                "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.git_observer_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.git_observer_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: GIT_OBSERVER_JOB_NAME_VALUE,
+                        CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.git_observer_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "git-observer",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "git_delivery_observe" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_CHANGE_SET_ID", "value": request.change_set_id },
+                                { "name": "PHARNESS_GIT_DELIVERY_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+                                }},
+                                { "name": "PHARNESS_GIT_OBSERVER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": token_secret, "key": "token" }
+                                }},
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "50m", "memory": "128Mi", "ephemeral-storage": "128Mi" },
+                                "limits": { "cpu": "250m", "memory": "256Mi", "ephemeral-storage": "256Mi" },
+                            },
+                        }],
+                    },
+                },
+            },
+        })
+    }
+
+    fn gitops_revision_resolver_job_manifest(
+        &self,
+        request: &GitOpsRevisionResolutionRequest,
+        job_name: &str,
+    ) -> serde_json::Value {
+        let token_secret = self
+            .config
+            .git_observer_token_secret_name
+            .as_deref()
+            .expect("Git observer availability validates token Secret");
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE,
+                    GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                },
+                "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.git_observer_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.git_observer_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        JOB_NAME_LABEL: GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE,
+                        GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.git_observer_service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "gitops-revision-resolver",
+                            "image": self.config.image,
+                            "imagePullPolicy": "Always",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "gitops_base_revision" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_GITOPS_CHANGE_SET_ID", "value": request.gitops_change_set_id },
+                                { "name": "PHARNESS_GITOPS_REVISION_EXECUTION_ID", "value": request.execution_id },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+                                }},
+                                { "name": "PHARNESS_GIT_OBSERVER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": token_secret, "key": "token" }
+                                }},
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "50m", "memory": "128Mi", "ephemeral-storage": "128Mi" },
+                                "limits": { "cpu": "250m", "memory": "256Mi", "ephemeral-storage": "256Mi" },
+                            },
+                        }],
+                    },
+                },
+            },
+        })
     }
 
     fn tekton_executor_job_manifest(
@@ -950,12 +1749,101 @@ fn tekton_executor_job_name(execution_id: &str) -> String {
     format!("pharness-tekton-{suffix}")
 }
 
+fn argo_executor_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-argo-{suffix}")
+}
+
+fn git_writer_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-git-writer-{suffix}")
+}
+
+fn gitops_writer_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-gitops-writer-{suffix}")
+}
+
+fn gitops_observer_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-gitops-observer-{suffix}")
+}
+
+fn git_observer_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-git-observer-{suffix}")
+}
+
+fn gitops_revision_resolver_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-gitops-revision-{suffix}")
+}
+
+async fn create_job_from_manifest(
+    kubectl_bin: &str,
+    namespace: &str,
+    manifest: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let payload = serde_json::to_vec(manifest)?;
+    let mut child = tokio::process::Command::new(kubectl_bin)
+        .args(["create", "-n", namespace, "-f", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use tokio::io::AsyncWriteExt;
+        stdin.write_all(&payload).await?;
+    }
+    let output = child.wait_with_output().await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "kubectl create Job failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        active_run_job_count, enforce_run_job_capacity, executor_job_terminal_state,
-        job_label_value, job_name, run_label_to_run_id, ExecutorJobTerminalState,
-        KubernetesJobDispatcher,
+        active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
+        executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
+        gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
+        run_label_to_run_id, ArgoSyncExecutionRequest, ExecutorJobTerminalState,
+        GitDeliveryExecutionRequest, GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
+        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{RunId, SessionId};
@@ -1055,6 +1943,162 @@ mod tests {
         assert!(manifest.pointer("/spec/template/spec/affinity").is_none());
     }
 
+    #[tokio::test]
+    async fn git_writer_manifest_isolated_from_model_credentials() {
+        let dispatcher = test_dispatcher(None).await;
+        let request = GitDeliveryExecutionRequest {
+            change_set_id: "cset_123".to_string(),
+            execution_id: "gexec_123".to_string(),
+        };
+        let job_name = git_writer_job_name(&request.execution_id);
+        let manifest = dispatcher.git_writer_job_manifest(&request, &job_name);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-git-writer"))
+        );
+        assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
+    }
+
+    #[tokio::test]
+    async fn git_observer_manifest_has_only_its_read_only_credential() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.git_observer_enabled = true;
+        dispatcher.config.git_observer_token_secret_name =
+            Some("pharness-git-observer-token".to_string());
+        dispatcher.config.git_observer_allowed_repos =
+            vec!["https://github.com/example/test.git".to_string()];
+        let request = GitDeliveryObservationRequest {
+            change_set_id: "cset_123".to_string(),
+            execution_id: "gobs_123".to_string(),
+        };
+        let job_name = git_observer_job_name(&request.execution_id);
+        let manifest = dispatcher.git_observer_job_manifest(&request, &job_name);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_GIT_OBSERVER_TOKEN"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-git-observer"))
+        );
+        assert!(manifest.pointer("/spec/template/spec/volumes").is_none());
+    }
+
+    #[tokio::test]
+    async fn gitops_writer_manifest_isolated_from_source_and_model_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.gitops_writer_enabled = true;
+        dispatcher.config.gitops_writer_token_secret_name =
+            Some("pharness-gitops-writer-token".to_string());
+        dispatcher.config.gitops_writer_allowed_repos =
+            vec!["https://github.com/example/finance-gitops.git".to_string()];
+        let request = GitOpsDeliveryExecutionRequest {
+            gitops_change_set_id: "gset_123".to_string(),
+            execution_id: "gopsexec_123".to_string(),
+        };
+        let job_name = gitops_writer_job_name(&request.execution_id);
+        let manifest = dispatcher.gitops_writer_job_manifest(&request, &job_name);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_GITOPS_CHANGE_SET_ID"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_OBSERVER_TOKEN"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-gitops-writer"))
+        );
+        assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
+    }
+
+    #[tokio::test]
+    async fn gitops_observer_manifest_has_only_read_only_observer_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.git_observer_enabled = true;
+        dispatcher.config.git_observer_token_secret_name =
+            Some("pharness-git-observer-token".to_string());
+        dispatcher.config.git_observer_allowed_repos =
+            vec!["https://github.com/example/finance-gitops.git".to_string()];
+        let request = GitOpsDeliveryObservationRequest {
+            gitops_change_set_id: "gset_123".to_string(),
+            execution_id: "gopsobs_123".to_string(),
+        };
+        let job_name = gitops_observer_job_name(&request.execution_id);
+        let manifest = dispatcher.gitops_observer_job_manifest(&request, &job_name);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_GIT_OBSERVER_TOKEN"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-git-observer"))
+        );
+        assert!(manifest.pointer("/spec/template/spec/volumes").is_none());
+    }
+
+    #[tokio::test]
+    async fn argo_executor_manifest_isolated_and_sync_scoped() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.argo_executor_enabled = true;
+        dispatcher.config.argo_executor_allowed_applications = vec!["finance-app-dev".to_string()];
+        let request = ArgoSyncExecutionRequest {
+            deployment_intent_id: "dint_123".to_string(),
+            execution_id: "aexec_123".to_string(),
+        };
+        let job_name = argo_executor_job_name(&request.execution_id);
+        let manifest = dispatcher.argo_executor_job_manifest(&request, &job_name);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_DEPLOYMENT_INTENT_ID"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-argo-runner"))
+        );
+        assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
+        assert_eq!(
+            manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(600))
+        );
+    }
+
     async fn test_dispatcher(node_hostname: Option<String>) -> KubernetesJobDispatcher {
         KubernetesJobDispatcher {
             store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
@@ -1066,6 +2110,38 @@ mod tests {
                 tekton_executor_service_account: "pharness-tekton-runner".to_string(),
                 tekton_allowed_namespaces: Vec::new(),
                 tekton_executor_poll_seconds: 5,
+                argo_executor_enabled: false,
+                argo_executor_service_account: "pharness-argo-runner".to_string(),
+                argo_executor_namespace: "argocd".to_string(),
+                argo_executor_allowed_applications: Vec::new(),
+                argo_executor_poll_seconds: 5,
+                argo_executor_active_deadline_seconds: 600,
+                argo_executor_ttl_seconds_after_finished: 3600,
+                git_writer_enabled: true,
+                git_writer_service_account: "pharness-git-writer".to_string(),
+                git_writer_token_secret_name: Some("pharness-git-writer-token".to_string()),
+                git_writer_allowed_repos: vec!["https://github.com/example/test.git".to_string()],
+                git_writer_github_api_url: "https://api.github.com".to_string(),
+                git_writer_author_name: "Pharness".to_string(),
+                git_writer_author_email: "pharness@example.test".to_string(),
+                git_writer_active_deadline_seconds: 900,
+                git_writer_ttl_seconds_after_finished: 3600,
+                gitops_writer_enabled: false,
+                gitops_writer_service_account: "pharness-gitops-writer".to_string(),
+                gitops_writer_token_secret_name: None,
+                gitops_writer_allowed_repos: Vec::new(),
+                gitops_writer_github_api_url: "https://api.github.com".to_string(),
+                gitops_writer_author_name: "Pharness".to_string(),
+                gitops_writer_author_email: "pharness@example.test".to_string(),
+                gitops_writer_active_deadline_seconds: 900,
+                gitops_writer_ttl_seconds_after_finished: 3600,
+                git_observer_enabled: false,
+                git_observer_service_account: "pharness-git-observer".to_string(),
+                git_observer_token_secret_name: None,
+                git_observer_allowed_repos: Vec::new(),
+                git_observer_github_api_url: "https://api.github.com".to_string(),
+                git_observer_active_deadline_seconds: 300,
+                git_observer_ttl_seconds_after_finished: 3600,
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),

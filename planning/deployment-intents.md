@@ -25,14 +25,70 @@
   - `Synced` and `Healthy` evidence records `status = satisfied`, `deploy_ready = true`, and `review_required = false`.
   - Out-of-sync or unhealthy evidence records `attention_required`; missing fields record `unknown`.
   - Lifecycle status remains separate from evidence status.
+- A WorkItem-backed PipelineIntent can now create a DeploymentIntent without
+  fabricating remediation or incident records. The durable source lineage is
+  its PipelineIntent, ChangeSet, and WorkPlan; the legacy incident fields are
+  nullable and remain populated for incident-backed delivery.
+- An approved development DeploymentIntent can create a deployment-scoped
+  supervised-autonomy envelope through
+  `POST /api/deployment-intents/:deployment_intent_id/trusted-envelope` or
+  `pharness-cli deployment-intents create-trusted-envelope`.
+  - The envelope is limited to a WorkItem-backed, non-production `dev` target.
+  - Its exact scope contains the WorkPlan, ChangeSet, PipelineIntent,
+    DeploymentIntent, target namespace, Argo Application, and only
+    `argo_sync` / `argocd_sync` authority for `agent:argo-runner`.
+  - The target must exactly equal the WorkItem target; it cannot be reused for
+    another namespace or Application.
+- `POST /api/deployment-intents/:deployment_intent_id/preflight` and
+  `pharness-cli deployment-intents preflight` now return a durable, structured
+  readiness result. They require approved delivery records, satisfied matching
+  PipelineRun evidence, one active exact DeploymentContract, a satisfied or
+  waived scoped `cluster_mutation` WorkItem gate, and an active matching
+  envelope. When the WorkItem declares `gitops_repo` and `gitops_ref`, they
+  also require a current approved GitOpsChangeSet and an observed
+  `gitops_delivery_merge` with a valid immutable merge SHA. A branch or open
+  PR is deliberately insufficient. The selected merge artifact id and SHA are
+  bound into the Argo execution receipt, so a later GitOps revision cannot
+  reuse an earlier sync request. Every preflight writes a
+  `deployment_intent.preflighted` audit event.
+- A successful preflight reports `ready_for_argo_runner = true`. Its separate
+  `dispatch_ready` field is true only when the deployed API is in Kubernetes
+  worker mode and the disabled-by-default executor is enabled for the exact
+  Argo Application. The chart contains an application-name-scoped
+  `pharness-argo-runner` ServiceAccount and exact RBAC; Helm rejects an
+  enabled empty allowlist rather than emitting a broad Argo Application Role.
+- `POST /api/deployment-intents/:deployment_intent_id/execute` and
+  `pharness-cli deployment-intents execute` are dry-run by default. `--apply`
+  requires a reason and re-runs the full contract, evidence, WorkItem gate,
+  and permission-grant preflight immediately before dispatching a dedicated
+  worker Job.
+  - The Job has only the internal worker token and `get`/`patch` access to the
+    exact configured Application. It receives no Fireworks, Git, registry,
+    database, or secret credentials.
+  - It requests an Argo operation sync with `prune=false` and no force option,
+    then reports compact `submitted`, `completed`, `failed`, or `cancelled`
+    evidence through worker-token-protected internal routes.
+  - The outcome artifact is idempotent by execution id and state. A cancelled
+    WorkItem stops the worker at its next control poll; Pharness never attempts
+    an implicit reverse sync or rollback.
+  - `completed` means Argo reported `Synced` with an operation phase of
+    `Succeeded`. It is not a rollout-health, metrics, log, trace, or release
+    verification assertion.
 
 # Backlog
 
-- DeploymentContracts now carry exact target policy for a future typed Argo
-  capability. They currently permit only a non-pruning, non-forced `sync`
-  shape and do not grant execution authority.
-- Add DeploymentIntent execution only as a separate approved typed Argo capability. Do not hide Argo mutation behind shell execution.
+- Exercise the short-lived `pharness-argo-runner` Job against one disposable
+  dev Application before enabling it for any other target. Do not hide Argo
+  mutation behind shell execution.
+- Add observed workload rollout, Prometheus/Loki/trace verification, and
+  Release completion as a separate post-sync stage. The first read-only stage
+  is implemented through Release verification: it requires a completed Argo
+  outcome, reads the exact Application and declared Deployment, and can mark a
+  dev Release complete only when both are healthy. LGTM criteria remain the
+  next extension of that verifier.
 - Add production policy gates for blast radius, sync windows, protected namespaces, and rollback evidence before any production-impacting DeploymentIntent can execute.
 - Add Argo preview/diff evidence before approving deploy intent.
 - Promote pipeline evidence warnings to blockers once real deployment execution exists, especially for production-impacting DeploymentIntents.
 - Promote deployment evidence warnings to blockers once real release or deployment execution exists, especially for production-impacting Release records.
+- Extend Release, RegistryEvidence, and ApprovalGate records with the same
+  WorkItem-compatible lineage before enabling WorkItem GitOps or Argo actions.

@@ -41,6 +41,12 @@
 - The fixture PipelineIntent declares the Pharness Argo CD target as a test
   handoff only. A successful terminal analysis must create exactly one proposed
   DeploymentIntent, but the smoke never approves it or mutates the Application.
+- `pharness-e2e-build-output` is a second inert GitOps-managed fixture used to
+  prove the digest-pinned `pipeline_build_output` artifact. It emits fixed
+  `IMAGE_URL` and `IMAGE_DIGEST` result values only; it does not perform any
+  registry operation or claim supply-chain verification. The smoke script must
+  opt in with `PHARNESS_TEKTON_SMOKE_EXPECT_BUILD_OUTPUT=1` and verifies the
+  exact artifact before recording success.
 
 ## Backlog
 
@@ -48,3 +54,5 @@
   evidence export has an operator-approved archival path.
 - Add an explicit DeploymentContract and separate Argo CD execution smoke
   before allowing the generated DeploymentIntent to request a sync.
+- Run the build-output fixture after its GitOps chart revision is synced, then
+  promote its artifact assertions into the release/registry provenance smoke.

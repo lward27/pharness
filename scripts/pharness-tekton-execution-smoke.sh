@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${PHARNESS_NAMESPACE:-pharness}"
 TEKTON_NAMESPACE="${PHARNESS_TEKTON_SMOKE_NAMESPACE:-tekton-pipelines}"
 PIPELINE_NAME="${PHARNESS_TEKTON_SMOKE_PIPELINE:-pharness-e2e-noop}"
+EXPECT_BUILD_OUTPUT="${PHARNESS_TEKTON_SMOKE_EXPECT_BUILD_OUTPUT:-0}"
 LOCAL_API_PORT="${PHARNESS_TEKTON_SMOKE_API_PORT:-14778}"
 ARTIFACT_ROOT="${PHARNESS_TEKTON_SMOKE_ARTIFACT_DIR:-target/tekton-execution-smoke}"
 RUN_NAME="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -38,6 +39,8 @@ Environment:
   PHARNESS_API_URL                     Required with --external-api.
   PHARNESS_TEKTON_SMOKE_NAMESPACE      Defaults to tekton-pipelines.
   PHARNESS_TEKTON_SMOKE_PIPELINE       Defaults to pharness-e2e-noop.
+  PHARNESS_TEKTON_SMOKE_EXPECT_BUILD_OUTPUT
+                                      Set to 1 for the inert build-output fixture.
   PHARNESS_TEKTON_SMOKE_ARTIFACT_DIR   Defaults to target/tekton-execution-smoke.
 EOF
 }
@@ -147,9 +150,15 @@ main() {
   wait_for "Pharness API health" 30 1 curl -fsS "$API_URL/health"
   kubectl -n "$TEKTON_NAMESPACE" get pipeline "$PIPELINE_NAME" -o json >"$ARTIFACT_DIR/fixture-pipeline.json" \
     || fail "fixture Pipeline $TEKTON_NAMESPACE/$PIPELINE_NAME is missing; wait for GitOps sync before running this smoke"
-  assert_jq "$ARTIFACT_DIR/fixture-pipeline.json" \
-    '.metadata.labels["pharness.lucas.engineering/fixture"] == "tekton-e2e"' \
-    "fixture Pipeline must carry the Pharness e2e label"
+  if [[ "$EXPECT_BUILD_OUTPUT" == "1" ]]; then
+    assert_jq "$ARTIFACT_DIR/fixture-pipeline.json" \
+      '.metadata.labels["pharness.lucas.engineering/fixture"] == "tekton-e2e-build-output"' \
+      "build-output fixture Pipeline must carry the Pharness build-output e2e label"
+  else
+    assert_jq "$ARTIFACT_DIR/fixture-pipeline.json" \
+      '.metadata.labels["pharness.lucas.engineering/fixture"] == "tekton-e2e"' \
+      "fixture Pipeline must carry the Pharness e2e label"
+  fi
 
   log "creating audited control-plane chain"
   post_json "/api/observations" \
@@ -233,6 +242,17 @@ main() {
   assert_jq "$ARTIFACT_DIR/pipeline-analysis-observation.json" \
     '.source == "tekton" and .kind == "pipeline_run_analysis" and .resource_name != null' \
     "terminal analysis observation must be typed and resource-bound"
+  BUILD_OUTPUT_ARTIFACT_ID=""
+  if [[ "$EXPECT_BUILD_OUTPUT" == "1" ]]; then
+    assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
+      '.intent_json.build_output.status == "verified" and .intent_json.build_output.artifact_id != null and (.intent_json.build_output.image_reference | test("@sha256:[0-9a-f]{64}$"))' \
+      "build-output fixture must persist a verified digest-pinned image artifact"
+    BUILD_OUTPUT_ARTIFACT_ID="$(jq -r '.intent_json.build_output.artifact_id' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
+    api_curl "$API_URL/api/artifacts/$BUILD_OUTPUT_ARTIFACT_ID" | jq . >"$ARTIFACT_DIR/pipeline-build-output-artifact.json"
+    assert_jq "$ARTIFACT_DIR/pipeline-build-output-artifact.json" \
+      '.kind == "pipeline_build_output" and .content_json.status == "verified" and (.content_json.image.reference | test("@sha256:[0-9a-f]{64}$"))' \
+      "build-output artifact must contain verified synthetic digest provenance"
+  fi
   api_curl "$API_URL/api/deployment-intents?pipeline_intent_id=$PIPELINE_INTENT_ID&limit=10" | jq . >"$ARTIFACT_DIR/deployment-handoff.json"
   assert_jq "$ARTIFACT_DIR/deployment-handoff.json" \
     '.count == 1 and .deployment_intents[0].status == "proposed" and .deployment_intents[0].target_environment == "homelab" and .deployment_intents[0].target_namespace == "pharness" and .deployment_intents[0].argo_application == "pharness" and .deployment_intents[0].intent_json.pipeline_evidence.status == "satisfied"' \
@@ -253,9 +273,10 @@ main() {
     --arg pipeline_run_name "$PIPELINE_RUN_NAME" \
     --arg pipeline_analysis_artifact_id "$PIPELINE_ANALYSIS_ARTIFACT_ID" \
     --arg pipeline_analysis_observation_id "$PIPELINE_ANALYSIS_OBSERVATION_ID" \
+    --arg pipeline_build_output_artifact_id "$BUILD_OUTPUT_ARTIFACT_ID" \
     --arg deployment_intent_id "$DEPLOYMENT_INTENT_ID" \
     --arg namespace "$TEKTON_NAMESPACE" \
-    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},pipeline_run_analysis:{artifact_id:$pipeline_analysis_artifact_id,observation_id:$pipeline_analysis_observation_id},deployment_handoff:{deployment_intent_id:$deployment_intent_id,status:"proposed"},application_resources_changed:false}' \
+    '{smoke:"tekton-execution",pipeline_intent_id:$pipeline_intent_id,pipeline_contract_id:$pipeline_contract_id,pipeline_run:{namespace:$namespace,name:$pipeline_run_name},pipeline_run_analysis:{artifact_id:$pipeline_analysis_artifact_id,observation_id:$pipeline_analysis_observation_id},pipeline_build_output:(if $pipeline_build_output_artifact_id == "" then null else {artifact_id:$pipeline_build_output_artifact_id} end),deployment_handoff:{deployment_intent_id:$deployment_intent_id,status:"proposed"},application_resources_changed:false}' \
     >"$ARTIFACT_DIR/manifest.json"
   jq . "$ARTIFACT_DIR/manifest.json"
   log "Tekton execution smoke passed; artifacts in $ARTIFACT_ROOT/$RUN_NAME"

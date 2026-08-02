@@ -204,6 +204,7 @@ impl ReadOnlyClusterTools {
                 "command": command_summary(&self.kubectl_bin, &args),
                 "stdout_truncated": output.stdout_truncated,
                 "output": compact_kubernetes_output(&output.stdout),
+                "analysis": kubernetes_read_analysis(&output.stdout),
             }),
         ))
     }
@@ -235,6 +236,7 @@ impl ReadOnlyClusterTools {
                 "command": command_summary(&self.kubectl_bin, &args),
                 "stdout_truncated": output.stdout_truncated,
                 "output": compact_kubernetes_output(&output.stdout),
+                "analysis": argo_read_analysis(&output.stdout),
             }),
         ))
     }
@@ -1237,6 +1239,29 @@ fn compact_kubernetes_output(stdout: &str) -> Value {
     }
 }
 
+/// Produces a small, redacted health summary beside the compact resource view.
+///
+/// The raw object is never returned here. This lets typed callers make a
+/// rollout decision without reconstructing it from a lossy compact response.
+fn kubernetes_read_analysis(stdout: &str) -> Value {
+    let Ok(mut value) = serde_json::from_str::<Value>(stdout) else {
+        return serde_json::json!({ "status": "unknown" });
+    };
+    redact_json(&mut value);
+    match value.get("kind").and_then(Value::as_str) {
+        Some("Deployment") => analyze_deployment(&value),
+        _ => serde_json::json!({ "status": "unknown" }),
+    }
+}
+
+fn argo_read_analysis(stdout: &str) -> Value {
+    let Ok(mut value) = serde_json::from_str::<Value>(stdout) else {
+        return serde_json::json!({ "status": "unknown" });
+    };
+    redact_json(&mut value);
+    analyze_argo_application(&value)
+}
+
 fn parse_json_output(stdout: &str) -> Result<Value, ToolError> {
     serde_json::from_str(stdout).map_err(|error| ToolError::InvalidArguments {
         message: format!("kubectl returned invalid JSON: {error}"),
@@ -1705,6 +1730,21 @@ fn image_alignment(
             "deployment_images": deployment_images,
         });
     };
+
+    // The isolated Tekton executor intentionally reads only the PipelineRun
+    // and TaskRuns. A skipped Deployment lookup means there is no deployment
+    // image to compare, not that the emitted build result is a mismatch.
+    if deployment.get("status").and_then(Value::as_str) == Some("skipped") {
+        return image_alignment_result(
+            "unknown",
+            expected_image,
+            &deployment_images,
+            None,
+            None,
+            None,
+            Some("related deployment lookup was intentionally skipped"),
+        );
+    }
 
     if let Some(matched_image) = deployment_images
         .iter()
@@ -2813,6 +2853,24 @@ mod tests {
         assert_eq!(
             alignment["reason"],
             "image repository and version match, but registry is not configured as equivalent"
+        );
+    }
+
+    #[test]
+    fn image_alignment_is_unknown_when_executor_skips_deployment_lookup() {
+        let alignment = image_alignment(
+            &serde_json::json!("example.invalid/pharness/e2e:synthetic"),
+            &serde_json::json!({
+                "status": "skipped",
+                "reason": "Related deployment lookup is disabled"
+            }),
+            &RegistryAliases::default(),
+        );
+
+        assert_eq!(alignment["status"], "unknown");
+        assert_eq!(
+            alignment["reason"],
+            "related deployment lookup was intentionally skipped"
         );
     }
 

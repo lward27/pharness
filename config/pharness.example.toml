@@ -94,6 +94,50 @@ workspace_ephemeral_storage_limit = "4Gi"
 # Set after confirming node-local capacity for the target cluster.
 workspace_node_hostname = ""
 max_concurrent_run_jobs = 1
+# Disabled unless a disposable dev Application has been explicitly allowlisted.
+# The dedicated runner can patch only the listed Application resources and
+# receives no model, Git, or database credentials.
+argo_executor_enabled = false
+argo_executor_service_account = "pharness-argo-runner"
+argo_executor_namespace = "argocd"
+argo_executor_allowed_applications = []
+argo_executor_poll_seconds = 5
+argo_executor_active_deadline_seconds = 600
+argo_executor_ttl_seconds_after_finished = 3600
+# Disabled unless all fields below are deliberately configured. The token
+# Secret name is never read by the API; only the dedicated writer Job mounts
+# its `token` key.
+git_writer_enabled = false
+git_writer_service_account = "pharness-git-writer"
+git_writer_token_secret_name = ""
+git_writer_allowed_repos = []
+git_writer_github_api_url = "https://api.github.com"
+git_writer_author_name = "Pharness"
+git_writer_author_email = "pharness@localhost"
+git_writer_active_deadline_seconds = 900
+git_writer_ttl_seconds_after_finished = 3600
+# This is deliberately a different identity and allowlist from the source
+# writer. It remains disabled until a disposable GitOps repository has an
+# explicitly scoped token Secret.
+gitops_writer_enabled = false
+gitops_writer_service_account = "pharness-gitops-writer"
+gitops_writer_token_secret_name = ""
+gitops_writer_allowed_repos = []
+gitops_writer_github_api_url = "https://api.github.com"
+gitops_writer_author_name = "Pharness"
+gitops_writer_author_email = "pharness@localhost"
+gitops_writer_active_deadline_seconds = 900
+gitops_writer_ttl_seconds_after_finished = 3600
+# The observer uses a separate read-only GitHub token to record immutable PR
+# merge provenance. It is disabled unless an exact repository allowlist and
+# dedicated Secret name are configured.
+git_observer_enabled = false
+git_observer_service_account = "pharness-git-observer"
+git_observer_token_secret_name = ""
+git_observer_allowed_repos = []
+git_observer_github_api_url = "https://api.github.com"
+git_observer_active_deadline_seconds = 300
+git_observer_ttl_seconds_after_finished = 3600
 
 [api]
 bind = "127.0.0.1:4777"

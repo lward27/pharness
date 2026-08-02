@@ -87,20 +87,38 @@
   grant. `ready_for_writer` means the authorization contract is complete;
   `dispatch_ready=false` remains explicit until a separate isolated writer is
   deployed, so preflight cannot be mistaken for a remote Git mutation.
+- A dedicated Git writer executor is now implemented but off by default. Its
+  branch/commit/push/PR path starts only after an explicit API execute call
+  revalidates the current immutable plan and exact grant. The job has no model
+  credential, uses its own ServiceAccount without Kubernetes RBAC, and mounts
+  the GitHub token only from a writer-specific Secret. It reports bounded
+  completed/failed provenance back as immutable result artifacts; a PR alone
+  never advances deployment state.
 - WorkItem reconciliation now exposes the controller's next action as a
   preview and applies it only when explicitly requested. It can deterministically
   declare a WorkPlan/workspace, start an already-approved bounded coding
   attempt, capture its durable ChangeSet evidence, and prepare/preflight an
   approved ChangeSet for Git delivery. It stops at WorkPlan review, ChangeSet
   review, missing Git authorization, cancellation, and blocked/replan states.
+- A blocked or failed development WorkItem can be explicitly replanned only
+  when its approved WorkPlan has no captured ChangeSet and it has remaining
+  attempt budget. Replan clears any stale run link, retains the WorkPlan, and
+  returns the WorkItem to `awaiting_approval`; a subsequent controller step
+  starts the fresh isolated workspace. It is deliberately not an automatic
+  retry mechanism.
+- Terminal coding attempts now produce one `work_item.attempt_finished` audit
+  event with a bounded, evidence-backed classification and a recommended next
+  action. The initial classifier recognizes policy denials, turn-budget
+  exhaustion, tool failures, absent model responses, completion, cancellation,
+  and unknown failure. It does not inspect or persist raw error text in the
+  audit payload and cannot dispatch a retry.
 
 ## Backlog
 
-- Add a dedicated Git writer and GitHub PR capability after credentials,
-  repository allowlists, branch protections, and pull-request semantics are
-  explicitly configured. Its only input must be a current `git_delivery_plan`
-  artifact and matching `agent:git-writer` grant whose ChangeSet revision and
-  material hash still match.
+- Run a controlled disposable-repository GitHub smoke with a fine-grained
+  token, exact repository allowlist, branch protections, and egress review.
+  Then add PR status/merge observation before a controller can schedule a
+  build from Git provenance.
 - Add an API-level fake-provider fixture for the full coding workflow. The
   workspace provisioner is tested against a real disposable Git repository,
   but the Fireworks-backed HTTP smoke remains an operator-run playbook so it
@@ -122,3 +140,7 @@
   artifacts, ChangeSet capture, and cleanup before the allowlist is kept on.
 - Add DeploymentIntent preflight and a separate Argo runner only after GitOps
   revision provenance is available.
+- Extend the terminal coding classifier to typed external-system outcomes
+  (Tekton, Git, Argo, registry, and database), then define a policy that can
+  propose only a bounded replan, an external wait, or a blocked remediation
+  path. It must never silently retry on an unknown classification.

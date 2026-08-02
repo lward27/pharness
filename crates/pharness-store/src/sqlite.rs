@@ -4,18 +4,19 @@ use crate::{
     ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
     ChangeSetListFilter, CountBucket, CreateApproval, CreateApprovalGate, CreateArtifact,
     CreateAuditEvent, CreateChangeSet, CreateDeploymentContract, CreateDeploymentIntent,
-    CreateFileChange, CreateIncident, CreateObservation, CreatePermissionGrant,
-    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
-    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter, IncidentListFilter,
-    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
-    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter,
-    ReplacePipelineContract, RunListFilter, RunSummary, RunSummaryFilter, StoredApproval,
-    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
-    StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
-    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem,
-    StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
+    CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
+    CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
+    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter,
+    GitOpsChangeSetListFilter, IncidentListFilter, ObservationListFilter,
+    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
+    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
+    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
+    StoredAuditEvent, StoredChangeSet, StoredDeploymentContract, StoredDeploymentIntent,
+    StoredFileChange, StoredGitOpsChangeSet, StoredIncident, StoredObservation,
+    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem, StoredWorkPlan,
+    StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
     UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
     UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
     UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution, WorkItemListFilter,
@@ -1687,6 +1688,150 @@ impl SqliteStore {
             })
     }
 
+    pub async fn create_gitops_change_set(
+        &self,
+        change_set: CreateGitOpsChangeSet,
+    ) -> Result<StoredGitOpsChangeSet, StoreError> {
+        let now = now_string();
+        let document = serde_json::to_string(&change_set.gitops_change_set_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO gitops_change_sets (
+              id, work_item_id, work_plan_id, source_change_set_id, pipeline_intent_id,
+              deployment_intent_id, gitops_update_plan_artifact_id, session_id, run_id,
+              status, title, summary, risk_level, material_hash, gitops_repo, gitops_ref,
+              head_branch, kustomization_path, image_name, image_ref, gitops_change_set_json,
+              created_at, updated_at, status_changed_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                    ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+            "#,
+        )
+        .bind(&change_set.id)
+        .bind(&change_set.work_item_id)
+        .bind(&change_set.work_plan_id)
+        .bind(&change_set.source_change_set_id)
+        .bind(&change_set.pipeline_intent_id)
+        .bind(&change_set.deployment_intent_id)
+        .bind(&change_set.gitops_update_plan_artifact_id)
+        .bind(change_set.session_id.as_str())
+        .bind(change_set.run_id.as_str())
+        .bind(&change_set.status)
+        .bind(&change_set.title)
+        .bind(&change_set.summary)
+        .bind(&change_set.risk_level)
+        .bind(&change_set.material_hash)
+        .bind(&change_set.gitops_repo)
+        .bind(&change_set.gitops_ref)
+        .bind(&change_set.head_branch)
+        .bind(&change_set.kustomization_path)
+        .bind(&change_set.image_name)
+        .bind(&change_set.image_ref)
+        .bind(document)
+        .bind(now.clone())
+        .bind(now.clone())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_gitops_change_set(&change_set.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "gitops_change_set".to_string(),
+                id: change_set.id,
+            })
+    }
+
+    pub async fn get_gitops_change_set(
+        &self,
+        change_set_id: &str,
+    ) -> Result<Option<StoredGitOpsChangeSet>, StoreError> {
+        let row = sqlx::query(gitops_change_set_select_sql("WHERE id = ?1"))
+            .bind(change_set_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_gitops_change_set).transpose()
+    }
+
+    pub async fn get_gitops_change_set_by_pipeline_intent(
+        &self,
+        pipeline_intent_id: &str,
+    ) -> Result<Option<StoredGitOpsChangeSet>, StoreError> {
+        let row = sqlx::query(gitops_change_set_select_sql(
+            "WHERE pipeline_intent_id = ?1",
+        ))
+        .bind(pipeline_intent_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_gitops_change_set).transpose()
+    }
+
+    pub async fn list_gitops_change_sets(
+        &self,
+        filter: GitOpsChangeSetListFilter,
+    ) -> Result<Vec<StoredGitOpsChangeSet>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_item_id, work_plan_id, source_change_set_id, pipeline_intent_id,
+                   deployment_intent_id, gitops_update_plan_artifact_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision, gitops_repo,
+                   gitops_ref, head_branch, kustomization_path, image_name, image_ref,
+                   gitops_change_set_json, created_at, updated_at, status_changed_at,
+                   status_changed_by, status_reason
+            FROM gitops_change_sets
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR pipeline_intent_id = ?2)
+              AND (?3 IS NULL OR deployment_intent_id = ?3)
+              AND (?4 IS NULL OR status = ?4)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?5 OFFSET ?6
+            "#,
+        )
+        .bind(filter.work_item_id)
+        .bind(filter.pipeline_intent_id)
+        .bind(filter.deployment_intent_id)
+        .bind(filter.status)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_gitops_change_set).collect()
+    }
+
+    pub async fn update_gitops_change_set_status(
+        &self,
+        change_set_id: &str,
+        status: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredGitOpsChangeSet, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE gitops_change_sets
+            SET status = ?2, updated_at = ?3, status_changed_at = ?3,
+                status_changed_by = ?4, status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(change_set_id)
+        .bind(status)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_gitops_change_set(change_set_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "gitops_change_set".to_string(),
+                id: change_set_id.to_string(),
+            })
+    }
+
     pub async fn create_pipeline_intent(
         &self,
         intent: CreatePipelineIntent,
@@ -3013,14 +3158,15 @@ impl SqliteStore {
         sqlx::query(
             r#"
             INSERT INTO approval_gates (
-              id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+              id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
               gate_order, title, summary, risk_level, resource_namespace, resource_kind,
               resource_name, gate_json, created_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
             "#,
         )
         .bind(&gate.id)
+        .bind(&gate.work_item_id)
         .bind(&gate.remediation_plan_id)
         .bind(&gate.incident_id)
         .bind(gate.session_id.as_str())
@@ -3101,26 +3247,28 @@ impl SqliteStore {
         let offset = i64::from(filter.offset);
         let rows = sqlx::query(
             r#"
-            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
                    gate_order, title, summary, risk_level, resource_namespace, resource_kind,
                    resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
                    stale_at, stale_by, stale_reason
             FROM approval_gates
-            WHERE (?1 IS NULL OR remediation_plan_id = ?1)
-              AND (?2 IS NULL OR incident_id = ?2)
-              AND (?3 IS NULL OR run_id = ?3)
-              AND (?4 IS NULL OR status = ?4)
-              AND (?5 IS NULL OR gate_kind = ?5)
-              AND (?6 IS NULL OR risk_level = ?6)
-              AND (?7 IS NULL OR resource_namespace = ?7)
-              AND (?8 IS NULL OR resource_kind = ?8)
-              AND (?9 IS NULL OR resource_name = ?9)
-              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
-              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
-            ORDER BY created_at DESC, remediation_plan_id DESC, gate_order ASC, id ASC
-            LIMIT ?12 OFFSET ?13
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR remediation_plan_id = ?2)
+              AND (?3 IS NULL OR incident_id = ?3)
+              AND (?4 IS NULL OR run_id = ?4)
+              AND (?5 IS NULL OR status = ?5)
+              AND (?6 IS NULL OR gate_kind = ?6)
+              AND (?7 IS NULL OR risk_level = ?7)
+              AND (?8 IS NULL OR resource_namespace = ?8)
+              AND (?9 IS NULL OR resource_kind = ?9)
+              AND (?10 IS NULL OR resource_name = ?10)
+              AND (?11 IS NULL OR CAST(created_at AS INTEGER) >= ?11)
+              AND (?12 IS NULL OR CAST(created_at AS INTEGER) <= ?12)
+            ORDER BY created_at DESC, work_item_id DESC, remediation_plan_id DESC, gate_order ASC, id ASC
+            LIMIT ?13 OFFSET ?14
             "#,
         )
+        .bind(filter.work_item_id)
         .bind(filter.remediation_plan_id)
         .bind(filter.incident_id)
         .bind(filter.run_id.as_ref().map(RunId::as_str))
@@ -3166,6 +3314,32 @@ impl SqliteStore {
             );
         }
 
+        Ok(staled)
+    }
+
+    pub async fn stale_approval_gates_for_work_item(
+        &self,
+        work_item_id: &str,
+        stale_by: Option<String>,
+        stale_reason: Option<String>,
+    ) -> Result<Vec<StoredApprovalGate>, StoreError> {
+        let gates = self
+            .list_approval_gates(ApprovalGateListFilter {
+                work_item_id: Some(work_item_id.to_string()),
+                limit: 200,
+                ..ApprovalGateListFilter::default()
+            })
+            .await?
+            .into_iter()
+            .filter(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"))
+            .collect::<Vec<_>>();
+        let mut staled = Vec::with_capacity(gates.len());
+        for gate in gates {
+            staled.push(
+                self.stale_approval_gate(&gate.id, stale_by.clone(), stale_reason.clone())
+                    .await?,
+            );
+        }
         Ok(staled)
     }
 
@@ -3218,6 +3392,8 @@ impl SqliteStore {
             approval_gate_summary_text_buckets(&self.pool, &filter, "resource_kind").await?;
         let by_resource_name =
             approval_gate_summary_text_buckets(&self.pool, &filter, "resource_name").await?;
+        let by_work_item_id =
+            approval_gate_summary_text_buckets(&self.pool, &filter, "work_item_id").await?;
         let by_incident_id =
             approval_gate_summary_text_buckets(&self.pool, &filter, "incident_id").await?;
         let by_remediation_plan_id =
@@ -3232,6 +3408,7 @@ impl SqliteStore {
             by_resource_namespace,
             by_resource_kind,
             by_resource_name,
+            by_work_item_id,
             by_incident_id,
             by_remediation_plan_id,
         })
@@ -3769,6 +3946,41 @@ fn row_to_change_set(row: sqlx::sqlite::SqliteRow) -> Result<StoredChangeSet, St
     })
 }
 
+fn row_to_gitops_change_set(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredGitOpsChangeSet, StoreError> {
+    let document: String = row.try_get("gitops_change_set_json")?;
+    Ok(StoredGitOpsChangeSet {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        source_change_set_id: row.try_get("source_change_set_id")?,
+        pipeline_intent_id: row.try_get("pipeline_intent_id")?,
+        deployment_intent_id: row.try_get("deployment_intent_id")?,
+        gitops_update_plan_artifact_id: row.try_get("gitops_update_plan_artifact_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: RunId::new(row.try_get::<String, _>("run_id")?),
+        status: row.try_get("status")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        risk_level: row.try_get("risk_level")?,
+        material_hash: row.try_get("material_hash")?,
+        revision: row.try_get("revision")?,
+        gitops_repo: row.try_get("gitops_repo")?,
+        gitops_ref: row.try_get("gitops_ref")?,
+        head_branch: row.try_get("head_branch")?,
+        kustomization_path: row.try_get("kustomization_path")?,
+        image_name: row.try_get("image_name")?,
+        image_ref: row.try_get("image_ref")?,
+        gitops_change_set_json: serde_json::from_str(&document)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
+    })
+}
+
 fn row_to_pipeline_intent(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredPipelineIntent, StoreError> {
@@ -3947,6 +4159,7 @@ fn row_to_approval_gate(row: sqlx::sqlite::SqliteRow) -> Result<StoredApprovalGa
     let gate_json: String = row.try_get("gate_json")?;
     Ok(StoredApprovalGate {
         id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
         remediation_plan_id: row.try_get("remediation_plan_id")?,
         incident_id: row.try_get("incident_id")?,
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
@@ -4142,6 +4355,36 @@ fn change_set_select_sql(where_clause: &str) -> &'static str {
     }
 }
 
+fn gitops_change_set_select_sql(where_clause: &str) -> &'static str {
+    match where_clause {
+        "WHERE id = ?1" => {
+            r#"
+            SELECT id, work_item_id, work_plan_id, source_change_set_id, pipeline_intent_id,
+                   deployment_intent_id, gitops_update_plan_artifact_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision, gitops_repo,
+                   gitops_ref, head_branch, kustomization_path, image_name, image_ref,
+                   gitops_change_set_json, created_at, updated_at, status_changed_at,
+                   status_changed_by, status_reason
+            FROM gitops_change_sets
+            WHERE id = ?1
+            "#
+        }
+        "WHERE pipeline_intent_id = ?1" => {
+            r#"
+            SELECT id, work_item_id, work_plan_id, source_change_set_id, pipeline_intent_id,
+                   deployment_intent_id, gitops_update_plan_artifact_id, session_id, run_id,
+                   status, title, summary, risk_level, material_hash, revision, gitops_repo,
+                   gitops_ref, head_branch, kustomization_path, image_name, image_ref,
+                   gitops_change_set_json, created_at, updated_at, status_changed_at,
+                   status_changed_by, status_reason
+            FROM gitops_change_sets
+            WHERE pipeline_intent_id = ?1
+            "#
+        }
+        _ => unreachable!("gitops change set select SQL only supports known static clauses"),
+    }
+}
+
 fn pipeline_intent_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
@@ -4287,7 +4530,7 @@ fn approval_gate_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
             r#"
-            SELECT id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
+            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
                    gate_order, title, summary, risk_level, resource_namespace, resource_kind,
                    resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
                    stale_at, stale_by, stale_reason
@@ -4711,22 +4954,23 @@ WHERE (?1 IS NULL OR remediation_plan_id = ?1)
   AND (?9 IS NULL OR resource_name = ?9)
   AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
   AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
+  AND (?12 IS NULL OR work_item_id = ?12)
 "#;
 
 const APPROVAL_GATE_AGE_BUCKET_CASE: &str = r#"
 CASE
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 300000 THEN 'lt_5m'
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 3600000 THEN '5m_to_1h'
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 86400000 THEN '1h_to_24h'
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 300000 THEN 'lt_5m'
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 3600000 THEN '5m_to_1h'
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 86400000 THEN '1h_to_24h'
   ELSE 'gte_24h'
 END
 "#;
 
 const APPROVAL_GATE_AGE_BUCKET_ORDER_CASE: &str = r#"
 CASE
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 300000 THEN 0
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 3600000 THEN 1
-  WHEN (?12 - CAST(created_at AS INTEGER)) < 86400000 THEN 2
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 300000 THEN 0
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 3600000 THEN 1
+  WHEN (?13 - CAST(created_at AS INTEGER)) < 86400000 THEN 2
   ELSE 3
 END
 "#;
@@ -4748,6 +4992,7 @@ async fn approval_gate_summary_total(
         .bind(filter.resource_name.clone())
         .bind(filter.created_after_ms)
         .bind(filter.created_before_ms)
+        .bind(filter.work_item_id.clone())
         .fetch_one(pool)
         .await?;
 
@@ -4780,6 +5025,7 @@ async fn approval_gate_summary_text_buckets(
         .bind(filter.resource_name.clone())
         .bind(filter.created_after_ms)
         .bind(filter.created_before_ms)
+        .bind(filter.work_item_id.clone())
         .fetch_all(pool)
         .await?;
 
@@ -4824,6 +5070,7 @@ async fn approval_gate_summary_age_buckets(
         .bind(filter.resource_name.clone())
         .bind(filter.created_after_ms)
         .bind(filter.created_before_ms)
+        .bind(filter.work_item_id.clone())
         .bind(now)
         .fetch_all(pool)
         .await?;
@@ -5914,8 +6161,8 @@ mod tests {
                 id: "pint_test".to_string(),
                 change_set_id: change_set.id.clone(),
                 work_plan_id: work_plan.id.clone(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "proposed".to_string(),
@@ -6010,8 +6257,8 @@ mod tests {
                 pipeline_intent_id: pipeline_intent.id.clone(),
                 change_set_id: change_set.id.clone(),
                 work_plan_id: work_plan.id.clone(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "proposed".to_string(),
@@ -6116,8 +6363,8 @@ mod tests {
                 pipeline_intent_id: pipeline_intent.id.clone(),
                 change_set_id: change_set.id.clone(),
                 work_plan_id: work_plan.id.clone(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "proposed".to_string(),
@@ -6226,8 +6473,8 @@ mod tests {
                 pipeline_intent_id: pipeline_intent.id.clone(),
                 change_set_id: change_set.id.clone(),
                 work_plan_id: work_plan.id.clone(),
-                remediation_plan_id: plan.id.clone(),
-                incident_id: incident.id.clone(),
+                remediation_plan_id: Some(plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
                 session_id: session_id.clone(),
                 run_id: Some(run_id.clone()),
                 status: "proposed".to_string(),
@@ -6328,8 +6575,9 @@ mod tests {
         let gate = store
             .create_approval_gate(crate::CreateApprovalGate {
                 id: "agate_test".to_string(),
-                remediation_plan_id: plan.id,
-                incident_id: incident.id,
+                work_item_id: None,
+                remediation_plan_id: Some(plan.id),
+                incident_id: Some(incident.id),
                 session_id,
                 run_id: Some(run_id.clone()),
                 status: "pending".to_string(),
@@ -6350,6 +6598,7 @@ mod tests {
         let fetched_gate = store.get_approval_gate(&gate.id).await.unwrap().unwrap();
         let gates = store
             .list_approval_gates(crate::ApprovalGateListFilter {
+                work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id.clone()),
@@ -6367,13 +6616,17 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(fetched_gate.remediation_plan_id, "rplan_test");
+        assert_eq!(
+            fetched_gate.remediation_plan_id.as_deref(),
+            Some("rplan_test")
+        );
         assert_eq!(fetched_gate.gate_kind, "pipeline_mutation");
         assert_eq!(gates.len(), 1);
         assert_eq!(gates[0].id, "agate_test");
 
         let gate_summary = store
             .approval_gate_summary(crate::ApprovalGateSummaryFilter {
+                work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id.clone()),
@@ -6415,6 +6668,7 @@ mod tests {
             .unwrap();
         let satisfied_gates = store
             .list_approval_gates(crate::ApprovalGateListFilter {
+                work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id),
@@ -6668,6 +6922,130 @@ mod tests {
             })
             .await
             .unwrap();
+        let change_set = store
+            .create_change_set(crate::CreateChangeSet {
+                id: "cset_work_item_test".to_string(),
+                work_item_id: Some(item.id.clone()),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: None,
+                status: "approved".to_string(),
+                title: "work item change".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "work-item-test".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                change_set_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let pipeline_intent = store
+            .create_pipeline_intent(crate::CreatePipelineIntent {
+                id: "pint_work_item_test".to_string(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: None,
+                status: "approved".to_string(),
+                title: "work item build".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                intent_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let deployment = store
+            .create_deployment_intent(crate::CreateDeploymentIntent {
+                id: "dint_work_item_test".to_string(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: None,
+                status: "approved".to_string(),
+                title: "work item deployment".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "argo_sync_deploy".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                intent_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let release = store
+            .create_release(crate::CreateRelease {
+                id: "rel_work_item_test".to_string(),
+                deployment_intent_id: deployment.id.clone(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: None,
+                status: "approved".to_string(),
+                title: "work item release".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                release_kind: "gitops_release".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                version: None,
+                commit_sha: None,
+                image_digest: None,
+                rollback_ref: None,
+                release_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let evidence = store
+            .create_registry_evidence(crate::CreateRegistryEvidence {
+                id: "regev_work_item_test".to_string(),
+                release_id: release.id.clone(),
+                deployment_intent_id: deployment.id.clone(),
+                pipeline_intent_id: pipeline_intent.id.clone(),
+                change_set_id: change_set.id.clone(),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: None,
+                status: "proposed".to_string(),
+                title: "work item image evidence".to_string(),
+                summary: "test".to_string(),
+                risk_level: "medium".to_string(),
+                registry: None,
+                repository: None,
+                image_ref: None,
+                image_digest: None,
+                tag: None,
+                source: "manual".to_string(),
+                verification_status: "unknown".to_string(),
+                evidence_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        assert!(deployment.remediation_plan_id.is_none());
+        assert!(release.incident_id.is_none());
+        assert!(evidence.remediation_plan_id.is_none());
 
         assert_eq!(
             store
