@@ -120,13 +120,23 @@ ensure_contract() {
 }
 
 wait_for_terminal_execution() {
-  local intent_id="$1"
+  local intent_id="$1" expect_build_output="$2"
   for _ in $(seq 1 80); do
     api_curl "$API_URL/api/pipeline-intents/$intent_id" | jq . >"$ARTIFACT_DIR/pipeline-intent-terminal.json"
     local status
     status="$(jq -r '.execution_evidence.status // empty' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
     case "$status" in
-      succeeded) return 0 ;;
+      succeeded)
+        if ! jq -e '.intent_json.evidence.status == "satisfied" and .intent_json.evidence.kind == "pipeline_run_analysis"' "$ARTIFACT_DIR/pipeline-intent-terminal.json" >/dev/null; then
+          sleep 3
+          continue
+        fi
+        if [[ "$expect_build_output" == "1" ]] && ! jq -e '.intent_json.build_output.status == "verified" and .intent_json.build_output.artifact_id != null' "$ARTIFACT_DIR/pipeline-intent-terminal.json" >/dev/null; then
+          sleep 3
+          continue
+        fi
+        return 0
+        ;;
       failed) fail "Tekton executor reported failure: $(jq -r '.execution_evidence.error // "unknown failure"' "$ARTIFACT_DIR/pipeline-intent-terminal.json")" ;;
     esac
     sleep 3
@@ -227,7 +237,7 @@ main() {
   assert_jq "$ARTIFACT_DIR/execution-dispatch.json" \
     '.status == "dispatched" and .dry_run == false and .executor_job_name != null' \
     "execution should dispatch a dedicated executor Job"
-  wait_for_terminal_execution "$PIPELINE_INTENT_ID"
+  wait_for_terminal_execution "$PIPELINE_INTENT_ID" "$EXPECT_BUILD_OUTPUT"
   assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
     '.execution_evidence.status == "succeeded" and .execution_evidence.pipeline_run.name != null and .intent_json.evidence.status == "satisfied" and .intent_json.evidence.kind == "pipeline_run_analysis"' \
     "executor must persist and attach a successful PipelineRunAnalysis"
@@ -245,7 +255,7 @@ main() {
   BUILD_OUTPUT_ARTIFACT_ID=""
   if [[ "$EXPECT_BUILD_OUTPUT" == "1" ]]; then
     assert_jq "$ARTIFACT_DIR/pipeline-intent-terminal.json" \
-      '.intent_json.build_output.status == "verified" and .intent_json.build_output.artifact_id != null and (.intent_json.build_output.image_reference | test("@sha256:[0-9a-f]{64}$"))' \
+      '.intent_json.build_output.status == "verified" and .intent_json.build_output.artifact_id != null and (.intent_json.build_output.image_ref | test("@sha256:[0-9a-f]{64}$"))' \
       "build-output fixture must persist a verified digest-pinned image artifact"
     BUILD_OUTPUT_ARTIFACT_ID="$(jq -r '.intent_json.build_output.artifact_id' "$ARTIFACT_DIR/pipeline-intent-terminal.json")"
     api_curl "$API_URL/api/artifacts/$BUILD_OUTPUT_ARTIFACT_ID" | jq . >"$ARTIFACT_DIR/pipeline-build-output-artifact.json"

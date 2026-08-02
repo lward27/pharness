@@ -54,5 +54,7 @@
   evidence export has an operator-approved archival path.
 - Add an explicit DeploymentContract and separate Argo CD execution smoke
   before allowing the generated DeploymentIntent to request a sync.
-- Run the build-output fixture after its GitOps chart revision is synced, then
-  promote its artifact assertions into the release/registry provenance smoke.
+- The build-output fixture passed live on 2026-08-02. Promote its inert,
+  digest-pinned artifact assertions into the future release/registry
+  provenance smoke without treating synthetic fixture output as real registry
+  verification.

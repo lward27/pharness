@@ -45,20 +45,47 @@ application deployment occurred.
 
 ## Build-Output Status
 
-This completed run validates the live typed Tekton execution path but does not
-validate `pipeline_build_output`: the existing `pharness-e2e-noop` fixture has
-no Tekton image-result outputs, and the persisted PipelineIntent correctly
-shows `build_output = null`.
+The original `pharness-e2e-noop` run intentionally had no image outputs, so it
+correctly persisted `build_output = null`. The separate GitOps-managed
+`pharness-e2e-build-output` fixture was subsequently published and run live.
+It emits fixed synthetic `IMAGE_URL` and `IMAGE_DIGEST` results only; it does
+not build or push an image, authenticate to a registry, read a secret, or
+change an application resource.
 
-The repository now defines a separate GitOps-managed
-`pharness-e2e-build-output` fixture. It emits fixed synthetic `IMAGE_URL` and
-`IMAGE_DIGEST` result markers only and performs no OCI registry operation. The
-fixture must be merged and allowed to sync through Argo before its live smoke
-can run. This preserves the rule that disposable cluster fixtures are
-GitOps-managed, rather than installed with an ad hoc `kubectl apply`.
+The successful build-output run produced the following durable evidence:
 
-After Argo is `Synced` and `Healthy` for the revision containing the fixture,
-run:
+- API image: `registry.lucas.engineering/pharness-runtime@sha256:833fcdd93b7ae56d42a406af5cf2ce368c35db83889e598a29d15cd518235620`
+- Git revision: `adce687403b0369749dc6ca2bbb330b09ba3713c`
+- PipelineIntent: `pint_1785686655786860403`
+- PipelineRun: `tekton-pipelines/pharness-pint-1785686655786860403`
+- Terminal condition: `Succeeded=True`, one successful `report` TaskRun
+- PipelineRunAnalysis artifact:
+  `art_pipeline_analysis_pexec_1785686656033883908`
+- PipelineRunAnalysis observation:
+  `obs_pipeline_analysis_pexec_1785686656033883908`
+- Verified build-output artifact:
+  `art_pipeline_build_output_pexec_1785686656033883908`
+- Recorded image reference:
+  `example.invalid/pharness/e2e-build-output:synthetic@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`
+- Proposed-only DeploymentIntent handoff: `dint_1785686676567739621`
+- Durable local evidence bundle:
+  `target/tekton-execution-smoke/20260802T160413Z`
+
+The smoke script waits for the asynchronous terminal analysis and optional
+build-output record before it reports success. This closes a race where a
+terminal PipelineRun receipt was visible before its follow-on durable evidence
+had been attached.
+
+The initial published runtime exposed a SQLite migration behavior specific to
+SQLx: SQLite migrations run in transactions, so the historical table-rebuild
+migrations could not toggle `foreign_keys` inside their SQL bodies. The runtime
+now performs migrations through one dedicated connection with foreign-key
+enforcement disabled, then opens the normal runtime pool with enforcement on.
+The complete migration chain was tested on a WAL-safe backup of the live PVC,
+followed by a clean `foreign_key_check`; the deployed API started healthy with
+zero restarts after the corrective rollout.
+
+To repeat the bounded build-output smoke:
 
 ```sh
 export PHARNESS_API_TOKEN='your operator token'
