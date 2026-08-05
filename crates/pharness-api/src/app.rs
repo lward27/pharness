@@ -10,7 +10,8 @@ use crate::dto::{
     AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
     AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
     AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
-    CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse, CreateChangeSetRequest,
+    CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse,
+    ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
     CreateChangeSetResponse, CreateDeploymentContractRequest,
     CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
     CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
@@ -22,12 +23,12 @@ use crate::dto::{
     CreateRegistryEvidenceFromInspectionResponse, CreateRegistryEvidenceFromReleaseRequest,
     CreateRegistryEvidenceResponse, CreateReleaseFromDeploymentIntentRequest,
     CreateReleaseResponse, CreateRemediationPlanRequest, CreateRunRequest,
-    CreateTrustedEnvelopeRequest, CreateWorkItemRequest, CreateWorkPlanFromRemediationPlanRequest,
-    CreateWorkPlanResponse, DecideApprovalGateRequest, DecideApprovalGateResponse,
-    DecideApprovalRequest, DecideApprovalResponse, DeploymentContractResponse,
-    DeploymentContractsResponse, DeploymentIntentPreflightRequest,
-    DeploymentIntentPreflightResponse, DeploymentIntentResponse, DeploymentIntentsResponse,
-    EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
+    CreateTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
+    CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse, DecideApprovalGateRequest,
+    DecideApprovalGateResponse, DecideApprovalRequest, DecideApprovalResponse,
+    DeploymentContractResponse, DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
+    DeploymentIntentPreflightRequest, DeploymentIntentPreflightResponse, DeploymentIntentResponse,
+    DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
     ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest,
     ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse,
     ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemRequest,
@@ -43,14 +44,15 @@ use crate::dto::{
     ObservationResponse, ObservationsResponse, ObserveGitDeliveryRequest,
     ObserveGitDeliveryResponse, ObserveGitOpsDeliveryRequest, ObserveGitOpsDeliveryResponse,
     PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
-    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest, PipelineIntentResponse,
-    PipelineIntentsResponse, PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest,
-    ReconcileWorkItemRequest, ReconcileWorkItemResponse, RegistryEvidenceListResponse,
-    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
-    RemediationPlansResponse, ReplacePipelineContractRequest, ReplacePipelineContractResponse,
-    ReplanWorkItemRequest, ReplanWorkItemResponse, ResolveGitOpsBaseRevisionRequest,
-    ResolveGitOpsBaseRevisionResponse, ReviewApprovalRequest, ReviseChangeSetRequest,
-    ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
+    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest,
+    PipelineIntentExecutionPreflightResponse, PipelineIntentResponse, PipelineIntentsResponse,
+    PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest,
+    ReconcileDueControllerWaitsResponse, ReconcileWorkItemRequest, ReconcileWorkItemResponse,
+    RegistryEvidenceListResponse, RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse,
+    RemediationPlanResponse, RemediationPlansResponse, ReplacePipelineContractRequest,
+    ReplacePipelineContractResponse, ReplanWorkItemRequest, ReplanWorkItemResponse,
+    ResolveGitOpsBaseRevisionRequest, ResolveGitOpsBaseRevisionResponse, ReviewApprovalRequest,
+    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
     RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
     SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
     SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
@@ -59,9 +61,10 @@ use crate::dto::{
     TransitionGitOpsChangeSetResponse, TransitionPipelineContractRequest,
     TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
     TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
-    TransitionReleaseRequest, TransitionReleaseResponse, TransitionWorkItemRequest,
-    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TrustedEnvelopeResponse,
-    VerifyReleaseRequest, VerifyReleaseResponse, WorkItemResponse, WorkItemsResponse,
+    TransitionReleaseRequest, TransitionReleaseResponse, TransitionRemediationPlanRequest,
+    TransitionRemediationPlanResponse, TransitionWorkItemRequest, TransitionWorkPlanRequest,
+    TransitionWorkPlanResponse, TrustedEnvelopeResponse, VerifyReleaseRequest,
+    VerifyReleaseResponse, WorkItemPipelineContextResponse, WorkItemResponse, WorkItemsResponse,
     WorkPlanResponse, WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
@@ -75,28 +78,28 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use pharness_core::{
-    AgentAction, AgentEvent, CapabilityKind, EventId, EventKind, PermissionGrant,
+    ActionId, AgentAction, AgentEvent, CapabilityKind, EventId, EventKind, PermissionGrant,
     PermissionGrantPolicy, PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools,
     RiskLevel, RunId, RunScope, SafetyPolicy, SessionId, ToolExecutor, ToolResult,
 };
 use pharness_runhost::{AttemptOutcome, WorkspaceSourceSpec};
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
-    AuditEventListFilter, ChangeSetListFilter, DeploymentContractListFilter,
-    DeploymentIntentListFilter, GitOpsChangeSetListFilter, IncidentListFilter,
-    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
-    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter, RunListFilter,
-    RunSummaryFilter, StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet,
-    StoredDeploymentContract, StoredDeploymentIntent, StoredGitOpsChangeSet, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
-    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredWorkItem, StoredWorkPlan,
-    UpdateChangeSetRevision, UpdateDeploymentIntentDraft, UpdatePipelineIntentDraft,
-    UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, WorkItemListFilter, WorkPlanListFilter,
-    WorkspaceListFilter,
+    AuditEventListFilter, ChangeSetListFilter, ControllerWaitListFilter,
+    DeploymentContractListFilter, DeploymentIntentListFilter, GitOpsChangeSetListFilter,
+    IncidentListFilter, ObservationListFilter, PipelineContractListFilter,
+    PipelineIntentListFilter, RegistryEvidenceListFilter, ReleaseListFilter,
+    RemediationPlanListFilter, RunListFilter, RunSummaryFilter, StoredApprovalGate, StoredArtifact,
+    StoredAuditEvent, StoredChangeSet, StoredControllerWait, StoredDeploymentContract,
+    StoredDeploymentIntent, StoredGitOpsChangeSet, StoredIncident, StoredObservation,
+    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, UpdateChangeSetRevision,
+    UpdateDeploymentIntentDraft, UpdatePipelineIntentDraft, UpdatePipelineIntentExecution,
+    UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
+    WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_store::{
-    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet,
+    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateControllerWait,
     CreateDeploymentContract, CreateDeploymentIntent, CreateGitOpsChangeSet, CreateIncident,
     CreateObservation, CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent,
     CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
@@ -139,6 +142,8 @@ const PIPELINE_DELIVERY_ACTIONS: [&str; 1] = ["tekton_create_pipeline_run"];
 const ARGO_SYNC_ACTIONS: [&str; 1] = ["argocd_sync"];
 const CLUSTER_DELIVERY_ACTIONS: [&str; 2] = ["tekton_create_pipeline_run", "argocd_sync"];
 const PRODUCTION_DELIVERY_ACTIONS: [&str; 1] = ["production_action"];
+const CONTROLLER_WAIT_INTERVAL_MS: u128 = 15_000;
+const CONTROLLER_WAIT_MAX_CHECKS: u32 = 240;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -284,6 +289,10 @@ pub fn router(
         )
         .route("/api/remediation-plans/:plan_id", get(get_remediation_plan))
         .route(
+            "/api/remediation-plans/:plan_id/transition",
+            post(transition_remediation_plan),
+        )
+        .route(
             "/api/work-items",
             get(list_work_items).post(create_work_item),
         )
@@ -291,6 +300,14 @@ pub fn router(
         .route(
             "/api/work-items/:work_item_id/events",
             get(list_work_item_events),
+        )
+        .route(
+            "/api/work-items/:work_item_id/controller-waits",
+            get(list_work_item_controller_waits),
+        )
+        .route(
+            "/api/controller-waits/reconcile-due",
+            post(reconcile_due_controller_waits),
         )
         .route(
             "/api/work-items/:work_item_id/work-plan",
@@ -311,6 +328,14 @@ pub fn router(
         .route(
             "/api/work-items/:work_item_id/capture-change-set",
             post(capture_work_item_change_set),
+        )
+        .route(
+            "/api/work-items/:work_item_id/pipeline-intent",
+            post(create_work_item_pipeline_intent),
+        )
+        .route(
+            "/api/work-items/:work_item_id/pipeline-intent-context",
+            get(work_item_pipeline_intent_context),
         )
         .route(
             "/api/work-items/:work_item_id/transition",
@@ -2050,6 +2075,47 @@ async fn create_remediation_plan(
     Ok(Json(plan.into()))
 }
 
+async fn transition_remediation_plan(
+    State(state): State<AppState>,
+    Path(plan_id): Path<String>,
+    Json(request): Json<TransitionRemediationPlanRequest>,
+) -> Result<Json<TransitionRemediationPlanResponse>, ApiError> {
+    let current = state
+        .store
+        .get_remediation_plan(&plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("remediation_plan", &plan_id))?;
+    let target = RemediationPlanStatus::parse(&request.target_status)?;
+    let current_status = RemediationPlanStatus::parse(&current.status)?;
+    current_status.ensure_can_transition_to(target)?;
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
+    if target == RemediationPlanStatus::Approved
+        && current.requires_approval
+        && (actor.is_none() || reason.is_none())
+    {
+        return Err(ApiError::bad_request(
+            "approving a remediation plan requires actor and reason",
+        ));
+    }
+    let remediation_plan = state
+        .store
+        .update_remediation_plan_status(&plan_id, target.as_str())
+        .await?;
+    append_remediation_plan_audit_event(
+        &state.store,
+        &remediation_plan,
+        &format!("remediation_plan.{}", target.as_str()),
+        actor,
+        reason,
+    )
+    .await?;
+
+    Ok(Json(TransitionRemediationPlanResponse {
+        remediation_plan: remediation_plan.into(),
+    }))
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListWorkItemsQuery {
     status: Option<String>,
@@ -2183,6 +2249,801 @@ async fn list_work_item_events(
         .map(Into::into)
         .collect();
     Ok(Json(AuditEventsResponse { events }))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListControllerWaitsQuery {
+    status: Option<String>,
+    wait_kind: Option<String>,
+    due_before_ms: Option<i64>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_work_item_controller_waits(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+    Query(query): Query<ListControllerWaitsQuery>,
+) -> Result<Json<ControllerWaitsResponse>, ApiError> {
+    state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let controller_waits = state
+        .store
+        .list_controller_waits(ControllerWaitListFilter {
+            work_item_id: Some(work_item_id),
+            status: clean_optional_text(query.status),
+            wait_kind: clean_optional_text(query.wait_kind),
+            due_before_ms: query.due_before_ms,
+            limit,
+            offset,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<_>>();
+    let count = controller_waits.len();
+    Ok(Json(ControllerWaitsResponse {
+        controller_waits,
+        count,
+        limit,
+        offset,
+    }))
+}
+
+/// Reconcile due controller waits against already-persisted delivery evidence.
+/// This endpoint never calls a provider, creates a worker Job, retries an
+/// action, merges a pull request, or mutates an external target.
+async fn reconcile_due_controller_waits(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Json(request): Json<ReconcileDueControllerWaitsRequest>,
+) -> Result<Json<ReconcileDueControllerWaitsResponse>, ApiError> {
+    let evaluated_at = current_millis();
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let waits = state
+        .store
+        .list_controller_waits(ControllerWaitListFilter {
+            status: Some("active".to_string()),
+            due_before_ms: Some(
+                i64::try_from(evaluated_at)
+                    .map_err(|_| ApiError::internal("controller clock exceeds SQLite range"))?,
+            ),
+            limit: request.limit.unwrap_or(25).clamp(1, 50),
+            ..ControllerWaitListFilter::default()
+        })
+        .await?;
+    let checked = waits.len();
+    let mut pending = 0;
+    let mut progressed = 0;
+    let mut blocked = 0;
+    let mut results = Vec::with_capacity(waits.len());
+
+    for wait in waits {
+        let work_item = state
+            .store
+            .get_work_item(&wait.work_item_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("work_item", &wait.work_item_id))?;
+        if matches!(
+            work_item.status.as_str(),
+            "completed" | "cancelled" | "failed"
+        ) {
+            let reason = format!("WorkItem is terminal ({})", work_item.status);
+            let resolved = state
+                .store
+                .resolve_controller_wait(&wait.id, "resolved", reason.clone())
+                .await?;
+            append_controller_wait_audit_event(
+                &state.store,
+                &resolved,
+                "controller_wait.resolved",
+                actor.clone(),
+                Some(reason.clone()),
+            )
+            .await?;
+            results.push(ControllerWaitTickResult {
+                controller_wait: resolved.into(),
+                outcome: "resolved".to_string(),
+                next_action: None,
+                work_item: work_item.into(),
+                message: reason,
+            });
+            continue;
+        }
+
+        let deadline_at = wait.deadline_at.parse::<u128>().unwrap_or(0);
+        if deadline_at <= evaluated_at || wait.check_count >= wait.max_checks {
+            let reason = if deadline_at <= evaluated_at {
+                "controller wait deadline elapsed without observed progress".to_string()
+            } else {
+                format!(
+                    "controller wait exhausted {} observation checks without observed progress",
+                    wait.max_checks
+                )
+            };
+            let expired = state
+                .store
+                .resolve_controller_wait(&wait.id, "expired", reason.clone())
+                .await?;
+            append_controller_wait_audit_event(
+                &state.store,
+                &expired,
+                "controller_wait.expired",
+                actor.clone(),
+                Some(reason.clone()),
+            )
+            .await?;
+            let work_item = block_work_item_from_controller_wait_expiry(
+                &state,
+                &work_item,
+                &expired,
+                actor.clone(),
+                reason.clone(),
+            )
+            .await?;
+            blocked += 1;
+            results.push(ControllerWaitTickResult {
+                controller_wait: expired.into(),
+                outcome: "blocked".to_string(),
+                next_action: None,
+                work_item: work_item.into(),
+                message: reason,
+            });
+            continue;
+        }
+
+        if let Err(error) = observe_due_controller_wait(&state, &wait, actor.clone()).await {
+            append_controller_wait_audit_event(
+                &state.store,
+                &wait,
+                "controller_wait.observation_failed",
+                actor.clone(),
+                Some(format!(
+                    "read-only PipelineRun observation was unavailable ({})",
+                    controller_wait_observation_failure_reason(&error)
+                )),
+            )
+            .await?;
+        }
+
+        let Json(snapshot) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: actor.clone(),
+                reason: None,
+                max_turns: None,
+            }),
+        )
+        .await?;
+        let expected_action = wait
+            .data_json
+            .get("controller_action")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if snapshot.action == expected_action {
+            let checked_wait = state
+                .store
+                .record_controller_wait_check(
+                    &wait.id,
+                    evaluated_at
+                        .saturating_add(CONTROLLER_WAIT_INTERVAL_MS)
+                        .to_string(),
+                )
+                .await?;
+            append_controller_wait_audit_event(
+                &state.store,
+                &checked_wait,
+                "controller_wait.checked",
+                actor.clone(),
+                Some("no new durable evidence observed".to_string()),
+            )
+            .await?;
+            pending += 1;
+            results.push(ControllerWaitTickResult {
+                controller_wait: checked_wait.into(),
+                outcome: "pending".to_string(),
+                next_action: Some(snapshot.action),
+                work_item: snapshot.work_item,
+                message: "no new durable evidence observed; scheduled the next bounded check"
+                    .to_string(),
+            });
+        } else {
+            let reason = format!(
+                "durable evidence advanced controller action from {expected_action} to {}",
+                snapshot.action
+            );
+            let resolved = state
+                .store
+                .resolve_controller_wait(&wait.id, "resolved", reason.clone())
+                .await?;
+            append_controller_wait_audit_event(
+                &state.store,
+                &resolved,
+                "controller_wait.progressed",
+                actor.clone(),
+                Some(reason.clone()),
+            )
+            .await?;
+            progressed += 1;
+            results.push(ControllerWaitTickResult {
+                controller_wait: resolved.into(),
+                outcome: "progressed".to_string(),
+                next_action: Some(snapshot.action),
+                work_item: snapshot.work_item,
+                message: reason,
+            });
+        }
+    }
+
+    Ok(Json(ReconcileDueControllerWaitsResponse {
+        evaluated_at: evaluated_at.to_string(),
+        checked,
+        pending,
+        progressed,
+        blocked,
+        results,
+    }))
+}
+
+/// Refreshes only the PipelineRun already named in durable PipelineIntent execution state.
+/// This is an observation adapter: it never dispatches Tekton work, retries an execution, or
+/// otherwise mutates an external system. Terminal evidence uses the existing outcome boundary;
+/// the normal controller reconciliation decides whether that evidence made progress.
+async fn observe_due_controller_wait(
+    state: &AppState,
+    wait: &StoredControllerWait,
+    actor: Option<String>,
+) -> Result<(), ApiError> {
+    match wait.wait_kind.as_str() {
+        "pipeline_execution" => observe_due_pipeline_execution_wait(state, wait, actor).await,
+        "deployment_execution" => observe_due_deployment_execution_wait(state, wait, actor).await,
+        _ => Ok(()),
+    }
+}
+
+async fn observe_due_pipeline_execution_wait(
+    state: &AppState,
+    wait: &StoredControllerWait,
+    actor: Option<String>,
+) -> Result<(), ApiError> {
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&wait.work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no WorkPlan lineage"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no ChangeSet lineage"))?;
+    let intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no PipelineIntent lineage"))?;
+    if intent.status != "executing" {
+        return Ok(());
+    }
+
+    let execution_id = intent
+        .intent_json
+        .pointer("/execution_state/execution_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| ApiError::conflict("PipelineIntent execution has no execution_id"))?
+        .to_string();
+    let namespace = intent
+        .intent_json
+        .pointer("/execution_state/pipeline_run_namespace")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| ApiError::conflict("PipelineIntent execution has no PipelineRun namespace"))?
+        .to_string();
+    let name = intent
+        .intent_json
+        .pointer("/execution_state/pipeline_run_name")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| ApiError::conflict("PipelineIntent execution has no PipelineRun name"))?
+        .to_string();
+    validate_kubernetes_name("PipelineIntent PipelineRun namespace", &namespace)?;
+    validate_kubernetes_name("PipelineIntent PipelineRun name", &name)?;
+
+    let action = AgentAction::TektonAnalyzePipelineRun {
+        id: ActionId::new(format!("controller.wait.{}.tekton", wait.id)),
+        reason: "Observe the exact PipelineRun recorded by a durable controller wait".to_string(),
+        namespace: namespace.clone(),
+        name: name.clone(),
+    };
+    if !matches!(
+        state.policy.evaluate_action(&action),
+        PolicyDecision::Allow { .. }
+    ) {
+        return Err(ApiError::conflict(
+            "controller policy does not permit read-only Tekton PipelineRun observation",
+        ));
+    }
+    let result = state
+        .cluster_tools
+        .execute(&action)
+        .await
+        .map_err(|_| ApiError::internal("read-only Tekton PipelineRun observation failed"))?;
+    let analysis = result
+        .content
+        .get("analysis")
+        .cloned()
+        .ok_or_else(|| ApiError::internal("Tekton observation returned no analysis"))?;
+    validate_pipeline_run_analysis_target(&namespace, &name, &analysis)?;
+    let observed_status = analysis
+        .pointer("/summary/status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+
+    match observed_status {
+        "succeeded" | "failed" | "cancelled" => {
+            let outcome_status = if observed_status == "succeeded" {
+                "completed"
+            } else {
+                "failed"
+            };
+            let Json(updated) = internal_pipeline_intent_execution_outcome(
+                State(state.clone()),
+                Path(intent.id.clone()),
+                Json(PipelineIntentExecutionOutcomeRequest {
+                    execution_id: execution_id.clone(),
+                    status: outcome_status.to_string(),
+                    pipeline_run_namespace: Some(namespace.clone()),
+                    pipeline_run_name: Some(name.clone()),
+                    error: (observed_status != "succeeded")
+                        .then(|| format!("PipelineRun reached terminal {observed_status} status")),
+                    pipeline_run_analysis: Some(analysis.clone()),
+                    analysis_error: None,
+                }),
+            )
+            .await?;
+            let updated_intent = state
+                .store
+                .get_pipeline_intent(&updated.id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("pipeline_intent", &updated.id))?;
+            append_pipeline_intent_audit_event(
+                &state.store,
+                &updated_intent,
+                "pipeline_intent.execution_observed",
+                actor.or_else(|| Some("controller:tekton-observer".to_string())),
+                Some("recorded terminal PipelineRun evidence from an exact typed read".to_string()),
+                json!({
+                    "execution_id": execution_id,
+                    "pipeline_run_namespace": namespace,
+                    "pipeline_run_name": name,
+                    "observed_status": observed_status,
+                }),
+            )
+            .await?;
+        }
+        "running" | "unknown" => {
+            persist_pipeline_execution_wait_observation(
+                state,
+                &intent,
+                PipelineExecutionWaitObservationInput {
+                    execution_id: &execution_id,
+                    namespace: &namespace,
+                    name: &name,
+                    observed_status,
+                    analysis: &analysis,
+                },
+                actor,
+            )
+            .await?;
+        }
+        _ => {
+            return Err(ApiError::internal(
+                "Tekton observation returned an unsupported PipelineRun status",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Reads one Argo CD Application already bound to an active Argo execution.
+/// It never initiates reconciliation: terminal evidence is accepted only from
+/// Argo's compact operation phase and exact declared application target.
+async fn observe_due_deployment_execution_wait(
+    state: &AppState,
+    wait: &StoredControllerWait,
+    actor: Option<String>,
+) -> Result<(), ApiError> {
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&wait.work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no WorkPlan lineage"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no ChangeSet lineage"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no PipelineIntent lineage"))?;
+    let intent = state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("controller wait has no DeploymentIntent lineage"))?;
+    if intent.status != "approved" {
+        return Ok(());
+    }
+    let target = deployment_target(&intent)?;
+    validate_kubernetes_name("DeploymentIntent argo_application", &target.application)?;
+    let run_id = intent
+        .run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("DeploymentIntent has no coding run provenance"))?;
+    let artifacts = state.store.list_artifacts(&run_id).await?;
+    let execution = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "argo_sync_execution"
+                && artifact.content_json.as_ref().is_some_and(|content| {
+                    content.get("deployment_intent_id").and_then(Value::as_str)
+                        == Some(intent.id.as_str())
+                })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .ok_or_else(|| ApiError::conflict("DeploymentIntent has no active Argo sync execution"))?;
+    let execution_content = execution
+        .content_json
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("Argo sync execution has no structured content"))?;
+    let execution_id =
+        required_json_string(execution_content, "execution_id", "Argo sync execution")?;
+    let execution_target = execution_content
+        .get("target")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("Argo sync execution has no immutable target"))?;
+    if execution_target.get("environment").and_then(Value::as_str) != Some(&target.environment)
+        || execution_target.get("namespace").and_then(Value::as_str) != Some(&target.namespace)
+        || execution_target
+            .get("argo_application")
+            .and_then(Value::as_str)
+            != Some(&target.application)
+    {
+        return Err(ApiError::conflict(
+            "Argo sync execution target no longer matches DeploymentIntent",
+        ));
+    }
+
+    let action = AgentAction::ArgoGetApp {
+        id: ActionId::new(format!("controller.wait.{}.argo", wait.id)),
+        reason: "Observe the exact Argo CD Application recorded by a durable controller wait"
+            .to_string(),
+        app: target.application.clone(),
+    };
+    if !matches!(
+        state.policy.evaluate_action(&action),
+        PolicyDecision::Allow { .. }
+    ) {
+        return Err(ApiError::conflict(
+            "controller policy does not permit read-only Argo Application observation",
+        ));
+    }
+    let result = state
+        .cluster_tools
+        .execute(&action)
+        .await
+        .map_err(|_| ApiError::internal("read-only Argo Application observation failed"))?;
+    let analysis = result
+        .content
+        .get("analysis")
+        .cloned()
+        .ok_or_else(|| ApiError::internal("Argo observation returned no analysis"))?;
+    if analysis.get("kind").and_then(Value::as_str) != Some("Application")
+        || analysis.get("name").and_then(Value::as_str) != Some(target.application.as_str())
+    {
+        return Err(ApiError::internal(
+            "Argo observation did not match the durable Application target",
+        ));
+    }
+    let sync_status = analysis.get("sync_status").and_then(Value::as_str);
+    let health_status = analysis
+        .get("health_status")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let operation_phase = analysis.get("operation_phase").and_then(Value::as_str);
+    let revision = analysis
+        .get("operation_revision")
+        .and_then(Value::as_str)
+        .or_else(|| analysis.get("revision").and_then(Value::as_str))
+        .map(ToOwned::to_owned);
+
+    let terminal_status = match operation_phase {
+        Some("Succeeded") if sync_status == Some("Synced") => Some("completed"),
+        Some("Failed" | "Error") => Some("failed"),
+        Some("Terminated") => Some("cancelled"),
+        _ => None,
+    };
+    if let Some(status) = terminal_status {
+        let Json(result) = internal_argo_sync_outcome(
+            State(state.clone()),
+            Path(intent.id.clone()),
+            Json(ArgoSyncOutcomeRequest {
+                execution_id: execution_id.clone(),
+                status: status.to_string(),
+                sync_status: sync_status.map(ToOwned::to_owned),
+                health_status,
+                operation_phase: operation_phase.map(ToOwned::to_owned),
+                revision,
+                error_code: (status != "completed").then(|| {
+                    if status == "cancelled" {
+                        "cancelled".to_string()
+                    } else {
+                        "argo_operation_failed".to_string()
+                    }
+                }),
+            }),
+        )
+        .await?;
+        append_deployment_intent_audit_event(
+            &state.store,
+            &intent,
+            "deployment_intent.execution_observed",
+            actor.or_else(|| Some("controller:argo-observer".to_string())),
+            Some(
+                "recorded terminal Argo Application evidence from an exact typed read".to_string(),
+            ),
+            json!({
+                "execution_id": execution_id,
+                "argo_application": target.application,
+                "observed_status": status,
+                "operation_phase": operation_phase,
+                "sync_status": sync_status,
+                "result_artifact_id": result.id,
+            }),
+        )
+        .await?;
+    } else {
+        persist_deployment_execution_wait_observation(
+            state,
+            &intent,
+            DeploymentExecutionWaitObservationInput {
+                execution_id: &execution_id,
+                application: &target.application,
+                observed_operation_phase: operation_phase,
+                observed_sync_status: sync_status,
+                analysis: &analysis,
+            },
+            actor,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+struct DeploymentExecutionWaitObservationInput<'a> {
+    execution_id: &'a str,
+    application: &'a str,
+    observed_operation_phase: Option<&'a str>,
+    observed_sync_status: Option<&'a str>,
+    analysis: &'a Value,
+}
+
+async fn persist_deployment_execution_wait_observation(
+    state: &AppState,
+    intent: &StoredDeploymentIntent,
+    input: DeploymentExecutionWaitObservationInput<'_>,
+    actor: Option<String>,
+) -> Result<(), ApiError> {
+    let phase = input.observed_operation_phase.unwrap_or("unknown");
+    let observation_id = format!(
+        "obs_argo_wait_{}_{}",
+        safe_controller_wait_id_fragment(input.execution_id),
+        safe_controller_wait_id_fragment(phase)
+    );
+    let observation = match state.store.get_observation(&observation_id).await? {
+        Some(existing) => existing,
+        None => {
+            let created = state
+                .store
+                .create_observation(CreateObservation {
+                    id: observation_id,
+                    session_id: intent.session_id.clone(),
+                    run_id: intent.run_id.clone(),
+                    source: "argocd".to_string(),
+                    kind: "argo_sync_wait_observation".to_string(),
+                    subject: input.application.to_string(),
+                    summary: format!(
+                        "Argo Application {} remains {} during bounded controller wait",
+                        input.application, phase
+                    ),
+                    resource_namespace: input
+                        .analysis
+                        .get("namespace")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned),
+                    resource_kind: Some("Application".to_string()),
+                    resource_name: Some(input.application.to_string()),
+                    resource_ref_json: Some(json!({
+                        "apiVersion": "argoproj.io/v1alpha1",
+                        "kind": "Application",
+                        "name": input.application,
+                    })),
+                    artifact_id: None,
+                    data_json: json!({
+                        "execution_id": input.execution_id,
+                        "operation_phase": input.observed_operation_phase,
+                        "sync_status": input.observed_sync_status,
+                        "analysis": input.analysis,
+                    }),
+                })
+                .await?;
+            append_observation_audit_event(
+                &state.store,
+                &created,
+                "observation.created",
+                actor
+                    .clone()
+                    .or_else(|| Some("controller:argo-observer".to_string())),
+                Some("recorded nonterminal exact Argo Application observation".to_string()),
+            )
+            .await?;
+            created
+        }
+    };
+    append_deployment_intent_audit_event(
+        &state.store,
+        intent,
+        "deployment_intent.execution_observed",
+        actor.or_else(|| Some("controller:argo-observer".to_string())),
+        Some(
+            "recorded nonterminal Argo Application observation from an exact typed read"
+                .to_string(),
+        ),
+        json!({
+            "execution_id": input.execution_id,
+            "argo_application": input.application,
+            "operation_phase": input.observed_operation_phase,
+            "sync_status": input.observed_sync_status,
+            "observation_id": observation.id,
+        }),
+    )
+    .await?;
+    Ok(())
+}
+
+struct PipelineExecutionWaitObservationInput<'a> {
+    execution_id: &'a str,
+    namespace: &'a str,
+    name: &'a str,
+    observed_status: &'a str,
+    analysis: &'a Value,
+}
+
+async fn persist_pipeline_execution_wait_observation(
+    state: &AppState,
+    intent: &StoredPipelineIntent,
+    input: PipelineExecutionWaitObservationInput<'_>,
+    actor: Option<String>,
+) -> Result<(), ApiError> {
+    let observation_id = format!(
+        "obs_pipeline_wait_{}_{}",
+        safe_controller_wait_id_fragment(input.execution_id),
+        input.observed_status
+    );
+    let observation = match state.store.get_observation(&observation_id).await? {
+        Some(existing) => existing,
+        None => {
+            let created = state
+                .store
+                .create_observation(CreateObservation {
+                    id: observation_id,
+                    session_id: intent.session_id.clone(),
+                    run_id: intent.run_id.clone(),
+                    source: "tekton".to_string(),
+                    kind: "pipeline_run_wait_observation".to_string(),
+                    subject: format!("{}/{}", input.namespace, input.name),
+                    summary: format!(
+                        "PipelineRun {}/{} remains {} during bounded controller wait",
+                        input.namespace, input.name, input.observed_status
+                    ),
+                    resource_namespace: Some(input.namespace.to_string()),
+                    resource_kind: Some("PipelineRun".to_string()),
+                    resource_name: Some(input.name.to_string()),
+                    resource_ref_json: Some(json!({
+                        "apiVersion": "tekton.dev/v1",
+                        "kind": "PipelineRun",
+                        "namespace": input.namespace,
+                        "name": input.name,
+                    })),
+                    artifact_id: None,
+                    data_json: json!({
+                        "execution_id": input.execution_id,
+                        "observed_status": input.observed_status,
+                        "analysis": input.analysis,
+                    }),
+                })
+                .await?;
+            append_observation_audit_event(
+                &state.store,
+                &created,
+                "observation.created",
+                actor
+                    .clone()
+                    .or_else(|| Some("controller:tekton-observer".to_string())),
+                Some("recorded nonterminal exact PipelineRun observation".to_string()),
+            )
+            .await?;
+            created
+        }
+    };
+    append_pipeline_intent_audit_event(
+        &state.store,
+        intent,
+        "pipeline_intent.execution_observed",
+        actor.or_else(|| Some("controller:tekton-observer".to_string())),
+        Some("recorded nonterminal PipelineRun observation from an exact typed read".to_string()),
+        json!({
+            "execution_id": input.execution_id,
+            "pipeline_run_namespace": input.namespace,
+            "pipeline_run_name": input.name,
+            "observed_status": input.observed_status,
+            "observation_id": observation.id,
+        }),
+    )
+    .await?;
+    Ok(())
+}
+
+fn validate_pipeline_run_analysis_target(
+    namespace: &str,
+    name: &str,
+    analysis: &Value,
+) -> Result<(), ApiError> {
+    if analysis.get("kind").and_then(Value::as_str) != Some("PipelineRunAnalysis") {
+        return Err(ApiError::internal(
+            "Tekton observation returned an invalid PipelineRun analysis",
+        ));
+    }
+    if analysis
+        .pointer("/pipeline_run/namespace")
+        .and_then(Value::as_str)
+        != Some(namespace)
+        || analysis
+            .pointer("/pipeline_run/name")
+            .and_then(Value::as_str)
+            != Some(name)
+    {
+        return Err(ApiError::internal(
+            "Tekton observation did not match the durable PipelineRun target",
+        ));
+    }
+    Ok(())
+}
+
+fn safe_controller_wait_id_fragment(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    format!("{:x}", digest)[..16].to_string()
+}
+
+fn controller_wait_observation_failure_reason(error: &ApiError) -> &'static str {
+    match error.status {
+        StatusCode::CONFLICT => "target or policy validation failed",
+        _ => "typed observer did not return usable evidence",
+    }
 }
 
 async fn transition_work_item(
@@ -2368,18 +3229,109 @@ async fn reconcile_work_item(
         None => None,
     };
 
-    let action = work_item_reconcile_action(&work_item, work_plan.as_ref(), change_set.as_ref());
+    let git_delivery = git_delivery_flow(&state.store, change_set.as_ref()).await?;
+    let pipeline_intent = match change_set.as_ref() {
+        Some(change_set) => {
+            state
+                .store
+                .get_pipeline_intent_by_change_set(&change_set.id)
+                .await?
+        }
+        None => None,
+    };
+    let pipeline_execution_preflight = match pipeline_intent
+        .as_ref()
+        .filter(|intent| pipeline_intent_requires_execution_preflight(intent))
+    {
+        Some(intent) => Some(pipeline_intent_execution_preflight(&state, &intent.id).await?),
+        None => None,
+    };
+    let deployment_intent = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_deployment_intent_by_pipeline_intent(&intent.id)
+                .await?
+        }
+        None => None,
+    };
+    let deployment_execution_preflight = match deployment_intent
+        .as_ref()
+        .filter(|intent| intent.status == "approved")
+    {
+        Some(intent) => Some(deployment_intent_execution_preflight(&state, &intent.id).await?),
+        None => None,
+    };
+    let deployment_dispatch_ready = deployment_execution_preflight.as_ref().map(|preflight| {
+        state.worker.argo_executor_available()
+            && deployment_target(&preflight.intent)
+                .ok()
+                .is_some_and(|target| {
+                    state
+                        .worker
+                        .argo_executor_allows_application(&target.application)
+                })
+    });
+    let deployment_delivery =
+        deployment_intent_delivery_flow(&state.store, deployment_intent.as_ref()).await?;
+    let gitops_change_set = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_gitops_change_set_by_pipeline_intent(&intent.id)
+                .await?
+        }
+        None => None,
+    };
+    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
+    let gitops_base_revision = match gitops_change_set.as_ref() {
+        Some(change_set) => {
+            Some(gitops_base_revision_reconcile_state(&state.store, change_set).await?)
+        }
+        None => None,
+    };
+    let action = work_item_reconcile_action(
+        &work_item,
+        work_plan.as_ref(),
+        WorkItemDeliveryReconcileContext {
+            change_set: change_set.as_ref(),
+            git_delivery: git_delivery.as_ref(),
+            pipeline_intent: pipeline_intent.as_ref(),
+            pipeline_execution_ready: pipeline_execution_preflight
+                .as_ref()
+                .map(|preflight| preflight.ready),
+            deployment_intent: deployment_intent.as_ref(),
+            deployment_execution_preflight: deployment_execution_preflight.as_ref(),
+            deployment_dispatch_ready,
+            deployment_delivery: deployment_delivery.as_ref(),
+            gitops_change_set: gitops_change_set.as_ref(),
+            gitops_delivery: gitops_delivery.as_ref(),
+            gitops_base_revision,
+        },
+    );
+    let recorded_preflight =
+        git_delivery_preflight_response(&state.store, git_delivery.as_ref()).await?;
     if !request.apply {
         return reconcile_work_item_response(
             &state,
             &work_item_id,
             action,
             false,
-            None,
+            recorded_preflight,
             "preview only; pass apply=true to perform the reported safe transition".to_string(),
         )
         .await
         .map(Json);
+    }
+
+    if action.controller_wait_kind().is_none() {
+        supersede_active_controller_wait_if_present(
+            &state,
+            &work_item_id,
+            format!("controller moved to {}", action.as_str()),
+            actor.clone(),
+        )
+        .await?;
     }
 
     match action {
@@ -2448,6 +3400,15 @@ async fn reconcile_work_item(
                 run: Some(execution.run),
                 change_set: None,
                 git_delivery_preflight: None,
+                pipeline_intent: None,
+                pipeline_execution_preflight: None,
+                deployment_intent: None,
+                deployment_execution_preflight: None,
+                deployment_delivery: None,
+                gitops_change_set: None,
+                gitops_delivery: None,
+                gitops_delivery_preflight: None,
+                controller_wait: None,
                 message: "started one bounded coding attempt in the declared isolated workspace"
                     .to_string(),
             }))
@@ -2527,17 +3488,734 @@ async fn reconcile_work_item(
             .await
             .map(Json)
         }
+        WorkItemReconcileAction::CompleteWorkItem => {
+            let completed =
+                complete_work_item_from_verified_release(&state, &work_item_id, actor, reason)
+                    .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                format!(
+                    "completed WorkItem {} from verified Release {}",
+                    completed.work_item.id, completed.release.id
+                ),
+            )
+            .await
+            .map(Json)
+        }
+        action if action.controller_wait_kind().is_some() => {
+            let (controller_wait, created) =
+                schedule_controller_wait(&state, &work_item, action, actor.clone()).await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                if created {
+                    format!(
+                        "scheduled bounded {} wait {} for WorkItem {}",
+                        controller_wait.wait_kind, controller_wait.id, work_item_id
+                    )
+                } else {
+                    format!(
+                        "retained active {} wait {} for WorkItem {}",
+                        controller_wait.wait_kind, controller_wait.id, work_item_id
+                    )
+                },
+            )
+            .await
+            .map(Json)
+        }
+        action if action.delivery_failure().is_some() => {
+            let (failure_code, failure_summary) = action
+                .delivery_failure()
+                .expect("matching controller action has a delivery failure");
+            let blocked = block_work_item_from_delivery_failure(
+                &state,
+                &work_item_id,
+                action,
+                failure_code,
+                failure_summary,
+                actor,
+                reason,
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                format!(
+                    "blocked WorkItem {}: {} ({})",
+                    blocked.id, failure_summary, failure_code
+                ),
+            )
+            .await
+            .map(Json)
+        }
         _ => reconcile_work_item_response(
             &state,
             &work_item_id,
             action,
             false,
-            None,
+            recorded_preflight,
             action.message(&work_item, work_plan.as_ref(), change_set.as_ref()),
         )
         .await
         .map(Json),
     }
+}
+
+/// Persist a terminal controller stop after a durable external-system failure.
+/// It deliberately does not retry, rollback, or mutate the external target.
+async fn block_work_item_from_delivery_failure(
+    state: &AppState,
+    work_item_id: &str,
+    action: WorkItemReconcileAction,
+    failure_code: &str,
+    failure_summary: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<StoredWorkItem, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if matches!(work_item.status.as_str(), "completed" | "cancelled") {
+        return Err(ApiError::conflict(
+            "terminal WorkItems cannot be blocked by controller reconciliation",
+        ));
+    }
+    if work_item.status == "blocked" {
+        return Ok(work_item);
+    }
+    let reason = reason.or_else(|| Some(failure_summary.to_string()));
+
+    // A delivery failure is operational evidence, not merely a controller state
+    // transition. Persist the evidence before blocking the WorkItem so the UI
+    // and a future remediation controller have a durable, non-secret anchor.
+    let work_plan = state.store.get_work_plan_by_work_item(work_item_id).await?;
+    let (session_id, run_id, resource_namespace, resource_kind, resource_name, work_plan_id) =
+        if let Some(work_plan) = work_plan {
+            (
+                work_plan.session_id,
+                work_plan
+                    .run_id
+                    .or_else(|| work_item.current_run_id.clone()),
+                work_plan
+                    .resource_namespace
+                    .or_else(|| work_item.target_namespace.clone()),
+                work_plan
+                    .resource_kind
+                    .or_else(|| Some("work_item".to_string())),
+                work_plan
+                    .resource_name
+                    .or_else(|| Some(work_item.id.clone())),
+                Some(work_plan.id),
+            )
+        } else {
+            let (session_id, run_id) = root_session_for_request(
+                &state.store,
+                None,
+                work_item.current_run_id.clone(),
+                "delivery failure evidence",
+            )
+            .await?;
+            (
+                session_id,
+                run_id,
+                work_item.target_namespace.clone(),
+                Some("work_item".to_string()),
+                Some(work_item.id.clone()),
+                None,
+            )
+        };
+    let evidence = json!({
+        "source": "work_item_delivery_failure",
+        "work_item_id": work_item.id,
+        "work_plan_id": work_plan_id,
+        "controller_action": action.as_str(),
+        "failure_code": failure_code,
+        "failure_summary": failure_summary,
+        "source_provenance": {
+            "repo": work_item.source_repo,
+            "ref": work_item.source_ref,
+        },
+        "target": {
+            "environment": work_item.target_environment,
+            "namespace": work_item.target_namespace,
+            "argo_application": work_item.argo_application,
+            "production_impacting": work_item.production_impacting,
+        },
+        "budget": {
+            "attempt_count": work_item.attempt_count,
+            "max_attempts": work_item.max_attempts,
+            "max_elapsed_seconds": work_item.max_elapsed_seconds,
+        },
+        "automatic_retry": false,
+        "automatic_rollback": false,
+        "mutation_performed": false,
+    });
+    let observation = state
+        .store
+        .create_observation(CreateObservation {
+            id: format!("obs_delivery_failure_{}", unique_suffix()),
+            session_id: session_id.clone(),
+            run_id: run_id.clone(),
+            source: "pharness_controller".to_string(),
+            kind: "delivery_failure".to_string(),
+            subject: format!("work_item/{}", work_item.id),
+            summary: failure_summary.to_string(),
+            resource_namespace: resource_namespace.clone(),
+            resource_kind: resource_kind.clone(),
+            resource_name: resource_name.clone(),
+            resource_ref_json: Some(json!({
+                "work_item_id": work_item.id,
+                "work_plan_id": work_plan_id,
+            })),
+            artifact_id: None,
+            data_json: evidence.clone(),
+        })
+        .await?;
+    append_observation_audit_event(
+        &state.store,
+        &observation,
+        "observation.delivery_failure_recorded",
+        actor.clone(),
+        reason.clone(),
+    )
+    .await?;
+    let incident = state
+        .store
+        .create_incident(CreateIncident {
+            id: format!("inc_delivery_failure_{}", unique_suffix()),
+            observation_id: observation.id.clone(),
+            session_id,
+            run_id,
+            status: "candidate".to_string(),
+            severity: delivery_failure_severity(action).to_string(),
+            title: format!("Delivery blocked: {}", work_item.title),
+            summary: failure_summary.to_string(),
+            resource_namespace,
+            resource_kind,
+            resource_name,
+            data_json: evidence,
+        })
+        .await?;
+    append_incident_audit_event(
+        &state.store,
+        &incident,
+        "incident.delivery_failure_created",
+        actor.clone(),
+        reason.clone(),
+    )
+    .await?;
+    let remediation_plan = create_delivery_failure_remediation_plan(
+        &state.store,
+        &incident,
+        actor.clone(),
+        reason.clone(),
+    )
+    .await?;
+    let blocked = state
+        .store
+        .update_work_item_status(work_item_id, "blocked", actor.clone(), reason.clone())
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &blocked,
+        "work_item.delivery_blocked",
+        actor,
+        json!({
+            "source": "work_item.reconcile",
+            "previous_status": work_item.status,
+            "controller_action": action.as_str(),
+            "failure_code": failure_code,
+            "failure_summary": failure_summary,
+            "reason": reason,
+            "attempt_count": blocked.attempt_count,
+            "max_attempts": blocked.max_attempts,
+            "automatic_retry": false,
+            "automatic_rollback": false,
+            "mutation_performed": false,
+            "observation_id": observation.id,
+            "incident_id": incident.id,
+            "remediation_plan_id": remediation_plan.as_ref().map(|plan| plan.id.as_str()),
+        }),
+    )
+    .await?;
+    Ok(blocked)
+}
+
+/// Schedule a bounded, durable wait for an external controller dependency.
+/// This records intent to observe later; it does not run a poller or mutate the
+/// external system. A future controller worker owns due-wait execution.
+async fn schedule_controller_wait(
+    state: &AppState,
+    work_item: &StoredWorkItem,
+    action: WorkItemReconcileAction,
+    actor: Option<String>,
+) -> Result<(StoredControllerWait, bool), ApiError> {
+    let wait_kind = action
+        .controller_wait_kind()
+        .expect("only controller wait actions may schedule waits");
+    if let Some(active) = state
+        .store
+        .get_active_controller_wait_for_work_item(&work_item.id)
+        .await?
+    {
+        if active.wait_kind == wait_kind
+            && active.subject_kind == "work_item"
+            && active.subject_id == work_item.id
+        {
+            return Ok((active, false));
+        }
+        let reason = format!("controller moved to {}", action.as_str());
+        let superseded = state
+            .store
+            .supersede_controller_wait(&active.id, reason.clone())
+            .await?;
+        append_controller_wait_audit_event(
+            &state.store,
+            &superseded,
+            "controller_wait.superseded",
+            actor.clone(),
+            Some(reason),
+        )
+        .await?;
+    }
+
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item.id)
+        .await?;
+    let (session_id, run_id) = match work_plan {
+        Some(plan) => (
+            plan.session_id,
+            plan.run_id.or_else(|| work_item.current_run_id.clone()),
+        ),
+        None => {
+            root_session_for_request(
+                &state.store,
+                None,
+                work_item.current_run_id.clone(),
+                "controller wait",
+            )
+            .await?
+        }
+    };
+    let now = current_millis();
+    let work_item_budget_ms = u128::from(work_item.max_elapsed_seconds).saturating_mul(1_000);
+    let controller_budget_ms =
+        CONTROLLER_WAIT_INTERVAL_MS.saturating_mul(u128::from(CONTROLLER_WAIT_MAX_CHECKS));
+    let deadline_at = now.saturating_add(work_item_budget_ms.min(controller_budget_ms));
+    let wait = state
+        .store
+        .create_controller_wait(CreateControllerWait {
+            id: format!("cwait_{}", unique_suffix()),
+            work_item_id: work_item.id.clone(),
+            session_id,
+            run_id,
+            status: "active".to_string(),
+            wait_kind: wait_kind.to_string(),
+            subject_kind: "work_item".to_string(),
+            subject_id: work_item.id.clone(),
+            next_check_at: now.saturating_add(CONTROLLER_WAIT_INTERVAL_MS).to_string(),
+            deadline_at: deadline_at.to_string(),
+            max_checks: CONTROLLER_WAIT_MAX_CHECKS,
+            data_json: json!({
+                "source": "work_item.reconcile",
+                "controller_action": action.as_str(),
+                "work_item_id": work_item.id,
+                "source_provenance": {
+                    "repo": work_item.source_repo,
+                    "ref": work_item.source_ref,
+                },
+                "target": {
+                    "environment": work_item.target_environment,
+                    "namespace": work_item.target_namespace,
+                    "argo_application": work_item.argo_application,
+                    "production_impacting": work_item.production_impacting,
+                },
+                "automatic_execution": false,
+                "automatic_retry": false,
+                "automatic_rollback": false,
+            }),
+        })
+        .await?;
+    append_controller_wait_audit_event(
+        &state.store,
+        &wait,
+        "controller_wait.scheduled",
+        actor,
+        None,
+    )
+    .await?;
+    Ok((wait, true))
+}
+
+async fn supersede_active_controller_wait_if_present(
+    state: &AppState,
+    work_item_id: &str,
+    reason: String,
+    actor: Option<String>,
+) -> Result<Option<StoredControllerWait>, ApiError> {
+    let Some(active) = state
+        .store
+        .get_active_controller_wait_for_work_item(work_item_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let wait = state
+        .store
+        .supersede_controller_wait(&active.id, reason.clone())
+        .await?;
+    append_controller_wait_audit_event(
+        &state.store,
+        &wait,
+        "controller_wait.superseded",
+        actor,
+        Some(reason),
+    )
+    .await?;
+    Ok(Some(wait))
+}
+
+/// Stop a non-terminal WorkItem when the controller can no longer observe a
+/// required external result within its bounded wait budget. This creates no
+/// remediation, retry, rollback, or external side effect.
+async fn block_work_item_from_controller_wait_expiry(
+    state: &AppState,
+    work_item: &StoredWorkItem,
+    wait: &StoredControllerWait,
+    actor: Option<String>,
+    reason: String,
+) -> Result<StoredWorkItem, ApiError> {
+    if matches!(
+        work_item.status.as_str(),
+        "blocked" | "completed" | "cancelled" | "failed"
+    ) {
+        return Ok(work_item.clone());
+    }
+    let blocked = state
+        .store
+        .update_work_item_status(
+            &work_item.id,
+            "blocked",
+            actor.clone(),
+            Some(reason.clone()),
+        )
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &blocked,
+        "work_item.controller_wait_blocked",
+        actor,
+        json!({
+            "source": "controller_wait.reconcile_due",
+            "previous_status": work_item.status,
+            "controller_wait_id": wait.id,
+            "wait_kind": wait.wait_kind,
+            "deadline_at": wait.deadline_at,
+            "max_checks": wait.max_checks,
+            "check_count": wait.check_count,
+            "reason": reason,
+            "automatic_retry": false,
+            "automatic_rollback": false,
+            "mutation_performed": false,
+        }),
+    )
+    .await?;
+    Ok(blocked)
+}
+
+fn delivery_failure_severity(action: WorkItemReconcileAction) -> &'static str {
+    match action {
+        WorkItemReconcileAction::DeploymentExecutionFailed => "high",
+        WorkItemReconcileAction::GitDeliveryFailed
+        | WorkItemReconcileAction::PipelineExecutionFailed
+        | WorkItemReconcileAction::GitOpsDeliveryFailed
+        | WorkItemReconcileAction::PipelineIntentBlocked
+        | WorkItemReconcileAction::GitOpsChangeSetBlocked
+        | WorkItemReconcileAction::DeploymentIntentBlocked
+        | WorkItemReconcileAction::ReleaseBlocked => "high",
+        _ => "medium",
+    }
+}
+
+async fn create_delivery_failure_remediation_plan(
+    store: &SqliteStore,
+    incident: &StoredIncident,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<Option<StoredRemediationPlan>, ApiError> {
+    if incident.status != "candidate"
+        || incident.data_json.get("source").and_then(Value::as_str)
+            != Some("work_item_delivery_failure")
+    {
+        return Ok(None);
+    }
+
+    let plan_id = format!("rplan_{}", incident.id);
+    if let Some(existing) = store.get_remediation_plan(&plan_id).await? {
+        return Ok(Some(existing));
+    }
+
+    let resource = incident_resource_label(incident);
+    let plan = store
+        .create_remediation_plan(CreateRemediationPlan {
+            id: plan_id,
+            incident_id: incident.id.clone(),
+            session_id: incident.session_id.clone(),
+            run_id: incident.run_id.clone(),
+            status: "draft".to_string(),
+            title: format!("Draft recovery for blocked delivery: {resource}"),
+            summary: "Review the bounded delivery evidence, refresh only the affected read-only signals, and require explicit approval before any retry, source change, pipeline action, or cluster mutation.".to_string(),
+            risk_level: incident.severity.clone(),
+            requires_approval: true,
+            resource_namespace: incident.resource_namespace.clone(),
+            resource_kind: incident.resource_kind.clone(),
+            resource_name: incident.resource_name.clone(),
+            plan_json: delivery_failure_remediation_plan_json(incident, &resource),
+        })
+        .await?;
+    append_remediation_plan_audit_event(
+        store,
+        &plan,
+        "remediation_plan.created",
+        actor,
+        reason.or_else(|| Some("delivery failure requires operator review".to_string())),
+    )
+    .await?;
+
+    for gate in approval_gates_from_remediation_plan(&plan) {
+        let gate = store.create_approval_gate(gate).await?;
+        append_approval_gate_audit_event(store, &gate, "approval_gate.created", "created").await?;
+    }
+
+    Ok(Some(plan))
+}
+
+fn delivery_failure_remediation_plan_json(incident: &StoredIncident, resource: &str) -> Value {
+    let controller_action = incident
+        .data_json
+        .get("controller_action")
+        .and_then(Value::as_str)
+        .unwrap_or("delivery_failure");
+    json!({
+        "mode": "read_only_draft",
+        "source": "work_item_delivery_failure",
+        "incident_id": incident.id,
+        "resource": {
+            "namespace": incident.resource_namespace,
+            "kind": incident.resource_kind,
+            "name": incident.resource_name,
+            "label": resource,
+        },
+        "evidence": {
+            "work_item_id": incident.data_json.get("work_item_id"),
+            "work_plan_id": incident.data_json.get("work_plan_id"),
+            "controller_action": controller_action,
+            "failure_code": incident.data_json.get("failure_code"),
+            "failure_summary": incident.data_json.get("failure_summary"),
+            "attempt_count": incident.data_json.pointer("/budget/attempt_count"),
+            "max_attempts": incident.data_json.pointer("/budget/max_attempts"),
+            "observation_id": incident.observation_id,
+        },
+        "steps": [
+            {
+                "order": 1,
+                "kind": "read_only",
+                "capability": "delivery_evidence_review",
+                "summary": "Review the exact bounded failure evidence and immutable delivery lineage; do not rerun the failed action."
+            },
+            {
+                "order": 2,
+                "kind": "read_only",
+                "capability": delivery_failure_observation_capability(controller_action),
+                "summary": "Refresh only the affected delivery-system status and compare it with the recorded failure evidence."
+            },
+            {
+                "order": 3,
+                "kind": "proposal",
+                "capability": "bounded_recovery_proposal",
+                "summary": "Propose a replan, source ChangeSet, PipelineIntent, DeploymentIntent, or rollback plan only after reviewing current evidence and policy."
+            }
+        ],
+        "approval_gates": [
+            {
+                "kind": "file_write",
+                "required_before": "creating or patching source or GitOps changes"
+            },
+            {
+                "kind": "git_mutation",
+                "required_before": "creating, pushing, merging, or reverting a Git branch or pull request"
+            },
+            {
+                "kind": "pipeline_mutation",
+                "required_before": "rerunning or cancelling Tekton resources"
+            },
+            {
+                "kind": "cluster_mutation",
+                "required_before": "Argo sync, rollback, restart, scale, or Kubernetes write"
+            },
+            {
+                "kind": "production_impact",
+                "required_before": "any action against production-impacting scope"
+            }
+        ],
+        "non_goals": [
+            "No automatic retry",
+            "No automatic rollback",
+            "No automatic mutation",
+            "No secret reads",
+            "No ticket creation",
+            "No notification dispatch"
+        ]
+    })
+}
+
+fn delivery_failure_observation_capability(action: &str) -> &'static str {
+    match action {
+        "pipeline_execution_failed" | "pipeline_intent_blocked" => "tekton_get_pipeline_runs",
+        "deployment_execution_failed" | "deployment_intent_blocked" | "release_blocked" => {
+            "argocd_get_application"
+        }
+        "git_delivery_failed" | "gitops_delivery_failed" | "gitops_change_set_blocked" => {
+            "git_delivery_observation"
+        }
+        _ => "delivery_evidence_review",
+    }
+}
+
+#[derive(Debug)]
+struct CompletedWorkItemRelease {
+    work_item: StoredWorkItem,
+    release: StoredRelease,
+}
+
+/// Complete a WorkItem only from its already-completed, post-sync verified
+/// release. This is a durable bookkeeping transition, never an external
+/// deployment operation.
+async fn complete_work_item_from_verified_release(
+    state: &AppState,
+    work_item_id: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<CompletedWorkItemRelease, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if work_item.status != "awaiting_approval" {
+        return Err(ApiError::conflict(
+            "WorkItem completion requires an awaiting_approval WorkItem",
+        ));
+    }
+    if work_item.production_impacting || work_item.target_environment != "dev" {
+        return Err(ApiError::conflict(
+            "Controller completion is limited to non-production dev WorkItems",
+        ));
+    }
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem completion requires a WorkPlan"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem completion requires a ChangeSet"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem completion requires a PipelineIntent"))?;
+    let deployment_intent = state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem completion requires a DeploymentIntent"))?;
+    let release = state
+        .store
+        .get_release_by_deployment_intent(&deployment_intent.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem completion requires a Release"))?;
+
+    let lineage_matches = work_plan.status == "approved"
+        && change_set.status == "approved"
+        && pipeline_intent.status == "approved"
+        && deployment_intent.status == "approved"
+        && release.work_plan_id == work_plan.id
+        && release.change_set_id == change_set.id
+        && release.pipeline_intent_id == pipeline_intent.id
+        && release.deployment_intent_id == deployment_intent.id;
+    if !lineage_matches {
+        return Err(ApiError::conflict(
+            "WorkItem completion requires current approved delivery lineage",
+        ));
+    }
+    let gitops_merge =
+        observed_gitops_merge_for_deployment(&state.store, &work_item, &pipeline_intent).await?;
+    let post_sync_verified = release.status == "completed"
+        && release
+            .release_json
+            .pointer("/post_sync_verification/status")
+            .and_then(Value::as_str)
+            == Some("verified")
+        && release
+            .release_json
+            .pointer("/post_sync_verification/runtime_ready")
+            .and_then(Value::as_bool)
+            == Some(true);
+    if !post_sync_verified {
+        return Err(ApiError::conflict(
+            "WorkItem completion requires completed post-sync verified Release evidence",
+        ));
+    }
+
+    let reason = reason.or_else(|| {
+        Some(format!(
+            "controller completed WorkItem from verified Release {}",
+            release.id
+        ))
+    });
+    let completed = state
+        .store
+        .update_work_item_status(work_item_id, "completed", actor.clone(), reason.clone())
+        .await?;
+    append_work_item_audit_event(
+        &state.store,
+        &completed,
+        "work_item.completed_from_verified_release",
+        actor,
+        json!({
+            "source": "work_item.reconcile",
+            "work_plan_id": work_plan.id,
+            "change_set_id": change_set.id,
+            "pipeline_intent_id": pipeline_intent.id,
+            "deployment_intent_id": deployment_intent.id,
+            "release_id": release.id,
+            "release_status": release.status,
+            "gitops_delivery_merge_artifact_id": gitops_merge.as_ref().map(|artifact| &artifact.id),
+            "post_sync_verification": release.release_json.get("post_sync_verification"),
+            "reason": reason,
+        }),
+    )
+    .await?;
+    Ok(CompletedWorkItemRelease {
+        work_item: completed,
+        release,
+    })
 }
 
 async fn replan_work_item(
@@ -2631,6 +4309,48 @@ enum WorkItemReconcileAction {
     CaptureChangeSet,
     AwaitingChangeSetApproval,
     PrepareGitDelivery,
+    AwaitingGitDeliveryAuthorization,
+    AwaitingGitWriterAvailability,
+    AwaitingGitDeliveryExecution,
+    WaitForGitDelivery,
+    AwaitingPullRequestObservation,
+    AwaitingPullRequestMerge,
+    AwaitingPipelineIntentDefinition,
+    AwaitingPipelineIntentApproval,
+    AwaitingPipelineExecutionAuthorization,
+    AwaitingPipelineExecution,
+    WaitForPipelineExecution,
+    PipelineExecutionFailed,
+    AwaitingPipelineEvidenceReview,
+    AwaitingPipelineBuildOutputReview,
+    AwaitingDeploymentIntentDefinition,
+    AwaitingGitOpsUpdatePlan,
+    AwaitingGitOpsChangeSetApproval,
+    AwaitingGitOpsBaseRevision,
+    WaitForGitOpsBaseRevision,
+    AwaitingGitOpsDeliveryPlan,
+    AwaitingGitOpsDeliveryAuthorization,
+    AwaitingGitOpsWriterAvailability,
+    AwaitingGitOpsDeliveryExecution,
+    WaitForGitOpsDelivery,
+    AwaitingGitOpsPullRequestObservation,
+    AwaitingGitOpsPullRequestMerge,
+    AwaitingDeploymentIntentReview,
+    AwaitingDeploymentAuthorization,
+    AwaitingArgoRunnerAvailability,
+    AwaitingDeploymentExecution,
+    WaitForDeploymentExecution,
+    DeploymentExecutionFailed,
+    AwaitingReleaseDefinition,
+    AwaitingReleaseApproval,
+    AwaitingReleaseVerification,
+    CompleteWorkItem,
+    DeploymentIntentBlocked,
+    ReleaseBlocked,
+    GitOpsDeliveryFailed,
+    GitOpsChangeSetBlocked,
+    PipelineIntentBlocked,
+    GitDeliveryFailed,
     RequiresReplan,
     Terminal,
 }
@@ -2645,8 +4365,70 @@ impl WorkItemReconcileAction {
             Self::CaptureChangeSet => "capture_change_set",
             Self::AwaitingChangeSetApproval => "awaiting_change_set_approval",
             Self::PrepareGitDelivery => "prepare_git_delivery",
+            Self::AwaitingGitDeliveryAuthorization => "awaiting_git_delivery_authorization",
+            Self::AwaitingGitWriterAvailability => "awaiting_git_writer_availability",
+            Self::AwaitingGitDeliveryExecution => "awaiting_git_delivery_execution",
+            Self::WaitForGitDelivery => "wait_for_git_delivery",
+            Self::AwaitingPullRequestObservation => "awaiting_pull_request_observation",
+            Self::AwaitingPullRequestMerge => "awaiting_pull_request_merge",
+            Self::AwaitingPipelineIntentDefinition => "awaiting_pipeline_intent_definition",
+            Self::AwaitingPipelineIntentApproval => "awaiting_pipeline_intent_approval",
+            Self::AwaitingPipelineExecutionAuthorization => {
+                "awaiting_pipeline_execution_authorization"
+            }
+            Self::AwaitingPipelineExecution => "awaiting_pipeline_execution",
+            Self::WaitForPipelineExecution => "wait_for_pipeline_execution",
+            Self::PipelineExecutionFailed => "pipeline_execution_failed",
+            Self::AwaitingPipelineEvidenceReview => "awaiting_pipeline_evidence_review",
+            Self::AwaitingPipelineBuildOutputReview => "awaiting_pipeline_build_output_review",
+            Self::AwaitingDeploymentIntentDefinition => "awaiting_deployment_intent_definition",
+            Self::AwaitingGitOpsUpdatePlan => "awaiting_gitops_update_plan",
+            Self::AwaitingGitOpsChangeSetApproval => "awaiting_gitops_change_set_approval",
+            Self::AwaitingGitOpsBaseRevision => "awaiting_gitops_base_revision",
+            Self::WaitForGitOpsBaseRevision => "wait_for_gitops_base_revision",
+            Self::AwaitingGitOpsDeliveryPlan => "awaiting_gitops_delivery_plan",
+            Self::AwaitingGitOpsDeliveryAuthorization => "awaiting_gitops_delivery_authorization",
+            Self::AwaitingGitOpsWriterAvailability => "awaiting_gitops_writer_availability",
+            Self::AwaitingGitOpsDeliveryExecution => "awaiting_gitops_delivery_execution",
+            Self::WaitForGitOpsDelivery => "wait_for_gitops_delivery",
+            Self::AwaitingGitOpsPullRequestObservation => {
+                "awaiting_gitops_pull_request_observation"
+            }
+            Self::AwaitingGitOpsPullRequestMerge => "awaiting_gitops_pull_request_merge",
+            Self::AwaitingDeploymentIntentReview => "awaiting_deployment_intent_review",
+            Self::AwaitingDeploymentAuthorization => "awaiting_deployment_authorization",
+            Self::AwaitingArgoRunnerAvailability => "awaiting_argo_runner_availability",
+            Self::AwaitingDeploymentExecution => "awaiting_deployment_execution",
+            Self::WaitForDeploymentExecution => "wait_for_deployment_execution",
+            Self::DeploymentExecutionFailed => "deployment_execution_failed",
+            Self::AwaitingReleaseDefinition => "awaiting_release_definition",
+            Self::AwaitingReleaseApproval => "awaiting_release_approval",
+            Self::AwaitingReleaseVerification => "awaiting_release_verification",
+            Self::CompleteWorkItem => "complete_work_item",
+            Self::DeploymentIntentBlocked => "deployment_intent_blocked",
+            Self::ReleaseBlocked => "release_blocked",
+            Self::GitOpsDeliveryFailed => "gitops_delivery_failed",
+            Self::GitOpsChangeSetBlocked => "gitops_change_set_blocked",
+            Self::PipelineIntentBlocked => "pipeline_intent_blocked",
+            Self::GitDeliveryFailed => "git_delivery_failed",
             Self::RequiresReplan => "requires_replan",
             Self::Terminal => "terminal",
+        }
+    }
+
+    fn controller_wait_kind(self) -> Option<&'static str> {
+        match self {
+            Self::WaitForCodingAttempt => Some("coding_attempt"),
+            Self::WaitForGitDelivery => Some("git_delivery_execution"),
+            Self::AwaitingPullRequestObservation => Some("source_pull_request_observation"),
+            Self::AwaitingPullRequestMerge => Some("source_pull_request_merge"),
+            Self::WaitForPipelineExecution => Some("pipeline_execution"),
+            Self::WaitForGitOpsBaseRevision => Some("gitops_base_revision"),
+            Self::WaitForGitOpsDelivery => Some("gitops_delivery_execution"),
+            Self::AwaitingGitOpsPullRequestObservation => Some("gitops_pull_request_observation"),
+            Self::AwaitingGitOpsPullRequestMerge => Some("gitops_pull_request_merge"),
+            Self::WaitForDeploymentExecution => Some("deployment_execution"),
+            _ => None,
         }
     }
 
@@ -2669,6 +4451,174 @@ impl WorkItemReconcileAction {
                     )
                 })
                 .unwrap_or_else(|| "ChangeSet capture is pending".to_string()),
+            Self::AwaitingGitDeliveryAuthorization => {
+                "Git delivery plan is prepared; a matching scoped Git writer grant and git_mutation gate decision are required"
+                    .to_string()
+            }
+            Self::AwaitingGitWriterAvailability => {
+                "Git delivery is authorized, but the dedicated Git writer is not configured for this exact repository"
+                    .to_string()
+            }
+            Self::AwaitingGitDeliveryExecution => {
+                "Git delivery is ready; explicitly execute the isolated branch-and-PR writer"
+                    .to_string()
+            }
+            Self::WaitForGitDelivery => {
+                "Git writer execution is in progress; wait for its durable branch-and-PR result"
+                    .to_string()
+            }
+            Self::AwaitingPullRequestObservation => {
+                "Git writer created a pull request; dispatch the read-only observer before any build is defined"
+                    .to_string()
+            }
+            Self::AwaitingPullRequestMerge => {
+                "Pull request is observed but lacks immutable merge provenance; wait for merge and observe again"
+                    .to_string()
+            }
+            Self::AwaitingPipelineIntentDefinition => {
+                "Immutable source merge provenance is recorded; define the exact PipelineIntent and PipelineContract next"
+                    .to_string()
+            }
+            Self::AwaitingPipelineIntentApproval => {
+                "PipelineIntent is proposed; review and approve its pinned PipelineContract and exact Tekton inputs"
+                    .to_string()
+            }
+            Self::AwaitingPipelineExecutionAuthorization => {
+                "PipelineIntent is approved but its scoped Tekton gates or trusted execution envelope are not yet ready"
+                    .to_string()
+            }
+            Self::AwaitingPipelineExecution => {
+                "PipelineIntent preflight is ready; explicitly dispatch the isolated Tekton executor"
+                    .to_string()
+            }
+            Self::WaitForPipelineExecution => {
+                "Tekton execution is in progress; wait for its signed-in executor outcome and terminal analysis"
+                    .to_string()
+            }
+            Self::PipelineExecutionFailed => {
+                "Tekton execution failed; inspect terminal evidence and revise or replan before further delivery"
+                    .to_string()
+            }
+            Self::AwaitingPipelineEvidenceReview => {
+                "Tekton completed, but its terminal PipelineRunAnalysis is not satisfied; review evidence before delivery planning"
+                    .to_string()
+            }
+            Self::AwaitingPipelineBuildOutputReview => {
+                "Tekton completed, but its build output is missing or not trusted; inspect terminal evidence before GitOps planning"
+                    .to_string()
+            }
+            Self::AwaitingDeploymentIntentDefinition => {
+                "Verified build evidence is ready; declare the exact development DeploymentIntent before GitOps update planning"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsUpdatePlan => {
+                "Verified digest-pinned build output is ready; prepare the separate review-only GitOps update plan next"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsChangeSetApproval => {
+                "GitOps ChangeSet is proposed; review its exact digest-pinned Kustomize update before authorization"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsBaseRevision => {
+                "GitOps ChangeSet is approved; explicitly dispatch the read-only base-revision observer"
+                    .to_string()
+            }
+            Self::WaitForGitOpsBaseRevision => {
+                "GitOps base-revision observation is in progress; wait for immutable base commit evidence"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsDeliveryPlan => {
+                "GitOps base revision is resolved; prepare the immutable GitOps delivery plan next"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsDeliveryAuthorization => {
+                "GitOps delivery plan is prepared; a matching scoped GitOps writer grant and gitops_mutation gate decision are required"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsWriterAvailability => {
+                "GitOps delivery is authorized, but the dedicated GitOps writer is not configured for this exact repository"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsDeliveryExecution => {
+                "GitOps delivery is ready; explicitly execute the isolated GitOps branch-and-PR writer"
+                    .to_string()
+            }
+            Self::WaitForGitOpsDelivery => {
+                "GitOps writer execution is in progress; wait for its durable branch-and-PR result"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsPullRequestObservation => {
+                "GitOps writer created a pull request; dispatch the read-only observer before Argo can be considered"
+                    .to_string()
+            }
+            Self::AwaitingGitOpsPullRequestMerge => {
+                "GitOps pull request is observed but lacks immutable merge provenance; wait for merge and observe again"
+                    .to_string()
+            }
+            Self::AwaitingDeploymentIntentReview => {
+                "Immutable GitOps merge provenance is recorded; review the declared DeploymentIntent before any Argo sync"
+                    .to_string()
+            }
+            Self::AwaitingDeploymentAuthorization => {
+                "DeploymentIntent is approved; a matching dev Argo contract, cluster_mutation gate, and scoped runner grant are required"
+                    .to_string()
+            }
+            Self::AwaitingArgoRunnerAvailability => {
+                "DeploymentIntent is authorized, but the isolated Argo runner is unavailable for this exact Application"
+                    .to_string()
+            }
+            Self::AwaitingDeploymentExecution => {
+                "DeploymentIntent is ready; explicitly dispatch the isolated Argo sync runner"
+                    .to_string()
+            }
+            Self::WaitForDeploymentExecution => {
+                "Argo sync is in progress; wait for its durable terminal result before proposing a Release"
+                    .to_string()
+            }
+            Self::DeploymentExecutionFailed => {
+                "Argo sync failed; inspect the bounded result and create a reviewed remediation or deployment revision"
+                    .to_string()
+            }
+            Self::AwaitingReleaseDefinition => {
+                "Argo sync completed; create the linked Release record before post-sync verification"
+                    .to_string()
+            }
+            Self::AwaitingReleaseApproval => {
+                "Release is proposed; review its immutable deployment provenance before verification"
+                    .to_string()
+            }
+            Self::AwaitingReleaseVerification => {
+                "Release is approved; explicitly run bounded post-sync verification against its declared targets"
+                    .to_string()
+            }
+            Self::CompleteWorkItem => {
+                "Release verification is complete; apply reconciliation to record terminal WorkItem completion"
+                    .to_string()
+            }
+            Self::DeploymentIntentBlocked => {
+                "DeploymentIntent is stale or rejected; create and review a new deployment intent before Argo execution"
+                    .to_string()
+            }
+            Self::ReleaseBlocked => {
+                "Release is stale or rejected; revise and review release provenance before post-sync verification"
+                    .to_string()
+            }
+            Self::GitOpsDeliveryFailed => {
+                "GitOps delivery failed; inspect its bounded result and create a newly reviewed GitOps ChangeSet"
+                    .to_string()
+            }
+            Self::GitOpsChangeSetBlocked => {
+                "GitOps ChangeSet is stale or rejected; create a newly reviewed GitOps plan before delivery can continue"
+                    .to_string()
+            }
+            Self::PipelineIntentBlocked => {
+                "PipelineIntent is stale or rejected; create a newly reviewed PipelineIntent before delivery can continue"
+                    .to_string()
+            }
+            Self::GitDeliveryFailed => {
+                "Git delivery failed; inspect its bounded result and revise/review the ChangeSet before another delivery"
+                    .to_string()
+            }
             Self::RequiresReplan => format!(
                 "WorkItem is {} after {}/{} coding attempts; explicit replan or cancellation is required",
                 work_item.status, work_item.attempt_count, work_item.max_attempts
@@ -2677,18 +4627,99 @@ impl WorkItemReconcileAction {
             _ => format!("next action is {}", self.as_str()),
         }
     }
+
+    fn delivery_failure(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::GitDeliveryFailed => Some((
+                "source_git_delivery_failed",
+                "the bounded source Git writer reported a failed delivery",
+            )),
+            Self::PipelineExecutionFailed => Some((
+                "pipeline_execution_failed",
+                "the bounded Tekton execution reported a failed delivery",
+            )),
+            Self::GitOpsDeliveryFailed => Some((
+                "gitops_delivery_failed",
+                "the bounded GitOps writer reported a failed delivery",
+            )),
+            Self::DeploymentExecutionFailed => Some((
+                "deployment_execution_failed",
+                "the bounded Argo sync execution reported a failed delivery",
+            )),
+            Self::PipelineIntentBlocked => Some((
+                "pipeline_intent_blocked",
+                "the PipelineIntent is stale or rejected and cannot be executed",
+            )),
+            Self::GitOpsChangeSetBlocked => Some((
+                "gitops_change_set_blocked",
+                "the GitOps ChangeSet is stale or rejected and cannot be delivered",
+            )),
+            Self::DeploymentIntentBlocked => Some((
+                "deployment_intent_blocked",
+                "the DeploymentIntent is stale or rejected and cannot be executed",
+            )),
+            Self::ReleaseBlocked => Some((
+                "release_blocked",
+                "the Release is stale or rejected and cannot be verified",
+            )),
+            _ => None,
+        }
+    }
+}
+
+struct WorkItemDeliveryReconcileContext<'a> {
+    change_set: Option<&'a StoredChangeSet>,
+    git_delivery: Option<&'a GitDeliveryFlowResponse>,
+    pipeline_intent: Option<&'a StoredPipelineIntent>,
+    pipeline_execution_ready: Option<bool>,
+    deployment_intent: Option<&'a StoredDeploymentIntent>,
+    deployment_execution_preflight: Option<&'a DeploymentIntentExecutionPreflight>,
+    deployment_dispatch_ready: Option<bool>,
+    deployment_delivery: Option<&'a DeploymentIntentDeliveryFlowResponse>,
+    gitops_change_set: Option<&'a StoredGitOpsChangeSet>,
+    gitops_delivery: Option<&'a GitOpsDeliveryFlowResponse>,
+    gitops_base_revision: Option<GitOpsBaseRevisionReconcileState>,
 }
 
 fn work_item_reconcile_action(
     work_item: &StoredWorkItem,
     work_plan: Option<&StoredWorkPlan>,
-    change_set: Option<&StoredChangeSet>,
+    delivery: WorkItemDeliveryReconcileContext<'_>,
 ) -> WorkItemReconcileAction {
     match work_item.status.as_str() {
         "submitted" | "planning" => WorkItemReconcileAction::DeclareWorkPlan,
-        "awaiting_approval" => match change_set {
+        "awaiting_approval" => match delivery.change_set {
             Some(change_set) if change_set.status == "approved" => {
-                WorkItemReconcileAction::PrepareGitDelivery
+                let git_action = git_delivery_reconcile_action(delivery.git_delivery);
+                if git_action == WorkItemReconcileAction::AwaitingPipelineIntentDefinition {
+                    let pipeline_action = pipeline_intent_reconcile_action(
+                        delivery.pipeline_intent,
+                        delivery.pipeline_execution_ready,
+                        delivery.deployment_intent,
+                    );
+                    if pipeline_action == WorkItemReconcileAction::AwaitingGitOpsUpdatePlan {
+                        let gitops_action = gitops_change_set_reconcile_action(
+                            delivery.gitops_change_set,
+                            delivery.gitops_delivery,
+                            delivery.gitops_base_revision,
+                        );
+                        if gitops_action == WorkItemReconcileAction::AwaitingDeploymentIntentReview
+                        {
+                            deployment_intent_reconcile_action(
+                                delivery.deployment_intent,
+                                delivery.deployment_execution_preflight,
+                                delivery.deployment_dispatch_ready,
+                                delivery.deployment_delivery,
+                            )
+                        } else {
+                            gitops_action
+                        }
+                    } else {
+                        pipeline_action
+                    }
+                } else {
+                    git_action
+                }
             }
             Some(_) => WorkItemReconcileAction::AwaitingChangeSetApproval,
             None if work_plan.is_some_and(|plan| plan.status == "approved") => {
@@ -2701,6 +4732,483 @@ fn work_item_reconcile_action(
         "blocked" | "failed" => WorkItemReconcileAction::RequiresReplan,
         "completed" | "cancelled" => WorkItemReconcileAction::Terminal,
         _ => WorkItemReconcileAction::RequiresReplan,
+    }
+}
+
+fn pipeline_intent_reconcile_action(
+    pipeline_intent: Option<&StoredPipelineIntent>,
+    pipeline_execution_ready: Option<bool>,
+    deployment_intent: Option<&StoredDeploymentIntent>,
+) -> WorkItemReconcileAction {
+    let Some(pipeline_intent) = pipeline_intent else {
+        return WorkItemReconcileAction::AwaitingPipelineIntentDefinition;
+    };
+    match pipeline_intent.status.as_str() {
+        "proposed" => WorkItemReconcileAction::AwaitingPipelineIntentApproval,
+        "executing" => WorkItemReconcileAction::WaitForPipelineExecution,
+        "failed" => WorkItemReconcileAction::PipelineExecutionFailed,
+        "rejected" | "stale" => WorkItemReconcileAction::PipelineIntentBlocked,
+        "approved" => match pipeline_intent_execution_state(pipeline_intent) {
+            Some("pipeline_run_succeeded") => {
+                if !pipeline_evidence_is_satisfied(pipeline_intent) {
+                    WorkItemReconcileAction::AwaitingPipelineEvidenceReview
+                } else if !pipeline_build_output_is_verified(pipeline_intent) {
+                    WorkItemReconcileAction::AwaitingPipelineBuildOutputReview
+                } else if deployment_intent.is_none() {
+                    WorkItemReconcileAction::AwaitingDeploymentIntentDefinition
+                } else {
+                    WorkItemReconcileAction::AwaitingGitOpsUpdatePlan
+                }
+            }
+            Some("pipeline_run_failed") | Some("failed") | Some("dispatch_failed") => {
+                WorkItemReconcileAction::PipelineExecutionFailed
+            }
+            _ if pipeline_execution_ready == Some(true) => {
+                WorkItemReconcileAction::AwaitingPipelineExecution
+            }
+            _ => WorkItemReconcileAction::AwaitingPipelineExecutionAuthorization,
+        },
+        _ => WorkItemReconcileAction::PipelineIntentBlocked,
+    }
+}
+
+fn pipeline_intent_execution_state(intent: &StoredPipelineIntent) -> Option<&str> {
+    intent
+        .intent_json
+        .pointer("/execution_state/state")
+        .and_then(Value::as_str)
+}
+
+fn pipeline_build_output_is_verified(intent: &StoredPipelineIntent) -> bool {
+    intent
+        .intent_json
+        .pointer("/build_output/status")
+        .and_then(Value::as_str)
+        == Some("verified")
+}
+
+fn pipeline_evidence_is_satisfied(intent: &StoredPipelineIntent) -> bool {
+    pipeline_intent_attached_evidence_status(intent) == Some("satisfied")
+}
+
+fn pipeline_intent_is_gitops_update_eligible(intent: &StoredPipelineIntent) -> bool {
+    pipeline_intent_is_deployment_eligible(&intent.status) && pipeline_evidence_is_satisfied(intent)
+}
+
+fn pipeline_intent_requires_execution_preflight(intent: &StoredPipelineIntent) -> bool {
+    intent.status == "approved" && pipeline_intent_execution_state(intent).is_none()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GitOpsBaseRevisionReconcileState {
+    Missing,
+    Resolving,
+    Resolved,
+}
+
+async fn gitops_base_revision_reconcile_state(
+    store: &SqliteStore,
+    change_set: &StoredGitOpsChangeSet,
+) -> Result<GitOpsBaseRevisionReconcileState, ApiError> {
+    let artifacts = store.list_artifacts(&change_set.run_id).await?;
+    if artifacts
+        .iter()
+        .any(|artifact| gitops_base_revision_matches_change_set(artifact, change_set))
+    {
+        return Ok(GitOpsBaseRevisionReconcileState::Resolved);
+    }
+    let latest_execution = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "gitops_base_revision_execution"
+                && artifact.content_json.as_ref().is_some_and(|content| {
+                    content.get("gitops_change_set_id").and_then(Value::as_str)
+                        == Some(change_set.id.as_str())
+                        && content.get("material_hash").and_then(Value::as_str)
+                            == Some(change_set.material_hash.as_str())
+                })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
+    let resolving = latest_execution.is_some_and(|execution| {
+        let execution_id = execution
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("execution_id"))
+            .and_then(Value::as_str);
+        execution_id.is_some_and(|execution_id| {
+            !artifacts.iter().any(|artifact| {
+                artifact.kind == "gitops_base_revision"
+                    && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                            && content.get("status").and_then(Value::as_str) == Some("failed")
+                    })
+            })
+        })
+    });
+    Ok(if resolving {
+        GitOpsBaseRevisionReconcileState::Resolving
+    } else {
+        GitOpsBaseRevisionReconcileState::Missing
+    })
+}
+
+fn gitops_change_set_reconcile_action(
+    change_set: Option<&StoredGitOpsChangeSet>,
+    delivery: Option<&GitOpsDeliveryFlowResponse>,
+    base_revision: Option<GitOpsBaseRevisionReconcileState>,
+) -> WorkItemReconcileAction {
+    let Some(change_set) = change_set else {
+        return WorkItemReconcileAction::AwaitingGitOpsUpdatePlan;
+    };
+    match change_set.status.as_str() {
+        "proposed" => WorkItemReconcileAction::AwaitingGitOpsChangeSetApproval,
+        "rejected" | "stale" => WorkItemReconcileAction::GitOpsChangeSetBlocked,
+        "applied" => WorkItemReconcileAction::AwaitingDeploymentIntentReview,
+        "approved" => match delivery {
+            Some(delivery) => gitops_delivery_reconcile_action(delivery),
+            None => match base_revision.unwrap_or(GitOpsBaseRevisionReconcileState::Missing) {
+                GitOpsBaseRevisionReconcileState::Missing => {
+                    WorkItemReconcileAction::AwaitingGitOpsBaseRevision
+                }
+                GitOpsBaseRevisionReconcileState::Resolving => {
+                    WorkItemReconcileAction::WaitForGitOpsBaseRevision
+                }
+                GitOpsBaseRevisionReconcileState::Resolved => {
+                    WorkItemReconcileAction::AwaitingGitOpsDeliveryPlan
+                }
+            },
+        },
+        _ => WorkItemReconcileAction::GitOpsChangeSetBlocked,
+    }
+}
+
+fn gitops_delivery_reconcile_action(
+    delivery: &GitOpsDeliveryFlowResponse,
+) -> WorkItemReconcileAction {
+    if delivery.latest_merge.is_some() {
+        return WorkItemReconcileAction::AwaitingDeploymentIntentReview;
+    }
+    if let Some(observation) = delivery.latest_observation.as_ref() {
+        let status = observation
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("status"))
+            .and_then(Value::as_str);
+        if status == Some("failed") {
+            return WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation;
+        }
+        let merged = observation
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("merged"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        return if merged {
+            WorkItemReconcileAction::AwaitingDeploymentIntentReview
+        } else {
+            WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge
+        };
+    }
+    if let Some(result) = delivery.latest_result.as_ref() {
+        return match result
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("status"))
+            .and_then(Value::as_str)
+        {
+            Some("completed") => WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation,
+            Some("failed") | Some("dispatch_failed") => {
+                WorkItemReconcileAction::GitOpsDeliveryFailed
+            }
+            _ => WorkItemReconcileAction::WaitForGitOpsDelivery,
+        };
+    }
+    if delivery.latest_execution.is_some() {
+        return WorkItemReconcileAction::WaitForGitOpsDelivery;
+    }
+    match delivery
+        .latest_preflight
+        .as_ref()
+        .and_then(|artifact| artifact.content_json.as_ref())
+        .and_then(|content| content.get("status"))
+        .and_then(Value::as_str)
+    {
+        Some("ready_for_writer") => {
+            let dispatch_ready = delivery
+                .latest_preflight
+                .as_ref()
+                .and_then(|artifact| artifact.content_json.as_ref())
+                .and_then(|content| content.get("dispatch_ready"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if dispatch_ready {
+                WorkItemReconcileAction::AwaitingGitOpsDeliveryExecution
+            } else {
+                WorkItemReconcileAction::AwaitingGitOpsWriterAvailability
+            }
+        }
+        _ => WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization,
+    }
+}
+
+fn deployment_intent_reconcile_action(
+    intent: Option<&StoredDeploymentIntent>,
+    preflight: Option<&DeploymentIntentExecutionPreflight>,
+    dispatch_ready: Option<bool>,
+    delivery: Option<&DeploymentIntentDeliveryFlowResponse>,
+) -> WorkItemReconcileAction {
+    let Some(intent) = intent else {
+        return WorkItemReconcileAction::AwaitingDeploymentIntentDefinition;
+    };
+    match intent.status.as_str() {
+        "proposed" => WorkItemReconcileAction::AwaitingDeploymentIntentReview,
+        "rejected" | "stale" => WorkItemReconcileAction::DeploymentIntentBlocked,
+        "approved" => {
+            let Some(delivery) = delivery else {
+                return WorkItemReconcileAction::AwaitingDeploymentAuthorization;
+            };
+            if let Some(result) = delivery.latest_result.as_ref() {
+                return match result
+                    .content_json
+                    .as_ref()
+                    .and_then(|content| content.get("status"))
+                    .and_then(Value::as_str)
+                {
+                    Some("completed") => release_reconcile_action(delivery.release.as_ref()),
+                    Some("failed") | Some("cancelled") | Some("dispatch_failed") => {
+                        WorkItemReconcileAction::DeploymentExecutionFailed
+                    }
+                    _ => WorkItemReconcileAction::WaitForDeploymentExecution,
+                };
+            }
+            if delivery.latest_execution.is_some() {
+                return WorkItemReconcileAction::WaitForDeploymentExecution;
+            }
+            let Some(preflight) = preflight else {
+                return WorkItemReconcileAction::AwaitingDeploymentAuthorization;
+            };
+            if !preflight.ready {
+                return WorkItemReconcileAction::AwaitingDeploymentAuthorization;
+            }
+            if dispatch_ready == Some(true) {
+                WorkItemReconcileAction::AwaitingDeploymentExecution
+            } else {
+                WorkItemReconcileAction::AwaitingArgoRunnerAvailability
+            }
+        }
+        _ => WorkItemReconcileAction::DeploymentIntentBlocked,
+    }
+}
+
+fn release_reconcile_action(release: Option<&ReleaseResponse>) -> WorkItemReconcileAction {
+    let Some(release) = release else {
+        return WorkItemReconcileAction::AwaitingReleaseDefinition;
+    };
+    match release.status.as_str() {
+        "proposed" => WorkItemReconcileAction::AwaitingReleaseApproval,
+        "approved" => WorkItemReconcileAction::AwaitingReleaseVerification,
+        "completed" => WorkItemReconcileAction::CompleteWorkItem,
+        "rejected" | "stale" => WorkItemReconcileAction::ReleaseBlocked,
+        _ => WorkItemReconcileAction::ReleaseBlocked,
+    }
+}
+
+fn git_delivery_reconcile_action(
+    git_delivery: Option<&GitDeliveryFlowResponse>,
+) -> WorkItemReconcileAction {
+    let Some(git_delivery) = git_delivery else {
+        return WorkItemReconcileAction::PrepareGitDelivery;
+    };
+
+    if git_delivery.latest_merge.is_some() {
+        return WorkItemReconcileAction::AwaitingPipelineIntentDefinition;
+    }
+
+    if let Some(observation) = git_delivery.latest_observation.as_ref() {
+        let observation_status = observation
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("status"))
+            .and_then(Value::as_str);
+        if observation_status == Some("failed") {
+            return WorkItemReconcileAction::AwaitingPullRequestObservation;
+        }
+        let merged = observation
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("merged"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if merged {
+            return WorkItemReconcileAction::AwaitingPipelineIntentDefinition;
+        }
+        return WorkItemReconcileAction::AwaitingPullRequestMerge;
+    }
+
+    if let Some(result) = git_delivery.latest_result.as_ref() {
+        return match result
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("status"))
+            .and_then(Value::as_str)
+        {
+            Some("completed") => WorkItemReconcileAction::AwaitingPullRequestObservation,
+            Some("failed") | Some("dispatch_failed") => WorkItemReconcileAction::GitDeliveryFailed,
+            _ => WorkItemReconcileAction::WaitForGitDelivery,
+        };
+    }
+
+    if git_delivery.latest_execution.is_some() {
+        return WorkItemReconcileAction::WaitForGitDelivery;
+    }
+
+    match git_delivery
+        .latest_preflight
+        .as_ref()
+        .and_then(|artifact| artifact.content_json.as_ref())
+        .and_then(|content| content.get("status"))
+        .and_then(Value::as_str)
+    {
+        Some("ready_for_writer") => {
+            let dispatch_ready = git_delivery
+                .latest_preflight
+                .as_ref()
+                .and_then(|artifact| artifact.content_json.as_ref())
+                .and_then(|content| content.get("dispatch_ready"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if dispatch_ready {
+                WorkItemReconcileAction::AwaitingGitDeliveryExecution
+            } else {
+                WorkItemReconcileAction::AwaitingGitWriterAvailability
+            }
+        }
+        _ => WorkItemReconcileAction::AwaitingGitDeliveryAuthorization,
+    }
+}
+
+async fn git_delivery_preflight_response(
+    store: &SqliteStore,
+    git_delivery: Option<&GitDeliveryFlowResponse>,
+) -> Result<Option<GitDeliveryPreflightResponse>, ApiError> {
+    let Some(git_delivery) = git_delivery else {
+        return Ok(None);
+    };
+    let Some(artifact) = git_delivery.latest_preflight.as_ref() else {
+        return Ok(None);
+    };
+    let Some(content) = artifact.content_json.as_ref() else {
+        return Ok(None);
+    };
+    let Some(status) = content.get("status").and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    let permission_grant = match content
+        .get("permission_grant_id")
+        .and_then(Value::as_str)
+        .filter(|grant_id| !grant_id.is_empty())
+    {
+        Some(grant_id) => store.get_permission_grant(grant_id).await?.map(Into::into),
+        None => None,
+    };
+    let checks = content
+        .get("checks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(Some(GitDeliveryPreflightResponse {
+        status: status.to_string(),
+        approval_gate_ready: content
+            .get("approval_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        authorization_ready: content
+            .get("authorization_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        dispatch_ready: content
+            .get("dispatch_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        plan: git_delivery.plan.clone(),
+        permission_grant,
+        checks,
+        artifact: artifact.clone(),
+        created: false,
+    }))
+}
+
+async fn gitops_delivery_preflight_response(
+    store: &SqliteStore,
+    gitops_delivery: Option<&GitOpsDeliveryFlowResponse>,
+) -> Result<Option<GitOpsDeliveryPreflightResponse>, ApiError> {
+    let Some(gitops_delivery) = gitops_delivery else {
+        return Ok(None);
+    };
+    let Some(artifact) = gitops_delivery.latest_preflight.as_ref() else {
+        return Ok(None);
+    };
+    let Some(content) = artifact.content_json.as_ref() else {
+        return Ok(None);
+    };
+    let Some(status) = content.get("status").and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    let permission_grant = match content
+        .get("permission_grant_id")
+        .and_then(Value::as_str)
+        .filter(|grant_id| !grant_id.is_empty())
+    {
+        Some(grant_id) => store.get_permission_grant(grant_id).await?.map(Into::into),
+        None => None,
+    };
+    let checks = content
+        .get("checks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(Some(GitOpsDeliveryPreflightResponse {
+        status: status.to_string(),
+        approval_gate_ready: content
+            .get("approval_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        authorization_ready: content
+            .get("authorization_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        dispatch_ready: content
+            .get("dispatch_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        plan: gitops_delivery.plan.clone(),
+        base_revision: gitops_delivery.base_revision.clone(),
+        permission_grant,
+        checks,
+        artifact: artifact.clone(),
+        created: false,
+    }))
+}
+
+fn deployment_intent_execution_preflight_response(
+    preflight: DeploymentIntentExecutionPreflight,
+    dispatch_ready: Option<bool>,
+) -> DeploymentIntentPreflightResponse {
+    let ready_for_argo_runner = preflight.ready;
+    DeploymentIntentPreflightResponse {
+        status: if ready_for_argo_runner {
+            "ready_for_argo_runner"
+        } else {
+            "blocked"
+        }
+        .to_string(),
+        ready_for_argo_runner,
+        dispatch_ready: dispatch_ready.unwrap_or(false),
+        deployment_intent: preflight.intent.into(),
+        deployment_contract: preflight.contract.map(Into::into),
+        permission_grant: preflight.grant.map(Into::into),
+        checks: preflight.checks,
     }
 }
 
@@ -2718,6 +5226,10 @@ async fn reconcile_work_item_response(
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
     let work_plan = state.store.get_work_plan_by_work_item(work_item_id).await?;
+    let controller_wait = state
+        .store
+        .get_active_controller_wait_for_work_item(work_item_id)
+        .await?;
     let change_set = match &work_plan {
         Some(work_plan) => {
             state
@@ -2745,6 +5257,62 @@ async fn reconcile_work_item_response(
         Some(run_id) => state.store.get_run(run_id).await?,
         None => None,
     };
+    let pipeline_intent = match change_set.as_ref() {
+        Some(change_set) => {
+            state
+                .store
+                .get_pipeline_intent_by_change_set(&change_set.id)
+                .await?
+        }
+        None => None,
+    };
+    let pipeline_execution_preflight = match pipeline_intent
+        .as_ref()
+        .filter(|intent| pipeline_intent_requires_execution_preflight(intent))
+    {
+        Some(intent) => Some(pipeline_intent_execution_preflight(state, &intent.id).await?),
+        None => None,
+    };
+    let deployment_intent = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_deployment_intent_by_pipeline_intent(&intent.id)
+                .await?
+        }
+        None => None,
+    };
+    let deployment_execution_preflight = match deployment_intent
+        .as_ref()
+        .filter(|intent| intent.status == "approved")
+    {
+        Some(intent) => Some(deployment_intent_execution_preflight(state, &intent.id).await?),
+        None => None,
+    };
+    let deployment_dispatch_ready = deployment_execution_preflight.as_ref().map(|preflight| {
+        state.worker.argo_executor_available()
+            && deployment_target(&preflight.intent)
+                .ok()
+                .is_some_and(|target| {
+                    state
+                        .worker
+                        .argo_executor_allows_application(&target.application)
+                })
+    });
+    let deployment_delivery =
+        deployment_intent_delivery_flow(&state.store, deployment_intent.as_ref()).await?;
+    let gitops_change_set = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_gitops_change_set_by_pipeline_intent(&intent.id)
+                .await?
+        }
+        None => None,
+    };
+    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
+    let gitops_delivery_preflight =
+        gitops_delivery_preflight_response(&state.store, gitops_delivery.as_ref()).await?;
 
     Ok(ReconcileWorkItemResponse {
         action: action.as_str().to_string(),
@@ -2755,6 +5323,18 @@ async fn reconcile_work_item_response(
         run: run.map(Into::into),
         change_set: change_set.map(Into::into),
         git_delivery_preflight,
+        pipeline_intent: pipeline_intent.map(Into::into),
+        pipeline_execution_preflight: pipeline_execution_preflight
+            .map(pipeline_execution_preflight_response),
+        deployment_intent: deployment_intent.map(Into::into),
+        deployment_execution_preflight: deployment_execution_preflight.map(|preflight| {
+            deployment_intent_execution_preflight_response(preflight, deployment_dispatch_ready)
+        }),
+        deployment_delivery,
+        gitops_change_set: gitops_change_set.map(Into::into),
+        gitops_delivery,
+        gitops_delivery_preflight,
+        controller_wait: controller_wait.map(Into::into),
         message,
     })
 }
@@ -3186,6 +5766,200 @@ async fn capture_work_item_change_set(
     Ok(Json(CreateChangeSetResponse {
         change_set: change_set.into(),
         created: true,
+    }))
+}
+
+async fn create_work_item_pipeline_intent(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<CreateWorkItemPipelineIntentRequest>,
+) -> Result<Json<CreatePipelineIntentResponse>, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem has no WorkPlan"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "WorkItem has no captured ChangeSet; source review and immutable merge evidence are required before a PipelineIntent",
+            )
+        })?;
+    if change_set.work_item_id.as_deref() != Some(work_item.id.as_str()) {
+        return Err(ApiError::conflict(
+            "WorkItem ChangeSet lineage does not match the requested WorkItem",
+        ));
+    }
+
+    let source_provenance = work_item_pipeline_source_provenance(&state.store, &change_set)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "WorkItem PipelineIntent requires immutable Git merge provenance before a pipeline definition",
+            )
+        })?;
+    let pipeline_contract_id = required_text(request.pipeline_contract_id, "pipeline_contract_id")?;
+    let pipeline_contract = state
+        .store
+        .get_pipeline_contract(&pipeline_contract_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_contract", &pipeline_contract_id))?;
+    if pipeline_contract.status != "active" {
+        return Err(ApiError::conflict(format!(
+            "WorkItem PipelineIntent requires an active PipelineContract; {} is {}",
+            pipeline_contract.id, pipeline_contract.status
+        )));
+    }
+    let mut intent_json = request.intent_json.ok_or_else(|| {
+        ApiError::bad_request(
+            "WorkItem PipelineIntent requires an exact enabled Tekton execution definition",
+        )
+    })?;
+    let execution = tekton_execution_spec(&intent_json)?;
+    if !execution.enabled {
+        return Err(ApiError::conflict(
+            "WorkItem PipelineIntent execution must be enabled before it can be reviewed against a PipelineContract",
+        ));
+    }
+    let source_revision = required_json_string(
+        source_provenance.as_object().ok_or_else(|| {
+            ApiError::internal("WorkItem source provenance must have an object body")
+        })?,
+        "merge_commit_sha",
+        "WorkItem source provenance",
+    )?;
+    execution_matches_pipeline_contract(&execution, &pipeline_contract, Some(&source_revision))?;
+    let intent_object = intent_json.as_object_mut().ok_or_else(|| {
+        ApiError::bad_request("WorkItem PipelineIntent intent_json must be a JSON object")
+    })?;
+    intent_object.insert(
+        "pipeline_contract".to_string(),
+        json!({
+            "id": pipeline_contract.id,
+            "version": pipeline_contract.version,
+            "namespace": pipeline_contract.namespace,
+            "pipeline_ref": pipeline_contract.pipeline_ref,
+        }),
+    );
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let reason = clean_optional_text(request.reason);
+    let Json(response) = create_pipeline_intent_from_change_set(
+        State(state.clone()),
+        Json(CreatePipelineIntentFromChangeSetRequest {
+            change_set_id: change_set.id.clone(),
+            title: request.title,
+            summary: request.summary,
+            risk_level: request.risk_level,
+            intent_kind: request.intent_kind,
+            intent_json: Some(intent_json),
+            actor: actor.clone(),
+            reason: reason.clone(),
+        }),
+    )
+    .await?;
+    if response.created {
+        append_work_item_audit_event(
+            &state.store,
+            &work_item,
+            "work_item.pipeline_intent_proposed",
+            actor,
+            json!({
+                "work_plan_id": work_plan.id,
+                "change_set_id": change_set.id,
+                "pipeline_intent_id": response.pipeline_intent.id,
+                "pipeline_contract_id": pipeline_contract.id,
+                "pipeline_contract_version": pipeline_contract.version,
+                "source_provenance": source_provenance,
+                "reason": reason,
+            }),
+        )
+        .await?;
+    }
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct WorkItemPipelineContextQuery {
+    namespace: Option<String>,
+    pipeline_ref: Option<String>,
+}
+
+async fn work_item_pipeline_intent_context(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+    Query(query): Query<WorkItemPipelineContextQuery>,
+) -> Result<Json<WorkItemPipelineContextResponse>, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("WorkItem has no WorkPlan"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "WorkItem has no captured ChangeSet; immutable source provenance is unavailable",
+            )
+        })?;
+    if change_set.work_item_id.as_deref() != Some(work_item.id.as_str()) {
+        return Err(ApiError::conflict(
+            "WorkItem ChangeSet lineage does not match the requested WorkItem",
+        ));
+    }
+    let source_provenance = work_item_pipeline_source_provenance(&state.store, &change_set)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict("WorkItem pipeline context requires immutable Git merge provenance")
+        })?;
+    let contract_namespace = clean_optional_text(query.namespace);
+    let contract_pipeline_ref = clean_optional_text(query.pipeline_ref);
+    let active_pipeline_contracts = state
+        .store
+        .list_pipeline_contracts(PipelineContractListFilter {
+            namespace: contract_namespace.clone(),
+            pipeline_ref: contract_pipeline_ref.clone(),
+            status: Some("active".to_string()),
+            limit: 200,
+            offset: 0,
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .map(Into::into);
+
+    Ok(Json(WorkItemPipelineContextResponse {
+        work_item: work_item.into(),
+        work_plan: work_plan.into(),
+        change_set: change_set.into(),
+        pipeline_intent,
+        source_provenance,
+        contract_namespace,
+        contract_pipeline_ref,
+        active_pipeline_contracts,
     }))
 }
 
@@ -3906,6 +6680,14 @@ async fn create_work_plan_from_remediation_plan(
         .get_remediation_plan(&remediation_plan_id)
         .await?
         .ok_or_else(|| ApiError::not_found("remediation_plan", &remediation_plan_id))?;
+    if remediation_plan.requires_approval && remediation_plan.status != "approved" {
+        return Err(ApiError::conflict(format!(
+            "WorkPlan derivation requires an approved remediation plan; {} is {}",
+            remediation_plan.id, remediation_plan.status
+        )));
+    }
+    let actor = clean_optional_text(request.actor);
+    let reason = clean_optional_text(request.reason);
     let work_plan = state
         .store
         .create_work_plan(work_plan_from_remediation_plan(
@@ -3913,6 +6695,20 @@ async fn create_work_plan_from_remediation_plan(
             format!("wplan_{}", unique_suffix()),
         ))
         .await?;
+    append_work_plan_audit_event(
+        &state.store,
+        &work_plan,
+        "work_plan.created_from_remediation_plan",
+        actor,
+        reason,
+        json!({
+            "remediation_plan_id": remediation_plan.id,
+            "incident_id": remediation_plan.incident_id,
+            "remediation_plan_status": remediation_plan.status,
+            "execution_enabled": false,
+        }),
+    )
+    .await?;
 
     Ok(Json(CreateWorkPlanResponse {
         work_plan: work_plan.into(),
@@ -4209,6 +7005,78 @@ impl WorkItemStatus {
         } else {
             Err(ApiError::conflict(format!(
                 "cannot transition work item from {} to {}",
+                self.as_str(),
+                target.as_str()
+            )))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemediationPlanStatus {
+    Draft,
+    Proposed,
+    Approved,
+    Executing,
+    Blocked,
+    Completed,
+    Rejected,
+    Stale,
+}
+
+impl RemediationPlanStatus {
+    fn parse(value: &str) -> Result<Self, ApiError> {
+        match value {
+            "draft" => Ok(Self::Draft),
+            "proposed" => Ok(Self::Proposed),
+            "approved" => Ok(Self::Approved),
+            "executing" => Ok(Self::Executing),
+            "blocked" => Ok(Self::Blocked),
+            "completed" => Ok(Self::Completed),
+            "rejected" => Ok(Self::Rejected),
+            "stale" => Ok(Self::Stale),
+            other => Err(ApiError::bad_request(format!(
+                "unsupported remediation plan status: {other}"
+            ))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Proposed => "proposed",
+            Self::Approved => "approved",
+            Self::Executing => "executing",
+            Self::Blocked => "blocked",
+            Self::Completed => "completed",
+            Self::Rejected => "rejected",
+            Self::Stale => "stale",
+        }
+    }
+
+    fn ensure_can_transition_to(self, target: Self) -> Result<(), ApiError> {
+        if self == target {
+            return Ok(());
+        }
+        let allowed = match self {
+            Self::Draft => matches!(target, Self::Proposed | Self::Rejected),
+            Self::Proposed => matches!(target, Self::Approved | Self::Rejected | Self::Draft),
+            Self::Approved => matches!(
+                target,
+                Self::Executing | Self::Rejected | Self::Draft | Self::Stale
+            ),
+            Self::Executing => matches!(target, Self::Blocked | Self::Completed | Self::Stale),
+            Self::Blocked => matches!(
+                target,
+                Self::Executing | Self::Rejected | Self::Draft | Self::Stale
+            ),
+            Self::Completed | Self::Rejected | Self::Stale => false,
+        };
+        if allowed {
+            Ok(())
+        } else {
+            Err(ApiError::conflict(format!(
+                "cannot transition remediation plan from {} to {}",
                 self.as_str(),
                 target.as_str()
             )))
@@ -6104,6 +8972,58 @@ async fn gitops_delivery_flow(
         latest_result,
         latest_observation,
         latest_merge,
+    }))
+}
+
+async fn deployment_intent_delivery_flow(
+    store: &SqliteStore,
+    intent: Option<&StoredDeploymentIntent>,
+) -> Result<Option<DeploymentIntentDeliveryFlowResponse>, ApiError> {
+    let Some(intent) = intent else {
+        return Ok(None);
+    };
+    let release = store
+        .get_release_by_deployment_intent(&intent.id)
+        .await?
+        .map(Into::into);
+    let Some(run_id) = intent.run_id.as_ref() else {
+        return Ok(Some(DeploymentIntentDeliveryFlowResponse {
+            latest_execution: None,
+            latest_result: None,
+            release,
+        }));
+    };
+    let artifacts = store.list_artifacts(run_id).await?;
+    let latest_execution = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "argo_sync_execution"
+                && artifact.content_json.as_ref().is_some_and(|content| {
+                    content.get("deployment_intent_id").and_then(Value::as_str)
+                        == Some(intent.id.as_str())
+                })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
+    let execution_id = latest_execution
+        .and_then(|artifact| artifact.content_json.as_ref())
+        .and_then(|content| content.get("execution_id"))
+        .and_then(Value::as_str);
+    let latest_result = execution_id.and_then(|execution_id| {
+        artifacts
+            .iter()
+            .filter(|artifact| {
+                artifact.kind == "argo_sync_result"
+                    && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                    })
+            })
+            .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+    });
+
+    Ok(Some(DeploymentIntentDeliveryFlowResponse {
+        latest_execution: latest_execution.cloned().map(Into::into),
+        latest_result: latest_result.cloned().map(Into::into),
+        release,
     }))
 }
 
@@ -8309,13 +11229,7 @@ async fn create_gitops_update_plan(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
-    if intent.status != "completed"
-        || intent
-            .intent_json
-            .pointer("/evidence/status")
-            .and_then(Value::as_str)
-            != Some("satisfied")
-    {
+    if !pipeline_intent_is_gitops_update_eligible(&intent) {
         return Err(ApiError::conflict(
             "GitOps update planning requires an eligible PipelineIntent with satisfied PipelineRunAnalysis evidence",
         ));
@@ -8840,6 +11754,41 @@ struct PipelineIntentExecutionPreflight {
     grant_id: Option<String>,
 }
 
+fn pipeline_execution_preflight_response(
+    preflight: PipelineIntentExecutionPreflight,
+) -> PipelineIntentExecutionPreflightResponse {
+    PipelineIntentExecutionPreflightResponse {
+        ready: preflight.ready,
+        manifest: preflight.manifest,
+        checks: preflight.checks,
+        permission_grant_id: preflight.grant_id,
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PipelineContractBinding {
+    id: String,
+    version: String,
+    namespace: String,
+    pipeline_ref: String,
+}
+
+fn pipeline_contract_binding(
+    intent_json: &Value,
+) -> Result<Option<PipelineContractBinding>, ApiError> {
+    let Some(binding) = intent_json.get("pipeline_contract") else {
+        return Ok(None);
+    };
+    serde_json::from_value(binding.clone())
+        .map(Some)
+        .map_err(|error| {
+            ApiError::conflict(format!(
+                "PipelineIntent has invalid pinned PipelineContract provenance: {error}"
+            ))
+        })
+}
+
 #[derive(Debug, Clone)]
 struct DeploymentTarget {
     environment: String,
@@ -8945,73 +11894,124 @@ async fn pipeline_intent_execution_preflight(
         ),
     ];
 
-    let contracts = state
-        .store
-        .list_pipeline_contracts(PipelineContractListFilter {
-            namespace: Some(execution.namespace.clone()),
-            pipeline_ref: Some(execution.pipeline_ref.clone()),
-            status: Some("active".to_string()),
-            limit: 10,
-            ..PipelineContractListFilter::default()
-        })
-        .await?;
-    let matching_contract_count = if contracts.is_empty() {
-        state
-            .store
-            .list_pipeline_contracts(PipelineContractListFilter {
-                namespace: Some(execution.namespace.clone()),
-                pipeline_ref: Some(execution.pipeline_ref.clone()),
-                limit: 10,
-                ..PipelineContractListFilter::default()
-            })
-            .await?
-            .len()
-    } else {
-        contracts.len()
-    };
-    let contract = match contracts.as_slice() {
-        [] => {
-            checks.push(execution_check(
-                "active_pipeline_contract",
-                false,
-                if matching_contract_count == 0 {
-                    format!(
-                        "No PipelineContract exists for {}/{}",
-                        execution.namespace, execution.pipeline_ref
-                    )
-                } else {
-                    format!(
-                        "All PipelineContracts for {}/{} are retired",
-                        execution.namespace, execution.pipeline_ref
-                    )
-                },
-            ));
-            None
-        }
-        [contract] => {
-            checks.push(execution_check(
-                "active_pipeline_contract",
-                true,
-                format!(
-                    "Active PipelineContract {} version {} matches",
-                    contract.id, contract.version
-                ),
-            ));
+    let contract = match pipeline_contract_binding(&intent.intent_json)? {
+        Some(binding) => match state.store.get_pipeline_contract(&binding.id).await? {
+            None => {
+                checks.push(execution_check(
+                    "active_pipeline_contract",
+                    false,
+                    format!("Pinned PipelineContract {} no longer exists", binding.id),
+                ));
+                None
+            }
             Some(contract)
-        }
-        _ => {
+                if contract.status != "active"
+                    || contract.version != binding.version
+                    || contract.namespace != binding.namespace
+                    || contract.pipeline_ref != binding.pipeline_ref
+                    || contract.namespace != execution.namespace
+                    || contract.pipeline_ref != execution.pipeline_ref =>
+            {
+                checks.push(execution_check(
+                    "active_pipeline_contract",
+                    false,
+                    format!(
+                        "Pinned PipelineContract {} no longer matches its active execution contract",
+                        binding.id
+                    ),
+                ));
+                None
+            }
+            Some(contract) => {
+                checks.push(execution_check(
+                    "active_pipeline_contract",
+                    true,
+                    format!(
+                        "Pinned active PipelineContract {} version {} matches",
+                        contract.id, contract.version
+                    ),
+                ));
+                Some(contract)
+            }
+        },
+        None if change_set.work_item_id.is_some() => {
             checks.push(execution_check(
                 "active_pipeline_contract",
                 false,
-                format!(
-                    "Multiple active PipelineContracts match {}/{}; retire the older contract",
-                    execution.namespace, execution.pipeline_ref
-                ),
+                "WorkItem PipelineIntent requires an exact pinned PipelineContract before execution",
             ));
             None
         }
+        None => {
+            let contracts = state
+                .store
+                .list_pipeline_contracts(PipelineContractListFilter {
+                    namespace: Some(execution.namespace.clone()),
+                    pipeline_ref: Some(execution.pipeline_ref.clone()),
+                    status: Some("active".to_string()),
+                    limit: 10,
+                    ..PipelineContractListFilter::default()
+                })
+                .await?;
+            let matching_contract_count = if contracts.is_empty() {
+                state
+                    .store
+                    .list_pipeline_contracts(PipelineContractListFilter {
+                        namespace: Some(execution.namespace.clone()),
+                        pipeline_ref: Some(execution.pipeline_ref.clone()),
+                        limit: 10,
+                        ..PipelineContractListFilter::default()
+                    })
+                    .await?
+                    .len()
+            } else {
+                contracts.len()
+            };
+            match contracts.as_slice() {
+                [] => {
+                    checks.push(execution_check(
+                        "active_pipeline_contract",
+                        false,
+                        if matching_contract_count == 0 {
+                            format!(
+                                "No PipelineContract exists for {}/{}",
+                                execution.namespace, execution.pipeline_ref
+                            )
+                        } else {
+                            format!(
+                                "All PipelineContracts for {}/{} are retired",
+                                execution.namespace, execution.pipeline_ref
+                            )
+                        },
+                    ));
+                    None
+                }
+                [contract] => {
+                    checks.push(execution_check(
+                        "active_pipeline_contract",
+                        true,
+                        format!(
+                            "Active PipelineContract {} version {} matches",
+                            contract.id, contract.version
+                        ),
+                    ));
+                    Some(contract.clone())
+                }
+                _ => {
+                    checks.push(execution_check(
+                        "active_pipeline_contract",
+                        false,
+                        format!(
+                            "Multiple active PipelineContracts match {}/{}; retire the older contract",
+                            execution.namespace, execution.pipeline_ref
+                        ),
+                    ));
+                    None
+                }
+            }
+        }
     };
-    if let Some(contract) = contract {
+    if let Some(contract) = contract.as_ref() {
         match execution_matches_pipeline_contract(
             &execution,
             contract,
@@ -10330,16 +13330,20 @@ fn validate_terminal_pipeline_run_analysis(
             ));
         }
     }
-    let expected_status = match outcome.status.as_str() {
-        "completed" => "succeeded",
-        "failed" => "failed",
+    let observed_status = analysis.pointer("/summary/status").and_then(Value::as_str);
+    let status_matches = match outcome.status.as_str() {
+        "completed" => observed_status == Some("succeeded"),
+        // Tekton reports a cancelled PipelineRun separately, but both terminal
+        // states are an unsuccessful execution from the delivery controller's
+        // perspective and must retain the same bounded failure path.
+        "failed" => matches!(observed_status, Some("failed" | "cancelled")),
         _ => {
             return Err(ApiError::bad_request(
                 "terminal execution analysis requires a completed or failed outcome",
             ))
         }
     };
-    if analysis.pointer("/summary/status").and_then(Value::as_str) != Some(expected_status) {
+    if !status_matches {
         return Err(ApiError::bad_request(
             "terminal execution analysis status must match the executor outcome",
         ));
@@ -17382,6 +20386,42 @@ async fn append_work_item_audit_event(
         .map(|_| ())
 }
 
+async fn append_controller_wait_audit_event(
+    store: &SqliteStore,
+    wait: &StoredControllerWait,
+    kind: &str,
+    actor: Option<String>,
+    reason: Option<String>,
+) -> Result<(), StoreError> {
+    store
+        .create_audit_event(CreateAuditEvent {
+            id: format!("aud_{}_{}", wait.id, unique_suffix()),
+            kind: kind.to_string(),
+            actor: actor.or_else(|| Some("api".to_string())),
+            resource_kind: "controller_wait".to_string(),
+            resource_id: wait.id.clone(),
+            run_id: wait.run_id.clone(),
+            payload_json: json!({
+                "controller_wait_id": wait.id,
+                "work_item_id": wait.work_item_id,
+                "run_id": wait.run_id.as_ref().map(RunId::as_str),
+                "status": wait.status,
+                "wait_kind": wait.wait_kind,
+                "subject": { "kind": wait.subject_kind, "id": wait.subject_id },
+                "next_check_at": wait.next_check_at,
+                "deadline_at": wait.deadline_at,
+                "max_checks": wait.max_checks,
+                "check_count": wait.check_count,
+                "reason": reason,
+                "automatic_execution": false,
+                "automatic_retry": false,
+                "automatic_rollback": false,
+            }),
+        })
+        .await
+        .map(|_| ())
+}
+
 async fn append_workspace_audit_event(
     store: &SqliteStore,
     workspace: &pharness_store::StoredWorkspace,
@@ -18110,71 +21150,84 @@ mod tests {
         approval_gate_summary, approval_gates_from_work_item, approval_summary,
         attach_deployment_intent_evidence, attach_pipeline_intent_evidence,
         attach_release_evidence, authorize_change_set_git_delivery,
-        authorize_gitops_change_set_delivery, build_pipeline_run_manifest, cancel_run,
-        cancel_work_item, change_set_flow, change_set_readiness, config_effective,
+        authorize_gitops_change_set_delivery, block_work_item_from_delivery_failure,
+        build_pipeline_run_manifest, cancel_run, cancel_work_item, change_set_flow,
+        change_set_readiness, complete_work_item_from_verified_release, config_effective,
         create_change_set, create_change_set_trusted_envelope, create_declared_deployment_handoff,
         create_deployment_contract, create_deployment_intent_from_pipeline_intent,
         create_deployment_intent_trusted_envelope, create_incident, create_observation,
         create_pipeline_intent_from_change_set, create_registry_evidence_from_registry_inspection,
         create_registry_evidence_from_release, create_release_from_deployment_intent,
-        create_remediation_plan, create_run, create_work_item,
+        create_remediation_plan, create_run, create_work_item, create_work_item_pipeline_intent,
         create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
         create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
-        deny_approval, ensure_pipeline_evidence_ready_for_deployment, execute_capability,
+        deny_approval, deployment_intent_reconcile_action,
+        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
         execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
         get_deployment_contract, get_deployment_intent, get_incident, get_observation,
         get_permission_grant, get_pipeline_intent, get_registry_evidence, get_release,
         get_remediation_plan, get_run, get_run_diff, get_run_events, get_work_plan,
-        gitops_delivery_flow, internal_argo_sync_outcome,
-        internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
-        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
-        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
-        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
-        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_item_events, list_work_plans, list_workspaces, merge_pipeline_execution_state,
-        observed_gitops_merge_for_deployment, parse_last_event_id, persist_pipeline_build_output,
-        persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
-        pipeline_build_output_from_analysis, policy_json, preflight_change_set_git_delivery,
+        git_delivery_reconcile_action, gitops_change_set_reconcile_action, gitops_delivery_flow,
+        internal_argo_sync_outcome, internal_gitops_delivery_observation_outcome,
+        internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
+        list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
+        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
+        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
+        list_run_observations, list_runs, list_work_item_controller_waits, list_work_item_events,
+        list_work_plans, list_workspaces, merge_pipeline_execution_state,
+        observe_due_controller_wait, observed_gitops_merge_for_deployment, parse_last_event_id,
+        persist_pipeline_build_output, persist_pipeline_execution_evidence,
+        persist_pipeline_run_analysis, pipeline_build_output_from_analysis,
+        pipeline_intent_execution_preflight, pipeline_intent_is_gitops_update_eligible,
+        pipeline_intent_reconcile_action, policy_json, preflight_change_set_git_delivery,
         preflight_deployment_intent, preflight_gitops_change_set_delivery,
-        prepare_change_set_git_delivery, prepare_gitops_change_set_delivery, reconcile_work_item,
+        prepare_change_set_git_delivery, prepare_gitops_change_set_delivery,
+        reconcile_due_controller_waits, reconcile_work_item, release_reconcile_action,
         replan_work_item, revise_change_set, revise_work_plan, revoke_permission_grant, router,
-        run_policy, run_summary, satisfy_approval_gate, set_pipeline_intent_evidence,
-        stream_start_seq, tekton_execution_spec, transition_change_set,
+        run_policy, run_summary, satisfy_approval_gate, schedule_controller_wait,
+        set_pipeline_intent_evidence, stream_start_seq,
+        supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
         transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
-        transition_registry_evidence, transition_release, transition_work_item,
-        transition_work_plan, unique_suffix, validate_permission_grant_request,
-        validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis,
-        verify_release, work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
-        ApprovalSummaryQuery, InternalWorkspaceProvisionedRequest, ListApprovalGatesQuery,
-        ListApprovalsQuery, ListAuditEventsQuery, ListChangeSetsQuery,
+        transition_registry_evidence, transition_release, transition_remediation_plan,
+        transition_work_item, transition_work_plan, unique_suffix,
+        validate_permission_grant_request, validate_pipeline_deployment_handoff,
+        validate_terminal_pipeline_run_analysis, verify_release, work_item_pipeline_intent_context,
+        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
+        ApprovalSummaryQuery, DeploymentIntentExecutionPreflight, GitDeliveryFlowResponse,
+        GitOpsBaseRevisionReconcileState, GitOpsDeliveryFlowResponse,
+        InternalWorkspaceProvisionedRequest, ListApprovalGatesQuery, ListApprovalsQuery,
+        ListAuditEventsQuery, ListChangeSetsQuery, ListControllerWaitsQuery,
         ListDeploymentContractsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
         ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
         ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
         ListWorkPlansQuery, ListWorkspacesQuery, PipelineDeploymentHandoffSpec,
-        StreamRunEventsQuery, GIT_DELIVERY_ACTIONS,
+        StreamRunEventsQuery, WorkItemPipelineContextQuery, WorkItemReconcileAction,
+        CONTROLLER_WAIT_MAX_CHECKS, GIT_DELIVERY_ACTIONS,
     };
     use crate::dispatch::RunDispatcher;
     use crate::dto::{
-        ApprovalDecision, ArgoSyncOutcomeRequest, AttachDeploymentIntentEvidenceRequest,
-        AttachPipelineIntentEvidenceRequest, AttachReleaseEvidenceRequest, CreateChangeSetRequest,
-        CreateDeploymentContractRequest, CreateDeploymentIntentFromPipelineIntentRequest,
+        ApprovalDecision, ArgoSyncOutcomeRequest, ArtifactResponse,
+        AttachDeploymentIntentEvidenceRequest, AttachPipelineIntentEvidenceRequest,
+        AttachReleaseEvidenceRequest, CreateChangeSetRequest, CreateDeploymentContractRequest,
+        CreateDeploymentIntentFromPipelineIntentRequest,
         CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
         CreateGitOpsDeliveryAuthorizationRequest, CreateIncidentRequest, CreateObservationRequest,
         CreatePermissionGrantRequest, CreatePipelineIntentFromChangeSetRequest,
         CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromReleaseRequest,
         CreateReleaseFromDeploymentIntentRequest, CreateRemediationPlanRequest, CreateRunRequest,
-        CreateTrustedEnvelopeRequest, CreateWorkItemRequest,
+        CreateTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
-        DeploymentIntentPreflightRequest, ExecuteCapabilityRequest, GitDeliveryPreflightRequest,
+        DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
+        ExecuteCapabilityRequest, GitDeliveryPreflightRequest,
         GitOpsDeliveryObservationOutcomeRequest, GitOpsDeliveryPreflightRequest,
         PipelineIntentExecutionOutcomeRequest, PrepareGitDeliveryRequest,
-        PrepareGitOpsDeliveryRequest, ReconcileWorkItemRequest, ReplanWorkItemRequest,
-        ReviewApprovalRequest, ReviseChangeSetRequest, ReviseWorkPlanRequest,
-        RevokePermissionGrantRequest, TransitionChangeSetRequest,
+        PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest, ReconcileWorkItemRequest,
+        ReleaseResponse, ReplanWorkItemRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
+        ReviseWorkPlanRequest, RevokePermissionGrantRequest, TransitionChangeSetRequest,
         TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
         TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
-        TransitionReleaseRequest, TransitionWorkItemRequest, TransitionWorkPlanRequest,
-        VerifyReleaseRequest,
+        TransitionReleaseRequest, TransitionRemediationPlanRequest, TransitionWorkItemRequest,
+        TransitionWorkPlanRequest, VerifyReleaseRequest,
     };
     use crate::workspace::WorkspaceProvisioner;
     use axum::extract::{Path, Query, State};
@@ -18186,12 +21239,14 @@ mod tests {
     };
     use pharness_store::{
         ApprovalGateListFilter, ApprovalGateSummaryFilter, CreateApproval, CreateApprovalGate,
-        CreateArtifact, CreateChangeSet, CreateDeploymentIntent, CreateFileChange,
-        CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePipelineIntent,
-        CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem,
-        CreateWorkPlan, CreateWorkspace, SqliteStore, StoredPipelineContract, StoredPipelineIntent,
+        CreateArtifact, CreateChangeSet, CreateControllerWait, CreateDeploymentIntent,
+        CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
+        CreatePipelineContract, CreatePipelineIntent, CreateRelease, CreateRemediationPlan,
+        CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace,
+        ObservationListFilter, SqliteStore, StoredDeploymentIntent, StoredGitOpsChangeSet,
+        StoredPipelineContract, StoredPipelineIntent, StoredRelease,
     };
-    use serde_json::json;
+    use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
@@ -18888,6 +21943,59 @@ case "$*" in
     ;;
   *deployments*)
     printf '%s\n' '{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"checkout-api","namespace":"apps-dev","generation":1},"spec":{"replicas":1},"status":{"observedGeneration":1,"updatedReplicas":1,"availableReplicas":1,"readyReplicas":1}}'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+"#,
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&path, permissions).unwrap();
+        path
+    }
+
+    fn fake_succeeded_tekton_kubectl_script() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "pharness-fake-succeeded-tekton-kubectl-{}",
+            unique_suffix()
+        ));
+        fs::write(
+            &path,
+            r#"#!/bin/sh
+case "$*" in
+  *pipelineruns.tekton.dev*)
+    printf '%s\n' '{"apiVersion":"tekton.dev/v1","kind":"PipelineRun","metadata":{"name":"finance-build","namespace":"ci","labels":{"tekton.dev/pipeline":"finance-ci"}},"status":{"conditions":[{"type":"Succeeded","status":"True","reason":"Succeeded"}]}}'
+    ;;
+  *taskruns.tekton.dev*)
+    printf '%s\n' '{"apiVersion":"tekton.dev/v1","kind":"TaskRunList","items":[]}'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+"#,
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&path, permissions).unwrap();
+        path
+    }
+
+    fn fake_completed_argo_wait_kubectl_script() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "pharness-fake-completed-argo-wait-kubectl-{}",
+            unique_suffix()
+        ));
+        fs::write(
+            &path,
+            r#"#!/bin/sh
+case "$*" in
+  *applications.argoproj.io*)
+    printf '%s\n' '{"apiVersion":"argoproj.io/v1alpha1","kind":"Application","metadata":{"name":"checkout-api","namespace":"argocd"},"status":{"sync":{"status":"Synced","revision":"abc1234"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded","syncResult":{"revision":"abc1234"}}}}'
     ;;
   *)
     exit 1
@@ -20944,10 +24052,59 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             get_remediation_plan(State(state.clone()), Path("rplan_test".to_string()))
                 .await
                 .unwrap();
+        let derivation_error = create_work_plan_from_remediation_plan(
+            State(state.clone()),
+            Json(CreateWorkPlanFromRemediationPlanRequest {
+                remediation_plan_id: "rplan_test".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("attempted before plan review".to_string()),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(derivation_error.status, StatusCode::CONFLICT);
+        let Json(proposed_remediation) = transition_remediation_plan(
+            State(state.clone()),
+            Path("rplan_test".to_string()),
+            Json(TransitionRemediationPlanRequest {
+                target_status: "proposed".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("draft recovery evidence reviewed".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(proposed_remediation.remediation_plan.status, "proposed");
+        let approval_error = transition_remediation_plan(
+            State(state.clone()),
+            Path("rplan_test".to_string()),
+            Json(TransitionRemediationPlanRequest {
+                target_status: "approved".to_string(),
+                actor: None,
+                reason: None,
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(approval_error.status, StatusCode::BAD_REQUEST);
+        let Json(approved_remediation) = transition_remediation_plan(
+            State(state.clone()),
+            Path("rplan_test".to_string()),
+            Json(TransitionRemediationPlanRequest {
+                target_status: "approved".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("bounded recovery plan approved".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(approved_remediation.remediation_plan.status, "approved");
         let Json(created_work_plan) = create_work_plan_from_remediation_plan(
             State(state.clone()),
             Json(CreateWorkPlanFromRemediationPlanRequest {
                 remediation_plan_id: "rplan_test".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("create an execution-disabled recovery work plan".to_string()),
             }),
         )
         .await
@@ -20956,6 +24113,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             State(state.clone()),
             Json(CreateWorkPlanFromRemediationPlanRequest {
                 remediation_plan_id: "rplan_test".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("verify idempotent work plan lookup".to_string()),
             }),
         )
         .await
@@ -21181,7 +24340,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 incident_id: "inc_plan_lifecycle".to_string(),
                 session_id: session_id.clone(),
                 run_id: Some(created.id.clone()),
-                status: "draft".to_string(),
+                status: "approved".to_string(),
                 title: "Draft remediation for ci/build-api".to_string(),
                 summary: "Review evidence before proposing mutation".to_string(),
                 risk_level: "high".to_string(),
@@ -21223,6 +24382,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             State(state.clone()),
             Json(CreateWorkPlanFromRemediationPlanRequest {
                 remediation_plan_id: "rplan_lifecycle".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("derive reviewed remediation work plan".to_string()),
             }),
         )
         .await
@@ -21512,7 +24673,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 incident_id: "inc_changeset_lifecycle".to_string(),
                 session_id: session_id.clone(),
                 run_id: Some(created.id.clone()),
-                status: "draft".to_string(),
+                status: "approved".to_string(),
                 title: "Draft remediation for ci/build-api".to_string(),
                 summary: "Prepare a bounded source change".to_string(),
                 risk_level: "high".to_string(),
@@ -21554,6 +24715,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             State(state.clone()),
             Json(CreateWorkPlanFromRemediationPlanRequest {
                 remediation_plan_id: "rplan_changeset".to_string(),
+                actor: Some("lucas".to_string()),
+                reason: Some("derive reviewed remediation work plan".to_string()),
             }),
         )
         .await
@@ -24566,6 +27729,28 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
     }
 
     #[test]
+    fn cancelled_pipeline_analysis_is_a_terminal_failed_execution() {
+        let outcome = PipelineIntentExecutionOutcomeRequest {
+            execution_id: "pexec_cancelled".to_string(),
+            status: "failed".to_string(),
+            pipeline_run_namespace: Some("ci".to_string()),
+            pipeline_run_name: Some("finance-build".to_string()),
+            error: Some("PipelineRun reached terminal cancelled status".to_string()),
+            pipeline_run_analysis: None,
+            analysis_error: None,
+        };
+        assert!(validate_terminal_pipeline_run_analysis(
+            &outcome,
+            &json!({
+                "kind": "PipelineRunAnalysis",
+                "pipeline_run": { "namespace": "ci", "name": "finance-build" },
+                "summary": { "status": "cancelled" }
+            }),
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn deployment_approval_requires_matching_satisfied_pipeline_evidence() {
         let mut intent = StoredPipelineIntent {
             id: "pint_deployment_evidence".to_string(),
@@ -24702,6 +27887,612 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(events
             .iter()
             .any(|event| event.kind == "work_item.work_plan_created"));
+    }
+
+    #[tokio::test]
+    async fn controller_waits_are_bounded_idempotent_and_audited() {
+        let state = test_state().await;
+        let Json(created) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Observe a bounded pipeline run".to_string(),
+                intent: "Wait for a terminal development pipeline result.".to_string(),
+                acceptance_criteria: vec!["Terminal status is recorded".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(600),
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let work_item = state
+            .store
+            .get_work_item(&created.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let (scheduled, first_created) = schedule_controller_wait(
+            &state,
+            &work_item,
+            WorkItemReconcileAction::WaitForPipelineExecution,
+            Some("operator".to_string()),
+        )
+        .await
+        .unwrap();
+        assert!(first_created);
+        assert_eq!(scheduled.status, "active");
+        assert_eq!(scheduled.wait_kind, "pipeline_execution");
+        assert_eq!(scheduled.max_checks, CONTROLLER_WAIT_MAX_CHECKS);
+        assert_eq!(scheduled.check_count, 0);
+        assert_eq!(scheduled.data_json["automatic_execution"], json!(false));
+        assert_eq!(scheduled.data_json["automatic_retry"], json!(false));
+        assert_eq!(scheduled.data_json["automatic_rollback"], json!(false));
+        assert!(
+            scheduled.deadline_at.parse::<u128>().unwrap()
+                > scheduled.next_check_at.parse::<u128>().unwrap()
+        );
+
+        let (retained, second_created) = schedule_controller_wait(
+            &state,
+            &work_item,
+            WorkItemReconcileAction::WaitForPipelineExecution,
+            Some("operator".to_string()),
+        )
+        .await
+        .unwrap();
+        assert!(!second_created);
+        assert_eq!(retained.id, scheduled.id);
+
+        let Json(listed) = list_work_item_controller_waits(
+            State(state.clone()),
+            Path(work_item.id.clone()),
+            Query(ListControllerWaitsQuery::default()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed.count, 1);
+        assert_eq!(listed.controller_waits[0].id, scheduled.id);
+
+        let superseded = supersede_active_controller_wait_if_present(
+            &state,
+            &work_item.id,
+            "terminal pipeline evidence was recorded".to_string(),
+            Some("controller".to_string()),
+        )
+        .await
+        .unwrap()
+        .expect("active wait should be superseded");
+        assert_eq!(superseded.status, "superseded");
+        assert_eq!(
+            superseded.resolution_reason.as_deref(),
+            Some("terminal pipeline evidence was recorded")
+        );
+
+        let events = state
+            .store
+            .list_audit_events(Some("controller_wait"), Some(&scheduled.id), None, 20)
+            .await
+            .unwrap();
+        assert!(events
+            .iter()
+            .any(|event| event.kind == "controller_wait.scheduled"));
+        assert!(events
+            .iter()
+            .any(|event| event.kind == "controller_wait.superseded"));
+    }
+
+    #[tokio::test]
+    async fn due_controller_waits_only_progress_from_evidence_or_block_on_expiry() {
+        let state = test_state().await;
+        let Json(progress_item) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Observe controller progress".to_string(),
+                intent: "Exercise durable evidence-only progression.".to_string(),
+                acceptance_criteria: vec!["No external action is dispatched".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(600),
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let progress_item_stored = state
+            .store
+            .get_work_item(&progress_item.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let (progress_wait, _) = schedule_controller_wait(
+            &state,
+            &progress_item_stored,
+            WorkItemReconcileAction::WaitForPipelineExecution,
+            Some("operator".to_string()),
+        )
+        .await
+        .unwrap();
+        state
+            .store
+            .record_controller_wait_check(&progress_wait.id, "0".to_string())
+            .await
+            .unwrap();
+
+        let Json(progressed) = reconcile_due_controller_waits(
+            State(state.clone()),
+            None,
+            Json(ReconcileDueControllerWaitsRequest {
+                limit: Some(10),
+                actor: Some("controller".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(progressed.checked, 1);
+        assert_eq!(progressed.progressed, 1);
+        assert_eq!(progressed.blocked, 0);
+        assert_eq!(progressed.results[0].outcome, "progressed");
+        assert_eq!(
+            progressed.results[0].next_action.as_deref(),
+            Some("declare_work_plan")
+        );
+        let progressed_wait = state
+            .store
+            .get_controller_wait(&progress_wait.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(progressed_wait.status, "resolved");
+
+        let Json(expiring_item) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Expire a controller wait".to_string(),
+                intent: "Prove a bounded wait stops safely.".to_string(),
+                acceptance_criteria: vec!["The WorkItem blocks after expiry".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(600),
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let session_id = SessionId::new("ses_controller_wait_expiry");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "controller wait expiry".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        let expiring_wait = state
+            .store
+            .create_controller_wait(CreateControllerWait {
+                id: "cwait_expiry".to_string(),
+                work_item_id: expiring_item.id.clone(),
+                session_id,
+                run_id: None,
+                status: "active".to_string(),
+                wait_kind: "pipeline_execution".to_string(),
+                subject_kind: "work_item".to_string(),
+                subject_id: expiring_item.id.clone(),
+                next_check_at: "0".to_string(),
+                deadline_at: "0".to_string(),
+                max_checks: 1,
+                data_json: json!({ "controller_action": "wait_for_pipeline_execution" }),
+            })
+            .await
+            .unwrap();
+
+        let Json(expired) = reconcile_due_controller_waits(
+            State(state.clone()),
+            None,
+            Json(ReconcileDueControllerWaitsRequest {
+                limit: Some(10),
+                actor: Some("controller".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(expired.checked, 1);
+        assert_eq!(expired.blocked, 1);
+        assert_eq!(expired.results[0].outcome, "blocked");
+        let stored_expiring_wait = state
+            .store
+            .get_controller_wait(&expiring_wait.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored_expiring_wait.status, "expired");
+        let blocked_item = state
+            .store
+            .get_work_item(&expiring_item.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(blocked_item.status, "blocked");
+        let audit_events = state
+            .store
+            .list_audit_events(Some("work_item"), Some(&expiring_item.id), None, 20)
+            .await
+            .unwrap();
+        assert!(audit_events
+            .iter()
+            .any(|event| event.kind == "work_item.controller_wait_blocked"));
+    }
+
+    #[tokio::test]
+    async fn due_pipeline_wait_observes_only_the_declared_tekton_run_and_persists_terminal_evidence(
+    ) {
+        let fake_kubectl = fake_succeeded_tekton_kubectl_script();
+        let state = test_state_with_cluster_tools(
+            ReadOnlyClusterTools::default()
+                .with_kubectl_bin(fake_kubectl.display().to_string())
+                .without_related_resource_lookups(),
+        )
+        .await;
+        let session_id = SessionId::new("ses_pipeline_wait_observer");
+        let run_id = RunId::new("run_pipeline_wait_observer");
+        let work_item_id = "witem_pipeline_wait_observer";
+        let work_plan_id = "wplan_pipeline_wait_observer";
+        let change_set_id = "cset_pipeline_wait_observer";
+        let pipeline_intent_id = "pint_pipeline_wait_observer";
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Pipeline wait observer".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "observe exact Tekton PipelineRun".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 1,
+                initial_status: "completed".to_string(),
+                execution_target_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "awaiting_approval".to_string(),
+                title: "Observe a declared finance build".to_string(),
+                intent: "Persist terminal Tekton evidence without redispatching work.".to_string(),
+                acceptance_criteria: vec!["Exact PipelineRun is observed".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 600,
+                created_by: Some("operator".to_string()),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: work_plan_id.to_string(),
+                work_item_id: Some(work_item_id.to_string()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Observe finance build".to_string(),
+                summary: "Bounded test lineage".to_string(),
+                risk_level: "medium".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("finance-build".to_string()),
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let change_set = state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: change_set_id.to_string(),
+                work_item_id: Some(work_item_id.to_string()),
+                work_plan_id: work_plan_id.to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Finance source change".to_string(),
+                summary: "Reviewed source change".to_string(),
+                risk_level: "medium".to_string(),
+                material_hash: "pipeline_wait_observer_hash".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("finance-build".to_string()),
+                change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_pipeline_wait_git_plan".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "git_delivery_plan".to_string(),
+                label: "merged finance source plan".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "change_set": {
+                        "id": change_set.id,
+                        "revision": change_set.revision,
+                        "material_hash": change_set.material_hash,
+                    }
+                })),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_pipeline_wait_git_merge".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "git_delivery_merge".to_string(),
+                label: "merged finance source".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "git_delivery_plan_artifact_id": "art_pipeline_wait_git_plan",
+                    "merge_commit_sha": "b1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+                })),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: pipeline_intent_id.to_string(),
+                change_set_id: change_set_id.to_string(),
+                work_plan_id: work_plan_id.to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "executing".to_string(),
+                title: "Finance build".to_string(),
+                summary: "Declared PipelineRun is active".to_string(),
+                risk_level: "medium".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("ci".to_string()),
+                resource_kind: Some("PipelineRun".to_string()),
+                resource_name: Some("finance-build".to_string()),
+                intent_json: json!({
+                    "execution_state": {
+                        "execution_id": "pexec_pipeline_wait_observer",
+                        "state": "pipeline_run_created",
+                        "pipeline_run_namespace": "ci",
+                        "pipeline_run_name": "finance-build",
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        let wait = state
+            .store
+            .create_controller_wait(CreateControllerWait {
+                id: "cwait_pipeline_wait_observer".to_string(),
+                work_item_id: work_item_id.to_string(),
+                session_id,
+                run_id: Some(run_id),
+                status: "active".to_string(),
+                wait_kind: "pipeline_execution".to_string(),
+                subject_kind: "pipeline_intent".to_string(),
+                subject_id: pipeline_intent_id.to_string(),
+                next_check_at: "0".to_string(),
+                deadline_at: "9999999999999999999999".to_string(),
+                max_checks: 3,
+                data_json: json!({ "controller_action": "wait_for_pipeline_execution" }),
+            })
+            .await
+            .unwrap();
+
+        let Json(result) = reconcile_due_controller_waits(
+            State(state.clone()),
+            None,
+            Json(ReconcileDueControllerWaitsRequest {
+                limit: Some(10),
+                actor: Some("controller".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.checked, 1);
+        assert_eq!(result.progressed, 1);
+        assert_eq!(result.results[0].outcome, "progressed");
+        assert_eq!(
+            result.results[0].next_action.as_deref(),
+            Some("awaiting_pipeline_build_output_review")
+        );
+        assert_eq!(
+            state
+                .store
+                .get_controller_wait(&wait.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "resolved"
+        );
+        let intent = state
+            .store
+            .get_pipeline_intent(pipeline_intent_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(intent.status, "approved");
+        assert_eq!(
+            intent.intent_json.pointer("/execution_state/state"),
+            Some(&json!("pipeline_run_succeeded"))
+        );
+        assert_eq!(
+            intent.intent_json.pointer("/evidence/status"),
+            Some(&json!("satisfied"))
+        );
+        let observations = state
+            .store
+            .list_observations(ObservationListFilter {
+                source: Some("tekton".to_string()),
+                resource_name: Some("finance-build".to_string()),
+                limit: 10,
+                ..ObservationListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert!(observations
+            .iter()
+            .any(|observation| observation.kind == "pipeline_run_analysis"));
+        let audits = state
+            .store
+            .list_audit_events(Some("pipeline_intent"), Some(pipeline_intent_id), None, 20)
+            .await
+            .unwrap();
+        assert!(audits
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.execution_observed"));
+        let _ = fs::remove_file(fake_kubectl);
+    }
+
+    #[tokio::test]
+    async fn due_deployment_wait_observes_only_the_declared_argo_application() {
+        let fake_kubectl = fake_completed_argo_wait_kubectl_script();
+        let state = test_state_with_cluster_tools(
+            ReadOnlyClusterTools::default().with_kubectl_bin(fake_kubectl.display().to_string()),
+        )
+        .await;
+        let release_id = seed_approved_work_item_release(&state).await;
+        let release = state.store.get_release(&release_id).await.unwrap().unwrap();
+        let run_id = release.run_id.clone().unwrap();
+        let deployment_intent_id = release.deployment_intent_id.clone();
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_argo_wait_execution".to_string(),
+                session_id: release.session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "argo_sync_execution".to_string(),
+                label: "declared Argo sync execution".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "execution_id": "aexec_argo_wait",
+                    "deployment_intent_id": deployment_intent_id,
+                    "target": {
+                        "environment": "dev",
+                        "namespace": "apps-dev",
+                        "argo_application": "checkout-api",
+                    }
+                })),
+            })
+            .await
+            .unwrap();
+        let wait = state
+            .store
+            .create_controller_wait(CreateControllerWait {
+                id: "cwait_argo_wait_observer".to_string(),
+                work_item_id: "witem_post_sync".to_string(),
+                session_id: release.session_id,
+                run_id: Some(run_id.clone()),
+                status: "active".to_string(),
+                wait_kind: "deployment_execution".to_string(),
+                subject_kind: "deployment_intent".to_string(),
+                subject_id: deployment_intent_id.clone(),
+                next_check_at: "0".to_string(),
+                deadline_at: "9999999999999999999999".to_string(),
+                max_checks: 3,
+                data_json: json!({ "controller_action": "wait_for_deployment_execution" }),
+            })
+            .await
+            .unwrap();
+
+        observe_due_controller_wait(&state, &wait, Some("controller".to_string()))
+            .await
+            .unwrap();
+
+        let artifacts = state.store.list_artifacts(&run_id).await.unwrap();
+        let result = artifacts
+            .iter()
+            .find(|artifact| {
+                artifact.kind == "argo_sync_result"
+                    && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("execution_id").and_then(Value::as_str)
+                            == Some("aexec_argo_wait")
+                            && content.get("status").and_then(Value::as_str) == Some("completed")
+                    })
+            })
+            .expect("exact Argo execution should receive a terminal result");
+        assert_eq!(
+            result.content_json.as_ref().unwrap()["details"]["operation_phase"],
+            "Succeeded"
+        );
+        let audits = state
+            .store
+            .list_audit_events(
+                Some("deployment_intent"),
+                Some(&deployment_intent_id),
+                None,
+                20,
+            )
+            .await
+            .unwrap();
+        assert!(audits
+            .iter()
+            .any(|event| event.kind == "deployment_intent.execution_observed"));
+        let _ = fs::remove_file(fake_kubectl);
     }
 
     #[tokio::test]
@@ -25693,8 +29484,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
-        assert_eq!(reconciled.action, "prepare_git_delivery");
-        assert!(reconciled.applied);
+        assert!(!reconciled.applied);
+        assert_eq!(reconciled.action, "awaiting_git_writer_availability");
         assert!(reconciled
             .git_delivery_preflight
             .as_ref()
@@ -25715,6 +29506,284 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             Some(ready_preflight.artifact.id.as_str())
         );
 
+        state
+            .store
+            .create_pipeline_contract(CreatePipelineContract {
+                id: "pcontract_finance_ci".to_string(),
+                status: "active".to_string(),
+                namespace: "ci".to_string(),
+                pipeline_ref: "finance-ci".to_string(),
+                version: "v1".to_string(),
+                contract_json: json!({
+                    "source_revision_param": "source-revision",
+                    "params": [{ "name": "source-revision", "type": "scalar", "required": true }]
+                }),
+                actor: Some("lucas".to_string()),
+                reason: Some("finance source pipeline contract".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let missing_merge = create_work_item_pipeline_intent(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(CreateWorkItemPipelineIntentRequest {
+                pipeline_contract_id: "pcontract_finance_ci".to_string(),
+                title: None,
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: Some(json!({ "execution": { "enabled": false } })),
+                actor: Some("lucas".to_string()),
+                reason: Some("must not build from a mutable branch".to_string()),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(missing_merge.status, StatusCode::CONFLICT);
+        assert!(missing_merge
+            .message
+            .contains("observed GitHub merge evidence"));
+
+        let stored_change_set = state
+            .store
+            .get_change_set(change_set_id)
+            .await
+            .unwrap()
+            .expect("ChangeSet should remain available for merge provenance");
+        let merge_sha = "b1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_git_delivery_merge".to_string(),
+                session_id: stored_change_set.session_id.clone(),
+                run_id: stored_change_set.run_id.clone(),
+                kind: "git_delivery_merge".to_string(),
+                label: "Immutable merged finance source".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "change_set_id": change_set_id,
+                    "git_delivery_plan_artifact_id": first.artifact.id,
+                    "pull_request_url": "https://github.com/example/finance-app/pull/7",
+                    "pull_request_number": 7,
+                    "head_commit_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+                    "merge_commit_sha": merge_sha,
+                })),
+            })
+            .await
+            .unwrap();
+
+        let Json(pipeline_intent) = create_work_item_pipeline_intent(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(CreateWorkItemPipelineIntentRequest {
+                pipeline_contract_id: "pcontract_finance_ci".to_string(),
+                title: Some("Finance build from reviewed source".to_string()),
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: Some(json!({
+                    "execution": {
+                        "enabled": true,
+                        "namespace": "ci",
+                        "pipeline_ref": "finance-ci",
+                        "params": { "source-revision": merge_sha }
+                    },
+                    "pipeline": { "provider": "tekton", "name": "finance-ci" }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("define the reviewed finance build".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(pipeline_intent.created);
+        assert_eq!(
+            pipeline_intent.pipeline_intent.intent_json["source_provenance"]["merge_commit_sha"],
+            merge_sha
+        );
+        assert_eq!(
+            pipeline_intent.pipeline_intent.intent_json["source_provenance"]
+                ["git_delivery_merge_artifact_id"],
+            "art_git_delivery_merge"
+        );
+        assert_eq!(
+            pipeline_intent.pipeline_intent.intent_json["pipeline_contract"]["id"],
+            "pcontract_finance_ci"
+        );
+        assert_eq!(
+            pipeline_intent.pipeline_intent.intent_json["pipeline_contract"]["version"],
+            "v1"
+        );
+        let pinned_contract_preflight =
+            pipeline_intent_execution_preflight(&state, &pipeline_intent.pipeline_intent.id)
+                .await
+                .unwrap();
+        assert!(pinned_contract_preflight.checks.iter().any(|check| {
+            check["code"] == "active_pipeline_contract" && check["passed"] == true
+        }));
+        assert!(pinned_contract_preflight.checks.iter().any(|check| {
+            check["code"] == "pipeline_contract_inputs" && check["passed"] == true
+        }));
+
+        let Json(proposed_pipeline_reconcile) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: Some("lucas".to_string()),
+                reason: Some("show durable pipeline approval handoff".to_string()),
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            proposed_pipeline_reconcile.action,
+            "awaiting_pipeline_intent_approval"
+        );
+        assert_eq!(
+            proposed_pipeline_reconcile
+                .pipeline_intent
+                .as_ref()
+                .map(|intent| intent.id.as_str()),
+            Some(pipeline_intent.pipeline_intent.id.as_str())
+        );
+        assert!(proposed_pipeline_reconcile
+            .pipeline_execution_preflight
+            .is_none());
+
+        state
+            .store
+            .update_pipeline_intent_status(
+                &pipeline_intent.pipeline_intent.id,
+                "approved",
+                Some("lucas".to_string()),
+                Some("approve exact Tekton definition".to_string()),
+            )
+            .await
+            .unwrap();
+        let Json(approved_pipeline_reconcile) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: Some("lucas".to_string()),
+                reason: Some("show bounded Tekton authorization handoff".to_string()),
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            approved_pipeline_reconcile.action,
+            "awaiting_pipeline_execution_authorization"
+        );
+        assert!(approved_pipeline_reconcile
+            .pipeline_execution_preflight
+            .as_ref()
+            .is_some_and(|preflight| !preflight.ready));
+
+        let Json(existing_pipeline_intent) = create_work_item_pipeline_intent(
+            State(state.clone()),
+            None,
+            Path(work_item_id.to_string()),
+            Json(CreateWorkItemPipelineIntentRequest {
+                pipeline_contract_id: "pcontract_finance_ci".to_string(),
+                title: Some("ignored duplicate".to_string()),
+                summary: None,
+                risk_level: None,
+                intent_kind: None,
+                intent_json: Some(json!({
+                    "execution": {
+                        "enabled": true,
+                        "namespace": "ci",
+                        "pipeline_ref": "finance-ci",
+                        "params": { "source-revision": merge_sha }
+                    }
+                })),
+                actor: Some("lucas".to_string()),
+                reason: Some("repeat controller request".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!existing_pipeline_intent.created);
+        assert_eq!(
+            existing_pipeline_intent.pipeline_intent.id,
+            pipeline_intent.pipeline_intent.id
+        );
+
+        state
+            .store
+            .create_pipeline_contract(CreatePipelineContract {
+                id: "pcontract_unrelated".to_string(),
+                status: "active".to_string(),
+                namespace: "other-ci".to_string(),
+                pipeline_ref: "unrelated".to_string(),
+                version: "v1".to_string(),
+                contract_json: json!({}),
+                actor: Some("lucas".to_string()),
+                reason: Some("unrelated contract should be filtered".to_string()),
+            })
+            .await
+            .unwrap();
+        let Json(context) = work_item_pipeline_intent_context(
+            State(state.clone()),
+            Path(work_item_id.to_string()),
+            Query(WorkItemPipelineContextQuery {
+                namespace: Some("ci".to_string()),
+                pipeline_ref: Some("finance-ci".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(context.work_item.id, work_item_id);
+        assert_eq!(context.change_set.id, change_set_id);
+        assert_eq!(context.source_provenance["merge_commit_sha"], merge_sha);
+        assert_eq!(
+            context
+                .pipeline_intent
+                .as_ref()
+                .map(|intent| intent.id.as_str()),
+            Some(pipeline_intent.pipeline_intent.id.as_str())
+        );
+        assert_eq!(context.contract_namespace.as_deref(), Some("ci"));
+        assert_eq!(context.contract_pipeline_ref.as_deref(), Some("finance-ci"));
+        assert_eq!(context.active_pipeline_contracts.len(), 1);
+        assert_eq!(
+            context.active_pipeline_contracts[0].id,
+            "pcontract_finance_ci"
+        );
+
+        state
+            .store
+            .update_pipeline_contract_status(
+                "pcontract_finance_ci",
+                "retired",
+                Some("lucas".to_string()),
+                Some("prove pinned contract retirement blocks execution".to_string()),
+            )
+            .await
+            .unwrap();
+        let retired_contract_preflight =
+            pipeline_intent_execution_preflight(&state, &pipeline_intent.pipeline_intent.id)
+                .await
+                .unwrap();
+        assert!(retired_contract_preflight.checks.iter().any(|check| {
+            check["code"] == "active_pipeline_contract"
+                && check["passed"] == false
+                && check["summary"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("Pinned PipelineContract"))
+        }));
+
         let audit = state
             .store
             .list_audit_events(Some("change_set"), Some(change_set_id), None, 10)
@@ -25729,6 +29798,1003 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(audit
             .iter()
             .any(|event| event.kind == "change_set.git_delivery_preflighted"));
+        let work_item_audit = state
+            .store
+            .list_audit_events(Some("work_item"), Some(work_item_id), None, 20)
+            .await
+            .unwrap();
+        assert!(work_item_audit
+            .iter()
+            .any(|event| event.kind == "work_item.pipeline_intent_proposed"));
+    }
+
+    fn reconcile_artifact(kind: &str, content_json: serde_json::Value) -> ArtifactResponse {
+        ArtifactResponse {
+            id: format!("art_{kind}"),
+            run_id: None,
+            kind: kind.to_string(),
+            label: kind.to_string(),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(content_json),
+            created_at: "1".to_string(),
+        }
+    }
+
+    fn reconcile_git_delivery_flow() -> GitDeliveryFlowResponse {
+        GitDeliveryFlowResponse {
+            plan: reconcile_artifact("git_delivery_plan", json!({})),
+            latest_preflight: None,
+            latest_execution: None,
+            latest_result: None,
+            latest_observation: None,
+            latest_merge: None,
+        }
+    }
+
+    fn reconcile_gitops_change_set(status: &str) -> StoredGitOpsChangeSet {
+        StoredGitOpsChangeSet {
+            id: "gset_reconcile".to_string(),
+            work_item_id: "witem_reconcile".to_string(),
+            work_plan_id: "wplan_reconcile".to_string(),
+            source_change_set_id: "cset_reconcile".to_string(),
+            pipeline_intent_id: "pint_reconcile".to_string(),
+            deployment_intent_id: "dint_reconcile".to_string(),
+            gitops_update_plan_artifact_id: "art_gitops_update_plan".to_string(),
+            session_id: SessionId::new("ses_reconcile"),
+            run_id: RunId::new("run_reconcile"),
+            status: status.to_string(),
+            title: "Reconcile GitOps ChangeSet".to_string(),
+            summary: "Reconcile GitOps delivery state".to_string(),
+            risk_level: "high".to_string(),
+            material_hash: "material_reconcile".to_string(),
+            revision: 1,
+            gitops_repo: "https://github.com/example/finance-gitops.git".to_string(),
+            gitops_ref: "main".to_string(),
+            head_branch: "pharness/gset-reconcile".to_string(),
+            kustomization_path: "apps/dev/finance-api".to_string(),
+            image_name: "registry.example/finance-api".to_string(),
+            image_ref: "sha256:reconcile".to_string(),
+            gitops_change_set_json: json!({}),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        }
+    }
+
+    fn reconcile_gitops_delivery_flow() -> GitOpsDeliveryFlowResponse {
+        GitOpsDeliveryFlowResponse {
+            plan: reconcile_artifact("gitops_delivery_plan", json!({})),
+            base_revision: reconcile_artifact("gitops_base_revision", json!({})),
+            latest_preflight: None,
+            latest_execution: None,
+            latest_result: None,
+            latest_observation: None,
+            latest_merge: None,
+        }
+    }
+
+    fn reconcile_pipeline_intent(
+        status: &str,
+        execution_state: Option<&str>,
+        build_output_status: Option<&str>,
+        evidence_status: Option<&str>,
+    ) -> StoredPipelineIntent {
+        let mut intent_json = serde_json::Map::new();
+        if let Some(execution_state) = execution_state {
+            intent_json.insert(
+                "execution_state".to_string(),
+                json!({ "state": execution_state }),
+            );
+        }
+        if let Some(build_output_status) = build_output_status {
+            intent_json.insert(
+                "build_output".to_string(),
+                json!({ "status": build_output_status }),
+            );
+        }
+        if let Some(evidence_status) = evidence_status {
+            intent_json.insert("evidence".to_string(), json!({ "status": evidence_status }));
+        }
+        StoredPipelineIntent {
+            id: "pint_reconcile".to_string(),
+            change_set_id: "cset_reconcile".to_string(),
+            work_plan_id: "wplan_reconcile".to_string(),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_reconcile"),
+            run_id: None,
+            status: status.to_string(),
+            title: "Reconcile pipeline intent".to_string(),
+            summary: "Reconcile pipeline intent state".to_string(),
+            risk_level: "high".to_string(),
+            intent_kind: "tekton_build_test_package".to_string(),
+            resource_namespace: Some("ci".to_string()),
+            resource_kind: Some("Pipeline".to_string()),
+            resource_name: Some("finance-ci".to_string()),
+            intent_json: Value::Object(intent_json),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        }
+    }
+
+    fn reconcile_deployment_intent() -> StoredDeploymentIntent {
+        StoredDeploymentIntent {
+            id: "dint_reconcile".to_string(),
+            pipeline_intent_id: "pint_reconcile".to_string(),
+            change_set_id: "cset_reconcile".to_string(),
+            work_plan_id: "wplan_reconcile".to_string(),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_reconcile"),
+            run_id: None,
+            status: "proposed".to_string(),
+            title: "Reconcile deployment intent".to_string(),
+            summary: "Declare exact deployment target".to_string(),
+            risk_level: "high".to_string(),
+            intent_kind: "argo_sync_deploy".to_string(),
+            target_environment: Some("dev".to_string()),
+            target_namespace: Some("apps-dev".to_string()),
+            argo_application: Some("finance-api".to_string()),
+            resource_namespace: Some("apps-dev".to_string()),
+            resource_kind: Some("Application".to_string()),
+            resource_name: Some("finance-api".to_string()),
+            intent_json: json!({}),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        }
+    }
+
+    fn reconcile_deployment_preflight(ready: bool) -> DeploymentIntentExecutionPreflight {
+        DeploymentIntentExecutionPreflight {
+            ready,
+            intent: reconcile_deployment_intent(),
+            contract: None,
+            grant: None,
+            gitops_merge: None,
+            checks: Vec::new(),
+        }
+    }
+
+    fn reconcile_deployment_delivery() -> DeploymentIntentDeliveryFlowResponse {
+        DeploymentIntentDeliveryFlowResponse {
+            latest_execution: None,
+            latest_result: None,
+            release: None,
+        }
+    }
+
+    fn reconcile_release(status: &str) -> ReleaseResponse {
+        StoredRelease {
+            id: "rel_reconcile".to_string(),
+            deployment_intent_id: "dint_reconcile".to_string(),
+            pipeline_intent_id: "pint_reconcile".to_string(),
+            change_set_id: "cset_reconcile".to_string(),
+            work_plan_id: "wplan_reconcile".to_string(),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_reconcile"),
+            run_id: Some(RunId::new("run_reconcile")),
+            status: status.to_string(),
+            title: "Reconcile release".to_string(),
+            summary: "Reconcile release state".to_string(),
+            risk_level: "high".to_string(),
+            release_kind: "gitops_release".to_string(),
+            target_environment: Some("dev".to_string()),
+            target_namespace: Some("apps-dev".to_string()),
+            argo_application: Some("finance-api".to_string()),
+            version: None,
+            commit_sha: None,
+            image_digest: None,
+            rollback_ref: None,
+            release_json: json!({}),
+            created_at: "1".to_string(),
+            updated_at: None,
+            status_changed_at: None,
+            status_changed_by: None,
+            status_reason: None,
+        }
+        .into()
+    }
+
+    #[test]
+    fn pipeline_intent_reconcile_action_follows_approval_execution_and_build_output() {
+        assert_eq!(
+            pipeline_intent_reconcile_action(None, None, None),
+            WorkItemReconcileAction::AwaitingPipelineIntentDefinition
+        );
+        let proposed = reconcile_pipeline_intent("proposed", None, None, None);
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&proposed), None, None),
+            WorkItemReconcileAction::AwaitingPipelineIntentApproval
+        );
+        let approved = reconcile_pipeline_intent("approved", None, None, None);
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&approved), Some(false), None),
+            WorkItemReconcileAction::AwaitingPipelineExecutionAuthorization
+        );
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&approved), Some(true), None),
+            WorkItemReconcileAction::AwaitingPipelineExecution
+        );
+        let executing =
+            reconcile_pipeline_intent("executing", Some("pipeline_run_created"), None, None);
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&executing), None, None),
+            WorkItemReconcileAction::WaitForPipelineExecution
+        );
+        let failed = reconcile_pipeline_intent("failed", Some("pipeline_run_failed"), None, None);
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&failed), None, None),
+            WorkItemReconcileAction::PipelineExecutionFailed
+        );
+        let completed_without_evidence =
+            reconcile_pipeline_intent("approved", Some("pipeline_run_succeeded"), None, None);
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&completed_without_evidence), None, None),
+            WorkItemReconcileAction::AwaitingPipelineEvidenceReview
+        );
+        let completed_without_output = reconcile_pipeline_intent(
+            "approved",
+            Some("pipeline_run_succeeded"),
+            None,
+            Some("satisfied"),
+        );
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&completed_without_output), None, None),
+            WorkItemReconcileAction::AwaitingPipelineBuildOutputReview
+        );
+        let completed_with_output = reconcile_pipeline_intent(
+            "approved",
+            Some("pipeline_run_succeeded"),
+            Some("verified"),
+            Some("satisfied"),
+        );
+        assert!(pipeline_intent_is_gitops_update_eligible(
+            &completed_with_output
+        ));
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&completed_with_output), None, None),
+            WorkItemReconcileAction::AwaitingDeploymentIntentDefinition
+        );
+        let deployment_intent = reconcile_deployment_intent();
+        assert_eq!(
+            pipeline_intent_reconcile_action(
+                Some(&completed_with_output),
+                None,
+                Some(&deployment_intent),
+            ),
+            WorkItemReconcileAction::AwaitingGitOpsUpdatePlan
+        );
+        let stale = reconcile_pipeline_intent("stale", None, None, None);
+        assert!(!pipeline_intent_is_gitops_update_eligible(&stale));
+        assert_eq!(
+            pipeline_intent_reconcile_action(Some(&stale), None, None),
+            WorkItemReconcileAction::PipelineIntentBlocked
+        );
+    }
+
+    #[test]
+    fn git_delivery_reconcile_action_follows_durable_handoff_artifacts() {
+        assert_eq!(
+            git_delivery_reconcile_action(None),
+            WorkItemReconcileAction::PrepareGitDelivery
+        );
+
+        let mut flow = reconcile_git_delivery_flow();
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingGitDeliveryAuthorization
+        );
+        flow.latest_preflight = Some(reconcile_artifact(
+            "git_delivery_preflight",
+            json!({ "status": "blocked", "dispatch_ready": false }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingGitDeliveryAuthorization
+        );
+
+        flow.latest_preflight = Some(reconcile_artifact(
+            "git_delivery_preflight",
+            json!({ "status": "ready_for_writer", "dispatch_ready": false }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingGitWriterAvailability
+        );
+
+        flow.latest_preflight = Some(reconcile_artifact(
+            "git_delivery_preflight",
+            json!({ "status": "ready_for_writer", "dispatch_ready": true }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingGitDeliveryExecution
+        );
+
+        flow.latest_execution = Some(reconcile_artifact("git_delivery_execution", json!({})));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::WaitForGitDelivery
+        );
+
+        flow.latest_result = Some(reconcile_artifact(
+            "git_delivery_result",
+            json!({ "status": "completed" }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingPullRequestObservation
+        );
+
+        flow.latest_result = Some(reconcile_artifact(
+            "git_delivery_result",
+            json!({ "status": "failed" }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::GitDeliveryFailed
+        );
+
+        flow.latest_result = Some(reconcile_artifact(
+            "git_delivery_result",
+            json!({ "status": "completed" }),
+        ));
+        flow.latest_observation = Some(reconcile_artifact(
+            "git_delivery_pr_observation",
+            json!({ "status": "failed" }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingPullRequestObservation
+        );
+
+        flow.latest_observation = Some(reconcile_artifact(
+            "git_delivery_pr_observation",
+            json!({ "status": "observed", "merged": false }),
+        ));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingPullRequestMerge
+        );
+
+        flow.latest_merge = Some(reconcile_artifact("git_delivery_merge", json!({})));
+        assert_eq!(
+            git_delivery_reconcile_action(Some(&flow)),
+            WorkItemReconcileAction::AwaitingPipelineIntentDefinition
+        );
+    }
+
+    #[test]
+    fn gitops_change_set_reconcile_action_follows_durable_handoff_artifacts() {
+        assert_eq!(
+            gitops_change_set_reconcile_action(None, None, None),
+            WorkItemReconcileAction::AwaitingGitOpsUpdatePlan
+        );
+
+        let proposed = reconcile_gitops_change_set("proposed");
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&proposed), None, None),
+            WorkItemReconcileAction::AwaitingGitOpsChangeSetApproval
+        );
+        let rejected = reconcile_gitops_change_set("rejected");
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&rejected), None, None),
+            WorkItemReconcileAction::GitOpsChangeSetBlocked
+        );
+
+        let approved = reconcile_gitops_change_set("approved");
+        assert_eq!(
+            gitops_change_set_reconcile_action(
+                Some(&approved),
+                None,
+                Some(GitOpsBaseRevisionReconcileState::Missing),
+            ),
+            WorkItemReconcileAction::AwaitingGitOpsBaseRevision
+        );
+        assert_eq!(
+            gitops_change_set_reconcile_action(
+                Some(&approved),
+                None,
+                Some(GitOpsBaseRevisionReconcileState::Resolving),
+            ),
+            WorkItemReconcileAction::WaitForGitOpsBaseRevision
+        );
+        assert_eq!(
+            gitops_change_set_reconcile_action(
+                Some(&approved),
+                None,
+                Some(GitOpsBaseRevisionReconcileState::Resolved),
+            ),
+            WorkItemReconcileAction::AwaitingGitOpsDeliveryPlan
+        );
+
+        let mut flow = reconcile_gitops_delivery_flow();
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization
+        );
+        flow.latest_preflight = Some(reconcile_artifact(
+            "gitops_delivery_preflight",
+            json!({ "status": "ready_for_writer", "dispatch_ready": false }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingGitOpsWriterAvailability
+        );
+        flow.latest_preflight = Some(reconcile_artifact(
+            "gitops_delivery_preflight",
+            json!({ "status": "ready_for_writer", "dispatch_ready": true }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingGitOpsDeliveryExecution
+        );
+
+        flow.latest_execution = Some(reconcile_artifact("gitops_delivery_execution", json!({})));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::WaitForGitOpsDelivery
+        );
+
+        flow.latest_result = Some(reconcile_artifact(
+            "gitops_delivery_result",
+            json!({ "status": "completed" }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation
+        );
+        flow.latest_result = Some(reconcile_artifact(
+            "gitops_delivery_result",
+            json!({ "status": "failed" }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::GitOpsDeliveryFailed
+        );
+
+        flow.latest_result = Some(reconcile_artifact(
+            "gitops_delivery_result",
+            json!({ "status": "completed" }),
+        ));
+        flow.latest_observation = Some(reconcile_artifact(
+            "gitops_delivery_pr_observation",
+            json!({ "status": "observed", "merged": false }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge
+        );
+        flow.latest_observation = Some(reconcile_artifact(
+            "gitops_delivery_pr_observation",
+            json!({ "status": "observed", "merged": true }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::AwaitingDeploymentIntentReview
+        );
+        let applied = reconcile_gitops_change_set("applied");
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&applied), None, None),
+            WorkItemReconcileAction::AwaitingDeploymentIntentReview
+        );
+    }
+
+    #[test]
+    fn deployment_reconcile_action_follows_argo_and_release_artifacts() {
+        let proposed = reconcile_deployment_intent();
+        assert_eq!(
+            deployment_intent_reconcile_action(Some(&proposed), None, None, None),
+            WorkItemReconcileAction::AwaitingDeploymentIntentReview
+        );
+        let mut approved = reconcile_deployment_intent();
+        approved.status = "approved".to_string();
+        assert_eq!(
+            deployment_intent_reconcile_action(Some(&approved), None, None, None),
+            WorkItemReconcileAction::AwaitingDeploymentAuthorization
+        );
+        let blocked_preflight = reconcile_deployment_preflight(false);
+        let flow = reconcile_deployment_delivery();
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&blocked_preflight),
+                Some(false),
+                Some(&flow),
+            ),
+            WorkItemReconcileAction::AwaitingDeploymentAuthorization
+        );
+        let ready_preflight = reconcile_deployment_preflight(true);
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(false),
+                Some(&flow),
+            ),
+            WorkItemReconcileAction::AwaitingArgoRunnerAvailability
+        );
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&flow),
+            ),
+            WorkItemReconcileAction::AwaitingDeploymentExecution
+        );
+
+        let mut executing = reconcile_deployment_delivery();
+        executing.latest_execution = Some(reconcile_artifact("argo_sync_execution", json!({})));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::WaitForDeploymentExecution
+        );
+        executing.latest_result = Some(reconcile_artifact(
+            "argo_sync_result",
+            json!({ "status": "failed" }),
+        ));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::DeploymentExecutionFailed
+        );
+        executing.latest_result = Some(reconcile_artifact(
+            "argo_sync_result",
+            json!({ "status": "cancelled" }),
+        ));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::DeploymentExecutionFailed
+        );
+        executing.latest_result = Some(reconcile_artifact(
+            "argo_sync_result",
+            json!({ "status": "completed" }),
+        ));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::AwaitingReleaseDefinition
+        );
+        executing.release = Some(reconcile_release("proposed"));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::AwaitingReleaseApproval
+        );
+        executing.release = Some(reconcile_release("approved"));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::AwaitingReleaseVerification
+        );
+        executing.release = Some(reconcile_release("completed"));
+        assert_eq!(
+            deployment_intent_reconcile_action(
+                Some(&approved),
+                Some(&ready_preflight),
+                Some(true),
+                Some(&executing),
+            ),
+            WorkItemReconcileAction::CompleteWorkItem
+        );
+        assert_eq!(
+            release_reconcile_action(Some(&reconcile_release("rejected"))),
+            WorkItemReconcileAction::ReleaseBlocked
+        );
+        approved.status = "rejected".to_string();
+        assert_eq!(
+            deployment_intent_reconcile_action(Some(&approved), None, None, None),
+            WorkItemReconcileAction::DeploymentIntentBlocked
+        );
+    }
+
+    async fn seed_verified_completion_chain(state: &AppState, verified: bool) -> String {
+        let session_id = SessionId::new(format!("ses_completion_{verified}"));
+        let run_id = RunId::new(format!("run_completion_{verified}"));
+        let work_item_id = format!("witem_completion_{verified}");
+        let work_plan_id = format!("wplan_completion_{verified}");
+        let change_set_id = format!("cset_completion_{verified}");
+        let pipeline_intent_id = format!("pint_completion_{verified}");
+        let deployment_intent_id = format!("dint_completion_{verified}");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Completion fixture".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "Completion fixture".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 1,
+                initial_status: "completed".to_string(),
+                execution_target_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.clone(),
+                status: "awaiting_approval".to_string(),
+                title: "Complete finance change".to_string(),
+                intent: "Prove verified delivery completion".to_string(),
+                acceptance_criteria: vec!["post-sync release verified".to_string()],
+                source_repo: "https://github.com/example/finance-api.git".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 600,
+                created_by: Some("lucas".to_string()),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: work_plan_id.clone(),
+                work_item_id: Some(work_item_id.clone()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Completion plan".to_string(),
+                summary: "Reviewed delivery plan".to_string(),
+                risk_level: "high".to_string(),
+                requires_approval: true,
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: change_set_id.clone(),
+                work_item_id: Some(work_item_id.clone()),
+                work_plan_id: work_plan_id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Completion ChangeSet".to_string(),
+                summary: "Reviewed source diff".to_string(),
+                risk_level: "high".to_string(),
+                material_hash: "completion_hash".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: pipeline_intent_id.clone(),
+                change_set_id: change_set_id.clone(),
+                work_plan_id: work_plan_id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Completion pipeline".to_string(),
+                summary: "Verified build".to_string(),
+                risk_level: "high".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Pipeline".to_string()),
+                resource_name: Some("finance-build".to_string()),
+                intent_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_deployment_intent(CreateDeploymentIntent {
+                id: deployment_intent_id.clone(),
+                pipeline_intent_id: pipeline_intent_id.clone(),
+                change_set_id: change_set_id.clone(),
+                work_plan_id: work_plan_id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Completion deployment".to_string(),
+                summary: "Verified dev deployment".to_string(),
+                risk_level: "high".to_string(),
+                intent_kind: "argo_sync_deploy".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                intent_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_release(CreateRelease {
+                id: format!("rel_completion_{verified}"),
+                deployment_intent_id,
+                pipeline_intent_id,
+                change_set_id,
+                work_plan_id,
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id,
+                run_id: Some(run_id),
+                status: "completed".to_string(),
+                title: "Completion release".to_string(),
+                summary: "Verified dev release".to_string(),
+                risk_level: "high".to_string(),
+                release_kind: "gitops_release".to_string(),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                version: Some("v1".to_string()),
+                commit_sha: Some("0123456789012345678901234567890123456789".to_string()),
+                image_digest: Some("sha256:completion".to_string()),
+                rollback_ref: None,
+                release_json: if verified {
+                    json!({ "post_sync_verification": { "status": "verified", "runtime_ready": true } })
+                } else {
+                    json!({ "post_sync_verification": { "status": "attention_required", "runtime_ready": false } })
+                },
+            })
+            .await
+            .unwrap();
+        work_item_id
+    }
+
+    #[tokio::test]
+    async fn verified_release_completion_is_durable_and_fail_closed() {
+        let state = test_state().await;
+        let work_item_id = seed_verified_completion_chain(&state, true).await;
+        let completed = complete_work_item_from_verified_release(
+            &state,
+            &work_item_id,
+            Some("lucas".to_string()),
+            Some("verified finance delivery".to_string()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(completed.work_item.status, "completed");
+        assert_eq!(completed.release.status, "completed");
+        let audit = state
+            .store
+            .list_audit_events(Some("work_item"), Some(&work_item_id), None, 10)
+            .await
+            .unwrap();
+        assert!(audit
+            .iter()
+            .any(|event| event.kind == "work_item.completed_from_verified_release"));
+
+        let unverified_work_item_id = seed_verified_completion_chain(&state, false).await;
+        let error = complete_work_item_from_verified_release(
+            &state,
+            &unverified_work_item_id,
+            Some("lucas".to_string()),
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert_eq!(
+            state
+                .store
+                .get_work_item(&unverified_work_item_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "awaiting_approval"
+        );
+    }
+
+    #[tokio::test]
+    async fn delivery_failure_blocks_once_and_never_retries_or_rolls_back() {
+        let state = test_state().await;
+        let work_item_id = seed_verified_completion_chain(&state, true).await;
+        let blocked = block_work_item_from_delivery_failure(
+            &state,
+            &work_item_id,
+            WorkItemReconcileAction::DeploymentExecutionFailed,
+            "deployment_execution_failed",
+            "the bounded Argo sync execution reported a failed delivery",
+            Some("lucas".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(blocked.status, "blocked");
+        let repeat = block_work_item_from_delivery_failure(
+            &state,
+            &work_item_id,
+            WorkItemReconcileAction::DeploymentExecutionFailed,
+            "deployment_execution_failed",
+            "the bounded Argo sync execution reported a failed delivery",
+            Some("lucas".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(repeat.status, "blocked");
+        let audit = state
+            .store
+            .list_audit_events(Some("work_item"), Some(&work_item_id), None, 10)
+            .await
+            .unwrap();
+        let delivery_blocks = audit
+            .iter()
+            .filter(|event| event.kind == "work_item.delivery_blocked")
+            .collect::<Vec<_>>();
+        assert_eq!(delivery_blocks.len(), 1);
+        assert_eq!(
+            delivery_blocks[0].payload_json["extra"]["controller_action"],
+            json!("deployment_execution_failed")
+        );
+        assert_eq!(
+            delivery_blocks[0].payload_json["extra"]["automatic_retry"],
+            json!(false)
+        );
+        assert_eq!(
+            delivery_blocks[0].payload_json["extra"]["automatic_rollback"],
+            json!(false)
+        );
+        assert_eq!(
+            delivery_blocks[0].payload_json["extra"]["mutation_performed"],
+            json!(false)
+        );
+        let observation_id = delivery_blocks[0].payload_json["extra"]["observation_id"]
+            .as_str()
+            .unwrap();
+        let incident_id = delivery_blocks[0].payload_json["extra"]["incident_id"]
+            .as_str()
+            .unwrap();
+        let remediation_plan_id = delivery_blocks[0].payload_json["extra"]["remediation_plan_id"]
+            .as_str()
+            .unwrap();
+        let observation = state
+            .store
+            .get_observation(observation_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(observation.source, "pharness_controller");
+        assert_eq!(observation.kind, "delivery_failure");
+        assert_eq!(observation.subject, format!("work_item/{work_item_id}"));
+        assert_eq!(observation.data_json["automatic_rollback"], json!(false));
+        let incident = state
+            .store
+            .get_incident(incident_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(incident.observation_id, observation.id);
+        assert_eq!(incident.status, "candidate");
+        assert_eq!(incident.severity, "high");
+        assert_eq!(incident.resource_namespace.as_deref(), Some("apps-dev"));
+        assert_eq!(incident.resource_name.as_deref(), Some("finance-api"));
+        assert_eq!(incident.data_json["mutation_performed"], json!(false));
+        let remediation_plan = state
+            .store
+            .get_remediation_plan(remediation_plan_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(remediation_plan.incident_id, incident.id);
+        assert_eq!(remediation_plan.status, "draft");
+        assert!(remediation_plan.requires_approval);
+        assert_eq!(
+            remediation_plan.plan_json["source"],
+            json!("work_item_delivery_failure")
+        );
+        assert_eq!(
+            remediation_plan.plan_json["non_goals"][0],
+            json!("No automatic retry")
+        );
+        let remediation_gates = state
+            .store
+            .list_approval_gates(ApprovalGateListFilter {
+                remediation_plan_id: Some(remediation_plan.id.clone()),
+                incident_id: Some(incident.id.clone()),
+                limit: 20,
+                ..ApprovalGateListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(remediation_gates.len(), 5);
+        assert!(remediation_gates
+            .iter()
+            .any(|gate| gate.gate_kind == "git_mutation"));
+        assert!(remediation_gates
+            .iter()
+            .all(|gate| gate.status == "pending"));
+        let run_id = RunId::new("run_completion_true");
+        let run_audit = state
+            .store
+            .list_audit_events(None, None, Some(&run_id), 20)
+            .await
+            .unwrap();
+        assert_eq!(
+            run_audit
+                .iter()
+                .filter(|event| event.kind == "observation.delivery_failure_recorded")
+                .count(),
+            1
+        );
+        assert_eq!(
+            run_audit
+                .iter()
+                .filter(|event| event.kind == "incident.delivery_failure_created")
+                .count(),
+            1
+        );
+        assert_eq!(
+            run_audit
+                .iter()
+                .filter(|event| event.kind == "remediation_plan.created")
+                .count(),
+            1
+        );
     }
 
     #[tokio::test]

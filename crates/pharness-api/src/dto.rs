@@ -3,11 +3,11 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
-    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredDeploymentContract,
-    StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet, StoredIncident,
-    StoredObservation, StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent,
-    StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem,
-    StoredWorkPlan, StoredWorkspace,
+    StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredControllerWait,
+    StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet,
+    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
+    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
+    StoredWorkItem, StoredWorkPlan, StoredWorkspace,
 };
 use serde::{Deserialize, Serialize};
 
@@ -286,6 +286,18 @@ pub struct RemediationPlanResponse {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransitionRemediationPlanRequest {
+    pub target_status: String,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransitionRemediationPlanResponse {
+    pub remediation_plan: RemediationPlanResponse,
+}
+
 impl From<StoredRemediationPlan> for RemediationPlanResponse {
     fn from(plan: StoredRemediationPlan) -> Self {
         Self {
@@ -455,6 +467,18 @@ pub struct WorkItemsResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemPipelineContextResponse {
+    pub work_item: WorkItemResponse,
+    pub work_plan: WorkPlanResponse,
+    pub change_set: ChangeSetResponse,
+    pub pipeline_intent: Option<PipelineIntentResponse>,
+    pub source_provenance: serde_json::Value,
+    pub contract_namespace: Option<String>,
+    pub contract_pipeline_ref: Option<String>,
+    pub active_pipeline_contracts: Vec<PipelineContractResponse>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct TransitionWorkItemRequest {
     pub target_status: String,
@@ -545,7 +569,94 @@ pub struct ReconcileWorkItemResponse {
     pub run: Option<RunResponse>,
     pub change_set: Option<ChangeSetResponse>,
     pub git_delivery_preflight: Option<GitDeliveryPreflightResponse>,
+    pub pipeline_intent: Option<PipelineIntentResponse>,
+    pub pipeline_execution_preflight: Option<PipelineIntentExecutionPreflightResponse>,
+    pub deployment_intent: Option<DeploymentIntentResponse>,
+    pub deployment_execution_preflight: Option<DeploymentIntentPreflightResponse>,
+    pub deployment_delivery: Option<DeploymentIntentDeliveryFlowResponse>,
+    pub gitops_change_set: Option<GitOpsChangeSetResponse>,
+    pub gitops_delivery: Option<GitOpsDeliveryFlowResponse>,
+    pub gitops_delivery_preflight: Option<GitOpsDeliveryPreflightResponse>,
+    pub controller_wait: Option<ControllerWaitResponse>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ControllerWaitResponse {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub wait_kind: String,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub next_check_at: String,
+    pub deadline_at: String,
+    pub max_checks: u32,
+    pub check_count: u32,
+    pub data_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub resolved_at: Option<String>,
+    pub resolution_reason: Option<String>,
+}
+
+impl From<StoredControllerWait> for ControllerWaitResponse {
+    fn from(wait: StoredControllerWait) -> Self {
+        Self {
+            id: wait.id,
+            work_item_id: wait.work_item_id,
+            run_id: wait.run_id,
+            status: wait.status,
+            wait_kind: wait.wait_kind,
+            subject_kind: wait.subject_kind,
+            subject_id: wait.subject_id,
+            next_check_at: wait.next_check_at,
+            deadline_at: wait.deadline_at,
+            max_checks: wait.max_checks,
+            check_count: wait.check_count,
+            data_json: wait.data_json,
+            created_at: wait.created_at,
+            updated_at: wait.updated_at,
+            resolved_at: wait.resolved_at,
+            resolution_reason: wait.resolution_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ControllerWaitsResponse {
+    pub controller_waits: Vec<ControllerWaitResponse>,
+    pub count: usize,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReconcileDueControllerWaitsRequest {
+    #[serde(default)]
+    pub limit: Option<u32>,
+    #[serde(default)]
+    pub actor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ControllerWaitTickResult {
+    pub controller_wait: ControllerWaitResponse,
+    pub outcome: String,
+    pub next_action: Option<String>,
+    pub work_item: WorkItemResponse,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReconcileDueControllerWaitsResponse {
+    pub evaluated_at: String,
+    pub checked: usize,
+    pub pending: usize,
+    pub progressed: usize,
+    pub blocked: usize,
+    pub results: Vec<ControllerWaitTickResult>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -571,6 +682,10 @@ pub struct CaptureWorkItemChangeSetRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateWorkPlanFromRemediationPlanRequest {
     pub remediation_plan_id: String,
+    #[serde(default)]
+    pub actor: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1155,6 +1270,19 @@ pub struct CreatePipelineIntentFromChangeSetRequest {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateWorkItemPipelineIntentRequest {
+    pub pipeline_contract_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub risk_level: Option<String>,
+    pub intent_kind: Option<String>,
+    #[serde(default)]
+    pub intent_json: Option<serde_json::Value>,
+    pub actor: Option<String>,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatePipelineIntentResponse {
     pub pipeline_intent: PipelineIntentResponse,
@@ -1533,6 +1661,16 @@ pub struct ExecutePipelineIntentResponse {
     pub executor_job_name: Option<String>,
 }
 
+/// Read-only readiness result used by the WorkItem controller. Dispatching a
+/// PipelineRun still requires the separate explicit PipelineIntent execute API.
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineIntentExecutionPreflightResponse {
+    pub ready: bool,
+    pub manifest: Option<serde_json::Value>,
+    pub checks: Vec<serde_json::Value>,
+    pub permission_grant_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct PipelineIntentExecutionOutcomeRequest {
     pub execution_id: String,
@@ -1704,6 +1842,15 @@ pub struct ExecuteDeploymentIntentResponse {
     pub execution_id: Option<String>,
     pub executor_job_name: Option<String>,
     pub created: bool,
+}
+
+/// Durable deployment progress used by a WorkItem controller. It is derived
+/// from execution artifacts and never represents permission to dispatch Argo.
+#[derive(Debug, Clone, Serialize)]
+pub struct DeploymentIntentDeliveryFlowResponse {
+    pub latest_execution: Option<ArtifactResponse>,
+    pub latest_result: Option<ArtifactResponse>,
+    pub release: Option<ReleaseResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -4,8 +4,11 @@
 
 - Add a durable PipelineContract record as operator-managed policy data. It is
   not proposed by an agent and cannot be inferred from an untrusted intent.
-- An active contract is keyed by namespace, PipelineRef, and version. Preflight
-  requires exactly one active contract for the intended namespace and pipeline.
+- An active contract is keyed by namespace, PipelineRef, and version. Legacy
+  intents select exactly one active contract for the intended namespace and
+  pipeline. WorkItem-backed intents instead pin one exact contract id, version,
+  namespace, and PipelineRef at proposal time; preflight rejects a missing,
+  retired, or drifted binding rather than selecting a replacement implicitly.
 - Contracts declare allowed parameters (`scalar` or `array`) and workspace
   bindings (`persistent_volume_claim` or `volume_claim_template`), including
   required inputs. Unknown, missing, or wrongly shaped intent inputs block the

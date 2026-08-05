@@ -2,25 +2,25 @@ use crate::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
     ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
-    ChangeSetListFilter, CountBucket, CreateApproval, CreateApprovalGate, CreateArtifact,
-    CreateAuditEvent, CreateChangeSet, CreateDeploymentContract, CreateDeploymentIntent,
-    CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
-    CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
-    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
-    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter,
-    GitOpsChangeSetListFilter, IncidentListFilter, ObservationListFilter,
-    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
-    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
-    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
-    StoredAuditEvent, StoredChangeSet, StoredDeploymentContract, StoredDeploymentIntent,
-    StoredFileChange, StoredGitOpsChangeSet, StoredIncident, StoredObservation,
-    StoredPermissionGrant, StoredPipelineContract, StoredPipelineIntent, StoredRegistryEvidence,
-    StoredRelease, StoredRemediationPlan, StoredRun, StoredWorkItem, StoredWorkPlan,
-    StoredWorkspace, UpdateChangeSetRevision, UpdateDeploymentIntentDraft,
-    UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
-    UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft, UpdateReleaseDraft,
-    UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution, WorkItemListFilter,
-    WorkPlanListFilter, WorkspaceListFilter,
+    ChangeSetListFilter, ControllerWaitListFilter, CountBucket, CreateApproval, CreateApprovalGate,
+    CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateControllerWait,
+    CreateDeploymentContract, CreateDeploymentIntent, CreateFileChange, CreateGitOpsChangeSet,
+    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineContract,
+    CreatePipelineIntent, CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun,
+    CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace, DeploymentContractListFilter,
+    DeploymentIntentListFilter, GitOpsChangeSetListFilter, IncidentListFilter,
+    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
+    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter,
+    ReplacePipelineContract, RunListFilter, RunSummary, RunSummaryFilter, StoredApproval,
+    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredControllerWait,
+    StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet,
+    StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
+    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
+    StoredWorkItem, StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision,
+    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
+    UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
+    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution,
+    WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_core::{AgentEvent, EventId, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -993,6 +993,31 @@ impl SqliteStore {
         rows.into_iter().map(row_to_remediation_plan).collect()
     }
 
+    pub async fn update_remediation_plan_status(
+        &self,
+        plan_id: &str,
+        status: &str,
+    ) -> Result<StoredRemediationPlan, StoreError> {
+        sqlx::query(
+            r#"
+            UPDATE remediation_plans
+            SET status = ?2
+            WHERE id = ?1
+            "#,
+        )
+        .bind(plan_id)
+        .bind(status)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_remediation_plan(plan_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "remediation_plan".to_string(),
+                id: plan_id.to_string(),
+            })
+    }
+
     pub async fn create_work_plan(
         &self,
         plan: CreateWorkPlan,
@@ -1166,6 +1191,184 @@ impl SqliteStore {
             .ok_or_else(|| StoreError::NotFound {
                 entity: "work_item".to_string(),
                 id: work_item_id.to_string(),
+            })
+    }
+
+    pub async fn create_controller_wait(
+        &self,
+        wait: CreateControllerWait,
+    ) -> Result<StoredControllerWait, StoreError> {
+        let now = now_string();
+        let data_json = serde_json::to_string(&wait.data_json)?;
+        sqlx::query(
+            r#"
+            INSERT INTO controller_waits (
+              id, work_item_id, session_id, run_id, status, wait_kind, subject_kind, subject_id,
+              next_check_at, deadline_at, max_checks, check_count, data_json, created_at, updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, ?13)
+            "#,
+        )
+        .bind(&wait.id)
+        .bind(&wait.work_item_id)
+        .bind(wait.session_id.as_str())
+        .bind(wait.run_id.as_ref().map(RunId::as_str))
+        .bind(&wait.status)
+        .bind(&wait.wait_kind)
+        .bind(&wait.subject_kind)
+        .bind(&wait.subject_id)
+        .bind(&wait.next_check_at)
+        .bind(&wait.deadline_at)
+        .bind(i64::from(wait.max_checks))
+        .bind(data_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_controller_wait(&wait.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "controller_wait".to_string(),
+                id: wait.id,
+            })
+    }
+
+    pub async fn get_controller_wait(
+        &self,
+        wait_id: &str,
+    ) -> Result<Option<StoredControllerWait>, StoreError> {
+        let sql = controller_wait_select_sql("WHERE id = ?1");
+        let row = sqlx::query(&sql)
+            .bind(wait_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_controller_wait).transpose()
+    }
+
+    pub async fn get_active_controller_wait_for_work_item(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Option<StoredControllerWait>, StoreError> {
+        let sql = controller_wait_select_sql("WHERE work_item_id = ?1 AND status = 'active'");
+        let row = sqlx::query(&sql)
+            .bind(work_item_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_controller_wait).transpose()
+    }
+
+    pub async fn list_controller_waits(
+        &self,
+        filter: ControllerWaitListFilter,
+    ) -> Result<Vec<StoredControllerWait>, StoreError> {
+        let limit = i64::from(filter.limit.clamp(1, 200));
+        let offset = i64::from(filter.offset);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_item_id, session_id, run_id, status, wait_kind, subject_kind,
+                   subject_id, next_check_at, deadline_at, max_checks, check_count, data_json,
+                   created_at, updated_at, resolved_at, resolution_reason
+            FROM controller_waits
+            WHERE (?1 IS NULL OR work_item_id = ?1)
+              AND (?2 IS NULL OR status = ?2)
+              AND (?3 IS NULL OR wait_kind = ?3)
+              AND (?4 IS NULL OR CAST(next_check_at AS INTEGER) <= ?4)
+            ORDER BY next_check_at ASC, created_at ASC, id ASC
+            LIMIT ?5 OFFSET ?6
+            "#,
+        )
+        .bind(filter.work_item_id)
+        .bind(filter.status)
+        .bind(filter.wait_kind)
+        .bind(filter.due_before_ms)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_controller_wait).collect()
+    }
+
+    pub async fn supersede_controller_wait(
+        &self,
+        wait_id: &str,
+        reason: String,
+    ) -> Result<StoredControllerWait, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE controller_waits
+            SET status = 'superseded', updated_at = ?2, resolved_at = ?2, resolution_reason = ?3
+            WHERE id = ?1 AND status = 'active'
+            "#,
+        )
+        .bind(wait_id)
+        .bind(now)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_controller_wait(wait_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "controller_wait".to_string(),
+                id: wait_id.to_string(),
+            })
+    }
+
+    pub async fn record_controller_wait_check(
+        &self,
+        wait_id: &str,
+        next_check_at: String,
+    ) -> Result<StoredControllerWait, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE controller_waits
+            SET check_count = check_count + 1, next_check_at = ?2, updated_at = ?3
+            WHERE id = ?1 AND status = 'active'
+            "#,
+        )
+        .bind(wait_id)
+        .bind(next_check_at)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_controller_wait(wait_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "controller_wait".to_string(),
+                id: wait_id.to_string(),
+            })
+    }
+
+    pub async fn resolve_controller_wait(
+        &self,
+        wait_id: &str,
+        status: &str,
+        reason: String,
+    ) -> Result<StoredControllerWait, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE controller_waits
+            SET status = ?2, updated_at = ?3, resolved_at = ?3, resolution_reason = ?4
+            WHERE id = ?1 AND status = 'active'
+            "#,
+        )
+        .bind(wait_id)
+        .bind(status)
+        .bind(now)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_controller_wait(wait_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "controller_wait".to_string(),
+                id: wait_id.to_string(),
             })
     }
 
@@ -3916,6 +4119,45 @@ fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, Stor
         status_changed_at: row.try_get("status_changed_at")?,
         status_changed_by: row.try_get("status_changed_by")?,
         status_reason: row.try_get("status_reason")?,
+    })
+}
+
+fn controller_wait_select_sql(where_clause: &str) -> String {
+    format!(
+        "SELECT id, work_item_id, session_id, run_id, status, wait_kind, subject_kind, \
+         subject_id, next_check_at, deadline_at, max_checks, check_count, data_json, \
+         created_at, updated_at, resolved_at, resolution_reason \
+         FROM controller_waits {where_clause}"
+    )
+}
+
+fn row_to_controller_wait(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredControllerWait, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let max_checks: i64 = row.try_get("max_checks")?;
+    let check_count: i64 = row.try_get("check_count")?;
+    let data_json: String = row.try_get("data_json")?;
+    Ok(StoredControllerWait {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        wait_kind: row.try_get("wait_kind")?,
+        subject_kind: row.try_get("subject_kind")?,
+        subject_id: row.try_get("subject_id")?,
+        next_check_at: row.try_get("next_check_at")?,
+        deadline_at: row.try_get("deadline_at")?,
+        max_checks: u32::try_from(max_checks)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        check_count: u32::try_from(check_count)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        data_json: serde_json::from_str(&data_json)?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        resolved_at: row.try_get("resolved_at")?,
+        resolution_reason: row.try_get("resolution_reason")?,
     })
 }
 

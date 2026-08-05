@@ -182,6 +182,21 @@ treating PR creation as deployment provenance. This command is also disabled
 until the existing read-only Git observer is configured and allowlisted for
 the exact GitOps repository.
 
+## WorkItem Reconciliation
+
+`POST /api/work-items/:work_item_id/reconcile` reports this lifecycle as one
+machine-facing next action after source merge, verified build output, and a
+declared DeploymentIntent. It follows durable GitOps ChangeSet and artifact
+evidence through review, base-revision observation, delivery-plan preparation,
+authorization, writer availability, explicit execution, PR observation, and
+merge provenance. A merged result, or an explicitly applied GitOps ChangeSet,
+returns `awaiting_deployment_intent_review`.
+
+Reconcile never invokes any command above. An API client or scheduler must
+choose and invoke each mutation endpoint with its own scoped approval/grant.
+That keeps controller polling safe and makes the GitOps provenance boundary
+auditable even when future automation drives the full dev loop.
+
 ## Transformer Contract
 
 The worker now has a tested, structured Kustomization image-update primitive

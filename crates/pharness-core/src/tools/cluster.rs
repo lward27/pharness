@@ -1652,6 +1652,11 @@ fn analyze_argo_application(value: &Value) -> Value {
         "health_status": value.pointer("/status/health/status").cloned().unwrap_or(Value::Null),
         "sync_status": value.pointer("/status/sync/status").cloned().unwrap_or(Value::Null),
         "revision": value.pointer("/status/sync/revision").cloned().unwrap_or(Value::Null),
+        // Keep only terminal-state fields from operationState. The full object
+        // can carry unbounded messages and resource details that do not belong
+        // in durable control-plane evidence.
+        "operation_phase": value.pointer("/status/operationState/phase").cloned().unwrap_or(Value::Null),
+        "operation_revision": value.pointer("/status/operationState/syncResult/revision").cloned().unwrap_or(Value::Null),
         "reconciled_at": value.pointer("/status/reconciledAt").cloned().unwrap_or(Value::Null),
         "conditions": compact_conditions(value).unwrap_or(Value::Array(Vec::new())),
     })
@@ -2972,8 +2977,35 @@ mod tests {
         assert_eq!(analysis["health_status"], "Healthy");
         assert_eq!(analysis["sync_status"], "Synced");
         assert_eq!(analysis["revision"], "abc123");
+        assert!(analysis["operation_phase"].is_null());
+        assert!(analysis["operation_revision"].is_null());
         assert_eq!(analysis["conditions"][0]["type"], "ComparisonError");
         assert!(analysis.get("operationState").is_none());
+    }
+
+    #[test]
+    fn analyzes_argo_application_with_compact_terminal_operation_state() {
+        let application = serde_json::json!({
+            "kind": "Application",
+            "metadata": { "name": "finance-api", "namespace": "argocd" },
+            "status": {
+                "sync": { "status": "Synced", "revision": "abc123" },
+                "operationState": {
+                    "phase": "Succeeded",
+                    "message": "this deliberately remains omitted",
+                    "syncResult": { "revision": "abc123", "resources": [{ "kind": "Deployment" }] }
+                }
+            }
+        });
+
+        let analysis = analyze_argo_application(&application);
+
+        assert_eq!(analysis["operation_phase"], "Succeeded");
+        assert_eq!(analysis["operation_revision"], "abc123");
+        assert!(!analysis
+            .to_string()
+            .contains("deliberately remains omitted"));
+        assert!(!analysis.to_string().contains("Deployment"));
     }
 
     #[test]

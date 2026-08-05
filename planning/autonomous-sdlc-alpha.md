@@ -98,8 +98,81 @@
   preview and applies it only when explicitly requested. It can deterministically
   declare a WorkPlan/workspace, start an already-approved bounded coding
   attempt, capture its durable ChangeSet evidence, and prepare/preflight an
-  approved ChangeSet for Git delivery. It stops at WorkPlan review, ChangeSet
-  review, missing Git authorization, cancellation, and blocked/replan states.
+  approved ChangeSet for Git delivery. From durable Git delivery artifacts it
+  now reports the exact next handoff: authorization, writer availability,
+  explicit writer execution, result wait, PR observation, merge wait, or
+  PipelineIntent definition after immutable merge evidence. After that intent
+  exists, reconcile returns its review state and a read-only execution
+  preflight where appropriate, then distinguishes scoped Tekton authorization,
+  explicit executor dispatch, external wait, terminal analysis review,
+  build-output review, DeploymentIntent declaration, and GitOps-update
+  planning. Once that separate GitOps ChangeSet exists, it reports its review,
+  base-ref observation, immutable delivery plan, scoped writer authorization,
+  writer availability, explicit execution, PR observation, merge provenance,
+  and DeploymentIntent-review handoffs from durable artifacts. After an
+  immutable GitOps merge, it similarly reports deployment preflight,
+  authorization, Argo runner availability, execution, terminal state, Release
+  review, post-sync verification, and final WorkItem completion. Applying the
+  final action is allowed only after current approved lineage and completed
+  post-sync verification evidence are revalidated; it writes an audit event
+  but never initiates an external operation. It stops at every external
+  mutation/review boundary rather than inferring success from a branch, PR,
+  or successful build alone.
+- Applying any reconciliation action that waits on an external coding,
+  branch-and-PR, Tekton, GitOps, or Argo outcome now persists one active
+  `controller_wait` for that WorkItem. The record has a 15-second first
+  observation target, a WorkItem/controller-budget-capped deadline, a bounded
+  check count, and only non-secret source/target provenance. Re-applying the
+  same action is idempotent; a later controller action supersedes the active
+  wait and emits `controller_wait.scheduled` or
+  `controller_wait.superseded` audit evidence. The API and CLI can list waits,
+  but this slice intentionally adds no background poller, automatic retry,
+  rollback, or external operation.
+  Operators can inspect one WorkItem with
+  `pharness work-items waits --work-item-id <id> --status active`.
+- The first due-wait controller tick is `POST
+  /api/controller-waits/reconcile-due` or `pharness work-items
+  reconcile-due-waits`. For a `pipeline_execution` wait it first performs one
+  exact, policy-checked `TektonAnalyzePipelineRun` read against the namespace
+  and name already persisted in that PipelineIntent's execution state. A
+  terminal `succeeded`, `failed`, or `cancelled` result is stored through the
+  existing terminal-evidence boundary; `running` and `unknown` results receive
+  a compact idempotent Observation. A `deployment_execution` wait likewise
+  reads only the Application recorded by its immutable Argo execution receipt;
+  only `Succeeded` plus `Synced` becomes a completed sync result, while
+  `Failed`, `Error`, and `Terminated` remain terminal non-success evidence.
+  All other Argo states are compact observations. The tick then compares each expected action
+  with the current action derived from durable evidence. A matching action
+  increments the check count and reschedules the wait; a different action
+  resolves it and reports the next boundary; an
+  expired/depleted wait blocks its non-terminal WorkItem with audit evidence.
+  It deliberately does not perform read-only remote observation yet, because
+  observer Job dispatch is a separate, explicitly governed capability.
+- Applying reconciliation to a known downstream failure now writes a typed
+  `work_item.delivery_blocked` audit event, a linked `delivery_failure`
+  Observation, a candidate Incident, and a deterministic read-only draft
+  RemediationPlan anchored to the WorkPlan's workload target and run
+  provenance. The plan has pending file, Git, pipeline, cluster, and
+  production gates, and cannot execute or approve itself. The WorkItem stops
+  without retries, rollback, remediation execution, secret collection, or any
+  external mutation; those are separate reviewed recovery decisions.
+- A remediation-derived WorkPlan now requires the parent RemediationPlan to
+  progress through `draft -> proposed -> approved`. Approval requires an
+  explicit actor and reason when the plan declares `requires_approval=true`.
+  Creating the resulting WorkPlan is audited and leaves it in `draft` with
+  execution disabled; this is a recovery handoff, not permission to retry.
+- A WorkItem-specific PipelineIntent endpoint now resolves that approved
+  ChangeSet internally and requires its current immutable Git merge artifact
+  before proposing an intent. The caller supplies the active PipelineContract
+  id and an enabled concrete Tekton definition; Pharness pins the contract
+  id/version/target into the intent and rejects a retired or drifted binding at
+  execution preflight. The result is review-only; this bridge cannot approve
+  or execute a PipelineIntent.
+- The paired read-only WorkItem pipeline-intent context returns the exact
+  merged source provenance, any already-proposed intent, and active
+  PipelineContracts filtered by explicit namespace/ref. It gives a controller
+  the facts needed to choose a reviewed contract without making that policy
+  choice implicitly inside the API.
 - A blocked or failed development WorkItem can be explicitly replanned only
   when its approved WorkPlan has no captured ChangeSet and it has remaining
   attempt budget. Replan clears any stale run link, retains the WorkPlan, and
@@ -144,3 +217,7 @@
   (Tekton, Git, Argo, registry, and database), then define a policy that can
   propose only a bounded replan, an external wait, or a blocked remediation
   path. It must never silently retry on an unknown classification.
+- Add a due-wait controller worker only after each wait kind has a typed,
+  read-only observation adapter, explicit terminal/timeout semantics, and
+  durable backoff/check-count handling. It must resolve or block a WorkItem;
+  it must not dispatch a retry, merge, build, sync, or rollback by itself.
