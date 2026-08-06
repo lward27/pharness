@@ -12,9 +12,11 @@
 - Add Workspace as a durable provenance record, not a persistent source tree.
   It records the immutable source revision, requested branch, assigned run,
   and retention state while artifacts retain the meaningful diff and output.
-- Keep this source pass non-mutating outside the repository. No GitHub token,
-  Git writer, Argo runner, database identity, or deployment RBAC is added.
-  Those capabilities require separately named external targets and approval.
+- Keep coding workers non-mutating outside their issued repository workspace.
+  Git writers and Argo runners are separately configured, disabled-by-default
+  external targets; each requires its own identity, allowlist, exact immutable
+  plan, scoped trusted envelope, and approval gate. Database identity and
+  deployment RBAC remain out of scope for the coding worker.
 - The first autonomous delivery target remains an isolated development
   workload. Production promotion, database mutation, and autonomous merge
   stay blocked behind later typed policy and verification work.
@@ -118,6 +120,56 @@
   but never initiates an external operation. It stops at every external
   mutation/review boundary rather than inferring success from a branch, PR,
   or successful build alone.
+- At either source or GitOps pull-request-observation boundary, an explicit
+  `POST /api/work-items/:id/reconcile` with `apply=true` can dispatch the
+  already configured isolated, read-only Git observer for the exact completed
+  branch-and-PR result. It records an auditable WorkItem event and schedules a
+  bounded observation wait only after dispatch or reuse succeeds. This is an
+  explicit controller operation, not background execution; a dispatch failure
+  is durable, retriable on a later explicit reconcile, and leaves no active
+  observation wait.
+- At the source Git delivery boundary, that same explicit reconcile can also
+  dispatch the isolated branch-and-PR writer, but only after the existing
+  current-plan preflight revalidates the exact `git_mutation` gate, plan-scoped
+  writer grant, repository allowlist, and dedicated writer configuration. A
+  successful dispatch records a WorkItem audit event and schedules the bounded
+  delivery-result wait. A repeat reconcile cannot create a second writer Job;
+  due-wait reconciliation itself never dispatches a writer.
+- At the Tekton boundary, an explicit reconcile with `apply=true` can dispatch
+  one isolated executor only after the existing execution preflight validates
+  the immutable merge SHA, pinned active PipelineContract, exact execution
+  inputs and namespace, current `pipeline_mutation` and `cluster_mutation`
+  gates, and a matching plan-scoped trusted envelope. The dispatch is audited
+  and schedules one bounded `pipeline_execution` wait. Pending future-phase
+  GitOps gates remain durable but do not block this separately scoped build;
+  they are evaluated only at their own mutation boundary. Reconcile previews
+  by default, a repeat cannot create a second executor Job, and the due-wait
+  tick remains read-only.
+- At the GitOps boundary, an explicit reconcile with `apply=true` can dispatch
+  one isolated branch-and-PR writer only after the existing preflight validates
+  the approved GitOps ChangeSet, immutable observed base revision, exact dev
+  target, scoped `gitops_mutation` gate, plan-scoped writer envelope, and
+  dedicated repository allowlist. It records one WorkItem audit receipt and
+  schedules one bounded `gitops_delivery_execution` wait. Repeated reconcile
+  calls reuse that durable execution; the wait tick never retries, merges a
+  pull request, or syncs Argo.
+- At the deployment boundary, an explicit reconcile with `apply=true` can
+  dispatch one isolated Argo sync runner only after the existing DeploymentIntent
+  preflight validates its active exact DeploymentContract, current
+  `cluster_mutation` gate, scoped Argo envelope, declared Application allowlist,
+  and any required immutable GitOps merge. It audits the dispatch and schedules
+  one bounded `deployment_execution` wait. Subsequent reconciles reuse the
+  durable execution; the wait tick observes only that exact Application and
+  never retries, force-syncs, prunes, rolls back, or mutates a second target.
+- The controller's complete source-merge through Argo-dispatch chain is covered
+  by an in-process durable-store test. It creates a WorkItem, approved source
+  ChangeSet and merge, completed PipelineIntent evidence, approved GitOps
+  ChangeSet and base-revision-bound merge, exact DeploymentContract, satisfied
+  cluster gate, and scoped Argo envelope. The first `apply=true` reconcile
+  creates exactly one `argo_sync_execution`, writes one
+  `work_item.deployment_execution_dispatched` audit receipt, and schedules one
+  `deployment_execution` wait; a repeat reconcile reuses the wait. This proves
+  controller idempotency and preflight composition without contacting a cluster.
 - Applying any reconciliation action that waits on an external coding,
   branch-and-PR, Tekton, GitOps, or Argo outcome now persists one active
   `controller_wait` for that WorkItem. The record has a 15-second first
@@ -146,8 +198,8 @@
   increments the check count and reschedules the wait; a different action
   resolves it and reports the next boundary; an
   expired/depleted wait blocks its non-terminal WorkItem with audit evidence.
-  It deliberately does not perform read-only remote observation yet, because
-  observer Job dispatch is a separate, explicitly governed capability.
+  It never dispatches, retries, merges, syncs, rolls back, or otherwise
+  mutates an external system.
 - Applying reconciliation to a known downstream failure now writes a typed
   `work_item.delivery_blocked` audit event, a linked `delivery_failure`
   Observation, a candidate Incident, and a deterministic read-only draft
@@ -188,10 +240,11 @@
 
 ## Backlog
 
-- Run a controlled disposable-repository GitHub smoke with a fine-grained
-  token, exact repository allowlist, branch protections, and egress review.
-  Then add PR status/merge observation before a controller can schedule a
-  build from Git provenance.
+- Run a controlled disposable-repository GitHub writer/observer smoke with a
+  fine-grained token, exact repository allowlist, branch protections, and
+  egress review. The source PR observation and immutable merge handoff are
+  implemented; this remaining step validates those identities and boundaries
+  in the cluster.
 - Add an API-level fake-provider fixture for the full coding workflow. The
   workspace provisioner is tested against a real disposable Git repository,
   but the Fireworks-backed HTTP smoke remains an operator-run playbook so it
@@ -211,8 +264,10 @@
   repository, with the exact Helm allowlist change reviewed through the
   cluster's GitOps owner. It must prove `workspace.provisioned`, bounded diff
   artifacts, ChangeSet capture, and cleanup before the allowlist is kept on.
-- Add DeploymentIntent preflight and a separate Argo runner only after GitOps
-  revision provenance is available.
+- Run the full WorkItem controller dispatch smoke against a disposable dev
+  Application after the source, Tekton, and GitOps artifacts are real. The
+  typed preflight and isolated Argo runner already exist; this must validate
+  their configured ServiceAccount, allowlist, and exact-target behavior live.
 - Extend the terminal coding classifier to typed external-system outcomes
   (Tekton, Git, Argo, registry, and database), then define a policy that can
   propose only a bounded replan, an external wait, or a blocked remediation
