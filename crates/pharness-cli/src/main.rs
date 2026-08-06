@@ -241,6 +241,8 @@ enum RemediationPlanCommand {
     Get(RemediationPlanGetArgs),
     /// Create a remediation plan draft from an incident.
     Create(RemediationPlanCreateArgs),
+    /// Move a remediation plan through its reviewed lifecycle.
+    Transition(RemediationPlanTransitionArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -285,8 +287,16 @@ enum WorkItemCommand {
     Execute(WorkItemExecuteArgs),
     /// Derive a proposed ChangeSet from the latest completed workspace diff.
     CaptureChangeSet(WorkItemCaptureChangeSetArgs),
+    /// Propose a PipelineIntent from one WorkItem's approved, immutable merged source revision.
+    CreatePipelineIntent(WorkItemPipelineIntentArgs),
+    /// Fetch immutable source provenance and active PipelineContracts for one merged WorkItem.
+    PipelineIntentContext(WorkItemPipelineContextArgs),
     /// Fetch durable audit events for one work item.
     Events(WorkItemGetArgs),
+    /// List durable external controller waits for one work item.
+    Waits(WorkItemControllerWaitListArgs),
+    /// Reconcile due controller waits against persisted evidence only.
+    ReconcileDueWaits(ControllerWaitReconcileDueArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -1198,6 +1208,24 @@ struct RemediationPlanCreateArgs {
 }
 
 #[derive(Debug, Parser)]
+struct RemediationPlanTransitionArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    plan_id: String,
+    #[arg(long)]
+    target_status: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct WorkItemListArgs {
     #[arg(
         long,
@@ -1231,6 +1259,42 @@ struct WorkItemGetArgs {
     api_url: String,
     #[arg(long)]
     work_item_id: String,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemControllerWaitListArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    wait_kind: Option<String>,
+    #[arg(long)]
+    due_before_ms: Option<i64>,
+    #[arg(long, default_value_t = 50)]
+    limit: u32,
+    #[arg(long, default_value_t = 0)]
+    offset: u32,
+}
+
+#[derive(Debug, Parser)]
+struct ControllerWaitReconcileDueArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long, default_value_t = 25)]
+    limit: u32,
+    #[arg(long)]
+    actor: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -1378,6 +1442,51 @@ struct WorkItemCaptureChangeSetArgs {
 }
 
 #[derive(Debug, Parser)]
+struct WorkItemPipelineIntentArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    pipeline_contract_id: String,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    summary: Option<String>,
+    #[arg(long)]
+    risk_level: Option<String>,
+    #[arg(long)]
+    intent_kind: Option<String>,
+    /// JSON object containing the enabled exact Tekton pipeline definition.
+    #[arg(long)]
+    intent_json: Option<String>,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Parser)]
+struct WorkItemPipelineContextArgs {
+    #[arg(
+        long,
+        env = "PHARNESS_API_URL",
+        default_value = "http://127.0.0.1:4777"
+    )]
+    api_url: String,
+    #[arg(long)]
+    work_item_id: String,
+    #[arg(long)]
+    namespace: Option<String>,
+    #[arg(long)]
+    pipeline_ref: Option<String>,
+}
+
+#[derive(Debug, Parser)]
 struct WorkspaceListArgs {
     #[arg(
         long,
@@ -1493,6 +1602,10 @@ struct WorkPlanCreateFromRemediationPlanArgs {
     api_url: String,
     #[arg(long)]
     remediation_plan_id: String,
+    #[arg(long)]
+    actor: Option<String>,
+    #[arg(long)]
+    reason: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -3096,6 +3209,7 @@ async fn main() -> anyhow::Result<()> {
             RemediationPlanCommand::List(args) => list_remediation_plans(args).await?,
             RemediationPlanCommand::Get(args) => get_remediation_plan(args).await?,
             RemediationPlanCommand::Create(args) => create_remediation_plan(args).await?,
+            RemediationPlanCommand::Transition(args) => transition_remediation_plan(args).await?,
         },
         Command::WorkItems { command } => match command {
             WorkItemCommand::List(args) => list_work_items(*args).await?,
@@ -3108,7 +3222,17 @@ async fn main() -> anyhow::Result<()> {
             WorkItemCommand::CreateWorkPlan(args) => create_work_item_work_plan(args).await?,
             WorkItemCommand::Execute(args) => execute_work_item(args).await?,
             WorkItemCommand::CaptureChangeSet(args) => capture_work_item_change_set(args).await?,
+            WorkItemCommand::CreatePipelineIntent(args) => {
+                create_work_item_pipeline_intent(args).await?
+            }
+            WorkItemCommand::PipelineIntentContext(args) => {
+                get_work_item_pipeline_intent_context(args).await?
+            }
             WorkItemCommand::Events(args) => get_work_item_events(args).await?,
+            WorkItemCommand::Waits(args) => list_work_item_controller_waits(args).await?,
+            WorkItemCommand::ReconcileDueWaits(args) => {
+                reconcile_due_controller_waits(args).await?
+            }
         },
         Command::Workspaces { command } => match command {
             WorkspaceCommand::List(args) => list_workspaces(*args).await?,
@@ -4307,6 +4431,30 @@ async fn create_remediation_plan(args: RemediationPlanCreateArgs) -> anyhow::Res
     Ok(())
 }
 
+async fn transition_remediation_plan(args: RemediationPlanTransitionArgs) -> anyhow::Result<()> {
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/remediation-plans/{}/transition", args.plan_id),
+        ))
+        .json(&serde_json::json!({
+            "target_status": args.target_status,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to transition remediation plan")?
+        .error_for_status()
+        .context("pharness API rejected remediation plan transition")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode remediation plan transition")?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
 async fn list_work_items(args: WorkItemListArgs) -> anyhow::Result<()> {
     let mut query = vec![
         ("limit".to_string(), args.limit.to_string()),
@@ -4356,6 +4504,64 @@ async fn get_work_item_events(args: WorkItemGetArgs) -> anyhow::Result<()> {
         "work item events",
     )
     .await
+}
+
+async fn list_work_item_controller_waits(
+    args: WorkItemControllerWaitListArgs,
+) -> anyhow::Result<()> {
+    let mut query = vec![
+        ("limit".to_string(), args.limit.to_string()),
+        ("offset".to_string(), args.offset.to_string()),
+    ];
+    if let Some(status) = args.status {
+        query.push(("status".to_string(), status));
+    }
+    if let Some(wait_kind) = args.wait_kind {
+        query.push(("wait_kind".to_string(), wait_kind));
+    }
+    if let Some(due_before_ms) = args.due_before_ms {
+        query.push(("due_before_ms".to_string(), due_before_ms.to_string()));
+    }
+    print_json_response(
+        api_client()
+            .get(api_url(
+                &args.api_url,
+                &format!("/api/work-items/{}/controller-waits", args.work_item_id),
+            ))
+            .query(&query)
+            .send()
+            .await
+            .context("failed to fetch controller waits")?
+            .error_for_status()
+            .context("pharness API rejected controller wait list")?
+            .json()
+            .await
+            .context("failed to decode controller wait list")?,
+    )
+}
+
+async fn reconcile_due_controller_waits(
+    args: ControllerWaitReconcileDueArgs,
+) -> anyhow::Result<()> {
+    print_json_response(
+        api_client()
+            .post(api_url(
+                &args.api_url,
+                "/api/controller-waits/reconcile-due",
+            ))
+            .json(&serde_json::json!({
+                "limit": args.limit,
+                "actor": args.actor,
+            }))
+            .send()
+            .await
+            .context("failed to reconcile due controller waits")?
+            .error_for_status()
+            .context("pharness API rejected due controller wait reconciliation")?
+            .json()
+            .await
+            .context("failed to decode due controller wait reconciliation")?,
+    )
 }
 
 async fn create_work_item(args: WorkItemCreateArgs) -> anyhow::Result<()> {
@@ -4530,6 +4736,69 @@ async fn capture_work_item_change_set(args: WorkItemCaptureChangeSetArgs) -> any
         .json::<serde_json::Value>()
         .await
         .context("failed to decode WorkItem ChangeSet capture")?;
+    print_json_response(response)
+}
+
+async fn create_work_item_pipeline_intent(args: WorkItemPipelineIntentArgs) -> anyhow::Result<()> {
+    let intent_json = args
+        .intent_json
+        .as_deref()
+        .map(|value| parse_json_object(value, "--intent-json"))
+        .transpose()
+        .context("failed to parse --intent-json as a JSON object")?;
+    let response = api_client()
+        .post(api_url(
+            &args.api_url,
+            &format!("/api/work-items/{}/pipeline-intent", args.work_item_id),
+        ))
+        .json(&serde_json::json!({
+            "pipeline_contract_id": args.pipeline_contract_id,
+            "title": args.title,
+            "summary": args.summary,
+            "risk_level": args.risk_level,
+            "intent_kind": args.intent_kind,
+            "intent_json": intent_json,
+            "actor": args.actor,
+            "reason": args.reason,
+        }))
+        .send()
+        .await
+        .context("failed to create WorkItem PipelineIntent")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem PipelineIntent creation")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem PipelineIntent creation")?;
+    print_json_response(response)
+}
+
+async fn get_work_item_pipeline_intent_context(
+    args: WorkItemPipelineContextArgs,
+) -> anyhow::Result<()> {
+    let mut query = Vec::new();
+    if let Some(namespace) = args.namespace {
+        query.push(("namespace", namespace));
+    }
+    if let Some(pipeline_ref) = args.pipeline_ref {
+        query.push(("pipeline_ref", pipeline_ref));
+    }
+    let response = api_client()
+        .get(api_url(
+            &args.api_url,
+            &format!(
+                "/api/work-items/{}/pipeline-intent-context",
+                args.work_item_id
+            ),
+        ))
+        .query(&query)
+        .send()
+        .await
+        .context("failed to fetch WorkItem PipelineIntent context")?
+        .error_for_status()
+        .context("pharness API rejected WorkItem PipelineIntent context")?
+        .json::<serde_json::Value>()
+        .await
+        .context("failed to decode WorkItem PipelineIntent context")?;
     print_json_response(response)
 }
 
@@ -4720,6 +4989,8 @@ async fn create_work_plan_from_remediation_plan(
         ))
         .json(&serde_json::json!({
             "remediation_plan_id": args.remediation_plan_id,
+            "actor": args.actor,
+            "reason": args.reason,
         }))
         .send()
         .await
@@ -7649,6 +7920,31 @@ mod tests {
             }
             _ => panic!("expected remediation-plans list command"),
         }
+
+        let transition = Cli::try_parse_from([
+            "pharness",
+            "remediation-plans",
+            "transition",
+            "--plan-id",
+            "rplan_1",
+            "--target-status",
+            "approved",
+            "--actor",
+            "lucas",
+            "--reason",
+            "reviewed bounded recovery",
+        ])
+        .unwrap();
+        match transition.command {
+            Command::RemediationPlans {
+                command: RemediationPlanCommand::Transition(args),
+            } => {
+                assert_eq!(args.plan_id, "rplan_1");
+                assert_eq!(args.target_status, "approved");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
+            _ => panic!("expected remediation-plans transition command"),
+        }
     }
 
     #[test]
@@ -7785,6 +8081,10 @@ mod tests {
             "create-from-remediation-plan",
             "--remediation-plan-id",
             "rplan_1",
+            "--actor",
+            "lucas",
+            "--reason",
+            "derive reviewed recovery plan",
         ])
         .unwrap();
         let envelope = Cli::try_parse_from([
@@ -7841,7 +8141,10 @@ mod tests {
         match create.command {
             Command::WorkPlans {
                 command: WorkPlanCommand::CreateFromRemediationPlan(args),
-            } => assert_eq!(args.remediation_plan_id, "rplan_1"),
+            } => {
+                assert_eq!(args.remediation_plan_id, "rplan_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+            }
             _ => panic!("expected work-plans create-from-remediation-plan command"),
         }
         match envelope.command {
@@ -9167,6 +9470,54 @@ mod tests {
             "retry after test failure",
         ])
         .unwrap();
+        let pipeline_intent = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "create-pipeline-intent",
+            "--work-item-id",
+            "witem_1",
+            "--pipeline-contract-id",
+            "pcontract_1",
+            "--intent-json",
+            r#"{"execution":{"enabled":false}}"#,
+            "--actor",
+            "lucas",
+        ])
+        .unwrap();
+        let pipeline_context = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "pipeline-intent-context",
+            "--work-item-id",
+            "witem_1",
+            "--namespace",
+            "ci",
+            "--pipeline-ref",
+            "finance-ci",
+        ])
+        .unwrap();
+        let waits = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "waits",
+            "--work-item-id",
+            "witem_1",
+            "--status",
+            "active",
+            "--wait-kind",
+            "pipeline_execution",
+        ])
+        .unwrap();
+        let reconcile_due_waits = Cli::try_parse_from([
+            "pharness",
+            "work-items",
+            "reconcile-due-waits",
+            "--limit",
+            "10",
+            "--actor",
+            "controller",
+        ])
+        .unwrap();
 
         assert!(matches!(
             create.command,
@@ -9200,6 +9551,49 @@ mod tests {
                 assert_eq!(args.reason, "retry after test failure");
             }
             _ => panic!("expected work-items replan command"),
+        }
+        match pipeline_intent.command {
+            Command::WorkItems {
+                command: WorkItemCommand::CreatePipelineIntent(args),
+            } => {
+                assert_eq!(args.work_item_id, "witem_1");
+                assert_eq!(args.pipeline_contract_id, "pcontract_1");
+                assert_eq!(args.actor.as_deref(), Some("lucas"));
+                assert_eq!(
+                    args.intent_json.as_deref(),
+                    Some(r#"{"execution":{"enabled":false}}"#)
+                );
+            }
+            _ => panic!("expected work-items create-pipeline-intent command"),
+        }
+        match pipeline_context.command {
+            Command::WorkItems {
+                command: WorkItemCommand::PipelineIntentContext(args),
+            } => {
+                assert_eq!(args.work_item_id, "witem_1");
+                assert_eq!(args.namespace.as_deref(), Some("ci"));
+                assert_eq!(args.pipeline_ref.as_deref(), Some("finance-ci"));
+            }
+            _ => panic!("expected work-items pipeline-intent-context command"),
+        }
+        match waits.command {
+            Command::WorkItems {
+                command: WorkItemCommand::Waits(args),
+            } => {
+                assert_eq!(args.work_item_id, "witem_1");
+                assert_eq!(args.status.as_deref(), Some("active"));
+                assert_eq!(args.wait_kind.as_deref(), Some("pipeline_execution"));
+            }
+            _ => panic!("expected work-items waits command"),
+        }
+        match reconcile_due_waits.command {
+            Command::WorkItems {
+                command: WorkItemCommand::ReconcileDueWaits(args),
+            } => {
+                assert_eq!(args.limit, 10);
+                assert_eq!(args.actor.as_deref(), Some("controller"));
+            }
+            _ => panic!("expected work-items reconcile-due-waits command"),
         }
     }
 }

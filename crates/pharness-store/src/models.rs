@@ -463,6 +463,53 @@ pub struct StoredWorkItem {
     pub status_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateControllerWait {
+    pub id: String,
+    pub work_item_id: String,
+    pub session_id: SessionId,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub wait_kind: String,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub next_check_at: String,
+    pub deadline_at: String,
+    pub max_checks: u32,
+    pub data_json: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredControllerWait {
+    pub id: String,
+    pub work_item_id: String,
+    pub session_id: SessionId,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub wait_kind: String,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub next_check_at: String,
+    pub deadline_at: String,
+    pub max_checks: u32,
+    pub check_count: u32,
+    pub data_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub resolved_at: Option<String>,
+    pub resolution_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ControllerWaitListFilter {
+    pub work_item_id: Option<String>,
+    pub status: Option<String>,
+    pub wait_kind: Option<String>,
+    pub due_before_ms: Option<i64>,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct WorkItemListFilter {
     pub status: Option<String>,

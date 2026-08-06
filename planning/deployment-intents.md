@@ -74,6 +74,15 @@
   - `completed` means Argo reported `Synced` with an operation phase of
     `Succeeded`. It is not a rollout-health, metrics, log, trace, or release
     verification assertion.
+- WorkItem reconciliation is a read-only controller view over the same
+  evidence. After an immutable GitOps merge it returns the exact next
+  deployment action: intent review, preflight authorization, runner
+  availability, explicit sync dispatch, sync wait/failure, Release creation
+  and approval, post-sync verification, or final WorkItem completion. It does
+  not call the Argo executor, create a Release, complete a Release, or change
+  WorkItem state as a side effect. Its final `complete_work_item` action is
+  apply-only and revalidates completed post-sync Release evidence and current
+  lineage before recording terminal WorkItem state.
 
 # Backlog
 

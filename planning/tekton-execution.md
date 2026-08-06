@@ -44,6 +44,11 @@
 - Expose `execution_state` directly on PipelineIntent API responses in addition
   to the durable `intent_json`, so machine clients can inspect the executor Job,
   PipelineRun identity, and reported failure without decoding the whole plan.
+- Expose the pending PipelineIntent and a read-only execution-preflight summary
+  through WorkItem reconciliation after immutable source merge. The controller
+  reports review, missing authorization, explicit dispatch, wait, failure,
+  build-output review, and GitOps-plan handoffs; it never dispatches Tekton as
+  a side effect of reconcile.
 - Persist one compact, idempotent `tekton_pipeline_run_execution` artifact and
   `pipeline_run_execution` observation for each terminal executor callback.
   They contain only execution identity, terminal status, PipelineRun identity,

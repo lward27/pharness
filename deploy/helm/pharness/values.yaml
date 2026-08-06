@@ -50,13 +50,14 @@ worker:
   # creates the referenced Secret out-of-band and explicitly allows a repo.
   # The API does not mount this Secret; only the short-lived writer Job does.
   gitWriter:
-    enabled: false
+    enabled: true
     serviceAccount: pharness-git-writer
-    tokenSecretName: ""
-    allowedRepos: []
+    tokenSecretName: pharness-git-writer-token
+    allowedRepos: 
+      - https://github.com/lward27/yfinance_wrapper.git
     githubApiUrl: https://api.github.com
     authorName: Pharness
-    authorEmail: pharness@localhost
+    authorEmail: pharness@lucas.engineering
     activeDeadlineSeconds: 900
     ttlSecondsAfterFinished: 3600
   # GitOps manifests use a separate credential, ServiceAccount, and allowlist
@@ -76,10 +77,11 @@ worker:
   # created by Pharness and persist an immutable merge SHA. This is distinct
   # from the writer token and remains disabled by default.
   gitObserver:
-    enabled: false
+    enabled: true
     serviceAccount: pharness-git-observer
-    tokenSecretName: ""
-    allowedRepos: []
+    tokenSecretName: pharness-git-observer-token
+    allowedRepos:
+      - https://github.com/lward27/yfinance_wrapper.git
     githubApiUrl: https://api.github.com
     activeDeadlineSeconds: 300
     ttlSecondsAfterFinished: 3600
