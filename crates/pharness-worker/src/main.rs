@@ -395,7 +395,13 @@ async fn execute_argo_sync() -> anyhow::Result<()> {
         .await;
     }
 
-    if let Err(error) = start_argo_sync(&argo_namespace, &context.argo_application).await {
+    if let Err(error) = start_argo_sync(
+        &argo_namespace,
+        &context.argo_application,
+        context.revision.as_deref(),
+    )
+    .await
+    {
         tracing::warn!(deployment_intent_id = %deployment_intent_id, error = %error, "Argo sync patch failed");
         return post_argo_sync_outcome(
             &client,
@@ -434,7 +440,13 @@ async fn execute_argo_sync() -> anyhow::Result<()> {
             )
             .await;
         }
-        match observe_argo_application(&argo_namespace, &context.argo_application).await {
+        match observe_argo_application(
+            &argo_namespace,
+            &context.argo_application,
+            context.revision.as_deref(),
+        )
+        .await
+        {
             Ok(ArgoApplicationTerminal::Succeeded(state)) => {
                 return post_argo_sync_outcome(
                     &client,
@@ -491,6 +503,7 @@ struct ArgoSyncContext {
     execution_id: String,
     target_namespace: String,
     argo_application: String,
+    revision: Option<String>,
     poll_seconds: u64,
 }
 
@@ -551,8 +564,12 @@ async fn argo_sync_cancelled(
     Ok(response.cancelled)
 }
 
-async fn start_argo_sync(namespace: &str, application: &str) -> anyhow::Result<()> {
-    let patch = argo_sync_patch_payload().to_string();
+async fn start_argo_sync(
+    namespace: &str,
+    application: &str,
+    revision: Option<&str>,
+) -> anyhow::Result<()> {
+    let patch = argo_sync_patch_payload(revision).to_string();
     let output = tokio::process::Command::new("kubectl")
         .args([
             "patch",
@@ -574,19 +591,24 @@ async fn start_argo_sync(namespace: &str, application: &str) -> anyhow::Result<(
     }
 }
 
-fn argo_sync_patch_payload() -> serde_json::Value {
-    serde_json::json!({
+fn argo_sync_patch_payload(revision: Option<&str>) -> serde_json::Value {
+    let mut payload = serde_json::json!({
         "operation": {
             "sync": {
                 "prune": false,
             }
         }
-    })
+    });
+    if let Some(revision) = revision {
+        payload["operation"]["sync"]["revision"] = serde_json::json!(revision);
+    }
+    payload
 }
 
 async fn observe_argo_application(
     namespace: &str,
     application: &str,
+    expected_revision: Option<&str>,
 ) -> anyhow::Result<ArgoApplicationTerminal> {
     let output = tokio::process::Command::new("kubectl")
         .args([
@@ -606,10 +628,13 @@ async fn observe_argo_application(
     }
     let application: serde_json::Value = serde_json::from_slice(&output.stdout)
         .context("kubectl returned invalid Argo Application JSON")?;
-    Ok(argo_application_terminal(&application))
+    Ok(argo_application_terminal(&application, expected_revision))
 }
 
-fn argo_application_terminal(application: &serde_json::Value) -> ArgoApplicationTerminal {
+fn argo_application_terminal(
+    application: &serde_json::Value,
+    expected_revision: Option<&str>,
+) -> ArgoApplicationTerminal {
     let state = ArgoApplicationState {
         sync_status: application
             .pointer("/status/sync/status")
@@ -628,6 +653,9 @@ fn argo_application_terminal(application: &serde_json::Value) -> ArgoApplication
             .and_then(serde_json::Value::as_str)
             .map(ToOwned::to_owned),
     };
+    if expected_revision.is_some() && state.revision.as_deref() != expected_revision {
+        return ArgoApplicationTerminal::Pending;
+    }
     match state.operation_phase.as_deref() {
         Some("Succeeded") if state.sync_status.as_deref() == Some("Synced") => {
             ArgoApplicationTerminal::Succeeded(state)
@@ -1941,6 +1969,21 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
     };
     source.validate()?;
 
+    if spec.resume.is_some() {
+        let cwd_text = cwd.to_string_lossy().to_string();
+        let resolved_commit = workspace_git_stdout(
+            &cwd,
+            &["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"],
+        )
+        .await
+        .context("durable workspace is missing its pinned Git checkout")?;
+        let branch = workspace_git_stdout(&cwd, &["-C", &cwd_text, "branch", "--show-current"])
+            .await
+            .context("durable workspace branch could not be inspected")?;
+        validate_resumed_workspace_identity(source, &resolved_commit, &branch)?;
+        return Ok(None);
+    }
+
     let mut entries = tokio::fs::read_dir(&cwd).await?;
     if entries.next_entry().await?.is_some() {
         anyhow::bail!("typed workspace must be empty before clone");
@@ -1951,12 +1994,40 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
     Ok(Some(ProvisionedWorkspace { resolved_commit }))
 }
 
+fn validate_resumed_workspace_identity(
+    source: &WorkspaceSourceSpec,
+    resolved_commit: &str,
+    branch: &str,
+) -> anyhow::Result<()> {
+    let expected_commit = source
+        .resolved_commit
+        .as_deref()
+        .or(source.source_commit.as_deref())
+        .ok_or_else(|| anyhow::anyhow!("resumed workspace has no immutable base commit"))?;
+    if resolved_commit != expected_commit {
+        anyhow::bail!(
+            "durable workspace HEAD {resolved_commit} does not match pinned base {expected_commit}"
+        );
+    }
+    if branch != source.branch {
+        anyhow::bail!(
+            "durable workspace branch {branch:?} does not match issued branch {:?}",
+            source.branch
+        );
+    }
+    Ok(())
+}
+
 async fn clone_workspace_source(
     source: &WorkspaceSourceSpec,
     cwd: &std::path::Path,
 ) -> anyhow::Result<String> {
     tracing::info!(workspace_id = %source.workspace_id, cwd = %cwd.display(), "cloning typed workspace source");
     let cwd_text = cwd.to_string_lossy().to_string();
+    let checkout_ref = source
+        .source_commit
+        .as_deref()
+        .unwrap_or(source.source_ref.as_str());
     run_workspace_git(
         cwd,
         &[
@@ -1978,7 +2049,7 @@ async fn clone_workspace_source(
             "--depth",
             "1",
             "origin",
-            &source.source_ref,
+            checkout_ref,
         ],
     )
     .await?;
@@ -1988,16 +2059,24 @@ async fn clone_workspace_source(
         &["-C", &cwd_text, "switch", "--create", &source.branch],
     )
     .await?;
-    workspace_git_stdout(
+    let resolved_commit = workspace_git_stdout(
         cwd,
         &["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"],
     )
-    .await
+    .await?;
+    if let Some(expected) = source.source_commit.as_deref() {
+        if resolved_commit != expected {
+            anyhow::bail!(
+                "workspace source resolved commit {resolved_commit} does not match requested immutable commit {expected}"
+            );
+        }
+    }
+    Ok(resolved_commit)
 }
 
-/// Execute Git only against the API-issued workspace. Kubernetes `emptyDir`
-/// roots can be owned by kubelet even when the worker runs as a non-root UID;
-/// scope Git's safe-directory exception to this one ephemeral workspace.
+/// Execute Git only against the API-issued workspace. Kubernetes volume roots
+/// can be owned by kubelet even when the worker runs as a non-root UID; scope
+/// Git's safe-directory exception to this one isolated workspace.
 async fn run_workspace_git(cwd: &std::path::Path, args: &[&str]) -> anyhow::Result<()> {
     workspace_git_output(cwd, args).await.map(|_| ())
 }
@@ -2252,8 +2331,10 @@ mod tests {
     use super::{
         argo_application_terminal, argo_sync_patch_payload, parse_github_repository,
         pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
-        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
+        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
+        GitDeliveryContext, PipelineRunTerminal,
     };
+    use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
     use std::path::Path;
 
@@ -2283,6 +2364,39 @@ mod tests {
                 "origin",
                 "main",
             ]
+        );
+    }
+
+    #[test]
+    fn resumed_workspace_must_match_the_pinned_commit_and_branch() {
+        let source = WorkspaceSourceSpec {
+            workspace_id: "ws_123".to_string(),
+            source_repo: "https://github.com/example/repo.git".to_string(),
+            source_ref: "main".to_string(),
+            source_commit: Some("a".repeat(40)),
+            branch: "pharness/witem_123/attempt-1".to_string(),
+            resolved_commit: Some("a".repeat(40)),
+        };
+
+        validate_resumed_workspace_identity(
+            &source,
+            &"a".repeat(40),
+            "pharness/witem_123/attempt-1",
+        )
+        .unwrap();
+        assert!(validate_resumed_workspace_identity(
+            &source,
+            &"b".repeat(40),
+            "pharness/witem_123/attempt-1",
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("does not match pinned base"));
+        assert!(
+            validate_resumed_workspace_identity(&source, &"a".repeat(40), "other")
+                .unwrap_err()
+                .to_string()
+                .contains("does not match issued branch")
         );
     }
 
@@ -2340,7 +2454,7 @@ mod tests {
                 "operationState": { "phase": "Succeeded", "syncResult": { "revision": "abc123" } }
             }
         });
-        match argo_application_terminal(&application) {
+        match argo_application_terminal(&application, None) {
             ArgoApplicationTerminal::Succeeded(state) => {
                 assert_eq!(state.sync_status.as_deref(), Some("Synced"));
                 assert_eq!(state.operation_phase.as_deref(), Some("Succeeded"));
@@ -2356,7 +2470,7 @@ mod tests {
             }
         });
         assert!(matches!(
-            argo_application_terminal(&not_synced),
+            argo_application_terminal(&not_synced, None),
             ArgoApplicationTerminal::Pending
         ));
     }
@@ -2369,7 +2483,7 @@ mod tests {
                 "operationState": { "phase": "Failed" }
             }
         });
-        match argo_application_terminal(&application) {
+        match argo_application_terminal(&application, None) {
             ArgoApplicationTerminal::Failed(state) => {
                 assert_eq!(state.operation_phase.as_deref(), Some("Failed"));
                 assert_eq!(state.health_status, None);
@@ -2380,10 +2494,14 @@ mod tests {
 
     #[test]
     fn argo_sync_patch_is_minimal_and_never_requests_prune_or_force_true() {
-        let patch = argo_sync_patch_payload();
+        let patch = argo_sync_patch_payload(Some("0123456789abcdef0123456789abcdef01234567"));
         assert_eq!(patch.pointer("/operation/sync/prune"), Some(&json!(false)));
         assert!(patch.pointer("/operation/sync/force").is_none());
         assert!(patch.pointer("/spec").is_none());
+        assert_eq!(
+            patch.pointer("/operation/sync/revision"),
+            Some(&json!("0123456789abcdef0123456789abcdef01234567"))
+        );
     }
 
     #[test]

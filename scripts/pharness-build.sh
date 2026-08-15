@@ -1,136 +1,108 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Trigger Tekton clone-build-push runs for pharness images.
+# Build one immutable Pharness revision. This script never restarts a
+# Deployment; the resulting digests must be reviewed and committed to Helm.
 #
-# Usage: scripts/pharness-build.sh <runtime|ui|all> [--node <hostname>]
-#
-# Image references are kept literal inside the manifest heredoc on purpose:
-# an interpolated `$VAR:latest` once parsed as the zsh `${VAR:l}` lowercase
-# modifier and silently pushed images to `pharness-uiatest`. Do not
-# reintroduce variable expansion around the colon.
+# Usage: scripts/pharness-build.sh <runtime|ui|all> --revision <40-char-sha> [--node <hostname>]
 
 NAMESPACE="tekton-pipelines"
 NODE="${PHARNESS_BUILD_NODE:-ubuntu-lucas-engineering-2}"
+TARGET="${1:-}"
+REVISION=""
+RUNS=()
 
 usage() {
-  echo "Usage: $0 <runtime|ui|all> [--node <hostname>]" >&2
+  echo "Usage: $0 <runtime|ui|all> --revision <40-char-sha> [--node <hostname>]" >&2
   exit 1
 }
 
-TARGET="${1:-}"
-[[ -n "$TARGET" ]] || usage
-shift || true
+[[ "$TARGET" =~ ^(runtime|ui|all)$ ]] || usage
+shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --node)
-      NODE="$2"
-      shift 2
-      ;;
-    *)
-      usage
-      ;;
+    --revision) REVISION="${2:-}"; shift 2 ;;
+    --node) NODE="${2:-}"; shift 2 ;;
+    *) usage ;;
   esac
 done
 
-trigger_runtime() {
-  kubectl create -n "$NAMESPACE" -f - <<MANIFEST
-apiVersion: tekton.dev/v1
-kind: PipelineRun
-metadata:
-  generateName: pharness-runtime-run-
-  namespace: $NAMESPACE
-  labels:
-    app.kubernetes.io/part-of: tekton-ci
-    app.kubernetes.io/component: pharness-runtime
-spec:
-  pipelineRef:
-    name: clone-build-push
-  taskRunTemplate:
-    podTemplate:
-      nodeSelector:
-        kubernetes.io/hostname: $NODE
-  workspaces:
-    - name: shared-data
-      volumeClaimTemplate:
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 8Gi
-  params:
-    - name: repo-url
-      value: "https://github.com/lward27/pharness.git"
-    - name: image-reference
-      value: "registry.lucas.engineering/pharness-runtime:latest"
-    - name: dockerfile
-      value: "./deploy/docker/Dockerfile.runtime"
-    - name: context
-      value: "./"
-    - name: kaniko-extra-args
-      value:
-        - --skip-tls-verify
-    - name: deployment
-      value: pharness-api
-    - name: deployment-namespace
-      value: pharness
-MANIFEST
+[[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "--revision must be a full lowercase 40-character Git SHA" >&2
+  exit 1
 }
 
-trigger_ui() {
-  kubectl create -n "$NAMESPACE" -f - <<MANIFEST
+trigger() {
+  local component="$1" storage="$2" dockerfile="$3"
+  local image="registry.lucas.engineering/pharness-${component}:git-${REVISION}"
+  local run
+  run="$(kubectl create -n "$NAMESPACE" -o name -f - <<MANIFEST
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: pharness-ui-run-
-  namespace: $NAMESPACE
+  generateName: pharness-${component}-run-
+  namespace: ${NAMESPACE}
   labels:
     app.kubernetes.io/part-of: tekton-ci
-    app.kubernetes.io/component: pharness-ui
+    app.kubernetes.io/component: pharness-${component}
+    pharness.dev/source-revision: ${REVISION}
 spec:
   pipelineRef:
     name: clone-build-push
   taskRunTemplate:
     podTemplate:
       nodeSelector:
-        kubernetes.io/hostname: $NODE
+        kubernetes.io/hostname: ${NODE}
   workspaces:
     - name: shared-data
       volumeClaimTemplate:
         spec:
-          accessModes:
-            - ReadWriteOnce
+          accessModes: [ReadWriteOnce]
           resources:
             requests:
-              storage: 1Gi
+              storage: ${storage}
   params:
     - name: repo-url
-      value: "https://github.com/lward27/pharness.git"
+      value: https://github.com/lward27/pharness.git
+    - name: revision
+      value: ${REVISION}
     - name: image-reference
-      value: "registry.lucas.engineering/pharness-ui:latest"
+      value: ${image}
     - name: dockerfile
-      value: "./deploy/docker/Dockerfile.ui"
+      value: ${dockerfile}
     - name: context
-      value: "./"
+      value: ./
     - name: kaniko-extra-args
       value:
         - --skip-tls-verify
+        - --build-arg=PHARNESS_BUILD_REVISION=${REVISION}
     - name: deployment
-      value: pharness-ui
-    - name: deployment-namespace
-      value: pharness
+      value: ""
 MANIFEST
+)"
+  RUNS+=("${component}:${run#pipelinerun.tekton.dev/}")
 }
 
 case "$TARGET" in
-  runtime) trigger_runtime ;;
-  ui) trigger_ui ;;
+  runtime) trigger runtime 8Gi ./deploy/docker/Dockerfile.runtime ;;
+  ui) trigger ui 1Gi ./deploy/docker/Dockerfile.ui ;;
   all)
-    trigger_runtime
-    trigger_ui
+    trigger runtime 8Gi ./deploy/docker/Dockerfile.runtime
+    trigger ui 1Gi ./deploy/docker/Dockerfile.ui
     ;;
-  *) usage ;;
 esac
 
-kubectl get pipelineruns -n "$NAMESPACE" --sort-by=.metadata.creationTimestamp | tail -3
+for entry in "${RUNS[@]}"; do
+  component="${entry%%:*}"
+  run="${entry#*:}"
+  kubectl wait -n "$NAMESPACE" --for=condition=Succeeded "pipelinerun/${run}" --timeout=30m
+  task_run="$(kubectl get taskruns -n "$NAMESPACE" -l "tekton.dev/pipelineRun=${run}" -o json | jq -r '.items[] | select(.metadata.labels["tekton.dev/pipelineTask"] == "build-push") | .metadata.name' | head -1)"
+  digest="$(kubectl get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_DIGEST") | .value')"
+  image_url="$(kubectl get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_URL") | .value')"
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    echo "PipelineRun ${run} did not return an immutable image digest" >&2
+    exit 1
+  }
+  jq -n --arg component "$component" --arg revision "$REVISION" --arg pipeline_run "$run" --arg image_url "$image_url" --arg digest "$digest" \
+    '{component:$component,revision:$revision,pipeline_run:$pipeline_run,image_url:$image_url,digest:$digest,immutable_ref:($image_url+"@"+$digest)}'
+done

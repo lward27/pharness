@@ -41,6 +41,17 @@ metadata:
     app.kubernetes.io/part-of: pharness
     agentic.lucas.engineering/role: git-observer
 ---
+# GitOps observer has a separately scoped repository token and no Kubernetes
+# RoleBinding. It can only inspect the exact GitOps pull request.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.gitOpsObserver.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: gitops-observer
+---
 # Read-only observation permissions for worker attempts, mirroring the
 # hermes-readonly-observer posture: no Secret access anywhere.
 apiVersion: rbac.authorization.k8s.io/v1

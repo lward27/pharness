@@ -34,6 +34,10 @@ pub(super) fn router() -> Router<AppState> {
         .route("/api/runs/summary", get(run_summary))
         .route("/api/runs/:run_id", get(get_run))
         .route("/api/runs/:run_id/events", get(get_run_events))
+        .route(
+            "/api/runs/:run_id/operator-summary",
+            get(get_run_operator_summary),
+        )
         .route("/api/runs/:run_id/events/stream", get(stream_run_events))
         .route("/api/runs/:run_id/diff", get(get_run_diff))
         .route("/api/runs/:run_id/artifacts", get(list_run_artifacts))
@@ -470,6 +474,169 @@ pub(super) async fn get_run_events(
 ) -> Result<Json<EventsResponse>, ApiError> {
     let events = state.store.list_events(&RunId::new(run_id)).await?;
     Ok(Json(EventsResponse { events }))
+}
+
+pub(super) async fn get_run_operator_summary(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<RunOperatorSummaryResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let events = state.store.list_events(&run_id).await?;
+    let changes = state.store.list_file_changes(&run_id).await?;
+    let artifacts = state.store.list_artifacts(&run_id).await?;
+    let pending_approvals = state
+        .store
+        .pending_approval_for_run(&run_id)
+        .await?
+        .into_iter()
+        .map(|approval| approval.id)
+        .collect();
+    let mut turns = 0;
+    let mut recoverable_failures = 0;
+    let mut estimated_context_tokens = 0_u64;
+    let mut actual_prompt_tokens = 0_u64;
+    let mut actual_completion_tokens = 0_u64;
+    let mut actual_total_tokens = 0_u64;
+    let mut compactions = 0_u64;
+    let mut truncated_tool_results = 0_u64;
+    let mut tools_started = 0;
+    let mut tools_completed = 0;
+    let mut tools_failed = 0;
+    let mut test_commands = Vec::new();
+    let mut test_results = Vec::new();
+    let mut awaiting_test_result = false;
+    for event in &events {
+        match event.kind {
+            EventKind::ModelRequestStarted => {
+                turns = turns.max(
+                    event
+                        .payload
+                        .get("turn")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as u32
+                        + 1,
+                );
+                estimated_context_tokens += event
+                    .payload
+                    .get("estimated_input_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                compactions += event
+                    .payload
+                    .get("compacted_exchanges")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                truncated_tool_results += event
+                    .payload
+                    .get("truncated_tool_results")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+            }
+            EventKind::ModelResponseFinished => {
+                actual_prompt_tokens += event
+                    .payload
+                    .get("prompt_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                actual_completion_tokens += event
+                    .payload
+                    .get("completion_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                actual_total_tokens += event
+                    .payload
+                    .get("total_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+            }
+            EventKind::ActionProposed => {
+                awaiting_test_result = false;
+                if event.payload.get("action").and_then(Value::as_str) == Some("run_shell") {
+                    if let Some(command) = event.payload.get("cmd").and_then(Value::as_str) {
+                        let command_lower = command.to_ascii_lowercase();
+                        if [
+                            "test",
+                            "unittest",
+                            "pytest",
+                            "cargo",
+                            "compileall",
+                            "npm run",
+                        ]
+                        .iter()
+                        .any(|needle| command_lower.contains(needle))
+                        {
+                            test_commands.push(command.to_string());
+                            awaiting_test_result = true;
+                        }
+                    }
+                }
+            }
+            EventKind::ToolStarted => tools_started += 1,
+            EventKind::ToolFinished => {
+                tools_completed += 1;
+                let failed = event.payload.get("success").and_then(Value::as_bool) == Some(false)
+                    || event.payload.get("error").is_some()
+                    || event.payload.pointer("/content/error").is_some();
+                if failed {
+                    tools_failed += 1;
+                }
+                if event
+                    .payload
+                    .pointer("/content/recoverable")
+                    .and_then(Value::as_bool)
+                    == Some(true)
+                {
+                    recoverable_failures += 1;
+                }
+                if awaiting_test_result {
+                    test_results.push(event.payload.clone());
+                    awaiting_test_result = false;
+                }
+            }
+            _ => {}
+        }
+    }
+    let acceptance_evidence = artifacts
+        .iter()
+        .filter(|artifact| {
+            let value = format!("{} {}", artifact.kind, artifact.label).to_ascii_lowercase();
+            value.contains("test") || value.contains("acceptance") || value.contains("evidence")
+        })
+        .map(|artifact| {
+            json!({
+                "artifact_id": artifact.id,
+                "kind": artifact.kind,
+                "label": artifact.label,
+                "path": artifact.path,
+            })
+        })
+        .collect();
+    Ok(Json(RunOperatorSummaryResponse {
+        run_id: run_id.clone(),
+        turns,
+        recoverable_failures,
+        retries: recoverable_failures,
+        estimated_context_tokens,
+        actual_prompt_tokens,
+        actual_completion_tokens,
+        actual_total_tokens,
+        compactions,
+        truncated_tool_results,
+        tools_started,
+        tools_completed,
+        tools_failed,
+        changed_paths: changes.iter().map(|change| change.path.clone()).collect(),
+        diff_reference: format!("/api/runs/{}/diff", run_id.as_str()),
+        test_commands,
+        test_results,
+        acceptance_evidence,
+        pending_approvals,
+    }))
 }
 
 pub(super) async fn get_run_diff(

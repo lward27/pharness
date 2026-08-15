@@ -15,8 +15,9 @@ nameOverride: pharness
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    tag: latest
-    pullPolicy: Always
+    digest: sha256:20cd7db1dec6caab30797a44152e2b38181996c41f9e8d41c0c33c0d7b73afa6
+    pullPolicy: IfNotPresent
+    revision: 9ed987394aad0ba085d746287392f07c1eae7035
   # SQLite single-writer: keep exactly one API replica.
   replicas: 1
   host: pharness-api.lucas.engineering
@@ -85,6 +86,16 @@ worker:
     githubApiUrl: https://api.github.com
     activeDeadlineSeconds: 300
     ttlSecondsAfterFinished: 3600
+  # GitOps PR observation is intentionally a fourth GitHub identity. It must
+  # never reuse either the source observer or either writer credential.
+  gitOpsObserver:
+    enabled: false
+    serviceAccount: pharness-gitops-observer
+    tokenSecretName: ""
+    allowedRepos: []
+    githubApiUrl: https://api.github.com
+    activeDeadlineSeconds: 300
+    ttlSecondsAfterFinished: 3600
   tektonExecutor:
     serviceAccount: pharness-tekton-runner
     pollSeconds: 5
@@ -102,9 +113,10 @@ worker:
     activeDeadlineSeconds: 600
     ttlSecondsAfterFinished: 3600
   workspaceDir: /workspace
-  # Coding workspaces are per-Job emptyDir volumes. They are not backed by the
-  # API SQLite PVC and are reclaimed with the Job TTL.
+  # Coding workspaces use one durable PVC per run so approved mutations survive
+  # the short-lived Job boundary used for each inline approval resume.
   workspaceSizeLimit: 4Gi
+  workspaceStorageClass: local-path
   workspaceEphemeralStorageRequest: 2Gi
   workspaceEphemeralStorageLimit: 4Gi
   # Node-local storage is uneven in the homelab. Keep coding workers on the
@@ -125,7 +137,7 @@ tektonE2eSmoke:
   enabled: true
   namespace: tekton-pipelines
   pipelineName: pharness-e2e-noop
-  image: alpine:3.20
+  image: docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 
 # A second inert fixture that proves Tekton result collection and the durable
 # digest-pinned pipeline_build_output artifact. It does not build, push, pull,
@@ -135,15 +147,16 @@ tektonE2eBuildOutputSmoke:
   enabled: true
   namespace: tekton-pipelines
   pipelineName: pharness-e2e-build-output
-  image: alpine:3.20
+  image: docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
   imageUrl: example.invalid/pharness/e2e-build-output:synthetic
   imageDigest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    tag: latest
-    pullPolicy: Always
+    digest: sha256:6501e2d94dfa74270bc5411ab6bf341279fc0321d592d08d24db34703ef94681
+    pullPolicy: IfNotPresent
+    revision: 9ed987394aad0ba085d746287392f07c1eae7035
   replicas: 1
   host: pharness.lucas.engineering
   resources:
@@ -166,3 +179,18 @@ ingress:
 
 networkPolicy:
   enabled: true
+
+# The only production target admitted by this milestone. The API compares
+# every field with its locked policy tuple; this is not a general allowlist.
+protectedProductionTarget:
+  enabled: true
+  environment: production
+  namespace: apps-prod
+  argoApplication: yfinance-wrapper
+  workloadKind: Deployment
+  workloadName: yfinance-wrapper
+  sourceRepo: https://github.com/lward27/yfinance_wrapper.git
+  gitOpsRepo: https://github.com/lward27/lucas_engineering.git
+  kustomizationPath: charts/yfinance-wrapper/kustomization.yaml
+  imageName: registry.lucas.engineering/yfinance_wrapper
+  rollbackOwner: lucas

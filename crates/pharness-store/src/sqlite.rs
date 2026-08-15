@@ -3,16 +3,17 @@ use crate::{
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
     ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
     ChangeSetListFilter, ControllerWaitListFilter, CountBucket, CreateApproval, CreateApprovalGate,
-    CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateControllerWait,
-    CreateDeploymentContract, CreateDeploymentIntent, CreateFileChange, CreateGitOpsChangeSet,
-    CreateIncident, CreateObservation, CreatePermissionGrant, CreatePipelineContract,
-    CreatePipelineIntent, CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun,
-    CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace, DeploymentContractListFilter,
-    DeploymentIntentListFilter, GitOpsChangeSetListFilter, IncidentListFilter,
-    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
-    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter,
-    ReplacePipelineContract, RunListFilter, RunSummary, RunSummaryFilter, StoredApproval,
-    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredControllerWait,
+    CreateArtifact, CreateAuditEvent, CreateCapabilityVerification, CreateChangeSet,
+    CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent, CreateFileChange,
+    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePermissionGrant,
+    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter,
+    GitOpsChangeSetListFilter, IncidentListFilter, ObservationListFilter,
+    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
+    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
+    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
+    StoredAuditEvent, StoredCapabilityVerification, StoredChangeSet, StoredControllerWait,
     StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet,
     StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
     StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
@@ -1204,11 +1205,12 @@ impl SqliteStore {
             r#"
             INSERT INTO work_items (
               id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
-              gitops_repo, gitops_ref, target_environment, target_namespace, argo_application,
-              production_impacting, max_attempts, max_elapsed_seconds, created_by, created_at,
-              updated_at, status_changed_at
+              source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo, gitops_ref,
+              gitops_kustomization_path, gitops_image_name, target_environment, target_namespace,
+              argo_application, workload_kind, workload_name, rollback_owner, production_impacting,
+              max_attempts, max_elapsed_seconds, created_by, created_at, updated_at, status_changed_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17, ?17)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?25, ?25)
             "#,
         )
         .bind(&item.id)
@@ -1218,11 +1220,19 @@ impl SqliteStore {
         .bind(acceptance_criteria_json)
         .bind(&item.source_repo)
         .bind(&item.source_ref)
+        .bind(item.source_commit)
+        .bind(item.pipeline_contract_id)
+        .bind(item.deployment_contract_id)
         .bind(item.gitops_repo)
         .bind(item.gitops_ref)
+        .bind(item.gitops_kustomization_path)
+        .bind(item.gitops_image_name)
         .bind(&item.target_environment)
         .bind(item.target_namespace)
         .bind(item.argo_application)
+        .bind(item.workload_kind)
+        .bind(item.workload_name)
+        .bind(item.rollback_owner)
         .bind(if item.production_impacting { 1 } else { 0 })
         .bind(i64::from(item.max_attempts))
         .bind(i64::try_from(item.max_elapsed_seconds).unwrap_or(i64::MAX))
@@ -1263,8 +1273,10 @@ impl SqliteStore {
         let rows = sqlx::query(
             r#"
             SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
-                   gitops_repo, gitops_ref, target_environment, target_namespace,
-                   argo_application, production_impacting, max_attempts, max_elapsed_seconds,
+                   source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo,
+                   gitops_ref, gitops_kustomization_path, gitops_image_name, target_environment,
+                   target_namespace, argo_application, workload_kind, workload_name, rollback_owner,
+                   production_impacting, max_attempts, max_elapsed_seconds,
                    attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
@@ -4335,6 +4347,74 @@ impl SqliteStore {
 
         rows.into_iter().map(row_to_audit_event).collect()
     }
+
+    pub async fn create_capability_verification(
+        &self,
+        verification: CreateCapabilityVerification,
+    ) -> Result<StoredCapabilityVerification, StoreError> {
+        sqlx::query(
+            r#"
+            INSERT INTO capability_verifications (
+              id, capability, status, summary, principal, repository, permission,
+              verified_at, expires_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&verification.id)
+        .bind(&verification.capability)
+        .bind(&verification.status)
+        .bind(&verification.summary)
+        .bind(&verification.principal)
+        .bind(&verification.repository)
+        .bind(&verification.permission)
+        .bind(&verification.verified_at)
+        .bind(&verification.expires_at)
+        .execute(&self.pool)
+        .await?;
+        self.latest_capability_verification(&verification.capability)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "capability_verification".to_string(),
+                id: verification.id,
+            })
+    }
+
+    pub async fn latest_capability_verification(
+        &self,
+        capability: &str,
+    ) -> Result<Option<StoredCapabilityVerification>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, capability, status, summary, principal, repository, permission,
+                   verified_at, expires_at
+            FROM capability_verifications
+            WHERE capability = ?1
+            ORDER BY verified_at DESC, id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(capability)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_capability_verification).transpose()
+    }
+}
+
+fn row_to_capability_verification(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredCapabilityVerification, StoreError> {
+    Ok(StoredCapabilityVerification {
+        id: row.try_get("id")?,
+        capability: row.try_get("capability")?,
+        status: row.try_get("status")?,
+        summary: row.try_get("summary")?,
+        principal: row.try_get("principal")?,
+        repository: row.try_get("repository")?,
+        permission: row.try_get("permission")?,
+        verified_at: row.try_get("verified_at")?,
+        expires_at: row.try_get("expires_at")?,
+    })
 }
 
 fn row_to_file_change(row: sqlx::sqlite::SqliteRow) -> Result<StoredFileChange, StoreError> {
@@ -4480,11 +4560,19 @@ fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, Stor
         acceptance_criteria: serde_json::from_str(&acceptance_criteria_json)?,
         source_repo: row.try_get("source_repo")?,
         source_ref: row.try_get("source_ref")?,
+        source_commit: row.try_get("source_commit")?,
+        pipeline_contract_id: row.try_get("pipeline_contract_id")?,
+        deployment_contract_id: row.try_get("deployment_contract_id")?,
         gitops_repo: row.try_get("gitops_repo")?,
         gitops_ref: row.try_get("gitops_ref")?,
+        gitops_kustomization_path: row.try_get("gitops_kustomization_path")?,
+        gitops_image_name: row.try_get("gitops_image_name")?,
         target_environment: row.try_get("target_environment")?,
         target_namespace: row.try_get("target_namespace")?,
         argo_application: row.try_get("argo_application")?,
+        workload_kind: row.try_get("workload_kind")?,
+        workload_name: row.try_get("workload_name")?,
+        rollback_owner: row.try_get("rollback_owner")?,
         production_impacting: row.try_get::<i64, _>("production_impacting")? != 0,
         max_attempts: u32::try_from(max_attempts)
             .map_err(|error| StoreError::InvalidData(error.to_string()))?,
@@ -4913,8 +5001,10 @@ fn work_item_select_sql(where_clause: &str) -> &'static str {
         "WHERE id = ?1" => {
             r#"
             SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
-                   gitops_repo, gitops_ref, target_environment, target_namespace,
-                   argo_application, production_impacting, max_attempts, max_elapsed_seconds,
+                   source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo,
+                   gitops_ref, gitops_kustomization_path, gitops_image_name, target_environment,
+                   target_namespace, argo_application, workload_kind, workload_name, rollback_owner,
+                   production_impacting, max_attempts, max_elapsed_seconds,
                    attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
@@ -5897,8 +5987,8 @@ pub enum StoreError {
 mod tests {
     use super::SqliteStore;
     use crate::{
-        ApprovalListFilter, ApprovalSummaryFilter, CreateAuditEvent, CreateRun, CreateSession,
-        RunListFilter, RunSummaryFilter,
+        ApprovalListFilter, ApprovalSummaryFilter, CreateAuditEvent, CreateCapabilityVerification,
+        CreateRun, CreateSession, RunListFilter, RunSummaryFilter,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
 
@@ -5946,6 +6036,32 @@ mod tests {
         assert_eq!(run.status, "queued");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::RunStarted);
+    }
+
+    #[tokio::test]
+    async fn persists_latest_sanitized_capability_verification() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        store
+            .create_capability_verification(CreateCapabilityVerification {
+                id: "capverify_source_writer_1".to_string(),
+                capability: "source_writer".to_string(),
+                status: "available".to_string(),
+                summary: "isolated repository push permission verified".to_string(),
+                principal: Some("system:serviceaccount:pharness:pharness-git-writer".to_string()),
+                repository: Some("https://github.com/example/repo.git".to_string()),
+                permission: Some("repository_push".to_string()),
+                verified_at: "1000".to_string(),
+                expires_at: "901000".to_string(),
+            })
+            .await
+            .unwrap();
+        let verification = store
+            .latest_capability_verification("source_writer")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(verification.status, "available");
+        assert_eq!(verification.permission.as_deref(), Some("repository_push"));
     }
 
     #[tokio::test]
@@ -7592,11 +7708,19 @@ mod tests {
                 acceptance_criteria: vec!["test passes".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 2,
                 max_elapsed_seconds: 900,
@@ -7835,11 +7959,19 @@ mod tests {
                 acceptance_criteria: Vec::new(),
                 source_repo: "https://example.test/source.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: None,
                 argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 60,

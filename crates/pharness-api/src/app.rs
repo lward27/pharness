@@ -4,16 +4,16 @@ use crate::dispatch::{
     GitOpsRevisionResolutionRequest, RunDispatcher, TektonExecutionRequest,
 };
 use crate::dto::{
-    ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
-    ApprovalResponse, ApprovalSummaryResponse, ApprovalsResponse, ArgoSyncContextResponse,
-    ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse, ArtifactsResponse,
-    AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
-    AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
-    AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
-    BatchDecideApprovalGatesRequest, BatchDecideApprovalGatesResponse,
-    CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse,
-    ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
-    CreateChangeSetResponse, CreateDeploymentContractRequest,
+    AdvanceWorkItemRequest, AdvanceWorkItemResponse, ApprovalDecision, ApprovalGateResponse,
+    ApprovalGateSummaryResponse, ApprovalGatesResponse, ApprovalResponse, ApprovalSummaryResponse,
+    ApprovalsResponse, ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest,
+    ArtifactResponse, ArtifactsResponse, AttachDeploymentIntentEvidenceRequest,
+    AttachDeploymentIntentEvidenceResponse, AttachPipelineIntentEvidenceRequest,
+    AttachPipelineIntentEvidenceResponse, AttachReleaseEvidenceRequest,
+    AttachReleaseEvidenceResponse, AuditEventsResponse, BatchDecideApprovalGatesRequest,
+    BatchDecideApprovalGatesResponse, CapabilityStatusResponse, CaptureWorkItemChangeSetRequest,
+    ChangeSetResponse, ChangeSetsResponse, ControllerWaitTickResult, ControllerWaitsResponse,
+    CreateChangeSetRequest, CreateChangeSetResponse, CreateDeploymentContractRequest,
     CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
     CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
     CreateGitOpsChangeSetRequest, CreateGitOpsChangeSetResponse,
@@ -33,11 +33,12 @@ use crate::dto::{
     DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
     ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest,
     ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse,
-    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemRequest,
-    ExecuteWorkItemResponse, FileChangeResponse, GitDeliveryAuthorizationResponse,
-    GitDeliveryContextResponse, GitDeliveryFlowResponse, GitDeliveryObservationContextResponse,
-    GitDeliveryObservationOutcomeRequest, GitDeliveryOutcomeRequest, GitDeliveryPlanResponse,
-    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, GitOpsBaseRevisionContextResponse,
+    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemActionRequest,
+    ExecuteWorkItemRequest, ExecuteWorkItemResponse, FileChangeResponse,
+    GitDeliveryAuthorizationResponse, GitDeliveryContextResponse, GitDeliveryFlowResponse,
+    GitDeliveryObservationContextResponse, GitDeliveryObservationOutcomeRequest,
+    GitDeliveryOutcomeRequest, GitDeliveryPlanResponse, GitDeliveryPreflightRequest,
+    GitDeliveryPreflightResponse, GitOpsBaseRevisionContextResponse,
     GitOpsBaseRevisionOutcomeRequest, GitOpsChangeSetResponse, GitOpsChangeSetsResponse,
     GitOpsDeliveryAuthorizationResponse, GitOpsDeliveryContextResponse, GitOpsDeliveryFlowResponse,
     GitOpsDeliveryObservationContextResponse, GitOpsDeliveryObservationOutcomeRequest,
@@ -57,21 +58,22 @@ use crate::dto::{
     ReplanWorkItemRequest, ReplanWorkItemResponse, ResolveGitOpsBaseRevisionRequest,
     ResolveGitOpsBaseRevisionResponse, ReviewApprovalRequest, ReviseChangeSetRequest,
     ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
-    RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
-    ScopeOptionsResponse, SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary,
-    SdlcReadinessGrantSummary, SdlcReadinessResponse, TransitionChangeSetRequest,
-    TransitionChangeSetResponse, TransitionDeploymentContractRequest,
-    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
-    TransitionGitOpsChangeSetRequest, TransitionGitOpsChangeSetResponse,
-    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
-    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
-    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
-    TransitionRemediationPlanRequest, TransitionRemediationPlanResponse, TransitionWorkItemRequest,
-    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TriageItemResponse, TriageResponse,
-    TriageSummaryResponse, TrustedEnvelopeResponse, VerifyReleaseRequest, VerifyReleaseResponse,
+    RevokePermissionGrantRequest, RunDiffResponse, RunOperatorSummaryResponse, RunResponse,
+    RunSummaryResponse, RunsResponse, ScopeOptionsResponse, SdlcFlowResponse, SdlcReadinessFinding,
+    SdlcReadinessGateSummary, SdlcReadinessGrantSummary, SdlcReadinessResponse,
+    SystemReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
+    TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
+    TransitionDeploymentIntentResponse, TransitionGitOpsChangeSetRequest,
+    TransitionGitOpsChangeSetResponse, TransitionPipelineContractRequest,
+    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
+    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
+    TransitionReleaseRequest, TransitionReleaseResponse, TransitionRemediationPlanRequest,
+    TransitionRemediationPlanResponse, TransitionWorkItemRequest, TransitionWorkPlanRequest,
+    TransitionWorkPlanResponse, TriageItemResponse, TriageResponse, TriageSummaryResponse,
+    TrustedEnvelopeResponse, VerifyReleaseRequest, VerifyReleaseResponse, WorkItemActionResponse,
     WorkItemFlowResponse, WorkItemOperatorStateResponse, WorkItemPipelineContextResponse,
-    WorkItemResponse, WorkItemsResponse, WorkPlanResponse, WorkPlansResponse, WorkspaceResponse,
-    WorkspacesResponse,
+    WorkItemPreflightResponse, WorkItemResponse, WorkItemsResponse, WorkPlanResponse,
+    WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use crate::workspace::WorkspaceProvisioner;
@@ -105,13 +107,13 @@ use pharness_store::{
     WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_store::{
-    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateControllerWait,
-    CreateDeploymentContract, CreateDeploymentIntent, CreateGitOpsChangeSet, CreateIncident,
-    CreateObservation, CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent,
-    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
-    CreateWorkItem, CreateWorkPlan, CreateWorkspace, ReplacePipelineContract, SqliteStore,
-    StoreError, UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence,
-    UpdateWorkspaceExecution,
+    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateCapabilityVerification,
+    CreateChangeSet, CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent,
+    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePermissionGrant,
+    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateWorkspace, ReplacePipelineContract, SqliteStore, StoreError,
+    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence, UpdateWorkspaceExecution,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -136,7 +138,6 @@ const DEFAULT_TRUSTED_ENVELOPE_ENVIRONMENT: &str = "local";
 const DEFAULT_GIT_WRITER_SUBJECT: &str = "agent:git-writer";
 const DEFAULT_GITOPS_WRITER_SUBJECT: &str = "agent:gitops-writer";
 const DEFAULT_ARGO_RUNNER_SUBJECT: &str = "agent:argo-runner";
-const GIT_DELIVERY_ENVIRONMENT: &str = "dev";
 const GIT_DELIVERY_ACTIONS: [&str; 4] = [
     "git_create_branch",
     "git_commit",
@@ -155,6 +156,113 @@ const CLUSTER_DELIVERY_ACTIONS: [&str; 2] = ["tekton_create_pipeline_run", "argo
 const PRODUCTION_DELIVERY_ACTIONS: [&str; 1] = ["production_action"];
 const CONTROLLER_WAIT_INTERVAL_MS: u128 = 15_000;
 const CONTROLLER_WAIT_MAX_CHECKS: u32 = 240;
+const PROTECTED_ENVIRONMENT: &str = "production";
+const PROTECTED_NAMESPACE: &str = "apps-prod";
+const PROTECTED_ARGO_APPLICATION: &str = "yfinance-wrapper";
+const PROTECTED_WORKLOAD_KIND: &str = "Deployment";
+const PROTECTED_WORKLOAD_NAME: &str = "yfinance-wrapper";
+const PROTECTED_SOURCE_REPO: &str = "https://github.com/lward27/yfinance_wrapper.git";
+const PROTECTED_GITOPS_REPO: &str = "https://github.com/lward27/lucas_engineering.git";
+const PROTECTED_KUSTOMIZATION_PATH: &str = "charts/yfinance-wrapper/kustomization.yaml";
+const PROTECTED_IMAGE_NAME: &str = "registry.lucas.engineering/yfinance_wrapper";
+const PROTECTED_ROLLBACK_OWNER: &str = "lucas";
+const PROTECTED_PIPELINE_NAMESPACE: &str = "tekton-pipelines";
+const PROTECTED_PIPELINE_REF: &str = "pharness-yfinance-build";
+
+#[derive(Clone)]
+struct BuildMetadata {
+    api_revision: String,
+    ui_revision: String,
+    runtime_image_digest: String,
+    ui_image_digest: String,
+}
+
+#[derive(Clone)]
+struct ProtectedTargetConfiguration {
+    exact_locked_match: bool,
+}
+
+impl ProtectedTargetConfiguration {
+    fn from_env() -> Self {
+        let expected = [
+            (
+                "PHARNESS_PROTECTED_TARGET_ENVIRONMENT",
+                PROTECTED_ENVIRONMENT,
+            ),
+            ("PHARNESS_PROTECTED_TARGET_NAMESPACE", PROTECTED_NAMESPACE),
+            (
+                "PHARNESS_PROTECTED_TARGET_ARGO_APPLICATION",
+                PROTECTED_ARGO_APPLICATION,
+            ),
+            (
+                "PHARNESS_PROTECTED_TARGET_WORKLOAD_KIND",
+                PROTECTED_WORKLOAD_KIND,
+            ),
+            (
+                "PHARNESS_PROTECTED_TARGET_WORKLOAD_NAME",
+                PROTECTED_WORKLOAD_NAME,
+            ),
+            (
+                "PHARNESS_PROTECTED_TARGET_SOURCE_REPO",
+                PROTECTED_SOURCE_REPO,
+            ),
+            (
+                "PHARNESS_PROTECTED_TARGET_GITOPS_REPO",
+                PROTECTED_GITOPS_REPO,
+            ),
+            (
+                "PHARNESS_PROTECTED_TARGET_KUSTOMIZATION_PATH",
+                PROTECTED_KUSTOMIZATION_PATH,
+            ),
+            ("PHARNESS_PROTECTED_TARGET_IMAGE_NAME", PROTECTED_IMAGE_NAME),
+            (
+                "PHARNESS_PROTECTED_TARGET_ROLLBACK_OWNER",
+                PROTECTED_ROLLBACK_OWNER,
+            ),
+        ];
+        let configured = expected
+            .iter()
+            .any(|(name, _)| std::env::var_os(name).is_some());
+        let enabled = std::env::var("PHARNESS_PROTECTED_TARGET_ENABLED")
+            .ok()
+            .map(|value| value == "true")
+            .unwrap_or(!configured);
+        Self {
+            exact_locked_match: enabled
+                && (!configured
+                    || expected
+                        .iter()
+                        .all(|(name, value)| std::env::var(name).ok().as_deref() == Some(*value))),
+        }
+    }
+}
+
+impl BuildMetadata {
+    fn from_env() -> Self {
+        let value = |name: &str, compiled: Option<&str>| {
+            std::env::var(name)
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    compiled
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToOwned::to_owned)
+                })
+                .unwrap_or_else(|| "unknown".to_string())
+        };
+        Self {
+            api_revision: value(
+                "PHARNESS_BUILD_REVISION",
+                option_env!("PHARNESS_BUILD_REVISION"),
+            ),
+            ui_revision: value("PHARNESS_UI_BUILD_REVISION", None),
+            runtime_image_digest: value("PHARNESS_RUNTIME_IMAGE_DIGEST", None),
+            ui_image_digest: value("PHARNESS_UI_IMAGE_DIGEST", None),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -165,6 +273,8 @@ pub struct AppState {
     worker_token: Option<String>,
     operator_tokens: Arc<Vec<(String, String)>>,
     workspace: WorkspaceProvisioner,
+    build: BuildMetadata,
+    protected_target: ProtectedTargetConfiguration,
 }
 
 pub fn router(
@@ -184,6 +294,8 @@ pub fn router(
         worker_token,
         operator_tokens: Arc::new(operator_tokens),
         workspace,
+        build: BuildMetadata::from_env(),
+        protected_target: ProtectedTargetConfiguration::from_env(),
     };
 
     let internal = runs::internal_router()
@@ -252,6 +364,11 @@ pub fn router(
         .merge(runs::router())
         .route("/health", get(health))
         .route("/api/config/effective", get(config_effective))
+        .route("/api/system/readiness", get(system_readiness))
+        .route(
+            "/api/system/capabilities/:capability/preflight",
+            post(preflight_system_capability),
+        )
         .route("/api/capabilities/execute", post(execute_capability))
         .route("/api/artifacts/:artifact_id", get(get_artifact))
         .route(
@@ -274,6 +391,7 @@ pub fn router(
             "/api/work-items",
             get(list_work_items).post(create_work_item),
         )
+        .route("/api/work-items/preflight", post(preflight_work_item))
         .route("/api/triage", get(list_triage))
         .route("/api/triage/summary", get(triage_summary))
         .route("/api/work-items/:work_item_id", get(get_work_item))
@@ -297,6 +415,38 @@ pub fn router(
         .route(
             "/api/work-items/:work_item_id/reconcile",
             post(reconcile_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/actions/:action_id/execute",
+            post(execute_work_item_action),
+        )
+        .route(
+            "/api/work-items/:work_item_id/advance",
+            post(advance_work_item),
+        )
+        .route(
+            "/api/work-items/:work_item_id/rollback-intents",
+            get(get_work_item_rollback_intent),
+        )
+        .route(
+            "/api/work-items/:work_item_id/rollback-intents/prepare",
+            post(prepare_work_item_rollback_intent),
+        )
+        .route(
+            "/api/rollback-intents/:rollback_intent_id/approve",
+            post(approve_rollback_intent),
+        )
+        .route(
+            "/api/rollback-intents/:rollback_intent_id/preflight",
+            post(preflight_rollback_intent),
+        )
+        .route(
+            "/api/rollback-intents/:rollback_intent_id/execute",
+            post(execute_rollback_intent),
+        )
+        .route(
+            "/api/rollback-intents/:rollback_intent_id/observe",
+            post(observe_rollback_intent),
         )
         .route(
             "/api/work-items/:work_item_id/replan",
@@ -707,6 +857,256 @@ async fn config_effective(
         },
         "operator": operator,
     }))
+}
+
+async fn capability_statuses(state: &AppState) -> Result<Vec<CapabilityStatusResponse>, ApiError> {
+    let worker = state.worker.config_json();
+    let configured = |pointer: &str| {
+        worker
+            .pointer(pointer)
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    };
+    let status = |capability: &str, is_configured: bool, configured_summary: &str| {
+        CapabilityStatusResponse {
+            capability: capability.to_string(),
+            status: if is_configured {
+                "configured_unverified"
+            } else {
+                "unavailable"
+            }
+            .to_string(),
+            summary: if is_configured {
+                configured_summary.to_string()
+            } else {
+                format!("{capability} is not configured for the isolated execution identity")
+            },
+            verified_at: None,
+            expires_at: None,
+        }
+    };
+    let mut statuses = vec![
+        status(
+            "model_provider",
+            worker.get("enabled").and_then(Value::as_bool).unwrap_or(false),
+            "Model provider is configured but has not passed a fresh isolated credential check.",
+        ),
+        status(
+            "source_workspace",
+            state.workspace.remote_configured() || state.workspace.configured(),
+            "At least one workspace repository is allowlisted.",
+        ),
+        status(
+            "source_writer",
+            configured("/git_writer/available"),
+            "Source writer identity and allowlist are configured but repository reachability is unverified.",
+        ),
+        status(
+            "source_observer",
+            configured("/git_observer/available"),
+            "Source observer identity and allowlist are configured but repository reachability is unverified.",
+        ),
+        status(
+            "gitops_writer",
+            configured("/gitops_writer/available"),
+            "GitOps writer identity and allowlist are configured but repository reachability is unverified.",
+        ),
+        status(
+            "gitops_observer",
+            configured("/gitops_observer/available"),
+            "GitOps observer identity and allowlist are configured but repository reachability is unverified.",
+        ),
+        status(
+            "tekton",
+            state.worker.supports_remote_workspace(),
+            "Tekton executor is configured but cluster authorization is unverified.",
+        ),
+        status(
+            "argo",
+            configured("/argo_executor/available"),
+            "Argo runner identity and exact Application allowlist are configured but authorization is unverified.",
+        ),
+        status(
+            "observability",
+            state.cluster_tools.prometheus_configured(),
+            "Prometheus endpoint is configured but target inventory has not been freshly verified.",
+        ),
+    ];
+    let now = current_millis();
+    for status in &mut statuses {
+        if status.status != "configured_unverified" {
+            continue;
+        }
+        let Some(verification) = state
+            .store
+            .latest_capability_verification(&status.capability)
+            .await?
+        else {
+            continue;
+        };
+        let expires = verification.expires_at.parse::<u128>().unwrap_or_default();
+        status.verified_at = Some(verification.verified_at.clone());
+        status.expires_at = Some(verification.expires_at.clone());
+        if expires <= now {
+            status.status = "stale".to_string();
+            status.summary = format!(
+                "{} verification expired; run the isolated preflight again",
+                status.capability
+            );
+        } else {
+            status.status = verification.status;
+            status.summary = verification.summary;
+        }
+    }
+    Ok(statuses)
+}
+
+async fn system_readiness(
+    State(state): State<AppState>,
+) -> Result<Json<SystemReadinessResponse>, ApiError> {
+    let worker = state.worker.config_json();
+    let capabilities = capability_statuses(&state).await?;
+    let mut blockers = capabilities
+        .iter()
+        .filter(|capability| capability.status != "available")
+        .map(|capability| format!("{}: {}", capability.capability, capability.summary))
+        .collect::<Vec<_>>();
+    if !state.protected_target.exact_locked_match {
+        blockers.push(
+            "protected_target: deployed configuration does not exactly match the locked yfinance-wrapper production target"
+                .to_string(),
+        );
+    }
+    Ok(Json(SystemReadinessResponse {
+        api_revision: state.build.api_revision.clone(),
+        ui_revision: state.build.ui_revision.clone(),
+        runtime_image_digest: state.build.runtime_image_digest.clone(),
+        ui_image_digest: state.build.ui_image_digest.clone(),
+        platform_versions_match: state.build.api_revision != "unknown"
+            && state.build.api_revision == state.build.ui_revision
+            && immutable_image_digest(&state.build.runtime_image_digest)
+            && immutable_image_digest(&state.build.ui_image_digest),
+        capabilities,
+        repository_allowlists: json!({
+            "workspace": state.workspace.allowed_remote_repos(),
+            "source_writer": worker.pointer("/git_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
+            "source_observer": worker.pointer("/git_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
+            "gitops_writer": worker.pointer("/gitops_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
+            "gitops_observer": worker.pointer("/gitops_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
+        }),
+        targets: protected_target_json(),
+        blockers,
+    }))
+}
+
+async fn preflight_system_capability(
+    State(state): State<AppState>,
+    Path(capability): Path<String>,
+) -> Result<Json<CapabilityStatusResponse>, ApiError> {
+    let configured = capability_statuses(&state)
+        .await?
+        .into_iter()
+        .find(|entry| entry.capability == capability)
+        .ok_or_else(|| ApiError::not_found("capability", &capability))?;
+    if configured.status == "unavailable" {
+        return Ok(Json(configured));
+    }
+    let repository = (capability == "source_workspace")
+        .then(|| state.workspace.allowed_remote_repos().first().cloned())
+        .flatten();
+    let outcome = state
+        .worker
+        .verify_capability(&capability, repository.as_deref())
+        .await;
+    let now = current_millis();
+    let (status, summary, principal, verified_repository, permission) = match outcome {
+        Ok(outcome) => (
+            if outcome.available {
+                "available"
+            } else {
+                "unavailable"
+            },
+            if outcome.available {
+                format!(
+                    "Isolated identity verified {}{}",
+                    outcome.permission.as_deref().unwrap_or("required access"),
+                    outcome
+                        .repository
+                        .as_deref()
+                        .map(|repo| format!(" for {repo}"))
+                        .unwrap_or_default()
+                )
+            } else {
+                "Isolated identity did not pass the required read-only capability check".to_string()
+            },
+            outcome.principal,
+            outcome.repository,
+            outcome.permission,
+        ),
+        Err(_) => (
+            "unavailable",
+            "Isolated capability verification could not complete".to_string(),
+            None,
+            repository,
+            None,
+        ),
+    };
+    let verification = state
+        .store
+        .create_capability_verification(CreateCapabilityVerification {
+            id: format!(
+                "capverify_{}_{}",
+                safe_id_fragment(&capability),
+                unique_suffix()
+            ),
+            capability: capability.clone(),
+            status: status.to_string(),
+            summary: summary.clone(),
+            principal,
+            repository: verified_repository,
+            permission,
+            verified_at: now.to_string(),
+            expires_at: (now + 15 * 60 * 1_000).to_string(),
+        })
+        .await?;
+    Ok(Json(CapabilityStatusResponse {
+        capability,
+        status: verification.status,
+        summary: verification.summary,
+        verified_at: Some(verification.verified_at),
+        expires_at: Some(verification.expires_at),
+    }))
+}
+
+fn protected_target_json() -> Value {
+    json!({
+        "environment": PROTECTED_ENVIRONMENT,
+        "namespace": PROTECTED_NAMESPACE,
+        "argo_application": PROTECTED_ARGO_APPLICATION,
+        "workload_kind": PROTECTED_WORKLOAD_KIND,
+        "workload_name": PROTECTED_WORKLOAD_NAME,
+        "source_repo": PROTECTED_SOURCE_REPO,
+        "gitops_repo": PROTECTED_GITOPS_REPO,
+        "kustomization_path": PROTECTED_KUSTOMIZATION_PATH,
+        "image_name": PROTECTED_IMAGE_NAME,
+        "rollback_owner": PROTECTED_ROLLBACK_OWNER,
+    })
+}
+
+fn immutable_image_digest(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|digest| {
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
+fn immutable_git_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 async fn execute_capability(
@@ -2274,6 +2674,97 @@ async fn work_item_flow(
         .into_iter()
         .map(Into::into)
         .collect();
+    let mut action_rail = vec![work_item_action_response(&reconcile_preview)];
+    let rollback_intent = latest_rollback_intent(&state, &work_item, None).await?;
+    let rollback_writer_base_ready = sdlc_flow
+        .as_ref()
+        .and_then(|flow| flow.gitops_delivery.as_ref())
+        .and_then(|delivery| delivery.latest_merge.as_ref())
+        .is_some();
+    if let Some(rollback) = rollback_intent.as_ref() {
+        let rollback_id = rollback
+            .pointer("/content/rollback_intent_id")
+            .and_then(Value::as_str)
+            .unwrap_or("rollback_unavailable");
+        let status = rollback
+            .pointer("/content/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unavailable");
+        let (action_id, action_status, effect_class, summary, approval_requirements) = match status {
+            "prepared" if rollback_writer_base_ready => ("approve_rollback", "ready", "approval_boundary", format!("Approve the digest-bound RollbackIntent {rollback_id}; no rollback runs automatically."), vec!["production_rollback".to_string()]),
+            "prepared" => ("approve_rollback", "blocked", "external_wait", format!("RollbackIntent {rollback_id} is prepared, but its writer cannot be authorized until the deployment GitOps pull request has an observed immutable merge."), vec!["production_rollback".to_string()]),
+            "approved" => ("execute_rollback_gitops_pr", "ready", "external_effect", format!("Create the digest-only rollback pull request in {PROTECTED_GITOPS_REPO}; merge remains manual."), Vec::new()),
+            "awaiting_manual_merge" => ("observe_rollback_merge", "ready", "external_effect", format!("Observe the rollback pull request in {PROTECTED_GITOPS_REPO}; merge remains manual."), Vec::new()),
+            "ready_for_argo_sync" => ("approve_rollback_argo_sync", "ready", "approval_boundary", format!("Open a fresh production rollback window before syncing exact Argo Application {PROTECTED_ARGO_APPLICATION}."), vec!["production_rollback_deployment".to_string(), "cluster_mutation".to_string(), "production_impact".to_string()]),
+            "argo_approved" => ("execute_rollback_argo_sync", "ready", "external_effect", format!("Sync exact Argo Application {PROTECTED_ARGO_APPLICATION} to the observed rollback merge; no other target may be supplied."), Vec::new()),
+            "argo_syncing" => ("observe_rollback_argo_sync", "ready", "external_effect", format!("Observe the isolated Argo executor and verify {PROTECTED_WORKLOAD_NAME} against the captured baseline digest."), Vec::new()),
+            "verified" => ("rollback_verified", "completed", "internal", format!("RollbackIntent {rollback_id} was explicitly synced and verified."), Vec::new()),
+            _ => ("inspect_rollback", "blocked", "internal", format!("Inspect RollbackIntent {rollback_id} with owner {PROTECTED_ROLLBACK_OWNER}."), Vec::new()),
+        };
+        let state_hash = format!("{:x}", Sha256::digest(rollback.to_string().as_bytes()));
+        action_rail.push(WorkItemActionResponse {
+            id: action_id.to_string(),
+            lifecycle_stage: "rollback".to_string(),
+            resource: rollback_id.to_string(),
+            status: action_status.to_string(),
+            effect_class: effect_class.to_string(),
+            blockers: Vec::new(),
+            approval_required: !approval_requirements.is_empty(),
+            approval_requirements,
+            external_effect_summary: summary,
+            state_hash,
+        });
+    }
+
+    let desired_digest = sdlc_flow
+        .as_ref()
+        .and_then(|flow| flow.pipeline_intent.as_ref())
+        .and_then(|intent| intent.intent_json.pointer("/build_output/image_digest"))
+        .and_then(Value::as_str);
+    let current_digest = rollback_intent
+        .as_ref()
+        .and_then(|rollback| rollback.pointer("/content/baseline/image_digest"))
+        .and_then(Value::as_str);
+    let desired_gitops_revision = sdlc_flow
+        .as_ref()
+        .and_then(|flow| flow.gitops_delivery.as_ref())
+        .and_then(|delivery| delivery.latest_merge.as_ref())
+        .and_then(|artifact| artifact.content_json.as_ref())
+        .and_then(|content| content.get("merge_commit_sha"))
+        .and_then(Value::as_str);
+    let release_evidence = sdlc_flow
+        .as_ref()
+        .and_then(|flow| flow.release.as_ref())
+        .map(|release| &release.release_json);
+    let delivery_configuration = json!({
+        "pipeline_contract_id": work_item.pipeline_contract_id,
+        "deployment_contract_id": work_item.deployment_contract_id,
+        "gitops": {
+            "repository": work_item.gitops_repo,
+            "ref": work_item.gitops_ref,
+            "kustomization_path": work_item.gitops_kustomization_path,
+            "image_name": work_item.gitops_image_name,
+            "desired_revision": desired_gitops_revision,
+        },
+        "target": {
+            "environment": work_item.target_environment,
+            "namespace": work_item.target_namespace,
+            "argo_application": work_item.argo_application,
+            "workload_kind": work_item.workload_kind,
+            "workload_name": work_item.workload_name,
+        },
+        "current_digest": current_digest,
+        "desired_digest": desired_digest,
+        "argo": {
+            "sync_status": release_evidence.and_then(|evidence| evidence.pointer("/post_sync_verification/argo/sync_status")).and_then(Value::as_str),
+            "health_status": release_evidence.and_then(|evidence| evidence.pointer("/post_sync_verification/argo/health_status")).and_then(Value::as_str),
+        },
+        "production_window_expires_at": rollback_intent.as_ref().and_then(|rollback| rollback.pointer("/content/argo_authorization_expires_at").or_else(|| rollback.pointer("/content/authorization_expires_at"))).and_then(Value::as_str),
+        "baseline_digest": current_digest,
+        "rollback_owner": work_item.rollback_owner,
+        "rollback_intent_id": rollback_intent.as_ref().and_then(|rollback| rollback.pointer("/content/rollback_intent_id")).and_then(Value::as_str),
+        "rollback_status": rollback_intent.as_ref().and_then(|rollback| rollback.pointer("/content/status")).and_then(Value::as_str),
+    });
 
     Ok(Json(WorkItemFlowResponse {
         work_item: work_item.into(),
@@ -2283,7 +2774,76 @@ async fn work_item_flow(
         workspaces,
         controller_waits,
         audit_events,
+        action_rail,
+        delivery_configuration,
     }))
+}
+
+fn work_item_action_response(preview: &ReconcileWorkItemResponse) -> WorkItemActionResponse {
+    let action = preview.action.as_str();
+    let lifecycle_stage = if action.contains("pipeline") {
+        "pipeline"
+    } else if action.contains("gitops") {
+        "gitops"
+    } else if action.contains("deployment") || action.contains("argo") {
+        "deployment"
+    } else if action.contains("release") || action == "complete_work_item" {
+        "release"
+    } else {
+        "source"
+    };
+    let effect_class = if action == "start_coding_attempt" {
+        "model_execution"
+    } else if action.contains("approval") || action.contains("authorization") {
+        "approval_boundary"
+    } else if action.starts_with("wait_") || action.contains("merge") {
+        "external_wait"
+    } else if matches!(
+        action,
+        "awaiting_git_delivery_execution"
+            | "awaiting_pull_request_observation"
+            | "awaiting_pipeline_execution"
+            | "awaiting_gitops_base_revision"
+            | "awaiting_gitops_delivery_execution"
+            | "awaiting_gitops_pull_request_observation"
+            | "awaiting_deployment_execution"
+            | "awaiting_release_verification"
+    ) {
+        "external_effect"
+    } else {
+        "internal"
+    };
+    let hash_payload = json!({
+        "work_item_id": preview.work_item.id,
+        "work_item_updated_at": preview.work_item.updated_at,
+        "action": preview.action,
+        "can_apply": preview.can_apply,
+        "blockers": preview.blockers,
+        "authorization_checks": preview.authorization_checks,
+    });
+    let approval_requirements = preview
+        .authorization_checks
+        .iter()
+        .filter(|check| matches!(check.status.as_str(), "missing" | "blocked" | "unavailable"))
+        .map(|check| check.kind.clone())
+        .collect::<Vec<_>>();
+    WorkItemActionResponse {
+        id: preview.action.clone(),
+        lifecycle_stage: lifecycle_stage.to_string(),
+        resource: preview.work_item.id.clone(),
+        status: if preview.can_apply {
+            "ready"
+        } else {
+            "blocked"
+        }
+        .to_string(),
+        effect_class: effect_class.to_string(),
+        blockers: preview.blockers.clone(),
+        approval_required: effect_class == "approval_boundary" || !approval_requirements.is_empty(),
+        approval_requirements,
+        external_effect_summary: preview.effect_summary.clone(),
+        state_hash: format!("{:x}", Sha256::digest(hash_payload.to_string().as_bytes())),
+    }
 }
 
 fn work_item_delivery_segments(
@@ -2571,11 +3131,333 @@ fn is_blocked_delivery_status(status: &str) -> bool {
     matches!(status, "blocked" | "failed" | "rejected" | "stale")
 }
 
+async fn preflight_work_item(
+    State(state): State<AppState>,
+    Json(request): Json<CreateWorkItemRequest>,
+) -> Result<Json<WorkItemPreflightResponse>, ApiError> {
+    build_work_item_preflight(&state, &request).await.map(Json)
+}
+
+async fn build_work_item_preflight(
+    state: &AppState,
+    request: &CreateWorkItemRequest,
+) -> Result<WorkItemPreflightResponse, ApiError> {
+    let source_repo = request.source_repo.trim().trim_end_matches('/');
+    let source_ref = request.source_ref.trim();
+    let production =
+        request.production_impacting || request.target_environment.trim() == PROTECTED_ENVIRONMENT;
+    let normalized_submission = json!({
+        "title": request.title.trim(),
+        "intent": request.intent.trim(),
+        "acceptance_criteria": request.acceptance_criteria.iter().map(|value| value.trim()).filter(|value| !value.is_empty()).collect::<Vec<_>>(),
+        "source_repo": source_repo,
+        "source_ref": source_ref,
+        "source_commit": request.source_commit.as_deref().map(str::trim),
+        "pipeline_contract_id": request.pipeline_contract_id.as_deref().map(str::trim),
+        "deployment_contract_id": request.deployment_contract_id.as_deref().map(str::trim),
+        "gitops_repo": request.gitops_repo.as_deref().map(|value| value.trim().trim_end_matches('/')),
+        "gitops_ref": request.gitops_ref.as_deref().map(str::trim),
+        "gitops_kustomization_path": request.gitops_kustomization_path.as_deref().map(str::trim),
+        "gitops_image_name": request.gitops_image_name.as_deref().map(str::trim),
+        "target_environment": request.target_environment.trim(),
+        "target_namespace": request.target_namespace.as_deref().map(str::trim),
+        "argo_application": request.argo_application.as_deref().map(str::trim),
+        "workload_kind": request.workload_kind.as_deref().map(str::trim),
+        "workload_name": request.workload_name.as_deref().map(str::trim),
+        "rollback_owner": request.rollback_owner.as_deref().map(str::trim),
+        "production_impacting": production,
+        "max_attempts": request.max_attempts.unwrap_or(3).clamp(1, 10),
+        "max_elapsed_seconds": request.max_elapsed_seconds.unwrap_or(3_600).clamp(60, 86_400),
+    });
+    let mut blockers = Vec::new();
+    let mut warnings = Vec::new();
+    if source_repo.is_empty() {
+        blockers.push("source repository is required".to_string());
+    }
+    if source_ref.is_empty() {
+        blockers.push("source base branch is required".to_string());
+    }
+    if request
+        .acceptance_criteria
+        .iter()
+        .all(|value| value.trim().is_empty())
+    {
+        warnings.push(
+            "No acceptance commands are defined; completion evidence will be weak.".to_string(),
+        );
+    }
+    if let Some(commit) = request.source_commit.as_deref().map(str::trim) {
+        if !immutable_git_object_id(commit) {
+            blockers
+                .push("source_commit must be a full 40- or 64-character Git object ID".to_string());
+        }
+    } else if production {
+        blockers.push("production requires an immutable source_commit".to_string());
+    }
+    if production && !request_matches_protected_target(request) {
+        blockers.push(
+            "production target does not exactly match the protected yfinance-wrapper target"
+                .to_string(),
+        );
+    } else if request.target_environment.trim() != "dev" && !production {
+        blockers.push("only dev or the exact protected production target is supported".to_string());
+    }
+    if production && !state.protected_target.exact_locked_match {
+        blockers.push(
+            "deployed protected-target configuration does not exactly match the locked production target"
+                .to_string(),
+        );
+    }
+
+    let pipeline_contract = match request.pipeline_contract_id.as_deref().map(str::trim) {
+        Some(id) if !id.is_empty() => match state.store.get_pipeline_contract(id).await? {
+            Some(contract) => {
+                if contract.status != "active" {
+                    blockers.push(format!(
+                        "PipelineContract {id} is {} rather than active",
+                        contract.status
+                    ));
+                }
+                if production
+                    && (contract.namespace != PROTECTED_PIPELINE_NAMESPACE
+                        || contract.pipeline_ref != PROTECTED_PIPELINE_REF
+                        || pipeline_contract_spec(&contract.contract_json)
+                            .and_then(|spec| {
+                                validate_pipeline_contract_spec(&spec)?;
+                                if spec.source_revision_param.as_deref() != Some("revision") {
+                                    return Err(ApiError::bad_request(
+                                        "protected production PipelineContract must bind revision as its immutable source parameter",
+                                    ));
+                                }
+                                Ok(())
+                            })
+                            .is_err())
+                {
+                    blockers.push(format!(
+                        "PipelineContract {id} does not match tekton-pipelines/pharness-yfinance-build with immutable revision"
+                    ));
+                }
+                Some(contract)
+            }
+            None => {
+                blockers.push(format!("PipelineContract {id} does not exist"));
+                None
+            }
+        },
+        _ if production => {
+            blockers.push("production requires pipeline_contract_id".to_string());
+            None
+        }
+        _ => None,
+    };
+    let deployment_contract = match request.deployment_contract_id.as_deref().map(str::trim) {
+        Some(id) if !id.is_empty() => match state.store.get_deployment_contract(id).await? {
+            Some(contract) => {
+                if contract.status != "active" {
+                    blockers.push(format!(
+                        "DeploymentContract {id} is {} rather than active",
+                        contract.status
+                    ));
+                }
+                if production {
+                    let target_matches = contract.target_environment == PROTECTED_ENVIRONMENT
+                        && contract.target_namespace == PROTECTED_NAMESPACE
+                        && contract.argo_application == PROTECTED_ARGO_APPLICATION;
+                    let spec_matches = deployment_contract_spec(&contract.contract_json)
+                        .and_then(|spec| {
+                            validate_deployment_contract_spec(&spec)?;
+                            validate_protected_production_deployment_contract(&spec)
+                        })
+                        .is_ok();
+                    if !target_matches || !spec_matches {
+                        blockers.push(format!(
+                            "DeploymentContract {id} does not match the exact protected workload and /healthz contract"
+                        ));
+                    }
+                }
+                Some(contract)
+            }
+            None => {
+                blockers.push(format!("DeploymentContract {id} does not exist"));
+                None
+            }
+        },
+        _ if production => {
+            blockers.push("production requires deployment_contract_id".to_string());
+            None
+        }
+        _ => None,
+    };
+
+    let checks = capability_statuses(state).await?;
+    if production {
+        for capability in [
+            "model_provider",
+            "source_workspace",
+            "source_writer",
+            "source_observer",
+            "gitops_writer",
+            "gitops_observer",
+            "tekton",
+            "argo",
+            "observability",
+        ] {
+            if let Some(check) = checks.iter().find(|check| check.capability == capability) {
+                if check.status != "available" {
+                    blockers.push(format!(
+                        "{} must have a fresh passing isolated verification: {}",
+                        check.capability, check.summary
+                    ));
+                }
+            }
+        }
+    }
+    let selected_contracts = json!({
+        "pipeline": pipeline_contract,
+        "deployment": deployment_contract,
+    });
+    let predicted_external_mutations = if production {
+        vec![
+            format!("source pull request in {PROTECTED_SOURCE_REPO}"),
+            "PipelineRun tekton-pipelines/pharness-yfinance-build".to_string(),
+            format!("GitOps pull request in {PROTECTED_GITOPS_REPO}"),
+            format!("Argo sync of {PROTECTED_ARGO_APPLICATION}"),
+        ]
+    } else {
+        vec![format!("source pull request in {source_repo}")]
+    };
+    let production_gates = if production {
+        vec![
+            "source_mutation".to_string(),
+            "pipeline_mutation".to_string(),
+            "gitops_mutation".to_string(),
+            "cluster_mutation".to_string(),
+            "production_deployment".to_string(),
+        ]
+    } else {
+        Vec::new()
+    };
+    let rollback_prerequisites = if production {
+        vec![
+            "capture current deployment image digest and readiness".to_string(),
+            "capture current Argo and GitOps revisions".to_string(),
+            format!("bind rollback ownership to {PROTECTED_ROLLBACK_OWNER}"),
+            "prepare a digest-only rollback pull request before Argo authorization".to_string(),
+        ]
+    } else {
+        Vec::new()
+    };
+    let hash_payload = json!({
+        "submission": normalized_submission,
+        "contracts": selected_contracts,
+        "checks": checks,
+        "mutations": predicted_external_mutations,
+    });
+    let state_hash = format!("{:x}", Sha256::digest(hash_payload.to_string().as_bytes()));
+    Ok(WorkItemPreflightResponse {
+        ready: blockers.is_empty(),
+        state_hash,
+        normalized_submission,
+        selected_contracts,
+        checks,
+        blockers,
+        warnings,
+        predicted_external_mutations,
+        production_gates,
+        rollback_prerequisites,
+    })
+}
+
+fn request_matches_protected_target(request: &CreateWorkItemRequest) -> bool {
+    request.target_environment.trim() == PROTECTED_ENVIRONMENT
+        && request.target_namespace.as_deref().map(str::trim) == Some(PROTECTED_NAMESPACE)
+        && request.argo_application.as_deref().map(str::trim) == Some(PROTECTED_ARGO_APPLICATION)
+        && request.workload_kind.as_deref().map(str::trim) == Some(PROTECTED_WORKLOAD_KIND)
+        && request.workload_name.as_deref().map(str::trim) == Some(PROTECTED_WORKLOAD_NAME)
+        && request.source_repo.trim().trim_end_matches('/') == PROTECTED_SOURCE_REPO
+        && request
+            .gitops_repo
+            .as_deref()
+            .map(|value| value.trim().trim_end_matches('/'))
+            == Some(PROTECTED_GITOPS_REPO)
+        && request.gitops_kustomization_path.as_deref().map(str::trim)
+            == Some(PROTECTED_KUSTOMIZATION_PATH)
+        && request.gitops_image_name.as_deref().map(str::trim) == Some(PROTECTED_IMAGE_NAME)
+        && request.rollback_owner.as_deref().map(str::trim) == Some(PROTECTED_ROLLBACK_OWNER)
+}
+
+fn stored_work_item_matches_protected_target(item: &StoredWorkItem) -> bool {
+    item.production_impacting
+        && item.target_environment == PROTECTED_ENVIRONMENT
+        && item.target_namespace.as_deref() == Some(PROTECTED_NAMESPACE)
+        && item.argo_application.as_deref() == Some(PROTECTED_ARGO_APPLICATION)
+        && item.workload_kind.as_deref() == Some(PROTECTED_WORKLOAD_KIND)
+        && item.workload_name.as_deref() == Some(PROTECTED_WORKLOAD_NAME)
+        && item.source_repo.trim_end_matches('/') == PROTECTED_SOURCE_REPO
+        && item
+            .gitops_repo
+            .as_deref()
+            .map(|value| value.trim_end_matches('/'))
+            == Some(PROTECTED_GITOPS_REPO)
+        && item.gitops_kustomization_path.as_deref() == Some(PROTECTED_KUSTOMIZATION_PATH)
+        && item.gitops_image_name.as_deref() == Some(PROTECTED_IMAGE_NAME)
+        && item.rollback_owner.as_deref() == Some(PROTECTED_ROLLBACK_OWNER)
+        && item
+            .source_commit
+            .as_deref()
+            .is_some_and(immutable_git_object_id)
+        && item.pipeline_contract_id.is_some()
+        && item.deployment_contract_id.is_some()
+}
+
+fn work_item_target_supported(item: &StoredWorkItem) -> bool {
+    (!item.production_impacting && item.target_environment == "dev")
+        || stored_work_item_matches_protected_target(item)
+}
+
+fn bounded_production_grant_expiry(
+    item: &StoredWorkItem,
+    requested: Option<String>,
+) -> Result<Option<String>, ApiError> {
+    if !item.production_impacting {
+        return Ok(requested);
+    }
+    let expires_at = requested.ok_or_else(|| {
+        ApiError::bad_request("production authorization requires expires_at within 30 minutes")
+    })?;
+    let expires_ms = expires_at
+        .parse::<u128>()
+        .map_err(|_| ApiError::bad_request("expires_at must be unix milliseconds"))?;
+    let now = current_millis();
+    if expires_ms <= now || expires_ms > now + 30 * 60 * 1_000 {
+        return Err(ApiError::bad_request(
+            "production authorization must expire within the next 30 minutes",
+        ));
+    }
+    Ok(Some(expires_at))
+}
+
 async fn create_work_item(
     State(state): State<AppState>,
     identity: Option<Extension<OperatorIdentity>>,
     Json(request): Json<CreateWorkItemRequest>,
 ) -> Result<Json<WorkItemResponse>, ApiError> {
+    let production =
+        request.production_impacting || request.target_environment.trim() == PROTECTED_ENVIRONMENT;
+    if production {
+        let preflight = build_work_item_preflight(&state, &request).await?;
+        if !preflight.ready {
+            return Err(ApiError::conflict(format!(
+                "production WorkItem preflight failed: {}",
+                preflight.blockers.join("; ")
+            )));
+        }
+        if request.preflight_state_hash.as_deref() != Some(preflight.state_hash.as_str()) {
+            return Err(ApiError::conflict(
+                "production WorkItem preflight is missing or stale; run preflight again",
+            ));
+        }
+    }
     let title = required_text(request.title, "title")?;
     let intent = required_text(request.intent, "intent")?;
     let source_repo = required_text(request.source_repo, "source_repo")?;
@@ -2612,12 +3494,20 @@ async fn create_work_item(
                 .collect(),
             source_repo,
             source_ref,
+            source_commit: clean_optional_text(request.source_commit),
+            pipeline_contract_id: clean_optional_text(request.pipeline_contract_id),
+            deployment_contract_id: clean_optional_text(request.deployment_contract_id),
             gitops_repo: clean_optional_text(request.gitops_repo),
             gitops_ref: clean_optional_text(request.gitops_ref),
+            gitops_kustomization_path: clean_optional_text(request.gitops_kustomization_path),
+            gitops_image_name: clean_optional_text(request.gitops_image_name),
             target_environment,
             target_namespace,
             argo_application,
-            production_impacting: request.production_impacting,
+            workload_kind: clean_optional_text(request.workload_kind),
+            workload_name: clean_optional_text(request.workload_name),
+            rollback_owner: clean_optional_text(request.rollback_owner),
+            production_impacting: production,
             max_attempts,
             max_elapsed_seconds,
             created_by: actor.clone(),
@@ -3603,6 +4493,1875 @@ async fn create_work_plan_from_work_item(
         work_plan: work_plan.into(),
         created: true,
     }))
+}
+
+async fn execute_work_item_action(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path((work_item_id, action_id)): Path<(String, String)>,
+    Json(request): Json<ExecuteWorkItemActionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    if request.reason.trim().is_empty() {
+        return Err(ApiError::bad_request("action execution reason is required"));
+    }
+    if matches!(
+        action_id.as_str(),
+        "approve_rollback"
+            | "execute_rollback_gitops_pr"
+            | "approve_rollback_argo_sync"
+            | "execute_rollback_argo_sync"
+            | "observe_rollback_merge"
+            | "observe_rollback_argo_sync"
+    ) {
+        let item = state
+            .store
+            .get_work_item(&work_item_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+        let rollback = latest_rollback_intent(&state, &item, None)
+            .await?
+            .ok_or_else(|| ApiError::conflict("WorkItem has no RollbackIntent action"))?;
+        let rollback_id = rollback
+            .pointer("/content/rollback_intent_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::conflict("RollbackIntent ID is unavailable"))?;
+        let expected_action_id = match rollback.pointer("/content/status").and_then(Value::as_str) {
+            Some("prepared") => "approve_rollback",
+            Some("approved") => "execute_rollback_gitops_pr",
+            Some("awaiting_manual_merge") => "observe_rollback_merge",
+            Some("ready_for_argo_sync") => "approve_rollback_argo_sync",
+            Some("argo_approved") => "execute_rollback_argo_sync",
+            Some("argo_syncing") => "observe_rollback_argo_sync",
+            _ => {
+                return Err(ApiError::conflict(
+                    "RollbackIntent has no executable action at its current lifecycle state",
+                ))
+            }
+        };
+        let current_hash = format!("{:x}", Sha256::digest(rollback.to_string().as_bytes()));
+        if action_id != expected_action_id || request.state_hash != current_hash {
+            return Err(ApiError::conflict(
+                "action preview is stale; reload the WorkItem flow before executing",
+            ));
+        }
+        let response = match action_id.as_str() {
+            "approve_rollback" | "approve_rollback_argo_sync" => {
+                approve_rollback_intent(
+                    State(state),
+                    identity,
+                    Path(rollback_id.to_string()),
+                    Json(RollbackIntentRequest {
+                        actor: request.actor,
+                        reason: request.reason,
+                        expires_at: None,
+                    }),
+                )
+                .await?
+                .0
+            }
+            "execute_rollback_gitops_pr" | "execute_rollback_argo_sync" => {
+                execute_rollback_intent(State(state), Path(rollback_id.to_string()))
+                    .await?
+                    .0
+            }
+            "observe_rollback_merge" | "observe_rollback_argo_sync" => {
+                observe_rollback_intent(State(state), Path(rollback_id.to_string()))
+                    .await?
+                    .0
+            }
+            _ => unreachable!(),
+        };
+        return Ok(Json(response));
+    }
+    let Json(preview) = reconcile_work_item(
+        State(state.clone()),
+        identity.clone(),
+        Path(work_item_id.clone()),
+        Json(ReconcileWorkItemRequest {
+            apply: false,
+            actor: request.actor.clone(),
+            reason: Some(request.reason.clone()),
+            max_turns: None,
+        }),
+    )
+    .await?;
+    let action = work_item_action_response(&preview);
+    if action.id != action_id || action.state_hash != request.state_hash {
+        return Err(ApiError::conflict(
+            "action preview is stale; reload the WorkItem flow before executing",
+        ));
+    }
+    if !preview.can_apply {
+        return Err(ApiError::conflict(format!(
+            "action {} is blocked: {}",
+            action.id, preview.message
+        )));
+    }
+    let Json(response) = reconcile_work_item(
+        State(state),
+        identity,
+        Path(work_item_id),
+        Json(ReconcileWorkItemRequest {
+            apply: true,
+            actor: request.actor,
+            reason: Some(request.reason),
+            max_turns: None,
+        }),
+    )
+    .await?;
+    Ok(Json(serde_json::to_value(response).map_err(|error| {
+        ApiError::internal(format!("failed to serialize reconcile response: {error}"))
+    })?))
+}
+
+async fn advance_work_item(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<AdvanceWorkItemRequest>,
+) -> Result<Json<AdvanceWorkItemResponse>, ApiError> {
+    if request.reason.trim().is_empty() {
+        return Err(ApiError::bad_request("advance reason is required"));
+    }
+    let max_steps = request.max_steps.unwrap_or(10).clamp(1, 10);
+    let mut steps = Vec::new();
+    for _ in 0..max_steps {
+        let Json(preview) = reconcile_work_item(
+            State(state.clone()),
+            identity.clone(),
+            Path(work_item_id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: false,
+                actor: request.actor.clone(),
+                reason: Some(request.reason.clone()),
+                max_turns: None,
+            }),
+        )
+        .await?;
+        let safe_internal = matches!(
+            preview.action.as_str(),
+            "declare_work_plan"
+                | "capture_change_set"
+                | "prepare_git_delivery"
+                | "complete_work_item"
+        );
+        if !safe_internal || !preview.can_apply {
+            return Ok(Json(AdvanceWorkItemResponse {
+                stopped_at: work_item_action_response(&preview),
+                steps,
+            }));
+        }
+        let Json(applied) = reconcile_work_item(
+            State(state.clone()),
+            identity.clone(),
+            Path(work_item_id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: true,
+                actor: request.actor.clone(),
+                reason: Some(request.reason.clone()),
+                max_turns: None,
+            }),
+        )
+        .await?;
+        steps.push(applied);
+    }
+    let Json(preview) = reconcile_work_item(
+        State(state),
+        identity,
+        Path(work_item_id),
+        Json(ReconcileWorkItemRequest {
+            apply: false,
+            actor: request.actor,
+            reason: Some(request.reason),
+            max_turns: None,
+        }),
+    )
+    .await?;
+    Ok(Json(AdvanceWorkItemResponse {
+        stopped_at: work_item_action_response(&preview),
+        steps,
+    }))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RollbackIntentRequest {
+    actor: Option<String>,
+    reason: String,
+    #[serde(default)]
+    expires_at: Option<String>,
+}
+
+async fn prepare_work_item_rollback_intent(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(work_item_id): Path<String>,
+    Json(request): Json<RollbackIntentRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let reason = required_text(request.reason.clone(), "reason")?;
+    let item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    if !stored_work_item_matches_protected_target(&item) {
+        return Err(ApiError::conflict(
+            "RollbackIntent is limited to the exact protected production target",
+        ));
+    }
+    if let Some(existing) = latest_rollback_intent(&state, &item, None).await? {
+        return Ok(Json(existing));
+    }
+    let deployment = execute_direct_capability(
+        &state,
+        AgentAction::KubernetesGet {
+            id: ActionId::new(format!("act_{}_baseline_deployment", unique_suffix())),
+            reason: reason.clone(),
+            resource: "deployments".to_string(),
+            namespace: Some(PROTECTED_NAMESPACE.to_string()),
+            name: Some(PROTECTED_WORKLOAD_NAME.to_string()),
+            all_namespaces: false,
+            label_selector: None,
+        },
+        None,
+    )
+    .await?;
+    let argo = execute_direct_capability(
+        &state,
+        AgentAction::ArgoGetApp {
+            id: ActionId::new(format!("act_{}_baseline_argo", unique_suffix())),
+            reason: reason.clone(),
+            app: PROTECTED_ARGO_APPLICATION.to_string(),
+        },
+        None,
+    )
+    .await?;
+    let pods = execute_direct_capability(
+        &state,
+        AgentAction::KubernetesGet {
+            id: ActionId::new(format!("act_{}_baseline_pods", unique_suffix())),
+            reason: reason.clone(),
+            resource: "pods".to_string(),
+            namespace: Some(PROTECTED_NAMESPACE.to_string()),
+            name: None,
+            all_namespaces: false,
+            label_selector: Some("app=yfinance-wrapper".to_string()),
+        },
+        None,
+    )
+    .await?;
+    let deployment_result = deployment.result.ok_or_else(|| {
+        ApiError::conflict("production baseline Deployment observation did not execute")
+    })?;
+    let argo_result = argo.result.ok_or_else(|| {
+        ApiError::conflict("production baseline Argo observation did not execute")
+    })?;
+    let pods_result = pods
+        .result
+        .ok_or_else(|| ApiError::conflict("production baseline Pod observation did not execute"))?;
+    let expected_image = item
+        .gitops_image_name
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("protected target has no image name"))?;
+    let images = deployment_result
+        .content
+        .pointer("/analysis/containers")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let image_ref = images
+        .iter()
+        .filter_map(|container| container.get("image").and_then(Value::as_str))
+        .find(|image| image.starts_with(&format!("{expected_image}@sha256:")))
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "running protected Deployment does not expose the expected immutable image",
+            )
+        })?
+        .to_string();
+    let image_digest = image_ref
+        .split_once('@')
+        .map(|(_, digest)| digest.to_string())
+        .filter(|digest| immutable_image_digest(digest))
+        .ok_or_else(|| ApiError::conflict("production baseline image digest is malformed"))?;
+    let running_image_ids = pods_result
+        .content
+        .pointer("/output/items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|pod| {
+            pod.pointer("/status/containers")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|container| container.get("imageID").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    if running_image_ids.is_empty()
+        || !running_image_ids
+            .iter()
+            .all(|image_id| image_id.ends_with(&image_digest))
+    {
+        return Err(ApiError::conflict(
+            "running Pod imageID does not exactly match the declared production baseline digest",
+        ));
+    }
+    let ready = deployment_result
+        .content
+        .pointer("/analysis/status")
+        .and_then(Value::as_str)
+        == Some("healthy");
+    if !ready {
+        return Err(ApiError::conflict(
+            "production baseline Deployment must be healthy before rollback preparation",
+        ));
+    }
+    let argo_revision = argo_result
+        .content
+        .pointer("/analysis/revision")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("production baseline Argo revision is unavailable"))?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let rollback_intent_id = format!("rollback_{}", unique_suffix());
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&item.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent requires a WorkPlan"))?;
+    let run_id = item
+        .current_run_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("RollbackIntent requires coding run provenance"))?;
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let gate = state
+        .store
+        .create_approval_gate(CreateApprovalGate {
+            id: format!("agate_{}_rollback", unique_suffix()),
+            work_item_id: Some(item.id.clone()),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: run.session_id.clone(),
+            run_id: Some(run_id.clone()),
+            status: "pending".to_string(),
+            gate_kind: "production_rollback".to_string(),
+            gate_order: 90,
+            title: format!("Approve rollback for {}", item.title),
+            summary: format!("Restore only {image_digest} through a manual GitOps pull request"),
+            risk_level: "critical".to_string(),
+            resource_namespace: item.target_namespace.clone(),
+            resource_kind: item.workload_kind.clone(),
+            resource_name: item.workload_name.clone(),
+            gate_json: json!({
+                "rollback_intent_id": rollback_intent_id,
+                "work_plan_id": work_plan.id,
+                "baseline_digest": image_digest,
+                "argo_application": PROTECTED_ARGO_APPLICATION,
+            }),
+        })
+        .await?;
+    let content = json!({
+        "rollback_intent_id": rollback_intent_id,
+        "work_item_id": item.id,
+        "status": "prepared",
+        "baseline": {
+            "image_ref": image_ref,
+            "image_digest": image_digest,
+            "deployment_ready": true,
+            "running_image_ids_verified": true,
+            "argo_revision": argo_revision,
+            "gitops_revision": argo_revision,
+        },
+        "target": protected_target_json(),
+        "rollback_owner": PROTECTED_ROLLBACK_OWNER,
+        "approval_gate_id": gate.id,
+        "manual_merge_required": true,
+        "automatic_rollback": false,
+        "reason": reason,
+        "created_by": actor,
+    });
+    let artifact = append_rollback_intent_artifact(&state, &run, &content).await?;
+    Ok(Json(rollback_intent_response(&artifact)))
+}
+
+async fn get_work_item_rollback_intent(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    Ok(Json(
+        latest_rollback_intent(&state, &item, None)
+            .await?
+            .unwrap_or_else(|| json!({ "status": "unavailable", "work_item_id": item.id })),
+    ))
+}
+
+async fn approve_rollback_intent(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path(rollback_intent_id): Path<String>,
+    Json(request): Json<RollbackIntentRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let reason = required_text(request.reason.clone(), "reason")?;
+    let (item, current, run) = rollback_intent_context(&state, &rollback_intent_id).await?;
+    let current_status = current.pointer("/content/status").and_then(Value::as_str);
+    if current_status == Some("ready_for_argo_sync") {
+        return approve_rollback_argo_sync(
+            RollbackArgoApprovalContext {
+                state: &state,
+                rollback_intent_id: &rollback_intent_id,
+                item: &item,
+                current: &current,
+                run: &run,
+            },
+            identity,
+            request,
+            reason,
+        )
+        .await;
+    }
+    if current_status != Some("prepared") {
+        return Err(ApiError::conflict(
+            "RollbackIntent must be prepared for its writer or ready for its explicit Argo approval",
+        ));
+    }
+    let expires_at = bounded_production_grant_expiry(&item, request.expires_at)?;
+    let gate_id = current
+        .pointer("/content/approval_gate_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent approval gate is unavailable"))?;
+    let gate = state
+        .store
+        .get_approval_gate(gate_id)
+        .await?
+        .filter(|gate| gate.status == "pending")
+        .ok_or_else(|| ApiError::conflict("RollbackIntent approval gate is not pending"))?;
+    let baseline_digest_from_intent = current
+        .pointer("/content/baseline/image_digest")
+        .and_then(Value::as_str)
+        .filter(|value| immutable_image_digest(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is invalid"))?;
+    if gate.work_item_id.as_deref() != Some(item.id.as_str())
+        || gate.gate_kind != "production_rollback"
+        || gate
+            .gate_json
+            .get("rollback_intent_id")
+            .and_then(Value::as_str)
+            != Some(rollback_intent_id.as_str())
+        || gate
+            .gate_json
+            .get("baseline_digest")
+            .and_then(Value::as_str)
+            != Some(baseline_digest_from_intent)
+        || gate
+            .gate_json
+            .get("argo_application")
+            .and_then(Value::as_str)
+            != Some(PROTECTED_ARGO_APPLICATION)
+    {
+        return Err(ApiError::conflict(
+            "RollbackIntent approval gate no longer matches its immutable target binding",
+        ));
+    }
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    state
+        .store
+        .decide_approval_gate(gate_id, "satisfied", actor.clone(), Some(reason.clone()))
+        .await?;
+    let content = current
+        .get("content")
+        .cloned()
+        .ok_or_else(|| ApiError::internal("RollbackIntent content is unavailable"))?;
+    let mut content = content
+        .as_object()
+        .cloned()
+        .ok_or_else(|| ApiError::internal("RollbackIntent content is malformed"))?;
+    let baseline_digest = content
+        .get("baseline")
+        .and_then(|value| value.get("image_digest"))
+        .and_then(Value::as_str)
+        .filter(|value| immutable_image_digest(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is invalid"))?
+        .to_string();
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&item.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent WorkPlan is unavailable"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent ChangeSet is unavailable"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent PipelineIntent is unavailable"))?;
+    let source_merge_sha = pipeline_intent
+        .intent_json
+        .pointer("/source_provenance/merge_commit_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback source merge provenance is unavailable"))?
+        .to_string();
+    let rollback_base_commit =
+        observed_gitops_merge_for_deployment(&state.store, &item, &pipeline_intent)
+            .await?
+            .and_then(|artifact| artifact.content_json)
+            .and_then(|content| {
+                content
+                    .get("merge_commit_sha")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .filter(|value| is_git_sha(value))
+            .ok_or_else(|| {
+                ApiError::conflict(
+                    "rollback writer authorization requires the observed deployment GitOps merge",
+                )
+            })?;
+    let branch = format!(
+        "pharness/rollback-{}",
+        safe_id_fragment(&rollback_intent_id)
+    );
+    let permission_grant = create_permission_grant_record(
+        &state.store,
+        CreatePermissionGrantRequest {
+            subject: DEFAULT_GITOPS_WRITER_SUBJECT.to_string(),
+            created_by: actor.clone(),
+            reason: format!("RollbackIntent {rollback_intent_id}: {reason}"),
+            scope: json!({
+                "environment": PROTECTED_ENVIRONMENT,
+                "capability_kinds": ["git"],
+                "actions": GITOPS_DELIVERY_ACTIONS,
+                "max_risk": "critical",
+                "repos": [PROTECTED_GITOPS_REPO],
+                "branches": [branch],
+                "work_item_ids": [item.id],
+                "work_plan_ids": [work_plan.id],
+                "change_set_ids": [change_set.id],
+                "pipeline_intent_ids": [pipeline_intent.id],
+                "pipeline_contract_ids": [item.pipeline_contract_id],
+                "deployment_contract_ids": [item.deployment_contract_id],
+                "source_merge_shas": [source_merge_sha],
+                "gitops_merge_shas": [rollback_base_commit],
+                "image_digests": [baseline_digest],
+                "production_impacting": true,
+            }),
+            policy: json!({ "policy_mode": "supervised_autonomy" }),
+            expires_at: expires_at.clone(),
+        },
+    )
+    .await?;
+    content.insert("status".to_string(), json!("approved"));
+    content.insert("approved_by".to_string(), json!(actor));
+    content.insert("approval_reason".to_string(), json!(reason));
+    content.insert("authorization_expires_at".to_string(), json!(expires_at));
+    content.insert(
+        "permission_grant_id".to_string(),
+        json!(permission_grant.id),
+    );
+    content.insert(
+        "rollback_base_commit".to_string(),
+        json!(rollback_base_commit),
+    );
+    let artifact = append_rollback_intent_artifact(&state, &run, &Value::Object(content)).await?;
+    Ok(Json(rollback_intent_response(&artifact)))
+}
+
+struct RollbackArgoApprovalContext<'a> {
+    state: &'a AppState,
+    rollback_intent_id: &'a str,
+    item: &'a StoredWorkItem,
+    current: &'a Value,
+    run: &'a pharness_store::StoredRun,
+}
+
+async fn approve_rollback_argo_sync(
+    context: RollbackArgoApprovalContext<'_>,
+    identity: Option<Extension<OperatorIdentity>>,
+    request: RollbackIntentRequest,
+    reason: String,
+) -> Result<Json<Value>, ApiError> {
+    let RollbackArgoApprovalContext {
+        state,
+        rollback_intent_id,
+        item,
+        current,
+        run,
+    } = context;
+    if !stored_work_item_matches_protected_target(item) {
+        return Err(ApiError::conflict(
+            "rollback Argo approval is limited to the exact protected production target",
+        ));
+    }
+    let expires_at = bounded_production_grant_expiry(item, request.expires_at)?;
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor));
+    let content = current
+        .get("content")
+        .and_then(Value::as_object)
+        .cloned()
+        .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+    let baseline_digest = content
+        .get("baseline")
+        .and_then(|value| value.get("image_digest"))
+        .and_then(Value::as_str)
+        .filter(|value| immutable_image_digest(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is invalid"))?
+        .to_string();
+    let gitops_merge_sha = content
+        .get("gitops_merge_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback GitOps merge provenance is unavailable"))?
+        .to_string();
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&item.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent WorkPlan is unavailable"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent ChangeSet is unavailable"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent PipelineIntent is unavailable"))?;
+    let source_merge_sha = pipeline_intent
+        .intent_json
+        .pointer("/source_provenance/merge_commit_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| {
+            ApiError::conflict("rollback authorization requires source merge provenance")
+        })?
+        .to_string();
+
+    let mut gate_ids = Vec::new();
+    for (order, gate_kind) in [
+        (91, "production_rollback_deployment"),
+        (92, "cluster_mutation"),
+        (93, "production_impact"),
+    ] {
+        let gate = state
+            .store
+            .create_approval_gate(CreateApprovalGate {
+                id: format!("agate_{}_rollback_argo", unique_suffix()),
+                work_item_id: Some(item.id.clone()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: run.session_id.clone(),
+                run_id: Some(run.id.clone()),
+                status: "pending".to_string(),
+                gate_kind: gate_kind.to_string(),
+                gate_order: order,
+                title: format!("Approve {gate_kind} for {}", item.title),
+                summary: format!(
+                    "Sync {PROTECTED_ARGO_APPLICATION} only to rollback merge {gitops_merge_sha} and restore {baseline_digest}"
+                ),
+                risk_level: "critical".to_string(),
+                resource_namespace: Some(PROTECTED_NAMESPACE.to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some(PROTECTED_ARGO_APPLICATION.to_string()),
+                gate_json: json!({
+                    "rollback_intent_id": rollback_intent_id,
+                    "work_plan_id": work_plan.id,
+                    "gitops_merge_sha": gitops_merge_sha,
+                    "baseline_digest": baseline_digest,
+                    "argo_application": PROTECTED_ARGO_APPLICATION,
+                    "scope": {
+                        "work_item_id": item.id,
+                        "work_plan_id": work_plan.id,
+                        "environment": PROTECTED_ENVIRONMENT,
+                        "production_impacting": true,
+                        "source_repository": item.source_repo,
+                        "source_ref": item.source_ref,
+                        "gitops_repository": item.gitops_repo,
+                        "gitops_ref": item.gitops_ref,
+                        "target_namespace": PROTECTED_NAMESPACE,
+                        "argo_application": PROTECTED_ARGO_APPLICATION,
+                        "actions": ARGO_SYNC_ACTIONS,
+                    },
+                }),
+            })
+            .await?;
+        state
+            .store
+            .decide_approval_gate(&gate.id, "satisfied", actor.clone(), Some(reason.clone()))
+            .await?;
+        gate_ids.push(gate.id);
+    }
+    let grant = create_permission_grant_record(
+        &state.store,
+        CreatePermissionGrantRequest {
+            subject: DEFAULT_ARGO_RUNNER_SUBJECT.to_string(),
+            created_by: actor.clone(),
+            reason: format!("RollbackIntent {rollback_intent_id} Argo sync: {reason}"),
+            scope: json!({
+                "environment": PROTECTED_ENVIRONMENT,
+                "capability_kinds": ["argo_sync"],
+                "actions": ARGO_SYNC_ACTIONS,
+                "max_risk": "critical",
+                "namespaces": [PROTECTED_NAMESPACE],
+                "work_item_ids": [item.id],
+                "work_plan_ids": [work_plan.id],
+                "change_set_ids": [change_set.id],
+                "pipeline_intent_ids": [pipeline_intent.id],
+                "deployment_intent_ids": [rollback_intent_id],
+                "argo_applications": [PROTECTED_ARGO_APPLICATION],
+                "pipeline_contract_ids": [item.pipeline_contract_id],
+                "deployment_contract_ids": [item.deployment_contract_id],
+                "source_merge_shas": [source_merge_sha],
+                "gitops_merge_shas": [gitops_merge_sha],
+                "image_digests": [baseline_digest],
+                "production_impacting": true,
+            }),
+            policy: json!({ "policy_mode": "supervised_autonomy" }),
+            expires_at: expires_at.clone(),
+        },
+    )
+    .await?;
+    let mut updated = content;
+    updated.insert("status".to_string(), json!("argo_approved"));
+    updated.insert("argo_approved_by".to_string(), json!(actor));
+    updated.insert("argo_approval_reason".to_string(), json!(reason));
+    updated.insert(
+        "argo_authorization_expires_at".to_string(),
+        json!(expires_at),
+    );
+    updated.insert("argo_permission_grant_id".to_string(), json!(grant.id));
+    updated.insert("argo_approval_gate_ids".to_string(), json!(gate_ids));
+    let artifact = append_rollback_intent_artifact(state, run, &Value::Object(updated)).await?;
+    Ok(Json(rollback_intent_response(&artifact)))
+}
+
+async fn preflight_rollback_intent(
+    State(state): State<AppState>,
+    Path(rollback_intent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let (item, current, _run) = rollback_intent_context(&state, &rollback_intent_id).await?;
+    let status = current.pointer("/content/status").and_then(Value::as_str);
+    let argo_phase = status == Some("argo_approved");
+    let expires_at = current
+        .pointer(if argo_phase {
+            "/content/argo_authorization_expires_at"
+        } else {
+            "/content/authorization_expires_at"
+        })
+        .and_then(Value::as_str)
+        .and_then(|value| value.parse::<u128>().ok());
+    let authorization_fresh = expires_at.is_some_and(|value| value > current_millis());
+    let permission_grant_id = current
+        .pointer(if argo_phase {
+            "/content/argo_permission_grant_id"
+        } else {
+            "/content/permission_grant_id"
+        })
+        .and_then(Value::as_str);
+    let grant_fresh = match permission_grant_id {
+        Some(grant_id) => state
+            .store
+            .get_permission_grant(grant_id)
+            .await?
+            .is_some_and(|grant| {
+                grant.status == "active" && grant_is_unexpired(&grant, current_millis())
+            }),
+        None => false,
+    };
+    let exact_binding = if argo_phase {
+        match current.get("content").and_then(Value::as_object) {
+            Some(content) => {
+                validate_rollback_argo_grant(&state, &item, &rollback_intent_id, content)
+                    .await
+                    .is_ok()
+            }
+            None => false,
+        }
+    } else {
+        true
+    };
+    let ready = matches!(status, Some("approved" | "argo_approved"))
+        && authorization_fresh
+        && grant_fresh
+        && exact_binding;
+    Ok(Json(json!({
+        "rollback_intent_id": rollback_intent_id,
+        "status": if ready { if argo_phase { "ready_for_argo" } else { "ready_for_writer" } } else { "blocked" },
+        "ready": ready,
+        "authorization_fresh": authorization_fresh,
+        "grant_fresh": grant_fresh,
+        "writer_grant_fresh": !argo_phase && grant_fresh,
+        "argo_grant_fresh": argo_phase && grant_fresh,
+        "exact_binding": exact_binding,
+        "manual_merge_required": true,
+        "automatic_rollback": false,
+        "content": current.get("content"),
+    })))
+}
+
+async fn execute_rollback_intent(
+    State(state): State<AppState>,
+    Path(rollback_intent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let Json(preflight) =
+        preflight_rollback_intent(State(state.clone()), Path(rollback_intent_id.clone())).await?;
+    if preflight.get("ready").and_then(Value::as_bool) != Some(true) {
+        return Err(ApiError::conflict(
+            "RollbackIntent is not ready for its next isolated executor",
+        ));
+    }
+    if preflight.get("status").and_then(Value::as_str) == Some("ready_for_argo") {
+        return dispatch_rollback_argo_sync(&state, &rollback_intent_id).await;
+    }
+    let (item, current, run) = rollback_intent_context(&state, &rollback_intent_id).await?;
+    require_fresh_capability(&state, "gitops_writer").await?;
+    let settings = state
+        .worker
+        .gitops_writer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps rollback writer is not configured"))?;
+    if !settings
+        .allowed_repos
+        .iter()
+        .any(|repo| repo == PROTECTED_GITOPS_REPO)
+    {
+        return Err(ApiError::conflict(
+            "protected GitOps repository is not allowlisted for the rollback writer",
+        ));
+    }
+    let content = current
+        .get("content")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+    let baseline_digest = content
+        .get("baseline")
+        .and_then(|value| value.get("image_digest"))
+        .and_then(Value::as_str)
+        .filter(|value| immutable_image_digest(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is invalid"))?;
+    let base_commit = content
+        .get("rollback_base_commit")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent writer base revision is invalid"))?;
+    let permission_grant_id = content
+        .get("permission_grant_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent has no short-lived writer grant"))?;
+    let permission_grant = state
+        .store
+        .get_permission_grant(permission_grant_id)
+        .await?
+        .filter(|grant| grant.status == "active" && grant_is_unexpired(grant, current_millis()))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent writer grant is expired or revoked"))?;
+    let grant_scope =
+        serde_json::from_value::<PermissionGrantScope>(permission_grant.scope_json)
+            .map_err(|_| ApiError::conflict("RollbackIntent writer grant scope is malformed"))?;
+    let expected_branch = format!(
+        "pharness/rollback-{}",
+        safe_id_fragment(&rollback_intent_id)
+    );
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&item.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent WorkPlan is unavailable"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent ChangeSet is unavailable"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent PipelineIntent is unavailable"))?;
+    let source_merge_sha = pipeline_intent
+        .intent_json
+        .pointer("/source_provenance/merge_commit_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback source merge provenance is unavailable"))?;
+    if permission_grant.subject != DEFAULT_GITOPS_WRITER_SUBJECT
+        || grant_scope.environment.as_deref() != Some(PROTECTED_ENVIRONMENT)
+        || grant_scope.capability_kinds != vec![CapabilityKind::Git]
+        || grant_scope.repos != vec![PROTECTED_GITOPS_REPO.to_string()]
+        || grant_scope.branches != vec![expected_branch.clone()]
+        || grant_scope.work_item_ids != vec![item.id.clone()]
+        || grant_scope.work_plan_ids != vec![work_plan.id]
+        || grant_scope.change_set_ids != vec![change_set.id]
+        || grant_scope.pipeline_intent_ids != vec![pipeline_intent.id]
+        || grant_scope.pipeline_contract_ids
+            != vec![item.pipeline_contract_id.clone().unwrap_or_default()]
+        || grant_scope.deployment_contract_ids
+            != vec![item.deployment_contract_id.clone().unwrap_or_default()]
+        || grant_scope.source_merge_shas != vec![source_merge_sha.to_string()]
+        || grant_scope.gitops_merge_shas != vec![base_commit.to_string()]
+        || grant_scope.image_digests != vec![baseline_digest.to_string()]
+        || grant_scope.production_impacting != Some(true)
+        || !GITOPS_DELIVERY_ACTIONS
+            .iter()
+            .all(|action| grant_scope.actions.iter().any(|allowed| allowed == action))
+    {
+        return Err(ApiError::conflict(
+            "RollbackIntent writer grant no longer matches the exact WorkItem, contracts, digest, repository, and branch",
+        ));
+    }
+    let artifacts = state.store.list_artifacts(&run.id).await?;
+    if let Some(existing) = artifacts.iter().find(|artifact| {
+        artifact.kind == "rollback_delivery_execution"
+            && artifact.content_json.as_ref().is_some_and(|value| {
+                value.get("rollback_intent_id").and_then(Value::as_str)
+                    == Some(rollback_intent_id.as_str())
+            })
+    }) {
+        let execution_id = existing
+            .content_json
+            .as_ref()
+            .and_then(|value| value.get("execution_id"))
+            .and_then(Value::as_str);
+        let status = execution_id
+            .and_then(|id| {
+                artifacts.iter().find_map(|artifact| {
+                    (artifact.kind == "rollback_delivery_result")
+                        .then_some(artifact.content_json.as_ref())
+                        .flatten()
+                        .filter(|value| {
+                            value.get("execution_id").and_then(Value::as_str) == Some(id)
+                        })
+                        .and_then(|value| value.get("status").and_then(Value::as_str))
+                })
+            })
+            .unwrap_or("dispatched");
+        return Ok(Json(json!({
+            "rollback_intent_id": rollback_intent_id,
+            "status": status,
+            "execution": ArtifactResponse::from(existing.clone()),
+            "created": false,
+            "manual_merge_required": true,
+            "automatic_rollback": false,
+        })));
+    }
+    let execution_id = format!("rbexec_{}", unique_suffix());
+    let context = json!({
+        "execution_id": execution_id,
+        "repository": PROTECTED_GITOPS_REPO,
+        "base_ref": item.gitops_ref.as_deref().unwrap_or("main"),
+        "base_commit": base_commit,
+        "head_branch": expected_branch,
+        "kustomization_path": PROTECTED_KUSTOMIZATION_PATH,
+        "image_name": PROTECTED_IMAGE_NAME,
+        "image_ref": format!("{PROTECTED_IMAGE_NAME}@{baseline_digest}"),
+        "commit_subject": format!("rollback(yfinance-wrapper): restore {}", &baseline_digest[..19]),
+        "commit_body": format!("Restore the captured known-good digest for RollbackIntent {rollback_intent_id}.\n\nManual merge and explicit Argo approval remain required."),
+        "pull_request_title": format!("Rollback yfinance-wrapper to {}", &baseline_digest[..19]),
+        "pull_request_body": format!("Restore only the captured known-good image digest.\n\nPHarness RollbackIntent: {rollback_intent_id}\nWorkItem: {}\nRollback owner: {PROTECTED_ROLLBACK_OWNER}", item.id),
+        "github_api_url": settings.github_api_url,
+        "author_name": settings.author_name,
+        "author_email": settings.author_email,
+    });
+    let execution = state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_rollback_delivery_execution", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "rollback_delivery_execution".to_string(),
+            label: format!("Rollback GitOps delivery for {rollback_intent_id}"),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "execution_id": execution_id,
+                "status": "dispatched",
+                "context": context,
+            })),
+        })
+        .await?;
+    match state
+        .worker
+        .dispatch_gitops_delivery(GitOpsDeliveryExecutionRequest {
+            gitops_change_set_id: rollback_intent_id.clone(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+    {
+        Ok(receipt) => Ok(Json(json!({
+            "rollback_intent_id": rollback_intent_id,
+            "status": "dispatched",
+            "execution": ArtifactResponse::from(execution),
+            "job_name": receipt.job_name,
+            "created": true,
+            "manual_merge_required": true,
+            "automatic_rollback": false,
+        }))),
+        Err(error) => {
+            tracing::warn!(rollback_intent_id = %rollback_intent_id, %error, "rollback writer dispatch failed");
+            let failure = append_rollback_delivery_result(
+                &state,
+                &run,
+                &rollback_intent_id,
+                &execution_id,
+                "dispatch_failed",
+                json!({ "error_code": "job_dispatch_failed" }),
+            )
+            .await?;
+            let mut updated = content.clone();
+            updated.insert("status".to_string(), json!("attention_required"));
+            updated.insert("writer_failure_result_id".to_string(), json!(failure.id));
+            append_rollback_intent_artifact(&state, &run, &Value::Object(updated)).await?;
+            Ok(Json(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "status": "dispatch_failed",
+                "execution": ArtifactResponse::from(failure),
+                "created": true,
+                "manual_merge_required": true,
+                "automatic_rollback": false,
+            })))
+        }
+    }
+}
+
+async fn dispatch_rollback_argo_sync(
+    state: &AppState,
+    rollback_intent_id: &str,
+) -> Result<Json<Value>, ApiError> {
+    let (item, current, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let content = current
+        .get("content")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+    validate_rollback_argo_grant(state, &item, rollback_intent_id, content).await?;
+    if !state.worker.argo_executor_available()
+        || !state
+            .worker
+            .argo_executor_allows_application(PROTECTED_ARGO_APPLICATION)
+    {
+        return Err(ApiError::conflict(
+            "the isolated Argo executor is unavailable for the protected Application",
+        ));
+    }
+    let artifacts = state.store.list_artifacts(&run.id).await?;
+    if let Some(existing) = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_argo_sync_execution")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|value| {
+                value.get("rollback_intent_id").and_then(Value::as_str) == Some(rollback_intent_id)
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+    {
+        return Ok(Json(json!({
+            "rollback_intent_id": rollback_intent_id,
+            "status": "argo_syncing",
+            "execution": ArtifactResponse::from(existing.clone()),
+            "created": false,
+            "automatic_rollback": false,
+        })));
+    }
+    let execution_id = format!("rbaexec_{}", unique_suffix());
+    let execution = state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_rollback_argo_sync_execution", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "rollback_argo_sync_execution".to_string(),
+            label: format!("Rollback Argo sync for {rollback_intent_id}"),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "execution_id": execution_id,
+                "status": "dispatched",
+                "permission_grant_id": content.get("argo_permission_grant_id"),
+                "deployment_contract_id": item.deployment_contract_id,
+                "gitops_merge_sha": content.get("gitops_merge_sha"),
+                "baseline_digest": content.get("baseline").and_then(|value| value.get("image_digest")),
+                "target": protected_target_json(),
+            })),
+        })
+        .await?;
+    match state
+        .worker
+        .dispatch_argo_sync_execution(ArgoSyncExecutionRequest {
+            deployment_intent_id: rollback_intent_id.to_string(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+    {
+        Ok(receipt) => {
+            let mut updated = content.clone();
+            updated.insert("status".to_string(), json!("argo_syncing"));
+            updated.insert("argo_execution_id".to_string(), json!(execution_id));
+            append_rollback_intent_artifact(state, &run, &Value::Object(updated)).await?;
+            Ok(Json(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "status": "argo_syncing",
+                "execution": ArtifactResponse::from(execution),
+                "job_name": receipt.job_name,
+                "created": true,
+                "automatic_rollback": false,
+            })))
+        }
+        Err(error) => {
+            tracing::warn!(rollback_intent_id, %error, "rollback Argo executor dispatch failed");
+            let result = append_rollback_argo_sync_result(
+                state,
+                &run,
+                rollback_intent_id,
+                &execution_id,
+                "dispatch_failed",
+                json!({ "error_code": "job_dispatch_failed" }),
+            )
+            .await?;
+            let mut updated = content.clone();
+            updated.insert("status".to_string(), json!("attention_required"));
+            updated.insert("argo_failure_result_id".to_string(), json!(result.id));
+            append_rollback_intent_artifact(state, &run, &Value::Object(updated)).await?;
+            Ok(Json(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "status": "dispatch_failed",
+                "execution": ArtifactResponse::from(result),
+                "created": true,
+                "automatic_rollback": false,
+            })))
+        }
+    }
+}
+
+async fn validate_rollback_argo_grant(
+    state: &AppState,
+    item: &StoredWorkItem,
+    rollback_intent_id: &str,
+    content: &serde_json::Map<String, Value>,
+) -> Result<StoredPermissionGrant, ApiError> {
+    let grant_id = content
+        .get("argo_permission_grant_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent has no Argo permission grant"))?;
+    let grant = state
+        .store
+        .get_permission_grant(grant_id)
+        .await?
+        .filter(|grant| grant.status == "active" && grant_is_unexpired(grant, current_millis()))
+        .ok_or_else(|| {
+            ApiError::conflict("rollback Argo permission grant is expired or revoked")
+        })?;
+    let scope = serde_json::from_value::<PermissionGrantScope>(grant.scope_json.clone())
+        .map_err(|_| ApiError::conflict("rollback Argo permission grant scope is malformed"))?;
+    let baseline_digest = content
+        .get("baseline")
+        .and_then(|value| value.get("image_digest"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is unavailable"))?;
+    let gitops_merge_sha = content
+        .get("gitops_merge_sha")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("rollback GitOps merge SHA is unavailable"))?;
+    let expected_pipeline_contracts = item
+        .pipeline_contract_id
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let expected_deployment_contracts = item
+        .deployment_contract_id
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&item.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent WorkPlan is unavailable"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent ChangeSet is unavailable"))?;
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("RollbackIntent PipelineIntent is unavailable"))?;
+    let source_merge_sha = pipeline_intent
+        .intent_json
+        .pointer("/source_provenance/merge_commit_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback source merge provenance is unavailable"))?;
+    if grant.subject != DEFAULT_ARGO_RUNNER_SUBJECT
+        || scope.environment.as_deref() != Some(PROTECTED_ENVIRONMENT)
+        || scope.capability_kinds != vec![CapabilityKind::ArgoSync]
+        || !ARGO_SYNC_ACTIONS
+            .iter()
+            .all(|action| scope.actions.iter().any(|allowed| allowed == action))
+        || scope.namespaces != vec![PROTECTED_NAMESPACE.to_string()]
+        || scope.work_item_ids != vec![item.id.clone()]
+        || scope.work_plan_ids != vec![work_plan.id.clone()]
+        || scope.change_set_ids != vec![change_set.id.clone()]
+        || scope.pipeline_intent_ids != vec![pipeline_intent.id.clone()]
+        || scope.deployment_intent_ids != vec![rollback_intent_id.to_string()]
+        || scope.argo_applications != vec![PROTECTED_ARGO_APPLICATION.to_string()]
+        || scope.pipeline_contract_ids != expected_pipeline_contracts
+        || scope.deployment_contract_ids != expected_deployment_contracts
+        || scope.source_merge_shas != vec![source_merge_sha.to_string()]
+        || scope.gitops_merge_shas != vec![gitops_merge_sha.to_string()]
+        || scope.image_digests != vec![baseline_digest.to_string()]
+        || scope.production_impacting != Some(true)
+    {
+        return Err(ApiError::conflict(
+            "rollback Argo grant no longer matches the exact WorkItem, contracts, merge, digest, namespace, and Application",
+        ));
+    }
+    let expected_gate_kinds = [
+        "production_rollback_deployment",
+        "cluster_mutation",
+        "production_impact",
+    ];
+    let gate_ids = content
+        .get("argo_approval_gate_ids")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ApiError::conflict("rollback Argo approval gates are unavailable"))?;
+    if gate_ids.len() != expected_gate_kinds.len() {
+        return Err(ApiError::conflict(
+            "rollback Argo approval gate set is incomplete",
+        ));
+    }
+    for (gate_id, expected_kind) in gate_ids.iter().zip(expected_gate_kinds) {
+        let gate_id = gate_id
+            .as_str()
+            .ok_or_else(|| ApiError::conflict("rollback Argo approval gate ID is malformed"))?;
+        let gate = state
+            .store
+            .get_approval_gate(gate_id)
+            .await?
+            .filter(|gate| gate.status == "satisfied")
+            .ok_or_else(|| ApiError::conflict("rollback Argo approval gate is not satisfied"))?;
+        let gate_scope = gate
+            .gate_json
+            .get("scope")
+            .and_then(Value::as_object)
+            .ok_or_else(|| {
+                ApiError::conflict("rollback Argo approval gate scope is unavailable")
+            })?;
+        if gate.work_item_id.as_deref() != Some(item.id.as_str())
+            || gate.gate_kind != expected_kind
+            || gate_scope.get("work_item_id").and_then(Value::as_str) != Some(item.id.as_str())
+            || gate_scope.get("work_plan_id").and_then(Value::as_str) != Some(work_plan.id.as_str())
+            || gate_scope.get("environment").and_then(Value::as_str) != Some(PROTECTED_ENVIRONMENT)
+            || gate_scope
+                .get("production_impacting")
+                .and_then(Value::as_bool)
+                != Some(true)
+            || gate_scope.get("target_namespace").and_then(Value::as_str)
+                != Some(PROTECTED_NAMESPACE)
+            || gate_scope.get("argo_application").and_then(Value::as_str)
+                != Some(PROTECTED_ARGO_APPLICATION)
+            || gate
+                .gate_json
+                .get("gitops_merge_sha")
+                .and_then(Value::as_str)
+                != Some(gitops_merge_sha)
+            || gate
+                .gate_json
+                .get("baseline_digest")
+                .and_then(Value::as_str)
+                != Some(baseline_digest)
+        {
+            return Err(ApiError::conflict(
+                "rollback Argo approval gate no longer matches its immutable target binding",
+            ));
+        }
+    }
+    Ok(grant)
+}
+
+async fn append_rollback_argo_sync_result(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    rollback_intent_id: &str,
+    execution_id: &str,
+    status: &str,
+    details: Value,
+) -> Result<StoredArtifact, ApiError> {
+    if let Some(existing) =
+        state
+            .store
+            .list_artifacts(&run.id)
+            .await?
+            .into_iter()
+            .find(|artifact| {
+                artifact.kind == "rollback_argo_sync_result"
+                    && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("rollback_intent_id").and_then(Value::as_str)
+                            == Some(rollback_intent_id)
+                            && content.get("execution_id").and_then(Value::as_str)
+                                == Some(execution_id)
+                            && content.get("status").and_then(Value::as_str) == Some(status)
+                    })
+            })
+    {
+        return Ok(existing);
+    }
+    Ok(state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_rollback_argo_sync_result", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "rollback_argo_sync_result".to_string(),
+            label: format!("Rollback Argo sync {status} for {rollback_intent_id}"),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "execution_id": execution_id,
+                "status": status,
+                "details": details,
+            })),
+        })
+        .await?)
+}
+
+async fn observe_rollback_intent(
+    State(state): State<AppState>,
+    Path(rollback_intent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let (_item, current, run) = rollback_intent_context(&state, &rollback_intent_id).await?;
+    if current.pointer("/content/status").and_then(Value::as_str) == Some("argo_syncing") {
+        return observe_rollback_argo_sync(&state, &rollback_intent_id, &current, &run).await;
+    }
+    require_fresh_capability(&state, "gitops_observer").await?;
+    let settings = state
+        .worker
+        .gitops_observer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps rollback observer is not configured"))?;
+    if !settings
+        .allowed_repos
+        .iter()
+        .any(|repo| repo == PROTECTED_GITOPS_REPO)
+    {
+        return Err(ApiError::conflict(
+            "protected GitOps repository is not allowlisted for the rollback observer",
+        ));
+    }
+    let artifacts = state.store.list_artifacts(&run.id).await?;
+    let result = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_delivery_result")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|value| {
+                value.get("rollback_intent_id").and_then(Value::as_str)
+                    == Some(rollback_intent_id.as_str())
+                    && value.get("status").and_then(Value::as_str) == Some("completed")
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "rollback observation requires a completed GitOps pull-request delivery",
+            )
+        })?;
+    let details = result
+        .content_json
+        .as_ref()
+        .and_then(|value| value.get("details"))
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            ApiError::conflict("rollback delivery result has no pull-request provenance")
+        })?;
+    let source_commit_sha =
+        required_json_string(details, "commit_sha", "rollback delivery result")?;
+    let pull_request_url =
+        required_json_string(details, "pull_request_url", "rollback delivery result")?;
+    let pull_request_number = details
+        .get("pull_request_number")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| ApiError::conflict("rollback delivery result has no pull-request number"))?;
+    let head_branch = required_json_string(details, "branch", "rollback delivery result")?;
+    if !is_git_sha(&source_commit_sha) || !is_github_pr_url(&pull_request_url) {
+        return Err(ApiError::conflict(
+            "rollback delivery result has invalid immutable GitHub provenance",
+        ));
+    }
+    if let Some(merged) = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_delivery_observation")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|value| {
+                value.get("rollback_intent_id").and_then(Value::as_str)
+                    == Some(rollback_intent_id.as_str())
+                    && value.get("merged").and_then(Value::as_bool) == Some(true)
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+    {
+        return Ok(Json(
+            json!({ "rollback_intent_id": rollback_intent_id, "status": "merged", "observation": ArtifactResponse::from(merged.clone()), "created": false, "manual_merge_required": true }),
+        ));
+    }
+    let observation_index = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "rollback_delivery_observation_execution"
+                && artifact.content_json.as_ref().is_some_and(|value| {
+                    value.get("rollback_intent_id").and_then(Value::as_str)
+                        == Some(rollback_intent_id.as_str())
+                })
+        })
+        .count();
+    let execution_id = format!("rbobs_{}", unique_suffix());
+    let execution = state.store.create_artifact(CreateArtifact {
+        id: format!("art_{}_rollback_delivery_observation", unique_suffix()),
+        session_id: run.session_id.clone(), run_id: Some(run.id.clone()),
+        kind: "rollback_delivery_observation_execution".to_string(),
+        label: format!("Rollback PR observation {} for {}", observation_index + 1, rollback_intent_id),
+        mime_type: Some("application/json".to_string()), path: None, content_text: None,
+        content_json: Some(json!({ "rollback_intent_id": rollback_intent_id, "execution_id": execution_id, "status": "dispatched", "source": { "repository": PROTECTED_GITOPS_REPO, "head_branch": head_branch, "source_commit_sha": source_commit_sha, "pull_request_url": pull_request_url, "pull_request_number": pull_request_number, "github_api_url": settings.github_api_url } })),
+    }).await?;
+    match state
+        .worker
+        .dispatch_gitops_delivery_observation(GitOpsDeliveryObservationRequest {
+            gitops_change_set_id: rollback_intent_id.clone(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+    {
+        Ok(receipt) => Ok(Json(
+            json!({ "rollback_intent_id": rollback_intent_id, "status": "observation_dispatched", "execution": ArtifactResponse::from(execution), "job_name": receipt.job_name, "created": true, "manual_merge_required": true }),
+        )),
+        Err(error) => {
+            tracing::warn!(rollback_intent_id = %rollback_intent_id, %error, "rollback observer dispatch failed");
+            let failure = append_rollback_delivery_observation(
+                &state,
+                &run,
+                &rollback_intent_id,
+                &execution_id,
+                "failed",
+                json!({ "error_code": "job_dispatch_failed" }),
+            )
+            .await?;
+            Ok(Json(
+                json!({ "rollback_intent_id": rollback_intent_id, "status": "dispatch_failed", "observation": ArtifactResponse::from(failure), "created": true, "manual_merge_required": true }),
+            ))
+        }
+    }
+}
+
+async fn observe_rollback_argo_sync(
+    state: &AppState,
+    rollback_intent_id: &str,
+    current: &Value,
+    run: &pharness_store::StoredRun,
+) -> Result<Json<Value>, ApiError> {
+    let content = current
+        .get("content")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+    let execution_id = content
+        .get("argo_execution_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent has no Argo execution"))?;
+    let expected_revision = content
+        .get("gitops_merge_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback GitOps merge SHA is unavailable"))?;
+    let expected_digest = content
+        .get("baseline")
+        .and_then(|value| value.get("image_digest"))
+        .and_then(Value::as_str)
+        .filter(|value| immutable_image_digest(value))
+        .ok_or_else(|| ApiError::conflict("RollbackIntent baseline digest is invalid"))?;
+    let artifacts = state.store.list_artifacts(&run.id).await?;
+    let completed = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_argo_sync_result")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|value| {
+                value.get("rollback_intent_id").and_then(Value::as_str) == Some(rollback_intent_id)
+                    && value.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                    && value.get("status").and_then(Value::as_str) == Some("completed")
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
+    if completed.is_none() {
+        let terminal = artifacts.iter().find(|artifact| {
+            artifact.kind == "rollback_argo_sync_result"
+                && artifact.content_json.as_ref().is_some_and(|value| {
+                    value.get("rollback_intent_id").and_then(Value::as_str)
+                        == Some(rollback_intent_id)
+                        && value.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                        && matches!(
+                            value.get("status").and_then(Value::as_str),
+                            Some("failed" | "cancelled" | "dispatch_failed")
+                        )
+                })
+        });
+        return Ok(Json(json!({
+            "rollback_intent_id": rollback_intent_id,
+            "status": if terminal.is_some() { "attention_required" } else { "argo_syncing" },
+            "ready": false,
+            "automatic_rollback": false,
+            "result": terminal.cloned().map(ArtifactResponse::from),
+        })));
+    }
+
+    let (item, _, _) = rollback_intent_context(state, rollback_intent_id).await?;
+    let contract_id = item
+        .deployment_contract_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("RollbackIntent DeploymentContract is unavailable"))?;
+    let contract = state
+        .store
+        .get_deployment_contract(contract_id)
+        .await?
+        .filter(|contract| contract.status == "active")
+        .ok_or_else(|| ApiError::conflict("RollbackIntent DeploymentContract is not active"))?;
+    let spec = deployment_contract_spec(&contract.contract_json)?;
+    validate_protected_production_deployment_contract(&spec)?;
+    if contract.target_environment != PROTECTED_ENVIRONMENT
+        || contract.target_namespace != PROTECTED_NAMESPACE
+        || contract.argo_application != PROTECTED_ARGO_APPLICATION
+    {
+        return Err(ApiError::conflict(
+            "RollbackIntent DeploymentContract no longer matches the protected target",
+        ));
+    }
+
+    let argo = execute_direct_capability(
+        state,
+        AgentAction::ArgoGetApp {
+            id: ActionId::new(format!("act_{}_rollback_verify_argo", unique_suffix())),
+            reason: format!("verify RollbackIntent {rollback_intent_id} Argo state"),
+            app: PROTECTED_ARGO_APPLICATION.to_string(),
+        },
+        None,
+    )
+    .await?;
+    let deployment = execute_direct_capability(
+        state,
+        AgentAction::KubernetesGet {
+            id: ActionId::new(format!(
+                "act_{}_rollback_verify_deployment",
+                unique_suffix()
+            )),
+            reason: format!("verify RollbackIntent {rollback_intent_id} Deployment"),
+            resource: "deployments".to_string(),
+            namespace: Some(PROTECTED_NAMESPACE.to_string()),
+            name: Some(PROTECTED_WORKLOAD_NAME.to_string()),
+            all_namespaces: false,
+            label_selector: None,
+        },
+        None,
+    )
+    .await?;
+    let pods = execute_direct_capability(
+        state,
+        AgentAction::KubernetesGet {
+            id: ActionId::new(format!("act_{}_rollback_verify_pods", unique_suffix())),
+            reason: format!("verify RollbackIntent {rollback_intent_id} Pod imageIDs"),
+            resource: "pods".to_string(),
+            namespace: Some(PROTECTED_NAMESPACE.to_string()),
+            name: None,
+            all_namespaces: false,
+            label_selector: Some("app=yfinance-wrapper".to_string()),
+        },
+        None,
+    )
+    .await?;
+    let argo_content = argo
+        .result
+        .as_ref()
+        .map(|result| &result.content)
+        .ok_or_else(|| ApiError::conflict("rollback Argo verification did not execute"))?;
+    let deployment_content = deployment
+        .result
+        .as_ref()
+        .map(|result| &result.content)
+        .ok_or_else(|| ApiError::conflict("rollback Deployment verification did not execute"))?;
+    let pod_content = pods
+        .result
+        .as_ref()
+        .map(|result| &result.content)
+        .ok_or_else(|| ApiError::conflict("rollback Pod verification did not execute"))?;
+    let argo_healthy = argo_content
+        .pointer("/analysis/sync_status")
+        .and_then(Value::as_str)
+        == Some("Synced")
+        && argo_content
+            .pointer("/analysis/health_status")
+            .and_then(Value::as_str)
+            == Some("Healthy")
+        && argo_content
+            .pointer("/analysis/revision")
+            .and_then(Value::as_str)
+            == Some(expected_revision);
+    let deployment_healthy = deployment_content
+        .pointer("/analysis/status")
+        .and_then(Value::as_str)
+        == Some("healthy");
+    let image_ids = pod_content
+        .pointer("/output/items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|pod| {
+            pod.pointer("/status/containers")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|container| container.get("imageID").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    let digest_healthy = !image_ids.is_empty()
+        && image_ids
+            .iter()
+            .all(|image_id| image_id.ends_with(expected_digest));
+    let healthz = state
+        .worker
+        .verify_capability("yfinance_healthz", None)
+        .await;
+    let healthz_healthy = healthz.as_ref().is_ok_and(|outcome| outcome.available);
+    let (prometheus_observation, prometheus_check) =
+        verify_required_prometheus_inventory(state, None).await?;
+    let prometheus_healthy = prometheus_check
+        .get("passed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let verified = argo_healthy
+        && deployment_healthy
+        && digest_healthy
+        && healthz_healthy
+        && prometheus_healthy;
+    let checks = vec![
+        execution_check(
+            "argo_application_synced_healthy_at_rollback_merge",
+            argo_healthy,
+            format!("{PROTECTED_ARGO_APPLICATION} checked at {expected_revision}"),
+        ),
+        execution_check(
+            "declared_deployment_rollout_healthy",
+            deployment_healthy,
+            format!("{PROTECTED_NAMESPACE}/{PROTECTED_WORKLOAD_NAME} rollout checked"),
+        ),
+        execution_check(
+            "running_image_digest",
+            digest_healthy,
+            format!(
+                "{} running imageID(s) checked against {expected_digest}",
+                image_ids.len()
+            ),
+        ),
+        execution_check(
+            "service_healthz",
+            healthz_healthy,
+            "Exact apps-prod/yfinance-wrapper Service /healthz checked",
+        ),
+        prometheus_check,
+    ];
+    let verification = state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_rollback_verification", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "rollback_verification".to_string(),
+            label: format!("Rollback verification for {rollback_intent_id}"),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(json!({
+                "rollback_intent_id": rollback_intent_id,
+                "status": if verified { "verified" } else { "attention_required" },
+                "gitops_merge_sha": expected_revision,
+                "expected_digest": expected_digest,
+                "argo_observation_id": argo.observation_id,
+                "deployment_observation_id": deployment.observation_id,
+                "pod_observation_id": pods.observation_id,
+                "prometheus_observation_id": prometheus_observation.map(|observation| observation.id),
+                "checks": checks,
+            })),
+        })
+        .await?;
+    let mut updated = content.clone();
+    updated.insert(
+        "status".to_string(),
+        json!(if verified {
+            "verified"
+        } else {
+            "attention_required"
+        }),
+    );
+    updated.insert(
+        "verification_artifact_id".to_string(),
+        json!(verification.id),
+    );
+    append_rollback_intent_artifact(state, run, &Value::Object(updated)).await?;
+    Ok(Json(json!({
+        "rollback_intent_id": rollback_intent_id,
+        "status": if verified { "verified" } else { "attention_required" },
+        "verified": verified,
+        "verification": ArtifactResponse::from(verification),
+        "automatic_rollback": false,
+    })))
+}
+
+async fn require_fresh_capability(state: &AppState, capability: &str) -> Result<(), ApiError> {
+    let available = capability_statuses(state)
+        .await?
+        .into_iter()
+        .any(|entry| entry.capability == capability && entry.status == "available");
+    if available {
+        Ok(())
+    } else {
+        Err(ApiError::conflict(format!(
+            "{capability} requires a fresh passing isolated capability verification"
+        )))
+    }
+}
+
+async fn append_rollback_delivery_result(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    rollback_intent_id: &str,
+    execution_id: &str,
+    status: &str,
+    details: Value,
+) -> Result<StoredArtifact, ApiError> {
+    Ok(state.store.create_artifact(CreateArtifact { id: format!("art_{}_rollback_delivery_result", unique_suffix()), session_id: run.session_id.clone(), run_id: Some(run.id.clone()), kind: "rollback_delivery_result".to_string(), label: format!("Rollback GitOps delivery {status} for {rollback_intent_id}"), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_intent_id, "execution_id": execution_id, "status": status, "details": details })) }).await?)
+}
+
+async fn append_rollback_delivery_observation(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    rollback_intent_id: &str,
+    execution_id: &str,
+    status: &str,
+    details: Value,
+) -> Result<StoredArtifact, ApiError> {
+    Ok(state.store.create_artifact(CreateArtifact { id: format!("art_{}_rollback_delivery_observation", unique_suffix()), session_id: run.session_id.clone(), run_id: Some(run.id.clone()), kind: "rollback_delivery_observation".to_string(), label: format!("Rollback pull-request observation {status} for {rollback_intent_id}"), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_intent_id, "execution_id": execution_id, "status": status, "details": details, "pull_request_state": details.get("pull_request_state"), "merged": details.get("merged"), "merge_commit_sha": details.get("merge_commit_sha") })) }).await?)
+}
+
+async fn rollback_intent_context(
+    state: &AppState,
+    rollback_intent_id: &str,
+) -> Result<(StoredWorkItem, Value, pharness_store::StoredRun), ApiError> {
+    let items = state
+        .store
+        .list_work_items(WorkItemListFilter {
+            limit: 200,
+            ..Default::default()
+        })
+        .await?;
+    for item in items {
+        if let Some(current) =
+            latest_rollback_intent(state, &item, Some(rollback_intent_id)).await?
+        {
+            let run_id = item.current_run_id.clone().ok_or_else(|| {
+                ApiError::conflict("RollbackIntent run provenance is unavailable")
+            })?;
+            let run = state
+                .store
+                .get_run(&run_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+            return Ok((item, current, run));
+        }
+    }
+    Err(ApiError::not_found("rollback_intent", rollback_intent_id))
+}
+
+async fn latest_rollback_intent(
+    state: &AppState,
+    item: &StoredWorkItem,
+    rollback_intent_id: Option<&str>,
+) -> Result<Option<Value>, ApiError> {
+    let Some(run_id) = item.current_run_id.as_ref() else {
+        return Ok(None);
+    };
+    let artifact = state
+        .store
+        .list_artifacts(run_id)
+        .await?
+        .into_iter()
+        .filter(|artifact| artifact.kind == "rollback_intent")
+        .filter(|artifact| {
+            artifact
+                .content_json
+                .as_ref()
+                .and_then(|content| content.get("work_item_id"))
+                .and_then(Value::as_str)
+                == Some(item.id.as_str())
+        })
+        .filter(|artifact| {
+            rollback_intent_id.map_or(true, |id| {
+                artifact
+                    .content_json
+                    .as_ref()
+                    .and_then(|content| content.get("rollback_intent_id"))
+                    .and_then(Value::as_str)
+                    == Some(id)
+            })
+        })
+        .max_by_key(|artifact| (artifact.created_at.clone(), artifact.id.clone()));
+    Ok(artifact.as_ref().map(rollback_intent_response))
+}
+
+async fn append_rollback_intent_artifact(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    content: &Value,
+) -> Result<StoredArtifact, ApiError> {
+    Ok(state
+        .store
+        .create_artifact(CreateArtifact {
+            id: format!("art_{}_rollback_intent", unique_suffix()),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "rollback_intent".to_string(),
+            label: format!(
+                "RollbackIntent {}",
+                content
+                    .get("rollback_intent_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+            ),
+            mime_type: Some("application/json".to_string()),
+            path: None,
+            content_text: None,
+            content_json: Some(content.clone()),
+        })
+        .await?)
+}
+
+fn rollback_intent_response(artifact: &StoredArtifact) -> Value {
+    json!({
+        "artifact_id": artifact.id,
+        "created_at": artifact.created_at,
+        "content": artifact.content_json,
+    })
 }
 
 async fn reconcile_work_item(
@@ -5025,9 +7784,9 @@ async fn complete_work_item_from_verified_release(
             "WorkItem completion requires an awaiting_approval WorkItem",
         ));
     }
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "Controller completion is limited to non-production dev WorkItems",
+            "Controller completion requires a supported dev or exact protected-production WorkItem",
         ));
     }
     let work_plan = state
@@ -5139,9 +7898,9 @@ async fn replan_work_item(
             "WorkItem replan requires blocked or failed status",
         ));
     }
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "WorkItem replan is limited to non-production WorkItems targeting dev",
+            "WorkItem replan is limited to dev or the exact protected production target",
         ));
     }
     if work_item.attempt_count >= work_item.max_attempts {
@@ -6413,9 +9172,9 @@ async fn execute_work_item(
         .get_work_item(&work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "real coding alpha is limited to non-production WorkItems targeting dev",
+            "coding execution is limited to dev or the exact protected production target",
         ));
     }
     if work_item.status != "awaiting_approval" {
@@ -6488,6 +9247,7 @@ async fn execute_work_item(
                     attempt,
                     &work_item.source_repo,
                     &work_item.source_ref,
+                    work_item.source_commit.as_deref(),
                 )
                 .await
                 .map_err(|error| ApiError::conflict(error.to_string()))?;
@@ -6505,6 +9265,7 @@ async fn execute_work_item(
                 workspace_id: workspace.id.clone(),
                 source_repo: work_item.source_repo.clone(),
                 source_ref: work_item.source_ref.clone(),
+                source_commit: work_item.source_commit.clone(),
                 branch: branch.clone(),
                 resolved_commit: None,
             };
@@ -7026,8 +9787,13 @@ fn coding_task_prompt(work_item: &StoredWorkItem) -> String {
         .map(|criterion| format!("- {criterion}"))
         .collect::<Vec<_>>()
         .join("\n");
+    let target = if work_item.production_impacting {
+        "protected-production source WorkItem"
+    } else {
+        "development WorkItem"
+    };
     format!(
-        "Implement this development-only WorkItem in the current workspace.\n\nIntent:\n{}\n\nAcceptance criteria:\n{}\n\nBoundaries: work only in this workspace; do not read secrets; do not use network access; do not push, commit, create a pull request, deploy, or modify Git configuration other than the isolated workspace's local configuration. Run focused tests when available. Finish with a concise summary of changes and tests.",
+        "Implement this {target} in the current workspace.\n\nIntent:\n{}\n\nAcceptance criteria:\n{}\n\nBoundaries: work only in this workspace; do not read secrets; do not use network access; do not push, commit, create a pull request, deploy, or modify Git configuration other than the isolated workspace's local configuration. Run focused tests when available. Finish with a concise summary of changes and tests.",
         work_item.intent,
         if criteria.is_empty() { "- No explicit criteria were supplied." } else { &criteria }
     )
@@ -7883,6 +10649,7 @@ fn work_plan_from_work_item(
 
 fn work_item_approval_gate_specs(item: &StoredWorkItem) -> Vec<Value> {
     let mut gates = vec![
+        json!({ "kind": "source_mutation", "required_before": "creating a source branch, commit, or pull request" }),
         json!({ "kind": "git_mutation", "required_before": "creating a source branch, commit, or pull request" }),
         json!({ "kind": "pipeline_mutation", "required_before": "starting a Tekton PipelineRun" }),
         json!({ "kind": "gitops_mutation", "required_before": "creating a GitOps branch, commit, or pull request" }),
@@ -7890,6 +10657,7 @@ fn work_item_approval_gate_specs(item: &StoredWorkItem) -> Vec<Value> {
     ];
     if item.production_impacting {
         gates.push(json!({ "kind": "production_impact", "required_before": "executing a production-impacting action" }));
+        gates.push(json!({ "kind": "production_deployment", "required_before": "opening the bound production window and dispatching the exact Argo sync" }));
     }
     gates
 }
@@ -7959,11 +10727,11 @@ fn work_item_approval_gate_scope(
 
 fn approval_gate_actions(gate_kind: &str) -> &'static [&'static str] {
     match gate_kind {
-        "git_mutation" => &GIT_DELIVERY_ACTIONS,
+        "source_mutation" | "git_mutation" => &GIT_DELIVERY_ACTIONS,
         "gitops_mutation" => &GITOPS_DELIVERY_ACTIONS,
         "pipeline_mutation" => &PIPELINE_DELIVERY_ACTIONS,
         "cluster_mutation" => &CLUSTER_DELIVERY_ACTIONS,
-        "production_impact" => &PRODUCTION_DELIVERY_ACTIONS,
+        "production_impact" | "production_deployment" => &PRODUCTION_DELIVERY_ACTIONS,
         _ => &[],
     }
 }
@@ -8512,9 +11280,9 @@ async fn create_gitops_change_set(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "GitOps ChangeSet creation is limited to non-production WorkItems targeting dev",
+            "GitOps ChangeSet creation is limited to dev or the exact protected production target",
         ));
     }
     if plan.get("work_item_id").and_then(Value::as_str) != Some(work_item.id.as_str()) {
@@ -8683,9 +11451,9 @@ async fn resolve_gitops_base_revision(
             "GitOps base revision resolution requires a proposed or approved GitOps ChangeSet",
         ));
     }
-    let settings = state.worker.git_observer_settings().ok_or_else(|| {
+    let settings = state.worker.gitops_observer_settings().ok_or_else(|| {
         ApiError::conflict(
-            "read-only Git observer identity is not configured for GitOps revision resolution",
+            "read-only GitOps observer identity is not configured for GitOps revision resolution",
         )
     })?;
     if !settings
@@ -8873,6 +11641,23 @@ async fn prepare_gitops_change_set_delivery(
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", &change_set.work_item_id))?;
     ensure_gitops_delivery_target(&work_item, &change_set)?;
+    if work_item.production_impacting
+        && !latest_rollback_intent(&state, &work_item, None)
+            .await?
+            .is_some_and(|intent| {
+                matches!(
+                    intent.pointer("/content/status").and_then(Value::as_str),
+                    Some("prepared" | "approved")
+                ) && intent
+                    .pointer("/content/baseline/image_digest")
+                    .and_then(Value::as_str)
+                    .is_some_and(immutable_image_digest)
+            })
+    {
+        return Err(ApiError::conflict(
+            "production GitOps authorization requires a captured baseline and prepared RollbackIntent",
+        ));
+    }
 
     let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
     let base_revision = current_gitops_base_revision(&artifacts, &change_set)?;
@@ -9095,6 +11880,7 @@ async fn authorize_gitops_change_set_delivery(
         .map(|Extension(OperatorIdentity(name))| name)
         .or_else(|| clean_optional_text(request.created_by.clone()));
     let reason = required_text(request.reason, "reason")?;
+    let expires_at = bounded_production_grant_expiry(&work_item, request.expires_at)?;
     if let Some(existing) =
         matching_gitops_delivery_grant(&state.store, &subject, &change_set, &work_item, &plan.id)
             .await?
@@ -9112,7 +11898,7 @@ async fn authorize_gitops_change_set_delivery(
             created_by: actor.clone(),
             reason: reason.clone(),
             scope: json!({
-                "environment": GIT_DELIVERY_ENVIRONMENT,
+                "environment": work_item.target_environment,
                 "capability_kinds": ["git"],
                 "actions": GITOPS_DELIVERY_ACTIONS,
                 "max_risk": "high",
@@ -9121,10 +11907,10 @@ async fn authorize_gitops_change_set_delivery(
                 "work_plan_ids": [change_set.work_plan_id],
                 "gitops_change_set_ids": [change_set.id],
                 "gitops_delivery_plan_artifact_ids": [plan.id],
-                "production_impacting": false,
+                "production_impacting": work_item.production_impacting,
             }),
             policy: json!({ "policy_mode": "supervised_autonomy" }),
-            expires_at: request.expires_at,
+            expires_at,
         },
     )
     .await?;
@@ -9216,7 +12002,7 @@ async fn preflight_gitops_change_set_delivery(
             format!("WorkPlan status is {}", work_plan.status),
         ),
         execution_check(
-            "development_gitops_target",
+            "supported_gitops_target",
             target_valid,
             if target_valid {
                 format!(
@@ -9224,7 +12010,7 @@ async fn preflight_gitops_change_set_delivery(
                     change_set.gitops_repo, change_set.gitops_ref
                 )
             } else {
-                "GitOps ChangeSet no longer matches a non-production dev WorkItem target"
+                "GitOps ChangeSet no longer matches a supported dev or exact protected-production WorkItem target"
                     .to_string()
             },
         ),
@@ -9592,8 +12378,8 @@ async fn observe_gitops_change_set_delivery(
     let source = gitops_delivery_plan_source(&plan, &change_set)?;
     let settings = state
         .worker
-        .git_observer_settings()
-        .ok_or_else(|| ApiError::conflict("Git observer executor is not configured"))?;
+        .gitops_observer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps observer executor is not configured"))?;
     if !settings
         .allowed_repos
         .iter()
@@ -9769,9 +12555,9 @@ fn ensure_gitops_delivery_target(
     work_item: &StoredWorkItem,
     change_set: &StoredGitOpsChangeSet,
 ) -> Result<(), ApiError> {
-    if work_item.production_impacting || work_item.target_environment != GIT_DELIVERY_ENVIRONMENT {
+    if !work_item_target_supported(work_item) {
         return Err(ApiError::conflict(
-            "GitOps delivery is limited to non-production WorkItems targeting dev",
+            "GitOps delivery is limited to dev or the exact protected production target",
         ));
     }
     if work_item.gitops_repo.as_deref() != Some(change_set.gitops_repo.as_str())
@@ -11336,6 +14122,20 @@ async fn create_deployment_contract(
     validate_kubernetes_name("version", &version)?;
     let contract_spec = deployment_contract_spec(&request.contract_json)?;
     validate_deployment_contract_spec(&contract_spec)?;
+    if target_environment == PROTECTED_ENVIRONMENT
+        || target_namespace == PROTECTED_NAMESPACE
+        || argo_application == PROTECTED_ARGO_APPLICATION
+    {
+        if target_environment != PROTECTED_ENVIRONMENT
+            || target_namespace != PROTECTED_NAMESPACE
+            || argo_application != PROTECTED_ARGO_APPLICATION
+        {
+            return Err(ApiError::bad_request(
+                "production DeploymentContract target must exactly match production/apps-prod/yfinance-wrapper",
+            ));
+        }
+        validate_protected_production_deployment_contract(&contract_spec)?;
+    }
     let actor = identity
         .map(|Extension(OperatorIdentity(name))| name)
         .or_else(|| clean_optional_text(request.actor));
@@ -11806,10 +14606,40 @@ async fn create_pipeline_intent_trusted_envelope(
     ensure_approved_for_trusted_envelope("change_set", &change_set.id, &change_set.status)?;
     ensure_approved_for_trusted_envelope("pipeline_intent", &intent.id, &intent.status)?;
     let execution = tekton_execution_spec(&intent.intent_json)?;
+    let work_item = match work_plan.work_item_id.as_deref() {
+        Some(work_item_id) => Some(
+            state
+                .store
+                .get_work_item(work_item_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?,
+        ),
+        None => None,
+    };
+    if let Some(item) = work_item.as_ref() {
+        if !work_item_target_supported(item) {
+            return Err(ApiError::conflict(
+                "Pipeline trusted envelope target is outside the supported dev or protected-production boundary",
+            ));
+        }
+        if item.production_impacting != execution.production_impacting {
+            return Err(ApiError::conflict(
+                "Pipeline production impact must exactly match its WorkItem",
+            ));
+        }
+    }
     let reason = clean_optional_text(Some(request.reason.clone()))
         .ok_or_else(|| ApiError::bad_request("trusted envelope reason is required"))?;
     let subject =
         clean_optional_text(request.subject).unwrap_or_else(|| state.policy.subject.clone());
+    let environment = work_item
+        .as_ref()
+        .map(|item| item.target_environment.clone())
+        .unwrap_or_else(|| state.policy.environment.clone());
+    let expires_at = match work_item.as_ref() {
+        Some(item) => bounded_production_grant_expiry(item, request.expires_at)?,
+        None => request.expires_at,
+    };
     let grant = create_permission_grant_record(
         &state.store,
         CreatePermissionGrantRequest {
@@ -11817,7 +14647,7 @@ async fn create_pipeline_intent_trusted_envelope(
             created_by: clean_optional_text(request.created_by.clone()),
             reason: reason.clone(),
             scope: json!({
-                "environment": state.policy.environment,
+                "environment": environment,
                 "capability_kinds": ["tekton_start_run"],
                 "actions": ["tekton_trigger_pipeline"],
                 "max_risk": "high",
@@ -11828,7 +14658,7 @@ async fn create_pipeline_intent_trusted_envelope(
                 "production_impacting": execution.production_impacting,
             }),
             policy: json!({ "policy_mode": "supervised_autonomy" }),
-            expires_at: request.expires_at,
+            expires_at,
         },
     )
     .await?;
@@ -12377,9 +15207,9 @@ async fn create_gitops_update_plan(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "GitOps update planning is limited to non-production WorkItems targeting dev",
+            "GitOps update planning is limited to dev or the exact protected production target",
         ));
     }
     let gitops_repo = work_item.gitops_repo.clone().ok_or_else(|| {
@@ -12830,6 +15660,16 @@ struct DeploymentContractSpec {
     #[serde(default)]
     force: bool,
     #[serde(default)]
+    workload_kind: Option<String>,
+    #[serde(default)]
+    workload_name: Option<String>,
+    #[serde(default)]
+    service_name: Option<String>,
+    #[serde(default)]
+    service_port: Option<u16>,
+    #[serde(default)]
+    health_path: Option<String>,
+    #[serde(default)]
     post_sync_verification: PostSyncVerificationContract,
 }
 
@@ -12840,6 +15680,8 @@ struct DeploymentContractSpec {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PostSyncVerificationContract {
+    #[serde(default)]
+    service_healthz: VerificationRequirement,
     #[serde(default)]
     prometheus_inventory: VerificationRequirement,
 }
@@ -12949,13 +15791,13 @@ fn deployment_target(intent: &StoredDeploymentIntent) -> Result<DeploymentTarget
     })
 }
 
-fn ensure_development_deployment_target(
+fn ensure_supported_deployment_target(
     work_item: &StoredWorkItem,
     target: &DeploymentTarget,
 ) -> Result<(), ApiError> {
-    if work_item.production_impacting || work_item.target_environment != GIT_DELIVERY_ENVIRONMENT {
+    if !work_item_target_supported(work_item) {
         return Err(ApiError::conflict(
-            "Argo trusted envelopes are limited to non-production dev WorkItems",
+            "Argo trusted envelopes require either a non-production dev WorkItem or the exact protected production target",
         ));
     }
     if target.environment != work_item.target_environment
@@ -13196,9 +16038,9 @@ async fn pipeline_intent_execution_preflight(
         (None, None) => Vec::new(),
     };
     let required_kinds = if execution.production_impacting {
-        ["pipeline_mutation", "cluster_mutation", "production_impact"].as_slice()
+        ["pipeline_mutation", "production_impact"].as_slice()
     } else {
-        ["pipeline_mutation", "cluster_mutation"].as_slice()
+        ["pipeline_mutation"].as_slice()
     };
     for kind in required_kinds {
         let matching = gates
@@ -13275,6 +16117,20 @@ async fn matching_pipeline_execution_grant(
     execution: &TektonExecutionSpec,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
     let now = unique_suffix();
+    let work_plan = store
+        .get_work_plan(&intent.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &intent.work_plan_id))?;
+    let expected_environment = match work_plan.work_item_id.as_deref() {
+        Some(work_item_id) => {
+            store
+                .get_work_item(work_item_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?
+                .target_environment
+        }
+        None => policy.environment.clone(),
+    };
     for grant in store.list_permission_grants(Some("active"), 200).await? {
         if !grant_is_unexpired(&grant, now) {
             continue;
@@ -13296,7 +16152,7 @@ async fn matching_pipeline_execution_grant(
             ))
         })?;
         let matches = grant.subject == policy.subject
-            && scope.environment.as_deref() == Some(policy.environment.as_str())
+            && scope.environment.as_deref() == Some(expected_environment.as_str())
             && grant_policy.policy_mode == PolicyMode::SupervisedAutonomy
             && scope
                 .capability_kinds
@@ -13402,9 +16258,9 @@ async fn deployment_intent_execution_preflight(
     let development_target = work_item
         .as_ref()
         .zip(target.as_ref())
-        .and_then(|(item, target)| ensure_development_deployment_target(item, target).err());
+        .and_then(|(item, target)| ensure_supported_deployment_target(item, target).err());
     checks.push(execution_check(
-        "development_work_item_target",
+        "supported_work_item_target",
         work_item.is_some() && target.is_some() && development_target.is_none(),
         match (work_item.as_ref(), target.as_ref(), development_target) {
             (None, _, _) => "Argo preflight requires a WorkItem-backed delivery chain".to_string(),
@@ -13414,10 +16270,33 @@ async fn deployment_intent_execution_preflight(
             }
             (_, _, Some(error)) => error.message,
             _ => {
-                "DeploymentIntent exactly matches a non-production dev WorkItem target".to_string()
+                "DeploymentIntent exactly matches a supported dev or protected-production WorkItem target".to_string()
             }
         },
     ));
+    if let Some(item) = work_item.as_ref().filter(|item| item.production_impacting) {
+        let rollback_ready = latest_rollback_intent(state, item, None)
+            .await?
+            .is_some_and(|intent| {
+                matches!(
+                    intent.pointer("/content/status").and_then(Value::as_str),
+                    Some("prepared" | "approved")
+                ) && intent
+                    .pointer("/content/baseline/image_digest")
+                    .and_then(Value::as_str)
+                    .is_some_and(immutable_image_digest)
+            });
+        checks.push(execution_check(
+            "production_baseline_and_rollback",
+            rollback_ready,
+            if rollback_ready {
+                "Production baseline and digest-bound RollbackIntent are present".to_string()
+            } else {
+                "Production Argo execution requires a captured baseline and prepared RollbackIntent"
+                    .to_string()
+            },
+        ));
+    }
 
     let gitops_merge = match work_item.as_ref() {
         Some(work_item) => {
@@ -13485,9 +16364,13 @@ async fn deployment_intent_execution_preflight(
         Vec::new()
     };
     let contract = match contracts.as_slice() {
-        [contract] => match deployment_contract_spec(&contract.contract_json)
-            .and_then(|spec| validate_deployment_contract_spec(&spec))
-        {
+        [contract] => match deployment_contract_spec(&contract.contract_json).and_then(|spec| {
+            validate_deployment_contract_spec(&spec)?;
+            if contract.target_environment == PROTECTED_ENVIRONMENT {
+                validate_protected_production_deployment_contract(&spec)?;
+            }
+            Ok(())
+        }) {
             Ok(()) => {
                 checks.push(execution_check(
                     "active_deployment_contract",
@@ -13526,40 +16409,45 @@ async fn deployment_intent_execution_preflight(
         }
     };
 
-    let matching_gate = match work_item.as_ref() {
-        Some(work_item) => state
-            .store
-            .list_approval_gates(ApprovalGateListFilter {
-                work_item_id: Some(work_item.id.clone()),
-                gate_kind: Some("cluster_mutation".to_string()),
-                limit: 20,
-                ..ApprovalGateListFilter::default()
-            })
-            .await?
-            .into_iter()
-            .find(|gate| {
-                work_item_gate_scope_matches(gate, work_item, &work_plan, "cluster_mutation")
-            }),
-        None => None,
-    };
-    let approval_gate_ready = matching_gate
+    let deployment_gate_kinds: &[&str] = if work_item
         .as_ref()
-        .is_some_and(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
-    checks.push(execution_check(
-        "approval_gate_cluster_mutation",
-        approval_gate_ready,
-        matching_gate
+        .is_some_and(|item| item.production_impacting)
+    {
+        &[
+            "cluster_mutation",
+            "production_impact",
+            "production_deployment",
+        ]
+    } else {
+        &["cluster_mutation"]
+    };
+    for gate_kind in deployment_gate_kinds {
+        let matching_gate = match work_item.as_ref() {
+            Some(work_item) => state
+                .store
+                .list_approval_gates(ApprovalGateListFilter {
+                    work_item_id: Some(work_item.id.clone()),
+                    gate_kind: Some((*gate_kind).to_string()),
+                    limit: 20,
+                    ..ApprovalGateListFilter::default()
+                })
+                .await?
+                .into_iter()
+                .find(|gate| work_item_gate_scope_matches(gate, work_item, &work_plan, gate_kind)),
+            None => None,
+        };
+        let approval_gate_ready = matching_gate
             .as_ref()
-            .map(|gate| {
-                format!(
-                    "Scoped cluster_mutation gate {} is {}",
-                    gate.id, gate.status
-                )
-            })
-            .unwrap_or_else(|| {
-                "Required scoped WorkItem cluster_mutation gate is missing".to_string()
-            }),
-    ));
+            .is_some_and(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
+        checks.push(execution_check(
+            format!("approval_gate_{gate_kind}"),
+            approval_gate_ready,
+            matching_gate
+                .as_ref()
+                .map(|gate| format!("Scoped {gate_kind} gate {} is {}", gate.id, gate.status))
+                .unwrap_or_else(|| format!("Required scoped WorkItem {gate_kind} gate is missing")),
+        ));
+    }
 
     let grant = match (target.as_ref(), work_item.as_ref()) {
         (Some(target), Some(work_item)) => {
@@ -13664,6 +16552,40 @@ async fn matching_deployment_execution_grant(
     target: &DeploymentTarget,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
     let now = unique_suffix();
+    let production_binding = if work_item.production_impacting {
+        let pipeline_intent = store
+            .get_pipeline_intent(&intent.pipeline_intent_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("pipeline_intent", &intent.pipeline_intent_id))?;
+        let source_merge_sha = pipeline_intent
+            .intent_json
+            .pointer("/source_provenance/merge_commit_sha")
+            .and_then(Value::as_str)
+            .filter(|value| is_git_sha(value))
+            .ok_or_else(|| ApiError::conflict("source merge provenance is unavailable"))?
+            .to_string();
+        let image_digest = pipeline_intent
+            .intent_json
+            .pointer("/build_output/image_digest")
+            .and_then(Value::as_str)
+            .filter(|value| is_sha256_digest(value))
+            .ok_or_else(|| ApiError::conflict("build image digest provenance is unavailable"))?
+            .to_string();
+        let gitops_merge = observed_gitops_merge_for_deployment(store, work_item, &pipeline_intent)
+            .await?
+            .ok_or_else(|| ApiError::conflict("GitOps merge provenance is unavailable"))?;
+        let gitops_merge_sha = gitops_merge
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("merge_commit_sha"))
+            .and_then(Value::as_str)
+            .filter(|value| is_git_sha(value))
+            .ok_or_else(|| ApiError::conflict("GitOps merge provenance is malformed"))?
+            .to_string();
+        Some((source_merge_sha, gitops_merge_sha, image_digest))
+    } else {
+        None
+    };
     for grant in store.list_permission_grants(Some("active"), 200).await? {
         if !grant_is_unexpired(&grant, now) {
             continue;
@@ -13684,6 +16606,27 @@ async fn matching_deployment_execution_grant(
                 grant.id
             ))
         })?;
+        let production_binding_matches = match production_binding.as_ref() {
+            Some((source_merge_sha, gitops_merge_sha, image_digest)) => {
+                scope.work_item_ids == [work_item.id.clone()]
+                    && scope.pipeline_contract_ids
+                        == work_item
+                            .pipeline_contract_id
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    && scope.deployment_contract_ids
+                        == work_item
+                            .deployment_contract_id
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    && scope.source_merge_shas == [source_merge_sha.clone()]
+                    && scope.gitops_merge_shas == [gitops_merge_sha.clone()]
+                    && scope.image_digests == [image_digest.clone()]
+            }
+            None => true,
+        };
         let matches = grant.subject == DEFAULT_ARGO_RUNNER_SUBJECT
             && scope.environment.as_deref() == Some(target.environment.as_str())
             && grant_policy.policy_mode == PolicyMode::SupervisedAutonomy
@@ -13713,8 +16656,8 @@ async fn matching_deployment_execution_grant(
                 .argo_applications
                 .iter()
                 .any(|application| application == &target.application)
-            && scope.production_impacting == Some(false)
-            && !work_item.production_impacting;
+            && scope.production_impacting == Some(work_item.production_impacting)
+            && production_binding_matches;
         if matches {
             return Ok(Some(grant));
         }
@@ -13778,6 +16721,23 @@ fn validate_deployment_contract_spec(contract: &DeploymentContractSpec) -> Resul
     if contract.prune || contract.force {
         return Err(ApiError::bad_request(
             "deployment contract prune and force must remain false",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_protected_production_deployment_contract(
+    contract: &DeploymentContractSpec,
+) -> Result<(), ApiError> {
+    if contract.workload_kind.as_deref() != Some(PROTECTED_WORKLOAD_KIND)
+        || contract.workload_name.as_deref() != Some(PROTECTED_WORKLOAD_NAME)
+        || contract.service_name.as_deref() != Some(PROTECTED_WORKLOAD_NAME)
+        || contract.service_port != Some(8090)
+        || contract.health_path.as_deref() != Some("/healthz")
+        || contract.post_sync_verification.service_healthz != VerificationRequirement::Required
+    {
+        return Err(ApiError::bad_request(
+            "protected production DeploymentContract must pin Deployment/yfinance-wrapper and the exact yfinance-wrapper:8090/healthz check",
         ));
     }
     Ok(())
@@ -14739,13 +17699,58 @@ async fn create_deployment_intent_trusted_envelope(
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
     let target = deployment_target(&intent)?;
-    ensure_development_deployment_target(&work_item, &target)?;
+    ensure_supported_deployment_target(&work_item, &target)?;
 
     let reason = clean_optional_text(Some(request.reason.clone()))
         .ok_or_else(|| ApiError::bad_request("trusted envelope reason is required"))?;
     let actor = clean_optional_text(request.created_by.clone());
     let subject = clean_optional_text(request.subject)
         .unwrap_or_else(|| DEFAULT_ARGO_RUNNER_SUBJECT.to_string());
+    let expires_at = bounded_production_grant_expiry(&work_item, request.expires_at)?;
+    let (source_merge_shas, gitops_merge_shas, image_digests) = if work_item.production_impacting {
+        let source_merge_sha = pipeline_intent
+            .intent_json
+            .pointer("/source_provenance/merge_commit_sha")
+            .and_then(Value::as_str)
+            .filter(|value| is_git_sha(value))
+            .ok_or_else(|| {
+                ApiError::conflict(
+                    "production deployment authorization requires immutable source merge provenance",
+                )
+            })?;
+        let image_digest = pipeline_intent
+            .intent_json
+            .pointer("/build_output/image_digest")
+            .and_then(Value::as_str)
+            .filter(|value| is_sha256_digest(value))
+            .ok_or_else(|| {
+                ApiError::conflict(
+                    "production deployment authorization requires a verified build image digest",
+                )
+            })?;
+        let gitops_merge =
+            observed_gitops_merge_for_deployment(&state.store, &work_item, &pipeline_intent)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                "production deployment authorization requires immutable GitOps merge provenance",
+            )
+                })?;
+        let gitops_merge_sha = gitops_merge
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("merge_commit_sha"))
+            .and_then(Value::as_str)
+            .filter(|value| is_git_sha(value))
+            .ok_or_else(|| ApiError::conflict("GitOps merge provenance is malformed"))?;
+        (
+            vec![source_merge_sha.to_string()],
+            vec![gitops_merge_sha.to_string()],
+            vec![image_digest.to_string()],
+        )
+    } else {
+        (Vec::new(), Vec::new(), Vec::new())
+    };
     let grant = create_permission_grant_record(
         &state.store,
         CreatePermissionGrantRequest {
@@ -14758,15 +17763,21 @@ async fn create_deployment_intent_trusted_envelope(
                 "actions": ARGO_SYNC_ACTIONS,
                 "max_risk": "high",
                 "namespaces": [target.namespace],
+                "work_item_ids": [work_item.id],
                 "work_plan_ids": [work_plan.id],
                 "change_set_ids": [change_set.id],
                 "pipeline_intent_ids": [pipeline_intent.id],
                 "deployment_intent_ids": [intent.id],
                 "argo_applications": [target.application],
-                "production_impacting": false,
+                "pipeline_contract_ids": work_item.pipeline_contract_id.iter().cloned().collect::<Vec<_>>(),
+                "deployment_contract_ids": work_item.deployment_contract_id.iter().cloned().collect::<Vec<_>>(),
+                "source_merge_shas": source_merge_shas,
+                "gitops_merge_shas": gitops_merge_shas,
+                "image_digests": image_digests,
+                "production_impacting": work_item.production_impacting,
             }),
             policy: json!({ "policy_mode": "supervised_autonomy" }),
-            expires_at: request.expires_at,
+            expires_at,
         },
     )
     .await?;
@@ -15080,6 +18091,14 @@ async fn internal_argo_sync_context(
     Path(deployment_intent_id): Path<String>,
     Query(query): Query<InternalArgoSyncQuery>,
 ) -> Result<Json<ArgoSyncContextResponse>, ApiError> {
+    if deployment_intent_id.starts_with("rollback_") {
+        return internal_rollback_argo_sync_context(
+            &state,
+            &deployment_intent_id,
+            &query.execution_id,
+        )
+        .await;
+    }
     let (intent, _run_id, execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &query.execution_id).await?;
     let preflight = deployment_intent_execution_preflight(&state, &intent.id).await?;
@@ -15128,6 +18147,15 @@ async fn internal_argo_sync_context(
         execution_id: query.execution_id,
         target_namespace: target.namespace,
         argo_application: target.application,
+        revision: preflight.gitops_merge.as_ref().and_then(|artifact| {
+            artifact
+                .content_json
+                .as_ref()
+                .and_then(|content| content.get("merge_commit_sha"))
+                .and_then(Value::as_str)
+                .filter(|revision| is_git_sha(revision))
+                .map(str::to_string)
+        }),
         poll_seconds: argo_executor_poll_seconds(&state),
     }))
 }
@@ -15137,6 +18165,12 @@ async fn internal_argo_sync_control(
     Path(deployment_intent_id): Path<String>,
     Query(query): Query<InternalArgoSyncQuery>,
 ) -> Result<Json<ArgoSyncControlResponse>, ApiError> {
+    if deployment_intent_id.starts_with("rollback_") {
+        let (item, _current, _run) = rollback_intent_context(&state, &deployment_intent_id).await?;
+        return Ok(Json(ArgoSyncControlResponse {
+            cancelled: item.status == "cancelled",
+        }));
+    }
     let (intent, _run_id, _execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &query.execution_id).await?;
     let work_plan = state
@@ -15160,6 +18194,9 @@ async fn internal_argo_sync_outcome(
     Path(deployment_intent_id): Path<String>,
     Json(request): Json<ArgoSyncOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
+    if deployment_intent_id.starts_with("rollback_") {
+        return internal_rollback_argo_sync_outcome(&state, &deployment_intent_id, request).await;
+    }
     let (intent, run_id, execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &request.execution_id).await?;
     let execution_content = execution
@@ -15251,6 +18288,203 @@ async fn internal_argo_sync_outcome(
     )
     .await?;
     Ok(Json(result))
+}
+
+async fn current_rollback_argo_sync_execution(
+    state: &AppState,
+    rollback_intent_id: &str,
+    execution_id: &str,
+) -> Result<
+    (
+        StoredWorkItem,
+        Value,
+        pharness_store::StoredRun,
+        StoredArtifact,
+    ),
+    ApiError,
+> {
+    let (item, current, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let artifacts = state.store.list_artifacts(&run.id).await?;
+    let execution = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_argo_sync_execution")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|content| {
+                content.get("rollback_intent_id").and_then(Value::as_str)
+                    == Some(rollback_intent_id)
+                    && content.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .cloned()
+        .ok_or_else(|| ApiError::conflict("rollback Argo sync execution is unavailable"))?;
+    let latest = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == "rollback_argo_sync_execution")
+        .filter(|artifact| {
+            artifact.content_json.as_ref().is_some_and(|content| {
+                content.get("rollback_intent_id").and_then(Value::as_str)
+                    == Some(rollback_intent_id)
+            })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
+    if latest.map(|artifact| artifact.id.as_str()) != Some(execution.id.as_str()) {
+        return Err(ApiError::conflict(
+            "rollback Argo sync execution is no longer current",
+        ));
+    }
+    Ok((item, current, run, execution))
+}
+
+async fn internal_rollback_argo_sync_context(
+    state: &AppState,
+    rollback_intent_id: &str,
+    execution_id: &str,
+) -> Result<Json<ArgoSyncContextResponse>, ApiError> {
+    let (item, current, _run, execution) =
+        current_rollback_argo_sync_execution(state, rollback_intent_id, execution_id).await?;
+    let content = current
+        .get("content")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+    validate_rollback_argo_grant(state, &item, rollback_intent_id, content).await?;
+    if current.pointer("/content/status").and_then(Value::as_str) != Some("argo_syncing")
+        || !state
+            .worker
+            .argo_executor_allows_application(PROTECTED_ARGO_APPLICATION)
+    {
+        return Err(ApiError::conflict(
+            "rollback Argo sync is no longer authorized for the protected Application",
+        ));
+    }
+    let revision = content
+        .get("gitops_merge_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback GitOps merge SHA is unavailable"))?;
+    let execution_content = execution
+        .content_json
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("rollback Argo execution content is unavailable"))?;
+    if execution_content
+        .get("permission_grant_id")
+        .and_then(Value::as_str)
+        != content
+            .get("argo_permission_grant_id")
+            .and_then(Value::as_str)
+        || execution_content
+            .get("gitops_merge_sha")
+            .and_then(Value::as_str)
+            != Some(revision)
+    {
+        return Err(ApiError::conflict(
+            "rollback Argo execution is stale relative to its grant or observed merge",
+        ));
+    }
+    Ok(Json(ArgoSyncContextResponse {
+        execution_id: execution_id.to_string(),
+        target_namespace: PROTECTED_NAMESPACE.to_string(),
+        argo_application: PROTECTED_ARGO_APPLICATION.to_string(),
+        revision: Some(revision.to_string()),
+        poll_seconds: argo_executor_poll_seconds(state),
+    }))
+}
+
+async fn internal_rollback_argo_sync_outcome(
+    state: &AppState,
+    rollback_intent_id: &str,
+    request: ArgoSyncOutcomeRequest,
+) -> Result<Json<ArtifactResponse>, ApiError> {
+    let (_item, current, run, _execution) =
+        current_rollback_argo_sync_execution(state, rollback_intent_id, &request.execution_id)
+            .await?;
+    let expected_revision = current
+        .pointer("/content/gitops_merge_sha")
+        .and_then(Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| ApiError::conflict("rollback GitOps merge SHA is unavailable"))?;
+    let result = match request.status.as_str() {
+        "submitted" => {
+            append_rollback_argo_sync_result(
+                state,
+                &run,
+                rollback_intent_id,
+                &request.execution_id,
+                "submitted",
+                json!({}),
+            )
+            .await?
+        }
+        "completed" => {
+            let sync_status = clean_optional_text(request.sync_status).ok_or_else(|| {
+                ApiError::bad_request("completed Argo outcome requires sync_status")
+            })?;
+            let operation_phase =
+                clean_optional_text(request.operation_phase).ok_or_else(|| {
+                    ApiError::bad_request("completed Argo outcome requires operation_phase")
+                })?;
+            let revision = clean_optional_text(request.revision)
+                .filter(|revision| revision == expected_revision)
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                        "rollback Argo outcome revision does not match the observed GitOps merge",
+                    )
+                })?;
+            if sync_status != "Synced" || operation_phase != "Succeeded" {
+                return Err(ApiError::conflict(
+                    "completed rollback Argo outcome requires Synced and Succeeded",
+                ));
+            }
+            append_rollback_argo_sync_result(
+                state,
+                &run,
+                rollback_intent_id,
+                &request.execution_id,
+                "completed",
+                json!({
+                    "sync_status": sync_status,
+                    "health_status": clean_optional_text(request.health_status),
+                    "operation_phase": operation_phase,
+                    "revision": revision,
+                }),
+            )
+            .await?
+        }
+        "failed" | "cancelled" => append_rollback_argo_sync_result(
+            state,
+            &run,
+            rollback_intent_id,
+            &request.execution_id,
+            &request.status,
+            json!({
+                "error_code": normalized_executor_error_code(
+                    request.error_code,
+                    if request.status == "cancelled" { "cancelled" } else { "argo_sync_failed" },
+                ),
+                "sync_status": clean_optional_text(request.sync_status),
+                "health_status": clean_optional_text(request.health_status),
+                "operation_phase": clean_optional_text(request.operation_phase),
+                "revision": clean_optional_text(request.revision),
+            }),
+        )
+        .await?,
+        _ => {
+            return Err(ApiError::bad_request(
+                "rollback Argo outcome status must be submitted, completed, failed, or cancelled",
+            ))
+        }
+    };
+    if matches!(request.status.as_str(), "failed" | "cancelled") {
+        let mut updated = current
+            .get("content")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+        updated.insert("status".to_string(), json!("attention_required"));
+        updated.insert("argo_failure_result_id".to_string(), json!(result.id));
+        append_rollback_intent_artifact(state, &run, &Value::Object(updated)).await?;
+    }
+    Ok(Json(result.into()))
 }
 
 fn argo_executor_poll_seconds(state: &AppState) -> u64 {
@@ -16068,7 +19302,7 @@ async fn verify_release(
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
     let target = deployment_target(&intent)?;
-    ensure_development_deployment_target(&work_item, &target)?;
+    ensure_supported_deployment_target(&work_item, &target)?;
     let run_id = intent.run_id.clone().ok_or_else(|| {
         ApiError::conflict("post-sync verification requires DeploymentIntent coding run provenance")
     })?;
@@ -16139,6 +19373,84 @@ async fn verify_release(
         .pointer("/analysis/status")
         .and_then(Value::as_str)
         == Some("healthy");
+    let runtime_image_check = if work_item.production_impacting {
+        let expected_digest = pipeline_build_output_for_deployment_intent(&state, &intent)
+            .await?
+            .map(|output| output.image_digest)
+            .ok_or_else(|| {
+                ApiError::conflict(
+                    "production verification requires the verified Pipeline build digest",
+                )
+            })?;
+        let response = execute_direct_capability(
+            &state,
+            AgentAction::KubernetesGet {
+                id: "release.verify_running_image_ids".into(),
+                reason: format!("verify Release {} running Pod imageIDs", current.id),
+                resource: "pods".to_string(),
+                namespace: Some(PROTECTED_NAMESPACE.to_string()),
+                name: None,
+                all_namespaces: false,
+                label_selector: Some("app=yfinance-wrapper".to_string()),
+            },
+            request.timeout_ms,
+        )
+        .await?;
+        let image_ids = response
+            .result
+            .as_ref()
+            .and_then(|result| result.content.pointer("/output/items"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .flat_map(|pod| {
+                pod.pointer("/status/containers")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+            })
+            .filter_map(|container| container.get("imageID").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        execution_check(
+            "running_image_digest",
+            !image_ids.is_empty()
+                && image_ids
+                    .iter()
+                    .all(|image_id| image_id.ends_with(&expected_digest)),
+            format!(
+                "{} running container imageID(s) checked against {}",
+                image_ids.len(),
+                expected_digest
+            ),
+        )
+    } else {
+        execution_check(
+            "running_image_digest",
+            true,
+            "Exact Pod imageID verification is not required for legacy dev delivery",
+        )
+    };
+    let service_health_check = if work_item.production_impacting {
+        let outcome = state
+            .worker
+            .verify_capability("yfinance_healthz", None)
+            .await;
+        execution_check(
+            "service_healthz",
+            outcome.as_ref().is_ok_and(|outcome| outcome.available),
+            if outcome.as_ref().is_ok_and(|outcome| outcome.available) {
+                "Exact apps-prod/yfinance-wrapper Service /healthz check passed"
+            } else {
+                "Exact apps-prod/yfinance-wrapper Service /healthz check failed"
+            },
+        )
+    } else {
+        execution_check(
+            "service_healthz",
+            true,
+            "Bounded Service /healthz verification is not required for legacy dev delivery",
+        )
+    };
     let (observability_observation, observability_check) = if prometheus_inventory_required {
         verify_required_prometheus_inventory(&state, request.timeout_ms).await?
     } else {
@@ -16155,7 +19467,19 @@ async fn verify_release(
         .get("passed")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let verified = argo_healthy && rollout_healthy && observability_healthy;
+    let running_image_healthy = runtime_image_check
+        .get("passed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let service_healthy = service_health_check
+        .get("passed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let verified = argo_healthy
+        && rollout_healthy
+        && running_image_healthy
+        && service_healthy
+        && observability_healthy;
     let mut checks = vec![
         execution_check(
             "completed_argo_sync",
@@ -16176,6 +19500,8 @@ async fn verify_release(
             verification_observation_summary(&workload_observation),
         ),
     ];
+    checks.push(runtime_image_check);
+    checks.push(service_health_check);
     checks.push(observability_check);
 
     let release_json = release_json_with_post_sync_verification(
@@ -16299,6 +19625,9 @@ async fn deployment_contract_for_sync_execution(
     }
     let spec = deployment_contract_spec(&contract.contract_json)?;
     validate_deployment_contract_spec(&spec)?;
+    if contract.target_environment == PROTECTED_ENVIRONMENT {
+        validate_protected_production_deployment_contract(&spec)?;
+    }
     Ok(Some(contract))
 }
 
@@ -17865,9 +21194,9 @@ async fn prepare_change_set_git_delivery(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
-    if work_item.production_impacting || work_item.target_environment != "dev" {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "Git delivery preflight is limited to non-production WorkItems targeting dev",
+            "Git delivery preflight is limited to dev or the exact protected production target",
         ));
     }
     let run_id = change_set
@@ -17891,6 +21220,7 @@ async fn prepare_change_set_git_delivery(
         workspace_id: workspace_id.clone(),
         source_repo: work_item.source_repo.clone(),
         source_ref: work_item.source_ref.clone(),
+        source_commit: None,
         branch: branch.clone(),
         resolved_commit: Some(base_commit.clone()),
     }
@@ -18093,9 +21423,9 @@ async fn authorize_change_set_git_delivery(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
-    if work_item.production_impacting || work_item.target_environment != GIT_DELIVERY_ENVIRONMENT {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "Git delivery authorization is limited to non-production WorkItems targeting dev",
+            "Git delivery authorization is limited to dev or the exact protected production target",
         ));
     }
     let run_id = change_set
@@ -18113,6 +21443,7 @@ async fn authorize_change_set_git_delivery(
         .or_else(|| clean_optional_text(request.created_by.clone()));
     let reason = clean_optional_text(Some(request.reason))
         .ok_or_else(|| ApiError::bad_request("Git delivery authorization reason is required"))?;
+    let expires_at = bounded_production_grant_expiry(&work_item, request.expires_at)?;
     if let Some(existing) = matching_git_delivery_grant(
         &state.store,
         &subject,
@@ -18137,7 +21468,7 @@ async fn authorize_change_set_git_delivery(
             created_by: actor.clone(),
             reason: reason.clone(),
             scope: json!({
-                "environment": GIT_DELIVERY_ENVIRONMENT,
+                "environment": work_item.target_environment,
                 "capability_kinds": ["git"],
                 "actions": GIT_DELIVERY_ACTIONS,
                 "max_risk": "high",
@@ -18146,10 +21477,10 @@ async fn authorize_change_set_git_delivery(
                 "work_plan_ids": [change_set.work_plan_id],
                 "change_set_ids": [change_set.id],
                 "git_delivery_plan_artifact_ids": [plan.id],
-                "production_impacting": false,
+                "production_impacting": work_item.production_impacting,
             }),
             policy: json!({ "policy_mode": "supervised_autonomy" }),
-            expires_at: request.expires_at,
+            expires_at,
         },
     )
     .await?;
@@ -18218,6 +21549,27 @@ async fn preflight_change_set_git_delivery(
     let approval_gate_ready = approval_gate
         .as_ref()
         .is_some_and(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
+    let source_approval_gate = if work_item.production_impacting {
+        state
+            .store
+            .list_approval_gates(ApprovalGateListFilter {
+                work_item_id: Some(work_item.id.clone()),
+                gate_kind: Some("source_mutation".to_string()),
+                limit: 20,
+                ..ApprovalGateListFilter::default()
+            })
+            .await?
+            .into_iter()
+            .find(|gate| {
+                work_item_gate_scope_matches(gate, &work_item, &work_plan, "source_mutation")
+            })
+    } else {
+        None
+    };
+    let source_approval_ready = !work_item.production_impacting
+        || source_approval_gate
+            .as_ref()
+            .is_some_and(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
     let subject = clean_optional_text(request.subject)
         .unwrap_or_else(|| DEFAULT_GIT_WRITER_SUBJECT.to_string());
     let grant = matching_git_delivery_grant(
@@ -18243,14 +21595,17 @@ async fn preflight_change_set_git_delivery(
             format!("WorkPlan status is {}", work_plan.status),
         ),
         execution_check(
-            "development_target",
-            !work_item.production_impacting
-                && work_item.target_environment == GIT_DELIVERY_ENVIRONMENT,
-            if work_item.production_impacting {
-                "Git delivery preflight only permits non-production WorkItems".to_string()
-            } else {
-                format!("WorkItem targets {}", work_item.target_environment)
-            },
+            "supported_target",
+            work_item_target_supported(&work_item),
+            format!(
+                "WorkItem targets {}{}",
+                work_item.target_environment,
+                if work_item.production_impacting {
+                    " (protected production)"
+                } else {
+                    ""
+                }
+            ),
         ),
         execution_check(
             "immutable_source_provenance",
@@ -18270,6 +21625,21 @@ async fn preflight_change_set_git_delivery(
                     "No scoped WorkItem git_mutation gate matches this Git delivery plan"
                         .to_string()
                 }),
+        ),
+        execution_check(
+            "work_item_source_mutation_gate",
+            source_approval_ready,
+            if work_item.production_impacting {
+                source_approval_gate
+                    .as_ref()
+                    .map(|gate| format!("Source mutation gate {} is {}", gate.id, gate.status))
+                    .unwrap_or_else(|| {
+                        "No scoped WorkItem source_mutation gate matches this Git delivery plan"
+                            .to_string()
+                    })
+            } else {
+                "Separate source_mutation gate is not required for legacy dev delivery".to_string()
+            },
         ),
         execution_check(
             "trusted_git_delivery_grant",
@@ -18651,9 +22021,9 @@ async fn observe_change_set_git_delivery(
         })?)
         .await?
         .ok_or_else(|| ApiError::conflict("Git delivery WorkItem is unavailable"))?;
-    if work_item.production_impacting || work_item.target_environment != GIT_DELIVERY_ENVIRONMENT {
+    if !work_item_target_supported(&work_item) {
         return Err(ApiError::conflict(
-            "Git delivery observation is limited to non-production WorkItems targeting dev",
+            "Git delivery observation is limited to dev or the exact protected production target",
         ));
     }
     let plan = current_git_delivery_plan(&state.store, &run_id, &change_set).await?;
@@ -19128,9 +22498,9 @@ async fn internal_gitops_base_revision_context(
     let (change_set, execution) =
         current_gitops_base_revision_execution(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
-    let settings = state.worker.git_observer_settings().ok_or_else(|| {
+    let settings = state.worker.gitops_observer_settings().ok_or_else(|| {
         ApiError::conflict(
-            "read-only Git observer identity is not configured for GitOps revision resolution",
+            "read-only GitOps observer identity is not configured for GitOps revision resolution",
         )
     })?;
     if !settings
@@ -19277,6 +22647,14 @@ async fn internal_gitops_delivery_context(
     Path(gitops_change_set_id): Path<String>,
     Query(query): Query<InternalGitOpsDeliveryQuery>,
 ) -> Result<Json<GitOpsDeliveryContextResponse>, ApiError> {
+    if gitops_change_set_id.starts_with("rollback_") {
+        return internal_rollback_delivery_context(
+            &state,
+            &gitops_change_set_id,
+            &query.execution_id,
+        )
+        .await;
+    }
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
@@ -19323,6 +22701,9 @@ async fn internal_gitops_delivery_outcome(
     Path(gitops_change_set_id): Path<String>,
     Json(request): Json<GitOpsDeliveryOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
+    if gitops_change_set_id.starts_with("rollback_") {
+        return internal_rollback_delivery_outcome(&state, &gitops_change_set_id, request).await;
+    }
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &request.execution_id)
             .await?;
@@ -19420,13 +22801,21 @@ async fn internal_gitops_delivery_observation_context(
     Path(gitops_change_set_id): Path<String>,
     Query(query): Query<InternalGitOpsDeliveryQuery>,
 ) -> Result<Json<GitOpsDeliveryObservationContextResponse>, ApiError> {
+    if gitops_change_set_id.starts_with("rollback_") {
+        return internal_rollback_delivery_observation_context(
+            &state,
+            &gitops_change_set_id,
+            &query.execution_id,
+        )
+        .await;
+    }
     let (change_set, _plan, execution) =
         current_gitops_delivery_observation(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
     let settings = state
         .worker
-        .git_observer_settings()
-        .ok_or_else(|| ApiError::conflict("Git observer executor is not configured"))?;
+        .gitops_observer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps observer executor is not configured"))?;
     let source = execution
         .content_json
         .as_ref()
@@ -19476,6 +22865,14 @@ async fn internal_gitops_delivery_observation_outcome(
     Path(gitops_change_set_id): Path<String>,
     Json(request): Json<GitOpsDeliveryObservationOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
+    if gitops_change_set_id.starts_with("rollback_") {
+        return internal_rollback_delivery_observation_outcome(
+            &state,
+            &gitops_change_set_id,
+            request,
+        )
+        .await;
+    }
     let (change_set, plan, execution) =
         current_gitops_delivery_observation(&state, &gitops_change_set_id, &request.execution_id)
             .await?;
@@ -19513,6 +22910,288 @@ async fn internal_gitops_delivery_observation_outcome(
     };
     append_gitops_change_set_audit_event(&state.store,&change_set,&format!("gitops_change_set.delivery_observation_{}",request.status),Some("agent:git-observer".to_string()),None,json!({"execution_id":request.execution_id,"gitops_delivery_plan_artifact_id":plan.id,"observation_artifact_id":artifact.id})).await?;
     Ok(Json(artifact))
+}
+
+async fn internal_rollback_delivery_context(
+    state: &AppState,
+    rollback_intent_id: &str,
+    execution_id: &str,
+) -> Result<Json<GitOpsDeliveryContextResponse>, ApiError> {
+    let (_item, _intent, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let execution = state
+        .store
+        .list_artifacts(&run.id)
+        .await?
+        .into_iter()
+        .find(|artifact| {
+            artifact.kind == "rollback_delivery_execution"
+                && artifact.content_json.as_ref().is_some_and(|value| {
+                    value.get("rollback_intent_id").and_then(Value::as_str)
+                        == Some(rollback_intent_id)
+                        && value.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                })
+        })
+        .ok_or_else(|| ApiError::conflict("rollback delivery execution is not current"))?;
+    let context = execution
+        .content_json
+        .as_ref()
+        .and_then(|value| value.get("context"))
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            ApiError::conflict("rollback delivery execution has no immutable context")
+        })?;
+    let repository = required_json_string(context, "repository", "rollback delivery context")?;
+    let settings = state
+        .worker
+        .gitops_writer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps rollback writer is not configured"))?;
+    if repository != PROTECTED_GITOPS_REPO
+        || !settings
+            .allowed_repos
+            .iter()
+            .any(|repo| repo == &repository)
+    {
+        return Err(ApiError::conflict(
+            "rollback repository is not allowlisted for the isolated GitOps writer",
+        ));
+    }
+    let response = GitOpsDeliveryContextResponse {
+        execution_id: required_json_string(context, "execution_id", "rollback delivery context")?,
+        repository,
+        base_ref: required_json_string(context, "base_ref", "rollback delivery context")?,
+        base_commit: required_json_string(context, "base_commit", "rollback delivery context")?,
+        head_branch: required_json_string(context, "head_branch", "rollback delivery context")?,
+        kustomization_path: required_json_string(
+            context,
+            "kustomization_path",
+            "rollback delivery context",
+        )?,
+        image_name: required_json_string(context, "image_name", "rollback delivery context")?,
+        image_ref: required_json_string(context, "image_ref", "rollback delivery context")?,
+        commit_subject: required_json_string(
+            context,
+            "commit_subject",
+            "rollback delivery context",
+        )?,
+        commit_body: required_json_string(context, "commit_body", "rollback delivery context")?,
+        pull_request_title: required_json_string(
+            context,
+            "pull_request_title",
+            "rollback delivery context",
+        )?,
+        pull_request_body: required_json_string(
+            context,
+            "pull_request_body",
+            "rollback delivery context",
+        )?,
+        github_api_url: settings.github_api_url,
+        author_name: settings.author_name,
+        author_email: settings.author_email,
+    };
+    if response.execution_id != execution_id
+        || response.kustomization_path != PROTECTED_KUSTOMIZATION_PATH
+        || response.image_name != PROTECTED_IMAGE_NAME
+        || !response
+            .image_ref
+            .starts_with(&format!("{PROTECTED_IMAGE_NAME}@sha256:"))
+        || !is_git_sha(&response.base_commit)
+    {
+        return Err(ApiError::conflict(
+            "rollback delivery context no longer matches the protected target",
+        ));
+    }
+    Ok(Json(response))
+}
+
+async fn internal_rollback_delivery_outcome(
+    state: &AppState,
+    rollback_intent_id: &str,
+    request: GitOpsDeliveryOutcomeRequest,
+) -> Result<Json<ArtifactResponse>, ApiError> {
+    let Json(context) =
+        internal_rollback_delivery_context(state, rollback_intent_id, &request.execution_id)
+            .await?;
+    let (_item, current, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let result = match request.status.as_str() {
+        "completed" => {
+            let branch = clean_optional_text(request.branch).ok_or_else(|| ApiError::bad_request("completed rollback delivery requires branch"))?;
+            let commit_sha = clean_optional_text(request.commit_sha).ok_or_else(|| ApiError::bad_request("completed rollback delivery requires commit_sha"))?;
+            let pull_request_url = clean_optional_text(request.pull_request_url).ok_or_else(|| ApiError::bad_request("completed rollback delivery requires pull_request_url"))?;
+            let pull_request_number = request.pull_request_number.ok_or_else(|| ApiError::bad_request("completed rollback delivery requires pull_request_number"))?;
+            let expected_prefix = "https://github.com/lward27/lucas_engineering/pull/";
+            if branch != context.head_branch || !is_git_sha(&commit_sha) || !pull_request_url.starts_with(expected_prefix) || !pull_request_url.ends_with(&pull_request_number.to_string()) {
+                return Err(ApiError::conflict("rollback delivery outcome does not match immutable GitHub provenance"));
+            }
+            append_rollback_delivery_result(state, &run, rollback_intent_id, &request.execution_id, "completed", json!({ "branch": branch, "commit_sha": commit_sha, "pull_request_url": pull_request_url, "pull_request_number": pull_request_number })).await?
+        }
+        "failed" => append_rollback_delivery_result(state, &run, rollback_intent_id, &request.execution_id, "failed", json!({ "error_code": clean_optional_text(request.error_code).unwrap_or_else(|| "gitops_writer_failed".to_string()) })).await?,
+        _ => return Err(ApiError::bad_request("rollback delivery outcome status must be completed or failed")),
+    };
+    if request.status == "completed" {
+        let mut content = current
+            .get("content")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+        content.insert("status".to_string(), json!("awaiting_manual_merge"));
+        content.insert(
+            "pull_request".to_string(),
+            result
+                .content_json
+                .as_ref()
+                .and_then(|value| value.get("details"))
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
+        append_rollback_intent_artifact(state, &run, &Value::Object(content)).await?;
+    } else if request.status == "failed" {
+        let mut content = current
+            .get("content")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+        content.insert("status".to_string(), json!("attention_required"));
+        content.insert("writer_failure_result_id".to_string(), json!(result.id));
+        append_rollback_intent_artifact(state, &run, &Value::Object(content)).await?;
+    }
+    Ok(Json(result.into()))
+}
+
+async fn internal_rollback_delivery_observation_context(
+    state: &AppState,
+    rollback_intent_id: &str,
+    execution_id: &str,
+) -> Result<Json<GitOpsDeliveryObservationContextResponse>, ApiError> {
+    let (_item, _intent, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let execution = state
+        .store
+        .list_artifacts(&run.id)
+        .await?
+        .into_iter()
+        .find(|artifact| {
+            artifact.kind == "rollback_delivery_observation_execution"
+                && artifact.content_json.as_ref().is_some_and(|value| {
+                    value.get("rollback_intent_id").and_then(Value::as_str)
+                        == Some(rollback_intent_id)
+                        && value.get("execution_id").and_then(Value::as_str) == Some(execution_id)
+                })
+        })
+        .ok_or_else(|| ApiError::conflict("rollback observation execution is not current"))?;
+    let source = execution
+        .content_json
+        .as_ref()
+        .and_then(|value| value.get("source"))
+        .and_then(Value::as_object)
+        .ok_or_else(|| ApiError::conflict("rollback observation has no source provenance"))?;
+    let repository = required_json_string(source, "repository", "rollback observation source")?;
+    let settings = state
+        .worker
+        .gitops_observer_settings()
+        .ok_or_else(|| ApiError::conflict("GitOps rollback observer is not configured"))?;
+    if repository != PROTECTED_GITOPS_REPO
+        || !settings
+            .allowed_repos
+            .iter()
+            .any(|repo| repo == &repository)
+    {
+        return Err(ApiError::conflict(
+            "rollback repository is not allowlisted for the isolated GitOps observer",
+        ));
+    }
+    Ok(Json(GitOpsDeliveryObservationContextResponse {
+        execution_id: execution_id.to_string(),
+        repository,
+        head_branch: required_json_string(source, "head_branch", "rollback observation source")?,
+        source_commit_sha: required_json_string(
+            source,
+            "source_commit_sha",
+            "rollback observation source",
+        )?,
+        pull_request_url: required_json_string(
+            source,
+            "pull_request_url",
+            "rollback observation source",
+        )?,
+        pull_request_number: source
+            .get("pull_request_number")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                ApiError::conflict("rollback observation source has no pull-request number")
+            })?,
+        github_api_url: settings.github_api_url,
+    }))
+}
+
+async fn internal_rollback_delivery_observation_outcome(
+    state: &AppState,
+    rollback_intent_id: &str,
+    request: GitOpsDeliveryObservationOutcomeRequest,
+) -> Result<Json<ArtifactResponse>, ApiError> {
+    let Json(context) = internal_rollback_delivery_observation_context(
+        state,
+        rollback_intent_id,
+        &request.execution_id,
+    )
+    .await?;
+    let (_item, current, run) = rollback_intent_context(state, rollback_intent_id).await?;
+    let artifact = match request.status.as_str() {
+        "observed" => {
+            let pull_request_state = clean_optional_text(request.pull_request_state).ok_or_else(|| ApiError::bad_request("observed rollback outcome requires pull_request_state"))?;
+            let merged = request.merged.ok_or_else(|| ApiError::bad_request("observed rollback outcome requires merged"))?;
+            let head_branch = clean_optional_text(request.head_branch).ok_or_else(|| ApiError::bad_request("observed rollback outcome requires head_branch"))?;
+            let head_commit_sha = clean_optional_text(request.head_commit_sha).ok_or_else(|| ApiError::bad_request("observed rollback outcome requires head_commit_sha"))?;
+            let merge_commit_sha = clean_optional_text(request.merge_commit_sha);
+            if !matches!(pull_request_state.as_str(), "open" | "closed") || head_branch != context.head_branch || head_commit_sha != context.source_commit_sha || !is_git_sha(&head_commit_sha) || (merged && (pull_request_state != "closed" || !merge_commit_sha.as_deref().is_some_and(is_git_sha))) || (!merged && merge_commit_sha.is_some()) {
+                return Err(ApiError::conflict("rollback observation does not match the delivered immutable pull request"));
+            }
+            append_rollback_delivery_observation(state, &run, rollback_intent_id, &request.execution_id, "observed", json!({ "pull_request_state": pull_request_state, "merged": merged, "head_branch": head_branch, "head_commit_sha": head_commit_sha, "merge_commit_sha": merge_commit_sha })).await?
+        }
+        "failed" => append_rollback_delivery_observation(state, &run, rollback_intent_id, &request.execution_id, "failed", json!({ "error_code": clean_optional_text(request.error_code).unwrap_or_else(|| "gitops_observer_failed".to_string()) })).await?,
+        _ => return Err(ApiError::bad_request("rollback observation outcome status must be observed or failed")),
+    };
+    if request.status == "observed" {
+        let merged = artifact
+            .content_json
+            .as_ref()
+            .and_then(|value| value.get("merged"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let mut content = current
+            .get("content")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+        content.insert(
+            "status".to_string(),
+            json!(if merged {
+                "ready_for_argo_sync"
+            } else {
+                "awaiting_manual_merge"
+            }),
+        );
+        if merged {
+            content.insert(
+                "gitops_merge_sha".to_string(),
+                artifact
+                    .content_json
+                    .as_ref()
+                    .and_then(|value| value.get("merge_commit_sha"))
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            );
+        }
+        append_rollback_intent_artifact(state, &run, &Value::Object(content)).await?;
+    } else if request.status == "failed" {
+        let mut content = current
+            .get("content")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("RollbackIntent content is unavailable"))?;
+        content.insert("status".to_string(), json!("attention_required"));
+        content.insert("observer_failure_result_id".to_string(), json!(artifact.id));
+        append_rollback_intent_artifact(state, &run, &Value::Object(content)).await?;
+    }
+    Ok(Json(artifact.into()))
 }
 
 async fn current_gitops_delivery_observation(
@@ -19841,6 +23520,7 @@ fn git_delivery_plan_source(
         workspace_id: workspace_id.clone(),
         source_repo: repository.clone(),
         source_ref: base_ref.clone(),
+        source_commit: None,
         branch: head_branch.clone(),
         resolved_commit: Some(base_commit.clone()),
     }
@@ -19932,7 +23612,7 @@ async fn matching_git_delivery_grant(
             .all(|action| scope.actions.iter().any(|allowed| allowed == action));
         let matches = grant.subject == subject
             && policy.policy_mode == PolicyMode::SupervisedAutonomy
-            && scope.environment.as_deref() == Some(GIT_DELIVERY_ENVIRONMENT)
+            && scope.environment.as_deref() == Some(work_item.target_environment.as_str())
             && scope.capability_kinds == vec![CapabilityKind::Git]
             && scope.actions.len() == GIT_DELIVERY_ACTIONS.len()
             && has_all_actions
@@ -19944,7 +23624,7 @@ async fn matching_git_delivery_grant(
             && scope.work_plan_ids == vec![change_set.work_plan_id.clone()]
             && scope.change_set_ids == vec![change_set.id.clone()]
             && scope.git_delivery_plan_artifact_ids == vec![plan_artifact_id.to_string()]
-            && scope.production_impacting == Some(false);
+            && scope.production_impacting == Some(work_item.production_impacting);
         if matches {
             return Ok(Some(grant));
         }
@@ -19983,7 +23663,7 @@ async fn matching_gitops_delivery_grant(
             .all(|action| scope.actions.iter().any(|allowed| allowed == action));
         let matches = grant.subject == subject
             && policy.policy_mode == PolicyMode::SupervisedAutonomy
-            && scope.environment.as_deref() == Some(GIT_DELIVERY_ENVIRONMENT)
+            && scope.environment.as_deref() == Some(work_item.target_environment.as_str())
             && scope.capability_kinds == vec![CapabilityKind::Git]
             && scope.actions.len() == GITOPS_DELIVERY_ACTIONS.len()
             && has_all_actions
@@ -19995,7 +23675,7 @@ async fn matching_gitops_delivery_grant(
             && scope.work_plan_ids == vec![change_set.work_plan_id.clone()]
             && scope.gitops_change_set_ids == vec![change_set.id.clone()]
             && scope.gitops_delivery_plan_artifact_ids == vec![plan_artifact_id.to_string()]
-            && scope.production_impacting == Some(false)
+            && scope.production_impacting == Some(work_item.production_impacting)
             && work_item.gitops_repo.as_deref() == Some(change_set.gitops_repo.as_str())
             && work_item.gitops_ref.as_deref() == Some(change_set.gitops_ref.as_str());
         if matches {
@@ -22317,7 +25997,7 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_gate_summary, approval_gates_from_work_item, approval_summary,
+        advance_work_item, approval_gate_summary, approval_gates_from_work_item, approval_summary,
         attach_deployment_intent_evidence, attach_pipeline_intent_evidence,
         attach_release_evidence, authorize_change_set_git_delivery,
         authorize_gitops_change_set_delivery, block_work_item_from_delivery_failure,
@@ -22334,11 +26014,11 @@ mod tests {
         create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
         deny_approval, deployment_intent_reconcile_action,
         ensure_pipeline_evidence_ready_for_deployment, execute_capability,
-        execute_deployment_intent, execution_matches_pipeline_contract, get_approval,
-        get_approval_gate, get_artifact, get_deployment_contract, get_deployment_intent,
-        get_incident, get_observation, get_permission_grant, get_pipeline_intent,
-        get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
-        get_run_events, get_work_plan, git_delivery_reconcile_action,
+        execute_deployment_intent, execute_work_item_action, execution_matches_pipeline_contract,
+        get_approval, get_approval_gate, get_artifact, get_deployment_contract,
+        get_deployment_intent, get_incident, get_observation, get_permission_grant,
+        get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
+        get_run_diff, get_run_events, get_work_plan, git_delivery_reconcile_action,
         gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
         internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
         last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
@@ -22377,7 +26057,7 @@ mod tests {
     };
     use crate::dispatch::{KubernetesJobDispatcher, RunDispatcher};
     use crate::dto::{
-        ApprovalDecision, ArgoSyncOutcomeRequest, ArtifactResponse,
+        AdvanceWorkItemRequest, ApprovalDecision, ArgoSyncOutcomeRequest, ArtifactResponse,
         AttachDeploymentIntentEvidenceRequest, AttachPipelineIntentEvidenceRequest,
         AttachReleaseEvidenceRequest, CreateChangeSetRequest, CreateDeploymentContractRequest,
         CreateDeploymentIntentFromPipelineIntentRequest,
@@ -22390,8 +26070,9 @@ mod tests {
         CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
         DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
-        ExecuteCapabilityRequest, ExecuteDeploymentIntentRequest, GitDeliveryPreflightRequest,
-        GitOpsDeliveryObservationOutcomeRequest, GitOpsDeliveryPreflightRequest,
+        ExecuteCapabilityRequest, ExecuteDeploymentIntentRequest, ExecuteWorkItemActionRequest,
+        GitDeliveryPreflightRequest, GitOpsDeliveryObservationOutcomeRequest,
+        GitOpsDeliveryOutcomeRequest, GitOpsDeliveryPreflightRequest,
         PipelineIntentExecutionOutcomeRequest, PrepareGitDeliveryRequest,
         PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest, ReconcileWorkItemRequest,
         ReleaseResponse, ReplanWorkItemRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
@@ -22435,6 +26116,8 @@ mod tests {
             worker_token: None,
             operator_tokens: Arc::new(Vec::new()),
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+            build: super::BuildMetadata::from_env(),
+            protected_target: super::ProtectedTargetConfiguration::from_env(),
         }
     }
 
@@ -22447,6 +26130,8 @@ mod tests {
             worker_token: None,
             operator_tokens: Arc::new(Vec::new()),
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+            build: super::BuildMetadata::from_env(),
+            protected_target: super::ProtectedTargetConfiguration::from_env(),
         }
     }
 
@@ -22493,13 +26178,23 @@ mod tests {
                 git_observer_enabled: true,
                 git_observer_service_account: "pharness-git-observer".to_string(),
                 git_observer_token_secret_name: Some("pharness-git-observer-token".to_string()),
-                git_observer_allowed_repos: vec![allowed_repo],
+                git_observer_allowed_repos: vec![allowed_repo.clone()],
                 git_observer_github_api_url: "https://api.github.com".to_string(),
                 git_observer_active_deadline_seconds: 300,
                 git_observer_ttl_seconds_after_finished: 3600,
+                gitops_observer_enabled: true,
+                gitops_observer_service_account: "pharness-gitops-observer".to_string(),
+                gitops_observer_token_secret_name: Some(
+                    "pharness-gitops-observer-token".to_string(),
+                ),
+                gitops_observer_allowed_repos: vec![allowed_repo],
+                gitops_observer_github_api_url: "https://api.github.com".to_string(),
+                gitops_observer_active_deadline_seconds: 300,
+                gitops_observer_ttl_seconds_after_finished: 3600,
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),
+                workspace_storage_class: Some("local-path".to_string()),
                 workspace_ephemeral_storage_request: "2Gi".to_string(),
                 workspace_ephemeral_storage_limit: "4Gi".to_string(),
                 workspace_node_hostname: None,
@@ -22521,6 +26216,8 @@ mod tests {
             worker_token: None,
             operator_tokens: Arc::new(Vec::new()),
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+            build: super::BuildMetadata::from_env(),
+            protected_target: super::ProtectedTargetConfiguration::from_env(),
         }
     }
 
@@ -22749,11 +26446,19 @@ mod tests {
                 acceptance_criteria: vec!["rollout is healthy".to_string()],
                 source_repo: "https://github.example.test/team/checkout-api.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("checkout-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 300,
@@ -28624,7 +32329,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(!preflight.dispatch_ready);
         assert!(preflight.permission_grant.is_none());
         assert!(preflight.checks.iter().any(|check| {
-            check["code"] == "development_work_item_target" && check["passed"] == false
+            check["code"] == "supported_work_item_target" && check["passed"] == false
         }));
         let audit = state
             .store
@@ -28694,11 +32399,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["dry preflight is ready".to_string()],
                 source_repo: "https://github.com/example/finance-app.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-app".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -29196,14 +32909,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Endpoint returns a stable response".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: Some("team/finance-gitops".to_string()),
                 gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -29249,19 +32971,36 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(preview.work_item.status, "submitted");
         assert!(preview.work_plan.is_none());
 
-        let Json(applied) = reconcile_work_item(
+        let stale = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item.id.clone(), preview.action.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("operator".to_string()),
+                reason: "reviewed current controller boundary".to_string(),
+                state_hash: "stale-preview-hash".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(stale.status, StatusCode::CONFLICT);
+        assert!(stale.message.contains("preview is stale"));
+
+        let Json(advanced) = advance_work_item(
             State(state.clone()),
             None,
             Path(work_item.id.clone()),
-            Json(ReconcileWorkItemRequest {
-                apply: true,
+            Json(AdvanceWorkItemRequest {
                 actor: Some("operator".to_string()),
-                reason: Some("advance reviewed feature intent".to_string()),
-                max_turns: None,
+                reason: "advance reviewed feature intent".to_string(),
+                max_steps: Some(10),
             }),
         )
         .await
         .unwrap();
+        assert_eq!(advanced.steps.len(), 1);
+        assert_eq!(advanced.stopped_at.id, "awaiting_work_plan_approval");
+        let applied = &advanced.steps[0];
         assert_eq!(applied.action, "declare_work_plan");
         assert!(applied.applied);
         assert_eq!(applied.work_item.status, "awaiting_approval");
@@ -29315,14 +33054,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Terminal status is recorded".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -29417,14 +33165,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["No external action is dispatched".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -29485,14 +33242,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["The WorkItem blocks after expiry".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -29612,11 +33378,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Exact PipelineRun is observed".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -29921,14 +33695,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Focused test passes".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -30097,14 +33880,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: Vec::new(),
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -30200,14 +33992,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Endpoint returns a stable response".to_string()],
                 source_repo: "team/finance-api".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: Some("team/finance-gitops".to_string()),
                 gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
+                preflight_state_hash: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -30252,7 +34053,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
-        assert_eq!(gates.len(), 4);
+        assert_eq!(gates.len(), 5);
         assert!(gates.iter().all(|gate| gate.status == "pending"));
         let git_gate = gates
             .iter()
@@ -30283,7 +34084,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
-        assert_eq!(summary.total, 4);
+        assert_eq!(summary.total, 5);
         assert_eq!(summary.by_work_item_id.len(), 1);
         assert_eq!(
             summary.by_work_item_id[0].value.as_deref(),
@@ -30393,6 +34194,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 Vec::new(),
                 vec!["https://github.com/example/finance-app.git".to_string()],
             ),
+            build: super::BuildMetadata::from_env(),
+            protected_target: super::ProtectedTargetConfiguration::from_env(),
         };
         let work_item = state
             .store
@@ -30404,11 +34207,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["A focused test passes.".to_string()],
                 source_repo: "https://github.com/example/finance-app.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -30564,11 +34375,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["README is updated".to_string()],
                 source_repo: "https://github.com/example/finance-app.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -31266,11 +35085,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: Vec::new(),
                 source_repo: repository.to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -32006,11 +35833,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["GitOps update is reviewed".to_string()],
                 source_repo: "https://github.com/example/finance-api.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: Some(gitops_repo.to_string()),
                 gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -32428,11 +36263,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["Argo target is exact and reviewed".to_string()],
                 source_repo: "https://github.com/example/finance-api.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: Some(gitops_repo.to_string()),
                 gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -33489,11 +37332,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["post-sync release verified".to_string()],
                 source_repo: "https://github.com/example/finance-api.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: None,
                 gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -33862,11 +37713,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 acceptance_criteria: vec!["GitOps image is digest-pinned".to_string()],
                 source_repo: "https://github.com/example/finance-api.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
                 gitops_repo: Some("https://github.com/example/finance-gitops.git".to_string()),
                 gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
                 target_environment: "dev".to_string(),
                 target_namespace: Some("apps-dev".to_string()),
                 argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
@@ -34338,5 +38197,561 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .unwrap()
                 .expect("declared GitOps target should require and return merge evidence");
         assert_eq!(observed_merge.id, flow.latest_merge.unwrap().id);
+    }
+
+    fn protected_production_request() -> CreateWorkItemRequest {
+        CreateWorkItemRequest {
+            title: "Validate yfinance input".to_string(),
+            intent: "Add bounded validation and tests".to_string(),
+            acceptance_criteria: vec!["python -m unittest discover -s tests -v".to_string()],
+            source_repo: super::PROTECTED_SOURCE_REPO.to_string(),
+            source_ref: "main".to_string(),
+            source_commit: Some("a".repeat(40)),
+            pipeline_contract_id: Some("pcontract_yfinance".to_string()),
+            deployment_contract_id: Some("dcontract_yfinance".to_string()),
+            gitops_repo: Some(super::PROTECTED_GITOPS_REPO.to_string()),
+            gitops_ref: Some("main".to_string()),
+            gitops_kustomization_path: Some(super::PROTECTED_KUSTOMIZATION_PATH.to_string()),
+            gitops_image_name: Some(super::PROTECTED_IMAGE_NAME.to_string()),
+            target_environment: super::PROTECTED_ENVIRONMENT.to_string(),
+            target_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+            argo_application: Some(super::PROTECTED_ARGO_APPLICATION.to_string()),
+            workload_kind: Some(super::PROTECTED_WORKLOAD_KIND.to_string()),
+            workload_name: Some(super::PROTECTED_WORKLOAD_NAME.to_string()),
+            rollback_owner: Some(super::PROTECTED_ROLLBACK_OWNER.to_string()),
+            production_impacting: true,
+            max_attempts: Some(1),
+            max_elapsed_seconds: Some(3_600),
+            actor: Some("lucas".to_string()),
+            preflight_state_hash: None,
+        }
+    }
+
+    #[test]
+    fn protected_production_target_requires_every_exact_server_owned_coordinate() {
+        let request = protected_production_request();
+        assert!(super::request_matches_protected_target(&request));
+
+        let mut wrong_namespace = request.clone();
+        wrong_namespace.target_namespace = Some("apps-staging".to_string());
+        assert!(!super::request_matches_protected_target(&wrong_namespace));
+
+        let mut wrong_image = request.clone();
+        wrong_image.gitops_image_name = Some("registry.example.test/other".to_string());
+        assert!(!super::request_matches_protected_target(&wrong_image));
+
+        let mut wrong_repository = request;
+        wrong_repository.gitops_repo = Some("https://github.com/lward27/other.git".to_string());
+        assert!(!super::request_matches_protected_target(&wrong_repository));
+    }
+
+    #[test]
+    fn immutable_production_identifiers_reject_mutable_or_malformed_values() {
+        assert!(super::immutable_git_object_id(&"a".repeat(40)));
+        assert!(super::immutable_git_object_id(&"b".repeat(64)));
+        assert!(!super::immutable_git_object_id("main"));
+        assert!(!super::immutable_git_object_id(&"A".repeat(40)));
+        assert!(super::immutable_image_digest(&format!(
+            "sha256:{}",
+            "c".repeat(64)
+        )));
+        assert!(!super::immutable_image_digest("latest"));
+        assert!(!super::immutable_image_digest("sha256:abc"));
+        assert!(!super::immutable_image_digest(&format!(
+            "sha256:{}",
+            "C".repeat(64)
+        )));
+    }
+
+    #[tokio::test]
+    async fn production_authorization_rejects_expired_or_overlong_windows() {
+        let state = test_state().await;
+        let request = protected_production_request();
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: "witem_production_window".to_string(),
+                status: "proposed".to_string(),
+                title: request.title,
+                intent: request.intent,
+                acceptance_criteria: request.acceptance_criteria,
+                source_repo: request.source_repo,
+                source_ref: request.source_ref,
+                source_commit: request.source_commit,
+                pipeline_contract_id: request.pipeline_contract_id,
+                deployment_contract_id: request.deployment_contract_id,
+                gitops_repo: request.gitops_repo,
+                gitops_ref: request.gitops_ref,
+                gitops_kustomization_path: request.gitops_kustomization_path,
+                gitops_image_name: request.gitops_image_name,
+                target_environment: request.target_environment,
+                target_namespace: request.target_namespace,
+                argo_application: request.argo_application,
+                workload_kind: request.workload_kind,
+                workload_name: request.workload_name,
+                rollback_owner: request.rollback_owner,
+                production_impacting: true,
+                max_attempts: 1,
+                max_elapsed_seconds: 3_600,
+                created_by: request.actor,
+            })
+            .await
+            .unwrap();
+        let item = state
+            .store
+            .get_work_item("witem_production_window")
+            .await
+            .unwrap()
+            .unwrap();
+        let now = super::current_millis();
+        assert!(
+            super::bounded_production_grant_expiry(&item, Some((now - 1).to_string())).is_err()
+        );
+        assert!(super::bounded_production_grant_expiry(
+            &item,
+            Some((now + 30 * 60 * 1_000 + 1).to_string())
+        )
+        .is_err());
+        assert!(super::bounded_production_grant_expiry(
+            &item,
+            Some((now + 5 * 60 * 1_000).to_string())
+        )
+        .is_ok());
+    }
+
+    #[tokio::test]
+    async fn rollback_writer_and_observer_stay_bound_to_the_captured_digest_and_manual_merge() {
+        let state = test_state_with_git_observer(
+            "/bin/true".to_string(),
+            super::PROTECTED_GITOPS_REPO.to_string(),
+        )
+        .await;
+        let session_id = SessionId::new("ses_rollback_contract");
+        let run_id = RunId::new("run_rollback_contract");
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "rollback contract".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "rollback contract".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 1,
+                initial_status: "completed".to_string(),
+                execution_target_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let request = protected_production_request();
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: "witem_rollback_contract".to_string(),
+                status: "executing".to_string(),
+                title: request.title,
+                intent: request.intent,
+                acceptance_criteria: request.acceptance_criteria,
+                source_repo: request.source_repo,
+                source_ref: request.source_ref,
+                source_commit: request.source_commit,
+                pipeline_contract_id: request.pipeline_contract_id,
+                deployment_contract_id: request.deployment_contract_id,
+                gitops_repo: request.gitops_repo,
+                gitops_ref: request.gitops_ref,
+                gitops_kustomization_path: request.gitops_kustomization_path,
+                gitops_image_name: request.gitops_image_name,
+                target_environment: request.target_environment,
+                target_namespace: request.target_namespace,
+                argo_application: request.argo_application,
+                workload_kind: request.workload_kind,
+                workload_name: request.workload_name,
+                rollback_owner: request.rollback_owner,
+                production_impacting: true,
+                max_attempts: 1,
+                max_elapsed_seconds: 3_600,
+                created_by: request.actor,
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .start_work_item_attempt(
+                "witem_rollback_contract",
+                &run_id,
+                Some("tester".to_string()),
+                Some("seed rollback contract".to_string()),
+            )
+            .await
+            .unwrap();
+        state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: "wplan_rollback_contract".to_string(),
+                work_item_id: Some("witem_rollback_contract".to_string()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Rollback contract plan".to_string(),
+                summary: "Reviewed protected production delivery".to_string(),
+                risk_level: "critical".to_string(),
+                requires_approval: true,
+                resource_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some(super::PROTECTED_ARGO_APPLICATION.to_string()),
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: "cset_rollback_contract".to_string(),
+                work_item_id: Some("witem_rollback_contract".to_string()),
+                work_plan_id: "wplan_rollback_contract".to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "applied".to_string(),
+                title: "Rollback source ChangeSet".to_string(),
+                summary: "Merged protected source change".to_string(),
+                risk_level: "critical".to_string(),
+                material_hash: "rollback_contract_hash".to_string(),
+                resource_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                resource_kind: Some("Application".to_string()),
+                resource_name: Some(super::PROTECTED_ARGO_APPLICATION.to_string()),
+                change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: "pint_rollback_contract".to_string(),
+                change_set_id: "cset_rollback_contract".to_string(),
+                work_plan_id: "wplan_rollback_contract".to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "completed".to_string(),
+                title: "Rollback source pipeline".to_string(),
+                summary: "Verified protected source build".to_string(),
+                risk_level: "critical".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("tekton-pipelines".to_string()),
+                resource_kind: Some("Pipeline".to_string()),
+                resource_name: Some("pharness-yfinance-build".to_string()),
+                intent_json: json!({
+                    "source_provenance": { "merge_commit_sha": "c1b2c3d4e5f60718293a4b5c6d7e8f9012345678" }
+                }),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_deployment_intent(CreateDeploymentIntent {
+                id: "dint_rollback_contract".to_string(),
+                pipeline_intent_id: "pint_rollback_contract".to_string(),
+                change_set_id: "cset_rollback_contract".to_string(),
+                work_plan_id: "wplan_rollback_contract".to_string(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "approved".to_string(),
+                title: "Protected deployment".to_string(),
+                summary: "Deploy the verified yfinance image".to_string(),
+                risk_level: "critical".to_string(),
+                intent_kind: "argo_sync".to_string(),
+                target_environment: Some(super::PROTECTED_ENVIRONMENT.to_string()),
+                target_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                argo_application: Some(super::PROTECTED_ARGO_APPLICATION.to_string()),
+                resource_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                resource_kind: Some(super::PROTECTED_WORKLOAD_KIND.to_string()),
+                resource_name: Some(super::PROTECTED_WORKLOAD_NAME.to_string()),
+                intent_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let deployment_gitops_merge = "e1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+        let gitops_material_hash = "rollback_gitops_material";
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_rollback_gitops_update".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "gitops_update_plan".to_string(),
+                label: "Protected GitOps update".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({})),
+            })
+            .await
+            .unwrap();
+        let gitops_change_set = state
+            .store
+            .create_gitops_change_set(CreateGitOpsChangeSet {
+                id: "gcset_rollback_contract".to_string(),
+                work_item_id: "witem_rollback_contract".to_string(),
+                work_plan_id: "wplan_rollback_contract".to_string(),
+                source_change_set_id: "cset_rollback_contract".to_string(),
+                pipeline_intent_id: "pint_rollback_contract".to_string(),
+                deployment_intent_id: "dint_rollback_contract".to_string(),
+                gitops_update_plan_artifact_id: "art_rollback_gitops_update".to_string(),
+                session_id: session_id.clone(),
+                run_id: run_id.clone(),
+                status: "approved".to_string(),
+                title: "Protected GitOps ChangeSet".to_string(),
+                summary: "Set the verified yfinance digest".to_string(),
+                risk_level: "critical".to_string(),
+                material_hash: gitops_material_hash.to_string(),
+                gitops_repo: super::PROTECTED_GITOPS_REPO.to_string(),
+                gitops_ref: "main".to_string(),
+                head_branch: "pharness/yfinance/gitops".to_string(),
+                kustomization_path: super::PROTECTED_KUSTOMIZATION_PATH.to_string(),
+                image_name: super::PROTECTED_IMAGE_NAME.to_string(),
+                image_ref: format!("{}@sha256:{}", super::PROTECTED_IMAGE_NAME, "f".repeat(64)),
+                gitops_change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_gitops_base".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "gitops_base_revision".to_string(), label: "Protected GitOps base".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "status": "resolved", "gitops_change_set_id": gitops_change_set.id, "material_hash": gitops_change_set.material_hash, "repository": super::PROTECTED_GITOPS_REPO, "base_ref": "main", "base_commit": "d1b2c3d4e5f60718293a4b5c6d7e8f9012345678" })) }).await.unwrap();
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_gitops_plan".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "gitops_delivery_plan".to_string(), label: "Protected GitOps delivery plan".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "gitops_change_set": { "id": gitops_change_set.id, "revision": gitops_change_set.revision, "material_hash": gitops_change_set.material_hash }, "source": { "base_revision_artifact_id": "art_rollback_gitops_base" } })) }).await.unwrap();
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_gitops_merge".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "gitops_delivery_merge".to_string(), label: "Protected GitOps merge".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "gitops_change_set_id": gitops_change_set.id, "gitops_delivery_plan_artifact_id": "art_rollback_gitops_plan", "merge_commit_sha": deployment_gitops_merge })) }).await.unwrap();
+        let rollback_id = "rollback_contract";
+        let baseline_digest = format!("sha256:{}", "d".repeat(64));
+        let base_commit = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+        state
+            .store
+            .create_approval_gate(CreateApprovalGate {
+                id: "agate_rollback_contract".to_string(),
+                work_item_id: Some("witem_rollback_contract".to_string()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                status: "pending".to_string(),
+                gate_kind: "production_rollback".to_string(),
+                gate_order: 90,
+                title: "Approve rollback".to_string(),
+                summary: "Restore captured digest".to_string(),
+                risk_level: "critical".to_string(),
+                resource_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                resource_kind: Some(super::PROTECTED_WORKLOAD_KIND.to_string()),
+                resource_name: Some(super::PROTECTED_WORKLOAD_NAME.to_string()),
+                gate_json: json!({
+                    "rollback_intent_id": rollback_id,
+                    "baseline_digest": baseline_digest,
+                    "argo_application": super::PROTECTED_ARGO_APPLICATION,
+                }),
+            })
+            .await
+            .unwrap();
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_intent_contract".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "rollback_intent".to_string(), label: "RollbackIntent contract".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_id, "work_item_id": "witem_rollback_contract", "status": "prepared", "approval_gate_id": "agate_rollback_contract", "baseline": { "image_digest": baseline_digest, "gitops_revision": base_commit } })) }).await.unwrap();
+        let Json(writer_approved) = super::approve_rollback_intent(
+            State(state.clone()),
+            None,
+            Path(rollback_id.to_string()),
+            Json(super::RollbackIntentRequest {
+                actor: Some("lucas".to_string()),
+                reason: "approve exact rollback writer".to_string(),
+                expires_at: Some((super::current_millis() + 60_000).to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            writer_approved.pointer("/content/status"),
+            Some(&json!("approved"))
+        );
+        assert_eq!(
+            writer_approved.pointer("/content/rollback_base_commit"),
+            Some(&json!(deployment_gitops_merge))
+        );
+        let wrong_action = super::execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((
+                "witem_rollback_contract".to_string(),
+                "execute_rollback_argo_sync".to_string(),
+            )),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "attempt a stale lifecycle action".to_string(),
+                state_hash: format!(
+                    "{:x}",
+                    Sha256::digest(writer_approved.to_string().as_bytes())
+                ),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(wrong_action.status, StatusCode::CONFLICT);
+        let writer_execution = "rbexec_contract";
+        let head_branch = "pharness/rollback-contract";
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_delivery_execution_contract".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "rollback_delivery_execution".to_string(), label: "Rollback delivery".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_id, "execution_id": writer_execution, "status": "dispatched", "context": { "execution_id": writer_execution, "repository": super::PROTECTED_GITOPS_REPO, "base_ref": "main", "base_commit": deployment_gitops_merge, "head_branch": head_branch, "kustomization_path": super::PROTECTED_KUSTOMIZATION_PATH, "image_name": super::PROTECTED_IMAGE_NAME, "image_ref": format!("{}@{}", super::PROTECTED_IMAGE_NAME, baseline_digest), "commit_subject": "rollback yfinance", "commit_body": "restore captured digest", "pull_request_title": "rollback yfinance", "pull_request_body": "manual merge required", "github_api_url": "https://api.github.com", "author_name": "Pharness", "author_email": "pharness@example.test" } })) }).await.unwrap();
+        let Json(context) =
+            super::internal_rollback_delivery_context(&state, rollback_id, writer_execution)
+                .await
+                .unwrap();
+        assert_eq!(
+            context.image_ref,
+            format!("{}@{}", super::PROTECTED_IMAGE_NAME, baseline_digest)
+        );
+        assert_eq!(context.base_commit, deployment_gitops_merge);
+        let Json(result) = super::internal_rollback_delivery_outcome(
+            &state,
+            rollback_id,
+            GitOpsDeliveryOutcomeRequest {
+                execution_id: writer_execution.to_string(),
+                status: "completed".to_string(),
+                error_code: None,
+                branch: Some(head_branch.to_string()),
+                commit_sha: Some(base_commit.to_string()),
+                pull_request_url: Some(
+                    "https://github.com/lward27/lucas_engineering/pull/42".to_string(),
+                ),
+                pull_request_number: Some(42),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result
+                .content_json
+                .as_ref()
+                .and_then(|value| value.get("status")),
+            Some(&json!("completed"))
+        );
+
+        let observer_execution = "rbobs_contract";
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_observation_execution_contract".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "rollback_delivery_observation_execution".to_string(), label: "Rollback observation".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_id, "execution_id": observer_execution, "status": "dispatched", "source": { "repository": super::PROTECTED_GITOPS_REPO, "head_branch": head_branch, "source_commit_sha": base_commit, "pull_request_url": "https://github.com/lward27/lucas_engineering/pull/42", "pull_request_number": 42 } })) }).await.unwrap();
+        let merge_commit = "b1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+        let _ = super::internal_rollback_delivery_observation_outcome(
+            &state,
+            rollback_id,
+            GitOpsDeliveryObservationOutcomeRequest {
+                execution_id: observer_execution.to_string(),
+                status: "observed".to_string(),
+                error_code: None,
+                pull_request_state: Some("closed".to_string()),
+                merged: Some(true),
+                merge_commit_sha: Some(merge_commit.to_string()),
+                head_branch: Some(head_branch.to_string()),
+                head_commit_sha: Some(base_commit.to_string()),
+            },
+        )
+        .await
+        .unwrap();
+        let item = state
+            .store
+            .get_work_item("witem_rollback_contract")
+            .await
+            .unwrap()
+            .unwrap();
+        let latest = super::latest_rollback_intent(&state, &item, Some(rollback_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            latest.pointer("/content/status"),
+            Some(&json!("ready_for_argo_sync"))
+        );
+        assert_eq!(
+            latest.pointer("/content/gitops_merge_sha"),
+            Some(&json!(merge_commit))
+        );
+
+        let Json(approved) = super::approve_rollback_intent(
+            State(state.clone()),
+            None,
+            Path(rollback_id.to_string()),
+            Json(super::RollbackIntentRequest {
+                actor: Some("lucas".to_string()),
+                reason: "approve exact rollback Argo sync".to_string(),
+                expires_at: Some((super::current_millis() + 60_000).to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            approved.pointer("/content/status"),
+            Some(&json!("argo_approved"))
+        );
+        assert_eq!(
+            approved.pointer("/content/gitops_merge_sha"),
+            Some(&json!(merge_commit))
+        );
+        assert_eq!(
+            approved.pointer("/content/rollback_base_commit"),
+            Some(&json!(deployment_gitops_merge))
+        );
+        let Json(preflight) =
+            super::preflight_rollback_intent(State(state.clone()), Path(rollback_id.to_string()))
+                .await
+                .unwrap();
+        assert_eq!(preflight["status"], "ready_for_argo");
+        assert_eq!(preflight["exact_binding"], true);
+        assert_eq!(preflight["argo_grant_fresh"], true);
+
+        let argo_execution_id = "rbaexec_contract";
+        state.store.create_artifact(CreateArtifact { id: "art_rollback_argo_execution_contract".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "rollback_argo_sync_execution".to_string(), label: "Rollback Argo execution".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_id, "execution_id": argo_execution_id, "status": "dispatched", "permission_grant_id": approved.pointer("/content/argo_permission_grant_id"), "deployment_contract_id": "dcontract_yfinance", "gitops_merge_sha": merge_commit, "baseline_digest": baseline_digest, "target": super::protected_target_json() })) }).await.unwrap();
+        let wrong_revision = super::internal_rollback_argo_sync_outcome(
+            &state,
+            rollback_id,
+            ArgoSyncOutcomeRequest {
+                execution_id: argo_execution_id.to_string(),
+                status: "completed".to_string(),
+                sync_status: Some("Synced".to_string()),
+                health_status: Some("Healthy".to_string()),
+                operation_phase: Some("Succeeded".to_string()),
+                revision: Some(base_commit.to_string()),
+                error_code: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(wrong_revision.status, StatusCode::CONFLICT);
+        let outcome = ArgoSyncOutcomeRequest {
+            execution_id: argo_execution_id.to_string(),
+            status: "completed".to_string(),
+            sync_status: Some("Synced".to_string()),
+            health_status: Some("Healthy".to_string()),
+            operation_phase: Some("Succeeded".to_string()),
+            revision: Some(merge_commit.to_string()),
+            error_code: None,
+        };
+        let Json(first) = super::internal_rollback_argo_sync_outcome(&state, rollback_id, outcome)
+            .await
+            .unwrap();
+        let Json(second) = super::internal_rollback_argo_sync_outcome(
+            &state,
+            rollback_id,
+            ArgoSyncOutcomeRequest {
+                execution_id: argo_execution_id.to_string(),
+                status: "completed".to_string(),
+                sync_status: Some("Synced".to_string()),
+                health_status: Some("Healthy".to_string()),
+                operation_phase: Some("Succeeded".to_string()),
+                revision: Some(merge_commit.to_string()),
+                error_code: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.id, second.id);
     }
 }

@@ -54,6 +54,10 @@ pub struct WorkspaceSourceSpec {
     pub workspace_id: String,
     pub source_repo: String,
     pub source_ref: String,
+    /// Optional immutable object ID requested by the control plane. When set,
+    /// the worker must check out this object rather than resolving source_ref.
+    #[serde(default)]
+    pub source_commit: Option<String>,
     pub branch: String,
     /// Filled by the worker after checkout and before model execution.
     #[serde(default)]
@@ -67,6 +71,9 @@ impl WorkspaceSourceSpec {
         }
         validate_https_git_url(&self.source_repo)?;
         validate_git_ref(&self.source_ref, "source_ref")?;
+        if let Some(commit) = &self.source_commit {
+            validate_commit_id(commit)?;
+        }
         validate_git_ref(&self.branch, "branch")?;
         if let Some(commit) = &self.resolved_commit {
             validate_commit_id(commit)?;
@@ -121,7 +128,7 @@ pub struct AttemptOutcome {
 
 /// Bounded Git evidence collected by the process that owns the workspace.
 /// It is carried to the API with the terminal outcome because the API cannot
-/// inspect a Kubernetes `emptyDir` after its Job exits.
+/// directly inspect the isolated Kubernetes run workspace.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorkspaceGitEvidence {
     pub workspace_id: String,
@@ -556,6 +563,7 @@ mod workspace_source_tests {
             workspace_id: "ws_123".to_string(),
             source_repo: "https://github.com/example/finance-app.git".to_string(),
             source_ref: "main".to_string(),
+            source_commit: None,
             branch: "pharness/witem-123/attempt-1".to_string(),
             resolved_commit: None,
         }
@@ -569,6 +577,7 @@ mod workspace_source_tests {
             workspace_id: "ws_123".to_string(),
             source_repo: "https://token@example.test/team/app.git".to_string(),
             source_ref: "main".to_string(),
+            source_commit: None,
             branch: "pharness/witem-123/attempt-1".to_string(),
             resolved_commit: None,
         };
@@ -681,6 +690,7 @@ mod workspace_source_tests {
                 workspace_id: "ws_test".to_string(),
                 source_repo: "https://github.com/example/finance-app.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
                 branch: "pharness/test/attempt-1".to_string(),
                 resolved_commit: Some(base_commit),
             },
