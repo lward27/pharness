@@ -126,11 +126,47 @@ impl SqliteStore {
             })
     }
 
+    pub async fn set_run_origin(
+        &self,
+        run_id: &RunId,
+        origin: &str,
+    ) -> Result<StoredRun, StoreError> {
+        sqlx::query("UPDATE runs SET origin = ?2 WHERE id = ?1")
+            .bind(run_id.as_str())
+            .bind(origin)
+            .execute(&self.pool)
+            .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".to_string(),
+                id: run_id.to_string(),
+            })
+    }
+
+    pub async fn set_run_created_by(
+        &self,
+        run_id: &RunId,
+        created_by: Option<String>,
+    ) -> Result<StoredRun, StoreError> {
+        sqlx::query("UPDATE runs SET created_by = ?2 WHERE id = ?1")
+            .bind(run_id.as_str())
+            .bind(created_by)
+            .execute(&self.pool)
+            .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".to_string(),
+                id: run_id.to_string(),
+            })
+    }
+
     pub async fn get_run(&self, run_id: &RunId) -> Result<Option<StoredRun>, StoreError> {
         let row = sqlx::query(
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json
+                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
             WHERE runs.id = ?1
@@ -153,21 +189,27 @@ impl SqliteStore {
         let rows = sqlx::query(
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json
+                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
-            WHERE (?1 IS NULL OR status = ?1)
-              AND (?2 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?2)
-              AND (?3 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?3)
-              AND (?4 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?4)
-              AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?5)
-              AND (?6 IS NULL OR CAST(started_at AS INTEGER) >= ?6)
-              AND (?7 IS NULL OR CAST(started_at AS INTEGER) <= ?7)
+            WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
+              AND (?2 IS NULL OR status = ?2)
+              AND (?3 IS NULL OR runs.origin = ?3)
+              AND (?4 IS NULL OR runs.created_by = ?4)
+              AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?5)
+              AND (?6 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?6)
+              AND (?7 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?7)
+              AND (?8 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?8)
+              AND (?9 IS NULL OR CAST(started_at AS INTEGER) >= ?9)
+              AND (?10 IS NULL OR CAST(started_at AS INTEGER) <= ?10)
             ORDER BY started_at DESC, runs.id DESC
-            LIMIT ?8 OFFSET ?9
+            LIMIT ?11 OFFSET ?12
             "#,
         )
+        .bind(filter.search)
         .bind(filter.status)
+        .bind(filter.origin)
+        .bind(filter.created_by)
         .bind(filter.namespace)
         .bind(filter.repo)
         .bind(filter.branch)
@@ -180,6 +222,44 @@ impl SqliteStore {
         .await?;
 
         rows.into_iter().map(row_to_run).collect()
+    }
+
+    pub async fn count_runs(&self, filter: RunListFilter) -> Result<usize, StoreError> {
+        let production_impacting =
+            filter
+                .production_impacting
+                .map(|value| if value { 1_i64 } else { 0_i64 });
+        let count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM runs
+            JOIN sessions ON sessions.id = runs.session_id
+            WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
+              AND (?2 IS NULL OR status = ?2)
+              AND (?3 IS NULL OR runs.origin = ?3)
+              AND (?4 IS NULL OR runs.created_by = ?4)
+              AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?5)
+              AND (?6 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?6)
+              AND (?7 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?7)
+              AND (?8 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?8)
+              AND (?9 IS NULL OR CAST(started_at AS INTEGER) >= ?9)
+              AND (?10 IS NULL OR CAST(started_at AS INTEGER) <= ?10)
+            "#,
+        )
+        .bind(filter.search)
+        .bind(filter.status)
+        .bind(filter.origin)
+        .bind(filter.created_by)
+        .bind(filter.namespace)
+        .bind(filter.repo)
+        .bind(filter.branch)
+        .bind(production_impacting)
+        .bind(filter.started_after_ms)
+        .bind(filter.started_before_ms)
+        .fetch_one(&self.pool)
+        .await?;
+        usize::try_from(count)
+            .map_err(|_| StoreError::InvalidData(format!("invalid runs count {count}")))
     }
 
     pub async fn run_summary(&self, filter: RunSummaryFilter) -> Result<RunSummary, StoreError> {
@@ -351,6 +431,14 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
+        sqlx::query(
+            "UPDATE approvals SET origin = COALESCE((SELECT origin FROM runs WHERE id = ?1), 'worker') WHERE id = ?2",
+        )
+        .bind(approval.run_id.as_str())
+        .bind(&approval.id)
+        .execute(&self.pool)
+        .await?;
+
         self.get_approval(&approval.id)
             .await?
             .ok_or_else(|| StoreError::NotFound {
@@ -402,28 +490,37 @@ impl SqliteStore {
             r#"
             {}
             ORDER BY requested_at DESC, id DESC
-            LIMIT ?8 OFFSET ?9
+            LIMIT ?11 OFFSET ?12
             "#,
             approval_select_sql(
                 r#"
                 WHERE (?1 IS NULL OR status = ?1)
-                  AND (?2 IS NULL OR json_extract(run_scope_json, '$.namespace') = ?2)
-                  AND (?3 IS NULL OR json_extract(run_scope_json, '$.repo') = ?3)
-                  AND (?4 IS NULL OR json_extract(run_scope_json, '$.branch') = ?4)
-                  AND (?5 IS NULL OR json_extract(run_scope_json, '$.production_impacting') = ?5)
-                  AND (?6 IS NULL OR CAST(requested_at AS INTEGER) >= ?6)
-                  AND (?7 IS NULL OR CAST(requested_at AS INTEGER) <= ?7)
+                  AND (?2 IS NULL OR origin = ?2)
+                  AND (?3 IS NULL OR json_extract(run_scope_json, '$.namespace') = ?3)
+                  AND (?4 IS NULL OR json_extract(run_scope_json, '$.repo') = ?4)
+                  AND (?5 IS NULL OR json_extract(run_scope_json, '$.branch') = ?5)
+                  AND (?6 IS NULL OR json_extract(run_scope_json, '$.production_impacting') = ?6)
+                  AND (?7 IS NULL OR CAST(requested_at AS INTEGER) >= ?7)
+                  AND (?8 IS NULL OR CAST(requested_at AS INTEGER) <= ?8)
+                  AND (?9 IS NULL OR (SELECT created_by FROM runs WHERE id = approvals.run_id) = ?9)
+                  AND (?10 IS NULL OR lower(id) LIKE '%' || lower(?10) || '%'
+                       OR lower(kind) LIKE '%' || lower(?10) || '%'
+                       OR lower(summary) LIKE '%' || lower(?10) || '%'
+                       OR lower(run_id) LIKE '%' || lower(?10) || '%')
                 "#
             )
         );
         let rows = sqlx::query(&sql)
             .bind(filter.status)
+            .bind(filter.origin)
             .bind(filter.namespace)
             .bind(filter.repo)
             .bind(filter.branch)
             .bind(production_impacting)
             .bind(filter.requested_after_ms)
             .bind(filter.requested_before_ms)
+            .bind(filter.created_by)
+            .bind(filter.search)
             .bind(limit)
             .bind(offset)
             .fetch_all(&self.pool)
@@ -993,6 +1090,40 @@ impl SqliteStore {
         rows.into_iter().map(row_to_remediation_plan).collect()
     }
 
+    pub async fn count_remediation_plans(
+        &self,
+        filter: RemediationPlanListFilter,
+    ) -> Result<usize, StoreError> {
+        let count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM remediation_plans
+            WHERE (?1 IS NULL OR incident_id = ?1)
+              AND (?2 IS NULL OR run_id = ?2)
+              AND (?3 IS NULL OR status = ?3)
+              AND (?4 IS NULL OR risk_level = ?4)
+              AND (?5 IS NULL OR resource_namespace = ?5)
+              AND (?6 IS NULL OR resource_kind = ?6)
+              AND (?7 IS NULL OR resource_name = ?7)
+              AND (?8 IS NULL OR CAST(created_at AS INTEGER) >= ?8)
+              AND (?9 IS NULL OR CAST(created_at AS INTEGER) <= ?9)
+            "#,
+        )
+        .bind(filter.incident_id)
+        .bind(filter.run_id.as_ref().map(RunId::as_str))
+        .bind(filter.status)
+        .bind(filter.risk_level)
+        .bind(filter.resource_namespace)
+        .bind(filter.resource_kind)
+        .bind(filter.resource_name)
+        .bind(filter.created_after_ms)
+        .bind(filter.created_before_ms)
+        .fetch_one(&self.pool)
+        .await?;
+        usize::try_from(count)
+            .map_err(|_| StoreError::InvalidData(format!("invalid remediation plan count {count}")))
+    }
+
     pub async fn update_remediation_plan_status(
         &self,
         plan_id: &str,
@@ -1134,7 +1265,7 @@ impl SqliteStore {
             SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
                    gitops_repo, gitops_ref, target_environment, target_namespace,
                    argo_application, production_impacting, max_attempts, max_elapsed_seconds,
-                   attempt_count, current_run_id, created_by, created_at, updated_at,
+                   attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
             WHERE (?1 IS NULL OR status = ?1)
@@ -1142,8 +1273,11 @@ impl SqliteStore {
               AND (?3 IS NULL OR target_environment = ?3)
               AND (?4 IS NULL OR target_namespace = ?4)
               AND (?5 IS NULL OR production_impacting = ?5)
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?6 OFFSET ?7
+              AND (?6 IS NULL OR created_by = ?6)
+              AND (?7 IS NULL OR origin = ?7)
+            ORDER BY CASE WHEN status = 'blocked' THEN 0 ELSE 1 END,
+                     updated_at DESC, id DESC
+            LIMIT ?8 OFFSET ?9
             "#,
         )
         .bind(filter.status)
@@ -1151,12 +1285,71 @@ impl SqliteStore {
         .bind(filter.target_environment)
         .bind(filter.target_namespace)
         .bind(production_impacting)
+        .bind(filter.created_by)
+        .bind(filter.origin)
         .bind(limit)
         .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
         rows.into_iter().map(row_to_work_item).collect()
+    }
+
+    pub async fn count_work_items(&self, filter: WorkItemListFilter) -> Result<usize, StoreError> {
+        let production_impacting =
+            filter
+                .production_impacting
+                .map(|value| if value { 1_i64 } else { 0_i64 });
+        let count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM work_items
+            WHERE (?1 IS NULL OR status = ?1)
+              AND (?2 IS NULL OR source_repo = ?2)
+              AND (?3 IS NULL OR target_environment = ?3)
+              AND (?4 IS NULL OR target_namespace = ?4)
+              AND (?5 IS NULL OR production_impacting = ?5)
+              AND (?6 IS NULL OR created_by = ?6)
+              AND (?7 IS NULL OR origin = ?7)
+            "#,
+        )
+        .bind(filter.status)
+        .bind(filter.source_repo)
+        .bind(filter.target_environment)
+        .bind(filter.target_namespace)
+        .bind(production_impacting)
+        .bind(filter.created_by)
+        .bind(filter.origin)
+        .fetch_one(&self.pool)
+        .await?;
+        usize::try_from(count)
+            .map_err(|_| StoreError::InvalidData(format!("invalid WorkItem count {count}")))
+    }
+
+    pub async fn set_work_item_origin(
+        &self,
+        work_item_id: &str,
+        origin: &str,
+    ) -> Result<StoredWorkItem, StoreError> {
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET origin = ?2,
+                updated_at = ?3
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(origin)
+        .bind(now_string())
+        .execute(&self.pool)
+        .await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
     }
 
     pub async fn update_work_item_status(
@@ -1287,6 +1480,44 @@ impl SqliteStore {
         .await?;
 
         rows.into_iter().map(row_to_controller_wait).collect()
+    }
+
+    pub async fn list_expired_controller_waits(
+        &self,
+        deadline_at_or_before_ms: i64,
+        limit: u32,
+    ) -> Result<Vec<StoredControllerWait>, StoreError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_item_id, session_id, run_id, status, wait_kind, subject_kind,
+                   subject_id, next_check_at, deadline_at, max_checks, check_count, data_json,
+                   created_at, updated_at, resolved_at, resolution_reason
+            FROM controller_waits
+            WHERE status = 'active' AND CAST(deadline_at AS INTEGER) <= ?1
+            ORDER BY deadline_at ASC, created_at ASC, id ASC
+            LIMIT ?2
+            "#,
+        )
+        .bind(deadline_at_or_before_ms)
+        .bind(i64::from(limit.clamp(1, 200)))
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_controller_wait).collect()
+    }
+
+    pub async fn count_expired_controller_waits(
+        &self,
+        deadline_at_or_before_ms: i64,
+    ) -> Result<usize, StoreError> {
+        let count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM controller_waits WHERE status = 'active' AND CAST(deadline_at AS INTEGER) <= ?1",
+        )
+        .bind(deadline_at_or_before_ms)
+        .fetch_one(&self.pool)
+        .await?;
+        usize::try_from(count).map_err(|_| {
+            StoreError::InvalidData(format!("invalid expired controller wait count {count}"))
+        })
     }
 
     pub async fn supersede_controller_wait(
@@ -1552,7 +1783,7 @@ impl SqliteStore {
         &self,
         work_plan_id: &str,
     ) -> Result<Option<StoredWorkPlan>, StoreError> {
-        let row = sqlx::query(work_plan_select_sql("WHERE id = ?1"))
+        let row = sqlx::query(work_plan_select_sql("WHERE wp.id = ?1"))
             .bind(work_plan_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1564,7 +1795,7 @@ impl SqliteStore {
         &self,
         remediation_plan_id: &str,
     ) -> Result<Option<StoredWorkPlan>, StoreError> {
-        let row = sqlx::query(work_plan_select_sql("WHERE remediation_plan_id = ?1"))
+        let row = sqlx::query(work_plan_select_sql("WHERE wp.remediation_plan_id = ?1"))
             .bind(remediation_plan_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1576,7 +1807,7 @@ impl SqliteStore {
         &self,
         work_item_id: &str,
     ) -> Result<Option<StoredWorkPlan>, StoreError> {
-        let row = sqlx::query(work_plan_select_sql("WHERE work_item_id = ?1"))
+        let row = sqlx::query(work_plan_select_sql("WHERE wp.work_item_id = ?1"))
             .bind(work_item_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1592,24 +1823,28 @@ impl SqliteStore {
         let offset = i64::from(filter.offset);
         let rows = sqlx::query(
             r#"
-            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
-                   status, title, summary, risk_level, requires_approval, resource_namespace,
-                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
-                   revision, status_changed_at, status_changed_by, status_reason
-            FROM work_plans
-            WHERE (?1 IS NULL OR work_item_id = ?1)
-              AND (?2 IS NULL OR remediation_plan_id = ?2)
-              AND (?3 IS NULL OR incident_id = ?3)
-              AND (?4 IS NULL OR run_id = ?4)
-              AND (?5 IS NULL OR status = ?5)
-              AND (?6 IS NULL OR risk_level = ?6)
-              AND (?7 IS NULL OR resource_namespace = ?7)
-              AND (?8 IS NULL OR resource_kind = ?8)
-              AND (?9 IS NULL OR resource_name = ?9)
-              AND (?10 IS NULL OR CAST(created_at AS INTEGER) >= ?10)
-              AND (?11 IS NULL OR CAST(created_at AS INTEGER) <= ?11)
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?12 OFFSET ?13
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE (?1 IS NULL OR wp.work_item_id = ?1)
+              AND (?2 IS NULL OR wp.remediation_plan_id = ?2)
+              AND (?3 IS NULL OR wp.incident_id = ?3)
+              AND (?4 IS NULL OR wp.run_id = ?4)
+              AND (?5 IS NULL OR wp.status = ?5)
+              AND (?6 IS NULL OR wp.risk_level = ?6)
+              AND (?7 IS NULL OR wp.resource_namespace = ?7)
+              AND (?8 IS NULL OR wp.resource_kind = ?8)
+              AND (?9 IS NULL OR wp.resource_name = ?9)
+              AND (?10 IS NULL OR CAST(wp.created_at AS INTEGER) >= ?10)
+              AND (?11 IS NULL OR CAST(wp.created_at AS INTEGER) <= ?11)
+              AND (?12 IS NULL OR COALESCE(wi.origin, 'legacy') = ?12)
+              AND (?13 IS NULL OR COALESCE(wi.created_by, wp.status_changed_by) = ?13)
+            ORDER BY wp.created_at DESC, wp.id DESC
+            LIMIT ?14 OFFSET ?15
             "#,
         )
         .bind(filter.work_item_id)
@@ -1623,6 +1858,8 @@ impl SqliteStore {
         .bind(filter.resource_name)
         .bind(filter.created_after_ms)
         .bind(filter.created_before_ms)
+        .bind(filter.origin)
+        .bind(filter.created_by)
         .bind(limit)
         .bind(offset)
         .fetch_all(&self.pool)
@@ -3410,6 +3647,14 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
+        sqlx::query(
+            "UPDATE approval_gates SET origin = COALESCE((SELECT origin FROM work_items WHERE id = ?1), 'controller') WHERE id = ?2",
+        )
+        .bind(&gate.work_item_id)
+        .bind(&gate.id)
+        .execute(&self.pool)
+        .await?;
+
         self.get_approval_gate(&gate.id)
             .await?
             .ok_or_else(|| StoreError::NotFound {
@@ -3464,6 +3709,106 @@ impl SqliteStore {
             })
     }
 
+    pub async fn decide_pending_approval_gates(
+        &self,
+        gate_ids: &[String],
+        status: &str,
+        decided_by: Option<String>,
+        decision_reason: Option<String>,
+        audit_events: Vec<CreateAuditEvent>,
+    ) -> Result<Vec<StoredApprovalGate>, StoreError> {
+        if gate_ids.is_empty() {
+            return Err(StoreError::InvalidData(
+                "at least one approval gate is required".to_string(),
+            ));
+        }
+        if audit_events.len() != gate_ids.len() + 1 {
+            return Err(StoreError::InvalidData(
+                "batch approval gate decisions require one audit event per gate and one batch event"
+                    .to_string(),
+            ));
+        }
+
+        let serialized_audits = audit_events
+            .into_iter()
+            .map(|event| {
+                let payload_json = serde_json::to_string(&event.payload_json)?;
+                Ok((event, payload_json))
+            })
+            .collect::<Result<Vec<_>, StoreError>>()?;
+        let now = now_string();
+        let mut transaction = self.pool.begin().await?;
+        let mut gates = Vec::with_capacity(gate_ids.len());
+
+        for gate_id in gate_ids {
+            let row = sqlx::query(approval_gate_select_sql("WHERE id = ?1"))
+                .bind(gate_id)
+                .fetch_optional(&mut *transaction)
+                .await?;
+            let gate =
+                row.map(row_to_approval_gate)
+                    .transpose()?
+                    .ok_or_else(|| StoreError::NotFound {
+                        entity: "approval_gate".to_string(),
+                        id: gate_id.clone(),
+                    })?;
+            if gate.status != "pending" {
+                return Err(StoreError::Conflict(format!(
+                    "approval gate is not pending: {gate_id}"
+                )));
+            }
+            gates.push(gate);
+        }
+
+        for gate in &mut gates {
+            sqlx::query(
+                r#"
+                UPDATE approval_gates
+                SET status = ?2,
+                    decided_at = ?3,
+                    decided_by = ?4,
+                    decision_reason = ?5
+                WHERE id = ?1
+                "#,
+            )
+            .bind(&gate.id)
+            .bind(status)
+            .bind(&now)
+            .bind(&decided_by)
+            .bind(&decision_reason)
+            .execute(&mut *transaction)
+            .await?;
+            gate.status = status.to_string();
+            gate.decided_at = Some(now.clone());
+            gate.decided_by = decided_by.clone();
+            gate.decision_reason = decision_reason.clone();
+        }
+
+        for (event, payload_json) in serialized_audits {
+            sqlx::query(
+                r#"
+                INSERT INTO audit_events (
+                  id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "#,
+            )
+            .bind(event.id)
+            .bind(event.kind)
+            .bind(event.actor)
+            .bind(event.resource_kind)
+            .bind(event.resource_id)
+            .bind(event.run_id.as_ref().map(RunId::as_str))
+            .bind(payload_json)
+            .bind(&now)
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(gates)
+    }
+
     pub async fn list_approval_gates(
         &self,
         filter: ApprovalGateListFilter,
@@ -3475,22 +3820,38 @@ impl SqliteStore {
             SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
                    gate_order, title, summary, risk_level, resource_namespace, resource_kind,
                    resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
-                   stale_at, stale_by, stale_reason
+                   stale_at, stale_by, stale_reason, origin,
+                   COALESCE(
+                     (SELECT created_by FROM work_items WHERE id = approval_gates.work_item_id),
+                     (SELECT created_by FROM runs WHERE id = approval_gates.run_id)
+                   ) AS created_by
             FROM approval_gates
             WHERE (?1 IS NULL OR work_item_id = ?1)
               AND (?2 IS NULL OR remediation_plan_id = ?2)
               AND (?3 IS NULL OR incident_id = ?3)
               AND (?4 IS NULL OR run_id = ?4)
               AND (?5 IS NULL OR status = ?5)
-              AND (?6 IS NULL OR gate_kind = ?6)
-              AND (?7 IS NULL OR risk_level = ?7)
-              AND (?8 IS NULL OR resource_namespace = ?8)
-              AND (?9 IS NULL OR resource_kind = ?9)
-              AND (?10 IS NULL OR resource_name = ?10)
-              AND (?11 IS NULL OR CAST(created_at AS INTEGER) >= ?11)
-              AND (?12 IS NULL OR CAST(created_at AS INTEGER) <= ?12)
+              AND (?6 IS NULL OR origin = ?6)
+              AND (?7 IS NULL OR gate_kind = ?7)
+              AND (?8 IS NULL OR risk_level = ?8)
+              AND (?9 IS NULL OR resource_namespace = ?9)
+              AND (?10 IS NULL OR resource_kind = ?10)
+              AND (?11 IS NULL OR resource_name = ?11)
+              AND (?12 IS NULL OR CAST(created_at AS INTEGER) >= ?12)
+              AND (?13 IS NULL OR CAST(created_at AS INTEGER) <= ?13)
+              AND (?14 IS NULL OR COALESCE(
+                    (SELECT created_by FROM work_items WHERE id = approval_gates.work_item_id),
+                    (SELECT created_by FROM runs WHERE id = approval_gates.run_id)
+                  ) = ?14)
+              AND (?15 IS NULL OR lower(id) LIKE '%' || lower(?15) || '%'
+                   OR lower(title) LIKE '%' || lower(?15) || '%'
+                   OR lower(summary) LIKE '%' || lower(?15) || '%'
+                   OR lower(gate_kind) LIKE '%' || lower(?15) || '%'
+                   OR lower(COALESCE(resource_namespace, '')) LIKE '%' || lower(?15) || '%'
+                   OR lower(COALESCE(resource_kind, '')) LIKE '%' || lower(?15) || '%'
+                   OR lower(COALESCE(resource_name, '')) LIKE '%' || lower(?15) || '%')
             ORDER BY created_at DESC, work_item_id DESC, remediation_plan_id DESC, gate_order ASC, id ASC
-            LIMIT ?13 OFFSET ?14
+            LIMIT ?16 OFFSET ?17
             "#,
         )
         .bind(filter.work_item_id)
@@ -3498,6 +3859,7 @@ impl SqliteStore {
         .bind(filter.incident_id)
         .bind(filter.run_id.as_ref().map(RunId::as_str))
         .bind(filter.status)
+        .bind(filter.origin)
         .bind(filter.gate_kind)
         .bind(filter.risk_level)
         .bind(filter.resource_namespace)
@@ -3505,6 +3867,8 @@ impl SqliteStore {
         .bind(filter.resource_name)
         .bind(filter.created_after_ms)
         .bind(filter.created_before_ms)
+        .bind(filter.created_by)
+        .bind(filter.search)
         .bind(limit)
         .bind(offset)
         .fetch_all(&self.pool)
@@ -3799,9 +4163,21 @@ impl SqliteStore {
         sqlx::query(
             r#"
             INSERT INTO audit_events (
-              id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+              id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at, origin
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            VALUES (
+              ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+              COALESCE(
+                (SELECT origin FROM runs WHERE id = ?6),
+                CASE ?4
+                  WHEN 'run' THEN (SELECT origin FROM runs WHERE id = ?5)
+                  WHEN 'work_item' THEN (SELECT origin FROM work_items WHERE id = ?5)
+                  WHEN 'approval' THEN (SELECT origin FROM approvals WHERE id = ?5)
+                  WHEN 'approval_gate' THEN (SELECT origin FROM approval_gates WHERE id = ?5)
+                END,
+                'legacy'
+              )
+            )
             "#,
         )
         .bind(&event.id)
@@ -3881,7 +4257,7 @@ impl SqliteStore {
         let rows = sqlx::query(
             r#"
             SELECT ae.id, ae.kind, ae.actor, ae.resource_kind, ae.resource_id, ae.run_id,
-                   ae.payload_json, ae.created_at
+                   ae.origin, ae.payload_json, ae.created_at
             FROM audit_events ae
             LEFT JOIN runs r ON r.id = ae.run_id
             WHERE (?1 IS NULL OR ae.kind = ?1)
@@ -3937,6 +4313,7 @@ impl SqliteStore {
                     OR ae.resource_id LIKE '%' || ?10 || '%' COLLATE NOCASE
                     OR COALESCE(ae.run_id, '') LIKE '%' || ?10 || '%' COLLATE NOCASE
                     OR ae.payload_json LIKE '%' || ?10 || '%' COLLATE NOCASE)
+              AND (?12 IS NULL OR ae.origin = ?12)
             ORDER BY ae.created_at DESC, ae.id DESC
             LIMIT ?11
             "#,
@@ -3952,6 +4329,7 @@ impl SqliteStore {
         .bind(production_impacting)
         .bind(filter.search)
         .bind(limit)
+        .bind(filter.origin)
         .fetch_all(&self.pool)
         .await?;
 
@@ -4083,6 +4461,8 @@ fn row_to_work_plan(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkPlan, Stor
         status_changed_at: row.try_get("status_changed_at")?,
         status_changed_by: row.try_get("status_changed_by")?,
         status_reason: row.try_get("status_reason")?,
+        created_by: row.try_get("created_by")?,
+        origin: row.try_get("origin")?,
     })
 }
 
@@ -4114,6 +4494,7 @@ fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, Stor
             .map_err(|error| StoreError::InvalidData(error.to_string()))?,
         current_run_id: current_run_id.map(RunId::new),
         created_by: row.try_get("created_by")?,
+        origin: row.try_get("origin")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
         status_changed_at: row.try_get("status_changed_at")?,
@@ -4429,6 +4810,8 @@ fn row_to_approval_gate(row: sqlx::sqlite::SqliteRow) -> Result<StoredApprovalGa
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
         run_id: run_id.map(RunId::new),
         status: row.try_get("status")?,
+        origin: row.try_get("origin")?,
+        created_by: row.try_get("created_by")?,
         gate_kind: row.try_get("gate_kind")?,
         gate_order: row.try_get("gate_order")?,
         title: row.try_get("title")?,
@@ -4532,7 +4915,7 @@ fn work_item_select_sql(where_clause: &str) -> &'static str {
             SELECT id, status, title, intent, acceptance_criteria_json, source_repo, source_ref,
                    gitops_repo, gitops_ref, target_environment, target_namespace,
                    argo_application, production_impacting, max_attempts, max_elapsed_seconds,
-                   attempt_count, current_run_id, created_by, created_at, updated_at,
+                   attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
             WHERE id = ?1
@@ -4559,34 +4942,40 @@ fn workspace_select_sql(where_clause: &str) -> &'static str {
 
 fn work_plan_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
-        "WHERE id = ?1" => {
+        "WHERE wp.id = ?1" => {
             r#"
-            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
-                   status, title, summary, risk_level, requires_approval, resource_namespace,
-                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
-                   revision, status_changed_at, status_changed_by, status_reason
-            FROM work_plans
-            WHERE id = ?1
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE wp.id = ?1
             "#
         }
-        "WHERE remediation_plan_id = ?1" => {
+        "WHERE wp.remediation_plan_id = ?1" => {
             r#"
-            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
-                   status, title, summary, risk_level, requires_approval, resource_namespace,
-                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
-                   revision, status_changed_at, status_changed_by, status_reason
-            FROM work_plans
-            WHERE remediation_plan_id = ?1
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE wp.remediation_plan_id = ?1
             "#
         }
-        "WHERE work_item_id = ?1" => {
+        "WHERE wp.work_item_id = ?1" => {
             r#"
-            SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id,
-                   status, title, summary, risk_level, requires_approval, resource_namespace,
-                   resource_kind, resource_name, work_plan_json, created_at, updated_at,
-                   revision, status_changed_at, status_changed_by, status_reason
-            FROM work_plans
-            WHERE work_item_id = ?1
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE wp.work_item_id = ?1
             "#
         }
         _ => unreachable!("work plan select SQL only supports known static clauses"),
@@ -4797,7 +5186,11 @@ fn approval_gate_select_sql(where_clause: &str) -> &'static str {
             SELECT id, work_item_id, remediation_plan_id, incident_id, session_id, run_id, status, gate_kind,
                    gate_order, title, summary, risk_level, resource_namespace, resource_kind,
                    resource_name, gate_json, created_at, decided_at, decided_by, decision_reason,
-                   stale_at, stale_by, stale_reason
+                   stale_at, stale_by, stale_reason, origin,
+                   COALESCE(
+                     (SELECT created_by FROM work_items WHERE id = approval_gates.work_item_id),
+                     (SELECT created_by FROM runs WHERE id = approval_gates.run_id)
+                   ) AS created_by
             FROM approval_gates
             WHERE id = ?1
             "#
@@ -4824,6 +5217,8 @@ fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
             .map(|value| serde_json::from_str(&value))
             .transpose()?,
         execution_target_json: serde_json::from_str(&execution_target_json)?,
+        origin: row.try_get("origin")?,
+        created_by: row.try_get("created_by")?,
     })
 }
 
@@ -5024,6 +5419,8 @@ fn row_to_approval(row: sqlx::sqlite::SqliteRow) -> Result<StoredApproval, Store
             .map(|value| serde_json::from_str(&value))
             .transpose()?,
         turns_completed: row.try_get::<i64, _>("turns_completed")? as u32,
+        origin: row.try_get("origin")?,
+        created_by: row.try_get("created_by")?,
     })
 }
 
@@ -5032,7 +5429,8 @@ fn approval_select_sql(where_clause: &str) -> String {
         r#"
         SELECT id, session_id, run_id, status, kind, summary, risk_level,
                requested_at, decided_at, decided_by, decision_reason,
-               run_scope_json, action_json, preview_json, resume_messages_json, turns_completed
+               run_scope_json, action_json, preview_json, resume_messages_json, turns_completed, origin,
+               (SELECT created_by FROM runs WHERE id = approvals.run_id) AS created_by
         FROM approvals
         {where_clause}
         "#
@@ -5392,6 +5790,7 @@ fn row_to_audit_event(row: sqlx::sqlite::SqliteRow) -> Result<StoredAuditEvent, 
         resource_kind: row.try_get("resource_kind")?,
         resource_id: row.try_get("resource_id")?,
         run_id: run_id.map(RunId::new),
+        origin: row.try_get("origin")?,
         payload_json: serde_json::from_str(&payload_json)?,
         created_at: row.try_get("created_at")?,
     })
@@ -5434,14 +5833,14 @@ fn audit_event_select_sql(where_clause: &str) -> &'static str {
     match where_clause {
         "WHERE id = ?1" => {
             r#"
-            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, origin, payload_json, created_at
             FROM audit_events
             WHERE id = ?1
             "#
         }
         "WHERE resource_kind = ?1 AND resource_id = ?2 ORDER BY created_at DESC LIMIT ?3" => {
             r#"
-            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, origin, payload_json, created_at
             FROM audit_events
             WHERE resource_kind = ?1 AND resource_id = ?2
             ORDER BY created_at DESC
@@ -5450,7 +5849,7 @@ fn audit_event_select_sql(where_clause: &str) -> &'static str {
         }
         "WHERE run_id = ?1 ORDER BY created_at DESC LIMIT ?2" => {
             r#"
-            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, origin, payload_json, created_at
             FROM audit_events
             WHERE run_id = ?1
             ORDER BY created_at DESC
@@ -5459,7 +5858,7 @@ fn audit_event_select_sql(where_clause: &str) -> &'static str {
         }
         "ORDER BY created_at DESC LIMIT ?1" => {
             r#"
-            SELECT id, kind, actor, resource_kind, resource_id, run_id, payload_json, created_at
+            SELECT id, kind, actor, resource_kind, resource_id, run_id, origin, payload_json, created_at
             FROM audit_events
             ORDER BY created_at DESC
             LIMIT ?1
@@ -5490,6 +5889,8 @@ pub enum StoreError {
     InvalidData(String),
     #[error("{entity} not found: {id}")]
     NotFound { entity: String, id: String },
+    #[error("conflict: {0}")]
+    Conflict(String),
 }
 
 #[cfg(test)]
@@ -5527,7 +5928,6 @@ mod tests {
             })
             .await
             .unwrap();
-
         store
             .append_event(&AgentEvent {
                 event_id: EventId::new("evt_1"),
@@ -5744,6 +6144,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(approval.status, "pending");
+        assert_eq!(approval.origin, "legacy");
 
         let pending = store
             .pending_approval_for_run(&run_id)
@@ -5806,6 +6207,10 @@ mod tests {
             .await
             .unwrap();
         store
+            .set_run_created_by(&run_id, Some("operator".to_string()))
+            .await
+            .unwrap();
+        store
             .create_approval(crate::CreateApproval {
                 id: "appr_list".to_string(),
                 session_id,
@@ -5825,6 +6230,7 @@ mod tests {
 
         let approvals = store
             .list_approvals(ApprovalListFilter {
+                search: None,
                 status: Some("pending".to_string()),
                 limit: 50,
                 ..ApprovalListFilter::default()
@@ -5834,6 +6240,17 @@ mod tests {
 
         assert_eq!(approvals.len(), 1);
         assert_eq!(approvals[0].id, "appr_list");
+        assert_eq!(approvals[0].created_by.as_deref(), Some("operator"));
+        let actor_approvals = store
+            .list_approvals(ApprovalListFilter {
+                status: Some("pending".to_string()),
+                created_by: Some("operator".to_string()),
+                limit: 50,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(actor_approvals.len(), 1);
 
         store
             .create_approval(crate::CreateApproval {
@@ -5860,7 +6277,10 @@ mod tests {
 
         let scoped = store
             .list_approvals(ApprovalListFilter {
+                search: None,
                 status: Some("pending".to_string()),
+                origin: None,
+                created_by: None,
                 namespace: Some("apps-dev".to_string()),
                 repo: Some("git@example.test/team/app.git".to_string()),
                 branch: Some("feature/pharness".to_string()),
@@ -5881,10 +6301,20 @@ mod tests {
             })
             .await
             .unwrap();
+        let searched = store
+            .list_approvals(ApprovalListFilter {
+                search: Some("scoped file".to_string()),
+                limit: 50,
+                ..ApprovalListFilter::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(scoped.len(), 1);
         assert_eq!(scoped[0].id, "appr_scoped");
         assert_eq!(second_page.len(), 1);
+        assert_eq!(searched.len(), 1);
+        assert_eq!(searched[0].id, "appr_scoped");
 
         let summary = store
             .approval_summary(ApprovalSummaryFilter {
@@ -6374,6 +6804,8 @@ mod tests {
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id.clone()),
                 status: Some("draft".to_string()),
+                origin: None,
+                created_by: None,
                 risk_level: Some("high".to_string()),
                 resource_namespace: Some("ci".to_string()),
                 resource_kind: Some("PipelineRun".to_string()),
@@ -6836,6 +7268,10 @@ mod tests {
             Some("sha256:feedface")
         );
 
+        store
+            .set_run_created_by(&run_id, Some("gate-operator".to_string()))
+            .await
+            .unwrap();
         let gate = store
             .create_approval_gate(crate::CreateApprovalGate {
                 id: "agate_test".to_string(),
@@ -6862,11 +7298,14 @@ mod tests {
         let fetched_gate = store.get_approval_gate(&gate.id).await.unwrap().unwrap();
         let gates = store
             .list_approval_gates(crate::ApprovalGateListFilter {
+                search: None,
                 work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id.clone()),
                 status: Some("pending".to_string()),
+                origin: None,
+                created_by: Some("gate-operator".to_string()),
                 gate_kind: Some("pipeline_mutation".to_string()),
                 risk_level: Some("high".to_string()),
                 resource_namespace: Some("ci".to_string()),
@@ -6885,8 +7324,19 @@ mod tests {
             Some("rplan_test")
         );
         assert_eq!(fetched_gate.gate_kind, "pipeline_mutation");
+        assert_eq!(fetched_gate.created_by.as_deref(), Some("gate-operator"));
         assert_eq!(gates.len(), 1);
         assert_eq!(gates[0].id, "agate_test");
+        let searched_gates = store
+            .list_approval_gates(crate::ApprovalGateListFilter {
+                search: Some("rerunning tekton".to_string()),
+                limit: 10,
+                ..crate::ApprovalGateListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(searched_gates.len(), 1);
+        assert_eq!(searched_gates[0].id, "agate_test");
 
         let gate_summary = store
             .approval_gate_summary(crate::ApprovalGateSummaryFilter {
@@ -6932,11 +7382,14 @@ mod tests {
             .unwrap();
         let satisfied_gates = store
             .list_approval_gates(crate::ApprovalGateListFilter {
+                search: None,
                 work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(run_id),
                 status: Some("satisfied".to_string()),
+                origin: None,
+                created_by: None,
                 gate_kind: Some("pipeline_mutation".to_string()),
                 risk_level: Some("high".to_string()),
                 resource_namespace: Some("ci".to_string()),
@@ -7110,11 +7563,21 @@ mod tests {
             })
             .await
             .unwrap();
+        let by_origin = store
+            .query_audit_events(crate::AuditEventListFilter {
+                origin: Some("legacy".to_string()),
+                limit: 50,
+                ..crate::AuditEventListFilter::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(created.kind, "permission_grant.used");
+        assert_eq!(created.origin, "legacy");
         assert_eq!(by_resource.len(), 1);
         assert_eq!(by_run[0].payload_json["grant_id"], "pgrant_1");
         assert_eq!(searched.len(), 1);
+        assert_eq!(by_origin.len(), 1);
     }
 
     #[tokio::test]
@@ -7139,6 +7602,10 @@ mod tests {
                 max_elapsed_seconds: 900,
                 created_by: Some("operator".to_string()),
             })
+            .await
+            .unwrap();
+        let item = store
+            .set_work_item_origin(&item.id, "operator")
             .await
             .unwrap();
         let session_id = SessionId::new("ses_work_item_test");
@@ -7320,6 +7787,19 @@ mod tests {
                 .id,
             work_plan.id
         );
+        let operator_plans = store
+            .list_work_plans(crate::WorkPlanListFilter {
+                work_item_id: Some(item.id.clone()),
+                origin: Some("operator".to_string()),
+                created_by: Some("operator".to_string()),
+                limit: 10,
+                ..crate::WorkPlanListFilter::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(operator_plans.len(), 1);
+        assert_eq!(operator_plans[0].origin, "operator");
+        assert_eq!(operator_plans[0].created_by.as_deref(), Some("operator"));
         assert_eq!(
             store
                 .list_workspaces(crate::WorkspaceListFilter {
@@ -7332,5 +7812,141 @@ mod tests {
                 .id,
             workspace.id
         );
+    }
+
+    #[tokio::test]
+    async fn batch_approval_gate_decision_is_atomic_and_audited() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let session_id = SessionId::new("ses_batch_gates");
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "batch gates".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_work_item(crate::CreateWorkItem {
+                id: "witem_batch_gates".to_string(),
+                status: "awaiting_approval".to_string(),
+                title: "Batch gate test".to_string(),
+                intent: "Verify atomic decisions".to_string(),
+                acceptance_criteria: Vec::new(),
+                source_repo: "https://example.test/source.git".to_string(),
+                source_ref: "main".to_string(),
+                gitops_repo: None,
+                gitops_ref: None,
+                target_environment: "dev".to_string(),
+                target_namespace: None,
+                argo_application: None,
+                production_impacting: false,
+                max_attempts: 1,
+                max_elapsed_seconds: 60,
+                created_by: Some("tester".to_string()),
+            })
+            .await
+            .unwrap();
+
+        for gate_id in ["agate_batch_a", "agate_batch_b", "agate_batch_c"] {
+            store
+                .create_approval_gate(crate::CreateApprovalGate {
+                    id: gate_id.to_string(),
+                    work_item_id: Some("witem_batch_gates".to_string()),
+                    remediation_plan_id: None,
+                    incident_id: None,
+                    session_id: session_id.clone(),
+                    run_id: None,
+                    status: "pending".to_string(),
+                    gate_kind: "delivery".to_string(),
+                    gate_order: 1,
+                    title: format!("Approve {gate_id}"),
+                    summary: "Batch decision test".to_string(),
+                    risk_level: "medium".to_string(),
+                    resource_namespace: None,
+                    resource_kind: None,
+                    resource_name: None,
+                    gate_json: serde_json::json!({}),
+                })
+                .await
+                .unwrap();
+        }
+
+        let make_audit = |id: &str| CreateAuditEvent {
+            id: id.to_string(),
+            kind: "approval_gate.waived".to_string(),
+            actor: Some("operator".to_string()),
+            resource_kind: "approval_gate".to_string(),
+            resource_id: id.trim_start_matches("aud_").to_string(),
+            run_id: None,
+            payload_json: serde_json::json!({"decision":"waived"}),
+        };
+        let decided = store
+            .decide_pending_approval_gates(
+                &["agate_batch_a".to_string(), "agate_batch_b".to_string()],
+                "waived",
+                Some("operator".to_string()),
+                Some("reviewed together".to_string()),
+                vec![
+                    make_audit("aud_agate_batch_a"),
+                    make_audit("aud_agate_batch_b"),
+                    CreateAuditEvent {
+                        id: "aud_batch_success".to_string(),
+                        kind: "approval_gate.batch_decided".to_string(),
+                        actor: Some("operator".to_string()),
+                        resource_kind: "approval_gate_batch".to_string(),
+                        resource_id: "batch_success".to_string(),
+                        run_id: None,
+                        payload_json: serde_json::json!({"count":2}),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(decided.len(), 2);
+        assert!(decided.iter().all(|gate| gate.status == "waived"));
+        assert!(store
+            .get_audit_event("aud_batch_success")
+            .await
+            .unwrap()
+            .is_some());
+
+        let conflict = store
+            .decide_pending_approval_gates(
+                &["agate_batch_c".to_string(), "agate_batch_a".to_string()],
+                "satisfied",
+                Some("operator".to_string()),
+                Some("must not partially decide".to_string()),
+                vec![
+                    make_audit("aud_agate_batch_c"),
+                    make_audit("aud_agate_batch_a_second"),
+                    CreateAuditEvent {
+                        id: "aud_batch_conflict".to_string(),
+                        kind: "approval_gate.batch_decided".to_string(),
+                        actor: Some("operator".to_string()),
+                        resource_kind: "approval_gate_batch".to_string(),
+                        resource_id: "batch_conflict".to_string(),
+                        run_id: None,
+                        payload_json: serde_json::json!({"count":2}),
+                    },
+                ],
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(conflict, crate::StoreError::Conflict(_)));
+        assert_eq!(
+            store
+                .get_approval_gate("agate_batch_c")
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "pending"
+        );
+        assert!(store
+            .get_audit_event("aud_batch_conflict")
+            .await
+            .unwrap()
+            .is_none());
     }
 }

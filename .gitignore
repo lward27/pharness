@@ -6,6 +6,8 @@
 /ui/node_modules/
 /ui/dist/
 /ui/.npm-cache/
+/ui/test-results/
+/ui/playwright-report/
 /.npm-cache/
 
 # Local pharness runtime state

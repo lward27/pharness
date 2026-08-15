@@ -10,8 +10,9 @@ pub mod resources;
 pub mod tools;
 
 pub use agent::{
-    AgentRuntime, ApprovedAction, CancellationFlag, PendingApproval, RunConfig, RunOutcome,
-    RunStatus,
+    pack_messages, AgentRuntime, ApprovedAction, CancellationFlag, ContextBudget, ContextError,
+    ContextPack, PendingApproval, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome,
+    RunStatus, TaskContract, TaskKind,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
@@ -28,6 +29,6 @@ pub use policy::{
 pub use resources::{ArtifactRef, ResourceRef};
 pub use tools::{
     simple_text_diff, CapabilityKind, CompositeToolExecutor, LocalReadOnlyFsTools, LocalShellTools,
-    NoopToolExecutor, ReadOnlyClusterTools, ToolCapability, ToolError, ToolExecutor, ToolResult,
-    ToolResultStatus,
+    NoopToolExecutor, ReadOnlyClusterTools, ToolCapability, ToolError, ToolErrorDisposition,
+    ToolExecutor, ToolResult, ToolResultStatus,
 };

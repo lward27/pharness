@@ -2174,6 +2174,8 @@ mod tests {
             error: None,
             result_json: None,
             execution_target_json: json!({}),
+            origin: "legacy".to_string(),
+            created_by: None,
         }
     }
 }

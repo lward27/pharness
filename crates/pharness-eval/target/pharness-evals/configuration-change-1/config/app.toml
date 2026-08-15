@@ -1,0 +1,4 @@
+environment = "staging"
+feature_enabled = true
+max_connections = 20
+protected_mode = "strict"

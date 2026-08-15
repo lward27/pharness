@@ -64,6 +64,49 @@ The API reads provider configuration at startup. Restart `pharness-api` after ch
 cargo run -p pharness-cli -- config
 ```
 
+## Coding Reliability Evaluation
+
+`pharness-eval` exercises the real runtime, policy, tools, and Fireworks
+provider against eight disposable Git fixtures. Replay trajectories are the
+deterministic CI check; live Fireworks evaluation is deliberately manual and
+must never expose credentials or run in CI.
+
+```sh
+CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target \
+  cargo run -p pharness-eval -- list
+
+CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target \
+  cargo run -p pharness-eval -- run --provider replay --attempts 2 \
+  --output target/pharness-evals/replay.json
+```
+
+For the release gate, use an approved pre-change Fireworks result as the
+baseline, pin the model and configuration, then run the candidate twice over
+all eight fixtures. The evaluator refuses comparisons that differ in suite,
+fixture revision, provider, model, prompt version, temperature, token cap, or
+turn cap. Create the matched pre-change control with the historical runner: it
+executes the old runtime in a disposable worktree but supplies the candidate
+prompt so those comparison fields are identical.
+
+```sh
+FIREWORKS_API_KEY='...' \
+  CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target \
+  cargo run -p pharness-eval -- run --provider fireworks --attempts 2 \
+  --output target/pharness-evals/candidate-v1.6.json
+
+FIREWORKS_API_KEY='...' \
+  ./scripts/run-historical-baseline.sh --revision 21841e4 \
+  --output target/pharness-evals/baseline-v1.6.json --attempts 2
+
+cargo run -p pharness-eval -- compare \
+  --baseline target/pharness-evals/baseline-v1.6.json \
+  --candidate target/pharness-evals/candidate-v1.6.json
+```
+
+Do not begin the `app.rs` extraction unless the comparison reports the
+required improvement and zero safety regressions. Fixture artifacts are kept
+under `target/pharness-evals/` and remain untracked.
+
 ## Runtime Config
 
 By default the API uses local defaults and env overrides. If `config/pharness.toml` exists, it is loaded automatically; set `PHARNESS_CONFIG` to point at a different TOML file.
@@ -74,7 +117,7 @@ cargo run -p pharness-cli -- config validate --file config/pharness.toml
 PHARNESS_CONFIG=config/pharness.toml cargo run -p pharness-api
 ```
 
-Env overrides still win over TOML for the runtime-critical fields: `PHARNESS_BIND`, `PHARNESS_DB_PATH`, `PHARNESS_FIREWORKS_MODEL`, `PHARNESS_FIREWORKS_BASE_URL`, `PHARNESS_KUBECTL_BIN`, `PHARNESS_ARGOCD_NAMESPACE`, `PHARNESS_PROMETHEUS_URL`, `PHARNESS_LOKI_URL`, `PHARNESS_REGISTRY_ALIASES`, `PHARNESS_CLUSTER_TOOL_TIMEOUT_MS`, `PHARNESS_CLUSTER_TOOL_MAX_OUTPUT_BYTES`, `PHARNESS_POLICY_SUBJECT`, `PHARNESS_POLICY_ENVIRONMENT`, `PHARNESS_POLICY_MODE`, `PHARNESS_ALLOW_READ_ONLY_SHELL`, `PHARNESS_REQUIRE_APPROVAL_FOR_WRITES`, `PHARNESS_REQUIRE_APPROVAL_FOR_NETWORK`, `PHARNESS_REQUIRE_APPROVAL_FOR_DESTRUCTIVE`, `PHARNESS_DENY_PRIVILEGED`, and `PHARNESS_DENY_SECRET_ACCESS`.
+Env overrides still win over TOML for the runtime-critical fields: `PHARNESS_BIND`, `PHARNESS_DB_PATH`, `PHARNESS_FIREWORKS_MODEL`, `PHARNESS_FIREWORKS_BASE_URL`, `PHARNESS_CONTEXT_MAX_INPUT_TOKENS`, `PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS`, `PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS`, `PHARNESS_KUBECTL_BIN`, `PHARNESS_ARGOCD_NAMESPACE`, `PHARNESS_PROMETHEUS_URL`, `PHARNESS_LOKI_URL`, `PHARNESS_REGISTRY_ALIASES`, `PHARNESS_CLUSTER_TOOL_TIMEOUT_MS`, `PHARNESS_CLUSTER_TOOL_MAX_OUTPUT_BYTES`, `PHARNESS_POLICY_SUBJECT`, `PHARNESS_POLICY_ENVIRONMENT`, `PHARNESS_POLICY_MODE`, `PHARNESS_ALLOW_READ_ONLY_SHELL`, `PHARNESS_REQUIRE_APPROVAL_FOR_WRITES`, `PHARNESS_REQUIRE_APPROVAL_FOR_NETWORK`, `PHARNESS_REQUIRE_APPROVAL_FOR_DESTRUCTIVE`, `PHARNESS_DENY_PRIVILEGED`, and `PHARNESS_DENY_SECRET_ACCESS`.
 
 Policy defaults are intentionally conservative. `default` asks for local file writes, asks for destructive and network shell commands, and denies privileged or secret-accessing commands. `trusted_writes` can be selected in config or per run for local write autonomy:
 

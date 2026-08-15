@@ -5,11 +5,12 @@ use crate::dispatch::{
 };
 use crate::dto::{
     ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
-    ApprovalSummaryResponse, ApprovalsResponse, ArgoSyncContextResponse, ArgoSyncControlResponse,
-    ArgoSyncOutcomeRequest, ArtifactResponse, ArtifactsResponse,
+    ApprovalResponse, ApprovalSummaryResponse, ApprovalsResponse, ArgoSyncContextResponse,
+    ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse, ArtifactsResponse,
     AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
     AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
     AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
+    BatchDecideApprovalGatesRequest, BatchDecideApprovalGatesResponse,
     CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse,
     ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
     CreateChangeSetResponse, CreateDeploymentContractRequest,
@@ -26,7 +27,8 @@ use crate::dto::{
     CreateTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
     CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse, DecideApprovalGateRequest,
     DecideApprovalGateResponse, DecideApprovalRequest, DecideApprovalResponse,
-    DeploymentContractResponse, DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
+    DeliverySegmentResourceResponse, DeliverySegmentResponse, DeploymentContractResponse,
+    DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
     DeploymentIntentPreflightRequest, DeploymentIntentPreflightResponse, DeploymentIntentResponse,
     DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
     ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest,
@@ -43,29 +45,33 @@ use crate::dto::{
     GitOpsDeliveryPreflightResponse, GitOpsUpdatePlanResponse, IncidentResponse, IncidentsResponse,
     ObservationResponse, ObservationsResponse, ObserveGitDeliveryRequest,
     ObserveGitDeliveryResponse, ObserveGitOpsDeliveryRequest, ObserveGitOpsDeliveryResponse,
-    PermissionGrantResponse, PermissionGrantsResponse, PipelineContractResponse,
-    PipelineContractsResponse, PipelineIntentExecutionOutcomeRequest,
-    PipelineIntentExecutionPreflightResponse, PipelineIntentResponse, PipelineIntentsResponse,
-    PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest,
-    ReconcileDueControllerWaitsResponse, ReconcileWorkItemRequest, ReconcileWorkItemResponse,
-    RegistryEvidenceListResponse, RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse,
-    RemediationPlanResponse, RemediationPlansResponse, ReplacePipelineContractRequest,
-    ReplacePipelineContractResponse, ReplanWorkItemRequest, ReplanWorkItemResponse,
-    ResolveGitOpsBaseRevisionRequest, ResolveGitOpsBaseRevisionResponse, ReviewApprovalRequest,
-    ReviseChangeSetRequest, ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
+    OperatorResourceGroupMemberResponse, OperatorResourceGroupResponse, PermissionGrantResponse,
+    PermissionGrantsResponse, PipelineContractResponse, PipelineContractsResponse,
+    PipelineIntentExecutionOutcomeRequest, PipelineIntentExecutionPreflightResponse,
+    PipelineIntentResponse, PipelineIntentsResponse, PrepareGitDeliveryRequest,
+    PrepareGitOpsDeliveryRequest, ReconcileAuthorizationCheckResponse, ReconcileBlockerResponse,
+    ReconcileDueControllerWaitsRequest, ReconcileDueControllerWaitsResponse,
+    ReconcileWorkItemRequest, ReconcileWorkItemResponse, RegistryEvidenceListResponse,
+    RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse, RemediationPlanResponse,
+    RemediationPlansResponse, ReplacePipelineContractRequest, ReplacePipelineContractResponse,
+    ReplanWorkItemRequest, ReplanWorkItemResponse, ResolveGitOpsBaseRevisionRequest,
+    ResolveGitOpsBaseRevisionResponse, ReviewApprovalRequest, ReviseChangeSetRequest,
+    ReviseChangeSetResponse, ReviseWorkPlanRequest, ReviseWorkPlanResponse,
     RevokePermissionGrantRequest, RunDiffResponse, RunResponse, RunSummaryResponse, RunsResponse,
-    SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
-    SdlcReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
-    TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
-    TransitionDeploymentIntentResponse, TransitionGitOpsChangeSetRequest,
-    TransitionGitOpsChangeSetResponse, TransitionPipelineContractRequest,
-    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
-    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
-    TransitionReleaseRequest, TransitionReleaseResponse, TransitionRemediationPlanRequest,
-    TransitionRemediationPlanResponse, TransitionWorkItemRequest, TransitionWorkPlanRequest,
-    TransitionWorkPlanResponse, TrustedEnvelopeResponse, VerifyReleaseRequest,
-    VerifyReleaseResponse, WorkItemPipelineContextResponse, WorkItemResponse, WorkItemsResponse,
-    WorkPlanResponse, WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
+    ScopeOptionsResponse, SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary,
+    SdlcReadinessGrantSummary, SdlcReadinessResponse, TransitionChangeSetRequest,
+    TransitionChangeSetResponse, TransitionDeploymentContractRequest,
+    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
+    TransitionGitOpsChangeSetRequest, TransitionGitOpsChangeSetResponse,
+    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
+    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
+    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
+    TransitionRemediationPlanRequest, TransitionRemediationPlanResponse, TransitionWorkItemRequest,
+    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TriageItemResponse, TriageResponse,
+    TriageSummaryResponse, TrustedEnvelopeResponse, VerifyReleaseRequest, VerifyReleaseResponse,
+    WorkItemFlowResponse, WorkItemOperatorStateResponse, WorkItemPipelineContextResponse,
+    WorkItemResponse, WorkItemsResponse, WorkPlanResponse, WorkPlansResponse, WorkspaceResponse,
+    WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use crate::workspace::WorkspaceProvisioner;
@@ -117,6 +123,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::timeout;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
+
+mod runs;
+
+#[cfg(test)]
+use runs::*;
 
 const DEFAULT_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 60_000;
 const MAX_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 300_000;
@@ -175,31 +186,7 @@ pub fn router(
         workspace,
     };
 
-    let internal = Router::new()
-        .route(
-            "/api/internal/runs/:run_id/attempt-context",
-            get(internal_attempt_context),
-        )
-        .route(
-            "/api/internal/runs/:run_id/mark-running",
-            post(internal_mark_running),
-        )
-        .route(
-            "/api/internal/runs/:run_id/workspace-provisioned",
-            post(internal_workspace_provisioned),
-        )
-        .route(
-            "/api/internal/runs/:run_id/events",
-            post(internal_ingest_events),
-        )
-        .route(
-            "/api/internal/runs/:run_id/outcome",
-            post(internal_ingest_outcome),
-        )
-        .route(
-            "/api/internal/runs/:run_id/control",
-            get(internal_run_control),
-        )
+    let internal = runs::internal_router()
         .route(
             "/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome",
             post(internal_pipeline_intent_execution_outcome),
@@ -262,19 +249,10 @@ pub fn router(
         ));
 
     Router::new()
+        .merge(runs::router())
         .route("/health", get(health))
         .route("/api/config/effective", get(config_effective))
         .route("/api/capabilities/execute", post(execute_capability))
-        .route("/api/runs", get(list_runs).post(create_run))
-        .route("/api/runs/summary", get(run_summary))
-        .route("/api/runs/:run_id", get(get_run))
-        .route("/api/runs/:run_id/events", get(get_run_events))
-        .route("/api/runs/:run_id/events/stream", get(stream_run_events))
-        .route("/api/runs/:run_id/diff", get(get_run_diff))
-        .route("/api/runs/:run_id/artifacts", get(list_run_artifacts))
-        .route("/api/runs/:run_id/observations", get(list_run_observations))
-        .route("/api/runs/:run_id/cancel", post(cancel_run))
-        .route("/api/runs/:run_id/approvals", post(decide_run_approval))
         .route("/api/artifacts/:artifact_id", get(get_artifact))
         .route(
             "/api/observations",
@@ -296,7 +274,10 @@ pub fn router(
             "/api/work-items",
             get(list_work_items).post(create_work_item),
         )
+        .route("/api/triage", get(list_triage))
+        .route("/api/triage/summary", get(triage_summary))
         .route("/api/work-items/:work_item_id", get(get_work_item))
+        .route("/api/work-items/:work_item_id/flow", get(work_item_flow))
         .route(
             "/api/work-items/:work_item_id/events",
             get(list_work_item_events),
@@ -346,6 +327,7 @@ pub fn router(
             post(cancel_work_item),
         )
         .route("/api/workspaces", get(list_workspaces))
+        .route("/api/scopes/options", get(scope_options))
         .route("/api/workspaces/:workspace_id", get(get_workspace))
         .route(
             "/api/work-plans/from-remediation-plan",
@@ -568,6 +550,10 @@ pub fn router(
         )
         .route("/api/approval-gates", get(list_approval_gates))
         .route("/api/approval-gates/summary", get(approval_gate_summary))
+        .route(
+            "/api/approval-gates/batch-decide",
+            post(batch_decide_approval_gates),
+        )
         .route("/api/approval-gates/:gate_id", get(get_approval_gate))
         .route(
             "/api/approval-gates/:gate_id/satisfy",
@@ -690,242 +676,6 @@ async fn require_operator_token(
         }
         None => ApiError::unauthorized("invalid or missing operator token").into_response(),
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct InternalAttemptContextQuery {
-    approval_id: Option<String>,
-}
-
-async fn internal_attempt_context(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Query(query): Query<InternalAttemptContextQuery>,
-) -> Result<Json<pharness_runhost::AttemptSpec>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-
-    let approval = match &query.approval_id {
-        Some(approval_id) => {
-            let approval = state
-                .store
-                .get_approval(approval_id)
-                .await?
-                .ok_or_else(|| ApiError::not_found("approval", approval_id))?;
-            if approval.run_id != run_id {
-                return Err(ApiError::conflict(
-                    "approval does not belong to the requested run",
-                ));
-            }
-            if approval.status != "approved" {
-                return Err(ApiError::conflict(
-                    "attempt resume requires an approved approval",
-                ));
-            }
-            Some(approval)
-        }
-        None => None,
-    };
-
-    let cwd = std::path::PathBuf::from(&run.cwd);
-    let spec = attempt_spec_for_run(&state.store, &run, &cwd, approval.as_ref())
-        .await
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-    if let Some(source) = &spec.run.workspace_source {
-        state
-            .workspace
-            .remote_source_allowed(source)
-            .map_err(|error| ApiError::conflict(error.to_string()))?;
-    }
-
-    Ok(Json(spec))
-}
-
-async fn internal_mark_running(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<RunResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state.store.mark_run_running(&run_id).await?;
-
-    Ok(Json(run.into()))
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct InternalWorkspaceProvisionedRequest {
-    workspace_id: String,
-    resolved_commit: String,
-    branch: String,
-}
-
-async fn internal_workspace_provisioned(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Json(request): Json<InternalWorkspaceProvisionedRequest>,
-) -> Result<Json<WorkspaceResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    let mut source = run
-        .execution_target_json
-        .get("workspace_source")
-        .cloned()
-        .ok_or_else(|| ApiError::conflict("run has no typed workspace source"))
-        .and_then(|value| {
-            serde_json::from_value::<pharness_runhost::WorkspaceSourceSpec>(value).map_err(
-                |error| ApiError::conflict(format!("run has invalid workspace source: {error}")),
-            )
-        })?;
-    if source.workspace_id != request.workspace_id || source.branch != request.branch {
-        return Err(ApiError::conflict(
-            "workspace provision report does not match the issued source contract",
-        ));
-    }
-    source.resolved_commit = Some(request.resolved_commit);
-    source
-        .validate()
-        .map_err(|error| ApiError::conflict(error.to_string()))?;
-    state
-        .workspace
-        .remote_source_allowed(&source)
-        .map_err(|error| ApiError::conflict(error.to_string()))?;
-
-    let scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();
-    if scope.workspace_id.as_deref() != Some(source.workspace_id.as_str()) {
-        return Err(ApiError::conflict(
-            "workspace provision report does not match the run scope",
-        ));
-    }
-    let workspace = state
-        .store
-        .get_workspace(&source.workspace_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("workspace", &source.workspace_id))?;
-    if workspace.run_id.as_ref() != Some(&run.id)
-        || scope.work_item_id.as_deref() != Some(workspace.work_item_id.as_str())
-        || workspace.source_repo != source.source_repo
-        || workspace.source_ref != source.source_ref
-    {
-        return Err(ApiError::conflict(
-            "workspace provision report is not authorized for this run",
-        ));
-    }
-    if workspace.status == "executing"
-        && workspace.resolved_commit.as_deref() == source.resolved_commit.as_deref()
-        && workspace.branch.as_deref() == Some(source.branch.as_str())
-    {
-        return Ok(Json(workspace.into()));
-    }
-    if workspace.status != "provisioning" {
-        return Err(ApiError::conflict(
-            "workspace is not awaiting source provisioning",
-        ));
-    }
-    let workspace = state
-        .store
-        .update_workspace_execution(
-            &workspace.id,
-            UpdateWorkspaceExecution {
-                run_id: Some(run.id.clone()),
-                status: "executing".to_string(),
-                resolved_commit: source.resolved_commit.clone(),
-                branch: Some(source.branch.clone()),
-                actor: Some("agent:cluster-worker".to_string()),
-                reason: Some("remote source pinned by worker".to_string()),
-            },
-        )
-        .await?;
-    append_workspace_audit_event(
-        &state.store,
-        &workspace,
-        "workspace.provisioned",
-        Some("agent:cluster-worker".to_string()),
-    )
-    .await?;
-    Ok(Json(workspace.into()))
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct InternalIngestEventsRequest {
-    events: Vec<AgentEvent>,
-}
-
-async fn internal_ingest_events(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Json(request): Json<InternalIngestEventsRequest>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let mut ingested = 0usize;
-    for event in &request.events {
-        if event.run_id != run_id {
-            return Err(ApiError::conflict(
-                "event run_id does not match the ingest route",
-            ));
-        }
-        ingest_agent_event(&state.store, event).await?;
-        ingested += 1;
-    }
-
-    Ok(Json(json!({ "ingested": ingested })))
-}
-
-async fn internal_ingest_outcome(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Json(outcome): Json<AttemptOutcome>,
-) -> Result<Json<RunResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-
-    if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
-        return Err(ApiError::conflict(format!(
-            "run is already terminal with status {}",
-            run.status
-        )));
-    }
-
-    finish_run_from_attempt(&state.store, &run, outcome)
-        .await
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-
-    Ok(Json(run.into()))
-}
-
-async fn internal_run_control(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-
-    let cancel_requested = run.cancel_requested_at.is_some() || run.status == "cancelled";
-
-    Ok(Json(json!({
-        "cancel_requested": cancel_requested,
-        "status": run.status,
-    })))
 }
 
 async fn config_effective(
@@ -1448,211 +1198,174 @@ fn grant_is_unexpired(grant: &StoredPermissionGrant, now_millis: u128) -> bool {
         .unwrap_or(true)
 }
 
-async fn create_run(
-    State(state): State<AppState>,
-    Json(request): Json<CreateRunRequest>,
-) -> Result<Json<RunResponse>, ApiError> {
-    let run_id = RunId::new(format!("run_{}", unique_suffix()));
-    let session_id = SessionId::new(format!("ses_{}", run_id.as_str()));
-    let cwd = state
-        .worker
-        .effective_cwd(&request.cwd.unwrap_or_else(|| ".".to_string()));
-    let max_turns = request.max_turns.unwrap_or(40);
-    let run_scope = request.scope.unwrap_or_default();
-    let run_scope_json = run_scope.to_optional_json();
-    let mut policy = run_policy(&state.policy, request.policy_mode);
-    policy.permission_grants = active_permission_grants(&state.store).await?;
-
-    state
-        .store
-        .create_session(CreateSession {
-            id: session_id.clone(),
-            title: request.task.chars().take(80).collect(),
-            cwd: cwd.clone(),
-        })
-        .await?;
-
-    let run = state
-        .store
-        .create_run(CreateRun {
-            id: run_id.clone(),
-            session_id: session_id.clone(),
-            user_task: request.task,
-            cwd: cwd.clone(),
-            max_turns,
-            initial_status: "queued".to_string(),
-            execution_target_json: json!({
-                "kind": state.worker.execution_target_kind(),
-                "policy": &policy,
-                "run_scope": &run_scope_json,
-            }),
-        })
-        .await?;
-
-    let worker_config = state.worker.config_json();
-    let queue_payload = json!({
-        "source": "api",
-        "worker": state.worker.mode(),
-        "provider": worker_config.get("provider"),
-        "model": worker_config.get("model"),
-        "policy_mode": policy.mode,
-        "policy_environment": &policy.environment,
-        "run_scope": &run_scope_json,
+fn group_operator_records(
+    records: impl IntoIterator<Item = (String, String, String, String, String)>,
+) -> Vec<OperatorResourceGroupResponse> {
+    let mut groups =
+        BTreeMap::<(String, String, String), Vec<OperatorResourceGroupMemberResponse>>::new();
+    for (id, label, title, resource, status) in records {
+        groups
+            .entry((title, resource, status))
+            .or_default()
+            .push(OperatorResourceGroupMemberResponse { id, label });
+    }
+    let mut response = groups
+        .into_iter()
+        .map(
+            |((title, resource, status), members)| OperatorResourceGroupResponse {
+                key: format!("{title}\u{1f}{resource}\u{1f}{status}"),
+                title,
+                resource,
+                status,
+                count: members.len(),
+                members,
+            },
+        )
+        .collect::<Vec<OperatorResourceGroupResponse>>();
+    response.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.resource.cmp(&right.resource))
+            .then_with(|| left.status.cmp(&right.status))
     });
-
-    state
-        .store
-        .append_event(&AgentEvent {
-            event_id: EventId::new(format!("evt_{}_1", run_id.as_str())),
-            session_id,
-            run_id,
-            seq: 1,
-            kind: EventKind::RunQueued,
-            payload: queue_payload,
-        })
-        .await?;
-
-    state.worker.spawn_run(run.clone(), cwd);
-
-    Ok(Json(run.into()))
+    response
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
-struct ListRunsQuery {
-    status: Option<String>,
-    namespace: Option<String>,
-    repo: Option<String>,
-    branch: Option<String>,
-    production_impacting: Option<bool>,
-    started_after_ms: Option<i64>,
-    started_before_ms: Option<i64>,
-    limit: Option<u32>,
-    offset: Option<u32>,
+const OPERATOR_GROUP_PAGE_SIZE: u32 = 200;
+
+// List responses stay paginated. Groups intentionally enumerate the full matching set so a
+// repeated-record count never changes merely because the operator moved to another page.
+async fn all_runs_for_operator_groups(
+    store: &SqliteStore,
+    mut filter: RunListFilter,
+) -> Result<Vec<RunResponse>, StoreError> {
+    let mut runs = Vec::new();
+    filter.limit = OPERATOR_GROUP_PAGE_SIZE;
+    filter.offset = 0;
+    loop {
+        let page = store.list_runs(filter.clone()).await?;
+        let page_len = page.len();
+        runs.extend(page.into_iter().map(Into::into));
+        if page_len < OPERATOR_GROUP_PAGE_SIZE as usize {
+            return Ok(runs);
+        }
+        filter.offset = filter
+            .offset
+            .checked_add(OPERATOR_GROUP_PAGE_SIZE)
+            .ok_or_else(|| {
+                StoreError::InvalidData(
+                    "operator run group pagination exceeded supported range".to_string(),
+                )
+            })?;
+    }
 }
 
-async fn list_runs(
-    State(state): State<AppState>,
-    Query(query): Query<ListRunsQuery>,
-) -> Result<Json<RunsResponse>, ApiError> {
-    let limit = query.limit.unwrap_or(50).clamp(1, 200);
-    let offset = query.offset.unwrap_or(0);
-    let runs = state
-        .store
-        .list_runs(RunListFilter {
-            status: clean_optional_text(query.status),
-            namespace: clean_optional_text(query.namespace),
-            repo: clean_optional_text(query.repo),
-            branch: clean_optional_text(query.branch),
-            production_impacting: query.production_impacting,
-            started_after_ms: query.started_after_ms,
-            started_before_ms: query.started_before_ms,
-            limit,
-            offset,
-        })
-        .await?
+async fn all_work_plans_for_operator_groups(
+    store: &SqliteStore,
+    mut filter: WorkPlanListFilter,
+) -> Result<Vec<WorkPlanResponse>, StoreError> {
+    let mut work_plans = Vec::new();
+    filter.limit = OPERATOR_GROUP_PAGE_SIZE;
+    filter.offset = 0;
+    loop {
+        let page = store.list_work_plans(filter.clone()).await?;
+        let page_len = page.len();
+        work_plans.extend(page.into_iter().map(Into::into));
+        if page_len < OPERATOR_GROUP_PAGE_SIZE as usize {
+            return Ok(work_plans);
+        }
+        filter.offset = filter
+            .offset
+            .checked_add(OPERATOR_GROUP_PAGE_SIZE)
+            .ok_or_else(|| {
+                StoreError::InvalidData(
+                    "operator WorkPlan group pagination exceeded supported range".to_string(),
+                )
+            })?;
+    }
+}
+
+async fn all_approval_gates_for_operator_groups(
+    store: &SqliteStore,
+    mut filter: ApprovalGateListFilter,
+) -> Result<Vec<ApprovalGateResponse>, StoreError> {
+    let mut approval_gates = Vec::new();
+    filter.limit = OPERATOR_GROUP_PAGE_SIZE;
+    filter.offset = 0;
+    loop {
+        let page = store.list_approval_gates(filter.clone()).await?;
+        let page_len = page.len();
+        approval_gates.extend(page.into_iter().map(Into::into));
+        if page_len < OPERATOR_GROUP_PAGE_SIZE as usize {
+            return Ok(approval_gates);
+        }
+        filter.offset = filter
+            .offset
+            .checked_add(OPERATOR_GROUP_PAGE_SIZE)
+            .ok_or_else(|| {
+                StoreError::InvalidData(
+                    "operator approval gate group pagination exceeded supported range".to_string(),
+                )
+            })?;
+    }
+}
+
+async fn all_approvals_for_operator_groups(
+    store: &SqliteStore,
+    mut filter: ApprovalListFilter,
+) -> Result<Vec<ApprovalResponse>, StoreError> {
+    let mut approvals = Vec::new();
+    filter.limit = OPERATOR_GROUP_PAGE_SIZE;
+    filter.offset = 0;
+    loop {
+        let page = store.list_approvals(filter.clone()).await?;
+        let page_len = page.len();
+        approvals.extend(page.into_iter().map(Into::into));
+        if page_len < OPERATOR_GROUP_PAGE_SIZE as usize {
+            return Ok(approvals);
+        }
+        filter.offset = filter
+            .offset
+            .checked_add(OPERATOR_GROUP_PAGE_SIZE)
+            .ok_or_else(|| {
+                StoreError::InvalidData(
+                    "operator approval group pagination exceeded supported range".to_string(),
+                )
+            })?;
+    }
+}
+
+fn operator_resource_label(
+    namespace: Option<&str>,
+    kind: Option<&str>,
+    name: Option<&str>,
+) -> String {
+    [namespace, kind, name]
         .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>();
-    let count = runs.len();
-
-    Ok(Json(RunsResponse {
-        runs,
-        count,
-        limit,
-        offset,
-    }))
-}
-
-async fn run_summary(
-    State(state): State<AppState>,
-    Query(query): Query<ListRunsQuery>,
-) -> Result<Json<RunSummaryResponse>, ApiError> {
-    let summary = state
-        .store
-        .run_summary(RunSummaryFilter {
-            status: clean_optional_text(query.status),
-            namespace: clean_optional_text(query.namespace),
-            repo: clean_optional_text(query.repo),
-            branch: clean_optional_text(query.branch),
-            production_impacting: query.production_impacting,
-            started_after_ms: query.started_after_ms,
-            started_before_ms: query.started_before_ms,
-        })
-        .await?;
-
-    Ok(Json(RunSummaryResponse { summary }))
-}
-
-async fn get_run(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<RunResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    let run = state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    Ok(Json(run.into()))
-}
-
-async fn get_run_events(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<EventsResponse>, ApiError> {
-    let events = state.store.list_events(&RunId::new(run_id)).await?;
-    Ok(Json(EventsResponse { events }))
-}
-
-async fn get_run_diff(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<RunDiffResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    let changes: Vec<FileChangeResponse> = state
-        .store
-        .list_file_changes(&run_id)
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect();
-    let diff = changes
-        .iter()
-        .map(|change| change.diff.as_str())
+        .flatten()
+        .filter(|value| !value.is_empty())
         .collect::<Vec<_>>()
-        .join("\n");
-
-    Ok(Json(RunDiffResponse {
-        run_id,
-        changes,
-        diff,
-    }))
+        .join("/")
 }
 
-async fn list_run_artifacts(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<ArtifactsResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    let artifacts = state
-        .store
-        .list_artifacts(&run_id)
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect();
-
-    Ok(Json(ArtifactsResponse { artifacts }))
+fn run_group_resource(run: &RunResponse) -> String {
+    let scope = run.scope.as_ref();
+    let scoped = [
+        scope.and_then(|value| value.repo.as_deref()),
+        scope.and_then(|value| value.branch.as_deref()),
+        scope.and_then(|value| value.namespace.as_deref()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join("/");
+    if scoped.is_empty() {
+        run.task.clone()
+    } else {
+        scoped
+    }
 }
 
 async fn get_artifact(
@@ -1666,33 +1379,6 @@ async fn get_artifact(
         .ok_or_else(|| ApiError::not_found("artifact", &artifact_id))?;
 
     Ok(Json(artifact.into()))
-}
-
-async fn list_run_observations(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<ObservationsResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    let observations = state
-        .store
-        .list_run_observations(&run_id)
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>();
-    let count = observations.len();
-
-    Ok(Json(ObservationsResponse {
-        observations,
-        count,
-        limit: None,
-        offset: None,
-    }))
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -1734,7 +1420,7 @@ async fn list_observations(
         .await?
         .into_iter()
         .map(Into::into)
-        .collect::<Vec<_>>();
+        .collect::<Vec<ObservationResponse>>();
     let count = observations.len();
 
     Ok(Json(ObservationsResponse {
@@ -2123,6 +1809,9 @@ struct ListWorkItemsQuery {
     target_environment: Option<String>,
     target_namespace: Option<String>,
     production_impacting: Option<bool>,
+    actor: Option<String>,
+    origin: Option<String>,
+    include: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
 }
@@ -2133,28 +1822,379 @@ async fn list_work_items(
 ) -> Result<Json<WorkItemsResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0);
-    let work_items = state
-        .store
-        .list_work_items(WorkItemListFilter {
-            status: clean_optional_text(query.status),
-            source_repo: clean_optional_text(query.source_repo),
-            target_environment: clean_optional_text(query.target_environment),
-            target_namespace: clean_optional_text(query.target_namespace),
-            production_impacting: query.production_impacting,
-            limit,
-            offset,
-        })
-        .await?
+    let filter = WorkItemListFilter {
+        status: clean_optional_text(query.status),
+        source_repo: clean_optional_text(query.source_repo),
+        target_environment: clean_optional_text(query.target_environment),
+        target_namespace: clean_optional_text(query.target_namespace),
+        production_impacting: query.production_impacting,
+        created_by: clean_optional_text(query.actor),
+        origin: clean_optional_text(query.origin),
+        limit,
+        offset,
+    };
+    let count = state.store.count_work_items(filter.clone()).await?;
+    let stored_work_items = state.store.list_work_items(filter).await?;
+    let include_operator_state = clean_optional_text(query.include).is_some_and(|include| {
+        include
+            .split(',')
+            .any(|value| value.trim() == "operator_state")
+    });
+    let mut operator_state = BTreeMap::new();
+    if include_operator_state {
+        for item in &stored_work_items {
+            let active_wait = state
+                .store
+                .get_active_controller_wait_for_work_item(&item.id)
+                .await?;
+            operator_state.insert(
+                item.id.clone(),
+                WorkItemOperatorStateResponse {
+                    current_boundary: active_wait
+                        .as_ref()
+                        .map(|wait| format!("waiting for {}", wait.wait_kind))
+                        .unwrap_or_else(|| item.status.clone()),
+                    attempts_remaining: item.max_attempts.saturating_sub(item.attempt_count),
+                    attention_reason: item.status_reason.clone(),
+                    active_wait: active_wait.map(Into::into),
+                },
+            );
+        }
+    }
+    let work_items = stored_work_items
         .into_iter()
         .map(Into::into)
         .collect::<Vec<_>>();
-    let count = work_items.len();
     Ok(Json(WorkItemsResponse {
         work_items,
         count,
         limit,
         offset,
+        operator_state: include_operator_state.then_some(operator_state),
     }))
+}
+
+async fn scope_options(
+    State(state): State<AppState>,
+) -> Result<Json<ScopeOptionsResponse>, ApiError> {
+    let work_items = state
+        .store
+        .list_work_items(WorkItemListFilter {
+            limit: 200,
+            ..WorkItemListFilter::default()
+        })
+        .await?;
+    let workspaces = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            limit: 200,
+            ..WorkspaceListFilter::default()
+        })
+        .await?;
+    let gates = state
+        .store
+        .list_approval_gates(ApprovalGateListFilter {
+            limit: 200,
+            ..ApprovalGateListFilter::default()
+        })
+        .await?;
+    let audit_events = state.store.list_audit_events(None, None, None, 200).await?;
+    let runs = state
+        .store
+        .list_runs(RunListFilter {
+            limit: 200,
+            ..RunListFilter::default()
+        })
+        .await?;
+    let approvals = state
+        .store
+        .list_approvals(ApprovalListFilter {
+            limit: 200,
+            ..ApprovalListFilter::default()
+        })
+        .await?;
+
+    let mut environments = BTreeSet::new();
+    let mut namespaces = BTreeSet::new();
+    let mut repositories = BTreeSet::new();
+    let mut branches = BTreeSet::new();
+    let mut actors = BTreeSet::new();
+    for item in &work_items {
+        environments.insert(item.target_environment.clone());
+        repositories.insert(item.source_repo.clone());
+        branches.insert(item.source_ref.clone());
+        if let Some(value) = &item.gitops_repo {
+            repositories.insert(value.clone());
+        }
+        if let Some(value) = &item.gitops_ref {
+            branches.insert(value.clone());
+        }
+        if let Some(value) = &item.target_namespace {
+            namespaces.insert(value.clone());
+        }
+        if let Some(value) = &item.created_by {
+            actors.insert(value.clone());
+        }
+    }
+    for workspace in &workspaces {
+        repositories.insert(workspace.source_repo.clone());
+        branches.insert(workspace.source_ref.clone());
+        if let Some(value) = &workspace.branch {
+            branches.insert(value.clone());
+        }
+    }
+    for run in &runs {
+        if let Some(value) = &run.created_by {
+            actors.insert(value.clone());
+        }
+    }
+    for gate in &gates {
+        if let Some(value) = &gate.resource_namespace {
+            namespaces.insert(value.clone());
+        }
+        if let Some(value) = &gate.decided_by {
+            actors.insert(value.clone());
+        }
+    }
+    for event in &audit_events {
+        if let Some(value) = &event.actor {
+            actors.insert(value.clone());
+        }
+    }
+
+    Ok(Json(ScopeOptionsResponse {
+        environments: environments.into_iter().collect(),
+        namespaces: namespaces.into_iter().collect(),
+        repositories: repositories.into_iter().collect(),
+        branches: branches.into_iter().collect(),
+        actors: actors.into_iter().collect(),
+        origins: work_items
+            .iter()
+            .map(|item| item.origin.clone())
+            .chain(runs.iter().map(|run| run.origin.clone()))
+            .chain(approvals.iter().map(|approval| approval.origin.clone()))
+            .chain(gates.iter().map(|gate| gate.origin.clone()))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+    }))
+}
+
+async fn triage_summary(
+    State(state): State<AppState>,
+) -> Result<Json<TriageSummaryResponse>, ApiError> {
+    Ok(Json(load_triage(&state, None).await?.summary))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ListTriageQuery {
+    origin: Option<String>,
+}
+
+async fn list_triage(
+    State(state): State<AppState>,
+    Query(query): Query<ListTriageQuery>,
+) -> Result<Json<TriageResponse>, ApiError> {
+    Ok(Json(
+        load_triage(&state, clean_optional_text(query.origin)).await?,
+    ))
+}
+
+async fn load_triage(state: &AppState, origin: Option<String>) -> Result<TriageResponse, ApiError> {
+    let limit = 200;
+    let include_legacy = matches!(origin.as_deref(), None | Some("legacy"));
+    let pending_gate_filter = ApprovalGateListFilter {
+        status: Some("pending".to_string()),
+        origin: origin.clone(),
+        limit,
+        ..ApprovalGateListFilter::default()
+    };
+    let pending_gates =
+        all_approval_gates_for_operator_groups(state.store.as_ref(), pending_gate_filter).await?;
+    let pending_approval_filter = ApprovalListFilter {
+        status: Some("pending".to_string()),
+        origin: origin.clone(),
+        limit,
+        ..ApprovalListFilter::default()
+    };
+    let pending_approvals =
+        all_approvals_for_operator_groups(state.store.as_ref(), pending_approval_filter).await?;
+    let blocked_work_item_filter = WorkItemListFilter {
+        status: Some("blocked".to_string()),
+        origin: origin.clone(),
+        limit,
+        ..WorkItemListFilter::default()
+    };
+    let blocked_work_item_count = state
+        .store
+        .count_work_items(blocked_work_item_filter.clone())
+        .await?;
+    let blocked_work_items = state
+        .store
+        .list_work_items(blocked_work_item_filter)
+        .await?;
+    let now = i64::try_from(current_millis()).unwrap_or(i64::MAX);
+    let expired_wait_count = if include_legacy {
+        state.store.count_expired_controller_waits(now).await?
+    } else {
+        0
+    };
+    let expired_waits = state
+        .store
+        .list_expired_controller_waits(now, limit)
+        .await?
+        .into_iter()
+        .filter(|_| include_legacy)
+        .collect::<Vec<_>>();
+    let proposed_remediation_filter = RemediationPlanListFilter {
+        status: Some("proposed".to_string()),
+        limit,
+        ..RemediationPlanListFilter::default()
+    };
+    let proposed_remediation_count = if include_legacy {
+        state
+            .store
+            .count_remediation_plans(proposed_remediation_filter.clone())
+            .await?
+    } else {
+        0
+    };
+    let proposed_remediation = state
+        .store
+        .list_remediation_plans(proposed_remediation_filter)
+        .await?;
+    let proposed_remediation = if include_legacy {
+        proposed_remediation
+    } else {
+        Vec::new()
+    };
+
+    let summary = TriageSummaryResponse {
+        pending_approval_gates: pending_gates.len(),
+        pending_tool_approvals: pending_approvals.len(),
+        blocked_work_items: blocked_work_item_count,
+        expired_controller_waits: expired_wait_count,
+        proposed_remediation_plans: proposed_remediation_count,
+        total: pending_gates.len()
+            + pending_approvals.len()
+            + blocked_work_item_count
+            + expired_wait_count
+            + proposed_remediation_count,
+    };
+    let mut items = Vec::with_capacity(summary.total);
+    items.extend(pending_gates.into_iter().map(|gate| TriageItemResponse {
+        kind: "approval_gate".to_string(),
+        id: gate.id.clone(),
+        title: gate.title,
+        summary: gate.summary,
+        status: gate.status,
+        risk_level: gate.risk_level,
+        origin: gate.origin,
+        created_at: gate.created_at,
+        resource_kind: "approval_gate".to_string(),
+        resource_id: gate.id,
+        work_item_id: gate.work_item_id,
+    }));
+    items.extend(
+        pending_approvals
+            .into_iter()
+            .map(|approval| TriageItemResponse {
+                kind: "tool_approval".to_string(),
+                id: approval.id.clone(),
+                title: approval.kind,
+                summary: approval.summary,
+                status: approval.status,
+                risk_level: approval.risk_level,
+                origin: approval.origin,
+                created_at: approval.requested_at,
+                resource_kind: "approval".to_string(),
+                resource_id: approval.id,
+                work_item_id: None,
+            }),
+    );
+    items.extend(blocked_work_items.into_iter().map(|item| {
+        TriageItemResponse {
+            kind: "blocked_work_item".to_string(),
+            id: item.id.clone(),
+            title: item.title,
+            summary: item.status_reason.unwrap_or(item.intent),
+            status: item.status,
+            risk_level: if item.production_impacting {
+                "high"
+            } else {
+                "medium"
+            }
+            .to_string(),
+            origin: item.origin,
+            created_at: item.status_changed_at,
+            resource_kind: "work_item".to_string(),
+            resource_id: item.id.clone(),
+            work_item_id: Some(item.id),
+        }
+    }));
+    items.extend(expired_waits.into_iter().map(|wait| TriageItemResponse {
+        kind: "expired_controller_wait".to_string(),
+        id: wait.id.clone(),
+        title: format!("Expired {} wait", wait.wait_kind),
+        summary: format!(
+            "{} did not resolve before its next observation deadline",
+            wait.subject_id
+        ),
+        status: wait.status,
+        risk_level: "high".to_string(),
+        origin: "legacy".to_string(),
+        created_at: wait.deadline_at,
+        resource_kind: "controller_wait".to_string(),
+        resource_id: wait.id,
+        work_item_id: Some(wait.work_item_id),
+    }));
+    items.extend(
+        proposed_remediation
+            .into_iter()
+            .map(|plan| TriageItemResponse {
+                kind: "remediation_plan".to_string(),
+                id: plan.id.clone(),
+                title: plan.title,
+                summary: plan.summary,
+                status: plan.status,
+                risk_level: plan.risk_level,
+                origin: "legacy".to_string(),
+                created_at: plan.created_at,
+                resource_kind: "remediation_plan".to_string(),
+                resource_id: plan.id,
+                work_item_id: None,
+            }),
+    );
+    items.sort_by(|left, right| {
+        triage_kind_rank(&left.kind)
+            .cmp(&triage_kind_rank(&right.kind))
+            .then_with(|| {
+                triage_risk_rank(&right.risk_level).cmp(&triage_risk_rank(&left.risk_level))
+            })
+            .then_with(|| left.created_at.cmp(&right.created_at))
+    });
+
+    Ok(TriageResponse { items, summary })
+}
+
+fn triage_kind_rank(kind: &str) -> u8 {
+    match kind {
+        "approval_gate" => 0,
+        "tool_approval" => 1,
+        "blocked_work_item" => 2,
+        "expired_controller_wait" => 3,
+        "remediation_plan" => 4,
+        _ => u8::MAX,
+    }
+}
+
+fn triage_risk_rank(risk: &str) -> u8 {
+    match risk {
+        "critical" => 4,
+        "high" => 3,
+        "medium" => 2,
+        _ => 1,
+    }
 }
 
 async fn get_work_item(
@@ -2167,6 +2207,368 @@ async fn get_work_item(
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
     Ok(Json(work_item.into()))
+}
+
+async fn work_item_flow(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<WorkItemFlowResponse>, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(&work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan_by_work_item(&work_item_id)
+        .await?;
+    let change_set = match work_plan.as_ref() {
+        Some(plan) => state.store.get_change_set_by_work_plan(&plan.id).await?,
+        None => None,
+    };
+    let sdlc_flow = match work_plan.clone() {
+        Some(plan) => {
+            Some(build_sdlc_flow(&state.store, "work_item", &work_item_id, plan, change_set).await?)
+        }
+        None => None,
+    };
+    let Json(reconcile_preview) = reconcile_work_item(
+        State(state.clone()),
+        None,
+        Path(work_item_id.clone()),
+        Json(ReconcileWorkItemRequest {
+            apply: false,
+            actor: None,
+            reason: None,
+            max_turns: None,
+        }),
+    )
+    .await?;
+    let workspaces: Vec<WorkspaceResponse> = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: Some(work_item_id.clone()),
+            limit: 100,
+            ..WorkspaceListFilter::default()
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let controller_waits = state
+        .store
+        .list_controller_waits(ControllerWaitListFilter {
+            work_item_id: Some(work_item_id.clone()),
+            limit: 100,
+            ..ControllerWaitListFilter::default()
+        })
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let delivery_segments = work_item_delivery_segments(&sdlc_flow, workspaces.last());
+    let audit_events = state
+        .store
+        .list_audit_events(Some("work_item"), Some(&work_item_id), None, 100)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
+    Ok(Json(WorkItemFlowResponse {
+        work_item: work_item.into(),
+        reconcile_preview,
+        sdlc_flow,
+        delivery_segments,
+        workspaces,
+        controller_waits,
+        audit_events,
+    }))
+}
+
+fn work_item_delivery_segments(
+    flow: &Option<SdlcFlowResponse>,
+    workspace: Option<&WorkspaceResponse>,
+) -> Vec<DeliverySegmentResponse> {
+    let Some(flow) = flow else {
+        return vec![delivery_segment(
+            "source",
+            "Source",
+            "active",
+            "Awaiting WorkPlan declaration before source work can begin.",
+            Vec::new(),
+        )];
+    };
+
+    sdlc_flow_delivery_segments(flow, workspace)
+}
+
+fn sdlc_flow_delivery_segments(
+    flow: &SdlcFlowResponse,
+    workspace: Option<&WorkspaceResponse>,
+) -> Vec<DeliverySegmentResponse> {
+    let change_set = flow.change_set.as_ref();
+    let source_blocked = change_set.is_some_and(|item| is_blocked_delivery_status(&item.status));
+    let source_complete = workspace.is_some_and(|item| item.status == "captured")
+        && change_set.is_some_and(|item| is_complete_delivery_status(&item.status));
+    let mut source_resources = vec![delivery_resource(
+        "work_plan",
+        &flow.work_plan.id,
+        "WorkPlan",
+        Some(flow.work_plan.summary.clone()),
+    )];
+    if let Some(workspace) = workspace {
+        source_resources.push(delivery_resource(
+            "workspace",
+            &workspace.id,
+            "Workspace",
+            Some(format!(
+                "{} @ {}",
+                workspace.source_repo,
+                workspace
+                    .resolved_commit
+                    .as_deref()
+                    .unwrap_or(workspace.source_ref.as_str())
+            )),
+        ));
+    }
+    if let Some(change_set) = change_set {
+        source_resources.push(delivery_resource(
+            "change_set",
+            &change_set.id,
+            "ChangeSet",
+            Some(change_set.summary.clone()),
+        ));
+    }
+    if let Some(artifact) = flow
+        .git_delivery
+        .as_ref()
+        .and_then(|delivery| delivery.latest_result.as_ref())
+    {
+        source_resources.push(delivery_resource(
+            "artifact",
+            &artifact.id,
+            "Source PR evidence",
+            Some(artifact.label.clone()),
+        ));
+    }
+    let source = delivery_segment(
+        "source",
+        "Source",
+        if source_blocked {
+            "blocked"
+        } else if source_complete {
+            "complete"
+        } else {
+            "active"
+        },
+        if source_blocked {
+            change_set
+                .and_then(|item| item.status_reason.as_deref())
+                .unwrap_or("Source change requires a new reviewed revision.")
+        } else if source_complete {
+            "Immutable source change and workspace provenance are recorded."
+        } else {
+            "Awaiting a captured workspace and reviewed source ChangeSet."
+        },
+        source_resources,
+    );
+
+    let pipeline = flow.pipeline_intent.as_ref();
+    let build = next_delivery_segment(
+        "build",
+        "Build",
+        source_complete,
+        pipeline.map(|item| item.status.as_str()),
+        pipeline.map(|item| {
+            item.status_reason
+                .as_deref()
+                .unwrap_or(item.summary.as_str())
+        }),
+        pipeline.map(|item| {
+            vec![delivery_resource(
+                "pipeline_intent",
+                &item.id,
+                "PipelineIntent",
+                Some(item.summary.clone()),
+            )]
+        }),
+        [
+            "Awaiting immutable source delivery before build can start.",
+            "Awaiting a PipelineIntent for the immutable source revision.",
+        ],
+    );
+    let build_complete = build.status == "complete";
+
+    let gitops = flow.gitops_change_set.as_ref();
+    let gitops_segment = next_delivery_segment(
+        "gitops",
+        "GitOps",
+        build_complete,
+        gitops.map(|item| item.status.as_str()),
+        gitops.map(|item| {
+            item.status_reason
+                .as_deref()
+                .unwrap_or(item.summary.as_str())
+        }),
+        gitops.map(|item| {
+            vec![delivery_resource(
+                "gitops_change_set",
+                &item.id,
+                "GitOps ChangeSet",
+                Some(item.summary.clone()),
+            )]
+        }),
+        [
+            "Awaiting verified build output before GitOps delivery can start.",
+            "Awaiting a GitOps ChangeSet for the verified build output.",
+        ],
+    );
+    let gitops_complete = gitops_segment.status == "complete";
+
+    let deploy = flow.deployment_intent.as_ref();
+    let deploy_segment = next_delivery_segment(
+        "deploy",
+        "Deploy",
+        gitops_complete,
+        deploy.map(|item| item.status.as_str()),
+        deploy.map(|item| {
+            item.status_reason
+                .as_deref()
+                .unwrap_or(item.summary.as_str())
+        }),
+        deploy.map(|item| {
+            vec![delivery_resource(
+                "deployment_intent",
+                &item.id,
+                "DeploymentIntent",
+                Some(item.summary.clone()),
+            )]
+        }),
+        [
+            "Awaiting GitOps merge provenance before deployment can start.",
+            "Awaiting a DeploymentIntent for the immutable GitOps revision.",
+        ],
+    );
+    let deploy_complete = deploy_segment.status == "complete";
+
+    let release = flow.release.as_ref();
+    let mut verify_resources = release
+        .map(|item| {
+            vec![delivery_resource(
+                "release",
+                &item.id,
+                "Release",
+                Some(item.summary.clone()),
+            )]
+        })
+        .unwrap_or_default();
+    if let Some(evidence) = &flow.registry_evidence {
+        verify_resources.push(delivery_resource(
+            "registry_evidence",
+            &evidence.id,
+            "Registry evidence",
+            Some(evidence.summary.clone()),
+        ));
+    }
+    let verify = next_delivery_segment(
+        "verify",
+        "Verify",
+        deploy_complete,
+        release.map(|item| item.status.as_str()),
+        release.map(|item| {
+            item.status_reason
+                .as_deref()
+                .unwrap_or(item.summary.as_str())
+        }),
+        Some(verify_resources),
+        [
+            "Awaiting completed deployment before verification can start.",
+            "Awaiting a Release and post-deploy verification evidence.",
+        ],
+    );
+
+    vec![source, build, gitops_segment, deploy_segment, verify]
+}
+
+fn delivery_resource(
+    kind: &str,
+    id: &str,
+    label: &str,
+    summary: Option<String>,
+) -> DeliverySegmentResourceResponse {
+    DeliverySegmentResourceResponse {
+        kind: kind.to_string(),
+        id: id.to_string(),
+        label: label.to_string(),
+        summary,
+    }
+}
+
+fn delivery_segment(
+    key: &str,
+    label: &str,
+    status: &str,
+    summary: &str,
+    resources: Vec<DeliverySegmentResourceResponse>,
+) -> DeliverySegmentResponse {
+    DeliverySegmentResponse {
+        key: key.to_string(),
+        label: label.to_string(),
+        status: status.to_string(),
+        summary: summary.to_string(),
+        stopping_reason: (status != "complete").then(|| summary.to_string()),
+        resources,
+    }
+}
+
+fn next_delivery_segment(
+    key: &str,
+    label: &str,
+    previous_complete: bool,
+    resource_status: Option<&str>,
+    resource_summary: Option<&str>,
+    resources: Option<Vec<DeliverySegmentResourceResponse>>,
+    summaries: [&str; 2],
+) -> DeliverySegmentResponse {
+    if !previous_complete {
+        return delivery_segment(key, label, "unreached", summaries[0], Vec::new());
+    }
+    let Some(status) = resource_status else {
+        return delivery_segment(key, label, "active", summaries[1], Vec::new());
+    };
+    let mapped_status = if is_complete_delivery_status(status) {
+        "complete"
+    } else if is_blocked_delivery_status(status) {
+        "blocked"
+    } else {
+        "active"
+    };
+    delivery_segment(
+        key,
+        label,
+        mapped_status,
+        resource_summary.unwrap_or("Controller state recorded."),
+        resources.unwrap_or_default(),
+    )
+}
+
+fn is_complete_delivery_status(status: &str) -> bool {
+    matches!(
+        status,
+        "captured"
+            | "completed"
+            | "verified"
+            | "merged"
+            | "succeeded"
+            | "satisfied"
+            | "ready"
+            | "applied"
+    )
+}
+
+fn is_blocked_delivery_status(status: &str) -> bool {
+    matches!(status, "blocked" | "failed" | "rejected" | "stale")
 }
 
 async fn create_work_item(
@@ -2220,6 +2622,10 @@ async fn create_work_item(
             max_elapsed_seconds,
             created_by: actor.clone(),
         })
+        .await?;
+    let work_item = state
+        .store
+        .set_work_item_origin(&work_item.id, "operator")
         .await?;
     append_work_item_audit_event(
         &state.store,
@@ -3411,6 +3817,22 @@ async fn reconcile_work_item(
                 controller_wait: None,
                 message: "started one bounded coding attempt in the declared isolated workspace"
                     .to_string(),
+                boundary: action.as_str().to_string(),
+                can_apply: false,
+                effect_summary: "Started one bounded coding attempt in the declared isolated workspace."
+                    .to_string(),
+                blockers: vec![ReconcileBlockerResponse {
+                    code: "controller_wait".to_string(),
+                    summary: "Wait for the coding attempt to produce a durable outcome before reconciling again."
+                        .to_string(),
+                }],
+                authorization_checks: vec![ReconcileAuthorizationCheckResponse {
+                    kind: "controller_wait".to_string(),
+                    status: "active".to_string(),
+                    summary: "The bounded coding attempt now owns the next controller transition."
+                        .to_string(),
+                    resource_id: None,
+                }],
             }))
         }
         WorkItemReconcileAction::CaptureChangeSet => {
@@ -4915,6 +5337,25 @@ impl WorkItemReconcileAction {
         }
     }
 
+    fn is_applyable(self) -> bool {
+        matches!(
+            self,
+            Self::DeclareWorkPlan
+                | Self::StartCodingAttempt
+                | Self::CaptureChangeSet
+                | Self::PrepareGitDelivery
+                | Self::AwaitingGitDeliveryExecution
+                | Self::AwaitingPullRequestObservation
+                | Self::AwaitingPipelineExecution
+                | Self::AwaitingGitOpsBaseRevision
+                | Self::AwaitingGitOpsDeliveryExecution
+                | Self::AwaitingGitOpsPullRequestObservation
+                | Self::AwaitingDeploymentExecution
+                | Self::AwaitingReleaseVerification
+                | Self::CompleteWorkItem
+        )
+    }
+
     fn message(
         self,
         work_item: &StoredWorkItem,
@@ -5797,6 +6238,32 @@ async fn reconcile_work_item_response(
     let gitops_delivery_preflight =
         gitops_delivery_preflight_response(&state.store, gitops_delivery.as_ref()).await?;
 
+    let can_apply = action.is_applyable() && controller_wait.is_none();
+    let mut blockers = Vec::new();
+    if let Some(wait) = &controller_wait {
+        blockers.push(ReconcileBlockerResponse {
+            code: "controller_wait".to_string(),
+            summary: format!(
+                "{} is active for {} and must resolve or expire before another controller action can run",
+                wait.wait_kind, wait.subject_id
+            ),
+        });
+    } else if !action.is_applyable() {
+        blockers.push(ReconcileBlockerResponse {
+            code: action.as_str().to_string(),
+            summary: message.clone(),
+        });
+    }
+    let authorization_checks = reconcile_authorization_checks(action);
+    let effect_summary = if can_apply {
+        format!(
+            "Applying this controller action will {}",
+            action_effect(action)
+        )
+    } else {
+        message.clone()
+    };
+
     Ok(ReconcileWorkItemResponse {
         action: action.as_str().to_string(),
         applied,
@@ -5819,7 +6286,108 @@ async fn reconcile_work_item_response(
         gitops_delivery_preflight,
         controller_wait: controller_wait.map(Into::into),
         message,
+        boundary: action.as_str().to_string(),
+        can_apply,
+        effect_summary,
+        blockers,
+        authorization_checks,
     })
+}
+
+fn action_effect(action: WorkItemReconcileAction) -> &'static str {
+    match action {
+        WorkItemReconcileAction::DeclareWorkPlan => {
+            "declare one deterministic WorkPlan and its ephemeral workspace"
+        }
+        WorkItemReconcileAction::StartCodingAttempt => {
+            "dispatch one bounded model-backed coding attempt"
+        }
+        WorkItemReconcileAction::CaptureChangeSet => {
+            "capture the completed workspace diff and test evidence as a proposed ChangeSet"
+        }
+        WorkItemReconcileAction::PrepareGitDelivery => {
+            "prepare a review-only source Git delivery plan"
+        }
+        WorkItemReconcileAction::AwaitingGitDeliveryExecution => {
+            "dispatch one isolated source branch-and-pull-request writer"
+        }
+        WorkItemReconcileAction::AwaitingPullRequestObservation => {
+            "dispatch one read-only source pull-request observer"
+        }
+        WorkItemReconcileAction::AwaitingPipelineExecution => {
+            "dispatch one isolated Tekton executor"
+        }
+        WorkItemReconcileAction::AwaitingGitOpsBaseRevision => {
+            "dispatch one read-only GitOps base-revision observer"
+        }
+        WorkItemReconcileAction::AwaitingGitOpsDeliveryExecution => {
+            "dispatch one isolated GitOps branch-and-pull-request writer"
+        }
+        WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation => {
+            "dispatch one read-only GitOps pull-request observer"
+        }
+        WorkItemReconcileAction::AwaitingDeploymentExecution => {
+            "dispatch one isolated Argo reconciliation runner"
+        }
+        WorkItemReconcileAction::AwaitingReleaseVerification => {
+            "record the bounded release verification action"
+        }
+        WorkItemReconcileAction::CompleteWorkItem => "mark the verified WorkItem complete",
+        _ => "perform the next bounded controller action",
+    }
+}
+
+fn reconcile_authorization_checks(
+    action: WorkItemReconcileAction,
+) -> Vec<ReconcileAuthorizationCheckResponse> {
+    let authorization_missing = matches!(
+        action,
+        WorkItemReconcileAction::AwaitingGitDeliveryAuthorization
+            | WorkItemReconcileAction::AwaitingPipelineExecutionAuthorization
+            | WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization
+            | WorkItemReconcileAction::AwaitingDeploymentAuthorization
+    );
+    let executor_unavailable = matches!(
+        action,
+        WorkItemReconcileAction::AwaitingGitWriterAvailability
+            | WorkItemReconcileAction::AwaitingGitOpsWriterAvailability
+            | WorkItemReconcileAction::AwaitingArgoRunnerAvailability
+    );
+    vec![
+        ReconcileAuthorizationCheckResponse {
+            kind: "approval_gate".to_string(),
+            status: if authorization_missing { "missing" } else { "not_required" }.to_string(),
+            summary: if authorization_missing {
+                "A matching approval gate must be satisfied before this controller boundary can advance."
+            } else {
+                "No approval gate decision is required for the current controller boundary."
+            }
+            .to_string(),
+            resource_id: None,
+        },
+        ReconcileAuthorizationCheckResponse {
+            kind: "permission_grant".to_string(),
+            status: if authorization_missing { "missing" } else { "not_required" }.to_string(),
+            summary: if authorization_missing {
+                "A matching scoped PermissionGrant or trusted envelope is required."
+            } else {
+                "No scoped mutation grant is required for the current controller boundary."
+            }
+            .to_string(),
+            resource_id: None,
+        },
+        ReconcileAuthorizationCheckResponse {
+            kind: "executor_allowlist".to_string(),
+            status: if executor_unavailable { "unavailable" } else { "not_required" }.to_string(),
+            summary: if executor_unavailable {
+                "The required dedicated executor is not configured for this exact target."
+            } else {
+                "No dedicated executor availability check is required for the current boundary."
+            }
+            .to_string(),
+            resource_id: None,
+        },
+    ]
 }
 
 async fn execute_work_item(
@@ -5995,6 +6563,11 @@ async fn execute_work_item(
                 "workspace_source": workspace_source,
             }),
         })
+        .await?;
+    let run = state.store.set_run_origin(&run.id, "controller").await?;
+    let run = state
+        .store
+        .set_run_created_by(&run.id, actor.clone())
         .await?;
     state
         .store
@@ -6614,6 +7187,8 @@ struct ListWorkPlansQuery {
     incident_id: Option<String>,
     run_id: Option<String>,
     status: Option<String>,
+    origin: Option<String>,
+    actor: Option<String>,
     risk_level: Option<String>,
     resource_namespace: Option<String>,
     resource_kind: Option<String>,
@@ -6630,31 +7205,49 @@ async fn list_work_plans(
 ) -> Result<Json<WorkPlansResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0);
+    let filter = WorkPlanListFilter {
+        work_item_id: clean_optional_text(query.work_item_id),
+        remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+        incident_id: clean_optional_text(query.incident_id),
+        run_id: clean_optional_text(query.run_id).map(RunId::new),
+        status: clean_optional_text(query.status),
+        origin: clean_optional_text(query.origin),
+        created_by: clean_optional_text(query.actor),
+        risk_level: clean_optional_text(query.risk_level),
+        resource_namespace: clean_optional_text(query.resource_namespace),
+        resource_kind: clean_optional_text(query.resource_kind),
+        resource_name: clean_optional_text(query.resource_name),
+        created_after_ms: query.created_after_ms,
+        created_before_ms: query.created_before_ms,
+        limit,
+        offset,
+    };
     let work_plans = state
         .store
-        .list_work_plans(WorkPlanListFilter {
-            work_item_id: clean_optional_text(query.work_item_id),
-            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
-            incident_id: clean_optional_text(query.incident_id),
-            run_id: clean_optional_text(query.run_id).map(RunId::new),
-            status: clean_optional_text(query.status),
-            risk_level: clean_optional_text(query.risk_level),
-            resource_namespace: clean_optional_text(query.resource_namespace),
-            resource_kind: clean_optional_text(query.resource_kind),
-            resource_name: clean_optional_text(query.resource_name),
-            created_after_ms: query.created_after_ms,
-            created_before_ms: query.created_before_ms,
-            limit,
-            offset,
-        })
+        .list_work_plans(filter.clone())
         .await?
         .into_iter()
         .map(Into::into)
-        .collect::<Vec<_>>();
+        .collect::<Vec<WorkPlanResponse>>();
     let count = work_plans.len();
+    let group_work_plans = all_work_plans_for_operator_groups(state.store.as_ref(), filter).await?;
+    let groups = group_operator_records(group_work_plans.iter().map(|plan| {
+        (
+            plan.id.clone(),
+            plan.created_at.clone(),
+            plan.title.clone(),
+            operator_resource_label(
+                plan.resource_namespace.as_deref(),
+                plan.resource_kind.as_deref(),
+                plan.resource_name.as_deref(),
+            ),
+            plan.status.clone(),
+        )
+    }));
 
     Ok(Json(WorkPlansResponse {
         work_plans,
+        groups,
         count,
         limit,
         offset,
@@ -9318,10 +9911,11 @@ async fn build_sdlc_flow(
     )
     .await?;
 
-    Ok(SdlcFlowResponse {
+    let mut flow = SdlcFlowResponse {
         resource_kind: resource_kind.to_string(),
         resource_id: resource_id.to_string(),
         readiness,
+        delivery_segments: Vec::new(),
         work_plan: work_plan.into(),
         change_set: change_set.map(Into::into),
         pipeline_intent: pipeline_intent.map(Into::into),
@@ -9335,7 +9929,9 @@ async fn build_sdlc_flow(
         remediation_plans: remediation_plans.into_iter().map(Into::into).collect(),
         approval_gates: approval_gates.into_iter().map(Into::into).collect(),
         audit_events: audit_events.into_iter().map(Into::into).collect(),
-    })
+    };
+    flow.delivery_segments = sdlc_flow_delivery_segments(&flow, None);
+    Ok(flow)
 }
 
 async fn git_delivery_flow(
@@ -19929,11 +20525,14 @@ impl GitOpsChangeSetStatus {
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListApprovalGatesQuery {
+    search: Option<String>,
     work_item_id: Option<String>,
     remediation_plan_id: Option<String>,
     incident_id: Option<String>,
     run_id: Option<String>,
     status: Option<String>,
+    origin: Option<String>,
+    actor: Option<String>,
     gate_kind: Option<String>,
     risk_level: Option<String>,
     resource_namespace: Option<String>,
@@ -19967,32 +20566,52 @@ async fn list_approval_gates(
 ) -> Result<Json<ApprovalGatesResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0);
+    let filter = ApprovalGateListFilter {
+        search: clean_optional_text(query.search),
+        work_item_id: clean_optional_text(query.work_item_id),
+        remediation_plan_id: clean_optional_text(query.remediation_plan_id),
+        incident_id: clean_optional_text(query.incident_id),
+        run_id: clean_optional_text(query.run_id).map(RunId::new),
+        status: clean_optional_text(query.status),
+        origin: clean_optional_text(query.origin),
+        created_by: clean_optional_text(query.actor),
+        gate_kind: clean_optional_text(query.gate_kind),
+        risk_level: clean_optional_text(query.risk_level),
+        resource_namespace: clean_optional_text(query.resource_namespace),
+        resource_kind: clean_optional_text(query.resource_kind),
+        resource_name: clean_optional_text(query.resource_name),
+        created_after_ms: query.created_after_ms,
+        created_before_ms: query.created_before_ms,
+        limit,
+        offset,
+    };
     let approval_gates = state
         .store
-        .list_approval_gates(ApprovalGateListFilter {
-            work_item_id: clean_optional_text(query.work_item_id),
-            remediation_plan_id: clean_optional_text(query.remediation_plan_id),
-            incident_id: clean_optional_text(query.incident_id),
-            run_id: clean_optional_text(query.run_id).map(RunId::new),
-            status: clean_optional_text(query.status),
-            gate_kind: clean_optional_text(query.gate_kind),
-            risk_level: clean_optional_text(query.risk_level),
-            resource_namespace: clean_optional_text(query.resource_namespace),
-            resource_kind: clean_optional_text(query.resource_kind),
-            resource_name: clean_optional_text(query.resource_name),
-            created_after_ms: query.created_after_ms,
-            created_before_ms: query.created_before_ms,
-            limit,
-            offset,
-        })
+        .list_approval_gates(filter.clone())
         .await?
         .into_iter()
         .map(Into::into)
-        .collect::<Vec<_>>();
-    let count = approval_gates.len();
+        .collect::<Vec<ApprovalGateResponse>>();
+    let group_approval_gates =
+        all_approval_gates_for_operator_groups(state.store.as_ref(), filter).await?;
+    let count = group_approval_gates.len();
+    let groups = group_operator_records(group_approval_gates.iter().map(|gate| {
+        (
+            gate.id.clone(),
+            gate.created_at.clone(),
+            gate.title.clone(),
+            operator_resource_label(
+                gate.resource_namespace.as_deref(),
+                gate.resource_kind.as_deref(),
+                gate.resource_name.as_deref(),
+            ),
+            gate.status.clone(),
+        )
+    }));
 
     Ok(Json(ApprovalGatesResponse {
         approval_gates,
+        groups,
         count,
         limit,
         offset,
@@ -20098,126 +20717,109 @@ async fn decide_approval_gate(
     }))
 }
 
-async fn stream_run_events(
+async fn batch_decide_approval_gates(
     State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Query(query): Query<StreamRunEventsQuery>,
-    headers: HeaderMap,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    let run_id = RunId::new(run_id);
-    state
-        .store
-        .get_run(&run_id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-
-    let stream = event_stream(state.store, run_id, stream_start_seq(&headers, &query));
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
-}
-
-#[derive(Debug, Default, serde::Deserialize)]
-struct StreamRunEventsQuery {
-    after_seq: Option<u64>,
-}
-
-fn event_stream(
-    store: Arc<SqliteStore>,
-    run_id: RunId,
-    last_seq: u64,
-) -> impl Stream<Item = Result<Event, Infallible>> {
-    stream::unfold(
-        EventStreamState {
-            store,
-            run_id,
-            last_seq,
-        },
-        |mut state| async move {
-            loop {
-                match next_event(&state.store, &state.run_id, state.last_seq).await {
-                    Ok(Some(event)) => {
-                        state.last_seq = event.seq;
-                        return Some((Ok(sse_event(event)), state));
-                    }
-                    Ok(None) if run_is_terminal(&state.store, &state.run_id).await => {
-                        return None;
-                    }
-                    Ok(None) => {
-                        tokio::time::sleep(Duration::from_millis(500)).await;
-                    }
-                    Err(error) => {
-                        return Some((Ok(sse_error_event(error)), state));
-                    }
-                }
-            }
-        },
-    )
-}
-
-struct EventStreamState {
-    store: Arc<SqliteStore>,
-    run_id: RunId,
-    last_seq: u64,
-}
-
-async fn next_event(
-    store: &SqliteStore,
-    run_id: &RunId,
-    last_seq: u64,
-) -> Result<Option<AgentEvent>, StoreError> {
-    Ok(store
-        .list_events(run_id)
-        .await?
+    Json(request): Json<BatchDecideApprovalGatesRequest>,
+) -> Result<Json<BatchDecideApprovalGatesResponse>, ApiError> {
+    if request.gate_ids.is_empty() || request.gate_ids.len() > 100 {
+        return Err(ApiError::bad_request(
+            "batch approval gate decisions require between 1 and 100 gate IDs",
+        ));
+    }
+    let decision = request.decision.trim();
+    if !matches!(decision, "satisfied" | "waived" | "rejected") {
+        return Err(ApiError::bad_request(
+            "batch approval gate decision must be satisfied, waived, or rejected",
+        ));
+    }
+    let decided_by = request.decided_by.trim();
+    let reason = request.reason.trim();
+    if decided_by.is_empty() || reason.is_empty() {
+        return Err(ApiError::bad_request(
+            "batch approval gate decisions require an actor and reason",
+        ));
+    }
+    let gate_ids = request
+        .gate_ids
         .into_iter()
-        .find(|event| event.seq > last_seq))
-}
+        .map(|gate_id| gate_id.trim().to_string())
+        .collect::<Vec<_>>();
+    if gate_ids.iter().any(String::is_empty)
+        || gate_ids.iter().collect::<BTreeSet<_>>().len() != gate_ids.len()
+    {
+        return Err(ApiError::bad_request(
+            "batch approval gate IDs must be non-empty and unique",
+        ));
+    }
 
-async fn run_is_terminal(store: &SqliteStore, run_id: &RunId) -> bool {
-    store
-        .get_run(run_id)
-        .await
-        .ok()
-        .flatten()
-        .is_some_and(|run| matches!(run.status.as_str(), "completed" | "failed" | "cancelled"))
-}
+    let mut current_gates = Vec::with_capacity(gate_ids.len());
+    for gate_id in &gate_ids {
+        let gate = state
+            .store
+            .get_approval_gate(gate_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("approval_gate", gate_id))?;
+        if gate.status != "pending" {
+            return Err(ApiError::conflict(format!(
+                "approval gate is not pending: {gate_id}"
+            )));
+        }
+        current_gates.push(gate);
+    }
 
-fn last_event_seq(headers: &HeaderMap) -> u64 {
-    headers
-        .get("last-event-id")
-        .and_then(|value| value.to_str().ok())
-        .and_then(parse_last_event_id)
-        .unwrap_or(0)
-}
+    let batch_audit_event_id = format!("aud_approval_gate_batch_{}", unique_suffix());
+    let mut audit_events = current_gates
+        .iter()
+        .map(|gate| {
+            let mut decided_gate = gate.clone();
+            decided_gate.status = decision.to_string();
+            decided_gate.decided_by = Some(decided_by.to_string());
+            decided_gate.decision_reason = Some(reason.to_string());
+            approval_gate_audit_event(
+                &decided_gate,
+                &format!("approval_gate.{decision}"),
+                decision,
+            )
+        })
+        .collect::<Vec<_>>();
+    audit_events.push(CreateAuditEvent {
+        id: batch_audit_event_id.clone(),
+        kind: "approval_gate.batch_decided".to_string(),
+        actor: Some(decided_by.to_string()),
+        resource_kind: "approval_gate_batch".to_string(),
+        resource_id: batch_audit_event_id.clone(),
+        run_id: None,
+        payload_json: json!({
+            "approval_gate_ids": gate_ids,
+            "decision": decision,
+            "decided_by": decided_by,
+            "reason": reason,
+            "count": current_gates.len(),
+        }),
+    });
+    let decided = state
+        .store
+        .decide_pending_approval_gates(
+            &gate_ids,
+            decision,
+            Some(decided_by.to_string()),
+            Some(reason.to_string()),
+            audit_events,
+        )
+        .await?;
 
-fn stream_start_seq(headers: &HeaderMap, query: &StreamRunEventsQuery) -> u64 {
-    query.after_seq.unwrap_or_else(|| last_event_seq(headers))
-}
-
-fn parse_last_event_id(value: &str) -> Option<u64> {
-    value
-        .parse()
-        .ok()
-        .or_else(|| value.rsplit_once('_')?.1.parse().ok())
-}
-
-fn sse_event(event: AgentEvent) -> Event {
-    let event_id = event.event_id.to_string();
-    let event_kind = event.kind.as_str();
-    Event::default()
-        .id(event_id)
-        .event(event_kind)
-        .json_data(event)
-        .unwrap_or_else(sse_error_event)
-}
-
-fn sse_error_event(error: impl std::fmt::Display) -> Event {
-    Event::default()
-        .event("stream.error")
-        .data(json!({ "error": error.to_string() }).to_string())
+    Ok(Json(BatchDecideApprovalGatesResponse {
+        approval_gates: decided.into_iter().map(Into::into).collect(),
+        batch_audit_event_id,
+    }))
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct ListApprovalsQuery {
+    search: Option<String>,
     status: Option<String>,
+    origin: Option<String>,
+    actor: Option<String>,
     namespace: Option<String>,
     repo: Option<String>,
     branch: Option<String>,
@@ -20234,26 +20836,47 @@ async fn list_approvals(
 ) -> Result<Json<ApprovalsResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0);
+    let filter = ApprovalListFilter {
+        search: clean_optional_text(query.search),
+        status: clean_optional_text(query.status),
+        origin: clean_optional_text(query.origin),
+        created_by: clean_optional_text(query.actor),
+        namespace: clean_optional_text(query.namespace),
+        repo: clean_optional_text(query.repo),
+        branch: clean_optional_text(query.branch),
+        production_impacting: query.production_impacting,
+        requested_after_ms: query.requested_after_ms,
+        requested_before_ms: query.requested_before_ms,
+        limit,
+        offset,
+    };
     let approvals = state
         .store
-        .list_approvals(ApprovalListFilter {
-            status: clean_optional_text(query.status),
-            namespace: clean_optional_text(query.namespace),
-            repo: clean_optional_text(query.repo),
-            branch: clean_optional_text(query.branch),
-            production_impacting: query.production_impacting,
-            requested_after_ms: query.requested_after_ms,
-            requested_before_ms: query.requested_before_ms,
-            limit,
-            offset,
-        })
+        .list_approvals(filter.clone())
         .await?
         .into_iter()
         .map(Into::into)
-        .collect::<Vec<_>>();
-    let count = approvals.len();
+        .collect::<Vec<ApprovalResponse>>();
+    let group_approvals = all_approvals_for_operator_groups(state.store.as_ref(), filter).await?;
+    let count = group_approvals.len();
+    let groups = group_operator_records(group_approvals.iter().map(|approval| {
+        let resource = approval
+            .scope
+            .as_ref()
+            .and_then(|scope| scope.repo.as_deref())
+            .unwrap_or("unscoped")
+            .to_string();
+        (
+            approval.id.clone(),
+            approval.requested_at.clone(),
+            approval.kind.clone(),
+            resource,
+            approval.status.clone(),
+        )
+    }));
     Ok(Json(ApprovalsResponse {
         approvals,
+        groups,
         count,
         limit,
         offset,
@@ -20314,6 +20937,7 @@ struct ListPermissionGrantsQuery {
 struct ListAuditEventsQuery {
     kind: Option<String>,
     actor: Option<String>,
+    origin: Option<String>,
     resource_kind: Option<String>,
     resource_id: Option<String>,
     run_id: Option<String>,
@@ -20334,6 +20958,7 @@ async fn list_audit_events(
         .query_audit_events(AuditEventListFilter {
             kind: clean_optional_text(query.kind),
             actor: clean_optional_text(query.actor),
+            origin: clean_optional_text(query.origin),
             resource_kind: clean_optional_text(query.resource_kind),
             resource_id: clean_optional_text(query.resource_id),
             run_id: clean_optional_text(query.run_id).map(RunId::new),
@@ -21034,43 +21659,51 @@ async fn append_approval_gate_audit_event(
     decision: &str,
 ) -> Result<(), StoreError> {
     store
-        .create_audit_event(CreateAuditEvent {
-            id: format!("aud_{}_{}", gate.id, unique_suffix()),
-            kind: kind.to_string(),
-            actor: gate
-                .stale_by
-                .clone()
-                .or_else(|| gate.decided_by.clone())
-                .or_else(|| Some("api".to_string())),
-            resource_kind: "approval_gate".to_string(),
-            resource_id: gate.id.clone(),
-            run_id: gate.run_id.clone(),
-            payload_json: json!({
-                "approval_gate_id": gate.id,
-                "remediation_plan_id": gate.remediation_plan_id,
-                "incident_id": gate.incident_id,
-                "run_id": gate.run_id.as_ref().map(RunId::as_str),
-                "status": gate.status,
-                "decision": decision,
-                "gate_kind": gate.gate_kind,
-                "gate_order": gate.gate_order,
-                "risk_level": gate.risk_level,
-                "summary": gate.summary,
-                "resource": {
-                    "namespace": gate.resource_namespace,
-                    "kind": gate.resource_kind,
-                    "name": gate.resource_name,
-                },
-                "decided_at": gate.decided_at,
-                "decided_by": gate.decided_by,
-                "reason": gate.decision_reason,
-                "stale_at": gate.stale_at,
-                "stale_by": gate.stale_by,
-                "stale_reason": gate.stale_reason,
-            }),
-        })
+        .create_audit_event(approval_gate_audit_event(gate, kind, decision))
         .await
         .map(|_| ())
+}
+
+fn approval_gate_audit_event(
+    gate: &StoredApprovalGate,
+    kind: &str,
+    decision: &str,
+) -> CreateAuditEvent {
+    CreateAuditEvent {
+        id: format!("aud_{}_{}", gate.id, unique_suffix()),
+        kind: kind.to_string(),
+        actor: gate
+            .stale_by
+            .clone()
+            .or_else(|| gate.decided_by.clone())
+            .or_else(|| Some("api".to_string())),
+        resource_kind: "approval_gate".to_string(),
+        resource_id: gate.id.clone(),
+        run_id: gate.run_id.clone(),
+        payload_json: json!({
+            "approval_gate_id": gate.id,
+            "remediation_plan_id": gate.remediation_plan_id,
+            "incident_id": gate.incident_id,
+            "run_id": gate.run_id.as_ref().map(RunId::as_str),
+            "status": gate.status,
+            "decision": decision,
+            "gate_kind": gate.gate_kind,
+            "gate_order": gate.gate_order,
+            "risk_level": gate.risk_level,
+            "summary": gate.summary,
+            "resource": {
+                "namespace": gate.resource_namespace,
+                "kind": gate.resource_kind,
+                "name": gate.resource_name,
+            },
+            "decided_at": gate.decided_at,
+            "decided_by": gate.decided_by,
+            "reason": gate.decision_reason,
+            "stale_at": gate.stale_at,
+            "stale_by": gate.stale_by,
+            "stale_reason": gate.stale_reason,
+        }),
+    }
 }
 
 fn validate_permission_grant_request(
@@ -21195,47 +21828,6 @@ fn material_hash(value: &serde_json::Value) -> Result<String, ApiError> {
         .map_err(|error| ApiError::internal(format!("failed to encode material hash: {error}")))?;
     let digest = Sha256::digest(encoded);
     Ok(format!("sha256:{digest:x}"))
-}
-
-async fn cancel_run(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-) -> Result<Json<RunResponse>, ApiError> {
-    let run_id = RunId::new(run_id);
-    state.worker.cancel(&run_id);
-    let run = state.store.cancel_run(&run_id).await?;
-    let seq = state.store.list_events(&run_id).await?.len() as u64 + 1;
-    state
-        .store
-        .append_event(&AgentEvent {
-            event_id: EventId::new(format!("evt_{}_{}", run_id.as_str(), seq)),
-            session_id: run.session_id.clone(),
-            run_id,
-            seq,
-            kind: EventKind::RunCancelled,
-            payload: json!({ "source": "api" }),
-        })
-        .await?;
-
-    Ok(Json(run.into()))
-}
-
-async fn decide_run_approval(
-    State(state): State<AppState>,
-    Path(run_id): Path<String>,
-    Json(request): Json<DecideApprovalRequest>,
-) -> Result<Json<DecideApprovalResponse>, ApiError> {
-    decide_current_run_approval(
-        state,
-        RunId::new(run_id),
-        ApprovalDecisionInput {
-            decision: request.decision,
-            decided_by: request.decided_by,
-            reason: request.reason,
-        },
-        None,
-    )
-    .await
 }
 
 async fn approve_approval(
@@ -21701,6 +22293,7 @@ impl From<StoreError> for ApiError {
     fn from(error: StoreError) -> Self {
         match error {
             StoreError::NotFound { entity, id } => Self::not_found(&entity, &id),
+            StoreError::Conflict(message) => Self::conflict(message),
             other => Self {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: other.to_string(),
@@ -21733,26 +22326,27 @@ mod tests {
         create_change_set, create_change_set_trusted_envelope, create_declared_deployment_handoff,
         create_deployment_contract, create_deployment_intent_from_pipeline_intent,
         create_deployment_intent_trusted_envelope, create_incident, create_observation,
-        create_pipeline_intent_from_change_set, create_pipeline_intent_trusted_envelope,
-        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
-        create_release_from_deployment_intent, create_remediation_plan, create_run,
-        create_work_item, create_work_item_pipeline_intent, create_work_plan_from_remediation_plan,
-        create_work_plan_from_work_item, create_work_plan_trusted_envelope,
-        current_pipeline_build_output, decide_run_approval, deny_approval,
-        deployment_intent_reconcile_action, ensure_pipeline_evidence_ready_for_deployment,
-        execute_capability, execute_deployment_intent, execution_matches_pipeline_contract,
-        get_approval, get_approval_gate, get_artifact, get_deployment_contract,
-        get_deployment_intent, get_incident, get_observation, get_permission_grant,
-        get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
-        get_run_diff, get_run_events, get_work_plan, git_delivery_reconcile_action,
+        create_operator_run, create_pipeline_intent_from_change_set,
+        create_pipeline_intent_trusted_envelope, create_registry_evidence_from_registry_inspection,
+        create_registry_evidence_from_release, create_release_from_deployment_intent,
+        create_remediation_plan, create_run, create_work_item, create_work_item_pipeline_intent,
+        create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
+        create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
+        deny_approval, deployment_intent_reconcile_action,
+        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
+        execute_deployment_intent, execution_matches_pipeline_contract, get_approval,
+        get_approval_gate, get_artifact, get_deployment_contract, get_deployment_intent,
+        get_incident, get_observation, get_permission_grant, get_pipeline_intent,
+        get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
+        get_run_events, get_work_plan, git_delivery_reconcile_action,
         gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
         internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
         last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
         list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
         list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
         list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_item_controller_waits, list_work_item_events, list_work_plans, list_workspaces,
-        merge_pipeline_execution_state, observe_due_controller_wait,
+        list_work_item_controller_waits, list_work_item_events, list_work_items, list_work_plans,
+        list_workspaces, merge_pipeline_execution_state, observe_due_controller_wait,
         observed_gitops_merge_for_deployment, parse_last_event_id, persist_pipeline_build_output,
         persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
         pipeline_build_output_from_analysis, pipeline_intent_execution_preflight,
@@ -21777,9 +22371,9 @@ mod tests {
         ListDeploymentContractsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
         ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
         ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
-        ListWorkPlansQuery, ListWorkspacesQuery, PipelineDeploymentHandoffSpec,
-        StreamRunEventsQuery, WorkItemPipelineContextQuery, WorkItemReconcileAction,
-        CONTROLLER_WAIT_MAX_CHECKS, GIT_DELIVERY_ACTIONS,
+        ListWorkItemsQuery, ListWorkPlansQuery, ListWorkspacesQuery, OperatorIdentity,
+        PipelineDeploymentHandoffSpec, StreamRunEventsQuery, WorkItemPipelineContextQuery,
+        WorkItemReconcileAction, CONTROLLER_WAIT_MAX_CHECKS, GIT_DELIVERY_ACTIONS,
     };
     use crate::dispatch::{KubernetesJobDispatcher, RunDispatcher};
     use crate::dto::{
@@ -21810,7 +22404,7 @@ mod tests {
     use crate::workspace::WorkspaceProvisioner;
     use axum::extract::{Path, Query, State};
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
-    use axum::Json;
+    use axum::{Extension, Json};
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
         AgentAction, AgentEvent, EventId, EventKind, PolicyMode, ReadOnlyClusterTools, RunId,
@@ -22914,21 +23508,134 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
 
         assert_eq!(created.status, "queued");
         assert_eq!(created.max_turns, 12);
+        assert_eq!(created.origin, "operator");
 
         let Json(fetched) = get_run(State(state.clone()), Path(created.id.to_string()))
             .await
             .unwrap();
         assert_eq!(fetched.id, created.id);
+        assert_eq!(fetched.origin, "operator");
 
         let Json(events) = get_run_events(State(state.clone()), Path(created.id.to_string()))
             .await
             .unwrap();
         assert_eq!(events.events.len(), 1);
 
+        let Json(listed) = list_runs(
+            State(state.clone()),
+            Query(ListRunsQuery {
+                search: None,
+                status: Some("queued".to_string()),
+                origin: Some("operator".to_string()),
+                actor: None,
+                namespace: None,
+                repo: None,
+                branch: None,
+                production_impacting: None,
+                started_after_ms: None,
+                started_before_ms: None,
+                limit: Some(50),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed.groups.len(), 1);
+        assert_eq!(listed.groups[0].count, 1);
+        assert_eq!(listed.groups[0].members[0].id, created.id.to_string());
+
         let Json(cancelled) = cancel_run(State(state.clone()), Path(created.id.to_string()))
             .await
             .unwrap();
         assert_eq!(cancelled.status, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn authenticated_run_creation_persists_and_filters_creator() {
+        let state = test_state().await;
+        let Json(created) = create_operator_run(
+            State(state.clone()),
+            Some(Extension(OperatorIdentity("lucas".to_string()))),
+            Json(CreateRunRequest {
+                task: "inspect finance app".to_string(),
+                cwd: Some(".".to_string()),
+                max_turns: Some(4),
+                policy_mode: None,
+                scope: None,
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(created.created_by.as_deref(), Some("lucas"));
+        let Json(listed) = list_runs(
+            State(state),
+            Query(ListRunsQuery {
+                search: None,
+                status: Some("queued".to_string()),
+                origin: Some("operator".to_string()),
+                actor: Some("lucas".to_string()),
+                namespace: None,
+                repo: None,
+                branch: None,
+                production_impacting: None,
+                started_after_ms: None,
+                started_before_ms: None,
+                limit: Some(10),
+                offset: Some(0),
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(listed.count, 1);
+        assert_eq!(listed.runs[0].id, created.id);
+        assert_eq!(listed.runs[0].created_by.as_deref(), Some("lucas"));
+    }
+
+    #[tokio::test]
+    async fn operator_run_groups_cover_all_matching_pages() {
+        let state = test_state().await;
+        for _ in 0..3 {
+            let _ = create_run(
+                State(state.clone()),
+                Json(CreateRunRequest {
+                    task: "repeatable operator group".to_string(),
+                    cwd: Some(".".to_string()),
+                    max_turns: Some(1),
+                    policy_mode: None,
+                    scope: None,
+                }),
+            )
+            .await
+            .unwrap();
+        }
+
+        let Json(listed) = list_runs(
+            State(state),
+            Query(ListRunsQuery {
+                search: Some("repeatable operator".to_string()),
+                status: Some("queued".to_string()),
+                origin: Some("operator".to_string()),
+                actor: None,
+                namespace: None,
+                repo: None,
+                branch: None,
+                production_impacting: None,
+                started_after_ms: None,
+                started_before_ms: None,
+                limit: Some(1),
+                offset: Some(2),
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(listed.runs.len(), 1);
+        assert_eq!(listed.count, 3);
+        assert_eq!(listed.groups.len(), 1);
+        assert_eq!(listed.groups[0].count, 3);
+        assert_eq!(listed.groups[0].members.len(), 3);
     }
 
     #[tokio::test]
@@ -23046,7 +23753,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(listed) = list_runs(
             State(state.clone()),
             Query(ListRunsQuery {
+                search: None,
                 status: Some("queued".to_string()),
+                origin: Some("operator".to_string()),
+                actor: None,
                 namespace: Some("apps-dev".to_string()),
                 repo: Some("git@example.test/team/app.git".to_string()),
                 branch: Some("feature/pharness".to_string()),
@@ -23067,7 +23777,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(summary) = run_summary(
             State(state),
             Query(ListRunsQuery {
+                search: None,
                 status: Some("queued".to_string()),
+                origin: None,
+                actor: None,
                 namespace: Some("apps-dev".to_string()),
                 repo: Some("git@example.test/team/app.git".to_string()),
                 branch: Some("feature/pharness".to_string()),
@@ -23793,6 +24506,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                     reason: "list".to_string(),
                     path: ".".into(),
                     depth: 1,
+                    max_entries: None,
                 },
                 timeout_ms: None,
             }),
@@ -23854,6 +24568,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .unwrap();
         state
             .store
+            .set_run_created_by(&created.id, Some("lucas".to_string()))
+            .await
+            .unwrap();
+        state
+            .store
             .create_approval(CreateApproval {
                 id: "appr_list".to_string(),
                 session_id: pharness_core::SessionId::new(format!("ses_{}", created.id.as_str())),
@@ -23874,7 +24593,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(response) = list_approvals(
             State(state.clone()),
             Query(ListApprovalsQuery {
+                search: None,
                 status: Some("pending".to_string()),
+                origin: Some("operator".to_string()),
+                actor: Some("lucas".to_string()),
                 namespace: None,
                 repo: None,
                 branch: None,
@@ -23893,6 +24615,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(response.limit, 50);
         assert_eq!(response.offset, 0);
         assert_eq!(response.approvals[0].id, "appr_list");
+        assert_eq!(response.approvals[0].created_by.as_deref(), Some("lucas"));
 
         state
             .store
@@ -23920,7 +24643,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(scoped) = list_approvals(
             State(state.clone()),
             Query(ListApprovalsQuery {
+                search: None,
                 status: Some("pending".to_string()),
+                origin: None,
+                actor: None,
                 namespace: Some("apps-dev".to_string()),
                 repo: Some("git@example.test/team/pharness.git".to_string()),
                 branch: Some("feature/approval-filter".to_string()),
@@ -24780,6 +25506,8 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(created.id.to_string()),
                 status: Some("draft".to_string()),
+                origin: None,
+                actor: None,
                 risk_level: Some("high".to_string()),
                 resource_namespace: Some("ci".to_string()),
                 resource_kind: Some("PipelineRun".to_string()),
@@ -24801,11 +25529,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         let Json(listed_gates) = list_approval_gates(
             State(state.clone()),
             Query(ListApprovalGatesQuery {
+                search: None,
                 work_item_id: None,
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(created.id.to_string()),
                 status: Some("pending".to_string()),
+                origin: None,
+                actor: None,
                 gate_kind: Some("pipeline_mutation".to_string()),
                 risk_level: Some("high".to_string()),
                 resource_namespace: Some("ci".to_string()),
@@ -28478,6 +29209,27 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
+
+        let Json(listed) = list_work_items(
+            State(state.clone()),
+            Query(ListWorkItemsQuery {
+                status: Some("submitted".to_string()),
+                source_repo: Some("team/finance-api".to_string()),
+                target_environment: Some("dev".to_string()),
+                target_namespace: Some("apps-dev".to_string()),
+                production_impacting: Some(false),
+                actor: Some("operator".to_string()),
+                origin: Some("operator".to_string()),
+                include: Some("operator_state".to_string()),
+                limit: Some(1),
+                offset: Some(1),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed.count, 1);
+        assert!(listed.work_items.is_empty());
+        assert!(listed.operator_state.is_some_and(|state| state.is_empty()));
 
         let Json(preview) = reconcile_work_item(
             State(state.clone()),

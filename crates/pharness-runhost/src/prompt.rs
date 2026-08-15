@@ -2,6 +2,10 @@
 
 use pharness_core::{CapabilityKind, ToolSpec};
 
+/// Bump whenever the stable worker instructions change. Evaluations record
+/// this value so baseline and candidate runs can be compared meaningfully.
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-14.1";
+
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
 Use exactly one tool call per turn. Do not answer with prose unless you call the respond tool.
@@ -10,6 +14,8 @@ Prefer read-only repo inspection first. Never read secrets, .env files, private 
 File writes, destructive commands, network commands, and production mutations are policy-gated and may pause for approval.
 For available policy-gated actions, call the concrete tool. The runtime will pause for approval before execution.
 Use patch_file for small existing-file text edits when an exact find/replace patch is safer than rewriting the whole file.
+When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
+For coding work, inspect the final Git status or diff after your last edit before calling finish.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
 - kubernetes_get fields: resource, namespace, name, all_namespaces, label_selector.
 - argo_get_app fields: app.
@@ -65,7 +71,8 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                 "properties": {
                     "reason": { "type": "string" },
                     "path": { "type": "string" },
-                    "depth": { "type": "integer", "minimum": 0, "maximum": 3 }
+                    "depth": { "type": "integer", "minimum": 0, "maximum": 3 },
+                    "max_entries": { "type": ["integer", "null"], "minimum": 1, "maximum": 2000 }
                 }
             }),
             CapabilityKind::Filesystem,
@@ -80,7 +87,9 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                 "properties": {
                     "reason": { "type": "string" },
                     "path": { "type": "string" },
-                    "max_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 262144 }
+                    "max_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 131072 },
+                    "start_line": { "type": ["integer", "null"], "minimum": 1 },
+                    "line_count": { "type": ["integer", "null"], "minimum": 1, "maximum": 2000 }
                 }
             }),
             CapabilityKind::Filesystem,
@@ -96,7 +105,8 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                     "reason": { "type": "string" },
                     "query": { "type": "string" },
                     "path": { "type": ["string", "null"] },
-                    "glob": { "type": ["string", "null"] }
+                    "glob": { "type": ["string", "null"] },
+                    "max_results": { "type": ["integer", "null"], "minimum": 1, "maximum": 200 }
                 }
             }),
             CapabilityKind::Filesystem,

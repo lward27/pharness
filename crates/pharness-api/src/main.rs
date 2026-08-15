@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
                     base_url: config.model.base_url.clone(),
                     cluster_tools: cluster_tools.clone(),
                     default_policy: policy.clone(),
+                    context_budget: config.model.context_budget.clone(),
                 },
             )
             .context("failed to configure local worker")?;
@@ -111,6 +112,26 @@ fn worker_job_env(config: &ApiRuntimeConfig) -> Vec<(String, String)> {
         (
             "PHARNESS_FIREWORKS_BASE_URL".to_string(),
             config.model.base_url.clone(),
+        ),
+        (
+            "PHARNESS_CONTEXT_MAX_INPUT_TOKENS".to_string(),
+            config.model.context_budget.max_input_tokens.to_string(),
+        ),
+        (
+            "PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS".to_string(),
+            config
+                .model
+                .context_budget
+                .recent_message_tokens
+                .to_string(),
+        ),
+        (
+            "PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS".to_string(),
+            config
+                .model
+                .context_budget
+                .max_tool_result_tokens
+                .to_string(),
         ),
         (
             "PHARNESS_ARGOCD_NAMESPACE".to_string(),

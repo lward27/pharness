@@ -34,6 +34,8 @@ pub struct RunResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<RunScope>,
     pub result: Option<serde_json::Value>,
+    pub origin: String,
+    pub created_by: Option<String>,
 }
 
 impl From<StoredRun> for RunResponse {
@@ -56,6 +58,8 @@ impl From<StoredRun> for RunResponse {
                     })
                 })
             }),
+            origin: run.origin,
+            created_by: run.created_by,
         }
     }
 }
@@ -63,9 +67,26 @@ impl From<StoredRun> for RunResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct RunsResponse {
     pub runs: Vec<RunResponse>,
+    pub groups: Vec<OperatorResourceGroupResponse>,
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OperatorResourceGroupMemberResponse {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OperatorResourceGroupResponse {
+    pub key: String,
+    pub title: String,
+    pub resource: String,
+    pub status: String,
+    pub count: usize,
+    pub members: Vec<OperatorResourceGroupMemberResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -321,6 +342,7 @@ impl From<StoredRemediationPlan> for RemediationPlanResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkPlansResponse {
     pub work_plans: Vec<WorkPlanResponse>,
+    pub groups: Vec<OperatorResourceGroupResponse>,
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
@@ -348,6 +370,8 @@ pub struct WorkPlanResponse {
     pub status_changed_at: Option<String>,
     pub status_changed_by: Option<String>,
     pub status_reason: Option<String>,
+    pub created_by: Option<String>,
+    pub origin: String,
 }
 
 impl From<StoredWorkPlan> for WorkPlanResponse {
@@ -373,6 +397,8 @@ impl From<StoredWorkPlan> for WorkPlanResponse {
             status_changed_at: plan.status_changed_at,
             status_changed_by: plan.status_changed_by,
             status_reason: plan.status_reason,
+            created_by: plan.created_by,
+            origin: plan.origin,
         }
     }
 }
@@ -422,6 +448,7 @@ pub struct WorkItemResponse {
     pub attempt_count: u32,
     pub current_run_id: Option<RunId>,
     pub created_by: Option<String>,
+    pub origin: String,
     pub created_at: String,
     pub updated_at: String,
     pub status_changed_at: String,
@@ -450,6 +477,7 @@ impl From<StoredWorkItem> for WorkItemResponse {
             attempt_count: item.attempt_count,
             current_run_id: item.current_run_id,
             created_by: item.created_by,
+            origin: item.origin,
             created_at: item.created_at,
             updated_at: item.updated_at,
             status_changed_at: item.status_changed_at,
@@ -465,6 +493,16 @@ pub struct WorkItemsResponse {
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operator_state: Option<std::collections::BTreeMap<String, WorkItemOperatorStateResponse>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemOperatorStateResponse {
+    pub current_boundary: String,
+    pub attempts_remaining: u32,
+    pub attention_reason: Option<String>,
+    pub active_wait: Option<ControllerWaitResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -579,6 +617,101 @@ pub struct ReconcileWorkItemResponse {
     pub gitops_delivery_preflight: Option<GitOpsDeliveryPreflightResponse>,
     pub controller_wait: Option<ControllerWaitResponse>,
     pub message: String,
+    pub boundary: String,
+    pub can_apply: bool,
+    pub effect_summary: String,
+    pub blockers: Vec<ReconcileBlockerResponse>,
+    pub authorization_checks: Vec<ReconcileAuthorizationCheckResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReconcileBlockerResponse {
+    pub code: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReconcileAuthorizationCheckResponse {
+    pub kind: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<String>,
+}
+
+/// A read-only WorkItem-rooted delivery view. The nested reconcile response is
+/// always produced with `apply=false`; it is safe for dashboards to poll.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemFlowResponse {
+    pub work_item: WorkItemResponse,
+    pub reconcile_preview: ReconcileWorkItemResponse,
+    pub sdlc_flow: Option<SdlcFlowResponse>,
+    pub delivery_segments: Vec<DeliverySegmentResponse>,
+    pub workspaces: Vec<WorkspaceResponse>,
+    pub controller_waits: Vec<ControllerWaitResponse>,
+    pub audit_events: Vec<AuditEventResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeliverySegmentResourceResponse {
+    pub kind: String,
+    pub id: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeliverySegmentResponse {
+    pub key: String,
+    pub label: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stopping_reason: Option<String>,
+    pub resources: Vec<DeliverySegmentResourceResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TriageItemResponse {
+    pub kind: String,
+    pub id: String,
+    pub title: String,
+    pub summary: String,
+    pub status: String,
+    pub risk_level: String,
+    pub origin: String,
+    pub created_at: String,
+    pub resource_kind: String,
+    pub resource_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub work_item_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TriageSummaryResponse {
+    pub pending_approval_gates: usize,
+    pub pending_tool_approvals: usize,
+    pub blocked_work_items: usize,
+    pub expired_controller_waits: usize,
+    pub proposed_remediation_plans: usize,
+    pub total: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TriageResponse {
+    pub items: Vec<TriageItemResponse>,
+    pub summary: TriageSummaryResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ScopeOptionsResponse {
+    pub environments: Vec<String>,
+    pub namespaces: Vec<String>,
+    pub repositories: Vec<String>,
+    pub branches: Vec<String>,
+    pub actors: Vec<String>,
+    pub origins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -774,6 +907,8 @@ pub struct SdlcFlowResponse {
     pub resource_kind: String,
     pub resource_id: String,
     pub readiness: SdlcReadinessResponse,
+    /// Server-derived source-to-verification stages for legacy Flow deep links.
+    pub delivery_segments: Vec<DeliverySegmentResponse>,
     pub work_plan: WorkPlanResponse,
     pub change_set: Option<ChangeSetResponse>,
     pub pipeline_intent: Option<PipelineIntentResponse>,
@@ -2158,6 +2293,7 @@ pub struct TransitionRegistryEvidenceResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalGatesResponse {
     pub approval_gates: Vec<ApprovalGateResponse>,
+    pub groups: Vec<OperatorResourceGroupResponse>,
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
@@ -2176,6 +2312,9 @@ pub struct ApprovalGateResponse {
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: String,
+    pub origin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     pub gate_kind: String,
     pub gate_order: i64,
     pub title: String,
@@ -2203,6 +2342,8 @@ impl From<StoredApprovalGate> for ApprovalGateResponse {
             incident_id: gate.incident_id,
             run_id: gate.run_id,
             status: gate.status,
+            origin: gate.origin,
+            created_by: gate.created_by,
             gate_kind: gate.gate_kind,
             gate_order: gate.gate_order,
             title: gate.title,
@@ -2234,6 +2375,20 @@ pub struct DecideApprovalGateResponse {
     pub approval_gate: ApprovalGateResponse,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct BatchDecideApprovalGatesRequest {
+    pub gate_ids: Vec<String>,
+    pub decision: String,
+    pub decided_by: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchDecideApprovalGatesResponse {
+    pub approval_gates: Vec<ApprovalGateResponse>,
+    pub batch_audit_event_id: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FileChangeResponse {
     pub id: String,
@@ -2260,6 +2415,7 @@ impl From<StoredFileChange> for FileChangeResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalsResponse {
     pub approvals: Vec<ApprovalResponse>,
+    pub groups: Vec<OperatorResourceGroupResponse>,
     pub count: usize,
     pub limit: u32,
     pub offset: u32,
@@ -2311,6 +2467,9 @@ pub struct ApprovalResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview: Option<serde_json::Value>,
     pub action: Option<serde_json::Value>,
+    pub origin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
 }
 
 impl From<StoredApproval> for ApprovalResponse {
@@ -2333,6 +2492,8 @@ impl From<StoredApproval> for ApprovalResponse {
                 .filter(|scope| !scope.is_empty()),
             preview: approval.preview_json,
             action: approval.action_json,
+            origin: approval.origin,
+            created_by: approval.created_by,
         }
     }
 }
@@ -2427,6 +2588,7 @@ pub struct AuditEventResponse {
     pub resource_kind: String,
     pub resource_id: String,
     pub run_id: Option<RunId>,
+    pub origin: String,
     pub payload: serde_json::Value,
     pub created_at: String,
 }
@@ -2440,6 +2602,7 @@ impl From<StoredAuditEvent> for AuditEventResponse {
             resource_kind: event.resource_kind,
             resource_id: event.resource_id,
             run_id: event.run_id,
+            origin: event.origin,
             payload: event.payload_json,
             created_at: event.created_at,
         }

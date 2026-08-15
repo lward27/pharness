@@ -160,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
         provider,
         cluster_tools: config.cluster_tools(),
         default_policy: config.policy.clone(),
+        context_budget: config.model.context_budget.clone(),
     };
 
     let backend = Arc::new(HttpAttemptBackend::new(
@@ -1956,49 +1957,100 @@ async fn clone_workspace_source(
 ) -> anyhow::Result<String> {
     tracing::info!(workspace_id = %source.workspace_id, cwd = %cwd.display(), "cloning typed workspace source");
     let cwd_text = cwd.to_string_lossy().to_string();
-    run_git(&[
-        "clone",
-        "--no-checkout",
-        "--depth",
-        "1",
-        &source.source_repo,
-        &cwd_text,
-    ])
+    run_workspace_git(
+        cwd,
+        &[
+            "clone",
+            "--no-checkout",
+            "--depth",
+            "1",
+            &source.source_repo,
+            &cwd_text,
+        ],
+    )
     .await?;
-    run_git(&[
-        "-C",
-        &cwd_text,
-        "fetch",
-        "--depth",
-        "1",
-        "origin",
-        &source.source_ref,
-    ])
+    run_workspace_git(
+        cwd,
+        &[
+            "-C",
+            &cwd_text,
+            "fetch",
+            "--depth",
+            "1",
+            "origin",
+            &source.source_ref,
+        ],
+    )
     .await?;
-    run_git(&["-C", &cwd_text, "switch", "--detach", "FETCH_HEAD"]).await?;
-    run_git(&["-C", &cwd_text, "switch", "--create", &source.branch]).await?;
-    git_stdout(&["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"]).await
+    run_workspace_git(cwd, &["-C", &cwd_text, "switch", "--detach", "FETCH_HEAD"]).await?;
+    run_workspace_git(
+        cwd,
+        &["-C", &cwd_text, "switch", "--create", &source.branch],
+    )
+    .await?;
+    workspace_git_stdout(
+        cwd,
+        &["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"],
+    )
+    .await
 }
 
-async fn run_git(args: &[&str]) -> anyhow::Result<()> {
-    git_output(args).await.map(|_| ())
+/// Execute Git only against the API-issued workspace. Kubernetes `emptyDir`
+/// roots can be owned by kubelet even when the worker runs as a non-root UID;
+/// scope Git's safe-directory exception to this one ephemeral workspace.
+async fn run_workspace_git(cwd: &std::path::Path, args: &[&str]) -> anyhow::Result<()> {
+    workspace_git_output(cwd, args).await.map(|_| ())
 }
 
-async fn git_stdout(args: &[&str]) -> anyhow::Result<String> {
-    let output = git_output(args).await?;
+async fn workspace_git_stdout(cwd: &std::path::Path, args: &[&str]) -> anyhow::Result<String> {
+    let output = workspace_git_output(cwd, args).await?;
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-async fn git_output(args: &[&str]) -> anyhow::Result<std::process::Output> {
+async fn workspace_git_output(
+    cwd: &std::path::Path,
+    args: &[&str],
+) -> anyhow::Result<std::process::Output> {
+    let command_args = workspace_git_args(cwd, args);
     let output = tokio::process::Command::new("git")
-        .args(args)
+        .args(&command_args)
         .output()
         .await
         .context("failed to spawn typed Git workspace command")?;
     if !output.status.success() {
-        anyhow::bail!("typed Git workspace command failed")
+        anyhow::bail!(workspace_git_failure_summary(&output, args))
     }
     Ok(output)
+}
+
+fn workspace_git_args(cwd: &std::path::Path, args: &[&str]) -> Vec<String> {
+    let mut command_args = vec![
+        "-c".to_string(),
+        format!("safe.directory={}", cwd.display()),
+    ];
+    command_args.extend(args.iter().map(|arg| (*arg).to_string()));
+    command_args
+}
+
+fn workspace_git_failure_summary(output: &std::process::Output, args: &[&str]) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+    if stderr.contains("dubious ownership") {
+        return "Git rejected workspace ownership before clone".to_string();
+    }
+    if stderr.contains("could not resolve host") {
+        return "Git could not resolve the configured repository host".to_string();
+    }
+    if stderr.contains("authentication failed") || stderr.contains("could not read username") {
+        return "Git repository authentication failed".to_string();
+    }
+
+    let operation = args
+        .iter()
+        .copied()
+        .find(|arg| !matches!(*arg, "-C") && !arg.starts_with('/'))
+        .unwrap_or("operation");
+    let exit_code = output.status.code().unwrap_or(-1);
+    format!("Git {operation} failed with exit code {exit_code}")
 }
 
 async fn fetch_attempt_spec_with_retry(
@@ -2200,9 +2252,39 @@ mod tests {
     use super::{
         argo_application_terminal, argo_sync_patch_payload, parse_github_repository,
         pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
-        ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
+        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
     };
     use serde_json::json;
+    use std::path::Path;
+
+    #[test]
+    fn workspace_git_commands_scope_safe_directory_to_the_issued_workspace() {
+        assert_eq!(
+            workspace_git_args(
+                Path::new("/workspace"),
+                &[
+                    "-C",
+                    "/workspace",
+                    "fetch",
+                    "--depth",
+                    "1",
+                    "origin",
+                    "main"
+                ],
+            ),
+            vec![
+                "-c",
+                "safe.directory=/workspace",
+                "-C",
+                "/workspace",
+                "fetch",
+                "--depth",
+                "1",
+                "origin",
+                "main",
+            ]
+        );
+    }
 
     #[test]
     fn recognizes_a_successful_pipeline_run() {

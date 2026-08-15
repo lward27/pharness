@@ -1,6 +1,6 @@
 use pharness_core::{
-    AgentEvent, CancellationFlag, EventId, EventKind, ReadOnlyClusterTools, ResourceRef, RunId,
-    RunScope, SafetyPolicy,
+    AgentEvent, CancellationFlag, ContextBudget, EventId, EventKind, ReadOnlyClusterTools,
+    ResourceRef, RunId, RunScope, SafetyPolicy, TaskContract, TaskKind,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -27,6 +27,7 @@ pub struct LocalWorker {
     base_url: String,
     cluster_tools: ReadOnlyClusterTools,
     default_policy: SafetyPolicy,
+    context_budget: ContextBudget,
     cancellations: Arc<Mutex<HashMap<RunId, CancellationFlag>>>,
 }
 
@@ -42,6 +43,7 @@ impl LocalWorker {
         let base_url = options.base_url;
         let cluster_tools = options.cluster_tools;
         let default_policy = options.default_policy;
+        let context_budget = options.context_budget;
 
         let provider = FireworksClient::new(
             api_key,
@@ -58,6 +60,7 @@ impl LocalWorker {
             provider,
             cluster_tools,
             default_policy,
+            context_budget,
             cancellations: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
@@ -68,6 +71,7 @@ impl LocalWorker {
             provider: "fireworks".to_string(),
             model: self.model.clone(),
             base_url: self.base_url.clone(),
+            context_budget: self.context_budget.clone(),
         }
     }
 
@@ -100,6 +104,7 @@ impl LocalWorker {
             provider: self.provider.clone(),
             cluster_tools: self.cluster_tools.clone(),
             default_policy: self.default_policy.clone(),
+            context_budget: self.context_budget.clone(),
         };
         let cancellations = self.cancellations.clone();
         let cancellation = CancellationFlag::default();
@@ -158,6 +163,7 @@ pub(crate) async fn attempt_spec_for_run(
             max_turns: run.max_turns,
             execution_target_json: run.execution_target_json.clone(),
             workspace_source: workspace_source_for_run(&run.execution_target_json)?,
+            task_contract: task_contract_for_run(store, run).await?,
         },
         event_seq_start,
         resume,
@@ -174,6 +180,30 @@ fn workspace_source_for_run(
         .map_err(|error| anyhow::anyhow!("run has invalid workspace source: {error}"))?;
     source.validate()?;
     Ok(Some(source))
+}
+
+async fn task_contract_for_run(
+    store: &SqliteStore,
+    run: &StoredRun,
+) -> anyhow::Result<TaskContract> {
+    let Some(work_item_id) = run
+        .execution_target_json
+        .get("work_item_id")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(TaskContract::default());
+    };
+    let criteria = store
+        .get_work_item(work_item_id)
+        .await?
+        .map(|item| item.acceptance_criteria)
+        .unwrap_or_default();
+    Ok(TaskContract {
+        kind: TaskKind::Coding,
+        acceptance_criteria: criteria,
+        require_workspace_change: true,
+        require_post_change_diff: true,
+    })
 }
 
 fn resume_spec_from_approval(approval: &StoredApproval) -> anyhow::Result<ResumeSpec> {
@@ -223,6 +253,7 @@ pub struct LocalWorkerOptions {
     pub base_url: String,
     pub cluster_tools: ReadOnlyClusterTools,
     pub default_policy: SafetyPolicy,
+    pub context_budget: ContextBudget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -231,6 +262,7 @@ pub struct LocalWorkerConfig {
     pub provider: String,
     pub model: String,
     pub base_url: String,
+    pub context_budget: ContextBudget,
 }
 
 pub(crate) async fn finish_run_from_attempt(
@@ -1914,6 +1946,8 @@ mod tests {
             error: None,
             result_json: None,
             execution_target_json,
+            origin: "legacy".to_string(),
+            created_by: None,
         }
     }
 }

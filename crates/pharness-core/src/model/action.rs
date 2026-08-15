@@ -16,6 +16,10 @@ pub enum AgentAction {
         reason: String,
         path: Utf8PathBuf,
         max_bytes: Option<u64>,
+        #[serde(default)]
+        start_line: Option<u64>,
+        #[serde(default)]
+        line_count: Option<u64>,
     },
     WriteFile {
         id: ActionId,
@@ -34,6 +38,8 @@ pub enum AgentAction {
         reason: String,
         path: Utf8PathBuf,
         depth: u8,
+        #[serde(default)]
+        max_entries: Option<u32>,
     },
     SearchFiles {
         id: ActionId,
@@ -41,6 +47,8 @@ pub enum AgentAction {
         query: String,
         path: Option<Utf8PathBuf>,
         glob: Option<String>,
+        #[serde(default)]
+        max_results: Option<u32>,
     },
     RunShell {
         id: ActionId,
@@ -325,6 +333,7 @@ mod tests {
                 reason,
                 path,
                 max_bytes,
+                ..
             } => {
                 assert_eq!(id.as_str(), "call_abc");
                 assert_eq!(reason, "Inspect manifest");
@@ -333,6 +342,58 @@ mod tests {
             }
             other => panic!("expected read_file action, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn old_serialized_navigation_actions_use_new_field_defaults() {
+        let read: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "read_file",
+            "id": "act_read",
+            "reason": "inspect",
+            "path": "README.md",
+            "max_bytes": null
+        }))
+        .unwrap();
+        let list: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "list_dir",
+            "id": "act_list",
+            "reason": "inspect",
+            "path": ".",
+            "depth": 1
+        }))
+        .unwrap();
+        let search: AgentAction = serde_json::from_value(serde_json::json!({
+            "action": "search_files",
+            "id": "act_search",
+            "reason": "inspect",
+            "query": "todo",
+            "path": null,
+            "glob": null
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            read,
+            AgentAction::ReadFile {
+                start_line: None,
+                line_count: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            list,
+            AgentAction::ListDir {
+                max_entries: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            search,
+            AgentAction::SearchFiles {
+                max_results: None,
+                ..
+            }
+        ));
     }
 
     #[test]

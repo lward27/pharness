@@ -559,6 +559,7 @@ mod tests {
             reason: "list".to_string(),
             path: ".".into(),
             depth: 1,
+            max_entries: None,
         });
 
         assert!(decision.is_allow());

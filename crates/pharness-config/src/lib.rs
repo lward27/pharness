@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{bail, Context};
-use pharness_core::{PolicyMode, ReadOnlyClusterTools, SafetyPolicy};
+use pharness_core::{ContextBudget, PolicyMode, ReadOnlyClusterTools, SafetyPolicy};
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -178,6 +178,7 @@ pub struct ModelConfig {
     pub api_key_env: String,
     pub api_key: Option<SecretString>,
     pub base_url: String,
+    pub context_budget: ContextBudget,
 }
 
 #[derive(Clone)]
@@ -234,6 +235,7 @@ impl ApiRuntimeConfig {
         config.apply_file(file)?;
         config.apply_env(env)?;
         reject_non_fireworks(&config.model.provider)?;
+        reject_invalid_context_budget(&config.model.context_budget)?;
         reject_blank_policy_identity(&config.policy)?;
         reject_invalid_kubernetes_workspace(&config.worker.kubernetes)?;
         reject_invalid_argo_executor(&config.worker.kubernetes)?;
@@ -262,6 +264,7 @@ impl ApiRuntimeConfig {
                 api_key_env: DEFAULT_FIREWORKS_API_KEY_ENV.to_string(),
                 api_key: None,
                 base_url: DEFAULT_FIREWORKS_BASE_URL.to_string(),
+                context_budget: ContextBudget::default(),
             },
             cluster: ClusterConfig {
                 kubectl_bin: DEFAULT_KUBECTL_BIN.to_string(),
@@ -375,6 +378,15 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = model.base_url {
                 self.model.base_url = value;
+            }
+            if let Some(value) = model.context_max_input_tokens {
+                self.model.context_budget.max_input_tokens = value;
+            }
+            if let Some(value) = model.context_recent_message_tokens {
+                self.model.context_budget.recent_message_tokens = value;
+            }
+            if let Some(value) = model.context_max_tool_result_tokens {
+                self.model.context_budget.max_tool_result_tokens = value;
             }
         }
 
@@ -629,6 +641,30 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_FIREWORKS_BASE_URL") {
             self.model.base_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_MAX_INPUT_TOKENS") {
+            self.model.context_budget.max_input_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_MAX_INPUT_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_MAX_INPUT_TOKENS is too large")
+                    })?;
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS") {
+            self.model.context_budget.recent_message_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS is too large")
+                    })?;
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS") {
+            self.model.context_budget.max_tool_result_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS is too large")
+                    })?;
         }
         if let Some(value) = env.get("PHARNESS_FIREWORKS_API_KEY_ENV") {
             self.model.api_key_env = value.clone();
@@ -888,6 +924,19 @@ impl ApiRuntimeConfig {
     }
 }
 
+fn reject_invalid_context_budget(budget: &ContextBudget) -> anyhow::Result<()> {
+    if budget.max_input_tokens <= budget.reserved_output_tokens {
+        anyhow::bail!("model context_max_input_tokens must exceed the reserved output budget");
+    }
+    if budget.recent_message_tokens == 0 {
+        anyhow::bail!("model context_recent_message_tokens must be greater than zero");
+    }
+    if budget.max_tool_result_tokens == 0 {
+        anyhow::bail!("model context_max_tool_result_tokens must be greater than zero");
+    }
+    Ok(())
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct FileConfig {
@@ -982,6 +1031,9 @@ struct FileModelConfig {
     model: Option<String>,
     api_key_env: Option<String>,
     base_url: Option<String>,
+    context_max_input_tokens: Option<u32>,
+    context_recent_message_tokens: Option<u32>,
+    context_max_tool_result_tokens: Option<u32>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1339,6 +1391,19 @@ mod tests {
             .kubernetes
             .argo_executor_allowed_applications
             .is_empty());
+    }
+
+    #[test]
+    fn rejects_an_unusable_context_budget_from_environment() {
+        let mut env = BTreeMap::new();
+        env.insert(
+            "PHARNESS_CONTEXT_MAX_INPUT_TOKENS".to_string(),
+            "4096".to_string(),
+        );
+        let error = ApiRuntimeConfig::from_sources(None, &env)
+            .err()
+            .expect("invalid context budget must fail");
+        assert!(error.to_string().contains("reserved output budget"));
     }
 
     #[test]

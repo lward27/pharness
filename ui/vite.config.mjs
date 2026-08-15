@@ -25,8 +25,13 @@ export default defineConfig({
       "/health": proxyEntry,
     },
     warmup: {
-      clientFiles: ["./src/main.jsx"],
+      clientFiles: ["./src/main.tsx"],
     },
+  },
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx}"],
+    setupFiles: ["./src/test/setup.ts"],
   },
   plugins: [react()],
 });

@@ -8,7 +8,19 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## PHarness Prototype Direction
 
-- Primary lens is the SDLC topology flow.
+- The default operator lens is Triage, followed by WorkItems. A WorkItem is the durable root; ChangeSet Flow is one delivery segment, not the console spine.
+- Navigation and refresh must never dispatch controller work. WorkItem reconciliation is previewed first and applied only from an explicit confirmation carrying operator and reason.
+- A view may show only API-backed durable state. Empty, unreached, disabled, and unavailable states must be named plainly; do not synthesize inventory or failure treatment.
+- Origin is operational data: operator, controller, worker, smoke, system, and legacy records must be filterable without deleting their audit trail.
+- Audit origin is durable provenance returned by the API, not an origin guessed from actor names, titles, or client-side links.
+- Run actor filters use the durable submission or reconcile actor recorded by the API; never infer a person from a run title, branch, or origin label.
+- Repeated-record counts come from the complete API-filtered result set, never only the currently visible list page.
+- Keep preview and apply separated. Reconcile and approval confirmation are the only mutation surfaces; every other control must be read-only, navigational, or refresh-only.
+- Maintain desktop and phone-width visual baselines for empty and blocked operator states whenever shared layout changes.
+- Navigation badges mean actionable attention only. Show ages first with the absolute time available on hover or assistive text.
+- Keep the Inspector scoped to relevant resource detail. Do not show Flow-node detail beside unrelated inventory views.
+- Put fixture and implementation-status material on the Status surface, not in the primary operator path.
+- Use Flow as a focused delivery-evidence view when a WorkItem or resource needs investigation; it is not the console's default landing surface.
 - Keep Queue, Approvals, and Approval Gates as switchable operator lenses over the same resources.
 - Prefer dark mode visually, but keep theme switching available.
 - Keep tool approvals visually and behaviorally distinct from approval gates.
