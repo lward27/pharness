@@ -36,6 +36,20 @@ The early code keeps these future concepts explicit without implementing them pr
 
 Production app changes should eventually flow through GitOps: edit Git, build with Tekton, publish immutable image digests, reconcile with Argo CD, verify with LGTM signals, and require explicit approval for production-impacting actions.
 
+For a Pharness release, build both artifacts from the exact merged `origin/main`
+revision, capture the two registry digests, and prepare a separate reviewed Helm
+release commit:
+
+```bash
+scripts/pharness-build.sh all --revision <40-character-origin-main-sha>
+scripts/pharness-release-pin.sh <same-sha> <runtime-sha256-digest> <ui-sha256-digest>
+```
+
+The pinning command requires a clean worktree and an exact current `origin/main`
+revision. It updates only the API/UI digest and revision fields, validates the
+chart, and proves the rendered release uses the supplied immutable references.
+It never commits, merges, restarts a Deployment, or syncs Argo.
+
 ## Development Commands
 
 ```sh

@@ -392,3 +392,43 @@ test("production action confirmation is bound to the exact server action and sta
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ reason: "reviewed exact production target and digest", state_hash: action.state_hash });
 });
+
+test("rollback rail exposes exact approvals and digest-bound delivery evidence", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_rollback_1234567890"), status: "failed", target_environment: "production", target_namespace: "apps-prod", production_impacting: true };
+  const controllerAction = { id: "review_failure", lifecycle_stage: "release", resource: workItem.id, status: "blocked", effect_class: "internal", blockers: [], approval_requirements: [], external_effect_summary: "Review failed production verification.", state_hash: "state-controller-rollback" };
+  const rollbackAction = { id: "approve_rollback_argo_sync", lifecycle_stage: "rollback", resource: "rollback_1234567890", status: "ready", effect_class: "approval_boundary", blockers: [], approval_required: true, approval_requirements: ["production_rollback_deployment", "cluster_mutation", "production_impact"], external_effect_summary: "Open a fresh production rollback window before syncing exact Argo Application yfinance-wrapper.", state_hash: "state-rollback-123" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: {
+      work_item: workItem,
+      workspaces: [], controller_waits: [], delivery_segments: [],
+      action_rail: [controllerAction, rollbackAction],
+      delivery_configuration: {
+        pipeline_contract_id: "pcontract-yfinance",
+        deployment_contract_id: "dcontract-yfinance",
+        gitops: { repository: "https://github.com/lward27/lucas_engineering.git", kustomization_path: "charts/yfinance-wrapper/kustomization.yaml", desired_revision: "a".repeat(40) },
+        target: { argo_application: "yfinance-wrapper" },
+        argo: { sync_status: "Synced", health_status: "Degraded" },
+        current_digest: `sha256:${"b".repeat(64)}`,
+        desired_digest: `sha256:${"c".repeat(64)}`,
+        baseline_digest: `sha256:${"b".repeat(64)}`,
+        production_window_expires_at: "1786033800000",
+        rollback_owner: "lucas",
+        rollback_status: "ready_for_argo_sync",
+      },
+    },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "review_failure", boundary: "release", effect_summary: controllerAction.external_effect_summary, blockers: [{ code: "verification_failed", summary: "Production verification failed." }] },
+    [`/api/work-items/${workItem.id}/actions/${rollbackAction.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { status: "argo_approved" }; },
+    [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { rollback_intent_id: rollbackAction.resource, status: "ready_for_argo_sync", baseline: { image_digest: `sha256:${"b".repeat(64)}` } } },
+  });
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByText("Approvals: Production Rollback Deployment · Cluster Mutation · Production Impact")).toBeVisible();
+  await expect(page.getByText(`sha256:${"b".repeat(64)}`, { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Review exact action" }).click();
+  await expect(page.locator(".reconcile-confirmation").getByText("Open a fresh production rollback window")).toBeVisible();
+  await page.getByLabel("Reason").fill("reviewed rollback merge, baseline digest, and exact Argo target");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
+});

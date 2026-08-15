@@ -699,6 +699,7 @@ pub struct WorkItemActionResponse {
     pub effect_class: String,
     pub blockers: Vec<ReconcileBlockerResponse>,
     pub approval_required: bool,
+    pub approval_requirements: Vec<String>,
     pub external_effect_summary: String,
     pub state_hash: String,
 }
@@ -774,6 +775,7 @@ pub struct WorkItemFlowResponse {
     pub controller_waits: Vec<ControllerWaitResponse>,
     pub audit_events: Vec<AuditEventResponse>,
     pub action_rail: Vec<WorkItemActionResponse>,
+    pub delivery_configuration: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
