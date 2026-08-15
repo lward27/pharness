@@ -150,6 +150,9 @@ pub struct WorkerKubernetesConfig {
     pub workspace_dir: String,
     /// Per-run source workspace quota, independent of the API's SQLite PVC.
     pub workspace_size_limit: String,
+    /// StorageClass used by the durable per-run workspace PVC. `None` lets
+    /// Kubernetes select the cluster default.
+    pub workspace_storage_class: Option<String>,
     pub workspace_ephemeral_storage_request: String,
     pub workspace_ephemeral_storage_limit: String,
     /// Optional hostname pin for node-local workspace capacity.
@@ -347,6 +350,7 @@ impl ApiRuntimeConfig {
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
                     workspace_size_limit: DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT.to_string(),
+                    workspace_storage_class: None,
                     workspace_ephemeral_storage_request:
                         DEFAULT_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST.to_string(),
                     workspace_ephemeral_storage_limit:
@@ -595,6 +599,9 @@ impl ApiRuntimeConfig {
                 }
                 if let Some(value) = kubernetes.workspace_size_limit {
                     self.worker.kubernetes.workspace_size_limit = value;
+                }
+                if let Some(value) = kubernetes.workspace_storage_class {
+                    self.worker.kubernetes.workspace_storage_class = blank_to_none(value);
                 }
                 if let Some(value) = kubernetes.workspace_ephemeral_storage_request {
                     self.worker.kubernetes.workspace_ephemeral_storage_request = value;
@@ -923,6 +930,9 @@ impl ApiRuntimeConfig {
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_SIZE_LIMIT") {
             self.worker.kubernetes.workspace_size_limit = value.clone();
         }
+        if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_STORAGE_CLASS") {
+            self.worker.kubernetes.workspace_storage_class = blank_to_none(value.clone());
+        }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST") {
             self.worker.kubernetes.workspace_ephemeral_storage_request = value.clone();
         }
@@ -1080,6 +1090,7 @@ struct FileWorkerKubernetesConfig {
     api_url: Option<String>,
     workspace_dir: Option<String>,
     workspace_size_limit: Option<String>,
+    workspace_storage_class: Option<String>,
     workspace_ephemeral_storage_request: Option<String>,
     workspace_ephemeral_storage_limit: Option<String>,
     workspace_node_hostname: Option<String>,
@@ -1510,6 +1521,7 @@ mod tests {
         assert!(config.policy.require_approval_for_writes);
         assert!(config.model.api_key.is_none());
         assert_eq!(config.worker.kubernetes.workspace_size_limit, "4Gi");
+        assert!(config.worker.kubernetes.workspace_storage_class.is_none());
         assert_eq!(
             config.worker.kubernetes.workspace_ephemeral_storage_request,
             "2Gi"
@@ -1570,6 +1582,7 @@ tool_max_output_bytes = 3333
 [worker.kubernetes]
 tekton_executor_poll_seconds = 9
 workspace_size_limit = "3Gi"
+workspace_storage_class = "local-path"
 workspace_ephemeral_storage_request = "1500Mi"
 workspace_ephemeral_storage_limit = "3Gi"
 workspace_node_hostname = "worker-a"
@@ -1630,6 +1643,10 @@ deny_secret_access = true
         assert_eq!(config.cluster.max_output_bytes, 3333);
         assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 9);
         assert_eq!(config.worker.kubernetes.workspace_size_limit, "3Gi");
+        assert_eq!(
+            config.worker.kubernetes.workspace_storage_class.as_deref(),
+            Some("local-path")
+        );
         assert_eq!(
             config.worker.kubernetes.workspace_ephemeral_storage_request,
             "1500Mi"

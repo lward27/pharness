@@ -92,6 +92,9 @@ workspace_allowed_remote_repos = []
 # bounded per-run emptyDir, never the durable API SQLite volume.
 workspace_dir = "/workspace"
 workspace_size_limit = "4Gi"
+# Persistent per-run workspaces must survive approval-resume Jobs. Leave blank
+# only when the cluster has a default StorageClass.
+workspace_storage_class = ""
 workspace_ephemeral_storage_request = "2Gi"
 workspace_ephemeral_storage_limit = "4Gi"
 # Set after confirming node-local capacity for the target cluster.
