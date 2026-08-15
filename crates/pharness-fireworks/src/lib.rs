@@ -9,7 +9,8 @@ pub use stream::{AccumulatedToolCall, FireworksStreamAggregate, SseDecoder, Tool
 pub use types::{
     FireworksChatMessage, FireworksChatRequest, FireworksChatTool, FireworksChoiceDelta,
     FireworksFunctionCallDelta, FireworksFunctionTool, FireworksResponseFormat,
-    FireworksStreamChunk, FireworksToolCallDelta, FireworksToolChoice,
+    FireworksStreamChunk, FireworksStreamOptions, FireworksTokenUsage, FireworksToolCallDelta,
+    FireworksToolChoice,
 };
 
 pub const DEFAULT_FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";

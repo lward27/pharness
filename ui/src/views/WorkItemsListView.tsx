@@ -11,9 +11,10 @@ type WorkItemsListViewProps = {
   dashboard: any;
   autoRefresh: boolean;
   openWorkItem: (workItemId: string) => void;
+  onNew: () => void;
 };
 
-export function WorkItemsListView({ dashboard, autoRefresh, openWorkItem }: WorkItemsListViewProps) {
+export function WorkItemsListView({ dashboard, autoRefresh, openWorkItem, onNew }: WorkItemsListViewProps) {
   const scopeOptions = dashboard.data?.scopeOptions ?? { environments: [], repositories: [], actors: [], origins: [] };
   const [filters, setFilters] = useState({ status: "", environment: "", repository: "", actor: "", origin: "" });
   const [offset, setOffset] = useState(0);
@@ -51,7 +52,7 @@ export function WorkItemsListView({ dashboard, autoRefresh, openWorkItem }: Work
     <section className="work-items-view">
       <div className="section-heading">
         <div><h1>WorkItems</h1><p>Durable autonomous delivery intents and their current controller boundary.</p></div>
-        <button className="primary-action" type="button" onClick={() => setReload((value) => value + 1)} disabled={state.status === "refreshing"}><ArrowsClockwise size={17} /> {state.status === "refreshing" ? "Refreshing" : "Refresh"}</button>
+        <div className="heading-actions"><button type="button" onClick={() => setReload((value) => value + 1)} disabled={state.status === "refreshing"}><ArrowsClockwise size={17} /> {state.status === "refreshing" ? "Refreshing" : "Refresh"}</button><button className="primary-action" type="button" onClick={onNew}>New WorkItem</button></div>
       </div>
       <div className="work-item-filters" aria-label="WorkItem filters">
         <label>Status<select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}><option value="">All statuses</option>{["blocked", "planning", "executing", "verifying", "completed", "cancelled"].map((value) => <option value={value} key={value}>{statusText(value)}</option>)}</select></label>

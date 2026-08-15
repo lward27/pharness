@@ -25,6 +25,7 @@ import { QueueView } from "./views/QueueView.tsx";
 import { TriageView } from "./views/TriageView.tsx";
 import { WorkItemDetailView } from "./views/WorkItemDetailView.tsx";
 import { WorkItemsListView } from "./views/WorkItemsListView.tsx";
+import { WorkItemNewView } from "./views/WorkItemNewView.tsx";
 import { RunDetailView } from "./views/RunDetailView.tsx";
 import { ToolApprovalsView as ToolApprovalsPanel } from "./views/ToolApprovalsView.tsx";
 import { ApprovalGatesView as ApprovalGatesPanel } from "./views/ApprovalGatesView.tsx";
@@ -304,7 +305,7 @@ function AppShell({
             {activeView === "Triage" ? (
               <TriageView dashboard={dashboard} openResource={navigate} />
             ) : activeView === "WorkItems" ? (
-              routeParam ? <WorkItemDetailView workItemId={routeParam} refreshDashboard={dashboard.refresh} autoRefresh={autoRefresh} operatorName={dashboard.data?.config?.operator?.name} onBack={() => navigate("WorkItems")} /> : <WorkItemsListView dashboard={dashboard} autoRefresh={autoRefresh} openWorkItem={(workItemId) => navigate("WorkItems", workItemId)} />
+              routeParam === "new" ? <WorkItemNewView operatorName={dashboard.data?.config?.operator?.name} onCancel={() => navigate("WorkItems")} onCreated={(workItemId) => navigate("WorkItems", workItemId)} /> : routeParam ? <WorkItemDetailView workItemId={routeParam} refreshDashboard={dashboard.refresh} autoRefresh={autoRefresh} operatorName={dashboard.data?.config?.operator?.name} onBack={() => navigate("WorkItems")} /> : <WorkItemsListView dashboard={dashboard} autoRefresh={autoRefresh} openWorkItem={(workItemId) => navigate("WorkItems", workItemId)} onNew={() => navigate("WorkItems", "new")} />
             ) : activeView === "Flow" ? (
               <FlowPanel
                 dashboard={dashboard}

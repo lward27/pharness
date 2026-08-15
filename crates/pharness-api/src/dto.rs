@@ -107,6 +107,29 @@ pub struct RunDiffResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct RunOperatorSummaryResponse {
+    pub run_id: RunId,
+    pub turns: u32,
+    pub recoverable_failures: u32,
+    pub retries: u32,
+    pub estimated_context_tokens: u64,
+    pub actual_prompt_tokens: u64,
+    pub actual_completion_tokens: u64,
+    pub actual_total_tokens: u64,
+    pub compactions: u64,
+    pub truncated_tool_results: u64,
+    pub tools_started: u32,
+    pub tools_completed: u32,
+    pub tools_failed: u32,
+    pub changed_paths: Vec<String>,
+    pub diff_reference: String,
+    pub test_commands: Vec<String>,
+    pub test_results: Vec<serde_json::Value>,
+    pub acceptance_evidence: Vec<serde_json::Value>,
+    pub pending_approvals: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ArtifactsResponse {
     pub artifacts: Vec<ArtifactResponse>,
 }
@@ -412,16 +435,28 @@ pub struct CreateWorkItemRequest {
     pub source_repo: String,
     #[serde(default = "default_source_ref")]
     pub source_ref: String,
+    pub source_commit: Option<String>,
+    pub pipeline_contract_id: Option<String>,
+    pub deployment_contract_id: Option<String>,
     pub gitops_repo: Option<String>,
     pub gitops_ref: Option<String>,
+    pub gitops_kustomization_path: Option<String>,
+    pub gitops_image_name: Option<String>,
     pub target_environment: String,
     pub target_namespace: Option<String>,
     pub argo_application: Option<String>,
+    pub workload_kind: Option<String>,
+    pub workload_name: Option<String>,
+    pub rollback_owner: Option<String>,
     #[serde(default)]
     pub production_impacting: bool,
     pub max_attempts: Option<u32>,
     pub max_elapsed_seconds: Option<u64>,
     pub actor: Option<String>,
+    /// Hash returned by the latest read-only preflight. Production creation
+    /// requires an exact match so the browser cannot submit a stale preview.
+    #[serde(default)]
+    pub preflight_state_hash: Option<String>,
 }
 
 fn default_source_ref() -> String {
@@ -437,11 +472,19 @@ pub struct WorkItemResponse {
     pub acceptance_criteria: Vec<String>,
     pub source_repo: String,
     pub source_ref: String,
+    pub source_commit: Option<String>,
+    pub pipeline_contract_id: Option<String>,
+    pub deployment_contract_id: Option<String>,
     pub gitops_repo: Option<String>,
     pub gitops_ref: Option<String>,
+    pub gitops_kustomization_path: Option<String>,
+    pub gitops_image_name: Option<String>,
     pub target_environment: String,
     pub target_namespace: Option<String>,
     pub argo_application: Option<String>,
+    pub workload_kind: Option<String>,
+    pub workload_name: Option<String>,
+    pub rollback_owner: Option<String>,
     pub production_impacting: bool,
     pub max_attempts: u32,
     pub max_elapsed_seconds: u64,
@@ -466,11 +509,19 @@ impl From<StoredWorkItem> for WorkItemResponse {
             acceptance_criteria: item.acceptance_criteria,
             source_repo: item.source_repo,
             source_ref: item.source_ref,
+            source_commit: item.source_commit,
+            pipeline_contract_id: item.pipeline_contract_id,
+            deployment_contract_id: item.deployment_contract_id,
             gitops_repo: item.gitops_repo,
             gitops_ref: item.gitops_ref,
+            gitops_kustomization_path: item.gitops_kustomization_path,
+            gitops_image_name: item.gitops_image_name,
             target_environment: item.target_environment,
             target_namespace: item.target_namespace,
             argo_application: item.argo_application,
+            workload_kind: item.workload_kind,
+            workload_name: item.workload_name,
+            rollback_owner: item.rollback_owner,
             production_impacting: item.production_impacting,
             max_attempts: item.max_attempts,
             max_elapsed_seconds: item.max_elapsed_seconds,
@@ -639,6 +690,78 @@ pub struct ReconcileAuthorizationCheckResponse {
     pub resource_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemActionResponse {
+    pub id: String,
+    pub lifecycle_stage: String,
+    pub resource: String,
+    pub status: String,
+    pub effect_class: String,
+    pub blockers: Vec<ReconcileBlockerResponse>,
+    pub approval_required: bool,
+    pub external_effect_summary: String,
+    pub state_hash: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecuteWorkItemActionRequest {
+    pub actor: Option<String>,
+    pub reason: String,
+    pub state_hash: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdvanceWorkItemRequest {
+    pub actor: Option<String>,
+    pub reason: String,
+    #[serde(default)]
+    pub max_steps: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdvanceWorkItemResponse {
+    pub steps: Vec<ReconcileWorkItemResponse>,
+    pub stopped_at: WorkItemActionResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityStatusResponse {
+    pub capability: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkItemPreflightResponse {
+    pub ready: bool,
+    pub state_hash: String,
+    pub normalized_submission: serde_json::Value,
+    pub selected_contracts: serde_json::Value,
+    pub checks: Vec<CapabilityStatusResponse>,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+    pub predicted_external_mutations: Vec<String>,
+    pub production_gates: Vec<String>,
+    pub rollback_prerequisites: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemReadinessResponse {
+    pub api_revision: String,
+    pub ui_revision: String,
+    pub runtime_image_digest: String,
+    pub ui_image_digest: String,
+    pub platform_versions_match: bool,
+    pub capabilities: Vec<CapabilityStatusResponse>,
+    pub repository_allowlists: serde_json::Value,
+    pub targets: serde_json::Value,
+    pub blockers: Vec<String>,
+}
+
 /// A read-only WorkItem-rooted delivery view. The nested reconcile response is
 /// always produced with `apply=false`; it is safe for dashboards to poll.
 #[derive(Debug, Clone, Serialize)]
@@ -650,6 +773,7 @@ pub struct WorkItemFlowResponse {
     pub workspaces: Vec<WorkspaceResponse>,
     pub controller_waits: Vec<ControllerWaitResponse>,
     pub audit_events: Vec<AuditEventResponse>,
+    pub action_rail: Vec<WorkItemActionResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1993,6 +2117,7 @@ pub struct ArgoSyncContextResponse {
     pub execution_id: String,
     pub target_namespace: String,
     pub argo_application: String,
+    pub revision: Option<String>,
     pub poll_seconds: u64,
 }
 

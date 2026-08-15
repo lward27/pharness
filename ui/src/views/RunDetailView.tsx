@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowsClockwise, FileText, Rows, X } from "@phosphor-icons/react";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
-import { cancelRun, loadRunDetail, subscribeRunEvents } from "../api/runs";
+import { cancelRun, decideRunApproval, loadRunDetail, subscribeRunEvents } from "../api/runs";
 
 type RunDetailViewProps = {
   runId?: string | null;
   refreshDashboard?: () => Promise<unknown> | void;
   onOpenQueue: () => void;
+  operatorName?: string;
 };
 
 function canCancelRun(run: any) {
@@ -96,11 +97,12 @@ function RunArtifacts({ artifacts }: { artifacts: any[] }) {
   return <section className="review-surface"><div className="table-heading"><div><h2>Artifacts</h2><p>Observation and tool artifacts recorded by the runtime.</p></div><strong className="counter-label">{artifacts.length}</strong></div>{artifacts.length ? <div className="artifact-grid">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><span>{artifact.kind}</span><strong>{artifact.label}</strong><small>{artifact.mime_type ?? artifact.path ?? compactId(artifact.id)}</small><p>{artifactSummary(artifact)}</p></div>)}</div> : <EmptyState title="No artifacts" body="Read-only file-listing runs often have no artifacts. Cluster, Tekton, Argo, Prometheus, and Loki reads should appear here." />}</section>;
 }
 
-export function RunDetailView({ runId, refreshDashboard, onOpenQueue }: RunDetailViewProps) {
+export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorName }: RunDetailViewProps) {
   const [state, setState] = useState<any>({ status: runId ? "loading" : "empty", detail: null, error: null });
   const [reloadToken, setReloadToken] = useState(0);
   const [streamState, setStreamState] = useState<any>({ status: "idle", error: null });
   const [runNotice, setRunNotice] = useState<string | null>(null);
+  const [approvalReason, setApprovalReason] = useState("");
   const streamRunIdRef = useRef<string | null>(null);
   const [streamCursor, setStreamCursor] = useState<number | null>(null);
 
@@ -152,6 +154,7 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue }: RunDetai
   const events = detail?.events ?? [];
   const changes = detail?.diff?.changes ?? [];
   const artifacts = detail?.artifacts ?? [];
+  const operatorSummary = detail?.operatorSummary;
   const cancelAllowed = canCancelRun(run);
   const cancel = async () => {
     if (!runId || !cancelAllowed) return;
@@ -159,12 +162,23 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue }: RunDetai
     try { await cancelRun(runId); setRunNotice(`Cancel requested: ${compactId(runId)}`); setReloadToken((value) => value + 1); await refreshDashboard?.(); }
     catch (error) { setRunNotice(`Cancel failed: ${error instanceof Error ? error.message : String(error)}`); }
   };
+  const decideApproval = async (decision: "approve" | "deny") => {
+    if (!runId || !approvalReason.trim()) return;
+    try {
+      await decideRunApproval(runId, { decision, decidedBy: operatorName ?? "console-operator", reason: approvalReason.trim() });
+      setApprovalReason("");
+      setReloadToken((value) => value + 1);
+      await refreshDashboard?.();
+    } catch (error) { setRunNotice(`Approval failed: ${error instanceof Error ? error.message : String(error)}`); }
+  };
 
   if (!runId) return <EmptyState title="No run selected" body="Open a run from the Queue view to inspect events, diffs, artifacts, and final result JSON." />;
   return <section className="run-detail-view">
     <div className="section-heading"><div><h1>Run Detail</h1><p>{run?.task ?? `Loading ${compactId(runId)}...`}</p></div><div className="detail-actions"><span className={`stream-chip stream-${streamState.status}`}><i className={`dot ${streamState.status === "error" ? "blocked" : streamState.status === "live" ? "running" : "future"}`} />{streamLabel(streamState)}</span><button className="primary-action" type="button" onClick={onOpenQueue}><Rows size={17} /> Queue</button><button className="primary-action" type="button" onClick={() => setReloadToken((value) => value + 1)}><ArrowsClockwise size={17} /> Reload</button><button className="primary-action deny" type="button" disabled={!cancelAllowed} onClick={cancel}><X size={17} /> Cancel</button></div></div>
     {state.error ? <div className="api-banner">Run detail failed: {state.error}</div> : null}{streamState.status === "error" ? <div className="api-banner">Event stream: {streamState.error}</div> : null}{runNotice ? <span className="action-notice">{runNotice}</span> : null}
     <div className="run-detail-grid"><ReviewItem label="Run" value={<CopyIdentifier value={runId} label={run?.task ?? "Run"} />} /><ReviewItem label="Status" value={statusText(run?.status, state.status)} tone={run?.status === "failed" ? "risk" : run?.status === "approval_required" ? "pending" : undefined} /><ReviewItem label="Submitted" value={run?.started_at ? <time title={timestampTitle(run.started_at)}>{formatTimestamp(run.started_at)}</time> : "unknown"} /><ReviewItem label="Finished" value={run?.finished_at ? <time title={timestampTitle(run.finished_at)}>{formatTimestamp(run.finished_at)}</time> : "not finished"} /><ReviewItem label="Turns" value={result.turns ?? "unknown"} /><ReviewItem label="Scope" value={runScopeLabel(run?.scope ?? result.run_scope)} /></div>
+    {operatorSummary ? <section className="operator-summary"><ReviewItem label="Context estimate" value={`${operatorSummary.estimated_context_tokens ?? 0} tokens`} /><ReviewItem label="Actual usage" value={`${operatorSummary.actual_total_tokens ?? 0} total`} /><ReviewItem label="Recoveries / retries" value={`${operatorSummary.recoverable_failures ?? 0} / ${operatorSummary.retries ?? 0}`} /><ReviewItem label="Tools" value={`${operatorSummary.tools_completed ?? 0} completed · ${operatorSummary.tools_failed ?? 0} failed`} /><ReviewItem label="Compactions" value={operatorSummary.compactions ?? 0} /><ReviewItem label="Truncated results" value={operatorSummary.truncated_tool_results ?? 0} /></section> : null}
+    {operatorSummary?.pending_approvals?.length ? <section className="inline-approval"><span className="eyebrow">Inline tool approval</span><h2>Model action is paused for review</h2><p>Pending approval {operatorSummary.pending_approvals.join(", ")}. The exact action remains durable and execution resumes only after this decision.</p><label>Decision reason<textarea rows={2} value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} /></label><div><button className="primary-action" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("approve")}>Approve and resume</button><button className="primary-action deny" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("deny")}>Deny</button></div></section> : null}
     <StreamStatusPanel streamState={streamState} eventCount={events.length} cursor={streamCursor} run={run} />
     <section className="review-surface"><div className="table-heading"><div><h2>Result</h2><p>Structured final result returned by the run.</p></div><StatusPill tone={lifecycleTone(result.status ?? run?.status)}>{statusText(result.status ?? run?.status, state.status)}</StatusPill></div><p>{result.summary ?? result.error ?? "No result summary has been recorded yet."}</p></section>
     <section className="run-detail-layout"><RunEvents events={events} /><RunDiff diff={detail?.diff} changes={changes} /></section><RunArtifacts artifacts={artifacts} />

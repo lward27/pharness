@@ -12,6 +12,7 @@ pub struct FireworksChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
     pub stream: bool,
+    pub stream_options: FireworksStreamOptions,
     pub temperature: f32,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,6 +39,9 @@ impl FireworksChatRequest {
             tool_choice: Some(FireworksToolChoice::Required),
             parallel_tool_calls: Some(false),
             stream: true,
+            stream_options: FireworksStreamOptions {
+                include_usage: true,
+            },
             temperature,
             max_tokens,
             response_format: None,
@@ -61,12 +65,20 @@ impl FireworksChatRequest {
             tool_choice: None,
             parallel_tool_calls: None,
             stream: true,
+            stream_options: FireworksStreamOptions {
+                include_usage: true,
+            },
             temperature,
             max_tokens,
             response_format: Some(FireworksResponseFormat::JsonObject),
             reasoning_effort: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FireworksStreamOptions {
+    pub include_usage: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -172,7 +184,17 @@ pub enum FireworksResponseFormat {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct FireworksStreamChunk {
     pub id: Option<String>,
+    #[serde(default)]
     pub choices: Vec<FireworksChoiceDelta>,
+    #[serde(default)]
+    pub usage: Option<FireworksTokenUsage>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct FireworksTokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

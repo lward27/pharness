@@ -26,19 +26,25 @@ export function cancelRun(runId) {
   return postJson(`/api/runs/${encodeURIComponent(runId)}/cancel`, {});
 }
 
+export function decideRunApproval(runId, { decision, decidedBy, reason }) {
+  return postJson(`/api/runs/${encodeURIComponent(runId)}/approvals`, { decision, decided_by: decidedBy, reason });
+}
+
 export async function loadRunDetail(runId) {
   const encodedRunId = encodeURIComponent(runId);
-  const [run, events, diff, artifacts] = await Promise.all([
+  const [run, events, diff, artifacts, operatorSummary] = await Promise.all([
     fetchJson(`/api/runs/${encodedRunId}`),
     fetchJson(`/api/runs/${encodedRunId}/events`),
     fetchJson(`/api/runs/${encodedRunId}/diff`, { optional: true }),
     fetchJson(`/api/runs/${encodedRunId}/artifacts`, { optional: true }),
+    fetchJson(`/api/runs/${encodedRunId}/operator-summary`, { optional: true }),
   ]);
   return {
     run,
     events: Array.isArray(events?.events) ? events.events : [],
     diff: diff ?? { run_id: runId, changes: [], diff: "" },
     artifacts: Array.isArray(artifacts?.artifacts) ? artifacts.artifacts : [],
+    operatorSummary,
   };
 }
 

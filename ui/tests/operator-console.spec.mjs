@@ -102,7 +102,7 @@ test("opening a blocked WorkItem only performs a read-only reconcile preview", a
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await expect(page.getByRole("heading", { name: workItem.title })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Apply/ })).toBeDisabled();
+  await expect(page.locator(".reconcile-panel button.primary-action")).toBeDisabled();
   await expect(page.getByText("Git writer authorization is missing.")).toBeVisible();
   expect(reconcileCalls.length).toBeGreaterThan(0);
   expect(reconcileCalls.every((request) => request.apply === false)).toBe(true);
@@ -125,7 +125,7 @@ test("an apply-ready WorkItem requires confirmation and dispatches one controlle
     },
   });
   await page.goto(`/#/work-items/${workItem.id}`);
-  await page.getByRole("button", { name: "Apply Execute Coding Attempt" }).click();
+  await page.getByRole("button", { name: "Execute Coding Attempt" }).click();
   await expect(page.getByText("Confirm controller action")).toBeVisible();
   await page.getByLabel("Reason").fill("reviewed bounded coding attempt");
   await page.getByRole("button", { name: "Confirm and apply" }).click();
@@ -305,4 +305,90 @@ test("Run Detail renders only durable execution evidence", async ({ page }) => {
   await expect(page.getByText("Read deployment status")).toBeVisible();
   await expect(page.getByText("Deployment is healthy.")).toBeVisible();
   await expect(page).toHaveScreenshot("run-detail-durable.png", { fullPage: true });
+});
+
+test("production WorkItem wizard blocks until immutable preflight and warning acknowledgement", async ({ page }) => {
+  const sourceSha = "a".repeat(40);
+  const submitted = [];
+  const pipeline = { id: "pcontract_yfinance", namespace: "tekton-pipelines", pipeline_ref: "pharness-yfinance-build", status: "active" };
+  const deployment = { id: "dcontract_yfinance", environment: "production", namespace: "apps-prod", status: "active" };
+  await mockApi(page, {
+    "/api/pipeline-contracts": { pipeline_contracts: [pipeline] },
+    "/api/deployment-contracts": { deployment_contracts: [deployment] },
+    "/api/system/readiness": { capabilities: [{ capability: "gitops_writer", status: "available" }] },
+    "/api/work-items/preflight": {
+      ready: true,
+      state_hash: "state-production-1",
+      checks: [{ capability: "gitops_writer", status: "available", summary: "Verified with the isolated writer identity." }],
+      blockers: [],
+      warnings: ["Production effects still require explicit lifecycle approvals."],
+      predicted_external_mutations: ["Create a source pull request", "Create a GitOps pull request", "Sync Argo Application yfinance-wrapper"],
+    },
+    "/api/work-items": async (route) => {
+      if (route.request().method() === "POST") {
+        submitted.push(route.request().postDataJSON());
+        return { id: "witem_production_1234567890" };
+      }
+      return emptyPayload("/api/work-items");
+    },
+    "/api/work-items/witem_production_1234567890": workItemFixture("witem_production_1234567890"),
+  });
+
+  await page.goto("/#/work-items/new");
+  await expect(page.getByRole("heading", { name: "New WorkItem" })).toBeVisible();
+  await page.getByLabel("Full source commit SHA").fill(sourceSha);
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await expect(page.getByRole("textbox", { name: "Acceptance command 1", exact: true })).toHaveValue("python -m unittest discover -s tests -v");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await expect(page.getByRole("textbox", { name: "Environment", exact: true })).toHaveValue("production");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("PipelineContract").selectOption(pipeline.id);
+  await page.getByLabel("DeploymentContract").selectOption(deployment.id);
+  await page.getByRole("button", { name: "Run read-only preflight" }).click();
+  await expect(page.getByText("Submission ready")).toBeVisible();
+  await page.getByRole("button", { name: "Review mutations" }).click();
+  await expect(page.getByRole("button", { name: "Create supervised WorkItem" })).toBeDisabled();
+  await page.getByLabel("I acknowledge the non-blocking preflight warnings.").check();
+  await page.getByRole("button", { name: "Create supervised WorkItem" }).click();
+  await expect.poll(() => submitted.length).toBe(1);
+  expect(submitted[0]).toMatchObject({ source_commit: sourceSha, preflight_state_hash: "state-production-1", pipeline_contract_id: pipeline.id, deployment_contract_id: deployment.id });
+});
+
+test("release readiness reports an API and UI revision mismatch without claiming availability", async ({ page }) => {
+  await mockApi(page, {
+    "/api/system/readiness": {
+      api_revision: "b".repeat(40), ui_revision: "b".repeat(40), runtime_image_digest: `sha256:${"c".repeat(64)}`,
+      ui_image_digest: `sha256:${"d".repeat(64)}`, platform_versions_match: false,
+      capabilities: [{ capability: "gitops_writer", status: "configured_unverified", summary: "Configured but not verified with its isolated identity." }],
+      repository_allowlists: { gitops_writer: ["https://github.com/lward27/lucas_engineering.git"] },
+      targets: [{ environment: "production", namespace: "apps-prod", application: "yfinance-wrapper" }],
+      blockers: ["GitOps writer verification is not fresh."],
+    },
+  });
+  await page.goto("/#/status");
+  await expect(page.getByText("Version alignment")).toBeVisible();
+  await expect(page.getByText("Mismatch")).toBeVisible();
+  await expect(page.getByText("Configured Unverified")).toBeVisible();
+  await expect(page.getByText("GitOps writer verification is not fresh.")).toBeVisible();
+});
+
+test("production action confirmation is bound to the exact server action and state hash", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_action_1234567890"), status: "executing", target_environment: "production", target_namespace: "apps-prod", production_impacting: true };
+  const action = { id: "dispatch_argo_sync", lifecycle_stage: "deployment", resource: "yfinance-wrapper", status: "ready", effect_class: "external", blockers: [], approval_requirements: ["production_deployment"], external_effect_summary: "Sync exact Argo Application yfinance-wrapper in apps-prod.", state_hash: "state-argo-123" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: true, action: "dispatch_argo_sync", boundary: "deployment", effect_summary: action.external_effect_summary, blockers: [] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { status: "accepted" }; },
+    [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { status: "ready_for_writer", baseline: { image_digest: `sha256:${"e".repeat(64)}` }, authorization_expires_at: "1786033800000" } },
+  });
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await page.getByRole("button", { name: "Dispatch Argo Sync" }).click();
+  await expect(page.locator(".reconcile-confirmation").getByText("Sync exact Argo Application yfinance-wrapper in apps-prod.")).toBeVisible();
+  await expect(page).toHaveScreenshot("production-action-confirmation.png", { fullPage: true });
+  await page.getByLabel("Reason").fill("reviewed exact production target and digest");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ reason: "reviewed exact production target and digest", state_hash: action.state_hash });
 });

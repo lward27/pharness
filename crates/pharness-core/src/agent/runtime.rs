@@ -241,6 +241,9 @@ where
                 serde_json::json!({
                     "turn": turn_index,
                     "raw_provider_id": turn.raw_provider_id,
+                    "prompt_tokens": turn.usage.map(|usage| usage.prompt_tokens),
+                    "completion_tokens": turn.usage.map(|usage| usage.completion_tokens),
+                    "total_tokens": turn.usage.map(|usage| usage.total_tokens),
                 }),
             );
 
@@ -1621,6 +1624,7 @@ mod tests {
                 namespaces: Vec::new(),
                 repos: Vec::new(),
                 branches: Vec::new(),
+                work_item_ids: Vec::new(),
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
                 pipeline_intent_ids: Vec::new(),
@@ -1629,6 +1633,11 @@ mod tests {
                 git_delivery_plan_artifact_ids: Vec::new(),
                 gitops_change_set_ids: Vec::new(),
                 gitops_delivery_plan_artifact_ids: Vec::new(),
+                pipeline_contract_ids: Vec::new(),
+                deployment_contract_ids: Vec::new(),
+                source_merge_shas: Vec::new(),
+                gitops_merge_shas: Vec::new(),
+                image_digests: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

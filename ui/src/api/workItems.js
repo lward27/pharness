@@ -28,3 +28,33 @@ export function previewWorkItemReconcile(workItemId) {
 export function applyWorkItemReconcile(workItemId, { actor, reason }) {
   return postJson(`/api/work-items/${encodeURIComponent(workItemId)}/reconcile`, { apply: true, actor, reason });
 }
+
+export function preflightWorkItem(payload) {
+  return postJson("/api/work-items/preflight", payload);
+}
+
+export function createWorkItem(payload) {
+  return postJson("/api/work-items", payload);
+}
+
+export function executeWorkItemAction(workItemId, actionId, { actor, reason, stateHash }) {
+  return postJson(`/api/work-items/${encodeURIComponent(workItemId)}/actions/${encodeURIComponent(actionId)}/execute`, {
+    actor, reason, state_hash: stateHash,
+  });
+}
+
+export function advanceWorkItem(workItemId, { actor, reason }) {
+  return postJson(`/api/work-items/${encodeURIComponent(workItemId)}/advance`, { actor, reason, max_steps: 10 });
+}
+
+export function loadSystemReadiness() {
+  return fetchJson("/api/system/readiness");
+}
+
+export function verifySystemCapability(capability) {
+  return postJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight`, {});
+}
+
+export function loadRollbackIntent(workItemId) {
+  return fetchJson(`/api/work-items/${encodeURIComponent(workItemId)}/rollback-intents`);
+}

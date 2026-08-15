@@ -57,6 +57,7 @@ impl WorkspaceProvisioner {
         attempt: u32,
         source_repo: &str,
         source_ref: &str,
+        source_commit: Option<&str>,
     ) -> Result<ProvisionedWorkspace, WorkspaceError> {
         let source = self.allowed_source(source_repo).await?;
         let target = self.root.join(work_item_id).join(attempt.to_string());
@@ -79,14 +80,22 @@ impl WorkspaceProvisioner {
         ])
         .await?;
         let target_str = target.to_string_lossy().to_string();
+        let requested_ref = source_commit.unwrap_or(source_ref);
         let resolved_commit = run_git(&[
             "-C",
             &target_str,
             "rev-parse",
             "--verify",
-            &format!("{source_ref}^{{commit}}"),
+            &format!("{requested_ref}^{{commit}}"),
         ])
         .await?;
+        if let Some(expected) = source_commit {
+            if resolved_commit != expected {
+                return Err(WorkspaceError::new(format!(
+                    "workspace resolved commit {resolved_commit} does not match requested immutable commit {expected}"
+                )));
+            }
+        }
         let branch = format!("pharness/{work_item_id}/attempt-{attempt}");
         run_git(&[
             "-C",
@@ -140,6 +149,10 @@ impl WorkspaceProvisioner {
 
     pub(crate) fn remote_configured(&self) -> bool {
         !self.allowed_remote_repos.is_empty()
+    }
+
+    pub(crate) fn allowed_remote_repos(&self) -> &[String] {
+        &self.allowed_remote_repos
     }
 
     pub(crate) fn remote_source_allowed(
@@ -306,7 +319,7 @@ mod tests {
 
         let provisioner = WorkspaceProvisioner::new(root.join("workspaces"), vec![source.clone()]);
         let workspace = provisioner
-            .provision("witem_test", 1, source.to_str().unwrap(), "HEAD")
+            .provision("witem_test", 1, source.to_str().unwrap(), "HEAD", None)
             .await
             .unwrap();
         assert_eq!(workspace.resolved_commit, base);
@@ -328,7 +341,7 @@ mod tests {
         git(&source, &["init"]);
         let provisioner = WorkspaceProvisioner::new(root.join("workspaces"), vec![]);
         assert!(provisioner
-            .provision("witem_test", 1, source.to_str().unwrap(), "HEAD")
+            .provision("witem_test", 1, source.to_str().unwrap(), "HEAD", None)
             .await
             .is_err());
         let _ = std::fs::remove_dir_all(root);
@@ -355,6 +368,7 @@ mod tests {
             workspace_id: "ws_test".to_string(),
             source_repo: "https://github.com/example/finance-app.git".to_string(),
             source_ref: "main".to_string(),
+            source_commit: None,
             branch: "pharness/test/attempt-1".to_string(),
             resolved_commit: None,
         };

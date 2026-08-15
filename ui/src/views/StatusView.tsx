@@ -1,16 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RocketLaunch, ShieldCheck } from "@phosphor-icons/react";
 import { ReviewItem } from "../components/Operational";
 import { compactId, statusText } from "../lib/formatters";
 import { dispatchTektonE2eSmoke, loadPipelineIntent, prepareTektonE2eSmoke } from "../api/delivery";
+import { loadSystemReadiness } from "../api/workItems";
 
-const plannedCapabilities = ["ChangeSet detail views", "Capability catalog", "Cluster mutations", "Registry auth", "Database operator", "RAG context", "MCP adapters"];
-
-function ImplementationStrip({ dashboard }: { dashboard: any }) {
-  const worker = dashboard.data?.config?.worker;
-  const liveSurfaces = ["Flow read model", "WorkPlan list", "Run queue", "Run detail live events", worker?.enabled ? `${worker?.mode ?? "model"} worker` : "Worker disabled", "Tool approvals", "Approval gates", "Incidents", "Remediation plans", "Observations", "Audit log"];
-  return <section className="implementation-strip" aria-label="Implementation status"><div><strong>Live API-backed</strong><span>{liveSurfaces.join(" / ")}</span></div><div><strong>Planned only</strong><span>{plannedCapabilities.slice(0, 5).join(" / ")}</span></div></section>;
+function ReleaseReadinessPanel() {
+  const [state, setState] = useState<any>({ status: "loading", data: null, error: null });
+  const compiledUiRevision = import.meta.env.VITE_PHARNESS_BUILD_REVISION ?? "unknown";
+  const refresh = () => {
+    setState((current: any) => ({ ...current, status: current.data ? "refreshing" : "loading", error: null }));
+    loadSystemReadiness().then((data) => setState({ status: "ready", data, error: null })).catch((error) => setState({ status: "error", data: null, error: error instanceof Error ? error.message : String(error) }));
+  };
+  useEffect(refresh, []);
+  const readiness = state.data;
+  const uiMatches = readiness && compiledUiRevision !== "unknown" && compiledUiRevision === readiness.ui_revision && compiledUiRevision === readiness.api_revision;
+  return <section className="release-readiness" aria-label="Release readiness">
+    <div className="table-heading"><div><span className="eyebrow">Release readiness</span><h2>Running provenance and isolated capabilities</h2><p>Configured is not treated as verified. Production submission requires fresh passing checks.</p></div><button type="button" onClick={refresh}>Refresh</button></div>
+    {readiness ? <><div className="readiness-provenance"><ReviewItem label="API revision" value={readiness.api_revision} tone={uiMatches ? "healthy" : "risk"} /><ReviewItem label="Compiled UI revision" value={compiledUiRevision} tone={uiMatches ? "healthy" : "risk"} /><ReviewItem label="Runtime digest" value={readiness.runtime_image_digest} /><ReviewItem label="UI digest" value={readiness.ui_image_digest} /><ReviewItem label="Version alignment" value={uiMatches && readiness.platform_versions_match ? "Matched" : "Mismatch"} tone={uiMatches && readiness.platform_versions_match ? "healthy" : "risk"} /></div><div className="capability-grid">{readiness.capabilities?.map((capability: any) => <article key={capability.capability}><span className={`capability-dot ${capability.status}`} /><strong>{statusText(capability.capability)}</strong><em>{statusText(capability.status)}</em><p>{capability.summary}</p></article>)}</div><details className="readiness-details"><summary>Repository allowlists and protected target</summary><pre>{JSON.stringify({ repository_allowlists: readiness.repository_allowlists, protected_target: readiness.targets }, null, 2)}</pre></details>{readiness.blockers?.length ? <ul className="preflight-blockers">{readiness.blockers.map((blocker: string) => <li key={blocker}>{blocker}</li>)}</ul> : null}</> : <EmptyReadiness status={state.status} error={state.error} />}
+  </section>;
 }
+
+function EmptyReadiness({ status, error }: { status: string; error?: string }) { return <div className="api-banner">{error ?? (status === "loading" ? "Loading release readiness…" : "Release readiness unavailable.")}</div>; }
 
 function DeliveryTestView({ refreshDashboard, navigate }: { refreshDashboard: () => Promise<unknown> | void; navigate: (view: string, param?: any) => void }) {
   const [acknowledged, setAcknowledged] = useState(false);
@@ -48,5 +59,5 @@ function DeliveryTestView({ refreshDashboard, navigate }: { refreshDashboard: ()
 }
 
 export function StatusView({ dashboard, navigate }: { dashboard: any; navigate: (view: string, param?: any) => void }) {
-  return <section className="status-view"><div className="section-heading"><div><h1>System status</h1><p>Implementation and bounded fixture information live here, outside the operator workflow.</p></div></div><ImplementationStrip dashboard={dashboard} /><DeliveryTestView refreshDashboard={dashboard.refresh} navigate={navigate} /></section>;
+  return <section className="status-view"><div className="section-heading"><div><h1>System status</h1><p>Immutable release provenance, capability truth, and bounded fixture information.</p></div></div><ReleaseReadinessPanel /><DeliveryTestView refreshDashboard={dashboard.refresh} navigate={navigate} /></section>;
 }
