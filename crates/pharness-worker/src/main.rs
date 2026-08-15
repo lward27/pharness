@@ -1969,6 +1969,21 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
     };
     source.validate()?;
 
+    if spec.resume.is_some() {
+        let cwd_text = cwd.to_string_lossy().to_string();
+        let resolved_commit = workspace_git_stdout(
+            &cwd,
+            &["-C", &cwd_text, "rev-parse", "--verify", "HEAD^{commit}"],
+        )
+        .await
+        .context("durable workspace is missing its pinned Git checkout")?;
+        let branch = workspace_git_stdout(&cwd, &["-C", &cwd_text, "branch", "--show-current"])
+            .await
+            .context("durable workspace branch could not be inspected")?;
+        validate_resumed_workspace_identity(source, &resolved_commit, &branch)?;
+        return Ok(None);
+    }
+
     let mut entries = tokio::fs::read_dir(&cwd).await?;
     if entries.next_entry().await?.is_some() {
         anyhow::bail!("typed workspace must be empty before clone");
@@ -1977,6 +1992,30 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
     let resolved_commit = clone_workspace_source(source, &cwd).await?;
 
     Ok(Some(ProvisionedWorkspace { resolved_commit }))
+}
+
+fn validate_resumed_workspace_identity(
+    source: &WorkspaceSourceSpec,
+    resolved_commit: &str,
+    branch: &str,
+) -> anyhow::Result<()> {
+    let expected_commit = source
+        .resolved_commit
+        .as_deref()
+        .or(source.source_commit.as_deref())
+        .ok_or_else(|| anyhow::anyhow!("resumed workspace has no immutable base commit"))?;
+    if resolved_commit != expected_commit {
+        anyhow::bail!(
+            "durable workspace HEAD {resolved_commit} does not match pinned base {expected_commit}"
+        );
+    }
+    if branch != source.branch {
+        anyhow::bail!(
+            "durable workspace branch {branch:?} does not match issued branch {:?}",
+            source.branch
+        );
+    }
+    Ok(())
 }
 
 async fn clone_workspace_source(
@@ -2035,9 +2074,9 @@ async fn clone_workspace_source(
     Ok(resolved_commit)
 }
 
-/// Execute Git only against the API-issued workspace. Kubernetes `emptyDir`
-/// roots can be owned by kubelet even when the worker runs as a non-root UID;
-/// scope Git's safe-directory exception to this one ephemeral workspace.
+/// Execute Git only against the API-issued workspace. Kubernetes volume roots
+/// can be owned by kubelet even when the worker runs as a non-root UID; scope
+/// Git's safe-directory exception to this one isolated workspace.
 async fn run_workspace_git(cwd: &std::path::Path, args: &[&str]) -> anyhow::Result<()> {
     workspace_git_output(cwd, args).await.map(|_| ())
 }
@@ -2292,8 +2331,10 @@ mod tests {
     use super::{
         argo_application_terminal, argo_sync_patch_payload, parse_github_repository,
         pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
-        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
+        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
+        GitDeliveryContext, PipelineRunTerminal,
     };
+    use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
     use std::path::Path;
 
@@ -2323,6 +2364,39 @@ mod tests {
                 "origin",
                 "main",
             ]
+        );
+    }
+
+    #[test]
+    fn resumed_workspace_must_match_the_pinned_commit_and_branch() {
+        let source = WorkspaceSourceSpec {
+            workspace_id: "ws_123".to_string(),
+            source_repo: "https://github.com/example/repo.git".to_string(),
+            source_ref: "main".to_string(),
+            source_commit: Some("a".repeat(40)),
+            branch: "pharness/witem_123/attempt-1".to_string(),
+            resolved_commit: Some("a".repeat(40)),
+        };
+
+        validate_resumed_workspace_identity(
+            &source,
+            &"a".repeat(40),
+            "pharness/witem_123/attempt-1",
+        )
+        .unwrap();
+        assert!(validate_resumed_workspace_identity(
+            &source,
+            &"b".repeat(40),
+            "pharness/witem_123/attempt-1",
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("does not match pinned base"));
+        assert!(
+            validate_resumed_workspace_identity(&source, &"a".repeat(40), "other")
+                .unwrap_err()
+                .to_string()
+                .contains("does not match issued branch")
         );
     }
 

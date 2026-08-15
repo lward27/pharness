@@ -18,6 +18,9 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "watch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -200,6 +203,8 @@ spec:
               value: {{ .Values.worker.workspaceDir | quote }}
             - name: PHARNESS_WORKER_K8S_WORKSPACE_SIZE_LIMIT
               value: {{ .Values.worker.workspaceSizeLimit | quote }}
+            - name: PHARNESS_WORKER_K8S_WORKSPACE_STORAGE_CLASS
+              value: {{ .Values.worker.workspaceStorageClass | quote }}
             - name: PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST
               value: {{ .Values.worker.workspaceEphemeralStorageRequest | quote }}
             - name: PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_LIMIT

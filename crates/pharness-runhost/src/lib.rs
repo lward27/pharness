@@ -128,7 +128,7 @@ pub struct AttemptOutcome {
 
 /// Bounded Git evidence collected by the process that owns the workspace.
 /// It is carried to the API with the terminal outcome because the API cannot
-/// inspect a Kubernetes `emptyDir` after its Job exits.
+/// directly inspect the isolated Kubernetes run workspace.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorkspaceGitEvidence {
     pub workspace_id: String,

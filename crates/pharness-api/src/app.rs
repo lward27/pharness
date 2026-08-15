@@ -26194,6 +26194,7 @@ mod tests {
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),
+                workspace_storage_class: Some("local-path".to_string()),
                 workspace_ephemeral_storage_request: "2Gi".to_string(),
                 workspace_ephemeral_storage_limit: "4Gi".to_string(),
                 workspace_node_hostname: None,

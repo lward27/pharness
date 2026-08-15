@@ -113,9 +113,10 @@ worker:
     activeDeadlineSeconds: 600
     ttlSecondsAfterFinished: 3600
   workspaceDir: /workspace
-  # Coding workspaces are per-Job emptyDir volumes. They are not backed by the
-  # API SQLite PVC and are reclaimed with the Job TTL.
+  # Coding workspaces use one durable PVC per run so approved mutations survive
+  # the short-lived Job boundary used for each inline approval resume.
   workspaceSizeLimit: 4Gi
+  workspaceStorageClass: local-path
   workspaceEphemeralStorageRequest: 2Gi
   workspaceEphemeralStorageLimit: 4Gi
   # Node-local storage is uneven in the homelab. Keep coding workers on the

@@ -19,6 +19,7 @@ const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
 const JOB_NAME_VALUE: &str = "pharness-run";
+const WORKSPACE_CLAIM_NAME_VALUE: &str = "pharness-run-workspace";
 const TEKTON_EXECUTOR_JOB_NAME_VALUE: &str = "pharness-tekton-executor";
 const ARGO_EXECUTOR_JOB_NAME_VALUE: &str = "pharness-argo-executor";
 const GIT_WRITER_JOB_NAME_VALUE: &str = "pharness-git-writer";
@@ -692,6 +693,9 @@ impl KubernetesJobDispatcher {
                     tracing::warn!(run_id = %run_id, %error, "failed to spawn kubectl delete");
                 }
             }
+            if let Err(error) = self.delete_workspace_claim(&run_id).await {
+                tracing::warn!(run_id = %run_id, %error, "failed to delete run workspace claim");
+            }
         });
     }
 
@@ -701,6 +705,7 @@ impl KubernetesJobDispatcher {
         approval: Option<&StoredApproval>,
     ) -> anyhow::Result<()> {
         self.ensure_run_job_capacity().await?;
+        self.ensure_workspace_claim(run).await?;
         let manifest = self.job_manifest(run, approval);
         let payload = serde_json::to_vec(&manifest)?;
 
@@ -730,6 +735,100 @@ impl KubernetesJobDispatcher {
         );
 
         Ok(())
+    }
+
+    async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
+        let name = workspace_claim_name(run.id.as_str());
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "get",
+                "persistentvolumeclaim",
+                &name,
+                "-n",
+                &self.config.namespace,
+                "--ignore-not-found=true",
+                "-o",
+                "name",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl get workspace claim failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        if !output.stdout.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_vec(&self.workspace_claim_manifest(run))?;
+        let mut child = tokio::process::Command::new(&self.kubectl_bin)
+            .args(["create", "-n", &self.config.namespace, "-f", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use tokio::io::AsyncWriteExt;
+            stdin.write_all(&payload).await?;
+        }
+        let output = child.wait_with_output().await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl create workspace claim failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        tracing::info!(run_id = %run.id, claim = %name, "created durable run workspace claim");
+        Ok(())
+    }
+
+    async fn delete_workspace_claim(&self, run_id: &str) -> anyhow::Result<()> {
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "delete",
+                "persistentvolumeclaim",
+                &workspace_claim_name(run_id),
+                "-n",
+                &self.config.namespace,
+                "--ignore-not-found=true",
+                "--wait=false",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl delete workspace claim failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        Ok(())
+    }
+
+    fn workspace_claim_manifest(&self, run: &StoredRun) -> serde_json::Value {
+        let mut manifest = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+                "name": workspace_claim_name(run.id.as_str()),
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: WORKSPACE_CLAIM_NAME_VALUE,
+                    RUN_ID_LABEL: job_label_value(run.id.as_str()),
+                },
+            },
+            "spec": {
+                "accessModes": ["ReadWriteOnce"],
+                "resources": {
+                    "requests": { "storage": self.config.workspace_size_limit },
+                },
+            },
+        });
+        if let Some(storage_class) = self.config.workspace_storage_class.as_deref() {
+            manifest["spec"]["storageClassName"] = serde_json::json!(storage_class);
+        }
+        manifest
     }
 
     /// The API is deliberately single-replica while SQLite is the durable
@@ -1509,7 +1608,9 @@ impl KubernetesJobDispatcher {
                         "volumes": [
                             {
                                 "name": "workspace",
-                                "emptyDir": { "sizeLimit": self.config.workspace_size_limit },
+                                "persistentVolumeClaim": {
+                                    "claimName": workspace_claim_name(run.id.as_str()),
+                                },
                             },
                             { "name": "tmp", "emptyDir": {} },
                         ],
@@ -1550,7 +1651,55 @@ impl KubernetesJobDispatcher {
 
     async fn reap_once(&self) -> anyhow::Result<()> {
         self.reap_run_jobs().await?;
+        self.reap_run_workspace_claims().await?;
         self.reap_tekton_executor_jobs().await
+    }
+
+    async fn reap_run_workspace_claims(&self) -> anyhow::Result<()> {
+        let selector = format!("{JOB_NAME_LABEL}={WORKSPACE_CLAIM_NAME_VALUE}");
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "get",
+                "persistentvolumeclaims",
+                "-n",
+                &self.config.namespace,
+                "-l",
+                &selector,
+                "-o",
+                "json",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl get workspace claims failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let claims: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        for claim in claims
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(run_label) = claim
+                .pointer("/metadata/labels")
+                .and_then(|labels| labels.get(RUN_ID_LABEL))
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let run_id_text = run_label_to_run_id(run_label);
+            let run_id = pharness_core::RunId::new(run_id_text.clone());
+            let terminal = self.store.get_run(&run_id).await?.map_or(true, |run| {
+                matches!(run.status.as_str(), "completed" | "failed" | "cancelled")
+            });
+            if terminal {
+                self.delete_workspace_claim(&run_id_text).await?;
+            }
+        }
+        Ok(())
     }
 
     async fn reap_run_jobs(&self) -> anyhow::Result<()> {
@@ -1923,6 +2072,10 @@ fn job_name(run_id: &str, approval: Option<&StoredApproval>) -> String {
     }
 }
 
+fn workspace_claim_name(run_id: &str) -> String {
+    format!("pharness-{}-ws", job_label_value(run_id))
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -2025,9 +2178,9 @@ mod tests {
         active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
         executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
         gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
-        run_label_to_run_id, ArgoSyncExecutionRequest, ExecutorJobTerminalState,
-        GitDeliveryExecutionRequest, GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
-        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
+        run_label_to_run_id, workspace_claim_name, ArgoSyncExecutionRequest,
+        ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
+        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{RunId, SessionId};
@@ -2092,13 +2245,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_manifest_bounds_workspace_and_pins_node() {
+    async fn worker_manifest_mounts_durable_workspace_and_pins_node() {
         let dispatcher = test_dispatcher(Some("roomier-node".to_string())).await;
-        let manifest = dispatcher.job_manifest(&test_run(), None);
+        let run = test_run();
+        let manifest = dispatcher.job_manifest(&run, None);
 
         assert_eq!(
-            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/claimName"),
+            Some(&json!(workspace_claim_name(run.id.as_str())))
+        );
+        let claim = dispatcher.workspace_claim_manifest(&run);
+        assert_eq!(
+            claim.pointer("/spec/accessModes/0"),
+            Some(&json!("ReadWriteOnce"))
+        );
+        assert_eq!(
+            claim.pointer("/spec/resources/requests/storage"),
             Some(&json!("4Gi"))
+        );
+        assert_eq!(
+            claim.pointer("/spec/storageClassName"),
+            Some(&json!("local-path"))
         );
         assert_eq!(
             manifest
@@ -2340,6 +2507,7 @@ mod tests {
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),
+                workspace_storage_class: Some("local-path".to_string()),
                 workspace_ephemeral_storage_request: "2Gi".to_string(),
                 workspace_ephemeral_storage_limit: "4Gi".to_string(),
                 workspace_node_hostname: node_hostname,

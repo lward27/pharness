@@ -153,6 +153,22 @@ pub(crate) async fn attempt_spec_for_run(
 ) -> anyhow::Result<AttemptSpec> {
     let event_seq_start = store.list_events(&run.id).await?.len() as u64;
     let resume = approval.map(resume_spec_from_approval).transpose()?;
+    let mut workspace_source = workspace_source_for_run(&run.execution_target_json)?;
+    if let Some(source) = workspace_source.as_mut() {
+        if source.resolved_commit.is_none() {
+            let workspace = store
+                .get_workspace(&source.workspace_id)
+                .await?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("workspace {} no longer exists", source.workspace_id)
+                })?;
+            if workspace.run_id.as_ref() != Some(&run.id) {
+                anyhow::bail!("workspace does not belong to the resumed run");
+            }
+            source.resolved_commit = workspace.resolved_commit;
+            source.validate()?;
+        }
+    }
 
     Ok(AttemptSpec {
         run: RunSpec {
@@ -162,7 +178,7 @@ pub(crate) async fn attempt_spec_for_run(
             user_task: run.user_task.clone(),
             max_turns: run.max_turns,
             execution_target_json: run.execution_target_json.clone(),
-            workspace_source: workspace_source_for_run(&run.execution_target_json)?,
+            workspace_source,
             task_contract: task_contract_for_run(store, run).await?,
         },
         event_seq_start,
