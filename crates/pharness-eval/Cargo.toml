@@ -1,0 +1,21 @@
+[package]
+name = "pharness-eval"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+camino.workspace = true
+clap.workspace = true
+pharness-core = { path = "../pharness-core" }
+pharness-config = { path = "../pharness-config" }
+pharness-fireworks = { path = "../pharness-fireworks" }
+pharness-runhost = { path = "../pharness-runhost" }
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

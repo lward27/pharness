@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{bail, Context};
-use pharness_core::{PolicyMode, ReadOnlyClusterTools, SafetyPolicy};
+use pharness_core::{ContextBudget, PolicyMode, ReadOnlyClusterTools, SafetyPolicy};
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -25,6 +25,7 @@ const DEFAULT_ARGO_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-argo-runner";
 const DEFAULT_GIT_WRITER_SERVICE_ACCOUNT: &str = "pharness-git-writer";
 const DEFAULT_GITOPS_WRITER_SERVICE_ACCOUNT: &str = "pharness-gitops-writer";
 const DEFAULT_GIT_OBSERVER_SERVICE_ACCOUNT: &str = "pharness-git-observer";
+const DEFAULT_GITOPS_OBSERVER_SERVICE_ACCOUNT: &str = "pharness-gitops-observer";
 const DEFAULT_GITHUB_API_URL: &str = "https://api.github.com";
 const DEFAULT_GIT_WRITER_AUTHOR_NAME: &str = "Pharness";
 const DEFAULT_GIT_WRITER_AUTHOR_EMAIL: &str = "pharness@localhost";
@@ -138,6 +139,13 @@ pub struct WorkerKubernetesConfig {
     pub git_observer_github_api_url: String,
     pub git_observer_active_deadline_seconds: u64,
     pub git_observer_ttl_seconds_after_finished: u64,
+    pub gitops_observer_enabled: bool,
+    pub gitops_observer_service_account: String,
+    pub gitops_observer_token_secret_name: Option<String>,
+    pub gitops_observer_allowed_repos: Vec<String>,
+    pub gitops_observer_github_api_url: String,
+    pub gitops_observer_active_deadline_seconds: u64,
+    pub gitops_observer_ttl_seconds_after_finished: u64,
     pub api_url: String,
     pub workspace_dir: String,
     /// Per-run source workspace quota, independent of the API's SQLite PVC.
@@ -178,6 +186,7 @@ pub struct ModelConfig {
     pub api_key_env: String,
     pub api_key: Option<SecretString>,
     pub base_url: String,
+    pub context_budget: ContextBudget,
 }
 
 #[derive(Clone)]
@@ -234,12 +243,17 @@ impl ApiRuntimeConfig {
         config.apply_file(file)?;
         config.apply_env(env)?;
         reject_non_fireworks(&config.model.provider)?;
+        reject_invalid_context_budget(&config.model.context_budget)?;
         reject_blank_policy_identity(&config.policy)?;
         reject_invalid_kubernetes_workspace(&config.worker.kubernetes)?;
         reject_invalid_argo_executor(&config.worker.kubernetes)?;
         reject_invalid_git_writer(&config.worker.kubernetes)?;
         reject_invalid_gitops_writer(&config.worker.kubernetes)?;
         reject_invalid_git_observer(&config.worker.kubernetes)?;
+        reject_invalid_gitops_observer(&config.worker.kubernetes)?;
+        if config.worker.mode == WorkerMode::KubernetesJob {
+            reject_mutable_worker_image(&config.worker.kubernetes.image)?;
+        }
         config.resolve_api_key(env);
 
         Ok(config)
@@ -262,6 +276,7 @@ impl ApiRuntimeConfig {
                 api_key_env: DEFAULT_FIREWORKS_API_KEY_ENV.to_string(),
                 api_key: None,
                 base_url: DEFAULT_FIREWORKS_BASE_URL.to_string(),
+                context_budget: ContextBudget::default(),
             },
             cluster: ClusterConfig {
                 kubectl_bin: DEFAULT_KUBECTL_BIN.to_string(),
@@ -320,6 +335,15 @@ impl ApiRuntimeConfig {
                     git_observer_active_deadline_seconds:
                         DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
                     git_observer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
+                    gitops_observer_enabled: false,
+                    gitops_observer_service_account: DEFAULT_GITOPS_OBSERVER_SERVICE_ACCOUNT
+                        .to_string(),
+                    gitops_observer_token_secret_name: None,
+                    gitops_observer_allowed_repos: Vec::new(),
+                    gitops_observer_github_api_url: DEFAULT_GITHUB_API_URL.to_string(),
+                    gitops_observer_active_deadline_seconds:
+                        DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
+                    gitops_observer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
                     workspace_size_limit: DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT.to_string(),
@@ -375,6 +399,15 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = model.base_url {
                 self.model.base_url = value;
+            }
+            if let Some(value) = model.context_max_input_tokens {
+                self.model.context_budget.max_input_tokens = value;
+            }
+            if let Some(value) = model.context_recent_message_tokens {
+                self.model.context_budget.recent_message_tokens = value;
+            }
+            if let Some(value) = model.context_max_tool_result_tokens {
+                self.model.context_budget.max_tool_result_tokens = value;
             }
         }
 
@@ -529,6 +562,31 @@ impl ApiRuntimeConfig {
                         .kubernetes
                         .git_observer_ttl_seconds_after_finished = value;
                 }
+                if let Some(value) = kubernetes.gitops_observer_enabled {
+                    self.worker.kubernetes.gitops_observer_enabled = value;
+                }
+                if let Some(value) = kubernetes.gitops_observer_service_account {
+                    self.worker.kubernetes.gitops_observer_service_account = value;
+                }
+                if let Some(value) = kubernetes.gitops_observer_token_secret_name {
+                    self.worker.kubernetes.gitops_observer_token_secret_name = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.gitops_observer_allowed_repos {
+                    self.worker.kubernetes.gitops_observer_allowed_repos = value;
+                }
+                if let Some(value) = kubernetes.gitops_observer_github_api_url {
+                    self.worker.kubernetes.gitops_observer_github_api_url = value;
+                }
+                if let Some(value) = kubernetes.gitops_observer_active_deadline_seconds {
+                    self.worker
+                        .kubernetes
+                        .gitops_observer_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.gitops_observer_ttl_seconds_after_finished {
+                    self.worker
+                        .kubernetes
+                        .gitops_observer_ttl_seconds_after_finished = value;
+                }
                 if let Some(value) = kubernetes.api_url {
                     self.worker.kubernetes.api_url = value;
                 }
@@ -629,6 +687,30 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_FIREWORKS_BASE_URL") {
             self.model.base_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_MAX_INPUT_TOKENS") {
+            self.model.context_budget.max_input_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_MAX_INPUT_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_MAX_INPUT_TOKENS is too large")
+                    })?;
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS") {
+            self.model.context_budget.recent_message_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_RECENT_MESSAGE_TOKENS is too large")
+                    })?;
+        }
+        if let Some(value) = env.get("PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS") {
+            self.model.context_budget.max_tool_result_tokens =
+                parse_u64(value, "PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS")?
+                    .try_into()
+                    .map_err(|_| {
+                        anyhow::anyhow!("PHARNESS_CONTEXT_MAX_TOOL_RESULT_TOKENS is too large")
+                    })?;
         }
         if let Some(value) = env.get("PHARNESS_FIREWORKS_API_KEY_ENV") {
             self.model.api_key_env = value.clone();
@@ -804,6 +886,34 @@ impl ApiRuntimeConfig {
                 .git_observer_ttl_seconds_after_finished =
                 parse_u64(value, "PHARNESS_GIT_OBSERVER_TTL_SECONDS")?;
         }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_ENABLED") {
+            self.worker.kubernetes.gitops_observer_enabled =
+                parse_bool(value, "PHARNESS_GITOPS_OBSERVER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.gitops_observer_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_TOKEN_SECRET") {
+            self.worker.kubernetes.gitops_observer_token_secret_name = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_ALLOWED_REPOS") {
+            self.worker.kubernetes.gitops_observer_allowed_repos = split_registry_aliases(value);
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_GITHUB_API_URL") {
+            self.worker.kubernetes.gitops_observer_github_api_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_ACTIVE_DEADLINE_SECONDS") {
+            self.worker
+                .kubernetes
+                .gitops_observer_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_GITOPS_OBSERVER_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_GITOPS_OBSERVER_TTL_SECONDS") {
+            self.worker
+                .kubernetes
+                .gitops_observer_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_GITOPS_OBSERVER_TTL_SECONDS")?;
+        }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_API_URL") {
             self.worker.kubernetes.api_url = value.clone();
         }
@@ -888,6 +998,19 @@ impl ApiRuntimeConfig {
     }
 }
 
+fn reject_invalid_context_budget(budget: &ContextBudget) -> anyhow::Result<()> {
+    if budget.max_input_tokens <= budget.reserved_output_tokens {
+        anyhow::bail!("model context_max_input_tokens must exceed the reserved output budget");
+    }
+    if budget.recent_message_tokens == 0 {
+        anyhow::bail!("model context_recent_message_tokens must be greater than zero");
+    }
+    if budget.max_tool_result_tokens == 0 {
+        anyhow::bail!("model context_max_tool_result_tokens must be greater than zero");
+    }
+    Ok(())
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct FileConfig {
@@ -947,6 +1070,13 @@ struct FileWorkerKubernetesConfig {
     git_observer_github_api_url: Option<String>,
     git_observer_active_deadline_seconds: Option<u64>,
     git_observer_ttl_seconds_after_finished: Option<u64>,
+    gitops_observer_enabled: Option<bool>,
+    gitops_observer_service_account: Option<String>,
+    gitops_observer_token_secret_name: Option<String>,
+    gitops_observer_allowed_repos: Option<Vec<String>>,
+    gitops_observer_github_api_url: Option<String>,
+    gitops_observer_active_deadline_seconds: Option<u64>,
+    gitops_observer_ttl_seconds_after_finished: Option<u64>,
     api_url: Option<String>,
     workspace_dir: Option<String>,
     workspace_size_limit: Option<String>,
@@ -982,6 +1112,9 @@ struct FileModelConfig {
     model: Option<String>,
     api_key_env: Option<String>,
     base_url: Option<String>,
+    context_max_input_tokens: Option<u32>,
+    context_recent_message_tokens: Option<u32>,
+    context_max_tool_result_tokens: Option<u32>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1289,6 +1422,59 @@ fn reject_invalid_git_observer(config: &WorkerKubernetesConfig) -> anyhow::Resul
     Ok(())
 }
 
+fn reject_invalid_gitops_observer(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.gitops_observer_enabled {
+        return Ok(());
+    }
+    if config.gitops_observer_token_secret_name.is_none()
+        || config.gitops_observer_allowed_repos.is_empty()
+    {
+        bail!(
+            "enabled GitOps observer requires a separate token Secret name and at least one allowed repository"
+        );
+    }
+    for (label, value) in [
+        (
+            "worker.kubernetes.gitops_observer_service_account",
+            &config.gitops_observer_service_account,
+        ),
+        (
+            "worker.kubernetes.gitops_observer_github_api_url",
+            &config.gitops_observer_github_api_url,
+        ),
+    ] {
+        if value.trim().is_empty() || value.contains(['\n', '\r']) {
+            bail!("{label} must be non-blank and single-line");
+        }
+    }
+    if !config
+        .gitops_observer_github_api_url
+        .starts_with("https://")
+    {
+        bail!("worker.kubernetes.gitops_observer_github_api_url must use HTTPS");
+    }
+    if config.gitops_observer_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.gitops_observer_active_deadline_seconds must be at least one");
+    }
+    if config.gitops_observer_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.gitops_observer_ttl_seconds_after_finished must be at least one");
+    }
+    Ok(())
+}
+
+fn reject_mutable_worker_image(image: &str) -> anyhow::Result<()> {
+    let Some((repository, digest)) = image.rsplit_once("@sha256:") else {
+        bail!("worker.kubernetes.image must be pinned as repository@sha256:digest");
+    };
+    if repository.trim().is_empty()
+        || digest.len() != 64
+        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        bail!("worker.kubernetes.image has an invalid immutable sha256 digest");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{split_registry_aliases, ApiRuntimeConfig};
@@ -1339,6 +1525,19 @@ mod tests {
             .kubernetes
             .argo_executor_allowed_applications
             .is_empty());
+    }
+
+    #[test]
+    fn rejects_an_unusable_context_budget_from_environment() {
+        let mut env = BTreeMap::new();
+        env.insert(
+            "PHARNESS_CONTEXT_MAX_INPUT_TOKENS".to_string(),
+            "4096".to_string(),
+        );
+        let error = ApiRuntimeConfig::from_sources(None, &env)
+            .err()
+            .expect("invalid context budget must fail");
+        assert!(error.to_string().contains("reserved output budget"));
     }
 
     #[test]

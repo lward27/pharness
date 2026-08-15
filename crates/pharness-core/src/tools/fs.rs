@@ -2,6 +2,7 @@ use super::{ToolError, ToolExecutor, ToolResult};
 use crate::{AgentAction, TextPatch};
 use async_trait::async_trait;
 use camino::{Utf8Path, Utf8PathBuf};
+use ignore::WalkBuilder;
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
@@ -101,7 +102,12 @@ impl LocalReadOnlyFsTools {
             .to_string()
     }
 
-    fn list_dir(&self, path: &Utf8Path, depth: u8) -> Result<ToolResult, ToolError> {
+    fn list_dir(
+        &self,
+        path: &Utf8Path,
+        depth: u8,
+        max_entries: Option<u32>,
+    ) -> Result<ToolResult, ToolError> {
         let root = self.resolve_existing(path)?;
         if !root.is_dir() {
             return Err(ToolError::NotDirectory {
@@ -109,68 +115,79 @@ impl LocalReadOnlyFsTools {
             });
         }
 
+        let max_entries = max_entries.unwrap_or(500).clamp(1, 2_000) as usize;
         let mut entries = Vec::new();
-        self.collect_dir_entries(&root, depth, &mut entries)?;
+        let mut truncated = false;
+        let mut builder = WalkBuilder::new(&root);
+        builder
+            .standard_filters(true)
+            .hidden(false)
+            .git_ignore(true)
+            .max_depth(Some(depth as usize + 1));
+        builder.add_custom_ignore_filename(".gitignore");
+        for entry in builder.build() {
+            let entry = entry.map_err(|error| ToolError::Io {
+                message: error.to_string(),
+            })?;
+            let path = entry.path();
+            if path == root || should_ignore_path(path) {
+                continue;
+            }
+            if entries.len() >= max_entries {
+                truncated = true;
+                break;
+            }
+            let file_type = entry.file_type().ok_or_else(|| ToolError::Io {
+                message: format!("failed to read file type for {}", path.display()),
+            })?;
+            entries.push(DirectoryEntry {
+                path: self.display_path(path),
+                kind: if file_type.is_dir() { "dir" } else { "file" }.to_string(),
+            });
+        }
         entries.sort_by(|a, b| a.path.cmp(&b.path));
 
         Ok(ToolResult::ok(
             format!("listed {} entries", entries.len()),
-            serde_json::to_value(entries).expect("directory entries should serialize"),
+            serde_json::json!({ "entries": entries, "truncated": truncated }),
         ))
     }
 
-    fn collect_dir_entries(
+    fn read_file(
         &self,
-        dir: &Path,
-        depth: u8,
-        entries: &mut Vec<DirectoryEntry>,
-    ) -> Result<(), ToolError> {
-        for entry in fs::read_dir(dir).map_err(|error| ToolError::Io {
-            message: format!("failed to read {}: {error}", dir.display()),
-        })? {
-            let entry = entry.map_err(|error| ToolError::Io {
-                message: format!("failed to read directory entry: {error}"),
-            })?;
-            let file_type = entry.file_type().map_err(|error| ToolError::Io {
-                message: format!("failed to read file type: {error}"),
-            })?;
-            let path = entry.path();
-
-            entries.push(DirectoryEntry {
-                path: self.display_path(&path),
-                kind: if file_type.is_dir() { "dir" } else { "file" }.to_string(),
-            });
-
-            if depth > 0 && file_type.is_dir() {
-                self.collect_dir_entries(&path, depth - 1, entries)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn read_file(&self, path: &Utf8Path, max_bytes: Option<u64>) -> Result<ToolResult, ToolError> {
+        path: &Utf8Path,
+        max_bytes: Option<u64>,
+        start_line: Option<u64>,
+        line_count: Option<u64>,
+    ) -> Result<ToolResult, ToolError> {
         let resolved = self.resolve_existing(path)?;
-        let bytes = fs::read(&resolved).map_err(|error| ToolError::Io {
+        let content = fs::read_to_string(&resolved).map_err(|error| ToolError::Io {
             message: format!("failed to read {}: {error}", path.as_str()),
         })?;
-        let max_bytes = max_bytes.unwrap_or(256 * 1024) as usize;
-        let truncated = bytes.len() > max_bytes;
-        let bytes = if truncated {
-            &bytes[..max_bytes]
-        } else {
-            bytes.as_slice()
-        };
-        let content = std::str::from_utf8(bytes).map_err(|_| ToolError::NonUtf8 {
-            path: path.to_string(),
-        })?;
+        let start_line = start_line.unwrap_or(1).max(1) as usize;
+        let line_count = line_count.unwrap_or(400).clamp(1, 2_000) as usize;
+        let max_bytes = max_bytes.unwrap_or(64 * 1024).clamp(1, 128 * 1024) as usize;
+        let total_lines = content.lines().count();
+        let selected = content
+            .lines()
+            .skip(start_line.saturating_sub(1))
+            .take(line_count)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let truncated_before = start_line > 1;
+        let truncated_after_lines = total_lines > start_line.saturating_sub(1) + line_count;
+        let (selected, truncated_after_bytes) = truncate_utf8(&selected, max_bytes);
 
         Ok(ToolResult::ok(
-            format!("read {} bytes from {}", bytes.len(), path.as_str()),
+            format!("read {} bytes from {}", selected.len(), path.as_str()),
             serde_json::json!({
                 "path": path.as_str(),
-                "content": content,
-                "truncated": truncated,
+                "content": selected,
+                "total_lines": total_lines,
+                "start_line": start_line,
+                "line_count": line_count,
+                "truncated_before": truncated_before,
+                "truncated_after": truncated_after_lines || truncated_after_bytes,
             }),
         ))
     }
@@ -180,15 +197,65 @@ impl LocalReadOnlyFsTools {
         query: &str,
         path: Option<&Utf8PathBuf>,
         glob: Option<&str>,
+        max_results: Option<u32>,
     ) -> Result<ToolResult, ToolError> {
         let root =
             self.resolve_existing(path.map(Utf8PathBuf::as_path).unwrap_or(Utf8Path::new(".")))?;
+        // A directly selected file is already scope-checked above. Permit it
+        // even when an ancestor is normally ignored; broad searches continue
+        // to skip generated and metadata trees.
+        let explicitly_selected_file = path.is_some() && root.is_file();
+        let max_results = max_results.unwrap_or(50).clamp(1, 200) as usize;
         let mut matches = Vec::new();
-        self.search_path(query, glob, &root, &mut matches)?;
+        let mut truncated = false;
+        let mut builder = WalkBuilder::new(&root);
+        builder
+            .standard_filters(true)
+            .hidden(false)
+            .git_ignore(true)
+            .max_depth(None);
+        builder.add_custom_ignore_filename(".gitignore");
+        for entry in builder.build() {
+            let entry = entry.map_err(|error| ToolError::Io {
+                message: error.to_string(),
+            })?;
+            let candidate = entry.path();
+            if (candidate == root && root.is_dir())
+                || candidate.is_dir()
+                || (should_ignore_path(candidate) && !explicitly_selected_file)
+            {
+                continue;
+            }
+            if let Some(glob) = glob {
+                let display_path = self.display_path(candidate);
+                if !display_path.contains(glob.trim_matches('*')) {
+                    continue;
+                }
+            }
+            let Ok(content) = fs::read_to_string(candidate) else {
+                continue;
+            };
+            for (line_index, line) in content.lines().enumerate() {
+                if line.contains(query) {
+                    if matches.len() >= max_results {
+                        truncated = true;
+                        break;
+                    }
+                    matches.push(SearchMatch {
+                        path: self.display_path(candidate),
+                        line: line_index + 1,
+                        snippet: line.trim().to_string(),
+                    });
+                }
+            }
+            if truncated {
+                break;
+            }
+        }
 
         Ok(ToolResult::ok(
             format!("found {} matches", matches.len()),
-            serde_json::to_value(matches).expect("search matches should serialize"),
+            serde_json::json!({ "matches": matches, "truncated": truncated }),
         ))
     }
 
@@ -297,80 +364,59 @@ impl LocalReadOnlyFsTools {
             message: format!("failed to replace {}: {error}", path.as_str()),
         })
     }
-
-    fn search_path(
-        &self,
-        query: &str,
-        glob: Option<&str>,
-        path: &Path,
-        matches: &mut Vec<SearchMatch>,
-    ) -> Result<(), ToolError> {
-        if matches.len() >= 100 {
-            return Ok(());
-        }
-
-        if path.is_dir() {
-            for entry in fs::read_dir(path).map_err(|error| ToolError::Io {
-                message: format!("failed to read {}: {error}", path.display()),
-            })? {
-                let entry = entry.map_err(|error| ToolError::Io {
-                    message: format!("failed to read directory entry: {error}"),
-                })?;
-                self.search_path(query, glob, &entry.path(), matches)?;
-                if matches.len() >= 100 {
-                    break;
-                }
-            }
-            return Ok(());
-        }
-
-        if let Some(glob) = glob {
-            let display_path = self.display_path(path);
-            if !display_path.contains(glob.trim_matches('*')) {
-                return Ok(());
-            }
-        }
-
-        let Ok(content) = fs::read_to_string(path) else {
-            return Ok(());
-        };
-
-        for (line_index, line) in content.lines().enumerate() {
-            if line.contains(query) {
-                matches.push(SearchMatch {
-                    path: self.display_path(path),
-                    line: line_index + 1,
-                    snippet: line.trim().to_string(),
-                });
-
-                if matches.len() >= 100 {
-                    break;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
 impl ToolExecutor for LocalReadOnlyFsTools {
     async fn execute(&self, action: &AgentAction) -> Result<ToolResult, ToolError> {
         match action {
-            AgentAction::ListDir { path, depth, .. } => self.list_dir(path, *depth),
+            AgentAction::ListDir {
+                path,
+                depth,
+                max_entries,
+                ..
+            } => self.list_dir(path, *depth, *max_entries),
             AgentAction::ReadFile {
-                path, max_bytes, ..
-            } => self.read_file(path, *max_bytes),
+                path,
+                max_bytes,
+                start_line,
+                line_count,
+                ..
+            } => self.read_file(path, *max_bytes, *start_line, *line_count),
             AgentAction::WriteFile { path, content, .. } => self.write_file(path, content),
             AgentAction::PatchFile { path, patch, .. } => self.patch_file(path, patch),
             AgentAction::SearchFiles {
-                query, path, glob, ..
-            } => self.search_files(query, path.as_ref(), glob.as_deref()),
+                query,
+                path,
+                glob,
+                max_results,
+                ..
+            } => self.search_files(query, path.as_ref(), glob.as_deref(), *max_results),
             other => Err(ToolError::UnsupportedAction {
                 action: other.kind_name().to_string(),
             }),
         }
     }
+}
+
+fn should_ignore_path(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component.as_os_str().to_str(),
+            Some(".git" | "target" | "node_modules" | ".pharness")
+        )
+    })
+}
+
+fn truncate_utf8(value: &str, max_bytes: usize) -> (String, bool) {
+    if value.len() <= max_bytes {
+        return (value.to_string(), false);
+    }
+    let mut end = max_bytes;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    (value[..end].to_string(), true)
 }
 
 pub fn simple_text_diff(before: Option<&str>, after: &str) -> String {
@@ -418,11 +464,39 @@ mod tests {
                 reason: "read".to_string(),
                 path: Utf8PathBuf::from("hello.txt"),
                 max_bytes: None,
+                start_line: None,
+                line_count: None,
             })
             .await
             .unwrap();
 
         assert_eq!(result.content["content"], "hello world");
+    }
+
+    #[tokio::test]
+    async fn reads_requested_utf8_line_range_with_boundaries() {
+        let temp = unique_temp_dir("ranged-read");
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(temp.join("lines.txt"), "one\ntwø\nthree\nfour\n").unwrap();
+
+        let tools = LocalReadOnlyFsTools::new(&temp).unwrap();
+        let result = tools
+            .execute(&AgentAction::ReadFile {
+                id: "act_read".into(),
+                reason: "read range".to_string(),
+                path: Utf8PathBuf::from("lines.txt"),
+                max_bytes: Some(64),
+                start_line: Some(2),
+                line_count: Some(2),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.content["content"], "twø\nthree");
+        assert_eq!(result.content["total_lines"], 4);
+        assert_eq!(result.content["start_line"], 2);
+        assert_eq!(result.content["truncated_before"], true);
+        assert_eq!(result.content["truncated_after"], true);
     }
 
     #[tokio::test]
@@ -437,6 +511,8 @@ mod tests {
                 reason: "read".to_string(),
                 path: Utf8PathBuf::from("../outside.txt"),
                 max_bytes: None,
+                start_line: None,
+                line_count: None,
             })
             .await
             .unwrap_err();
@@ -458,12 +534,87 @@ mod tests {
                 query: "target".to_string(),
                 path: Some(Utf8PathBuf::from(".")),
                 glob: None,
+                max_results: None,
             })
             .await
             .unwrap();
 
-        assert_eq!(result.content[0]["path"], "src/lib.rs");
-        assert_eq!(result.content[0]["line"], 1);
+        assert_eq!(result.content["matches"][0]["path"], "src/lib.rs");
+        assert_eq!(result.content["matches"][0]["line"], 1);
+    }
+
+    #[tokio::test]
+    async fn search_and_directory_listing_apply_caps_and_ignore_rules() {
+        let temp = unique_temp_dir("ignore-and-caps");
+        fs::create_dir_all(temp.join("src")).unwrap();
+        fs::create_dir_all(temp.join("ignored")).unwrap();
+        fs::create_dir_all(temp.join("target")).unwrap();
+        fs::write(temp.join(".gitignore"), "ignored/\n").unwrap();
+        fs::write(temp.join("src/one.rs"), "needle\n").unwrap();
+        fs::write(temp.join("src/two.rs"), "needle\n").unwrap();
+        fs::write(temp.join("ignored/hidden.rs"), "needle\n").unwrap();
+        fs::write(temp.join("target/build.rs"), "needle\n").unwrap();
+
+        let tools = LocalReadOnlyFsTools::new(&temp).unwrap();
+        let search = tools
+            .execute(&AgentAction::SearchFiles {
+                id: "act_search".into(),
+                reason: "search".to_string(),
+                query: "needle".to_string(),
+                path: Some(Utf8PathBuf::from(".")),
+                glob: None,
+                max_results: Some(1),
+            })
+            .await
+            .unwrap();
+        assert_eq!(search.content["matches"].as_array().unwrap().len(), 1);
+        assert_eq!(search.content["truncated"], true);
+
+        let listing = tools
+            .execute(&AgentAction::ListDir {
+                id: "act_list".into(),
+                reason: "list".to_string(),
+                path: Utf8PathBuf::from("."),
+                depth: 2,
+                max_entries: Some(2),
+            })
+            .await
+            .unwrap();
+        assert_eq!(listing.content["truncated"], true);
+        let paths = listing.content["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|entry| entry["path"].as_str())
+            .collect::<Vec<_>>();
+        assert!(!paths.iter().any(|path| path.starts_with("target")));
+        assert!(!paths.iter().any(|path| path.starts_with("ignored")));
+    }
+
+    #[tokio::test]
+    async fn search_can_use_an_explicit_safe_file_inside_an_ignored_directory() {
+        let temp = unique_temp_dir("explicit-ignored-file");
+        fs::create_dir_all(temp.join("node_modules")).unwrap();
+        fs::write(temp.join("node_modules/package.txt"), "needle\n").unwrap();
+        let tools = LocalReadOnlyFsTools::new(&temp).unwrap();
+
+        let result = tools
+            .execute(&AgentAction::SearchFiles {
+                id: "act_search".into(),
+                reason: "inspect an explicitly selected file".to_string(),
+                query: "needle".to_string(),
+                path: Some(Utf8PathBuf::from("node_modules/package.txt")),
+                glob: None,
+                max_results: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.content["matches"][0]["path"],
+            "node_modules/package.txt"
+        );
+        let _ = fs::remove_dir_all(temp);
     }
 
     #[tokio::test]

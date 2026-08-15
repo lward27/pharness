@@ -8,7 +8,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
-const DEFAULT_MAX_OUTPUT_BYTES: usize = 512 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct LocalShellTools {
@@ -346,17 +346,33 @@ fn truncate(value: &str, max_bytes: usize) -> (String, bool) {
         return (value.to_string(), false);
     }
 
-    let mut end = max_bytes;
-    while !value.is_char_boundary(end) {
-        end -= 1;
+    let half = max_bytes.saturating_div(2);
+    let mut head_end = half;
+    while !value.is_char_boundary(head_end) {
+        head_end -= 1;
     }
-
-    (format!("{}...[truncated]", &value[..end]), true)
+    let mut tail_start = value.len().saturating_sub(half);
+    while tail_start < value.len() && !value.is_char_boundary(tail_start) {
+        tail_start += 1;
+    }
+    let omitted = value
+        .len()
+        .saturating_sub(head_end)
+        .saturating_sub(value.len().saturating_sub(tail_start));
+    (
+        format!(
+            "{}\n...[{} bytes truncated]...\n{}",
+            &value[..head_end],
+            omitted,
+            &value[tail_start..]
+        ),
+        true,
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::LocalShellTools;
+    use super::{truncate, LocalShellTools};
     use crate::{AgentAction, ToolError, ToolExecutor, ToolResultStatus};
     use camino::Utf8PathBuf;
     use std::fs;
@@ -488,6 +504,15 @@ mod tests {
 
         assert_eq!(result.status, ToolResultStatus::Error);
         assert!(result.content["stderr"].as_str().unwrap().contains("git"));
+    }
+
+    #[test]
+    fn truncation_preserves_diagnostic_head_tail_and_omitted_count() {
+        let (output, truncated) = truncate("begin-0123456789-end", 10);
+        assert!(truncated);
+        assert!(output.starts_with("begin"));
+        assert!(output.ends_with("9-end"));
+        assert!(output.contains("[10 bytes truncated]"));
     }
 
     fn unique_temp_dir(name: &str) -> std::path::PathBuf {

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["api", "ui", "protectedProductionTarget"],
+  "properties": {
+    "api": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": { "$ref": "#/$defs/immutableImage" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": { "$ref": "#/$defs/immutableImage" }
+      }
+    },
+    "protectedProductionTarget": {
+      "type": "object",
+      "required": ["enabled", "environment", "namespace", "argoApplication", "workloadKind", "workloadName", "sourceRepo", "gitOpsRepo", "kustomizationPath", "imageName", "rollbackOwner"],
+      "properties": {
+        "enabled": { "const": true },
+        "environment": { "const": "production" },
+        "namespace": { "const": "apps-prod" },
+        "argoApplication": { "const": "yfinance-wrapper" },
+        "workloadKind": { "const": "Deployment" },
+        "workloadName": { "const": "yfinance-wrapper" },
+        "sourceRepo": { "const": "https://github.com/lward27/yfinance_wrapper.git" },
+        "gitOpsRepo": { "const": "https://github.com/lward27/lucas_engineering.git" },
+        "kustomizationPath": { "const": "charts/yfinance-wrapper/kustomization.yaml" },
+        "imageName": { "const": "registry.lucas.engineering/yfinance_wrapper" },
+        "rollbackOwner": { "const": "lucas" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "immutableImage": {
+      "type": "object",
+      "required": ["repository", "digest", "revision", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "not": { "pattern": "@sha256:" } },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "pullPolicy": { "enum": ["IfNotPresent", "Never"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

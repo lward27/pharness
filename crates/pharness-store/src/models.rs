@@ -33,11 +33,16 @@ pub struct StoredRun {
     pub error: Option<String>,
     pub result_json: Option<serde_json::Value>,
     pub execution_target_json: serde_json::Value,
+    pub origin: String,
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RunListFilter {
+    pub search: Option<String>,
     pub status: Option<String>,
+    pub origin: Option<String>,
+    pub created_by: Option<String>,
     pub namespace: Option<String>,
     pub repo: Option<String>,
     pub branch: Option<String>,
@@ -104,11 +109,17 @@ pub struct StoredApproval {
     pub preview_json: Option<serde_json::Value>,
     pub resume_messages_json: Option<serde_json::Value>,
     pub turns_completed: u32,
+    pub origin: String,
+    /// The durable actor that submitted the owning run, not the later reviewer.
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ApprovalListFilter {
+    pub search: Option<String>,
     pub status: Option<String>,
+    pub origin: Option<String>,
+    pub created_by: Option<String>,
     pub namespace: Option<String>,
     pub repo: Option<String>,
     pub branch: Option<String>,
@@ -397,6 +408,8 @@ pub struct StoredWorkPlan {
     pub status_changed_at: Option<String>,
     pub status_changed_by: Option<String>,
     pub status_reason: Option<String>,
+    pub created_by: Option<String>,
+    pub origin: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -406,6 +419,8 @@ pub struct WorkPlanListFilter {
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: Option<String>,
+    pub origin: Option<String>,
+    pub created_by: Option<String>,
     pub risk_level: Option<String>,
     pub resource_namespace: Option<String>,
     pub resource_kind: Option<String>,
@@ -425,11 +440,19 @@ pub struct CreateWorkItem {
     pub acceptance_criteria: Vec<String>,
     pub source_repo: String,
     pub source_ref: String,
+    pub source_commit: Option<String>,
+    pub pipeline_contract_id: Option<String>,
+    pub deployment_contract_id: Option<String>,
     pub gitops_repo: Option<String>,
     pub gitops_ref: Option<String>,
+    pub gitops_kustomization_path: Option<String>,
+    pub gitops_image_name: Option<String>,
     pub target_environment: String,
     pub target_namespace: Option<String>,
     pub argo_application: Option<String>,
+    pub workload_kind: Option<String>,
+    pub workload_name: Option<String>,
+    pub rollback_owner: Option<String>,
     pub production_impacting: bool,
     pub max_attempts: u32,
     pub max_elapsed_seconds: u64,
@@ -445,17 +468,26 @@ pub struct StoredWorkItem {
     pub acceptance_criteria: Vec<String>,
     pub source_repo: String,
     pub source_ref: String,
+    pub source_commit: Option<String>,
+    pub pipeline_contract_id: Option<String>,
+    pub deployment_contract_id: Option<String>,
     pub gitops_repo: Option<String>,
     pub gitops_ref: Option<String>,
+    pub gitops_kustomization_path: Option<String>,
+    pub gitops_image_name: Option<String>,
     pub target_environment: String,
     pub target_namespace: Option<String>,
     pub argo_application: Option<String>,
+    pub workload_kind: Option<String>,
+    pub workload_name: Option<String>,
+    pub rollback_owner: Option<String>,
     pub production_impacting: bool,
     pub max_attempts: u32,
     pub max_elapsed_seconds: u64,
     pub attempt_count: u32,
     pub current_run_id: Option<RunId>,
     pub created_by: Option<String>,
+    pub origin: String,
     pub created_at: String,
     pub updated_at: String,
     pub status_changed_at: String,
@@ -517,6 +549,8 @@ pub struct WorkItemListFilter {
     pub target_environment: Option<String>,
     pub target_namespace: Option<String>,
     pub production_impacting: Option<bool>,
+    pub created_by: Option<String>,
+    pub origin: Option<String>,
     pub limit: u32,
     pub offset: u32,
 }
@@ -1243,6 +1277,9 @@ pub struct StoredApprovalGate {
     pub session_id: SessionId,
     pub run_id: Option<RunId>,
     pub status: String,
+    pub origin: String,
+    /// Derived from the owning WorkItem or run so pending gates retain provenance.
+    pub created_by: Option<String>,
     pub gate_kind: String,
     pub gate_order: i64,
     pub title: String,
@@ -1263,11 +1300,14 @@ pub struct StoredApprovalGate {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ApprovalGateListFilter {
+    pub search: Option<String>,
     pub work_item_id: Option<String>,
     pub remediation_plan_id: Option<String>,
     pub incident_id: Option<String>,
     pub run_id: Option<RunId>,
     pub status: Option<String>,
+    pub origin: Option<String>,
+    pub created_by: Option<String>,
     pub gate_kind: Option<String>,
     pub risk_level: Option<String>,
     pub resource_namespace: Option<String>,
@@ -1356,6 +1396,7 @@ pub struct StoredAuditEvent {
     pub resource_kind: String,
     pub resource_id: String,
     pub run_id: Option<RunId>,
+    pub origin: String,
     pub payload_json: serde_json::Value,
     pub created_at: String,
 }
@@ -1364,6 +1405,7 @@ pub struct StoredAuditEvent {
 pub struct AuditEventListFilter {
     pub kind: Option<String>,
     pub actor: Option<String>,
+    pub origin: Option<String>,
     pub resource_kind: Option<String>,
     pub resource_id: Option<String>,
     pub run_id: Option<RunId>,
@@ -1373,4 +1415,30 @@ pub struct AuditEventListFilter {
     pub production_impacting: Option<bool>,
     pub search: Option<String>,
     pub limit: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateCapabilityVerification {
+    pub id: String,
+    pub capability: String,
+    pub status: String,
+    pub summary: String,
+    pub principal: Option<String>,
+    pub repository: Option<String>,
+    pub permission: Option<String>,
+    pub verified_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredCapabilityVerification {
+    pub id: String,
+    pub capability: String,
+    pub status: String,
+    pub summary: String,
+    pub principal: Option<String>,
+    pub repository: Option<String>,
+    pub permission: Option<String>,
+    pub verified_at: String,
+    pub expires_at: String,
 }

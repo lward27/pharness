@@ -25,6 +25,7 @@ const GIT_WRITER_JOB_NAME_VALUE: &str = "pharness-git-writer";
 const GITOPS_WRITER_JOB_NAME_VALUE: &str = "pharness-gitops-writer";
 const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
 const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
+const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
 const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
 const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
@@ -125,6 +126,14 @@ pub struct GitObserverSettings {
     pub github_api_url: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct CapabilityVerificationOutcome {
+    pub available: bool,
+    pub principal: Option<String>,
+    pub repository: Option<String>,
+    pub permission: Option<String>,
+}
+
 #[derive(Clone)]
 pub enum RunDispatcher {
     Disabled,
@@ -217,6 +226,13 @@ impl RunDispatcher {
                     "allowed_repos": dispatcher.config.git_observer_allowed_repos,
                     "github_api_url": dispatcher.config.git_observer_github_api_url,
                 },
+                "gitops_observer": {
+                    "enabled": dispatcher.config.gitops_observer_enabled,
+                    "available": dispatcher.gitops_observer_available(),
+                    "service_account": dispatcher.config.gitops_observer_service_account,
+                    "allowed_repos": dispatcher.config.gitops_observer_allowed_repos,
+                    "github_api_url": dispatcher.config.gitops_observer_github_api_url,
+                },
                 "argo_executor": {
                     "enabled": dispatcher.config.argo_executor_enabled,
                     "available": dispatcher.argo_executor_available(),
@@ -226,6 +242,21 @@ impl RunDispatcher {
                     "poll_seconds": dispatcher.config.argo_executor_poll_seconds,
                 },
             }),
+        }
+    }
+
+    pub async fn verify_capability(
+        &self,
+        capability: &str,
+        repository: Option<&str>,
+    ) -> anyhow::Result<CapabilityVerificationOutcome> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.verify_capability(capability, repository).await
+            }
+            _ => anyhow::bail!(
+                "isolated capability verification requires kubernetes_job worker mode"
+            ),
         }
     }
 
@@ -377,6 +408,18 @@ impl RunDispatcher {
         }
     }
 
+    pub fn gitops_observer_settings(&self) -> Option<GitObserverSettings> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.gitops_observer_available() => {
+                Some(GitObserverSettings {
+                    allowed_repos: dispatcher.config.gitops_observer_allowed_repos.clone(),
+                    github_api_url: dispatcher.config.gitops_observer_github_api_url.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
     pub async fn dispatch_git_delivery_observation(
         &self,
         request: GitDeliveryObservationRequest,
@@ -476,6 +519,147 @@ impl KubernetesJobDispatcher {
         self.config.git_observer_enabled
             && self.config.git_observer_token_secret_name.is_some()
             && !self.config.git_observer_allowed_repos.is_empty()
+    }
+
+    fn gitops_observer_available(&self) -> bool {
+        self.config.gitops_observer_enabled
+            && self.config.gitops_observer_token_secret_name.is_some()
+            && !self.config.gitops_observer_allowed_repos.is_empty()
+    }
+
+    async fn verify_capability(
+        &self,
+        capability: &str,
+        repository: Option<&str>,
+    ) -> anyhow::Result<CapabilityVerificationOutcome> {
+        let (principal, permission, repository, manifest) =
+            self.capability_preflight_manifest(capability, repository)?;
+        let job_name = manifest
+            .pointer("/metadata/name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("capability preflight Job has no name"))?
+            .to_string();
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let mut available = false;
+        for _ in 0..60 {
+            let output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "get",
+                    "job",
+                    &job_name,
+                    "-n",
+                    &self.config.namespace,
+                    "-o",
+                    "json",
+                ])
+                .output()
+                .await?;
+            if !output.status.success() {
+                break;
+            }
+            let job: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+            if job
+                .pointer("/status/succeeded")
+                .and_then(serde_json::Value::as_u64)
+                == Some(1)
+            {
+                available = true;
+                break;
+            }
+            if job
+                .pointer("/status/failed")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+                > 0
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        let _ = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "delete",
+                "job",
+                &job_name,
+                "-n",
+                &self.config.namespace,
+                "--ignore-not-found=true",
+                "--wait=false",
+            ])
+            .output()
+            .await;
+        Ok(CapabilityVerificationOutcome {
+            available,
+            principal: Some(principal),
+            repository,
+            permission: Some(permission),
+        })
+    }
+
+    fn capability_preflight_manifest(
+        &self,
+        capability: &str,
+        requested_repository: Option<&str>,
+    ) -> anyhow::Result<(String, String, Option<String>, serde_json::Value)> {
+        let suffix = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let job_name = format!("pharness-cap-preflight-{suffix}");
+        let mut env = Vec::new();
+        let (service_account, principal, permission, repository, script) = match capability {
+            "model_provider" => {
+                env.push(serde_json::json!({"name":"FIREWORKS_API_KEY","valueFrom":{"secretKeyRef":{"name":self.config.fireworks_secret_name,"key":"api-key"}}}));
+                env.push(serde_json::json!({"name":"ENDPOINT","value":format!("{}/models", self.base_url.trim_end_matches('/'))}));
+                (self.config.service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account), "provider_authenticate".to_string(), None, "curl -fsS -o /dev/null -H \"Authorization: Bearer $FIREWORKS_API_KEY\" \"$ENDPOINT\"".to_string())
+            }
+            "source_workspace" => {
+                let repo = requested_repository.ok_or_else(|| anyhow::anyhow!("source workspace repository is unavailable"))?;
+                env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
+                (self.config.service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account), "repository_read".to_string(), Some(repo.to_string()), "git ls-remote --exit-code \"$REPOSITORY\" HEAD >/dev/null".to_string())
+            }
+            "source_writer" | "source_observer" | "gitops_writer" | "gitops_observer" => {
+                let (enabled, service_account, secret, repos, required_permission) = match capability {
+                    "source_writer" => (self.git_writer_available(), &self.config.git_writer_service_account, self.config.git_writer_token_secret_name.as_deref(), &self.config.git_writer_allowed_repos, "push"),
+                    "source_observer" => (self.git_observer_available(), &self.config.git_observer_service_account, self.config.git_observer_token_secret_name.as_deref(), &self.config.git_observer_allowed_repos, "pull"),
+                    "gitops_writer" => (self.gitops_writer_available(), &self.config.gitops_writer_service_account, self.config.gitops_writer_token_secret_name.as_deref(), &self.config.gitops_writer_allowed_repos, "push"),
+                    _ => (self.gitops_observer_available(), &self.config.gitops_observer_service_account, self.config.gitops_observer_token_secret_name.as_deref(), &self.config.gitops_observer_allowed_repos, "pull"),
+                };
+                if !enabled { anyhow::bail!("{capability} is not configured"); }
+                let repo = repos.first().ok_or_else(|| anyhow::anyhow!("{capability} repository allowlist is empty"))?;
+                let repo_path = repo.trim_end_matches('/').trim_end_matches(".git").strip_prefix("https://github.com/").ok_or_else(|| anyhow::anyhow!("{capability} repository is not a safe GitHub HTTPS URL"))?;
+                env.push(serde_json::json!({"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"name":secret.expect("availability requires Secret"),"key":"token"}}}));
+                env.push(serde_json::json!({"name":"REPOSITORY_API","value":format!("https://api.github.com/repos/{repo_path}")}));
+                env.push(serde_json::json!({"name":"REQUIRED_PERMISSION","value":required_permission}));
+                (service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, service_account), format!("repository_{required_permission}"), Some(repo.clone()), "curl -fsS -H \"Authorization: Bearer $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" \"$REPOSITORY_API\" -o /tmp/repository.json && grep -Eq \"\\\"$REQUIRED_PERMISSION\\\"[[:space:]]*:[[:space:]]*true\" /tmp/repository.json".to_string())
+            }
+            "tekton" => (self.config.tekton_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.tekton_executor_service_account), "create_pipelineruns".to_string(), None, format!("kubectl auth can-i create pipelineruns.tekton.dev -n {} | grep -qx yes", self.config.tekton_allowed_namespaces.first().ok_or_else(|| anyhow::anyhow!("Tekton namespace allowlist is empty"))?)),
+            "argo" => (self.config.argo_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.argo_executor_service_account), "get_and_patch_application".to_string(), None, format!("kubectl auth can-i get applications.argoproj.io/{} -n {} | grep -qx yes && kubectl auth can-i patch applications.argoproj.io/{} -n {} | grep -qx yes", self.config.argo_executor_allowed_applications.first().ok_or_else(|| anyhow::anyhow!("Argo Application allowlist is empty"))?, self.config.argo_executor_namespace, self.config.argo_executor_allowed_applications.first().unwrap(), self.config.argo_executor_namespace)),
+            "observability" => {
+                let url = self.worker_env.iter().find(|(name, _)| name == "PHARNESS_PROMETHEUS_URL").map(|(_, value)| value).ok_or_else(|| anyhow::anyhow!("Prometheus endpoint is not configured"))?;
+                env.push(serde_json::json!({"name":"PROMETHEUS_URL","value":url}));
+                (self.config.service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account), "prometheus_ready".to_string(), None, "curl -fsS -o /dev/null \"${PROMETHEUS_URL%/}/-/ready\"".to_string())
+            }
+            "yfinance_healthz" => (
+                self.config.service_account.clone(),
+                format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account),
+                "get_apps_prod_yfinance_wrapper_healthz".to_string(),
+                None,
+                "curl -fsS -o /dev/null http://yfinance-wrapper.apps-prod.svc.cluster.local:8090/healthz".to_string(),
+            ),
+            _ => anyhow::bail!("unsupported capability {capability}"),
+        };
+        let manifest = serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":job_name,"namespace":self.config.namespace,"labels":{JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":75,"ttlSecondsAfterFinished":300,
+                "template":{"metadata":{"labels":{JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":service_account,"restartPolicy":"Never",
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "containers":[{"name":"preflight","image":self.config.image,"imagePullPolicy":"IfNotPresent","command":["/bin/sh","-ec"],"args":[script],"env":env,
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "volumeMounts":[{"name":"tmp","mountPath":"/tmp"}],
+                            "resources":{"requests":{"cpu":"25m","memory":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi"}}}],
+                        "volumes":[{"name":"tmp","emptyDir":{}}]}}}
+        });
+        Ok((principal, permission, repository, manifest))
     }
 
     fn delete_jobs_for_run(self: Arc<Self>, run_id: &str) {
@@ -686,9 +870,9 @@ impl KubernetesJobDispatcher {
         &self,
         request: &GitOpsRevisionResolutionRequest,
     ) -> anyhow::Result<GitOpsRevisionResolutionReceipt> {
-        if !self.git_observer_available() {
+        if !self.gitops_observer_available() {
             anyhow::bail!(
-                "Git observer identity is not configured for read-only GitOps resolution"
+                "GitOps observer identity is not configured for read-only GitOps resolution"
             );
         }
         let job_name = gitops_revision_resolver_job_name(&request.execution_id);
@@ -726,8 +910,8 @@ impl KubernetesJobDispatcher {
         &self,
         request: &GitOpsDeliveryObservationRequest,
     ) -> anyhow::Result<GitOpsDeliveryObservationReceipt> {
-        if !self.git_observer_available() {
-            anyhow::bail!("Git observer executor is not configured");
+        if !self.gitops_observer_available() {
+            anyhow::bail!("GitOps observer executor is not configured");
         }
         let job_name = gitops_observer_job_name(&request.execution_id);
         let manifest = self.gitops_observer_job_manifest(request, &job_name);
@@ -742,17 +926,17 @@ impl KubernetesJobDispatcher {
     ) -> serde_json::Value {
         let token_secret = self
             .config
-            .git_observer_token_secret_name
+            .gitops_observer_token_secret_name
             .as_deref()
-            .expect("Git observer availability validates token Secret");
+            .expect("GitOps observer availability validates token Secret");
         serde_json::json!({
             "apiVersion":"batch/v1", "kind":"Job",
             "metadata":{"name":job_name,"namespace":self.config.namespace,
                 "labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)},
                 "annotations":{EXECUTION_ID_ANNOTATION:request.execution_id}},
-            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.git_observer_active_deadline_seconds,"ttlSecondsAfterFinished":self.config.git_observer_ttl_seconds_after_finished,
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.gitops_observer_active_deadline_seconds,"ttlSecondsAfterFinished":self.config.gitops_observer_ttl_seconds_after_finished,
                 "template":{"metadata":{"labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)}},
-                    "spec":{"serviceAccountName":self.config.git_observer_service_account,"restartPolicy":"Never",
+                    "spec":{"serviceAccountName":self.config.gitops_observer_service_account,"restartPolicy":"Never",
                         "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
                         "containers":[{"name":"gitops-observer","image":self.config.image,"imagePullPolicy":"Always","command":["pharness-worker"],
                             "env":[
@@ -1078,9 +1262,9 @@ impl KubernetesJobDispatcher {
     ) -> serde_json::Value {
         let token_secret = self
             .config
-            .git_observer_token_secret_name
+            .gitops_observer_token_secret_name
             .as_deref()
-            .expect("Git observer availability validates token Secret");
+            .expect("GitOps observer availability validates token Secret");
         serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -1095,15 +1279,15 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.git_observer_active_deadline_seconds,
-                "ttlSecondsAfterFinished": self.config.git_observer_ttl_seconds_after_finished,
+                "activeDeadlineSeconds": self.config.gitops_observer_active_deadline_seconds,
+                "ttlSecondsAfterFinished": self.config.gitops_observer_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE,
                         GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
                     }},
                     "spec": {
-                        "serviceAccountName": self.config.git_observer_service_account,
+                        "serviceAccountName": self.config.gitops_observer_service_account,
                         "restartPolicy": "Never",
                         "securityContext": {
                             "runAsNonRoot": true,
@@ -2037,10 +2221,10 @@ mod tests {
     #[tokio::test]
     async fn gitops_observer_manifest_has_only_read_only_observer_credentials() {
         let mut dispatcher = test_dispatcher(None).await;
-        dispatcher.config.git_observer_enabled = true;
-        dispatcher.config.git_observer_token_secret_name =
-            Some("pharness-git-observer-token".to_string());
-        dispatcher.config.git_observer_allowed_repos =
+        dispatcher.config.gitops_observer_enabled = true;
+        dispatcher.config.gitops_observer_token_secret_name =
+            Some("pharness-gitops-observer-token".to_string());
+        dispatcher.config.gitops_observer_allowed_repos =
             vec!["https://github.com/example/finance-gitops.git".to_string()];
         let request = GitOpsDeliveryObservationRequest {
             gitops_change_set_id: "gset_123".to_string(),
@@ -2061,7 +2245,7 @@ mod tests {
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
         assert_eq!(
             manifest.pointer("/spec/template/spec/serviceAccountName"),
-            Some(&json!("pharness-git-observer"))
+            Some(&json!("pharness-gitops-observer"))
         );
         assert!(manifest.pointer("/spec/template/spec/volumes").is_none());
     }
@@ -2142,6 +2326,17 @@ mod tests {
                 git_observer_github_api_url: "https://api.github.com".to_string(),
                 git_observer_active_deadline_seconds: 300,
                 git_observer_ttl_seconds_after_finished: 3600,
+                gitops_observer_enabled: true,
+                gitops_observer_service_account: "pharness-gitops-observer".to_string(),
+                gitops_observer_token_secret_name: Some(
+                    "pharness-gitops-observer-token".to_string(),
+                ),
+                gitops_observer_allowed_repos: vec![
+                    "https://github.com/example/finance-gitops.git".to_string(),
+                ],
+                gitops_observer_github_api_url: "https://api.github.com".to_string(),
+                gitops_observer_active_deadline_seconds: 300,
+                gitops_observer_ttl_seconds_after_finished: 3600,
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),
@@ -2174,6 +2369,8 @@ mod tests {
             error: None,
             result_json: None,
             execution_target_json: json!({}),
+            origin: "legacy".to_string(),
+            created_by: None,
         }
     }
 }

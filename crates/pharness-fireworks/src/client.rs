@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use pharness_core::{
     AgentAction, ModelCapabilities, ModelProvider, ModelRequest, ModelToolCall, ModelTurn,
-    ProviderError, ToolProtocolMode,
+    ProviderError, TokenUsage, ToolProtocolMode,
 };
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
@@ -315,12 +315,17 @@ fn aggregate_to_model_turn(
         },
     };
 
+    let usage = aggregate.usage.map(|usage| TokenUsage {
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        total_tokens: usage.total_tokens,
+    });
     Ok(ModelTurn {
         raw_provider_id: aggregate.raw_provider_id,
         assistant_message: (!aggregate.content.is_empty()).then_some(aggregate.content),
         assistant_tool_calls,
         action,
-        usage: None,
+        usage,
     })
 }
 
@@ -423,6 +428,7 @@ mod tests {
                         r#"{"reason":"Inspect manifest","path":"Cargo.toml","max_bytes":2048}"#
                             .to_string(),
                 }],
+                usage: None,
             },
             ToolProtocolMode::NativeTools,
         )
@@ -472,6 +478,7 @@ mod tests {
                                 .to_string(),
                     },
                 ],
+                usage: None,
             },
             ToolProtocolMode::NativeTools,
         )
@@ -491,6 +498,7 @@ mod tests {
                     r#"{"action":"finish","id":"act_done","reason":"Done","summary":"ok","success":true}"#
                         .to_string(),
                 tool_calls: Vec::new(),
+                usage: None,
             },
             ToolProtocolMode::JsonAction,
         )

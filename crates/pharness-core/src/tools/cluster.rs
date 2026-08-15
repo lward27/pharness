@@ -1378,6 +1378,8 @@ fn compact_pod_status(value: &Value) -> Option<Value> {
 fn compact_container_status(value: &Value) -> Value {
     let mut container = Map::new();
     copy_string(value, &mut container, "name", "/name");
+    copy_string(value, &mut container, "image", "/image");
+    copy_string(value, &mut container, "imageID", "/imageID");
     copy_bool(value, &mut container, "ready", "/ready");
     copy_u64(value, &mut container, "restartCount", "/restartCount");
 

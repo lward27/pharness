@@ -71,3 +71,43 @@ pub enum ToolError {
     #[error("network error: {message}")]
     Network { message: String },
 }
+
+/// Whether a tool failure is safe to show to the model for a bounded retry.
+/// Policy denials are evaluated before an executor is invoked and therefore
+/// never enter this classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolErrorDisposition {
+    Recoverable,
+    Terminal,
+}
+
+impl ToolError {
+    pub fn disposition(&self) -> ToolErrorDisposition {
+        match self {
+            Self::UnsupportedAction { .. } | Self::OutsideWorkspace { .. } => {
+                ToolErrorDisposition::Terminal
+            }
+            Self::Io { .. }
+            | Self::NonUtf8 { .. }
+            | Self::NotDirectory { .. }
+            | Self::InvalidArguments { .. }
+            | Self::TimedOut { .. }
+            | Self::CommandFailed { .. }
+            | Self::Network { .. } => ToolErrorDisposition::Recoverable,
+        }
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Self::UnsupportedAction { .. } => "unsupported_action",
+            Self::OutsideWorkspace { .. } => "outside_workspace",
+            Self::Io { .. } => "io",
+            Self::NonUtf8 { .. } => "non_utf8",
+            Self::NotDirectory { .. } => "not_directory",
+            Self::InvalidArguments { .. } => "invalid_arguments",
+            Self::TimedOut { .. } => "timed_out",
+            Self::CommandFailed { .. } => "command_failed",
+            Self::Network { .. } => "network",
+        }
+    }
+}

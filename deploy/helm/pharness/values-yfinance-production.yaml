@@ -1,0 +1,16 @@
+# Apply only after both separately scoped GitOps credential Secrets exist.
+worker:
+  gitOpsWriter:
+    enabled: true
+    tokenSecretName: pharness-gitops-writer-token
+    allowedRepos:
+      - https://github.com/lward27/lucas_engineering.git
+  gitOpsObserver:
+    enabled: true
+    tokenSecretName: pharness-gitops-observer-token
+    allowedRepos:
+      - https://github.com/lward27/lucas_engineering.git
+  argoExecutor:
+    enabled: true
+    allowedApplications:
+      - yfinance-wrapper

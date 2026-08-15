@@ -423,6 +423,8 @@ pub struct PermissionGrantScope {
     pub namespaces: Vec<String>,
     pub repos: Vec<String>,
     pub branches: Vec<String>,
+    #[serde(default)]
+    pub work_item_ids: Vec<String>,
     pub work_plan_ids: Vec<String>,
     pub change_set_ids: Vec<String>,
     pub pipeline_intent_ids: Vec<String>,
@@ -436,6 +438,16 @@ pub struct PermissionGrantScope {
     pub gitops_change_set_ids: Vec<String>,
     #[serde(default)]
     pub gitops_delivery_plan_artifact_ids: Vec<String>,
+    #[serde(default)]
+    pub pipeline_contract_ids: Vec<String>,
+    #[serde(default)]
+    pub deployment_contract_ids: Vec<String>,
+    #[serde(default)]
+    pub source_merge_shas: Vec<String>,
+    #[serde(default)]
+    pub gitops_merge_shas: Vec<String>,
+    #[serde(default)]
+    pub image_digests: Vec<String>,
     pub production_impacting: Option<bool>,
 }
 
@@ -559,6 +571,7 @@ mod tests {
             reason: "list".to_string(),
             path: ".".into(),
             depth: 1,
+            max_entries: None,
         });
 
         assert!(decision.is_allow());
@@ -1020,6 +1033,7 @@ mod tests {
                 namespaces: Vec::new(),
                 repos: Vec::new(),
                 branches: Vec::new(),
+                work_item_ids: Vec::new(),
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),
                 pipeline_intent_ids: Vec::new(),
@@ -1028,6 +1042,11 @@ mod tests {
                 git_delivery_plan_artifact_ids: Vec::new(),
                 gitops_change_set_ids: Vec::new(),
                 gitops_delivery_plan_artifact_ids: Vec::new(),
+                pipeline_contract_ids: Vec::new(),
+                deployment_contract_ids: Vec::new(),
+                source_merge_shas: Vec::new(),
+                gitops_merge_shas: Vec::new(),
+                image_digests: Vec::new(),
                 production_impacting: None,
             },
             policy: PermissionGrantPolicy {

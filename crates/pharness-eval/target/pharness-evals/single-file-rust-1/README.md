@@ -1,0 +1,1 @@
+# Single-file Rust fixture

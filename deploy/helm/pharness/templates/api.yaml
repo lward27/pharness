@@ -82,7 +82,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: api
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          image: "{{ .Values.api.image.repository }}@{{ .Values.api.image.digest }}"
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           ports:
             - containerPort: 4777
@@ -99,7 +99,15 @@ spec:
             - name: PHARNESS_WORKER_K8S_NAMESPACE
               value: {{ .Release.Namespace | quote }}
             - name: PHARNESS_WORKER_K8S_IMAGE
-              value: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+              value: "{{ .Values.api.image.repository }}@{{ .Values.api.image.digest }}"
+            - name: PHARNESS_BUILD_REVISION
+              value: {{ .Values.api.image.revision | quote }}
+            - name: PHARNESS_RUNTIME_IMAGE_DIGEST
+              value: {{ .Values.api.image.digest | quote }}
+            - name: PHARNESS_UI_IMAGE_DIGEST
+              value: {{ .Values.ui.image.digest | quote }}
+            - name: PHARNESS_UI_BUILD_REVISION
+              value: {{ .Values.ui.image.revision | quote }}
             - name: PHARNESS_WORKER_K8S_SERVICE_ACCOUNT
               value: {{ .Values.worker.serviceAccount | quote }}
             - name: PHARNESS_TEKTON_EXECUTOR_SERVICE_ACCOUNT
@@ -172,6 +180,20 @@ spec:
               value: {{ .Values.worker.gitObserver.activeDeadlineSeconds | quote }}
             - name: PHARNESS_GIT_OBSERVER_TTL_SECONDS
               value: {{ .Values.worker.gitObserver.ttlSecondsAfterFinished | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_ENABLED
+              value: {{ .Values.worker.gitOpsObserver.enabled | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_SERVICE_ACCOUNT
+              value: {{ .Values.worker.gitOpsObserver.serviceAccount | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_TOKEN_SECRET
+              value: {{ .Values.worker.gitOpsObserver.tokenSecretName | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_ALLOWED_REPOS
+              value: {{ join "," .Values.worker.gitOpsObserver.allowedRepos | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_GITHUB_API_URL
+              value: {{ .Values.worker.gitOpsObserver.githubApiUrl | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_ACTIVE_DEADLINE_SECONDS
+              value: {{ .Values.worker.gitOpsObserver.activeDeadlineSeconds | quote }}
+            - name: PHARNESS_GITOPS_OBSERVER_TTL_SECONDS
+              value: {{ .Values.worker.gitOpsObserver.ttlSecondsAfterFinished | quote }}
             - name: PHARNESS_WORKER_K8S_API_URL
               value: "http://pharness-api.{{ .Release.Namespace }}.svc.cluster.local:4777"
             - name: PHARNESS_WORKER_K8S_WORKSPACE_DIR
@@ -210,6 +232,28 @@ spec:
               value: {{ .Values.api.policy.subject | quote }}
             - name: PHARNESS_POLICY_ENVIRONMENT
               value: {{ .Values.api.policy.environment | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_ENABLED
+              value: {{ .Values.protectedProductionTarget.enabled | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_ENVIRONMENT
+              value: {{ .Values.protectedProductionTarget.environment | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_NAMESPACE
+              value: {{ .Values.protectedProductionTarget.namespace | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_ARGO_APPLICATION
+              value: {{ .Values.protectedProductionTarget.argoApplication | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_WORKLOAD_KIND
+              value: {{ .Values.protectedProductionTarget.workloadKind | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_WORKLOAD_NAME
+              value: {{ .Values.protectedProductionTarget.workloadName | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_SOURCE_REPO
+              value: {{ .Values.protectedProductionTarget.sourceRepo | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_GITOPS_REPO
+              value: {{ .Values.protectedProductionTarget.gitOpsRepo | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_KUSTOMIZATION_PATH
+              value: {{ .Values.protectedProductionTarget.kustomizationPath | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_IMAGE_NAME
+              value: {{ .Values.protectedProductionTarget.imageName | quote }}
+            - name: PHARNESS_PROTECTED_TARGET_ROLLBACK_OWNER
+              value: {{ .Values.protectedProductionTarget.rollbackOwner | quote }}
             - name: FIREWORKS_API_KEY
               valueFrom:
                 secretKeyRef:

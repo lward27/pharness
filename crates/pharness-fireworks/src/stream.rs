@@ -1,4 +1,4 @@
-use crate::{FireworksStreamChunk, FireworksToolCallDelta};
+use crate::{FireworksStreamChunk, FireworksTokenUsage, FireworksToolCallDelta};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -6,12 +6,16 @@ pub struct FireworksStreamAggregate {
     pub raw_provider_id: Option<String>,
     pub content: String,
     pub tool_calls: Vec<AccumulatedToolCall>,
+    pub usage: Option<FireworksTokenUsage>,
 }
 
 impl FireworksStreamAggregate {
     pub fn push_chunk(&mut self, chunk: FireworksStreamChunk) {
         if self.raw_provider_id.is_none() {
             self.raw_provider_id = chunk.id;
+        }
+        if chunk.usage.is_some() {
+            self.usage = chunk.usage;
         }
 
         let mut accumulator = ToolCallAccumulator {
@@ -203,6 +207,19 @@ mod tests {
         aggregate.push_chunk(
             serde_json::from_value(serde_json::json!({
                 "id": "chatcmpl-test",
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": 120,
+                    "completion_tokens": 30,
+                    "total_tokens": 150
+                }
+            }))
+            .unwrap(),
+        );
+
+        aggregate.push_chunk(
+            serde_json::from_value(serde_json::json!({
+                "id": "chatcmpl-test",
                 "choices": [{
                     "index": 0,
                     "delta": {
@@ -227,5 +244,6 @@ mod tests {
             aggregate.tool_calls[0].arguments,
             "{\"path\":\"Cargo.toml\"}"
         );
+        assert_eq!(aggregate.usage.unwrap().total_tokens, 150);
     }
 }

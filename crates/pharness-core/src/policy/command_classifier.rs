@@ -74,6 +74,10 @@ pub fn classify_command(command: &str) -> CommandClass {
             "cat ",
             "head ",
             "tail ",
+            "sed -n",
+            "wc ",
+            "cargo metadata",
+            "cargo fmt --check",
             "rg ",
             "grep ",
             "find ",
@@ -92,7 +96,20 @@ pub fn classify_command(command: &str) -> CommandClass {
 
     if starts_with_any(
         normalized.trim_start(),
-        &["touch ", "mkdir ", "cp ", "mv ", "cargo test", "npm test"],
+        &[
+            "touch ",
+            "mkdir ",
+            "cp ",
+            "mv ",
+            "cargo check",
+            "cargo test",
+            "cargo clippy",
+            "npm test",
+            "pnpm test",
+            "yarn test",
+            "pytest",
+            "go test",
+        ],
     ) {
         return CommandClass::WriteLocalProject;
     }

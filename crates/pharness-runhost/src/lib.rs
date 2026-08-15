@@ -12,12 +12,13 @@ mod preview;
 mod prompt;
 
 pub use preview::approval_preview_for_action;
-pub use prompt::{system_prompt, worker_tool_specs};
+pub use prompt::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
 
 use pharness_core::{
-    AgentEvent, AgentRuntime, ApprovedAction, CancellationFlag, CompositeToolExecutor, EventSink,
-    LocalReadOnlyFsTools, LocalShellTools, ModelMessage, ReadOnlyClusterTools, RunConfig,
-    RunOutcome, RunScope, RunStatus, SafetyPolicy, ToolProtocolMode,
+    AgentEvent, AgentRuntime, ApprovedAction, CancellationFlag, CompositeToolExecutor,
+    ContextBudget, EventSink, LocalReadOnlyFsTools, LocalShellTools, ModelMessage,
+    ReadOnlyClusterTools, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome, RunScope,
+    RunStatus, SafetyPolicy, TaskContract, ToolProtocolMode,
 };
 use pharness_fireworks::FireworksClient;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,8 @@ pub struct RunSpec {
     /// workspace. Model prompts and ambient environment variables cannot
     /// supply or alter this contract.
     pub workspace_source: Option<WorkspaceSourceSpec>,
+    #[serde(default)]
+    pub task_contract: TaskContract,
 }
 
 /// Typed remote source checkout contract for one workspace attempt.
@@ -51,6 +54,10 @@ pub struct WorkspaceSourceSpec {
     pub workspace_id: String,
     pub source_repo: String,
     pub source_ref: String,
+    /// Optional immutable object ID requested by the control plane. When set,
+    /// the worker must check out this object rather than resolving source_ref.
+    #[serde(default)]
+    pub source_commit: Option<String>,
     pub branch: String,
     /// Filled by the worker after checkout and before model execution.
     #[serde(default)]
@@ -64,6 +71,9 @@ impl WorkspaceSourceSpec {
         }
         validate_https_git_url(&self.source_repo)?;
         validate_git_ref(&self.source_ref, "source_ref")?;
+        if let Some(commit) = &self.source_commit {
+            validate_commit_id(commit)?;
+        }
         validate_git_ref(&self.branch, "branch")?;
         if let Some(commit) = &self.resolved_commit {
             validate_commit_id(commit)?;
@@ -157,6 +167,7 @@ pub struct AttemptHost {
     pub provider: FireworksClient,
     pub cluster_tools: ReadOnlyClusterTools,
     pub default_policy: SafetyPolicy,
+    pub context_budget: ContextBudget,
 }
 
 pub fn run_status_str(status: RunStatus) -> &'static str {
@@ -240,6 +251,66 @@ where
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
+fn repository_instructions(cwd: &Path) -> anyhow::Result<(String, Vec<RepositoryInstruction>)> {
+    const MAX_FILE_BYTES: usize = 16 * 1024;
+    const MAX_TOTAL_BYTES: usize = 32 * 1024;
+    let canonical_root = cwd.canonicalize()?;
+    let mut total = 0usize;
+    let mut sections = Vec::new();
+    let mut files = Vec::new();
+    for relative in ["AGENTS.md", "CLAUDE.md", ".pharness/instructions.md"] {
+        let candidate = cwd.join(relative);
+        if !candidate.exists() {
+            continue;
+        }
+        let canonical = candidate.canonicalize().map_err(|error| {
+            anyhow::anyhow!("failed to resolve repository instruction {relative}: {error}")
+        })?;
+        if !canonical.starts_with(&canonical_root) || secret_shaped_path(relative) {
+            continue;
+        }
+        let content = std::fs::read_to_string(&canonical).map_err(|error| {
+            anyhow::anyhow!("failed to read repository instruction {relative}: {error}")
+        })?;
+        let available = MAX_TOTAL_BYTES.saturating_sub(total);
+        if available == 0 {
+            break;
+        }
+        let bounded = truncate_utf8(&content, MAX_FILE_BYTES.min(available));
+        total += bounded.len();
+        files.push(RepositoryInstruction {
+            filename: relative.to_string(),
+            bytes: bounded.len(),
+        });
+        sections.push(format!(
+            "Repository instructions from {relative}:\n{bounded}"
+        ));
+    }
+    if sections.is_empty() {
+        Ok((
+            "No additional repository instructions were found.".to_string(),
+            files,
+        ))
+    } else {
+        Ok((sections.join("\n\n"), files))
+    }
+}
+
+fn truncate_utf8(value: &str, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value.to_string();
+    }
+    const MARKER: &str = "\n[instructions truncated]";
+    if max_bytes <= MARKER.len() {
+        return MARKER[..max_bytes].to_string();
+    }
+    let mut end = max_bytes - MARKER.len();
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{MARKER}", &value[..end])
+}
+
 /// Execute one run attempt against the given backend.
 ///
 /// The backend's `finish` is called exactly once on the success path. Callers
@@ -274,11 +345,14 @@ pub async fn execute_attempt<B: AttemptBackend>(
 
     let outcome = match &spec.resume {
         None => {
+            let (repository_instruction_content, repository_instruction_files) =
+                repository_instructions(&cwd)?;
             let config = RunConfig {
                 session_id,
                 run_id,
                 messages: vec![
                     ModelMessage::system(system_prompt()),
+                    ModelMessage::system(repository_instruction_content),
                     ModelMessage::user(spec.run.user_task.clone()),
                 ],
                 tools: worker_tool_specs(),
@@ -286,6 +360,10 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 temperature: 0.1,
                 max_tokens: 4096,
                 max_turns: spec.run.max_turns,
+                context_budget: host.context_budget.clone(),
+                recovery_policy: RecoveryPolicy::default(),
+                task_contract: spec.run.task_contract.clone(),
+                repository_instruction_files,
                 policy,
                 run_scope,
                 event_seq_start: spec.event_seq_start,
@@ -310,6 +388,10 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 temperature: 0.1,
                 max_tokens: 4096,
                 max_turns: spec.run.max_turns,
+                context_budget: host.context_budget.clone(),
+                recovery_policy: RecoveryPolicy::default(),
+                task_contract: spec.run.task_contract.clone(),
+                repository_instruction_files: Vec::new(),
                 policy,
                 run_scope,
                 event_seq_start: spec.event_seq_start,
@@ -469,7 +551,7 @@ impl EventSink for ChannelEventSink {
 
 #[cfg(test)]
 mod workspace_source_tests {
-    use super::{collect_workspace_git_evidence, WorkspaceSourceSpec};
+    use super::{collect_workspace_git_evidence, repository_instructions, WorkspaceSourceSpec};
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -481,6 +563,7 @@ mod workspace_source_tests {
             workspace_id: "ws_123".to_string(),
             source_repo: "https://github.com/example/finance-app.git".to_string(),
             source_ref: "main".to_string(),
+            source_commit: None,
             branch: "pharness/witem-123/attempt-1".to_string(),
             resolved_commit: None,
         }
@@ -494,6 +577,7 @@ mod workspace_source_tests {
             workspace_id: "ws_123".to_string(),
             source_repo: "https://token@example.test/team/app.git".to_string(),
             source_ref: "main".to_string(),
+            source_commit: None,
             branch: "pharness/witem-123/attempt-1".to_string(),
             resolved_commit: None,
         };
@@ -506,6 +590,81 @@ mod workspace_source_tests {
         source.source_ref = "main".to_string();
         source.resolved_commit = Some("a1b2c3d4".to_string());
         assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn old_attempt_payload_deserializes_with_the_general_task_contract() {
+        let spec: super::AttemptSpec = serde_json::from_value(serde_json::json!({
+            "run": {
+                "run_id": "run_legacy",
+                "session_id": "ses_legacy",
+                "cwd": "/tmp/workspace",
+                "user_task": "inspect",
+                "max_turns": 24,
+                "execution_target_json": {},
+                "workspace_source": null
+            },
+            "event_seq_start": 0,
+            "resume": null
+        }))
+        .unwrap();
+
+        assert_eq!(
+            spec.run.task_contract.kind,
+            pharness_core::TaskKind::General
+        );
+        assert!(!spec.run.task_contract.require_workspace_change);
+        assert!(!spec.run.task_contract.require_post_change_diff);
+    }
+
+    #[test]
+    fn repository_instructions_are_bounded_and_stay_inside_the_workspace() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-runhost-instructions-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(root.join(".pharness")).unwrap();
+        std::fs::write(root.join("AGENTS.md"), "a".repeat(20 * 1024)).unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "b".repeat(20 * 1024)).unwrap();
+        std::fs::write(root.join(".pharness/instructions.md"), "third").unwrap();
+
+        let (prompt, files) = repository_instructions(&root).unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().all(|file| file.bytes <= 16 * 1024));
+        assert!(files.iter().map(|file| file.bytes).sum::<usize>() <= 32 * 1024);
+        assert!(prompt.contains("Repository instructions from AGENTS.md"));
+        assert!(prompt.contains("Repository instructions from CLAUDE.md"));
+        assert!(!prompt.contains("third"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repository_instruction_symlink_escaping_workspace_is_ignored() {
+        use std::os::unix::fs::symlink;
+
+        let root = std::env::temp_dir().join(format!(
+            "pharness-runhost-instruction-symlink-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        let outside = std::env::temp_dir().join(format!(
+            "pharness-runhost-outside-instruction-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(&outside, "outside instructions").unwrap();
+        symlink(&outside, root.join("AGENTS.md")).unwrap();
+
+        let (prompt, files) = repository_instructions(&root).unwrap();
+
+        assert!(files.is_empty());
+        assert!(!prompt.contains("outside instructions"));
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_file(outside);
     }
 
     #[tokio::test]
@@ -531,6 +690,7 @@ mod workspace_source_tests {
                 workspace_id: "ws_test".to_string(),
                 source_repo: "https://github.com/example/finance-app.git".to_string(),
                 source_ref: "main".to_string(),
+                source_commit: None,
                 branch: "pharness/test/attempt-1".to_string(),
                 resolved_commit: Some(base_commit),
             },
