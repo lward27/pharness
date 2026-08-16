@@ -356,8 +356,9 @@ fn allowlisted_connect_target(
     let method = parts.next().unwrap_or_default();
     let authority = parts.next().unwrap_or_default();
     let version = parts.next().unwrap_or_default();
-    if method != "CONNECT" || version != "HTTP/1.1" || parts.next().is_some() {
-        anyhow::bail!("egress proxy accepts only HTTP/1.1 CONNECT");
+    if method != "CONNECT" || !matches!(version, "HTTP/1.0" | "HTTP/1.1") || parts.next().is_some()
+    {
+        anyhow::bail!("egress proxy accepts only HTTP/1.0 or HTTP/1.1 CONNECT");
     }
     let (host, port) = authority
         .rsplit_once(':')
@@ -2751,6 +2752,11 @@ mod tests {
             .unwrap(),
             ("api.fireworks.ai".to_string(), 443)
         );
+        assert_eq!(
+            allowlisted_connect_target("CONNECT api.fireworks.ai:443 HTTP/1.0\r\n\r\n", &allowed,)
+                .unwrap(),
+            ("api.fireworks.ai".to_string(), 443)
+        );
         assert!(
             allowlisted_connect_target("CONNECT evil.example:443 HTTP/1.1\r\n\r\n", &allowed,)
                 .is_err()
@@ -2762,6 +2768,11 @@ mod tests {
         .is_err());
         assert!(allowlisted_connect_target(
             "CONNECT api.fireworks.ai:80 HTTP/1.1\r\n\r\n",
+            &allowed,
+        )
+        .is_err());
+        assert!(allowlisted_connect_target(
+            "CONNECT api.fireworks.ai:443 HTTP/2\r\n\r\n",
             &allowed,
         )
         .is_err());
