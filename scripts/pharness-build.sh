@@ -7,6 +7,7 @@ set -euo pipefail
 # Usage: scripts/pharness-build.sh <runtime|ui|python-runner|all> --revision <40-char-sha> [--node <hostname>]
 
 NAMESPACE="tekton-pipelines"
+KUBE_CONTEXT="${PHARNESS_KUBE_CONTEXT:-lucas_engineering}"
 NODE="${PHARNESS_BUILD_NODE:-ubuntu-lucas-engineering-2}"
 TARGET="${1:-}"
 REVISION=""
@@ -36,7 +37,7 @@ trigger() {
   local component="$1" storage="$2" dockerfile="$3"
   local image="registry.lucas.engineering/pharness-${component}:git-${REVISION}"
   local run
-  run="$(kubectl create -n "$NAMESPACE" -o name -f - <<MANIFEST
+  run="$(kubectl --context "$KUBE_CONTEXT" create -n "$NAMESPACE" -o name -f - <<MANIFEST
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -75,12 +76,39 @@ spec:
     - name: kaniko-extra-args
       value:
         - --skip-tls-verify
+        - --custom-platform=linux/amd64
         - --build-arg=PHARNESS_BUILD_REVISION=${REVISION}
+        - --build-arg=TARGETARCH=amd64
     - name: deployment
       value: ""
 MANIFEST
 )"
   RUNS+=("${component}:${run#pipelinerun.tekton.dev/}")
+}
+
+wait_for_pipeline() {
+  local run="$1"
+  local status=""
+  local reason=""
+  local deadline=$((SECONDS + 1800))
+
+  while ((SECONDS < deadline)); do
+    status="$(kubectl --context "$KUBE_CONTEXT" get pipelinerun -n "$NAMESPACE" "$run" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')"
+    case "$status" in
+      True)
+        return 0
+        ;;
+      False)
+        reason="$(kubectl --context "$KUBE_CONTEXT" get pipelinerun -n "$NAMESPACE" "$run" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].reason}')"
+        echo "PipelineRun ${run} failed (${reason:-unknown reason})" >&2
+        return 1
+        ;;
+    esac
+    sleep 5
+  done
+
+  echo "PipelineRun ${run} did not complete within 30 minutes" >&2
+  return 1
 }
 
 case "$TARGET" in
@@ -97,10 +125,10 @@ esac
 for entry in "${RUNS[@]}"; do
   component="${entry%%:*}"
   run="${entry#*:}"
-  kubectl wait -n "$NAMESPACE" --for=condition=Succeeded "pipelinerun/${run}" --timeout=30m
-  task_run="$(kubectl get taskruns -n "$NAMESPACE" -l "tekton.dev/pipelineRun=${run}" -o json | jq -r '.items[] | select(.metadata.labels["tekton.dev/pipelineTask"] == "build-push") | .metadata.name' | head -1)"
-  digest="$(kubectl get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_DIGEST") | .value')"
-  image_url="$(kubectl get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_URL") | .value')"
+  wait_for_pipeline "$run"
+  task_run="$(kubectl --context "$KUBE_CONTEXT" get taskruns -n "$NAMESPACE" -l "tekton.dev/pipelineRun=${run}" -o json | jq -r '.items[] | select(.metadata.labels["tekton.dev/pipelineTask"] == "build-push") | .metadata.name' | head -1)"
+  digest="$(kubectl --context "$KUBE_CONTEXT" get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_DIGEST") | .value')"
+  image_url="$(kubectl --context "$KUBE_CONTEXT" get taskrun -n "$NAMESPACE" "$task_run" -o json | jq -r '.status.results[] | select(.name == "IMAGE_URL") | .value')"
   [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
     echo "PipelineRun ${run} did not return an immutable image digest" >&2
     exit 1
