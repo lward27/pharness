@@ -76,6 +76,7 @@ fn environment_ref_marks_production_context() {
 #[test]
 fn run_scope_carries_sdlc_metadata() {
     let scope = RunScope {
+        run_id: Some("run_1".to_string()),
         namespace: Some("apps-dev".to_string()),
         repo: Some("git@example.test/team/app.git".to_string()),
         branch: Some("feature/pharness".to_string()),

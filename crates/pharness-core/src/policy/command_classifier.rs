@@ -7,6 +7,7 @@ pub enum CommandClass {
     WriteLocalProject,
     DestructiveLocal,
     Network,
+    EnvironmentSetup,
     Privileged,
     SecretAccessing,
     Unknown,
@@ -39,6 +40,10 @@ pub fn classify_command(command: &str) -> CommandClass {
         || normalized.contains("helm uninstall")
     {
         return CommandClass::DestructiveLocal;
+    }
+
+    if is_environment_setup_or_probe(&normalized) {
+        return CommandClass::EnvironmentSetup;
     }
 
     if starts_with_any(
@@ -107,6 +112,10 @@ pub fn classify_command(command: &str) -> CommandClass {
             "npm test",
             "pnpm test",
             "yarn test",
+            "python -m unittest",
+            "python3 -m unittest",
+            "python -m compileall",
+            "python3 -m compileall",
             "pytest",
             "go test",
         ],
@@ -115,6 +124,52 @@ pub fn classify_command(command: &str) -> CommandClass {
     }
 
     CommandClass::Unknown
+}
+
+fn is_environment_setup_or_probe(command: &str) -> bool {
+    let padded = format!(" {command} ");
+    [
+        " apt ",
+        " apt-get ",
+        " apk ",
+        " pip install ",
+        " pip3 install ",
+        " python -m pip install ",
+        " python3 -m pip install ",
+        " uv pip install ",
+        " npm install ",
+        " pnpm install ",
+        " yarn install ",
+        " cargo install ",
+        " curl ",
+        " wget ",
+        " httpx ",
+        " requests.get ",
+        " urllib.request ",
+        " http.client ",
+        " socket.create_connection ",
+        " docker version ",
+        " docker info ",
+        " podman version ",
+        " which python ",
+        " which python3 ",
+        " which docker ",
+        " command -v python ",
+        " command -v python3 ",
+        " command -v docker ",
+        " python --version ",
+        " python3 --version ",
+    ]
+    .iter()
+    .any(|needle| padded.contains(needle))
+        || [
+            "import httpx",
+            "import requests",
+            "import urllib",
+            "import socket",
+        ]
+        .iter()
+        .any(|needle| command.contains(needle))
 }
 
 fn starts_with_any(value: &str, prefixes: &[&str]) -> bool {
@@ -161,6 +216,18 @@ mod tests {
     }
 
     #[test]
+    fn classifies_python_acceptance_commands_as_local_writes() {
+        assert_eq!(
+            classify_command("python3 -m unittest discover -s tests -v"),
+            CommandClass::WriteLocalProject
+        );
+        assert_eq!(
+            classify_command("python -m compileall -q src tests"),
+            CommandClass::WriteLocalProject
+        );
+    }
+
+    #[test]
     fn classifies_privileged_and_secret_access() {
         assert_eq!(
             classify_command("sudo cat /etc/hosts"),
@@ -171,5 +238,18 @@ mod tests {
             CommandClass::SecretAccessing
         );
         assert_eq!(classify_command("cat .env"), CommandClass::SecretAccessing);
+    }
+
+    #[test]
+    fn rejects_setup_network_probes_even_inside_compound_commands() {
+        for command in [
+            "apt-get update",
+            "echo checking && python -c 'import httpx'",
+            "mkdir /tmp/x; pip install pytest",
+            "command -v docker",
+            "wget https://example.test/tool",
+        ] {
+            assert_eq!(classify_command(command), CommandClass::EnvironmentSetup);
+        }
     }
 }

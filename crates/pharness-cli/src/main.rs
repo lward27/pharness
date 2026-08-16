@@ -7221,6 +7221,7 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
 
 fn run_scope_from_args(args: &RunArgs) -> Option<RunScope> {
     let scope = RunScope {
+        run_id: None,
         namespace: args.namespace.clone(),
         repo: args.repo.clone(),
         branch: args.branch.clone(),

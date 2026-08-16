@@ -130,6 +130,29 @@ worker:
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
 
+# Implementation branches keep the future runner profile inactive until the
+# post-merge release commit replaces this immutable historical pin with a
+# runner built from the exact merged API/UI revision.
+environmentProfiles:
+  - id: python-3.11
+    active: false
+    image: registry.lucas.engineering/pharness-python-runner@sha256:20cd7db1dec6caab30797a44152e2b38181996c41f9e8d41c0c33c0d7b73afa6
+    revision: 9ed987394aad0ba085d746287392f07c1eae7035
+    platform: linux/amd64
+    required_executables:
+      - pharness-worker
+      - git
+      - python
+      - pip
+    preparation_strategy: python_hashed_requirements
+    service_account: pharness-python-runner
+    repository_allowlist:
+      - https://github.com/lward27/yfinance_wrapper.git
+    limits:
+      cpu: "2"
+      memory: 2Gi
+      ephemeral_storage: 4Gi
+
 # A permanently inert, GitOps-managed Pipeline used only by the bounded
 # execution smoke. Keep this enabled only in environments where Tekton is
 # installed and the executor namespace below is allowlisted.
@@ -179,6 +202,17 @@ ingress:
 
 networkPolicy:
   enabled: true
+  # Flannel/standard NetworkPolicy cannot select FQDNs. Runner pods therefore
+  # have no direct internet egress and use phase-specific CONNECT proxies
+  # whose exact host allowlists are server-owned here.
+  egressProxy:
+    enabled: true
+    preparationAllowedHosts:
+      - github.com
+      - pypi.org
+      - files.pythonhosted.org
+    codingAllowedHosts:
+      - api.fireworks.ai
 
 # The only production target admitted by this milestone. The API compares
 # every field with its locked policy tuple; this is not a general allowlist.

@@ -11,6 +11,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 futures.workspace = true
+hmac.workspace = true
 pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }

@@ -1,5 +1,6 @@
 use pharness_core::{
-    AgentAction, AgentEvent, PolicyDecision, PolicyMode, RunId, RunScope, ToolResult,
+    AgentAction, AgentEvent, PolicyDecision, PolicyMode, RunBudget, RunBudgetConsumption, RunId,
+    RunScope, ToolResult,
 };
 use pharness_store::{
     ApprovalGateSummary, ApprovalSummary, RunSummary, StoredApproval, StoredApprovalGate,
@@ -36,6 +37,9 @@ pub struct RunResponse {
     pub result: Option<serde_json::Value>,
     pub origin: String,
     pub created_by: Option<String>,
+    pub run_budget: RunBudget,
+    pub budget_consumption: RunBudgetConsumption,
+    pub stop_reason: Option<String>,
 }
 
 impl From<StoredRun> for RunResponse {
@@ -60,6 +64,9 @@ impl From<StoredRun> for RunResponse {
             }),
             origin: run.origin,
             created_by: run.created_by,
+            run_budget: run.run_budget,
+            budget_consumption: run.budget_consumption,
+            stop_reason: run.stop_reason,
         }
     }
 }
@@ -127,6 +134,12 @@ pub struct RunOperatorSummaryResponse {
     pub test_results: Vec<serde_json::Value>,
     pub acceptance_evidence: Vec<serde_json::Value>,
     pub pending_approvals: Vec<String>,
+    pub environment_discovery_turns: u32,
+    pub approval_count: u32,
+    pub approval_wait_ms: u64,
+    pub preparation_duration_ms: Option<u64>,
+    pub budget_extensions: u32,
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -452,6 +465,14 @@ pub struct CreateWorkItemRequest {
     pub production_impacting: bool,
     pub max_attempts: Option<u32>,
     pub max_elapsed_seconds: Option<u64>,
+    pub environment_profile_id: Option<String>,
+    pub initial_turn_budget: Option<u32>,
+    pub hard_turn_budget: Option<u32>,
+    pub initial_token_budget: Option<u64>,
+    pub hard_token_budget: Option<u64>,
+    pub active_execution_seconds: Option<u64>,
+    pub recoverable_tool_error_limit: Option<u32>,
+    pub identical_failure_limit: Option<u32>,
     pub actor: Option<String>,
     /// Hash returned by the latest read-only preflight. Production creation
     /// requires an exact match so the browser cannot submit a stale preview.
@@ -497,6 +518,12 @@ pub struct WorkItemResponse {
     pub status_changed_at: String,
     pub status_changed_by: Option<String>,
     pub status_reason: Option<String>,
+    pub environment_profile_id: Option<String>,
+    pub run_budget: RunBudget,
+    pub repository_contract: Option<serde_json::Value>,
+    pub repository_contract_hash: Option<String>,
+    pub environment_preparation_status: String,
+    pub current_environment_snapshot_id: Option<String>,
 }
 
 impl From<StoredWorkItem> for WorkItemResponse {
@@ -534,8 +561,111 @@ impl From<StoredWorkItem> for WorkItemResponse {
             status_changed_at: item.status_changed_at,
             status_changed_by: item.status_changed_by,
             status_reason: item.status_reason,
+            environment_profile_id: item.environment_profile_id,
+            run_budget: item.run_budget,
+            repository_contract: item.repository_contract_json,
+            repository_contract_hash: item.repository_contract_hash,
+            environment_preparation_status: item.environment_preparation_status,
+            current_environment_snapshot_id: item.current_environment_snapshot_id,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EnvironmentProfileResponse {
+    pub id: String,
+    pub status: String,
+    pub image: String,
+    pub revision: String,
+    pub platform: String,
+    pub required_executables: Vec<String>,
+    pub preparation_strategy: String,
+    pub service_account: String,
+    pub repository_allowlist: Vec<String>,
+    pub blockers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EnvironmentProfilesResponse {
+    pub profiles: Vec<EnvironmentProfileResponse>,
+    pub provider_transport_attempts: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EnvironmentPreparationResponse {
+    pub id: String,
+    pub work_item_id: String,
+    pub workspace_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub environment_profile_id: String,
+    pub source_commit: String,
+    pub project_contract: Option<serde_json::Value>,
+    pub project_contract_hash: Option<String>,
+    pub environment_snapshot: Option<serde_json::Value>,
+    pub logs: serde_json::Value,
+    pub error: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+impl From<pharness_store::StoredEnvironmentPreparation> for EnvironmentPreparationResponse {
+    fn from(value: pharness_store::StoredEnvironmentPreparation) -> Self {
+        Self {
+            id: value.id,
+            work_item_id: value.work_item_id,
+            workspace_id: value.workspace_id,
+            run_id: value.run_id,
+            status: value.status,
+            environment_profile_id: value.environment_profile_id,
+            source_commit: value.source_commit,
+            project_contract: value.project_contract_json,
+            project_contract_hash: value.project_contract_hash,
+            environment_snapshot: value.environment_snapshot_json,
+            logs: value.logs_json,
+            error: value.error,
+            started_at: value.started_at,
+            finished_at: value.finished_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BudgetExtensionResponse {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: RunId,
+    pub status: String,
+    pub turn_increment: u32,
+    pub token_increment: u64,
+    pub state_hash: String,
+    pub requested_at: String,
+    pub approved_at: Option<String>,
+    pub approved_by: Option<String>,
+}
+
+impl From<pharness_store::StoredBudgetExtension> for BudgetExtensionResponse {
+    fn from(value: pharness_store::StoredBudgetExtension) -> Self {
+        Self {
+            id: value.id,
+            work_item_id: value.work_item_id,
+            run_id: value.run_id,
+            status: value.status,
+            turn_increment: value.turn_increment,
+            token_increment: value.token_increment,
+            state_hash: value.state_hash,
+            requested_at: value.requested_at,
+            approved_at: value.approved_at,
+            approved_by: value.approved_by,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApproveBudgetExtensionRequest {
+    pub actor: String,
+    pub reason: String,
+    pub state_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -760,6 +890,7 @@ pub struct SystemReadinessResponse {
     pub capabilities: Vec<CapabilityStatusResponse>,
     pub repository_allowlists: serde_json::Value,
     pub targets: serde_json::Value,
+    pub environment_profiles: Vec<EnvironmentProfileResponse>,
     pub blockers: Vec<String>,
 }
 
@@ -2458,10 +2589,14 @@ pub struct ApprovalGateResponse {
     pub stale_at: Option<String>,
     pub stale_by: Option<String>,
     pub stale_reason: Option<String>,
+    pub actionable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lifecycle_blocker: Option<String>,
 }
 
 impl From<StoredApprovalGate> for ApprovalGateResponse {
     fn from(gate: StoredApprovalGate) -> Self {
+        let actionable = gate.status == "pending";
         Self {
             id: gate.id,
             work_item_id: gate.work_item_id,
@@ -2487,6 +2622,8 @@ impl From<StoredApprovalGate> for ApprovalGateResponse {
             stale_at: gate.stale_at,
             stale_by: gate.stale_by,
             stale_reason: gate.stale_reason,
+            actionable,
+            lifecycle_blocker: None,
         }
     }
 }

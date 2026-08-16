@@ -51,6 +51,10 @@ export function loadSystemReadiness() {
   return fetchJson("/api/system/readiness");
 }
 
+export function loadEnvironmentProfiles() {
+  return fetchJson("/api/environment-profiles");
+}
+
 export function verifySystemCapability(capability) {
   return postJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight`, {});
 }

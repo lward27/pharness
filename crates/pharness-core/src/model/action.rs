@@ -50,6 +50,20 @@ pub enum AgentAction {
         #[serde(default)]
         max_results: Option<u32>,
     },
+    EnvironmentInfo {
+        id: ActionId,
+        reason: String,
+    },
+    CreateDirectory {
+        id: ActionId,
+        reason: String,
+        path: Utf8PathBuf,
+    },
+    RunAcceptanceCommand {
+        id: ActionId,
+        reason: String,
+        name: String,
+    },
     RunShell {
         id: ActionId,
         reason: String,
@@ -156,6 +170,9 @@ impl AgentAction {
             | Self::PatchFile { id, .. }
             | Self::ListDir { id, .. }
             | Self::SearchFiles { id, .. }
+            | Self::EnvironmentInfo { id, .. }
+            | Self::CreateDirectory { id, .. }
+            | Self::RunAcceptanceCommand { id, .. }
             | Self::RunShell { id, .. }
             | Self::GitDiff { id, .. }
             | Self::GitStatus { id, .. }
@@ -181,6 +198,9 @@ impl AgentAction {
             Self::PatchFile { .. } => "patch_file",
             Self::ListDir { .. } => "list_dir",
             Self::SearchFiles { .. } => "search_files",
+            Self::EnvironmentInfo { .. } => "environment_info",
+            Self::CreateDirectory { .. } => "create_directory",
+            Self::RunAcceptanceCommand { .. } => "run_acceptance_command",
             Self::RunShell { .. } => "run_shell",
             Self::GitDiff { .. } => "git_diff",
             Self::GitStatus { .. } => "git_status",

@@ -53,6 +53,7 @@
 .action-rail,
 .delivery-configuration,
 .inline-approval,
+.environment-snapshot,
 .operator-summary,
 .evidence-summary {
   padding: 1.1rem;
@@ -76,6 +77,7 @@
 .acceptance-editor { display: grid; gap: 0.55rem; }
 .acceptance-editor > div { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; }
 .field-note { margin: 0; color: var(--text-muted); }
+.advanced-budget { padding: 0.85rem; border: 1px solid var(--border); border-radius: 0.65rem; }
 .wizard-navigation { justify-content: space-between; margin-top: 1rem; }
 
 .capability-grid {
@@ -109,8 +111,14 @@
 .action-rail article p,
 .action-rail article small { grid-column: 1 / -1; margin: 0; }
 .action-rail article p { color: var(--text-muted); }
+.action-rail .action-blocker { color: var(--danger); }
 .delivery-configuration { margin: 1rem 0; }
 .inline-approval { margin: 1rem 0; border-color: var(--warning); }
+.environment-snapshot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.environment-snapshot > div:first-child,
+.environment-snapshot > pre,
+.environment-snapshot > .api-banner { grid-column: 1 / -1; }
+.environment-snapshot pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; }
 .operator-summary { margin: 0.8rem 0; }
 
 @media (max-width: 900px) {
@@ -120,6 +128,7 @@
   .delivery-config-grid,
   .readiness-provenance,
   .operator-summary,
+  .environment-snapshot,
   .evidence-summary,
   .capability-grid { grid-template-columns: 1fr; }
   .mutation-summary div { grid-template-columns: 1fr; gap: 0.2rem; }

@@ -1,4 +1,4 @@
-use pharness_core::{RunId, SessionId};
+use pharness_core::{RunBudget, RunBudgetConsumption, RunId, SessionId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +35,9 @@ pub struct StoredRun {
     pub execution_target_json: serde_json::Value,
     pub origin: String,
     pub created_by: Option<String>,
+    pub run_budget: RunBudget,
+    pub budget_consumption: RunBudgetConsumption,
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -457,6 +460,11 @@ pub struct CreateWorkItem {
     pub max_attempts: u32,
     pub max_elapsed_seconds: u64,
     pub created_by: Option<String>,
+    pub environment_profile_id: Option<String>,
+    pub run_budget: RunBudget,
+    pub repository_contract_json: Option<serde_json::Value>,
+    pub repository_contract_hash: Option<String>,
+    pub environment_preparation_status: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -493,6 +501,77 @@ pub struct StoredWorkItem {
     pub status_changed_at: String,
     pub status_changed_by: Option<String>,
     pub status_reason: Option<String>,
+    pub environment_profile_id: Option<String>,
+    pub run_budget: RunBudget,
+    pub repository_contract_json: Option<serde_json::Value>,
+    pub repository_contract_hash: Option<String>,
+    pub environment_preparation_status: String,
+    pub current_environment_snapshot_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateEnvironmentPreparation {
+    pub id: String,
+    pub work_item_id: String,
+    pub workspace_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub environment_profile_id: String,
+    pub source_commit: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateEnvironmentPreparation {
+    pub id: String,
+    pub status: String,
+    pub project_contract_json: Option<serde_json::Value>,
+    pub project_contract_hash: Option<String>,
+    pub environment_snapshot_json: Option<serde_json::Value>,
+    pub logs_json: serde_json::Value,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredEnvironmentPreparation {
+    pub id: String,
+    pub work_item_id: String,
+    pub workspace_id: String,
+    pub run_id: Option<RunId>,
+    pub status: String,
+    pub environment_profile_id: String,
+    pub source_commit: String,
+    pub project_contract_json: Option<serde_json::Value>,
+    pub project_contract_hash: Option<String>,
+    pub environment_snapshot_json: Option<serde_json::Value>,
+    pub logs_json: serde_json::Value,
+    pub error: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateBudgetExtension {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: RunId,
+    pub state_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredBudgetExtension {
+    pub id: String,
+    pub work_item_id: String,
+    pub run_id: RunId,
+    pub status: String,
+    pub turn_increment: u32,
+    pub token_increment: u64,
+    pub state_hash: String,
+    pub requested_at: String,
+    pub approved_at: Option<String>,
+    pub approved_by: Option<String>,
+    pub approval_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

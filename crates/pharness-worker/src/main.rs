@@ -8,17 +8,21 @@
 //! non-zero only when the attempt could not be reported back to the API.
 
 use anyhow::Context;
+use hmac::{Hmac, Mac};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    AgentAction, AgentEvent, CancellationFlag, ReadOnlyClusterTools, ToolExecutor,
+    AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot, ProjectContract,
+    ReadOnlyClusterTools, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
     execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, WorkspaceSourceSpec,
 };
 use serde_yaml::Value as YamlValue;
+use sha2::Sha256;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::process::Command;
 use tracing_subscriber::EnvFilter;
 
 const CONTROL_POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -119,6 +123,14 @@ fn parse_digest_pinned_image_reference(image_ref: &str) -> anyhow::Result<(Strin
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing()?;
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("egress_proxy") {
+        return execute_allowlisted_egress_proxy().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("environment_prepare") {
+        return execute_environment_preparation().await;
+    }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
         return execute_tekton_trigger().await;
@@ -239,6 +251,386 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+async fn execute_allowlisted_egress_proxy() -> anyhow::Result<()> {
+    use std::collections::BTreeSet;
+    use tokio::net::TcpListener;
+
+    let bind =
+        std::env::var("PHARNESS_EGRESS_PROXY_BIND").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let allowed = serde_json::from_str::<Vec<String>>(&required_env(
+        "PHARNESS_EGRESS_PROXY_ALLOWED_HOSTS_JSON",
+    )?)?
+    .into_iter()
+    .map(|host| host.trim().to_ascii_lowercase())
+    .collect::<BTreeSet<_>>();
+    if allowed.is_empty()
+        || allowed.iter().any(|host| {
+            host.is_empty()
+                || host.len() > 253
+                || host.starts_with('.')
+                || host.ends_with('.')
+                || host.contains(['/', ':', '*', '\\', '\0', '\n', '\r'])
+                || !host
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        })
+    {
+        anyhow::bail!("egress proxy host allowlist is invalid");
+    }
+    let listener = TcpListener::bind(&bind).await?;
+    let allowed = Arc::new(allowed);
+    tracing::info!(%bind, host_count = allowed.len(), "allowlisted egress proxy ready");
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let allowed = Arc::clone(&allowed);
+        tokio::spawn(async move {
+            if let Err(error) = proxy_connect(stream, allowed.as_ref()).await {
+                tracing::warn!(%error, "egress proxy rejected or lost a connection");
+            }
+        });
+    }
+}
+
+async fn proxy_connect(
+    mut client: tokio::net::TcpStream,
+    allowed: &std::collections::BTreeSet<String>,
+) -> anyhow::Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut request = Vec::with_capacity(1024);
+    let header_end = loop {
+        if request.len() >= 16 * 1024 {
+            client
+                .write_all(b"HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n")
+                .await?;
+            anyhow::bail!("proxy request header exceeded 16 KiB");
+        }
+        let mut chunk = [0_u8; 1024];
+        let read =
+            tokio::time::timeout(std::time::Duration::from_secs(10), client.read(&mut chunk))
+                .await
+                .context("proxy request header timed out")??;
+        if read == 0 {
+            anyhow::bail!("proxy client closed before sending CONNECT");
+        }
+        request.extend_from_slice(&chunk[..read]);
+        if let Some(index) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+            break index + 4;
+        }
+    };
+    let request_head = std::str::from_utf8(&request[..header_end])?;
+    let (host, port) = match allowlisted_connect_target(request_head, allowed) {
+        Ok(target) => target,
+        Err(error) => {
+            client.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await?;
+            return Err(error);
+        }
+    };
+    let mut upstream = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        tokio::net::TcpStream::connect((host.as_str(), port)),
+    )
+    .await
+    .context("CONNECT target timed out")??;
+    client
+        .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+        .await?;
+    if request.len() > header_end {
+        upstream.write_all(&request[header_end..]).await?;
+    }
+    tokio::io::copy_bidirectional(&mut client, &mut upstream).await?;
+    Ok(())
+}
+
+fn allowlisted_connect_target(
+    request_head: &str,
+    allowed: &std::collections::BTreeSet<String>,
+) -> anyhow::Result<(String, u16)> {
+    let first_line = request_head
+        .lines()
+        .next()
+        .context("proxy request is missing a request line")?;
+    let mut parts = first_line.split_whitespace();
+    let method = parts.next().unwrap_or_default();
+    let authority = parts.next().unwrap_or_default();
+    let version = parts.next().unwrap_or_default();
+    if method != "CONNECT" || version != "HTTP/1.1" || parts.next().is_some() {
+        anyhow::bail!("egress proxy accepts only HTTP/1.1 CONNECT");
+    }
+    let (host, port) = authority
+        .rsplit_once(':')
+        .context("CONNECT authority must include port 443")?;
+    let host = host.to_ascii_lowercase();
+    if port != "443" || !allowed.contains(&host) {
+        anyhow::bail!("CONNECT target is outside the exact host allowlist");
+    }
+    Ok((host, 443))
+}
+
+async fn execute_environment_preparation() -> anyhow::Result<()> {
+    let env = WorkerEnv::from_env()?;
+    let backend = HttpAttemptBackend::new(
+        env.api_url.clone(),
+        env.run_id.clone(),
+        env.worker_token.clone(),
+    )?;
+    let mut spec = fetch_attempt_spec_with_retry(&backend, None)
+        .await
+        .context("failed to fetch preparation context")?;
+    let result = async {
+        let provisioned = prepare_workspace(&spec).await?;
+        if let Some(provisioned) = provisioned {
+            let source = spec
+                .run
+                .workspace_source
+                .as_mut()
+                .context("preparation requires a workspace source")?;
+            source.resolved_commit = Some(provisioned.resolved_commit.clone());
+            backend
+                .report_workspace_provisioned(
+                    &source.workspace_id,
+                    &provisioned.resolved_commit,
+                    &source.branch,
+                )
+                .await?;
+        }
+        prepare_project_environment(&spec, &env.worker_token).await
+    }
+    .await;
+
+    match result {
+        Ok(payload) => backend
+            .post_json_with_retry("environment-preparation", &payload)
+            .await
+            .context("failed to report environment preparation"),
+        Err(error) => {
+            tracing::error!(run_id = %env.run_id, %error, "environment preparation failed");
+            backend
+                .post_json_with_retry(
+                    "environment-preparation",
+                    &serde_json::json!({
+                        "status": "failed",
+                        "error": error.to_string(),
+                        "logs": [{"step":"preparation","status":"failed","summary":error.to_string()}],
+                    }),
+                )
+                .await
+                .context("failed to report environment preparation failure")
+        }
+    }
+}
+
+async fn prepare_project_environment(
+    spec: &AttemptSpec,
+    worker_token: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let cwd = std::path::PathBuf::from(&spec.run.cwd);
+    let source = spec
+        .run
+        .workspace_source
+        .as_ref()
+        .context("environment preparation requires typed workspace source")?;
+    let source_sha = source
+        .resolved_commit
+        .as_deref()
+        .or(source.source_commit.as_deref())
+        .context("environment preparation requires immutable source commit")?;
+    let profile_id = required_env("PHARNESS_ENVIRONMENT_PROFILE_ID")?;
+    if spec
+        .run
+        .execution_target_json
+        .get("environment_profile_id")
+        .and_then(serde_json::Value::as_str)
+        != Some(profile_id.as_str())
+    {
+        anyhow::bail!("runner profile does not match the server-selected run profile");
+    }
+    let (contract, contract_hash) = ProjectContract::load(&cwd)?;
+    if contract.environment_profile != profile_id {
+        anyhow::bail!(
+            "repository contract selects {} rather than runner profile {profile_id}",
+            contract.environment_profile
+        );
+    }
+    let required_executables =
+        serde_json::from_str::<Vec<String>>(&required_env("PHARNESS_REQUIRED_EXECUTABLES_JSON")?)
+            .context("required executable inventory is invalid")?;
+    let mut executable_paths = serde_json::Map::new();
+    for executable in &required_executables {
+        let path = executable_path(executable).await?;
+        executable_paths.insert(executable.clone(), serde_json::Value::String(path));
+    }
+    let python = required_executables
+        .iter()
+        .find(|name| name.as_str() == "python" || name.as_str() == "python3")
+        .context("python runner profile must declare python or python3")?;
+    let python_path = executable_paths
+        .get(python)
+        .and_then(serde_json::Value::as_str)
+        .context("python executable path was not recorded")?;
+    let runtime_dir = cwd.join(".pharness-runtime");
+    let venv = runtime_dir.join("venv");
+    tokio::fs::create_dir_all(&runtime_dir).await?;
+    exclude_runtime_from_git(&cwd).await?;
+    run_checked(
+        &cwd,
+        python_path,
+        &["-m", "venv", venv.to_string_lossy().as_ref()],
+    )
+    .await?;
+    let venv_python = venv.join("bin/python");
+    run_checked(
+        &cwd,
+        venv_python.to_string_lossy().as_ref(),
+        &[
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--require-hashes",
+            "--only-binary=:all:",
+            "-r",
+            &contract.dependency_lock.path,
+        ],
+    )
+    .await?;
+    let python_version =
+        run_output(&cwd, venv_python.to_string_lossy().as_ref(), &["--version"]).await?;
+    let effective_user = run_output(&cwd, "id", &["-u"]).await?;
+    let mut unavailable_tools = Vec::new();
+    for executable in ["docker", "podman", "apt", "apt-get", "apk"] {
+        if executable_path_optional(executable).await.is_none() {
+            unavailable_tools.push(executable.to_string());
+        }
+    }
+    let snapshot = EnvironmentSnapshot {
+        source_sha: source_sha.to_string(),
+        manifest_sha256: contract_hash.clone(),
+        dependency_lock_sha256: contract.dependency_lock.sha256.clone(),
+        runner_image_digest: required_env("PHARNESS_RUNNER_IMAGE")?,
+        runner_revision: required_env("PHARNESS_RUNNER_REVISION")?,
+        os: std::env::consts::OS.to_string(),
+        architecture: std::env::consts::ARCH.to_string(),
+        effective_user,
+        python_version,
+        python_path: venv_python.to_string_lossy().to_string(),
+        writable_paths: contract.writable_paths.clone(),
+        unavailable_tools,
+        agent_network: contract.agent_network,
+        package_installation: contract.package_installation,
+        acceptance_commands: contract.acceptance_commands.clone(),
+        preparation_evidence: serde_json::json!({
+            "required_executables": executable_paths,
+            "venv": venv,
+            "dependency_install": "pip --require-hashes --only-binary=:all:",
+            "platform": required_env("PHARNESS_RUNNER_PLATFORM")?,
+        }),
+    };
+    let snapshot_json = serde_json::to_value(&snapshot)?;
+    let signature = signed_payload(worker_token, &snapshot_json);
+    Ok(serde_json::json!({
+        "status": "succeeded",
+        "project_contract": contract,
+        "project_contract_hash": contract_hash,
+        "environment_snapshot": snapshot_json,
+        "snapshot_signature": signature,
+        "logs": [
+            {"step":"checkout","status":"succeeded","source_sha":source_sha},
+            {"step":"contract","status":"succeeded","manifest_sha256":contract_hash},
+            {"step":"executables","status":"succeeded","inventory":required_executables},
+            {"step":"dependencies","status":"succeeded","lock_sha256":snapshot.dependency_lock_sha256},
+        ],
+    }))
+}
+
+async fn executable_path(executable: &str) -> anyhow::Result<String> {
+    executable_path_optional(executable)
+        .await
+        .with_context(|| format!("runner is missing required executable {executable}"))
+}
+
+async fn executable_path_optional(executable: &str) -> Option<String> {
+    let output = Command::new("/bin/sh")
+        .args(["-c", "command -v \"$1\"", "pharness-executable", executable])
+        .output()
+        .await
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+async fn run_checked(cwd: &std::path::Path, program: &str, args: &[&str]) -> anyhow::Result<()> {
+    let output = Command::new(program)
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "{} failed: {}",
+            program,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+async fn run_output(cwd: &std::path::Path, program: &str, args: &[&str]) -> anyhow::Result<String> {
+    let output = Command::new(program)
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!("{} failed", program);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .to_string()
+        .pipe_if_empty(|| String::from_utf8_lossy(&output.stderr).trim().to_string()))
+}
+
+trait NonEmptyString {
+    fn pipe_if_empty(self, fallback: impl FnOnce() -> String) -> String;
+}
+
+impl NonEmptyString for String {
+    fn pipe_if_empty(self, fallback: impl FnOnce() -> String) -> String {
+        if self.is_empty() {
+            fallback()
+        } else {
+            self
+        }
+    }
+}
+
+async fn exclude_runtime_from_git(cwd: &std::path::Path) -> anyhow::Result<()> {
+    let exclude = cwd.join(".git/info/exclude");
+    let mut content = tokio::fs::read_to_string(&exclude)
+        .await
+        .unwrap_or_default();
+    if !content
+        .lines()
+        .any(|line| line.trim() == "/.pharness-runtime/")
+    {
+        if !content.ends_with('\n') && !content.is_empty() {
+            content.push('\n');
+        }
+        content.push_str("/.pharness-runtime/\n");
+        tokio::fs::write(exclude, content).await?;
+    }
+    Ok(())
+}
+
+fn signed_payload(token: &str, payload: &serde_json::Value) -> String {
+    let mut mac = Hmac::<Sha256>::new_from_slice(token.as_bytes())
+        .expect("HMAC-SHA256 accepts keys of any size");
+    mac.update(payload.to_string().as_bytes());
+    format!("hmac-sha256:{:x}", mac.finalize().into_bytes())
 }
 
 /// Submit and observe one prevalidated PipelineRun. This mode deliberately
@@ -1969,7 +2361,7 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
     };
     source.validate()?;
 
-    if spec.resume.is_some() {
+    if spec.resume.is_some() || source.resolved_commit.is_some() {
         let cwd_text = cwd.to_string_lossy().to_string();
         let resolved_commit = workspace_git_stdout(
             &cwd,
@@ -1981,6 +2373,16 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
             .await
             .context("durable workspace branch could not be inspected")?;
         validate_resumed_workspace_identity(source, &resolved_commit, &branch)?;
+        if spec.resume.is_none()
+            && spec
+                .run
+                .execution_target_json
+                .get("environment_snapshot")
+                .is_some()
+            && !cwd.join(".pharness-runtime/venv/bin/python").is_file()
+        {
+            anyhow::bail!("prepared workspace is missing its durable Python environment");
+        }
         return Ok(None);
     }
 
@@ -2329,14 +2731,41 @@ fn init_tracing() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        argo_application_terminal, argo_sync_patch_payload, parse_github_repository,
-        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
-        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
-        GitDeliveryContext, PipelineRunTerminal,
+        allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
+        parse_github_repository, pipeline_run_terminal, update_kustomization_image,
+        validate_git_delivery_context, validate_resumed_workspace_identity, workspace_git_args,
+        ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
     use std::path::Path;
+
+    #[test]
+    fn connect_proxy_accepts_only_exact_allowlisted_https_hosts() {
+        let allowed = ["api.fireworks.ai".to_string()].into_iter().collect();
+        assert_eq!(
+            allowlisted_connect_target(
+                "CONNECT api.fireworks.ai:443 HTTP/1.1\r\nHost: api.fireworks.ai:443\r\n\r\n",
+                &allowed,
+            )
+            .unwrap(),
+            ("api.fireworks.ai".to_string(), 443)
+        );
+        assert!(
+            allowlisted_connect_target("CONNECT evil.example:443 HTTP/1.1\r\n\r\n", &allowed,)
+                .is_err()
+        );
+        assert!(allowlisted_connect_target(
+            "GET https://api.fireworks.ai/ HTTP/1.1\r\n\r\n",
+            &allowed,
+        )
+        .is_err());
+        assert!(allowlisted_connect_target(
+            "CONNECT api.fireworks.ai:80 HTTP/1.1\r\n\r\n",
+            &allowed,
+        )
+        .is_err());
+    }
 
     #[test]
     fn workspace_git_commands_scope_safe_directory_to_the_issued_workspace() {

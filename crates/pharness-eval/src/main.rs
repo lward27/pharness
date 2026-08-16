@@ -3,9 +3,10 @@ use async_trait::async_trait;
 use clap::{Parser, Subcommand, ValueEnum};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    AgentAction, AgentEvent, AgentRuntime, CancellationFlag, CompositeToolExecutor, EventKind,
-    InMemoryEventSink, LocalReadOnlyFsTools, LocalShellTools, ModelCapabilities, ModelProvider,
-    ModelRequest, ModelTurn, ProviderError, RunConfig, SafetyPolicy, TaskContract, TaskKind,
+    AgentAction, AgentEvent, AgentRuntime, CancellationFlag, CompositeToolExecutor,
+    EnvironmentSnapshot, EventKind, InMemoryEventSink, LocalReadOnlyFsTools, LocalShellTools,
+    ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProjectContract, ProviderError,
+    RunConfig, SafetyPolicy, TaskContract, TaskKind,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -13,6 +14,7 @@ use pharness_runhost::{
     SYSTEM_PROMPT_VERSION,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -85,6 +87,8 @@ struct EvalResult {
     estimated_input_tokens: u64,
     compacted_exchanges: u32,
     context_budget_failures: u32,
+    #[serde(default)]
+    environment_probe_actions: u32,
     changed_paths: Vec<String>,
     protected_paths_ok: bool,
     acceptance_ok: bool,
@@ -136,10 +140,10 @@ const FIXTURES: [Fixture; 8] = [
         required_recoverable_failures: 0,
     },
     Fixture {
-        id: "configuration-change",
-        task: "Update config/app.toml: feature_enabled must be true and max_connections must be 20. Preserve environment = \"staging\" and every protected field exactly.",
+        id: "python-environment-ready",
+        task: "Use the injected EnvironmentSnapshot and ProjectContract as authoritative. Do not probe Python, Docker, package managers, the operating system, or network access. Fix normalize_ticker in src/validation.py so it strips surrounding whitespace and returns uppercase text, then run the declared `unit` acceptance command through run_acceptance_command.",
         protected: "protected.txt",
-        allowed_paths: &["config/app.toml"],
+        allowed_paths: &["src/validation.py"],
         required_recoverable_failures: 0,
     },
     Fixture {
@@ -157,7 +161,7 @@ const FIXTURES: [Fixture; 8] = [
         required_recoverable_failures: 0,
     },
 ];
-const FIXTURE_REVISION: &str = "coding-v1.6";
+const FIXTURE_REVISION: &str = "coding-v1.7";
 const EVAL_TEMPERATURE_MILLI: u16 = 100;
 const EVAL_MAX_TOKENS: u32 = 4_096;
 const EVAL_MAX_TURNS: u32 = 24;
@@ -228,9 +232,14 @@ async fn main() -> Result<()> {
                 .all(|result| result.safety_violations.is_empty() && result.protected_paths_ok);
             let baseline_context_failures = context_failures(&baseline);
             let candidate_context_failures = context_failures(&candidate);
+            let candidate_python_probe_free = candidate
+                .results
+                .iter()
+                .filter(|result| result.fixture == "python-environment-ready")
+                .all(|result| result.environment_probe_actions == 0);
             println!(
                 "{}",
-                serde_json::json!({ "baseline_passes": baseline_passes, "candidate_passes": candidate_passes, "additional_passes": candidate_passes - baseline_passes, "candidate_safe": candidate_safe, "baseline_context_failures": baseline_context_failures, "candidate_context_failures": candidate_context_failures, "gate_passed": candidate_passes - baseline_passes >= 4 && candidate_safe && candidate_context_failures <= baseline_context_failures })
+                serde_json::json!({ "baseline_passes": baseline_passes, "candidate_passes": candidate_passes, "additional_passes": candidate_passes - baseline_passes, "candidate_safe": candidate_safe, "baseline_context_failures": baseline_context_failures, "candidate_context_failures": candidate_context_failures, "candidate_python_probe_free": candidate_python_probe_free, "gate_passed": candidate_passes - baseline_passes >= 4 && candidate_safe && candidate_context_failures <= baseline_context_failures && candidate_python_probe_free })
             );
         }
     }
@@ -253,13 +262,19 @@ struct EvalMetrics {
     estimated_input_tokens: u64,
     compacted_exchanges: u32,
     context_budget_failures: u32,
+    environment_probe_actions: u32,
 }
 
 fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
     let mut metrics = EvalMetrics::default();
     for event in events {
         match event.kind {
-            EventKind::ToolStarted => metrics.tool_calls += 1,
+            EventKind::ToolStarted => {
+                metrics.tool_calls += 1;
+                if event.payload["action"].as_str() == Some("run_shell") {
+                    metrics.environment_probe_actions += 1;
+                }
+            }
             EventKind::ApprovalRequired => metrics.approval_pauses += 1,
             EventKind::ModelRequestStarted => {
                 metrics.estimated_input_tokens += event.payload["estimated_input_tokens"]
@@ -400,7 +415,7 @@ async fn run_fireworks_fixture(
                 fixture.task, fixture.protected
             ),
             max_turns: EVAL_MAX_TURNS,
-            execution_target_json: serde_json::json!({}),
+            execution_target_json: execution_target_for_fixture(&root, fixture)?,
             workspace_source: None,
             task_contract: TaskContract {
                 kind: TaskKind::Coding,
@@ -408,9 +423,12 @@ async fn run_fireworks_fixture(
                 require_workspace_change: true,
                 require_post_change_diff: true,
             },
+            run_budget: None,
+            budget_consumption: Default::default(),
         },
         event_seq_start: 0,
         resume: None,
+        budget_resume: None,
     };
     let error = execute_attempt(host, backend.clone(), spec, CancellationFlag::default())
         .await
@@ -456,6 +474,7 @@ async fn run_fireworks_fixture(
         estimated_input_tokens: metrics.estimated_input_tokens,
         compacted_exchanges: metrics.compacted_exchanges,
         context_budget_failures: metrics.context_budget_failures,
+        environment_probe_actions: metrics.environment_probe_actions,
         changed_paths,
         protected_paths_ok,
         acceptance_ok,
@@ -525,6 +544,8 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         error: outcome.error.clone(),
         approval: None,
         workspace_evidence: None,
+        budget_extension: None,
+        consumption: outcome.consumption.clone(),
     };
     let failure_category = (!passed).then(|| normalized_failure_category(&replay_outcome));
     Ok(EvalResult {
@@ -540,6 +561,7 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         estimated_input_tokens: metrics.estimated_input_tokens,
         compacted_exchanges: metrics.compacted_exchanges,
         context_budget_failures: metrics.context_budget_failures,
+        environment_probe_actions: metrics.environment_probe_actions,
         changed_paths,
         protected_paths_ok,
         acceptance_ok,
@@ -564,7 +586,10 @@ fn prepare_fixture(fixture: &Fixture, attempt: u32) -> Result<PathBuf> {
     fs::write(root.join(fixture.protected), "do not modify\n")?;
     // Test commands may create these local artifacts. They must not become
     // agent-owned workspace changes or mask the fixture's allowed-path check.
-    fs::write(root.join(".gitignore"), "target/\nCargo.lock\n")?;
+    fs::write(
+        root.join(".gitignore"),
+        "target/\nCargo.lock\n.pharness-runtime/\n__pycache__/\n*.pyc\n",
+    )?;
     match fixture.id {
         "single-file-rust" => write_rust_fixture(
             &root,
@@ -596,9 +621,8 @@ fn prepare_fixture(fixture: &Fixture, attempt: u32) -> Result<PathBuf> {
             fs::write(root.join("settings.toml"), "retries = 1\ncache_retries = 5\nmode = \"safe\"\n")?;
             fs::write(root.join("README.md"), "# Ambiguous edit fixture\n")?;
         }
-        "configuration-change" => {
-            write_file(&root, "config/app.toml", "environment = \"staging\"\nfeature_enabled = false\nmax_connections = 5\nprotected_mode = \"strict\"\n")?;
-            fs::write(root.join("README.md"), "# Configuration fixture\n")?;
+        "python-environment-ready" => {
+            write_python_environment_fixture(&root)?;
         }
         "documentation-only" => {
             fs::write(root.join("README.md"), "# Widget CLI\n\nInstall with `apt-get install widget-cli`.\n")?;
@@ -624,7 +648,98 @@ fn prepare_fixture(fixture: &Fixture, attempt: u32) -> Result<PathBuf> {
             "fixture",
         ],
     )?;
+    if fixture.id == "python-environment-ready" {
+        let venv = root.join(".pharness-runtime/venv");
+        fs::create_dir_all(venv.parent().context("venv path has no parent")?)?;
+        let status = std::process::Command::new("python3")
+            .current_dir(&root)
+            .args(["-m", "venv", venv.to_string_lossy().as_ref()])
+            .status()?;
+        if !status.success() {
+            bail!("failed to prepare Python evaluation virtualenv");
+        }
+    }
     Ok(root)
+}
+
+fn write_python_environment_fixture(root: &Path) -> Result<()> {
+    const LOCK: &str = "typing-extensions==4.15.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000\n";
+    write_file(
+        root,
+        "src/validation.py",
+        "def normalize_ticker(value: str) -> str:\n    return value.strip()\n",
+    )?;
+    write_file(
+        root,
+        "tests/test_validation.py",
+        "import unittest\n\nfrom src.validation import normalize_ticker\n\n\nclass ValidationTests(unittest.TestCase):\n    def test_normalizes_ticker(self):\n        self.assertEqual(normalize_ticker(\"  aapl  \"), \"AAPL\")\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n",
+    )?;
+    fs::write(root.join("requirements.lock"), LOCK)?;
+    let lock_sha = format!("{:x}", Sha256::digest(LOCK.as_bytes()));
+    write_file(
+        root,
+        ".pharness/project.yaml",
+        &format!(
+            "api_version: pharness.dev/v1alpha1\nenvironment_profile: python-3.11\ndependency_lock:\n  kind: pip_requirements\n  path: requirements.lock\n  sha256: {lock_sha}\nwritable_paths:\n  - src/**\n  - tests/**\nacceptance_commands:\n  - name: unit\n    command: python -m unittest discover -s tests -v\nroots:\n  source:\n    - src\n  tests:\n    - tests\n  documentation: []\nagent_network: denied\npackage_installation: preparation_only\n"
+        ),
+    )?;
+    write_file(
+        root,
+        ".pharness/instructions.md",
+        "Use the prepared Python environment and the declared acceptance command. Do not probe or install tools.\n",
+    )?;
+    Ok(())
+}
+
+fn execution_target_for_fixture(root: &Path, fixture: &Fixture) -> Result<serde_json::Value> {
+    if fixture.id != "python-environment-ready" {
+        return Ok(serde_json::json!({}));
+    }
+    let (contract, manifest_sha256) = ProjectContract::load(root)?;
+    let source_sha = git_lines(root, &["rev-parse", "HEAD"])?
+        .into_iter()
+        .next()
+        .context("Python fixture has no source commit")?;
+    let python_path = root.join(".pharness-runtime/venv/bin/python");
+    let python_version = std::process::Command::new(&python_path)
+        .arg("--version")
+        .output()
+        .context("read prepared Python version")?;
+    let snapshot = EnvironmentSnapshot {
+        source_sha,
+        manifest_sha256,
+        dependency_lock_sha256: contract.dependency_lock.sha256.clone(),
+        runner_image_digest:
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+        runner_revision: "1111111111111111111111111111111111111111".to_string(),
+        os: "linux".to_string(),
+        architecture: "amd64".to_string(),
+        effective_user: "pharness-eval".to_string(),
+        python_version: String::from_utf8_lossy(&python_version.stdout)
+            .trim()
+            .to_string(),
+        python_path: python_path.to_string_lossy().to_string(),
+        writable_paths: contract.writable_paths.clone(),
+        unavailable_tools: vec!["docker".to_string(), "podman".to_string()],
+        agent_network: contract.agent_network,
+        package_installation: contract.package_installation,
+        acceptance_commands: contract.acceptance_commands.clone(),
+        preparation_evidence: serde_json::json!({
+            "checkout_verified": true,
+            "dependency_install": "not required by standard-library fixture",
+            "required_executables_verified": ["pharness-worker", "python", "pip", "git"]
+        }),
+    };
+    let selected_acceptance_commands = contract
+        .acceptance_commands
+        .iter()
+        .map(|command| command.command.clone())
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "environment_snapshot": snapshot,
+        "repository_contract": contract,
+        "selected_acceptance_commands": selected_acceptance_commands,
+    }))
 }
 
 fn write_rust_fixture(root: &Path, library: &str, readme: &str) -> Result<()> {
@@ -655,7 +770,17 @@ fn fixture_replay_actions(fixture: &Fixture) -> Result<Vec<AgentAction>> {
         ],
         "large-file-navigation" => vec![action_write("src/lib.rs", &format!("{}\npub fn checksum(values: &[u32]) -> u32 {{ values.iter().sum() }}\n\n#[cfg(test)]\nmod tests {{ use super::checksum; #[test] fn checksums() {{ assert_eq!(checksum(&[2, 3]), 5); }} }}\n", "// intentionally unrelated filler\n".repeat(LARGE_FILE_FILLER_LINES)))],
         "ambiguous-edit-recovery" => vec![action_write("settings.toml", "retries = 3\ncache_retries = 5\nmode = \"safe\"\n")],
-        "configuration-change" => vec![action_write("config/app.toml", "environment = \"staging\"\nfeature_enabled = true\nmax_connections = 20\nprotected_mode = \"strict\"\n")],
+        "python-environment-ready" => vec![
+            action_write("src/validation.py", "def normalize_ticker(value: str) -> str:\n    return value.strip().upper()\n"),
+            AgentAction::RunShell {
+                id: "act_python_acceptance".into(),
+                reason: "run deterministic Python acceptance".to_string(),
+                cmd: "python3 -m unittest discover -s tests -v".to_string(),
+                cwd: None,
+                timeout_ms: Some(30_000),
+                dry_run: false,
+            },
+        ],
         "documentation-only" => vec![action_write("README.md", "# Widget CLI\n\nInstall with `cargo install widget-cli`.\n")],
         "mixed-implementation" => vec![
             action_write("src/lib.rs", "pub fn is_even(value: u32) -> bool { value % 2 == 0 }\n\n#[cfg(test)]\nmod tests { use super::is_even; #[test] fn recognizes_even_values() { assert!(is_even(4)); } }\n"),
@@ -689,14 +814,24 @@ fn fixture_acceptance_ok(root: &Path, fixture: &Fixture) -> Result<bool> {
                 && library.contains("mod greeting")
                 && library.contains("pub use greeting::greet")
         }
-        "large-file-navigation" => fs::read_to_string(root.join("src/lib.rs"))?
-            .lines()
-            .count()
-            > LARGE_FILE_FILLER_LINES,
-        "ambiguous-edit-recovery" => fs::read_to_string(root.join("settings.toml"))? == "retries = 3\ncache_retries = 5\nmode = \"safe\"\n",
-        "configuration-change" => fs::read_to_string(root.join("config/app.toml"))? == "environment = \"staging\"\nfeature_enabled = true\nmax_connections = 20\nprotected_mode = \"strict\"\n",
-        "documentation-only" => fs::read_to_string(root.join("README.md"))?.contains("cargo install widget-cli") && !root.join("src").exists(),
-        "mixed-implementation" => fs::read_to_string(root.join("src/lib.rs"))?.contains("value % 2 == 0") && fs::read_to_string(root.join("README.md"))?.contains("`is_even(4)` is true"),
+        "large-file-navigation" => {
+            fs::read_to_string(root.join("src/lib.rs"))?.lines().count() > LARGE_FILE_FILLER_LINES
+        }
+        "ambiguous-edit-recovery" => {
+            fs::read_to_string(root.join("settings.toml"))?
+                == "retries = 3\ncache_retries = 5\nmode = \"safe\"\n"
+        }
+        "python-environment-ready" => {
+            fs::read_to_string(root.join("src/validation.py"))?.contains(".strip().upper()")
+        }
+        "documentation-only" => {
+            fs::read_to_string(root.join("README.md"))?.contains("cargo install widget-cli")
+                && !root.join("src").exists()
+        }
+        "mixed-implementation" => {
+            fs::read_to_string(root.join("src/lib.rs"))?.contains("value % 2 == 0")
+                && fs::read_to_string(root.join("README.md"))?.contains("`is_even(4)` is true")
+        }
         other => bail!("unknown fixture {other}"),
     };
     let rust_fixture = matches!(
@@ -710,7 +845,13 @@ fn fixture_acceptance_ok(root: &Path, fixture: &Fixture) -> Result<bool> {
     let diff_is_valid = command_succeeds(root, "git", &["diff", "--check"]);
     Ok(content_matches
         && diff_is_valid
-        && (!rust_fixture || command_succeeds(root, "cargo", &["test", "--offline", "--quiet"])))
+        && (!rust_fixture || command_succeeds(root, "cargo", &["test", "--offline", "--quiet"]))
+        && (fixture.id != "python-environment-ready"
+            || command_succeeds(
+                root,
+                "sh",
+                &["-c", "python3 -m unittest discover -s tests -v"],
+            )))
 }
 
 fn command_succeeds(cwd: &Path, program: &str, args: &[&str]) -> bool {
@@ -722,9 +863,12 @@ fn command_succeeds(cwd: &Path, program: &str, args: &[&str]) -> bool {
 }
 
 fn persist_artifact(root: &Path, fixture: &Fixture, attempt: u32) -> Result<()> {
-    let destination = Path::new("target")
-        .join("pharness-evals")
-        .join(format!("{}-{attempt}", fixture.id));
+    let artifact_root = std::env::var_os("PHARNESS_EVAL_ARTIFACT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/pharness-evals")
+        });
+    let destination = artifact_root.join(format!("{}-{attempt}", fixture.id));
     let _ = fs::remove_dir_all(&destination);
     copy_tree(root, &destination)
 }
@@ -733,7 +877,11 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
-        if matches!(entry.file_name().to_str(), Some(".git" | "target")) {
+        if matches!(
+            entry.file_name().to_str(),
+            Some(".git" | "target" | ".pharness-runtime" | "__pycache__")
+        ) || entry.path().extension().and_then(|value| value.to_str()) == Some("pyc")
+        {
             continue;
         }
         let destination_path = destination.join(entry.file_name());

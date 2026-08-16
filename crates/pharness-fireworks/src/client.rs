@@ -13,6 +13,8 @@ use thiserror::Error;
 use tokio::time::{sleep, Duration};
 use url::Url;
 
+pub const DEFAULT_MAX_TRANSPORT_ATTEMPTS: u32 = 3;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FireworksProviderConfig {
     pub base_url: String,
@@ -261,7 +263,7 @@ pub struct RetryPolicy {
 impl Default for RetryPolicy {
     fn default() -> Self {
         Self {
-            max_attempts: 3,
+            max_attempts: DEFAULT_MAX_TRANSPORT_ATTEMPTS,
             initial_delay_ms: 250,
             max_delay_ms: 2_000,
         }

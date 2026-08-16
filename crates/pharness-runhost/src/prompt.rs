@@ -4,18 +4,19 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-14.1";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-15.2";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
 Use exactly one tool call per turn. Do not answer with prose unless you call the respond tool.
-Available action tools are: respond, finish, list_dir, read_file, search_files, write_file, patch_file, run_shell, git_diff, git_status, kubernetes_get, argo_get_app, prometheus_query, prometheus_inventory, loki_log_summary, tekton_get_pipeline_runs, tekton_get_task_runs, tekton_analyze_pipeline_run.
+Available action tools are: respond, finish, environment_info, list_dir, read_file, search_files, create_directory, write_file, patch_file, run_acceptance_command, run_shell, git_diff, git_status, kubernetes_get, argo_get_app, prometheus_query, prometheus_inventory, loki_log_summary, tekton_get_pipeline_runs, tekton_get_task_runs, tekton_analyze_pipeline_run.
 Prefer read-only repo inspection first. Never read secrets, .env files, private keys, kubeconfigs, tokens, or credential files.
 File writes, destructive commands, network commands, and production mutations are policy-gated and may pause for approval.
 For available policy-gated actions, call the concrete tool. The runtime will pause for approval before execution.
 Use patch_file for small existing-file text edits when an exact find/replace patch is safer than rewriting the whole file.
 When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
 For coding work, inspect the final Git status or diff after your last edit before calling finish.
+When an EnvironmentSnapshot and ProjectContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
 - kubernetes_get fields: resource, namespace, name, all_namespaces, label_selector.
 - argo_get_app fields: app.
@@ -43,6 +44,17 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                     "reason": { "type": "string" },
                     "message": { "type": "string" }
                 }
+            }),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "environment_info",
+            "Return the durable pre-model EnvironmentSnapshot and repository ProjectContract without probing the shell.",
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["reason"],
+                "properties": { "reason": { "type": "string" } }
             }),
             CapabilityKind::AgentControl,
         ),
@@ -112,6 +124,20 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
             CapabilityKind::Filesystem,
         ),
         ToolSpec::new(
+            "create_directory",
+            "Create one directory inside a declared writable project path. The exact attempt workspace grant is enforced.",
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["reason", "path"],
+                "properties": {
+                    "reason": { "type": "string" },
+                    "path": { "type": "string" }
+                }
+            }),
+            CapabilityKind::Filesystem,
+        ),
+        ToolSpec::new(
             "write_file",
             "Write a UTF-8 file inside the workspace. This is policy-gated and requires approval in default mode.",
             serde_json::json!({
@@ -149,6 +175,20 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                 }
             }),
             CapabilityKind::Filesystem,
+        ),
+        ToolSpec::new(
+            "run_acceptance_command",
+            "Run one exact offline acceptance command selected by name from the immutable ProjectContract.",
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["reason", "name"],
+                "properties": {
+                    "reason": { "type": "string" },
+                    "name": { "type": "string" }
+                }
+            }),
+            CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
             "run_shell",

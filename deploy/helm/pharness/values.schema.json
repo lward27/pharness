@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["api", "ui", "protectedProductionTarget"],
+  "required": ["api", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget"],
   "properties": {
     "api": {
       "type": "object",
@@ -16,6 +16,41 @@
       "properties": {
         "image": { "$ref": "#/$defs/immutableImage" }
       }
+    },
+    "environmentProfiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/environmentProfile" }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": ["enabled", "egressProxy"],
+      "properties": {
+        "enabled": { "const": true },
+        "egressProxy": {
+          "type": "object",
+          "required": ["enabled", "preparationAllowedHosts", "codingAllowedHosts"],
+          "properties": {
+            "enabled": { "const": true },
+            "preparationAllowedHosts": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": { "enum": ["github.com", "pypi.org", "files.pythonhosted.org"] }
+            },
+            "codingAllowedHosts": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": { "const": "api.fireworks.ai" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "protectedProductionTarget": {
       "type": "object",
@@ -45,6 +80,43 @@
         "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "pullPolicy": { "enum": ["IfNotPresent", "Never"] }
+      },
+      "additionalProperties": false
+    },
+    "environmentProfile": {
+      "type": "object",
+      "required": ["id", "active", "image", "revision", "platform", "required_executables", "preparation_strategy", "service_account", "repository_allowlist", "limits"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+        "active": { "type": "boolean" },
+        "image": { "type": "string", "pattern": "^[^@[:space:]]+@sha256:[0-9a-f]{64}$" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "platform": { "const": "linux/amd64" },
+        "required_executables": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "contains": { "const": "pharness-worker" },
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+        },
+        "preparation_strategy": { "const": "python_hashed_requirements" },
+        "service_account": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "repository_allowlist": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+\\.git$" }
+        },
+        "limits": {
+          "type": "object",
+          "required": ["cpu", "memory", "ephemeral_storage"],
+          "properties": {
+            "cpu": { "type": "string", "minLength": 1 },
+            "memory": { "type": "string", "minLength": 1 },
+            "ephemeral_storage": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     }

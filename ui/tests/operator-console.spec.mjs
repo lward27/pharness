@@ -14,6 +14,8 @@ function emptyPayload(pathname) {
   if (pathname === "/api/remediation-plans") return { remediation_plans: [] };
   if (pathname === "/api/observations") return { observations: [] };
   if (pathname === "/api/work-items") return { work_items: [], operator_state: {} };
+  if (pathname === "/api/environment-profiles") return { profiles: [] };
+  if (pathname === "/api/system/readiness") return { capabilities: [] };
   if (pathname === "/api/scopes/options") return { environments: [], namespaces: [], repositories: [], branches: [], actors: [], origins: ["legacy"] };
   if (pathname === "/api/triage") return { items: [], summary: {} };
   if (pathname === "/api/triage/summary") return {};
@@ -196,6 +198,26 @@ test("a single gate decision requires attributable rationale", async ({ page }) 
   expect(calls[0]).toMatchObject({ decided_by: "lucas", reason: "reviewed bounded release evidence" });
 });
 
+test("future production gates remain visible but cannot be selected or decided", async ({ page }) => {
+  const gate = {
+    id: "gate_future_1234567890", status: "pending", actionable: false, origin: "controller", gate_kind: "cluster_mutation", gate_order: 5,
+    title: "Approve exact Argo sync", summary: "Reserved for the deployment boundary.", risk_level: "high", work_item_id: "witem_future_1234567890",
+    remediation_plan_id: null, incident_id: null, resource_kind: "Application", resource_name: "yfinance-wrapper", resource_namespace: "argocd",
+    created_at: "1760000000000", gate_json: {}, lifecycle_blocker: "The exact GitOps pull request must be observed merged before cluster production gates can be decided.",
+  };
+  await mockApi(page, {
+    "/api/approval-gates": { approval_gates: [gate], groups: [], count: 1, limit: 25, offset: 0 },
+  });
+  await page.goto("/#/gates");
+  await expect(page.getByText("Future lifecycle gate")).toBeVisible();
+  await expect(page.getByText(/exact GitOps pull request must be observed merged/)).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /Select Approve exact Argo sync/ })).toBeDisabled();
+  await page.getByLabel("Rationale").fill("must still wait for immutable merge provenance");
+  await expect(page.getByRole("button", { name: "Satisfy" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Waive" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
+});
+
 test("approval filters and pages are server-backed", async ({ page }) => {
   const approval = { id: "appr_server_1234567890", run_id: "run_server_1234567890", status: "pending", kind: "file_write", summary: "Write a bounded finance note", risk_level: "medium", origin: "operator", created_by: "lucas", requested_at: "1760000000000" };
   const requests = [];
@@ -313,6 +335,7 @@ test("production WorkItem wizard blocks until immutable preflight and warning ac
   const pipeline = { id: "pcontract_yfinance", namespace: "tekton-pipelines", pipeline_ref: "pharness-yfinance-build", status: "active" };
   const deployment = { id: "dcontract_yfinance", environment: "production", namespace: "apps-prod", status: "active" };
   await mockApi(page, {
+    "/api/environment-profiles": { profiles: [{ id: "python-3.11", status: "available", image: `registry.lucas.engineering/pharness-python-runner@sha256:${"e".repeat(64)}` }] },
     "/api/pipeline-contracts": { pipeline_contracts: [pipeline] },
     "/api/deployment-contracts": { deployment_contracts: [deployment] },
     "/api/system/readiness": { capabilities: [{ capability: "gitops_writer", status: "available" }] },
@@ -323,6 +346,7 @@ test("production WorkItem wizard blocks until immutable preflight and warning ac
       blockers: [],
       warnings: ["Production effects still require explicit lifecycle approvals."],
       predicted_external_mutations: ["Create a source pull request", "Create a GitOps pull request", "Sync Argo Application yfinance-wrapper"],
+      normalized_submission: { repository_contract: { dependency_lock: { path: "requirements.lock" }, writable_paths: ["src/**", "tests/**", "readme.md"] } },
     },
     "/api/work-items": async (route) => {
       if (route.request().method() === "POST") {
@@ -341,6 +365,11 @@ test("production WorkItem wizard blocks until immutable preflight and warning ac
   await expect(page.getByRole("textbox", { name: "Acceptance command 1", exact: true })).toHaveValue("python -m unittest discover -s tests -v");
   await page.getByRole("button", { name: /Continue/ }).click();
   await expect(page.getByRole("textbox", { name: "Environment", exact: true })).toHaveValue("production");
+  await page.getByRole("button", { name: "Advanced budgets" }).click();
+  await expect(page.getByLabel("Initial turns")).toHaveValue("48");
+  await expect(page.getByLabel("Hard turn maximum")).toHaveValue("100");
+  await expect(page.getByLabel("Initial tokens")).toHaveValue("400000");
+  await expect(page.getByLabel("Hard token maximum")).toHaveValue("1000000");
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("PipelineContract").selectOption(pipeline.id);
   await page.getByLabel("DeploymentContract").selectOption(deployment.id);
@@ -351,7 +380,7 @@ test("production WorkItem wizard blocks until immutable preflight and warning ac
   await page.getByLabel("I acknowledge the non-blocking preflight warnings.").check();
   await page.getByRole("button", { name: "Create supervised WorkItem" }).click();
   await expect.poll(() => submitted.length).toBe(1);
-  expect(submitted[0]).toMatchObject({ source_commit: sourceSha, preflight_state_hash: "state-production-1", pipeline_contract_id: pipeline.id, deployment_contract_id: deployment.id });
+  expect(submitted[0]).toMatchObject({ source_commit: sourceSha, preflight_state_hash: "state-production-1", pipeline_contract_id: pipeline.id, deployment_contract_id: deployment.id, environment_profile_id: "python-3.11", initial_turn_budget: 48, hard_turn_budget: 100, initial_token_budget: 400000, hard_token_budget: 1000000 });
 });
 
 test("release readiness reports an API and UI revision mismatch without claiming availability", async ({ page }) => {
@@ -431,4 +460,114 @@ test("rollback rail exposes exact approvals and digest-bound delivery evidence",
   await page.getByRole("button", { name: "Confirm and apply" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
+});
+
+test("WorkPlan review is directly actionable from the WorkItem boundary", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_review_1234567890"), status: "awaiting_approval", source_commit: "a".repeat(40), environment_profile_id: "python-3.11" };
+  const action = { id: "approve_work_plan", lifecycle_stage: "planning", resource: "wplan_review_1234567890", status: "ready", effect_class: "approval_boundary", blockers: [], approval_required: true, approval_requirements: ["work_plan_review"], external_effect_summary: "Approve the proposed WorkPlan before authorizing one attempt workspace.", state_hash: "state-workplan-review" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_review", source_repo: workItem.source_repo, source_ref: "main", status: "declared" }], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "awaiting_work_plan_approval", boundary: "planning", effect_summary: action.external_effect_summary, blockers: [] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { work_plan: { id: action.resource, status: "approved" } }; },
+  });
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByRole("button", { name: "Approve Work Plan" })).toBeEnabled();
+  await expect(page).toHaveScreenshot("work-item-review-required.png", { fullPage: true });
+  await page.getByRole("button", { name: "Approve Work Plan" }).click();
+  await page.getByLabel("Reason").fill("reviewed bounded WorkPlan and acceptance commands");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ state_hash: action.state_hash });
+});
+
+test("replan boundary creates a fresh explicit review action", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_replan_1234567890"), status: "blocked", source_commit: "b".repeat(40), environment_profile_id: "python-3.11", status_reason: "Hard run limit requires a revised WorkPlan." };
+  const action = { id: "replan_work_item", lifecycle_stage: "planning", resource: workItem.id, status: "ready", effect_class: "internal", blockers: [], approval_required: false, approval_requirements: [], external_effect_summary: "Create a fresh isolated workspace and proposed WorkPlan; no model starts automatically.", state_hash: "state-replan-ready" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_old", source_repo: workItem.source_repo, status: "retained" }], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "requires_replan", boundary: "planning", effect_summary: action.external_effect_summary, blockers: [] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { work_item: { ...workItem, status: "planning" } }; },
+  });
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByRole("button", { name: "Replan Work Item" })).toBeEnabled();
+  await expect(page.getByText("Create a fresh isolated workspace and proposed WorkPlan; no model starts automatically.").first()).toBeVisible();
+  await expect(page).toHaveScreenshot("work-item-replan-ready.png", { fullPage: true });
+  await page.getByRole("button", { name: "Replan Work Item" }).click();
+  await page.getByLabel("Reason").fill("revise the bounded plan after hard-limit review");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+});
+
+test("budget extension resumes the existing workspace from an exact server action", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_budget_1234567890"), status: "executing", source_commit: "c".repeat(40), environment_profile_id: "python-3.11", current_run_id: "run_budget_1234567890" };
+  const action = { id: "approve_budget_extension", lifecycle_stage: "attempt", resource: "budget_1234567890", status: "ready", effect_class: "approval_boundary", blockers: [], approval_required: true, approval_requirements: ["budget_extension"], external_effect_summary: "Resume the existing workspace with exactly 20 additional turns and 200000 additional tokens.", state_hash: "state-budget-extension" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_budget", run_id: workItem.current_run_id, source_repo: workItem.source_repo, source_ref: "main", resolved_commit: workItem.source_commit, status: "active" }], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "budget_extension_required", boundary: "attempt", effect_summary: action.external_effect_summary, blockers: [] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { id: action.resource, status: "approved" }; },
+    [`/api/runs/${workItem.current_run_id}`]: { id: workItem.current_run_id, status: "budget_extension_required", task: workItem.intent, run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000, active_execution_seconds: 3600 }, budget_consumption: { allowed_turns: 48, allowed_tokens: 400000, turns_used: 48, tokens_used: 365000, active_execution_seconds_used: 1200 }, result: { status: "budget_extension_required", turns: 48 } },
+    [`/api/runs/${workItem.current_run_id}/events`]: { events: [] },
+    [`/api/runs/${workItem.current_run_id}/diff`]: { run_id: workItem.current_run_id, changes: [], diff: "" },
+    [`/api/runs/${workItem.current_run_id}/artifacts`]: { artifacts: [] },
+    [`/api/runs/${workItem.current_run_id}/operator-summary`]: { run_id: workItem.current_run_id, actual_total_tokens: 365000, budget_extensions: 0, stop_reason: "soft_turn_budget_exhausted", pending_approvals: [] },
+  });
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByRole("button", { name: "Approve Budget Extension" }).first()).toBeEnabled();
+  await expect(page.getByText("48 used · 0 remaining")).toBeVisible();
+  await expect(page).toHaveScreenshot("work-item-budget-extension.png", { fullPage: true });
+  await page.getByRole("button", { name: "Approve Budget Extension" }).first().click();
+  await page.getByLabel("Reason").fill("preserve the active workspace and finish verification");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+});
+
+test("active coding displays the verified environment snapshot and live budget", async ({ page }) => {
+  const runId = "run_active_environment_1234567890";
+  await page.addInitScript(() => {
+    window.EventSource = class {
+      addEventListener() {}
+      close() {}
+    };
+  });
+  await mockApi(page, {
+    [`/api/runs/${runId}`]: { id: runId, status: "running", task: "Add pure yfinance validation", started_at: "1786032000000", scope: { namespace: "apps-prod", repo: "lward27/yfinance_wrapper", branch: "pharness/attempt-1" }, run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000, active_execution_seconds: 3600 }, budget_consumption: { allowed_turns: 48, allowed_tokens: 400000, turns_used: 7, tokens_used: 52000, active_execution_seconds_used: 240 }, result: {} },
+    [`/api/runs/${runId}/events`]: { events: [{ event_id: "evt_active", seq: 1, type: "tool.finished", payload: { summary: "Patched src/yfinance_wrapper/validation.py", status: "ok" } }] },
+    [`/api/runs/${runId}/diff`]: { run_id: runId, changes: [{ id: "chg_active", path: "src/yfinance_wrapper/validation.py", diff: "+def normalize_ticker(value):", created_at: "1786032010000" }], diff: "+def normalize_ticker(value):" },
+    [`/api/runs/${runId}/artifacts`]: { artifacts: [] },
+    [`/api/runs/${runId}/operator-summary`]: { run_id: runId, actual_total_tokens: 52000, tools_completed: 4, tools_failed: 0, environment_discovery_turns: 0, approval_count: 0, approval_wait_ms: 0, preparation_duration_ms: 84000, budget_extensions: 0, pending_approvals: [] },
+    [`/api/runs/${runId}/environment-preparation`]: { id: "envprep_active", status: "succeeded", environment_profile_id: "python-3.11", source_commit: "d".repeat(40), environment_snapshot: { runner_image_digest: `registry.lucas.engineering/pharness-python-runner@sha256:${"e".repeat(64)}`, python_version: "Python 3.11.13", python_path: "/workspace/.pharness-runtime/venv/bin/python", writable_paths: ["src/**", "tests/**", "readme.md"], unavailable_tools: ["docker", "podman", "apt", "apk"] }, logs: [{ step: "dependencies", status: "succeeded" }] },
+  });
+  await page.goto(`/#/runs/${runId}`);
+  await expect(page.getByText("Python 3.11.13 · /workspace/.pharness-runtime/venv/bin/python")).toBeVisible();
+  await expect(page.getByText("Environment probes")).toBeVisible();
+  await expect(page.getByText("7 used · 41 remaining")).toBeVisible();
+  await expect(page).toHaveScreenshot("run-active-coding.png", { fullPage: true });
+});
+
+test("wizard preserves a blocked preparation preflight without creating durable work", async ({ page }) => {
+  const sourceSha = "f".repeat(40);
+  await mockApi(page, {
+    "/api/environment-profiles": { profiles: [{ id: "python-3.11", status: "configured_unverified", image: `registry.lucas.engineering/pharness-python-runner@sha256:${"a".repeat(64)}` }] },
+    "/api/pipeline-contracts": { pipeline_contracts: [{ id: "pcontract_yfinance", namespace: "tekton-pipelines", pipeline_ref: "pharness-yfinance-build" }] },
+    "/api/deployment-contracts": { deployment_contracts: [{ id: "dcontract_yfinance", environment: "production", namespace: "apps-prod" }] },
+    "/api/system/readiness": { capabilities: [{ capability: "environment_profile:python-3.11", status: "configured_unverified" }] },
+    "/api/work-items/preflight": { ready: false, checks: [{ capability: "environment_profile:python-3.11", status: "unavailable", summary: "The isolated runner could not create a Python venv." }], blockers: ["Runner preparation capability has not passed."], warnings: [], predicted_external_mutations: [] },
+  });
+  await page.goto("/#/work-items/new");
+  await page.getByLabel("Full source commit SHA").fill(sourceSha);
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("PipelineContract").selectOption("pcontract_yfinance");
+  await page.getByLabel("DeploymentContract").selectOption("dcontract_yfinance");
+  await page.getByRole("button", { name: "Run read-only preflight" }).click();
+  await expect(page.getByText("1 blocking checks")).toBeVisible();
+  await expect(page.getByText("Runner preparation capability has not passed.")).toBeVisible();
+  await expect(page).toHaveScreenshot("work-item-preparation-blocked.png", { fullPage: true });
 });

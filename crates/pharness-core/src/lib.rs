@@ -6,13 +6,14 @@ pub mod execution;
 pub mod ids;
 pub mod model;
 pub mod policy;
+pub mod project;
 pub mod resources;
 pub mod tools;
 
 pub use agent::{
-    pack_messages, AgentRuntime, ApprovedAction, CancellationFlag, ContextBudget, ContextError,
-    ContextPack, PendingApproval, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome,
-    RunStatus, TaskContract, TaskKind,
+    pack_messages, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag, ContextBudget,
+    ContextError, ContextPack, PendingApproval, PendingBudgetExtension, RecoveryPolicy,
+    RepositoryInstruction, RunConfig, RunOutcome, RunStatus, TaskContract, TaskKind,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
@@ -25,6 +26,11 @@ pub use model::{
 pub use policy::{
     classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
     PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
+};
+pub use project::{
+    AcceptanceCommand, DependencyLock, EnvironmentProfile, EnvironmentProfileLimits,
+    EnvironmentSnapshot, PackageInstallationPolicy, PreparationStrategy, ProjectContract,
+    ProjectContractError, ProjectRoots, RunBudget, RunBudgetConsumption,
 };
 pub use resources::{ArtifactRef, ResourceRef};
 pub use tools::{
