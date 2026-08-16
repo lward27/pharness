@@ -1,7 +1,8 @@
 use crate::dispatch::{
-    ArgoSyncExecutionRequest, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
-    GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
-    GitOpsRevisionResolutionRequest, RunDispatcher, TektonExecutionRequest,
+    ArgoSyncExecutionRequest, CapabilityVerificationOutcome, GitDeliveryExecutionRequest,
+    GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
+    GitOpsDeliveryObservationRequest, GitOpsRevisionResolutionRequest, RunDispatcher,
+    TektonExecutionRequest,
 };
 use crate::dto::{
     AdvanceWorkItemRequest, AdvanceWorkItemResponse, ApprovalDecision, ApprovalGateResponse,
@@ -31,16 +32,16 @@ use crate::dto::{
     DeliverySegmentResourceResponse, DeliverySegmentResponse, DeploymentContractResponse,
     DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
     DeploymentIntentPreflightRequest, DeploymentIntentPreflightResponse, DeploymentIntentResponse,
-    DeploymentIntentsResponse, EnvironmentPreparationResponse, EnvironmentProfilesResponse,
-    EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
-    ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest,
-    ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse,
-    ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemActionRequest,
-    ExecuteWorkItemRequest, ExecuteWorkItemResponse, FileChangeResponse,
-    GitDeliveryAuthorizationResponse, GitDeliveryContextResponse, GitDeliveryFlowResponse,
-    GitDeliveryObservationContextResponse, GitDeliveryObservationOutcomeRequest,
-    GitDeliveryOutcomeRequest, GitDeliveryPlanResponse, GitDeliveryPreflightRequest,
-    GitDeliveryPreflightResponse, GitOpsBaseRevisionContextResponse,
+    DeploymentIntentsResponse, EnvironmentPreparationResponse, EnvironmentProfileResponse,
+    EnvironmentProfilesResponse, EventsResponse, ExecuteCapabilityRequest,
+    ExecuteCapabilityResponse, ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse,
+    ExecuteGitDeliveryRequest, ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest,
+    ExecuteGitOpsDeliveryResponse, ExecutePipelineIntentRequest, ExecutePipelineIntentResponse,
+    ExecuteWorkItemActionRequest, ExecuteWorkItemRequest, ExecuteWorkItemResponse,
+    FileChangeResponse, GitDeliveryAuthorizationResponse, GitDeliveryContextResponse,
+    GitDeliveryFlowResponse, GitDeliveryObservationContextResponse,
+    GitDeliveryObservationOutcomeRequest, GitDeliveryOutcomeRequest, GitDeliveryPlanResponse,
+    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, GitOpsBaseRevisionContextResponse,
     GitOpsBaseRevisionOutcomeRequest, GitOpsChangeSetResponse, GitOpsChangeSetsResponse,
     GitOpsDeliveryAuthorizationResponse, GitOpsDeliveryContextResponse, GitOpsDeliveryFlowResponse,
     GitOpsDeliveryObservationContextResponse, GitOpsDeliveryObservationOutcomeRequest,
@@ -805,6 +806,39 @@ async fn environment_profile_responses(
     Ok(responses)
 }
 
+fn environment_profile_readiness_blocker(profile: &EnvironmentProfileResponse) -> Option<String> {
+    if profile.status == "available" {
+        return None;
+    }
+    let detail = if profile.blockers.is_empty() {
+        match profile.status.as_str() {
+            "configured_unverified" => {
+                "runner profile requires a fresh passing isolated verification"
+            }
+            "stale" => "isolated runner verification expired",
+            _ => "runner profile is unavailable",
+        }
+        .to_string()
+    } else {
+        profile.blockers.join("; ")
+    };
+    Some(format!("environment_profile {}: {detail}", profile.id))
+}
+
+fn capability_verification_summary(outcome: &CapabilityVerificationOutcome) -> String {
+    let permission = outcome.permission.as_deref().unwrap_or("required access");
+    let repository = outcome
+        .repository
+        .as_deref()
+        .map(|repo| format!(" for {repo}"))
+        .unwrap_or_default();
+    if outcome.available {
+        format!("Isolated identity verified {permission}{repository}")
+    } else {
+        format!("Isolated identity did not verify {permission}{repository}")
+    }
+}
+
 /// Gate `/api/internal/*` behind the configured worker token.
 ///
 /// Worker ingest is disabled entirely when no token is configured, so a
@@ -1035,14 +1069,7 @@ async fn system_readiness(
     blockers.extend(
         environment_profiles
             .iter()
-            .filter(|profile| profile.status != "available")
-            .map(|profile| {
-                format!(
-                    "environment_profile {}: {}",
-                    profile.id,
-                    profile.blockers.join("; ")
-                )
-            }),
+            .filter_map(environment_profile_readiness_blocker),
     );
     Ok(Json(SystemReadinessResponse {
         api_revision: state.build.api_revision.clone(),
@@ -1122,19 +1149,7 @@ async fn preflight_system_capability(
             } else {
                 "unavailable"
             },
-            if outcome.available {
-                format!(
-                    "Isolated identity verified {}{}",
-                    outcome.permission.as_deref().unwrap_or("required access"),
-                    outcome
-                        .repository
-                        .as_deref()
-                        .map(|repo| format!(" for {repo}"))
-                        .unwrap_or_default()
-                )
-            } else {
-                "Isolated identity did not pass the required read-only capability check".to_string()
-            },
+            capability_verification_summary(&outcome),
             outcome.principal,
             outcome.repository,
             outcome.permission,
@@ -27030,43 +27045,43 @@ mod tests {
         attach_deployment_intent_evidence, attach_pipeline_intent_evidence,
         attach_release_evidence, authorize_change_set_git_delivery,
         authorize_gitops_change_set_delivery, block_work_item_from_delivery_failure,
-        build_pipeline_run_manifest, cancel_run, cancel_work_item, change_set_flow,
-        change_set_readiness, complete_work_item_from_verified_release, config_effective,
-        create_change_set, create_change_set_trusted_envelope, create_declared_deployment_handoff,
-        create_deployment_contract, create_deployment_intent_from_pipeline_intent,
-        create_deployment_intent_trusted_envelope, create_incident, create_observation,
-        create_operator_run, create_pipeline_intent_from_change_set,
-        create_pipeline_intent_trusted_envelope, create_registry_evidence_from_registry_inspection,
-        create_registry_evidence_from_release, create_release_from_deployment_intent,
-        create_remediation_plan, create_run, create_work_item, create_work_item_pipeline_intent,
-        create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
-        create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
-        deny_approval, deployment_intent_reconcile_action,
-        ensure_pipeline_evidence_ready_for_deployment, execute_capability,
-        execute_deployment_intent, execute_work_item_action, execution_matches_pipeline_contract,
-        get_approval, get_approval_gate, get_artifact, get_deployment_contract,
-        get_deployment_intent, get_incident, get_observation, get_permission_grant,
-        get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
-        get_run_diff, get_run_events, get_run_operator_summary, get_work_plan,
-        git_delivery_reconcile_action, gitops_change_set_reconcile_action, gitops_delivery_flow,
-        internal_argo_sync_outcome, internal_gitops_delivery_observation_outcome,
-        internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
-        list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
-        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
-        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
-        list_run_observations, list_runs, list_work_item_controller_waits, list_work_item_events,
-        list_work_items, list_work_plans, list_workspaces, merge_pipeline_execution_state,
-        observe_due_controller_wait, observed_gitops_merge_for_deployment, parse_last_event_id,
-        persist_pipeline_build_output, persist_pipeline_execution_evidence,
-        persist_pipeline_run_analysis, pipeline_build_output_from_analysis,
-        pipeline_intent_execution_preflight, pipeline_intent_is_gitops_update_eligible,
-        pipeline_intent_reconcile_action, policy_json, preflight_change_set_git_delivery,
-        preflight_deployment_intent, preflight_gitops_change_set_delivery,
-        prepare_change_set_git_delivery, prepare_gitops_change_set_delivery,
-        reconcile_due_controller_waits, reconcile_work_item, release_reconcile_action,
-        replan_work_item, revise_change_set, revise_work_plan, revoke_permission_grant, router,
-        run_policy, run_summary, satisfy_approval_gate, schedule_controller_wait,
-        set_pipeline_intent_evidence, stream_start_seq,
+        build_pipeline_run_manifest, cancel_run, cancel_work_item, capability_verification_summary,
+        change_set_flow, change_set_readiness, complete_work_item_from_verified_release,
+        config_effective, create_change_set, create_change_set_trusted_envelope,
+        create_declared_deployment_handoff, create_deployment_contract,
+        create_deployment_intent_from_pipeline_intent, create_deployment_intent_trusted_envelope,
+        create_incident, create_observation, create_operator_run,
+        create_pipeline_intent_from_change_set, create_pipeline_intent_trusted_envelope,
+        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
+        create_release_from_deployment_intent, create_remediation_plan, create_run,
+        create_work_item, create_work_item_pipeline_intent, create_work_plan_from_remediation_plan,
+        create_work_plan_from_work_item, create_work_plan_trusted_envelope,
+        current_pipeline_build_output, decide_run_approval, deny_approval,
+        deployment_intent_reconcile_action, ensure_pipeline_evidence_ready_for_deployment,
+        environment_profile_readiness_blocker, execute_capability, execute_deployment_intent,
+        execute_work_item_action, execution_matches_pipeline_contract, get_approval,
+        get_approval_gate, get_artifact, get_deployment_contract, get_deployment_intent,
+        get_incident, get_observation, get_permission_grant, get_pipeline_intent,
+        get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
+        get_run_events, get_run_operator_summary, get_work_plan, git_delivery_reconcile_action,
+        gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
+        internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
+        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
+        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
+        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
+        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
+        list_work_item_controller_waits, list_work_item_events, list_work_items, list_work_plans,
+        list_workspaces, merge_pipeline_execution_state, observe_due_controller_wait,
+        observed_gitops_merge_for_deployment, parse_last_event_id, persist_pipeline_build_output,
+        persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
+        pipeline_build_output_from_analysis, pipeline_intent_execution_preflight,
+        pipeline_intent_is_gitops_update_eligible, pipeline_intent_reconcile_action, policy_json,
+        preflight_change_set_git_delivery, preflight_deployment_intent,
+        preflight_gitops_change_set_delivery, prepare_change_set_git_delivery,
+        prepare_gitops_change_set_delivery, reconcile_due_controller_waits, reconcile_work_item,
+        release_reconcile_action, replan_work_item, revise_change_set, revise_work_plan,
+        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
+        schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
         supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
         transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
         transition_registry_evidence, transition_release, transition_remediation_plan,
@@ -27150,6 +27165,44 @@ mod tests {
             protected_target: super::ProtectedTargetConfiguration::from_env(),
             environment_profiles: Arc::new(Vec::new()),
         }
+    }
+
+    #[test]
+    fn readiness_explains_unverified_runner_profiles_without_empty_blockers() {
+        let profile = crate::dto::EnvironmentProfileResponse {
+            id: "python-3.11".to_string(),
+            status: "configured_unverified".to_string(),
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".to_string(),
+            required_executables: vec!["python".to_string()],
+            preparation_strategy: "python_hashed_requirements".to_string(),
+            service_account: "pharness-python-runner".to_string(),
+            repository_allowlist: vec!["https://github.com/example/repo.git".to_string()],
+            blockers: Vec::new(),
+        };
+
+        assert_eq!(
+            environment_profile_readiness_blocker(&profile).as_deref(),
+            Some(
+                "environment_profile python-3.11: runner profile requires a fresh passing isolated verification"
+            )
+        );
+    }
+
+    #[test]
+    fn failed_capability_summary_names_only_the_known_check_scope() {
+        let outcome = crate::dispatch::CapabilityVerificationOutcome {
+            available: false,
+            principal: Some("system:serviceaccount:pharness:runner".to_string()),
+            repository: Some("https://github.com/example/repo.git".to_string()),
+            permission: Some("repository_read".to_string()),
+        };
+
+        assert_eq!(
+            capability_verification_summary(&outcome),
+            "Isolated identity did not verify repository_read for https://github.com/example/repo.git"
+        );
     }
 
     async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyClusterTools) -> AppState {
