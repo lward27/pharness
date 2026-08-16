@@ -42,7 +42,7 @@ release commit:
 
 ```bash
 scripts/pharness-build.sh all --revision <40-character-origin-main-sha>
-scripts/pharness-release-pin.sh <same-sha> <runtime-sha256-digest> <ui-sha256-digest>
+scripts/pharness-release-pin.sh <same-sha> <runtime-sha256-digest> <ui-sha256-digest> <python-runner-sha256-digest>
 ```
 
 The pinning command requires a clean worktree and an exact current `origin/main`

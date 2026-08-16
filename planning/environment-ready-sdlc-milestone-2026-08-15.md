@@ -33,6 +33,9 @@ source revision before the profile can be activated.
 - The runner smoke verifies the non-root identity, executable inventory,
   absence of Docker/Podman, writable virtualenv, and a complete yfinance
   `--require-hashes --only-binary=:all:` installation.
+- The immutable build and release-pinning scripts require runtime, UI, and
+  Python-runner artifacts from the same merged revision. Release pinning
+  activates `python-3.11` only after recording its independently built digest.
 
 ## Matched Fireworks gate
 
