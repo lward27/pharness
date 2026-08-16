@@ -71,6 +71,18 @@ gate_passed: true
 The reports and fixture artifacts remain untracked under
 `target/pharness-evals/`.
 
+## Post-merge immutable build correction
+
+The first three-artifact Tekton build from merge `e9e5212` produced the UI
+image but stopped both Rust-based images before compilation because Kaniko did
+not synthesize BuildKit's `TARGETARCH` argument. The failed runtime and runner
+PipelineRuns were retained as evidence and were not blindly retried. The build
+workflow now explicitly selects `linux/amd64`, passes `TARGETARCH=amd64`, uses
+the approved `lucas_engineering` context on every Kubernetes call, and exits
+promptly when Tekton reports a terminal failure. All three artifacts must be
+rebuilt from the merge that contains this correction; the earlier UI digest is
+not release-eligible.
+
 ## Remaining supervised boundaries
 
 Deployment cannot start from the implementation branch. The required order is:
