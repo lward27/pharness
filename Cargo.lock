@@ -1223,6 +1223,7 @@ dependencies = [
  "async-trait",
  "axum",
  "futures",
+ "hmac",
  "pharness-config",
  "pharness-core",
  "pharness-fireworks",
@@ -1279,6 +1280,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
 ]
@@ -1298,6 +1301,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
 ]
 
@@ -1323,6 +1327,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "camino",
  "pharness-core",
  "pharness-fireworks",
  "serde",
@@ -1348,6 +1353,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "hmac",
  "pharness-config",
  "pharness-core",
  "pharness-fireworks",
@@ -1356,6 +1362,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "tokio",
  "tracing",
  "tracing-subscriber",

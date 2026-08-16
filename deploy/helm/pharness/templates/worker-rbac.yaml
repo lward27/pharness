@@ -6,6 +6,20 @@ metadata:
   labels:
     app.kubernetes.io/part-of: pharness
     agentic.lucas.engineering/role: readonly-observer
+{{- range .Values.environmentProfiles }}
+---
+# Runner profiles deliberately receive no Kubernetes RoleBinding. Preparation
+# and coding Jobs communicate only with the PHarness API and approved FQDNs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .service_account }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: repository-runner
+    agentic.lucas.engineering/environment-profile: {{ .id | quote }}
+{{- end }}
 ---
 # This identity intentionally has no Kubernetes RoleBinding. Its only scoped
 # authority is the GitHub token mounted into a short-lived writer Job.

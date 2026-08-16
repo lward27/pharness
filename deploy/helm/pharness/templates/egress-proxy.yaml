@@ -1,0 +1,90 @@
+{{- if and .Values.networkPolicy.enabled .Values.networkPolicy.egressProxy.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pharness-egress-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+automountServiceAccountToken: false
+{{- range $phase := list "preparation" "coding" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-{{ $phase }}-egress-proxy
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: pharness-egress-proxy
+    agentic.lucas.engineering/phase: {{ $phase }}
+spec:
+  selector:
+    app: pharness-egress-proxy
+    agentic.lucas.engineering/phase: {{ $phase }}
+  ports:
+    - name: connect
+      port: 8080
+      targetPort: connect
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharness-{{ $phase }}-egress-proxy
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: pharness-egress-proxy
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/phase: {{ $phase }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pharness-egress-proxy
+      agentic.lucas.engineering/phase: {{ $phase }}
+  template:
+    metadata:
+      labels:
+        app: pharness-egress-proxy
+        app.kubernetes.io/part-of: pharness
+        agentic.lucas.engineering/phase: {{ $phase }}
+    spec:
+      serviceAccountName: pharness-egress-proxy
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          image: "{{ $.Values.api.image.repository }}@{{ $.Values.api.image.digest }}"
+          imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
+          command: ["/usr/local/bin/pharness-worker"]
+          ports:
+            - name: connect
+              containerPort: 8080
+          env:
+            - name: PHARNESS_EXECUTION_KIND
+              value: egress_proxy
+            - name: PHARNESS_EGRESS_PROXY_ALLOWED_HOSTS_JSON
+              {{- if eq $phase "preparation" }}
+              value: {{ toJson $.Values.networkPolicy.egressProxy.preparationAllowedHosts | quote }}
+              {{- else }}
+              value: {{ toJson $.Values.networkPolicy.egressProxy.codingAllowedHosts | quote }}
+              {{- end }}
+          readinessProbe:
+            tcpSocket: { port: connect }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: connect }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+{{- end }}
+{{- end }}

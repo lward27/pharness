@@ -42,7 +42,7 @@ release commit:
 
 ```bash
 scripts/pharness-build.sh all --revision <40-character-origin-main-sha>
-scripts/pharness-release-pin.sh <same-sha> <runtime-sha256-digest> <ui-sha256-digest>
+scripts/pharness-release-pin.sh <same-sha> <runtime-sha256-digest> <ui-sha256-digest> <python-runner-sha256-digest>
 ```
 
 The pinning command requires a clean worktree and an exact current `origin/main`
@@ -106,15 +106,15 @@ prompt so those comparison fields are identical.
 FIREWORKS_API_KEY='...' \
   CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target \
   cargo run -p pharness-eval -- run --provider fireworks --attempts 2 \
-  --output target/pharness-evals/candidate-v1.6.json
+  --output target/pharness-evals/candidate-v1.7.json
 
 FIREWORKS_API_KEY='...' \
-  ./scripts/run-historical-baseline.sh --revision 21841e4 \
-  --output target/pharness-evals/baseline-v1.6.json --attempts 2
+  ./scripts/run-historical-baseline.sh --revision <deployed-source-sha> \
+  --output target/pharness-evals/baseline-v1.7.json --attempts 2
 
 cargo run -p pharness-eval -- compare \
-  --baseline target/pharness-evals/baseline-v1.6.json \
-  --candidate target/pharness-evals/candidate-v1.6.json
+  --baseline target/pharness-evals/baseline-v1.7.json \
+  --candidate target/pharness-evals/candidate-v1.7.json
 ```
 
 Do not begin the `app.rs` extraction unless the comparison reports the

@@ -4,7 +4,7 @@ set -euo pipefail
 # Build one immutable Pharness revision. This script never restarts a
 # Deployment; the resulting digests must be reviewed and committed to Helm.
 #
-# Usage: scripts/pharness-build.sh <runtime|ui|all> --revision <40-char-sha> [--node <hostname>]
+# Usage: scripts/pharness-build.sh <runtime|ui|python-runner|all> --revision <40-char-sha> [--node <hostname>]
 
 NAMESPACE="tekton-pipelines"
 NODE="${PHARNESS_BUILD_NODE:-ubuntu-lucas-engineering-2}"
@@ -13,11 +13,11 @@ REVISION=""
 RUNS=()
 
 usage() {
-  echo "Usage: $0 <runtime|ui|all> --revision <40-char-sha> [--node <hostname>]" >&2
+  echo "Usage: $0 <runtime|ui|python-runner|all> --revision <40-char-sha> [--node <hostname>]" >&2
   exit 1
 }
 
-[[ "$TARGET" =~ ^(runtime|ui|all)$ ]] || usage
+[[ "$TARGET" =~ ^(runtime|ui|python-runner|all)$ ]] || usage
 shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -86,9 +86,11 @@ MANIFEST
 case "$TARGET" in
   runtime) trigger runtime 8Gi ./deploy/docker/Dockerfile.runtime ;;
   ui) trigger ui 1Gi ./deploy/docker/Dockerfile.ui ;;
+  python-runner) trigger python-runner 8Gi ./deploy/docker/Dockerfile.python-runner ;;
   all)
     trigger runtime 8Gi ./deploy/docker/Dockerfile.runtime
     trigger ui 1Gi ./deploy/docker/Dockerfile.ui
+    trigger python-runner 8Gi ./deploy/docker/Dockerfile.python-runner
     ;;
 esac
 

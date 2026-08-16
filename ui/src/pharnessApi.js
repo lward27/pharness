@@ -1,6 +1,6 @@
 // Compatibility barrel. New UI code should import from the focused resource client when practical.
 export { getOperatorName, setOperatorName } from "./api/operator";
-export { advanceWorkItem, applyWorkItemReconcile, createWorkItem, executeWorkItemAction, loadRollbackIntent, loadSystemReadiness, loadWorkItem, loadWorkItemFlow, preflightWorkItem, previewWorkItemReconcile } from "./api/workItems";
+export { advanceWorkItem, applyWorkItemReconcile, createWorkItem, executeWorkItemAction, loadEnvironmentProfiles, loadRollbackIntent, loadSystemReadiness, loadWorkItem, loadWorkItemFlow, preflightWorkItem, previewWorkItemReconcile } from "./api/workItems";
 export { batchDecideApprovalGates, decideApproval, decideApprovalGate } from "./api/governance";
 export { cancelRun, loadRunDetail, submitRun, subscribeRunEvents } from "./api/runs";
 export { dispatchTektonE2eSmoke, loadPipelineIntent, prepareTektonE2eSmoke } from "./api/delivery";

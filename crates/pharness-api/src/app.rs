@@ -6,14 +6,15 @@ use crate::dispatch::{
 use crate::dto::{
     AdvanceWorkItemRequest, AdvanceWorkItemResponse, ApprovalDecision, ApprovalGateResponse,
     ApprovalGateSummaryResponse, ApprovalGatesResponse, ApprovalResponse, ApprovalSummaryResponse,
-    ApprovalsResponse, ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest,
-    ArtifactResponse, ArtifactsResponse, AttachDeploymentIntentEvidenceRequest,
-    AttachDeploymentIntentEvidenceResponse, AttachPipelineIntentEvidenceRequest,
-    AttachPipelineIntentEvidenceResponse, AttachReleaseEvidenceRequest,
-    AttachReleaseEvidenceResponse, AuditEventsResponse, BatchDecideApprovalGatesRequest,
-    BatchDecideApprovalGatesResponse, CapabilityStatusResponse, CaptureWorkItemChangeSetRequest,
-    ChangeSetResponse, ChangeSetsResponse, ControllerWaitTickResult, ControllerWaitsResponse,
-    CreateChangeSetRequest, CreateChangeSetResponse, CreateDeploymentContractRequest,
+    ApprovalsResponse, ApproveBudgetExtensionRequest, ArgoSyncContextResponse,
+    ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse, ArtifactsResponse,
+    AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
+    AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
+    AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
+    BatchDecideApprovalGatesRequest, BatchDecideApprovalGatesResponse, BudgetExtensionResponse,
+    CapabilityStatusResponse, CaptureWorkItemChangeSetRequest, ChangeSetResponse,
+    ChangeSetsResponse, ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
+    CreateChangeSetResponse, CreateDeploymentContractRequest,
     CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
     CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
     CreateGitOpsChangeSetRequest, CreateGitOpsChangeSetResponse,
@@ -30,7 +31,8 @@ use crate::dto::{
     DeliverySegmentResourceResponse, DeliverySegmentResponse, DeploymentContractResponse,
     DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
     DeploymentIntentPreflightRequest, DeploymentIntentPreflightResponse, DeploymentIntentResponse,
-    DeploymentIntentsResponse, EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
+    DeploymentIntentsResponse, EnvironmentPreparationResponse, EnvironmentProfilesResponse,
+    EventsResponse, ExecuteCapabilityRequest, ExecuteCapabilityResponse,
     ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest,
     ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse,
     ExecutePipelineIntentRequest, ExecutePipelineIntentResponse, ExecuteWorkItemActionRequest,
@@ -87,8 +89,9 @@ use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use pharness_core::{
     ActionId, AgentAction, AgentEvent, CapabilityKind, EventId, EventKind, PermissionGrant,
-    PermissionGrantPolicy, PermissionGrantScope, PolicyDecision, PolicyMode, ReadOnlyClusterTools,
-    RiskLevel, RunId, RunScope, SafetyPolicy, SessionId, ToolExecutor, ToolResult,
+    PermissionGrantPolicy, PermissionGrantScope, PolicyDecision, PolicyMode, ProjectContract,
+    ReadOnlyClusterTools, RiskLevel, RunBudget, RunBudgetConsumption, RunId, RunScope,
+    SafetyPolicy, SessionId, ToolExecutor, ToolResult,
 };
 use pharness_runhost::{AttemptOutcome, WorkspaceSourceSpec};
 use pharness_store::{
@@ -109,11 +112,12 @@ use pharness_store::{
 use pharness_store::{
     CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateCapabilityVerification,
     CreateChangeSet, CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent,
-    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePermissionGrant,
-    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateEnvironmentPreparation, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
+    CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
+    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
     CreateWorkspace, ReplacePipelineContract, SqliteStore, StoreError,
-    UpdateDeploymentIntentEvidence, UpdatePipelineIntentEvidence, UpdateWorkspaceExecution,
+    UpdateDeploymentIntentEvidence, UpdateEnvironmentPreparation, UpdatePipelineIntentEvidence,
+    UpdateWorkspaceExecution,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -126,6 +130,7 @@ use tokio::time::timeout;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+mod environment;
 mod runs;
 
 #[cfg(test)]
@@ -275,6 +280,7 @@ pub struct AppState {
     workspace: WorkspaceProvisioner,
     build: BuildMetadata,
     protected_target: ProtectedTargetConfiguration,
+    environment_profiles: Arc<Vec<pharness_core::EnvironmentProfile>>,
 }
 
 pub fn router(
@@ -296,6 +302,7 @@ pub fn router(
         workspace,
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
+        environment_profiles: Arc::new(environment::load_environment_profiles()),
     };
 
     let internal = runs::internal_router()
@@ -365,6 +372,7 @@ pub fn router(
         .route("/health", get(health))
         .route("/api/config/effective", get(config_effective))
         .route("/api/system/readiness", get(system_readiness))
+        .route("/api/environment-profiles", get(list_environment_profiles))
         .route(
             "/api/system/capabilities/:capability/preflight",
             post(preflight_system_capability),
@@ -755,6 +763,48 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "ok": true }))
 }
 
+async fn list_environment_profiles(
+    State(state): State<AppState>,
+) -> Result<Json<EnvironmentProfilesResponse>, ApiError> {
+    Ok(Json(EnvironmentProfilesResponse {
+        profiles: environment_profile_responses(&state).await?,
+        provider_transport_attempts: pharness_fireworks::DEFAULT_MAX_TRANSPORT_ATTEMPTS,
+    }))
+}
+
+async fn environment_profile_responses(
+    state: &AppState,
+) -> Result<Vec<crate::dto::EnvironmentProfileResponse>, ApiError> {
+    let now = current_millis();
+    let mut responses = Vec::new();
+    for profile in state.environment_profiles.iter() {
+        let mut response = environment::profile_response(profile);
+        if response.status == "configured_unverified" {
+            let capability = format!("environment_profile:{}", profile.id);
+            if let Some(verification) = state
+                .store
+                .latest_capability_verification(&capability)
+                .await?
+            {
+                response.status =
+                    if verification.expires_at.parse::<u128>().unwrap_or_default() <= now {
+                        response
+                            .blockers
+                            .push("isolated runner verification expired".to_string());
+                        "stale".to_string()
+                    } else {
+                        if verification.status != "available" {
+                            response.blockers.push(verification.summary);
+                        }
+                        verification.status
+                    };
+            }
+        }
+        responses.push(response);
+    }
+    Ok(responses)
+}
+
 /// Gate `/api/internal/*` behind the configured worker token.
 ///
 /// Worker ingest is disabled entirely when no token is configured, so a
@@ -977,6 +1027,23 @@ async fn system_readiness(
                 .to_string(),
         );
     }
+    let environment_profiles = environment_profile_responses(&state).await?;
+    if environment_profiles.is_empty() {
+        blockers
+            .push("environment_profiles: no immutable runner profile is configured".to_string());
+    }
+    blockers.extend(
+        environment_profiles
+            .iter()
+            .filter(|profile| profile.status != "available")
+            .map(|profile| {
+                format!(
+                    "environment_profile {}: {}",
+                    profile.id,
+                    profile.blockers.join("; ")
+                )
+            }),
+    );
     Ok(Json(SystemReadinessResponse {
         api_revision: state.build.api_revision.clone(),
         ui_revision: state.build.ui_revision.clone(),
@@ -995,6 +1062,7 @@ async fn system_readiness(
             "gitops_observer": worker.pointer("/gitops_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
         }),
         targets: protected_target_json(),
+        environment_profiles,
         blockers,
     }))
 }
@@ -1003,21 +1071,49 @@ async fn preflight_system_capability(
     State(state): State<AppState>,
     Path(capability): Path<String>,
 ) -> Result<Json<CapabilityStatusResponse>, ApiError> {
-    let configured = capability_statuses(&state)
-        .await?
-        .into_iter()
-        .find(|entry| entry.capability == capability)
-        .ok_or_else(|| ApiError::not_found("capability", &capability))?;
+    let profile = capability
+        .strip_prefix("environment_profile:")
+        .and_then(|id| {
+            state
+                .environment_profiles
+                .iter()
+                .find(|profile| profile.id == id)
+        });
+    let configured = if let Some(profile) = profile {
+        let response = environment::profile_response(profile);
+        CapabilityStatusResponse {
+            capability: capability.clone(),
+            status: response.status,
+            summary: if response.blockers.is_empty() {
+                "Runner profile is configured but has not passed isolated verification.".to_string()
+            } else {
+                response.blockers.join("; ")
+            },
+            verified_at: None,
+            expires_at: None,
+        }
+    } else {
+        capability_statuses(&state)
+            .await?
+            .into_iter()
+            .find(|entry| entry.capability == capability)
+            .ok_or_else(|| ApiError::not_found("capability", &capability))?
+    };
     if configured.status == "unavailable" {
         return Ok(Json(configured));
     }
     let repository = (capability == "source_workspace")
         .then(|| state.workspace.allowed_remote_repos().first().cloned())
         .flatten();
-    let outcome = state
-        .worker
-        .verify_capability(&capability, repository.as_deref())
-        .await;
+    let outcome = match profile {
+        Some(profile) => state.worker.verify_environment_profile(profile).await,
+        None => {
+            state
+                .worker
+                .verify_capability(&capability, repository.as_deref())
+                .await
+        }
+    };
     let now = current_millis();
     let (status, summary, principal, verified_repository, permission) = match outcome {
         Ok(outcome) => (
@@ -2627,9 +2723,16 @@ async fn work_item_flow(
         None => None,
     };
     let sdlc_flow = match work_plan.clone() {
-        Some(plan) => {
-            Some(build_sdlc_flow(&state.store, "work_item", &work_item_id, plan, change_set).await?)
-        }
+        Some(plan) => Some(
+            build_sdlc_flow(
+                &state.store,
+                "work_item",
+                &work_item_id,
+                plan,
+                change_set.clone(),
+            )
+            .await?,
+        ),
         None => None,
     };
     let Json(reconcile_preview) = reconcile_work_item(
@@ -2674,7 +2777,214 @@ async fn work_item_flow(
         .into_iter()
         .map(Into::into)
         .collect();
-    let mut action_rail = vec![work_item_action_response(&reconcile_preview)];
+    let mut action_rail = Vec::new();
+    if let Some(plan) = work_plan.as_ref() {
+        if plan.status == "proposed" {
+            action_rail.push(resource_review_action(
+                "planning",
+                "work_plan",
+                &plan.id,
+                &plan.status,
+                plan.updated_at.as_deref(),
+                plan.revision,
+                true,
+            ));
+            action_rail.push(resource_review_action(
+                "planning",
+                "work_plan",
+                &plan.id,
+                &plan.status,
+                plan.updated_at.as_deref(),
+                plan.revision,
+                false,
+            ));
+        } else if plan.status == "approved" && work_item.status == "awaiting_approval" {
+            action_rail.push(WorkItemActionResponse {
+                id: "authorize_workspace_and_start".to_string(),
+                lifecycle_stage: "attempt".to_string(),
+                resource: plan.id.clone(),
+                status: "ready".to_string(),
+                effect_class: "model_execution".to_string(),
+                blockers: Vec::new(),
+                approval_required: true,
+                approval_requirements: vec!["attempt_workspace_write".to_string()],
+                external_effect_summary: format!(
+                    "Authorize one coding attempt for repository {} using only the declared writable paths, then start model execution.",
+                    work_item.source_repo
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "authorize_workspace_and_start",
+                    "work_item": work_item.id,
+                    "work_item_updated_at": work_item.updated_at,
+                    "work_plan": plan.id,
+                    "work_plan_revision": plan.revision,
+                    "attempt_count": work_item.attempt_count,
+                })),
+            });
+        }
+    }
+    if let Some(flow) = sdlc_flow.as_ref() {
+        if let Some(change_set) = flow
+            .change_set
+            .as_ref()
+            .filter(|item| item.status == "proposed")
+        {
+            action_rail.extend(resource_review_actions(
+                "change_set",
+                "source",
+                &change_set.id,
+                &change_set.status,
+                change_set.updated_at.as_deref(),
+                change_set.revision,
+            ));
+        }
+        if let Some(intent) = flow
+            .pipeline_intent
+            .as_ref()
+            .filter(|item| item.status == "proposed")
+        {
+            action_rail.extend(resource_review_actions(
+                "pipeline_intent",
+                "pipeline",
+                &intent.id,
+                &intent.status,
+                intent.updated_at.as_deref(),
+                0,
+            ));
+        }
+        if let Some(intent) = flow
+            .deployment_intent
+            .as_ref()
+            .filter(|item| item.status == "proposed")
+        {
+            action_rail.extend(resource_review_actions(
+                "deployment_intent",
+                "deployment",
+                &intent.id,
+                &intent.status,
+                intent.updated_at.as_deref(),
+                0,
+            ));
+        }
+        if let Some(release) = flow
+            .release
+            .as_ref()
+            .filter(|item| item.status == "proposed")
+        {
+            action_rail.extend(resource_review_actions(
+                "release",
+                "release",
+                &release.id,
+                &release.status,
+                release.updated_at.as_deref(),
+                0,
+            ));
+        }
+    }
+    let lifecycle_gates = state
+        .store
+        .list_approval_gates(ApprovalGateListFilter {
+            work_item_id: Some(work_item_id.clone()),
+            limit: 200,
+            ..ApprovalGateListFilter::default()
+        })
+        .await?;
+    for gate in lifecycle_gates
+        .iter()
+        .filter(|gate| gate.status == "pending")
+    {
+        let (eligible, boundary_summary) = approval_gate_lifecycle_readiness(&state, gate).await?;
+        action_rail.push(WorkItemActionResponse {
+            id: format!("satisfy_approval_gate:{}", gate.id),
+            lifecycle_stage: approval_gate_lifecycle_stage(&gate.gate_kind).to_string(),
+            resource: gate.id.clone(),
+            status: if eligible { "ready" } else { "blocked" }.to_string(),
+            effect_class: "approval_boundary".to_string(),
+            blockers: (!eligible)
+                .then(|| ReconcileBlockerResponse {
+                    code: "future_lifecycle_gate".to_string(),
+                    summary: boundary_summary.clone(),
+                })
+                .into_iter()
+                .collect(),
+            approval_required: true,
+            approval_requirements: vec![gate.gate_kind.clone()],
+            external_effect_summary: if eligible {
+                gate.summary.clone()
+            } else {
+                format!("Future gate: {} {boundary_summary}", gate.summary)
+            },
+            state_hash: lifecycle_action_hash(json!({
+                "action": "satisfy_approval_gate",
+                "gate_id": gate.id,
+                "gate_status": gate.status,
+                "gate_kind": gate.gate_kind,
+                "eligible": eligible,
+                "boundary": boundary_summary,
+                "work_item_updated_at": work_item.updated_at,
+            })),
+        });
+    }
+    if let Some(run_id) = workspaces
+        .last()
+        .and_then(|workspace| workspace.run_id.as_ref())
+    {
+        if let Some(extension) = state.store.pending_budget_extension_for_run(run_id).await? {
+            action_rail.push(WorkItemActionResponse {
+                id: "approve_budget_extension".to_string(),
+                lifecycle_stage: "attempt".to_string(),
+                resource: extension.id,
+                status: "ready".to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers: Vec::new(),
+                approval_required: true,
+                approval_requirements: vec!["budget_extension".to_string()],
+                external_effect_summary: format!(
+                    "Resume the existing workspace with exactly {} additional turns and {} additional tokens.",
+                    extension.turn_increment, extension.token_increment
+                ),
+                state_hash: extension.state_hash,
+            });
+        }
+    }
+    if matches!(work_item.status.as_str(), "blocked" | "failed") {
+        let mut blockers = Vec::new();
+        if work_item.attempt_count >= work_item.max_attempts {
+            blockers.push(ReconcileBlockerResponse {
+                code: "attempt_budget_exhausted".to_string(),
+                summary: "The WorkItem has no remaining attempt budget.".to_string(),
+            });
+        }
+        if change_set.is_some() {
+            blockers.push(ReconcileBlockerResponse {
+                code: "source_delivery_started".to_string(),
+                summary:
+                    "Replanning is disabled after a ChangeSet exists; review or roll back instead."
+                        .to_string(),
+            });
+        }
+        action_rail.push(WorkItemActionResponse {
+            id: "replan_work_item".to_string(),
+            lifecycle_stage: "planning".to_string(),
+            resource: work_item.id.clone(),
+            status: if blockers.is_empty() { "ready" } else { "blocked" }.to_string(),
+            effect_class: "internal".to_string(),
+            blockers,
+            approval_required: false,
+            approval_requirements: Vec::new(),
+            external_effect_summary: "Create a fresh isolated workspace for another explicit coding attempt; no attempt starts automatically.".to_string(),
+            state_hash: lifecycle_action_hash(json!({
+                "action": "replan_work_item",
+                "work_item": work_item.id,
+                "status": work_item.status,
+                "updated_at": work_item.updated_at,
+                "attempt_count": work_item.attempt_count,
+                "max_attempts": work_item.max_attempts,
+                "change_set": change_set.as_ref().map(|value| &value.id),
+            })),
+        });
+    }
+    action_rail.push(work_item_action_response(&reconcile_preview));
     let rollback_intent = latest_rollback_intent(&state, &work_item, None).await?;
     let rollback_writer_base_ready = sdlc_flow
         .as_ref()
@@ -2777,6 +3087,77 @@ async fn work_item_flow(
         action_rail,
         delivery_configuration,
     }))
+}
+
+fn lifecycle_action_hash(payload: Value) -> String {
+    format!("{:x}", Sha256::digest(payload.to_string().as_bytes()))
+}
+
+fn resource_review_actions(
+    resource_kind: &str,
+    lifecycle_stage: &str,
+    resource_id: &str,
+    status: &str,
+    updated_at: Option<&str>,
+    revision: i64,
+) -> Vec<WorkItemActionResponse> {
+    vec![
+        resource_review_action(
+            lifecycle_stage,
+            resource_kind,
+            resource_id,
+            status,
+            updated_at,
+            revision,
+            true,
+        ),
+        resource_review_action(
+            lifecycle_stage,
+            resource_kind,
+            resource_id,
+            status,
+            updated_at,
+            revision,
+            false,
+        ),
+    ]
+}
+
+fn resource_review_action(
+    lifecycle_stage: &str,
+    resource_kind: &str,
+    resource_id: &str,
+    status: &str,
+    updated_at: Option<&str>,
+    revision: i64,
+    approve: bool,
+) -> WorkItemActionResponse {
+    let action_id = format!(
+        "{}_{resource_kind}",
+        if approve { "approve" } else { "reject" }
+    );
+    WorkItemActionResponse {
+        id: action_id.clone(),
+        lifecycle_stage: lifecycle_stage.to_string(),
+        resource: resource_id.to_string(),
+        status: "ready".to_string(),
+        effect_class: "approval_boundary".to_string(),
+        blockers: Vec::new(),
+        approval_required: true,
+        approval_requirements: vec![format!("{resource_kind}_review")],
+        external_effect_summary: format!(
+            "{} {resource_kind} {resource_id}. This review changes durable PHarness state only.",
+            if approve { "Approve" } else { "Reject" }
+        ),
+        state_hash: lifecycle_action_hash(json!({
+            "action": &action_id,
+            "resource_kind": resource_kind,
+            "resource_id": resource_id,
+            "status": status,
+            "updated_at": updated_at,
+            "revision": revision,
+        })),
+    }
 }
 
 fn work_item_action_response(preview: &ReconcileWorkItemResponse) -> WorkItemActionResponse {
@@ -3146,7 +3527,8 @@ async fn build_work_item_preflight(
     let source_ref = request.source_ref.trim();
     let production =
         request.production_impacting || request.target_environment.trim() == PROTECTED_ENVIRONMENT;
-    let normalized_submission = json!({
+    let budget = run_budget_from_request(request);
+    let mut normalized_submission = json!({
         "title": request.title.trim(),
         "intent": request.intent.trim(),
         "acceptance_criteria": request.acceptance_criteria.iter().map(|value| value.trim()).filter(|value| !value.is_empty()).collect::<Vec<_>>(),
@@ -3168,9 +3550,14 @@ async fn build_work_item_preflight(
         "production_impacting": production,
         "max_attempts": request.max_attempts.unwrap_or(3).clamp(1, 10),
         "max_elapsed_seconds": request.max_elapsed_seconds.unwrap_or(3_600).clamp(60, 86_400),
+        "environment_profile_id": request.environment_profile_id.as_deref().map(str::trim),
+        "run_budget": budget.as_ref().ok(),
     });
     let mut blockers = Vec::new();
     let mut warnings = Vec::new();
+    if let Err(error) = &budget {
+        blockers.push(error.message.clone());
+    }
     if source_repo.is_empty() {
         blockers.push("source repository is required".to_string());
     }
@@ -3206,6 +3593,116 @@ async fn build_work_item_preflight(
         blockers.push(
             "deployed protected-target configuration does not exactly match the locked production target"
                 .to_string(),
+        );
+    }
+
+    let profile_id = request
+        .environment_profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let selected_profile = match profile_id {
+        Some(id) => match environment::select_profile(&state.environment_profiles, id, source_repo)
+        {
+            Ok(profile) => Some(profile),
+            Err(error) => {
+                blockers.push(error);
+                None
+            }
+        },
+        None if production => {
+            blockers.push("production requires environment_profile_id".to_string());
+            None
+        }
+        None => {
+            warnings.push(
+                "No immutable environment profile selected; legacy generic runner will be used."
+                    .to_string(),
+            );
+            None
+        }
+    };
+    if production {
+        if let Some(profile) = selected_profile {
+            let capability = format!("environment_profile:{}", profile.id);
+            let verified = state
+                .store
+                .latest_capability_verification(&capability)
+                .await?
+                .is_some_and(|verification| {
+                    verification.status == "available"
+                        && verification
+                            .expires_at
+                            .parse::<u128>()
+                            .is_ok_and(|expires| expires > current_millis())
+                });
+            if !verified {
+                blockers.push(format!(
+                    "environment profile {} requires a fresh passing isolated verification",
+                    profile.id
+                ));
+            }
+        }
+    }
+
+    let mut repository_contract = None;
+    let mut repository_contract_hash = None;
+    if production {
+        if let (Some(profile), Some(commit)) = (
+            selected_profile,
+            request
+                .source_commit
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| immutable_git_object_id(value)),
+        ) {
+            match environment::inspect_remote_project_contract(source_repo, commit).await {
+                Ok((contract, hash)) => {
+                    if contract.environment_profile != profile.id {
+                        blockers.push(format!(
+                            "repository contract selects {} instead of requested profile {}",
+                            contract.environment_profile, profile.id
+                        ));
+                    }
+                    let declared = contract
+                        .acceptance_commands
+                        .iter()
+                        .map(|command| command.command.trim())
+                        .collect::<BTreeSet<_>>();
+                    for requested in request
+                        .acceptance_criteria
+                        .iter()
+                        .map(|command| command.trim())
+                        .filter(|command| !command.is_empty())
+                    {
+                        if !declared.contains(requested) {
+                            blockers.push(format!(
+                                "acceptance command is not declared by the repository contract: {requested}"
+                            ));
+                        }
+                    }
+                    repository_contract_hash = Some(hash);
+                    repository_contract = serde_json::to_value(contract).ok();
+                }
+                Err(error) => blockers.push(format!(
+                    "repository contract preflight failed before submission: {error}"
+                )),
+            }
+        }
+    }
+    if let Some(object) = normalized_submission.as_object_mut() {
+        object.insert(
+            "repository_contract".to_string(),
+            repository_contract
+                .clone()
+                .unwrap_or(serde_json::Value::Null),
+        );
+        object.insert(
+            "repository_contract_hash".to_string(),
+            repository_contract_hash
+                .clone()
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null),
         );
     }
 
@@ -3444,7 +3941,7 @@ async fn create_work_item(
 ) -> Result<Json<WorkItemResponse>, ApiError> {
     let production =
         request.production_impacting || request.target_environment.trim() == PROTECTED_ENVIRONMENT;
-    if production {
+    let production_preflight = if production {
         let preflight = build_work_item_preflight(&state, &request).await?;
         if !preflight.ready {
             return Err(ApiError::conflict(format!(
@@ -3457,7 +3954,11 @@ async fn create_work_item(
                 "production WorkItem preflight is missing or stale; run preflight again",
             ));
         }
-    }
+        Some(preflight)
+    } else {
+        None
+    };
+    let run_budget = run_budget_from_request(&request)?;
     let title = required_text(request.title, "title")?;
     let intent = required_text(request.intent, "intent")?;
     let source_repo = required_text(request.source_repo, "source_repo")?;
@@ -3472,11 +3973,26 @@ async fn create_work_item(
     if let Some(application) = &argo_application {
         validate_kubernetes_name("argo_application", application)?;
     }
-    let max_attempts = request.max_attempts.unwrap_or(3).clamp(1, 10);
-    let max_elapsed_seconds = request
-        .max_elapsed_seconds
-        .unwrap_or(3_600)
-        .clamp(60, 86_400);
+    let max_attempts = if production {
+        request.max_attempts.unwrap_or(2).clamp(1, 3)
+    } else {
+        request.max_attempts.unwrap_or(2).clamp(1, 10)
+    };
+    let max_elapsed_seconds = run_budget.active_execution_seconds;
+    let repository_contract_json = production_preflight
+        .as_ref()
+        .and_then(|preflight| preflight.normalized_submission.get("repository_contract"))
+        .filter(|value| !value.is_null())
+        .cloned();
+    let repository_contract_hash = production_preflight
+        .as_ref()
+        .and_then(|preflight| {
+            preflight
+                .normalized_submission
+                .get("repository_contract_hash")
+        })
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned);
     let actor = identity
         .map(|Extension(OperatorIdentity(name))| name)
         .or_else(|| clean_optional_text(request.actor));
@@ -3511,6 +4027,15 @@ async fn create_work_item(
             max_attempts,
             max_elapsed_seconds,
             created_by: actor.clone(),
+            environment_profile_id: clean_optional_text(request.environment_profile_id),
+            run_budget,
+            repository_contract_json,
+            repository_contract_hash,
+            environment_preparation_status: if production {
+                "pending".to_string()
+            } else {
+                "not_required".to_string()
+            },
         })
         .await?;
     let work_item = state
@@ -4547,7 +5072,7 @@ async fn execute_work_item_action(
         let response = match action_id.as_str() {
             "approve_rollback" | "approve_rollback_argo_sync" => {
                 approve_rollback_intent(
-                    State(state),
+                    State(state.clone()),
                     identity,
                     Path(rollback_id.to_string()),
                     Json(RollbackIntentRequest {
@@ -4572,6 +5097,184 @@ async fn execute_work_item_action(
             _ => unreachable!(),
         };
         return Ok(Json(response));
+    }
+    let actor = identity
+        .clone()
+        .map(|Extension(OperatorIdentity(name))| name)
+        .or_else(|| clean_optional_text(request.actor.clone()))
+        .ok_or_else(|| ApiError::bad_request("action execution actor is required"))?;
+    let Json(flow) = work_item_flow(State(state.clone()), Path(work_item_id.clone())).await?;
+    if let Some(action) = flow
+        .action_rail
+        .iter()
+        .find(|action| action.id == action_id)
+    {
+        if action.state_hash != request.state_hash {
+            return Err(ApiError::conflict(
+                "action preview is stale; reload the WorkItem flow before executing",
+            ));
+        }
+        if action.status != "ready" {
+            return Err(ApiError::conflict(format!(
+                "action {} is blocked: {}",
+                action.id,
+                action
+                    .blockers
+                    .iter()
+                    .map(|blocker| blocker.summary.as_str())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )));
+        }
+        let transition_target = if action.id.starts_with("approve_") {
+            "approved"
+        } else {
+            "rejected"
+        };
+        let value = match action.id.as_str() {
+            "approve_work_plan" | "reject_work_plan" => serde_json::to_value(
+                transition_work_plan(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionWorkPlanRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "authorize_workspace_and_start" => serde_json::to_value(
+                execute_work_item(
+                    State(state.clone()),
+                    identity.clone(),
+                    Path(work_item_id.clone()),
+                    Json(ExecuteWorkItemRequest {
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                        max_turns: None,
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "replan_work_item" => serde_json::to_value(
+                replan_work_item(
+                    State(state.clone()),
+                    identity.clone(),
+                    Path(work_item_id.clone()),
+                    Json(ReplanWorkItemRequest {
+                        actor: Some(actor.clone()),
+                        reason: request.reason.clone(),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "approve_budget_extension" => {
+                let extension = state
+                    .store
+                    .get_budget_extension(&action.resource)
+                    .await?
+                    .ok_or_else(|| ApiError::not_found("budget_extension", &action.resource))?;
+                serde_json::to_value(
+                    runs::approve_run_budget_extension(
+                        State(state.clone()),
+                        identity.clone(),
+                        Path((extension.run_id.to_string(), extension.id)),
+                        Json(ApproveBudgetExtensionRequest {
+                            actor: actor.clone(),
+                            reason: request.reason.clone(),
+                            state_hash: request.state_hash.clone(),
+                        }),
+                    )
+                    .await?
+                    .0,
+                )
+            }
+            action_id if action_id.starts_with("satisfy_approval_gate:") => {
+                let gate_id = action_id
+                    .strip_prefix("satisfy_approval_gate:")
+                    .ok_or_else(|| ApiError::conflict("approval gate action is malformed"))?;
+                serde_json::to_value(
+                    decide_approval_gate(
+                        state.clone(),
+                        gate_id.to_string(),
+                        "satisfied",
+                        DecideApprovalGateRequest {
+                            decided_by: Some(actor.clone()),
+                            reason: Some(request.reason.clone()),
+                        },
+                    )
+                    .await?
+                    .0,
+                )
+            }
+            "approve_change_set" | "reject_change_set" => serde_json::to_value(
+                transition_change_set(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionChangeSetRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "approve_pipeline_intent" | "reject_pipeline_intent" => serde_json::to_value(
+                transition_pipeline_intent(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionPipelineIntentRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "approve_deployment_intent" | "reject_deployment_intent" => serde_json::to_value(
+                transition_deployment_intent(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionDeploymentIntentRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "approve_release" | "reject_release" => serde_json::to_value(
+                transition_release(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionReleaseRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            _ => {
+                // The controller-derived reconcile action below remains the
+                // compatibility path for non-review lifecycle actions.
+                serde_json::to_value(Value::Null)
+            }
+        }
+        .map_err(|error| {
+            ApiError::internal(format!("failed to serialize action result: {error}"))
+        })?;
+        if value != Value::Null {
+            return Ok(Json(value));
+        }
     }
     let Json(preview) = reconcile_work_item(
         State(state.clone()),
@@ -9177,6 +9880,28 @@ async fn execute_work_item(
             "coding execution is limited to dev or the exact protected production target",
         ));
     }
+    let environment_profile = match work_item.environment_profile_id.as_deref() {
+        Some(profile_id) => Some(
+            environment::select_profile(
+                &state.environment_profiles,
+                profile_id,
+                &work_item.source_repo,
+            )
+            .map_err(ApiError::conflict)?
+            .clone(),
+        ),
+        None if work_item.production_impacting => {
+            return Err(ApiError::conflict(
+                "production coding requires an immutable environment profile",
+            ));
+        }
+        None => None,
+    };
+    if environment_profile.is_some() && !remote_workspace {
+        return Err(ApiError::conflict(
+            "immutable environment profile execution requires the Kubernetes worker",
+        ));
+    }
     if work_item.status != "awaiting_approval" {
         return Err(ApiError::conflict(
             "WorkItem must be awaiting_approval before an execution attempt can start",
@@ -9184,6 +9909,14 @@ async fn execute_work_item(
     }
     if work_item.attempt_count >= work_item.max_attempts {
         return Err(ApiError::conflict("WorkItem attempt budget is exhausted"));
+    }
+    if request
+        .max_turns
+        .is_some_and(|requested| requested != work_item.run_budget.initial_turns)
+    {
+        return Err(ApiError::conflict(
+            "attempt max_turns is fixed by the WorkItem RunBudget; update it through the wizard or a budget extension",
+        ));
     }
     let work_plan = state
         .store
@@ -9285,6 +10018,7 @@ async fn execute_work_item(
     let run_id = RunId::new(format!("run_{}", unique_suffix()));
     let session_id = SessionId::new(format!("ses_{}", run_id.as_str()));
     let run_scope = RunScope {
+        run_id: Some(run_id.to_string()),
         namespace: work_item.target_namespace.clone(),
         repo: Some(work_item.source_repo.clone()),
         branch: Some(branch.clone()),
@@ -9292,8 +10026,52 @@ async fn execute_work_item(
         workspace_id: Some(workspace.id.clone()),
         work_plan_id: Some(work_plan.id.clone()),
         change_set_id: None,
-        production_impacting: false,
+        production_impacting: work_item.production_impacting,
     };
+    let contract = work_item
+        .repository_contract_json
+        .clone()
+        .map(serde_json::from_value::<ProjectContract>)
+        .transpose()
+        .map_err(|error| {
+            ApiError::internal(format!("stored repository contract is invalid: {error}"))
+        })?;
+    if work_item.production_impacting && contract.is_none() {
+        return Err(ApiError::conflict(
+            "production coding requires a validated repository contract",
+        ));
+    }
+    if let Some(contract) = contract.as_ref() {
+        create_permission_grant_record(
+            &state.store,
+            CreatePermissionGrantRequest {
+                subject: state.policy.subject.clone(),
+                created_by: actor.clone(),
+                reason: format!(
+                    "attempt-scoped workspace authorization for WorkItem {} run {}",
+                    work_item.id, run_id
+                ),
+                scope: json!({
+                    "environment": state.policy.environment,
+                    "capability_kinds": ["filesystem"],
+                    "actions": ["write_file", "patch_file", "create_directory"],
+                    "max_risk": "medium",
+                    "namespaces": work_item.target_namespace.iter().collect::<Vec<_>>(),
+                    "repos": [work_item.source_repo],
+                    "branches": [branch],
+                    "run_ids": [run_id.to_string()],
+                    "workspace_ids": [workspace.id],
+                    "writable_path_globs": contract.writable_paths,
+                    "work_item_ids": [work_item.id],
+                    "work_plan_ids": [work_plan.id],
+                    "production_impacting": work_item.production_impacting,
+                }),
+                policy: json!({ "policy_mode": "trusted_writes" }),
+                expires_at: Some((current_millis() + 4 * 60 * 60 * 1_000).to_string()),
+            },
+        )
+        .await?;
+    }
     let mut policy = run_policy(&state.policy, None);
     policy.permission_grants = active_permission_grants(&state.store).await?;
     state
@@ -9311,8 +10089,12 @@ async fn execute_work_item(
             session_id: session_id.clone(),
             user_task: coding_task_prompt(&work_item),
             cwd: cwd.clone(),
-            max_turns: request.max_turns.unwrap_or(24).clamp(1, 40),
-            initial_status: "queued".to_string(),
+            max_turns: work_item.run_budget.initial_turns,
+            initial_status: if environment_profile.is_some() {
+                "preparing".to_string()
+            } else {
+                "queued".to_string()
+            },
             execution_target_json: json!({
                 "kind": execution_kind,
                 "policy": &policy,
@@ -9322,8 +10104,25 @@ async fn execute_work_item(
                     "branch": branch,
                 },
                 "workspace_source": workspace_source,
+                "run_budget": &work_item.run_budget,
+                "environment_profile_id": work_item.environment_profile_id,
+                "repository_contract": work_item.repository_contract_json,
+                "selected_acceptance_commands": work_item.acceptance_criteria,
+                "runner_profile": environment_profile.clone(),
             }),
         })
+        .await?;
+    let run = state
+        .store
+        .set_run_budget(
+            &run.id,
+            &work_item.run_budget,
+            &RunBudgetConsumption {
+                allowed_turns: work_item.run_budget.initial_turns,
+                allowed_tokens: work_item.run_budget.initial_tokens,
+                ..RunBudgetConsumption::default()
+            },
+        )
         .await?;
     let run = state.store.set_run_origin(&run.id, "controller").await?;
     let run = state
@@ -9386,7 +10185,43 @@ async fn execute_work_item(
         json!({ "workspace_id": workspace.id, "run_id": run_id, "base_commit": workspace.resolved_commit, "branch": workspace.branch, "execution_kind": execution_kind }),
     )
     .await?;
-    state.worker.spawn_run(run.clone(), cwd);
+    if let Some(profile) = environment_profile.as_ref() {
+        let source_commit = work_item
+            .source_commit
+            .clone()
+            .ok_or_else(|| ApiError::conflict("environment preparation requires source_commit"))?;
+        let preparation = state
+            .store
+            .create_environment_preparation(CreateEnvironmentPreparation {
+                id: format!("prep_{}", unique_suffix()),
+                work_item_id: work_item.id.clone(),
+                workspace_id: workspace.id.clone(),
+                run_id: Some(run.id.clone()),
+                status: "queued".to_string(),
+                environment_profile_id: profile.id.clone(),
+                source_commit,
+            })
+            .await?;
+        let receipt = state
+            .worker
+            .dispatch_environment_preparation(&run, profile)
+            .await
+            .map_err(|error| ApiError::internal(error.to_string()))?;
+        state
+            .store
+            .update_environment_preparation(UpdateEnvironmentPreparation {
+                id: preparation.id,
+                status: "running".to_string(),
+                project_contract_json: None,
+                project_contract_hash: None,
+                environment_snapshot_json: None,
+                logs_json: json!([{"step":"dispatch","status":"succeeded","job_name":receipt.job_name}]),
+                error: None,
+            })
+            .await?;
+    } else {
+        state.worker.spawn_run(run.clone(), cwd);
+    }
     Ok(Json(ExecuteWorkItemResponse {
         work_item: work_item.into(),
         workspace: workspace.into(),
@@ -10576,7 +11411,7 @@ fn work_plan_from_remediation_plan(plan: &StoredRemediationPlan, id: String) -> 
         incident_id: Some(plan.incident_id.clone()),
         session_id: plan.session_id.clone(),
         run_id: plan.run_id.clone(),
-        status: "draft".to_string(),
+        status: "proposed".to_string(),
         title: format!("WorkPlan: {}", plan.title),
         summary: plan.summary.clone(),
         risk_level: plan.risk_level.clone(),
@@ -10590,7 +11425,7 @@ fn work_plan_from_remediation_plan(plan: &StoredRemediationPlan, id: String) -> 
                 "id": plan.id.clone(),
                 "incident_id": plan.incident_id.clone(),
             },
-            "status": "draft",
+            "status": "proposed",
             "execution": {
                 "enabled": false,
                 "reason": "work plan execution is not implemented",
@@ -10614,7 +11449,7 @@ fn work_plan_from_work_item(
         incident_id: None,
         session_id,
         run_id: None,
-        status: "draft".to_string(),
+        status: "proposed".to_string(),
         title: format!("WorkPlan: {}", item.title),
         summary: item.intent.clone(),
         risk_level: if item.production_impacting {
@@ -24265,13 +25100,11 @@ async fn list_approval_gates(
         limit,
         offset,
     };
-    let approval_gates = state
-        .store
-        .list_approval_gates(filter.clone())
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<ApprovalGateResponse>>();
+    let stored_approval_gates = state.store.list_approval_gates(filter.clone()).await?;
+    let mut approval_gates = Vec::with_capacity(stored_approval_gates.len());
+    for gate in stored_approval_gates {
+        approval_gates.push(approval_gate_response(&state, gate).await?);
+    }
     let group_approval_gates =
         all_approval_gates_for_operator_groups(state.store.as_ref(), filter).await?;
     let count = group_approval_gates.len();
@@ -24333,7 +25166,159 @@ async fn get_approval_gate(
         .await?
         .ok_or_else(|| ApiError::not_found("approval_gate", &gate_id))?;
 
-    Ok(Json(gate.into()))
+    Ok(Json(approval_gate_response(&state, gate).await?))
+}
+
+fn approval_gate_lifecycle_stage(gate_kind: &str) -> &'static str {
+    match gate_kind {
+        "source_mutation" | "git_mutation" => "source",
+        "pipeline_mutation" | "production_impact" => "pipeline",
+        "gitops_mutation" => "gitops",
+        "cluster_mutation" | "production_deployment" => "deployment",
+        _ => "planning",
+    }
+}
+
+async fn approval_gate_lifecycle_readiness(
+    state: &AppState,
+    gate: &StoredApprovalGate,
+) -> Result<(bool, String), ApiError> {
+    let Some(work_item_id) = gate.work_item_id.as_deref() else {
+        return Ok((
+            true,
+            "The gate is at its declared review boundary.".to_string(),
+        ));
+    };
+    let item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if !item.production_impacting {
+        return Ok((
+            true,
+            "The development gate is ready for review.".to_string(),
+        ));
+    }
+    let Some(plan) = state.store.get_work_plan_by_work_item(work_item_id).await? else {
+        return Ok((false, "A WorkPlan has not been created yet.".to_string()));
+    };
+    if plan.status != "approved" {
+        return Ok((
+            false,
+            "The proposed WorkPlan must be approved before production gates become actionable."
+                .to_string(),
+        ));
+    }
+    let change_set = state.store.get_change_set_by_work_plan(&plan.id).await?;
+    if matches!(gate.gate_kind.as_str(), "source_mutation" | "git_mutation") {
+        return Ok(match change_set {
+            Some(change_set) if change_set.status == "approved" => (
+                true,
+                "The approved ChangeSet is at the source-delivery boundary.".to_string(),
+            ),
+            _ => (
+                false,
+                "An approved ChangeSet is required before source delivery gates can be decided."
+                    .to_string(),
+            ),
+        });
+    }
+    let Some(change_set) = change_set else {
+        return Ok((
+            false,
+            "Source delivery has not produced an approved ChangeSet.".to_string(),
+        ));
+    };
+    let pipeline_intent = state
+        .store
+        .get_pipeline_intent_by_change_set(&change_set.id)
+        .await?;
+    if matches!(
+        gate.gate_kind.as_str(),
+        "pipeline_mutation" | "production_impact"
+    ) {
+        return Ok(match pipeline_intent {
+            Some(intent) if intent.status == "approved" => (
+                true,
+                "The approved PipelineIntent is at the immutable build boundary.".to_string(),
+            ),
+            _ => (
+                false,
+                "An approved PipelineIntent is required before pipeline production gates can be decided."
+                    .to_string(),
+            ),
+        });
+    }
+    let Some(pipeline_intent) = pipeline_intent else {
+        return Ok((
+            false,
+            "The immutable build boundary has not been reached.".to_string(),
+        ));
+    };
+    let gitops_change_set = state
+        .store
+        .get_gitops_change_set_by_pipeline_intent(&pipeline_intent.id)
+        .await?;
+    if gate.gate_kind == "gitops_mutation" {
+        return Ok(match gitops_change_set {
+            Some(change_set) if change_set.status == "approved" => (
+                true,
+                "The approved GitOps ChangeSet is at the GitOps writer boundary.".to_string(),
+            ),
+            _ => (
+                false,
+                "An approved GitOps ChangeSet is required before the GitOps mutation gate can be decided."
+                    .to_string(),
+            ),
+        });
+    }
+    let deployment_intent = state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
+        .await?;
+    if !deployment_intent
+        .as_ref()
+        .is_some_and(|intent| intent.status == "approved")
+    {
+        return Ok((
+            false,
+            "An approved DeploymentIntent is required before cluster production gates can be decided."
+                .to_string(),
+        ));
+    }
+    let merge_ready = observed_gitops_merge_for_deployment(&state.store, &item, &pipeline_intent)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
+    if !merge_ready {
+        return Ok((
+            false,
+            "The exact GitOps pull request must be observed merged before cluster production gates can be decided."
+                .to_string(),
+        ));
+    }
+    Ok((
+        true,
+        "The approved DeploymentIntent and immutable GitOps merge are at the explicit Argo boundary."
+            .to_string(),
+    ))
+}
+
+async fn approval_gate_response(
+    state: &AppState,
+    gate: StoredApprovalGate,
+) -> Result<ApprovalGateResponse, ApiError> {
+    let mut response: ApprovalGateResponse = gate.clone().into();
+    if gate.status == "pending" {
+        let (actionable, reason) = approval_gate_lifecycle_readiness(state, &gate).await?;
+        response.actionable = actionable;
+        if !actionable {
+            response.lifecycle_blocker = Some(reason);
+        }
+    }
+    Ok(response)
 }
 
 async fn satisfy_approval_gate(
@@ -24373,6 +25358,10 @@ async fn decide_approval_gate(
         .ok_or_else(|| ApiError::not_found("approval_gate", &gate_id))?;
     if current.status != "pending" {
         return Err(ApiError::conflict("approval gate is not pending"));
+    }
+    let (eligible, blocker) = approval_gate_lifecycle_readiness(&state, &current).await?;
+    if !eligible {
+        return Err(ApiError::conflict(blocker));
     }
 
     let gate = state
@@ -24442,6 +25431,12 @@ async fn batch_decide_approval_gates(
         if gate.status != "pending" {
             return Err(ApiError::conflict(format!(
                 "approval gate is not pending: {gate_id}"
+            )));
+        }
+        let (eligible, blocker) = approval_gate_lifecycle_readiness(&state, &gate).await?;
+        if !eligible {
+            return Err(ApiError::conflict(format!(
+                "approval gate {gate_id} is not at its lifecycle boundary: {blocker}"
             )));
         }
         current_gates.push(gate);
@@ -25454,6 +26449,40 @@ fn required_text(value: String, field: &str) -> Result<String, ApiError> {
         .ok_or_else(|| ApiError::bad_request(format!("{field} is required")))
 }
 
+fn run_budget_from_request(request: &CreateWorkItemRequest) -> Result<RunBudget, ApiError> {
+    let defaults = RunBudget::default();
+    let budget = RunBudget {
+        initial_turns: request
+            .initial_turn_budget
+            .unwrap_or(defaults.initial_turns),
+        hard_turns: request.hard_turn_budget.unwrap_or(defaults.hard_turns),
+        initial_tokens: request
+            .initial_token_budget
+            .unwrap_or(defaults.initial_tokens),
+        hard_tokens: request.hard_token_budget.unwrap_or(defaults.hard_tokens),
+        active_execution_seconds: request
+            .active_execution_seconds
+            .or(request.max_elapsed_seconds)
+            .unwrap_or(defaults.active_execution_seconds),
+        recoverable_tool_errors: request
+            .recoverable_tool_error_limit
+            .unwrap_or(defaults.recoverable_tool_errors),
+        identical_failures: request
+            .identical_failure_limit
+            .unwrap_or(defaults.identical_failures),
+        verification_reserve_turns: defaults.verification_reserve_turns,
+    };
+    budget
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    if !(60..=86_400).contains(&budget.active_execution_seconds) {
+        return Err(ApiError::bad_request(
+            "active execution budget must be between 60 and 86400 seconds",
+        ));
+    }
+    Ok(budget)
+}
+
 fn validate_allowed_value(field: &str, value: &str, allowed: &[&str]) -> Result<(), ApiError> {
     if allowed.contains(&value) {
         Ok(())
@@ -26018,34 +27047,35 @@ mod tests {
         get_approval, get_approval_gate, get_artifact, get_deployment_contract,
         get_deployment_intent, get_incident, get_observation, get_permission_grant,
         get_pipeline_intent, get_registry_evidence, get_release, get_remediation_plan, get_run,
-        get_run_diff, get_run_events, get_work_plan, git_delivery_reconcile_action,
-        gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
-        internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
-        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
-        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
-        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
-        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_item_controller_waits, list_work_item_events, list_work_items, list_work_plans,
-        list_workspaces, merge_pipeline_execution_state, observe_due_controller_wait,
-        observed_gitops_merge_for_deployment, parse_last_event_id, persist_pipeline_build_output,
-        persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
-        pipeline_build_output_from_analysis, pipeline_intent_execution_preflight,
-        pipeline_intent_is_gitops_update_eligible, pipeline_intent_reconcile_action, policy_json,
-        preflight_change_set_git_delivery, preflight_deployment_intent,
-        preflight_gitops_change_set_delivery, prepare_change_set_git_delivery,
-        prepare_gitops_change_set_delivery, reconcile_due_controller_waits, reconcile_work_item,
-        release_reconcile_action, replan_work_item, revise_change_set, revise_work_plan,
-        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
-        schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
+        get_run_diff, get_run_events, get_run_operator_summary, get_work_plan,
+        git_delivery_reconcile_action, gitops_change_set_reconcile_action, gitops_delivery_flow,
+        internal_argo_sync_outcome, internal_gitops_delivery_observation_outcome,
+        internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
+        list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
+        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
+        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
+        list_run_observations, list_runs, list_work_item_controller_waits, list_work_item_events,
+        list_work_items, list_work_plans, list_workspaces, merge_pipeline_execution_state,
+        observe_due_controller_wait, observed_gitops_merge_for_deployment, parse_last_event_id,
+        persist_pipeline_build_output, persist_pipeline_execution_evidence,
+        persist_pipeline_run_analysis, pipeline_build_output_from_analysis,
+        pipeline_intent_execution_preflight, pipeline_intent_is_gitops_update_eligible,
+        pipeline_intent_reconcile_action, policy_json, preflight_change_set_git_delivery,
+        preflight_deployment_intent, preflight_gitops_change_set_delivery,
+        prepare_change_set_git_delivery, prepare_gitops_change_set_delivery,
+        reconcile_due_controller_waits, reconcile_work_item, release_reconcile_action,
+        replan_work_item, revise_change_set, revise_work_plan, revoke_permission_grant, router,
+        run_policy, run_summary, satisfy_approval_gate, schedule_controller_wait,
+        set_pipeline_intent_evidence, stream_start_seq,
         supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
         transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
         transition_registry_evidence, transition_release, transition_remediation_plan,
         transition_work_item, transition_work_plan, unique_suffix,
         validate_permission_grant_request, validate_pipeline_deployment_handoff,
-        validate_terminal_pipeline_run_analysis, verify_release, work_item_pipeline_intent_context,
-        work_plan_flow, work_plan_readiness, AppState, ApprovalGateSummaryQuery,
-        ApprovalSummaryQuery, DeploymentIntentExecutionPreflight, GitDeliveryFlowResponse,
-        GitOpsBaseRevisionReconcileState, GitOpsDeliveryFlowResponse,
+        validate_terminal_pipeline_run_analysis, verify_release, work_item_flow,
+        work_item_pipeline_intent_context, work_plan_flow, work_plan_readiness, AppState,
+        ApprovalGateSummaryQuery, ApprovalSummaryQuery, DeploymentIntentExecutionPreflight,
+        GitDeliveryFlowResponse, GitOpsBaseRevisionReconcileState, GitOpsDeliveryFlowResponse,
         InternalWorkspaceProvisionedRequest, ListApprovalGatesQuery, ListApprovalsQuery,
         ListAuditEventsQuery, ListChangeSetsQuery, ListControllerWaitsQuery,
         ListDeploymentContractsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
@@ -26118,6 +27148,7 @@ mod tests {
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
             build: super::BuildMetadata::from_env(),
             protected_target: super::ProtectedTargetConfiguration::from_env(),
+            environment_profiles: Arc::new(Vec::new()),
         }
     }
 
@@ -26132,6 +27163,7 @@ mod tests {
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
             build: super::BuildMetadata::from_env(),
             protected_target: super::ProtectedTargetConfiguration::from_env(),
+            environment_profiles: Arc::new(Vec::new()),
         }
     }
 
@@ -26218,6 +27250,7 @@ mod tests {
             workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
             build: super::BuildMetadata::from_env(),
             protected_target: super::ProtectedTargetConfiguration::from_env(),
+            environment_profiles: Arc::new(Vec::new()),
         }
     }
 
@@ -26462,6 +27495,11 @@ mod tests {
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 300,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("tester".to_string()),
             })
             .await
@@ -27415,6 +28453,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
     async fn create_run_persists_run_scope_metadata() {
         let state = test_state().await;
         let scope = RunScope {
+            run_id: None,
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
@@ -29210,7 +30249,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 remediation_plan_id: Some("rplan_test".to_string()),
                 incident_id: Some("inc_test".to_string()),
                 run_id: Some(created.id.to_string()),
-                status: Some("draft".to_string()),
+                status: Some("proposed".to_string()),
                 origin: None,
                 actor: None,
                 risk_level: Some("high".to_string()),
@@ -29495,17 +30534,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap_err();
-        let Json(proposed) = transition_work_plan(
-            State(state.clone()),
-            Path(work_plan_id.clone()),
-            Json(TransitionWorkPlanRequest {
-                target_status: "proposed".to_string(),
-                actor: Some("lucas".to_string()),
-                reason: Some("ready for review".to_string()),
-            }),
-        )
-        .await
-        .unwrap();
+        let proposed = created_work_plan.clone();
         let Json(approved) = transition_work_plan(
             State(state.clone()),
             Path(work_plan_id.clone()),
@@ -29580,6 +30609,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_turns: Some(12),
                 policy_mode: None,
                 scope: Some(RunScope {
+                    run_id: None,
                     namespace: Some("apps-dev".to_string()),
                     repo: Some("git@example.test/team/app.git".to_string()),
                     branch: Some("feature/pharness".to_string()),
@@ -29810,17 +30840,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         )
         .await
         .unwrap();
-        let Json(proposed_work_plan) = transition_work_plan(
-            State(state.clone()),
-            Path(created_work_plan.work_plan.id.clone()),
-            Json(TransitionWorkPlanRequest {
-                target_status: "proposed".to_string(),
-                actor: Some("lucas".to_string()),
-                reason: Some("ready for source plan review".to_string()),
-            }),
-        )
-        .await
-        .unwrap();
+        let proposed_work_plan = created_work_plan.clone();
         let Json(approved_work_plan) = transition_work_plan(
             State(state.clone()),
             Path(created_work_plan.work_plan.id.clone()),
@@ -30592,6 +31612,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_turns: Some(12),
                 policy_mode: None,
                 scope: Some(RunScope {
+                    run_id: None,
                     namespace: Some("apps-dev".to_string()),
                     repo: Some("git@example.test/team/app.git".to_string()),
                     branch: Some("feature/pharness".to_string()),
@@ -32415,6 +33436,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -32926,6 +33952,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -33029,6 +34063,51 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(waiting.action, "awaiting_work_plan_approval");
         assert!(!waiting.applied);
 
+        let Json(flow) = work_item_flow(State(state.clone()), Path(work_item.id.clone()))
+            .await
+            .unwrap();
+        let approve = flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "approve_work_plan")
+            .expect("proposed WorkPlan must be reviewable from the action rail");
+        let stale_review = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item.id.clone(), approve.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("operator".to_string()),
+                reason: "stale WorkPlan review".to_string(),
+                state_hash: "stale-review".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(stale_review.status, StatusCode::CONFLICT);
+        let Json(reviewed) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item.id.clone(), approve.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("operator".to_string()),
+                reason: "approve the bounded WorkPlan".to_string(),
+                state_hash: approve.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reviewed["work_plan"]["status"], "approved");
+        let Json(reviewed_flow) = work_item_flow(State(state.clone()), Path(work_item.id.clone()))
+            .await
+            .unwrap();
+        assert!(
+            reviewed_flow
+                .action_rail
+                .iter()
+                .any(|action| action.id == "authorize_workspace_and_start"
+                    && action.status == "ready")
+        );
+
         let events = state
             .store
             .list_audit_events(Some("work_item"), Some(&work_item.id), None, 20)
@@ -33071,6 +34150,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -33182,6 +34269,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -33259,6 +34354,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(600),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -33394,6 +34497,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("operator".to_string()),
             })
             .await
@@ -33712,6 +34820,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -33897,6 +35013,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -34009,6 +35133,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 max_attempts: Some(2),
                 max_elapsed_seconds: Some(900),
                 preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
                 actor: Some("operator".to_string()),
             }),
         )
@@ -34196,6 +35328,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             ),
             build: super::BuildMetadata::from_env(),
             protected_target: super::ProtectedTargetConfiguration::from_env(),
+            environment_profiles: Arc::new(Vec::new()),
         };
         let work_item = state
             .store
@@ -34223,6 +35356,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("operator".to_string()),
             })
             .await
@@ -34391,6 +35529,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -35101,6 +36244,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -35849,6 +36997,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -36279,6 +37432,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -37348,6 +38506,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -37729,6 +38892,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: Some("lucas".to_string()),
             })
             .await
@@ -38222,6 +39390,14 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             production_impacting: true,
             max_attempts: Some(1),
             max_elapsed_seconds: Some(3_600),
+            environment_profile_id: None,
+            initial_turn_budget: None,
+            hard_turn_budget: None,
+            initial_token_budget: None,
+            hard_token_budget: None,
+            active_execution_seconds: None,
+            recoverable_tool_error_limit: None,
+            identical_failure_limit: None,
             actor: Some("lucas".to_string()),
             preflight_state_hash: None,
         }
@@ -38293,6 +39469,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: true,
                 max_attempts: 1,
                 max_elapsed_seconds: 3_600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: request.actor,
             })
             .await
@@ -38317,6 +39498,336 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             Some((now + 5 * 60 * 1_000).to_string())
         )
         .is_ok());
+    }
+
+    #[tokio::test]
+    async fn future_production_gates_are_visible_but_cannot_be_decided_early() {
+        let state = test_state().await;
+        let work_item_id = "witem_future_production_gates";
+        let session_id = SessionId::new("ses_future_production_gates");
+        let item = state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "awaiting_approval".to_string(),
+                title: "Protected production gate ordering".to_string(),
+                intent: "Keep future gates inert".to_string(),
+                acceptance_criteria: vec!["python -m compileall -q src tests".to_string()],
+                source_repo: super::PROTECTED_SOURCE_REPO.to_string(),
+                source_ref: "main".to_string(),
+                source_commit: Some("a".repeat(40)),
+                pipeline_contract_id: Some("pcontract_yfinance".to_string()),
+                deployment_contract_id: Some("dcontract_yfinance".to_string()),
+                gitops_repo: Some(super::PROTECTED_GITOPS_REPO.to_string()),
+                gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: Some(super::PROTECTED_KUSTOMIZATION_PATH.to_string()),
+                gitops_image_name: Some(super::PROTECTED_IMAGE_NAME.to_string()),
+                target_environment: super::PROTECTED_ENVIRONMENT.to_string(),
+                target_namespace: Some(super::PROTECTED_NAMESPACE.to_string()),
+                argo_application: Some(super::PROTECTED_ARGO_APPLICATION.to_string()),
+                workload_kind: Some(super::PROTECTED_WORKLOAD_KIND.to_string()),
+                workload_name: Some(super::PROTECTED_WORKLOAD_NAME.to_string()),
+                rollback_owner: Some(super::PROTECTED_ROLLBACK_OWNER.to_string()),
+                production_impacting: true,
+                max_attempts: 2,
+                max_elapsed_seconds: 3_600,
+                created_by: Some("tester".to_string()),
+                environment_profile_id: Some("python-3.11".to_string()),
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "pending".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: item.title.clone(),
+                cwd: format!("work-item/{work_item_id}"),
+            })
+            .await
+            .unwrap();
+        let plan = state
+            .store
+            .create_work_plan(CreateWorkPlan {
+                id: "wplan_future_production_gates".to_string(),
+                work_item_id: Some(work_item_id.to_string()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: session_id.clone(),
+                run_id: None,
+                status: "approved".to_string(),
+                title: "Approved WorkPlan".to_string(),
+                summary: item.intent.clone(),
+                risk_level: "high".to_string(),
+                requires_approval: true,
+                resource_namespace: item.target_namespace.clone(),
+                resource_kind: Some("application".to_string()),
+                resource_name: item.argo_application.clone(),
+                work_plan_json: json!({}),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_workspace(CreateWorkspace {
+                id: "ws_future_production_gates".to_string(),
+                work_item_id: work_item_id.to_string(),
+                run_id: None,
+                status: "declared".to_string(),
+                source_repo: item.source_repo.clone(),
+                source_ref: item.source_ref.clone(),
+                resolved_commit: item.source_commit.clone(),
+                branch: None,
+                retention_status: "ephemeral".to_string(),
+                actor: Some("tester".to_string()),
+                reason: Some("future gate test".to_string()),
+            })
+            .await
+            .unwrap();
+        let mut gate_ids = Vec::new();
+        for gate in approval_gates_from_work_item(&item, &plan) {
+            let gate = state.store.create_approval_gate(gate).await.unwrap();
+            gate_ids.push(gate.id);
+        }
+        let source_gate = gate_ids
+            .iter()
+            .find(|id| id.ends_with("source_mutation"))
+            .unwrap()
+            .clone();
+        let pipeline_gate = gate_ids
+            .iter()
+            .find(|id| id.ends_with("pipeline_mutation"))
+            .unwrap()
+            .clone();
+
+        let Json(listed) = super::list_approval_gates(
+            State(state.clone()),
+            Query(ListApprovalGatesQuery {
+                work_item_id: Some(work_item_id.to_string()),
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+        let listed_pipeline_gate = listed
+            .approval_gates
+            .iter()
+            .find(|gate| gate.id == pipeline_gate)
+            .unwrap();
+        assert!(!listed_pipeline_gate.actionable);
+        assert_eq!(
+            listed_pipeline_gate.lifecycle_blocker.as_deref(),
+            Some("Source delivery has not produced an approved ChangeSet.")
+        );
+
+        let early = satisfy_approval_gate(
+            State(state.clone()),
+            Path(source_gate.clone()),
+            Json(DecideApprovalGateRequest {
+                decided_by: Some("tester".to_string()),
+                reason: Some("too early".to_string()),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(early.status, StatusCode::CONFLICT);
+        let batch = super::batch_decide_approval_gates(
+            State(state.clone()),
+            Json(crate::dto::BatchDecideApprovalGatesRequest {
+                gate_ids: vec![source_gate.clone(), pipeline_gate.clone()],
+                decision: "satisfied".to_string(),
+                decided_by: "tester".to_string(),
+                reason: "must remain atomic".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(batch.status, StatusCode::CONFLICT);
+        assert_eq!(
+            state
+                .store
+                .get_approval_gate(&source_gate)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "pending"
+        );
+        let Json(flow) = work_item_flow(State(state), Path(work_item_id.to_string()))
+            .await
+            .unwrap();
+        assert!(flow.action_rail.iter().any(|action| {
+            action.id == format!("satisfy_approval_gate:{pipeline_gate}")
+                && action.status == "blocked"
+                && action
+                    .blockers
+                    .iter()
+                    .any(|blocker| blocker.code == "future_lifecycle_gate")
+        }));
+    }
+
+    #[tokio::test]
+    async fn operator_summary_uses_exact_acceptance_evidence_and_deduplicates_failures() {
+        let state = test_state().await;
+        let session_id = SessionId::new("ses_operator_summary_regression");
+        let run_id = RunId::new("run_operator_summary_regression");
+        let work_item_id = "witem_operator_summary_regression";
+        let unit = "python -m unittest discover -s tests -v";
+        let compile = "python -m compileall -q src tests";
+        state
+            .store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "executing".to_string(),
+                title: "Operator summary regression".to_string(),
+                intent: "Count exact evidence".to_string(),
+                acceptance_criteria: vec![unit.to_string(), compile.to_string()],
+                source_repo: "https://github.com/lward27/yfinance_wrapper.git".to_string(),
+                source_ref: "main".to_string(),
+                source_commit: Some("a".repeat(40)),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 3_600,
+                created_by: Some("tester".to_string()),
+                environment_profile_id: Some("python-3.11".to_string()),
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "succeeded".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Operator summary regression".to_string(),
+                cwd: "/workspace".to_string(),
+            })
+            .await
+            .unwrap();
+        state
+            .store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: "regression".to_string(),
+                cwd: "/workspace".to_string(),
+                max_turns: 48,
+                initial_status: "failed".to_string(),
+                execution_target_json: json!({
+                    "run_scope": {"work_item_id": work_item_id},
+                    "repository_contract": {
+                        "api_version": "pharness.dev/v1alpha1",
+                        "environment_profile": "python-3.11",
+                        "dependency_lock": {"kind":"pip_requirements","path":"requirements.lock","sha256": "b".repeat(64)},
+                        "writable_paths": ["src/**", "tests/**", "readme.md"],
+                        "acceptance_commands": [
+                            {"name":"unit-tests","command":unit},
+                            {"name":"compile-check","command":compile}
+                        ],
+                        "roots": {"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
+                        "agent_network":"denied",
+                        "package_installation":"preparation_only"
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        let payloads = [
+            (
+                EventKind::ModelRequestStarted,
+                json!({"turn":0,"estimated_input_tokens":100}),
+            ),
+            (
+                EventKind::ActionProposed,
+                json!({"action":"run_shell","cmd":"mkdir -p tests"}),
+            ),
+            (EventKind::ToolStarted, json!({"action":"run_shell"})),
+            (EventKind::ToolFinished, json!({"status":"ok"})),
+            (
+                EventKind::ActionProposed,
+                json!({"action":"run_shell","cmd":unit}),
+            ),
+            (EventKind::ToolStarted, json!({"action":"run_shell"})),
+            (EventKind::ToolFinished, json!({"status":"ok"})),
+            (EventKind::ToolFinished, json!({"status":"error"})),
+            (EventKind::ToolFinished, json!({"success":false})),
+            (EventKind::ToolFinished, json!({"content":{"error":"boom"}})),
+            (
+                EventKind::ActionProposed,
+                json!({"action":"run_shell","cmd":"which python"}),
+            ),
+        ];
+        for (index, (kind, payload)) in payloads.into_iter().enumerate() {
+            state
+                .store
+                .append_event(&AgentEvent {
+                    event_id: EventId::new(format!("evt_operator_summary_{index}")),
+                    session_id: session_id.clone(),
+                    run_id: run_id.clone(),
+                    seq: index as u64 + 1,
+                    kind,
+                    payload,
+                })
+                .await
+                .unwrap();
+        }
+        for (index, path) in [
+            "src/validation.py",
+            "tests/test_validation.py",
+            "src/validation.py",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            state
+                .store
+                .create_file_change(CreateFileChange {
+                    id: format!("fchange_operator_summary_{index}"),
+                    session_id: session_id.clone(),
+                    run_id: run_id.clone(),
+                    path: path.to_string(),
+                    before_hash: None,
+                    after_hash: Some("hash".to_string()),
+                    diff: "diff".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let Json(summary) = get_run_operator_summary(State(state), Path(run_id.to_string()))
+            .await
+            .unwrap();
+        assert_eq!(summary.tools_failed, 3);
+        assert_eq!(summary.test_commands, vec![unit.to_string()]);
+        assert!(!summary
+            .test_commands
+            .iter()
+            .any(|command| command.contains("mkdir")));
+        assert_eq!(
+            summary.changed_paths,
+            vec![
+                "src/validation.py".to_string(),
+                "tests/test_validation.py".to_string()
+            ]
+        );
+        assert_eq!(summary.environment_discovery_turns, 1);
     }
 
     #[tokio::test]
@@ -38377,6 +39888,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 production_impacting: true,
                 max_attempts: 1,
                 max_elapsed_seconds: 3_600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: request.actor,
             })
             .await

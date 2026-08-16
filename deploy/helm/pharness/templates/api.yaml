@@ -113,6 +113,8 @@ spec:
               value: {{ .Values.ui.image.revision | quote }}
             - name: PHARNESS_WORKER_K8S_SERVICE_ACCOUNT
               value: {{ .Values.worker.serviceAccount | quote }}
+            - name: PHARNESS_ENVIRONMENT_PROFILES_JSON
+              value: {{ toJson .Values.environmentProfiles | quote }}
             - name: PHARNESS_TEKTON_EXECUTOR_SERVICE_ACCOUNT
               value: {{ .Values.worker.tektonExecutor.serviceAccount | quote }}
             - name: PHARNESS_TEKTON_ALLOWED_NAMESPACES

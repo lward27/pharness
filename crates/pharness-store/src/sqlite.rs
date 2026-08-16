@@ -3,27 +3,28 @@ use crate::{
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,
     ApprovalSummary, ApprovalSummaryFilter, AuditEventListFilter, BooleanCountBucket,
     ChangeSetListFilter, ControllerWaitListFilter, CountBucket, CreateApproval, CreateApprovalGate,
-    CreateArtifact, CreateAuditEvent, CreateCapabilityVerification, CreateChangeSet,
-    CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent, CreateFileChange,
-    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePermissionGrant,
-    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
-    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
-    CreateWorkspace, DeploymentContractListFilter, DeploymentIntentListFilter,
-    GitOpsChangeSetListFilter, IncidentListFilter, ObservationListFilter,
-    PipelineContractListFilter, PipelineIntentListFilter, RegistryEvidenceListFilter,
-    ReleaseListFilter, RemediationPlanListFilter, ReplacePipelineContract, RunListFilter,
-    RunSummary, RunSummaryFilter, StoredApproval, StoredApprovalGate, StoredArtifact,
-    StoredAuditEvent, StoredCapabilityVerification, StoredChangeSet, StoredControllerWait,
-    StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet,
+    CreateArtifact, CreateAuditEvent, CreateBudgetExtension, CreateCapabilityVerification,
+    CreateChangeSet, CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent,
+    CreateEnvironmentPreparation, CreateFileChange, CreateGitOpsChangeSet, CreateIncident,
+    CreateObservation, CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent,
+    CreateRegistryEvidence, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
+    CreateWorkItem, CreateWorkPlan, CreateWorkspace, DeploymentContractListFilter,
+    DeploymentIntentListFilter, GitOpsChangeSetListFilter, IncidentListFilter,
+    ObservationListFilter, PipelineContractListFilter, PipelineIntentListFilter,
+    RegistryEvidenceListFilter, ReleaseListFilter, RemediationPlanListFilter,
+    ReplacePipelineContract, RunListFilter, RunSummary, RunSummaryFilter, StoredApproval,
+    StoredApprovalGate, StoredArtifact, StoredAuditEvent, StoredBudgetExtension,
+    StoredCapabilityVerification, StoredChangeSet, StoredControllerWait, StoredDeploymentContract,
+    StoredDeploymentIntent, StoredEnvironmentPreparation, StoredFileChange, StoredGitOpsChangeSet,
     StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
     StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
     StoredWorkItem, StoredWorkPlan, StoredWorkspace, UpdateChangeSetRevision,
-    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdatePipelineIntentDraft,
-    UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution, UpdateRegistryEvidenceDraft,
-    UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision, UpdateWorkspaceExecution,
-    WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
+    UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence, UpdateEnvironmentPreparation,
+    UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution,
+    UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
+    UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
-use pharness_core::{AgentEvent, EventId, RunId, SessionId};
+use pharness_core::{AgentEvent, EventId, RunBudget, RunBudgetConsumption, RunId, SessionId};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
 use std::path::Path;
@@ -167,7 +168,8 @@ impl SqliteStore {
         let row = sqlx::query(
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by
+                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by,
+                   run_budget_json, budget_consumption_json, stop_reason
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
             WHERE runs.id = ?1
@@ -190,7 +192,8 @@ impl SqliteStore {
         let rows = sqlx::query(
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by
+                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by,
+                   run_budget_json, budget_consumption_json, stop_reason
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
             WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
@@ -1201,6 +1204,11 @@ impl SqliteStore {
     ) -> Result<StoredWorkItem, StoreError> {
         let now = now_string();
         let acceptance_criteria_json = serde_json::to_string(&item.acceptance_criteria)?;
+        let run_budget_json = serde_json::to_string(&item.run_budget)?;
+        let repository_contract_json = item
+            .repository_contract_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
         sqlx::query(
             r#"
             INSERT INTO work_items (
@@ -1208,9 +1216,11 @@ impl SqliteStore {
               source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo, gitops_ref,
               gitops_kustomization_path, gitops_image_name, target_environment, target_namespace,
               argo_application, workload_kind, workload_name, rollback_owner, production_impacting,
-              max_attempts, max_elapsed_seconds, created_by, created_at, updated_at, status_changed_at
+              max_attempts, max_elapsed_seconds, created_by, environment_profile_id,
+              run_budget_json, repository_contract_json, repository_contract_hash,
+              environment_preparation_status, created_at, updated_at, status_changed_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?25, ?25)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?30, ?30)
             "#,
         )
         .bind(&item.id)
@@ -1237,6 +1247,11 @@ impl SqliteStore {
         .bind(i64::from(item.max_attempts))
         .bind(i64::try_from(item.max_elapsed_seconds).unwrap_or(i64::MAX))
         .bind(item.created_by)
+        .bind(item.environment_profile_id)
+        .bind(run_budget_json)
+        .bind(repository_contract_json)
+        .bind(item.repository_contract_hash)
+        .bind(item.environment_preparation_status)
         .bind(now)
         .execute(&self.pool)
         .await?;
@@ -1276,7 +1291,9 @@ impl SqliteStore {
                    source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo,
                    gitops_ref, gitops_kustomization_path, gitops_image_name, target_environment,
                    target_namespace, argo_application, workload_kind, workload_name, rollback_owner,
-                   production_impacting, max_attempts, max_elapsed_seconds,
+                   production_impacting, max_attempts, max_elapsed_seconds, environment_profile_id,
+                   run_budget_json, repository_contract_json, repository_contract_hash,
+                   environment_preparation_status, current_environment_snapshot_id,
                    attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
@@ -4399,6 +4416,491 @@ impl SqliteStore {
         .await?;
         row.map(row_to_capability_verification).transpose()
     }
+
+    pub async fn create_environment_preparation(
+        &self,
+        preparation: CreateEnvironmentPreparation,
+    ) -> Result<StoredEnvironmentPreparation, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO environment_preparations (
+              id, work_item_id, workspace_id, run_id, status, environment_profile_id,
+              source_commit, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+            "#,
+        )
+        .bind(&preparation.id)
+        .bind(&preparation.work_item_id)
+        .bind(&preparation.workspace_id)
+        .bind(preparation.run_id.as_ref().map(RunId::as_str))
+        .bind(&preparation.status)
+        .bind(&preparation.environment_profile_id)
+        .bind(&preparation.source_commit)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        self.get_environment_preparation(&preparation.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "environment_preparation".into(),
+                id: preparation.id,
+            })
+    }
+
+    pub async fn get_environment_preparation(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredEnvironmentPreparation>, StoreError> {
+        let row = sqlx::query(&environment_preparation_select_sql("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_environment_preparation).transpose()
+    }
+
+    pub async fn get_environment_preparation_by_run(
+        &self,
+        run_id: &RunId,
+    ) -> Result<Option<StoredEnvironmentPreparation>, StoreError> {
+        let row = sqlx::query(&environment_preparation_select_sql("WHERE run_id = ?1"))
+            .bind(run_id.as_str())
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_environment_preparation).transpose()
+    }
+
+    pub async fn update_environment_preparation(
+        &self,
+        preparation: UpdateEnvironmentPreparation,
+    ) -> Result<StoredEnvironmentPreparation, StoreError> {
+        let now = now_string();
+        let contract = preparation
+            .project_contract_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let snapshot = preparation
+            .environment_snapshot_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let logs = serde_json::to_string(&preparation.logs_json)?;
+        let terminal = matches!(preparation.status.as_str(), "succeeded" | "failed");
+        sqlx::query(
+            r#"
+            UPDATE environment_preparations
+            SET status = ?2,
+                project_contract_json = COALESCE(?3, project_contract_json),
+                project_contract_hash = COALESCE(?4, project_contract_hash),
+                environment_snapshot_json = COALESCE(?5, environment_snapshot_json),
+                logs_json = ?6,
+                error = ?7,
+                started_at = COALESCE(started_at, ?8),
+                finished_at = CASE WHEN ?9 = 1 THEN ?8 ELSE finished_at END,
+                updated_at = ?8
+            WHERE id = ?1
+            "#,
+        )
+        .bind(&preparation.id)
+        .bind(&preparation.status)
+        .bind(contract)
+        .bind(preparation.project_contract_hash)
+        .bind(snapshot)
+        .bind(logs)
+        .bind(preparation.error)
+        .bind(&now)
+        .bind(if terminal { 1_i64 } else { 0_i64 })
+        .execute(&self.pool)
+        .await?;
+        self.get_environment_preparation(&preparation.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "environment_preparation".into(),
+                id: preparation.id,
+            })
+    }
+
+    pub async fn set_work_item_environment_snapshot(
+        &self,
+        work_item_id: &str,
+        preparation_status: &str,
+        snapshot_id: Option<String>,
+        contract_json: Option<serde_json::Value>,
+        contract_hash: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let contract = contract_json
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET environment_preparation_status = ?2,
+                current_environment_snapshot_id = ?3,
+                repository_contract_json = COALESCE(?4, repository_contract_json),
+                repository_contract_hash = COALESCE(?5, repository_contract_hash),
+                updated_at = ?6
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(preparation_status)
+        .bind(snapshot_id)
+        .bind(contract)
+        .bind(contract_hash)
+        .bind(now_string())
+        .execute(&self.pool)
+        .await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".into(),
+                id: work_item_id.to_string(),
+            })
+    }
+
+    pub async fn set_run_budget(
+        &self,
+        run_id: &RunId,
+        budget: &RunBudget,
+        consumption: &RunBudgetConsumption,
+    ) -> Result<StoredRun, StoreError> {
+        sqlx::query(
+            "UPDATE runs SET run_budget_json = ?2, budget_consumption_json = ?3, max_turns = ?4 WHERE id = ?1",
+        )
+        .bind(run_id.as_str())
+        .bind(serde_json::to_string(budget)?)
+        .bind(serde_json::to_string(consumption)?)
+        .bind(i64::from(consumption.allowed_turns))
+        .execute(&self.pool)
+        .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
+    }
+
+    pub async fn update_run_budget_consumption(
+        &self,
+        run_id: &RunId,
+        consumption: &RunBudgetConsumption,
+    ) -> Result<StoredRun, StoreError> {
+        sqlx::query("UPDATE runs SET budget_consumption_json = ?2 WHERE id = ?1")
+            .bind(run_id.as_str())
+            .bind(serde_json::to_string(consumption)?)
+            .execute(&self.pool)
+            .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
+    }
+
+    pub async fn pause_run_for_budget(
+        &self,
+        run_id: &RunId,
+        result_json: serde_json::Value,
+        stop_reason: &str,
+    ) -> Result<StoredRun, StoreError> {
+        sqlx::query(
+            "UPDATE runs SET status = 'budget_extension_required', result_json = ?2, stop_reason = ?3 WHERE id = ?1",
+        )
+        .bind(run_id.as_str())
+        .bind(serde_json::to_string(&result_json)?)
+        .bind(stop_reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
+    }
+
+    pub async fn set_run_environment_snapshot(
+        &self,
+        run_id: &RunId,
+        snapshot: serde_json::Value,
+    ) -> Result<StoredRun, StoreError> {
+        let run = self
+            .get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })?;
+        let mut target = run.execution_target_json;
+        let object = target.as_object_mut().ok_or_else(|| {
+            StoreError::InvalidData("run execution target must be an object".into())
+        })?;
+        object.insert("environment_snapshot".to_string(), snapshot);
+        sqlx::query(
+            "UPDATE runs SET execution_target_json = ?2, status = 'queued', stop_reason = NULL WHERE id = ?1 AND status = 'preparing'",
+        )
+        .bind(run_id.as_str())
+        .bind(serde_json::to_string(&target)?)
+        .execute(&self.pool)
+        .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
+    }
+
+    pub async fn create_budget_extension(
+        &self,
+        extension: CreateBudgetExtension,
+    ) -> Result<StoredBudgetExtension, StoreError> {
+        sqlx::query(
+            r#"
+            INSERT INTO budget_extensions (
+              id, work_item_id, run_id, status, turn_increment, token_increment,
+              state_hash, requested_at
+            ) VALUES (?1, ?2, ?3, 'pending', 20, 200000, ?4, ?5)
+            "#,
+        )
+        .bind(&extension.id)
+        .bind(&extension.work_item_id)
+        .bind(extension.run_id.as_str())
+        .bind(&extension.state_hash)
+        .bind(now_string())
+        .execute(&self.pool)
+        .await?;
+        self.get_budget_extension(&extension.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "budget_extension".into(),
+                id: extension.id,
+            })
+    }
+
+    pub async fn get_budget_extension(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredBudgetExtension>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, work_item_id, run_id, status, turn_increment, token_increment,
+                   state_hash, requested_at, approved_at, approved_by, approval_reason
+            FROM budget_extensions WHERE id = ?1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_budget_extension).transpose()
+    }
+
+    pub async fn pending_budget_extension_for_run(
+        &self,
+        run_id: &RunId,
+    ) -> Result<Option<StoredBudgetExtension>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, work_item_id, run_id, status, turn_increment, token_increment,
+                   state_hash, requested_at, approved_at, approved_by, approval_reason
+            FROM budget_extensions
+            WHERE run_id = ?1 AND status = 'pending'
+            ORDER BY requested_at DESC LIMIT 1
+            "#,
+        )
+        .bind(run_id.as_str())
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_budget_extension).transpose()
+    }
+
+    pub async fn list_budget_extensions_for_run(
+        &self,
+        run_id: &RunId,
+    ) -> Result<Vec<StoredBudgetExtension>, StoreError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, work_item_id, run_id, status, turn_increment, token_increment,
+                   state_hash, requested_at, approved_at, approved_by, approval_reason
+            FROM budget_extensions
+            WHERE run_id = ?1
+            ORDER BY requested_at ASC
+            "#,
+        )
+        .bind(run_id.as_str())
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_budget_extension).collect()
+    }
+
+    pub async fn approve_budget_extension(
+        &self,
+        id: &str,
+        state_hash: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<(StoredBudgetExtension, StoredRun), StoreError> {
+        let mut extension =
+            self.get_budget_extension(id)
+                .await?
+                .ok_or_else(|| StoreError::NotFound {
+                    entity: "budget_extension".into(),
+                    id: id.to_string(),
+                })?;
+        if extension.status != "pending" || extension.state_hash != state_hash {
+            return Err(StoreError::Conflict(
+                "budget extension is stale or already decided".into(),
+            ));
+        }
+        let run = self
+            .get_run(&extension.run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: extension.run_id.to_string(),
+            })?;
+        if run.status != "budget_extension_required" {
+            return Err(StoreError::Conflict(
+                "run is not paused at a budget-extension boundary".into(),
+            ));
+        }
+        if run.budget_consumption.allowed_turns >= run.run_budget.hard_turns
+            && run.budget_consumption.allowed_tokens >= run.run_budget.hard_tokens
+        {
+            return Err(StoreError::Conflict(
+                "run has reached both hard budget limits".into(),
+            ));
+        }
+        let mut consumption = run.budget_consumption.clone();
+        consumption.allowed_turns = consumption
+            .allowed_turns
+            .saturating_add(extension.turn_increment)
+            .min(run.run_budget.hard_turns);
+        consumption.allowed_tokens = consumption
+            .allowed_tokens
+            .saturating_add(extension.token_increment)
+            .min(run.run_budget.hard_tokens);
+        consumption.extensions = consumption.extensions.saturating_add(1);
+        let now = now_string();
+        let mut transaction = self.pool.begin().await?;
+        let extension_update = sqlx::query(
+            r#"
+            UPDATE budget_extensions
+            SET status = 'approved', approved_at = ?2, approved_by = ?3, approval_reason = ?4
+            WHERE id = ?1 AND status = 'pending' AND state_hash = ?5
+            "#,
+        )
+        .bind(id)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .bind(state_hash)
+        .execute(&mut *transaction)
+        .await?;
+        if extension_update.rows_affected() != 1 {
+            transaction.rollback().await?;
+            return Err(StoreError::Conflict(
+                "budget extension is stale or already decided".into(),
+            ));
+        }
+        let run_update = sqlx::query(
+            r#"
+            UPDATE runs
+            SET budget_consumption_json = ?2, max_turns = ?3, status = 'queued', stop_reason = NULL
+            WHERE id = ?1 AND status = 'budget_extension_required'
+            "#,
+        )
+        .bind(run.id.as_str())
+        .bind(serde_json::to_string(&consumption)?)
+        .bind(i64::from(consumption.allowed_turns))
+        .execute(&mut *transaction)
+        .await?;
+        if run_update.rows_affected() != 1 {
+            transaction.rollback().await?;
+            return Err(StoreError::Conflict(
+                "run left the budget-extension boundary before approval completed".into(),
+            ));
+        }
+        transaction.commit().await?;
+        extension = self
+            .get_budget_extension(id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "budget_extension".into(),
+                id: id.to_string(),
+            })?;
+        let run = self
+            .get_run(&run.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run.id.to_string(),
+            })?;
+        Ok((extension, run))
+    }
+}
+
+fn environment_preparation_select_sql(where_clause: &str) -> String {
+    format!(
+        "SELECT id, work_item_id, workspace_id, run_id, status, environment_profile_id, \
+         source_commit, project_contract_json, project_contract_hash, environment_snapshot_json, \
+         logs_json, error, started_at, finished_at, created_at, updated_at \
+         FROM environment_preparations {where_clause} ORDER BY created_at DESC LIMIT 1"
+    )
+}
+
+fn row_to_environment_preparation(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredEnvironmentPreparation, StoreError> {
+    let run_id: Option<String> = row.try_get("run_id")?;
+    let contract: Option<String> = row.try_get("project_contract_json")?;
+    let snapshot: Option<String> = row.try_get("environment_snapshot_json")?;
+    let logs: String = row.try_get("logs_json")?;
+    Ok(StoredEnvironmentPreparation {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        workspace_id: row.try_get("workspace_id")?,
+        run_id: run_id.map(RunId::new),
+        status: row.try_get("status")?,
+        environment_profile_id: row.try_get("environment_profile_id")?,
+        source_commit: row.try_get("source_commit")?,
+        project_contract_json: contract
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
+        project_contract_hash: row.try_get("project_contract_hash")?,
+        environment_snapshot_json: snapshot
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
+        logs_json: serde_json::from_str(&logs)?,
+        error: row.try_get("error")?,
+        started_at: row.try_get("started_at")?,
+        finished_at: row.try_get("finished_at")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn row_to_budget_extension(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredBudgetExtension, StoreError> {
+    let turn_increment: i64 = row.try_get("turn_increment")?;
+    let token_increment: i64 = row.try_get("token_increment")?;
+    Ok(StoredBudgetExtension {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        run_id: RunId::new(row.try_get::<String, _>("run_id")?),
+        status: row.try_get("status")?,
+        turn_increment: u32::try_from(turn_increment)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        token_increment: u64::try_from(token_increment)
+            .map_err(|error| StoreError::InvalidData(error.to_string()))?,
+        state_hash: row.try_get("state_hash")?,
+        requested_at: row.try_get("requested_at")?,
+        approved_at: row.try_get("approved_at")?,
+        approved_by: row.try_get("approved_by")?,
+        approval_reason: row.try_get("approval_reason")?,
+    })
 }
 
 fn row_to_capability_verification(
@@ -4552,6 +5054,8 @@ fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, Stor
     let max_attempts: i64 = row.try_get("max_attempts")?;
     let max_elapsed_seconds: i64 = row.try_get("max_elapsed_seconds")?;
     let attempt_count: i64 = row.try_get("attempt_count")?;
+    let run_budget_json: String = row.try_get("run_budget_json")?;
+    let repository_contract_json: Option<String> = row.try_get("repository_contract_json")?;
     Ok(StoredWorkItem {
         id: row.try_get("id")?,
         status: row.try_get("status")?,
@@ -4588,6 +5092,14 @@ fn row_to_work_item(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkItem, Stor
         status_changed_at: row.try_get("status_changed_at")?,
         status_changed_by: row.try_get("status_changed_by")?,
         status_reason: row.try_get("status_reason")?,
+        environment_profile_id: row.try_get("environment_profile_id")?,
+        run_budget: serde_json::from_str(&run_budget_json)?,
+        repository_contract_json: repository_contract_json
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
+        repository_contract_hash: row.try_get("repository_contract_hash")?,
+        environment_preparation_status: row.try_get("environment_preparation_status")?,
+        current_environment_snapshot_id: row.try_get("current_environment_snapshot_id")?,
     })
 }
 
@@ -5004,7 +5516,9 @@ fn work_item_select_sql(where_clause: &str) -> &'static str {
                    source_commit, pipeline_contract_id, deployment_contract_id, gitops_repo,
                    gitops_ref, gitops_kustomization_path, gitops_image_name, target_environment,
                    target_namespace, argo_application, workload_kind, workload_name, rollback_owner,
-                   production_impacting, max_attempts, max_elapsed_seconds,
+                   production_impacting, max_attempts, max_elapsed_seconds, environment_profile_id,
+                   run_budget_json, repository_contract_json, repository_contract_hash,
+                   environment_preparation_status, current_environment_snapshot_id,
                    attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
@@ -5292,6 +5806,8 @@ fn approval_gate_select_sql(where_clause: &str) -> &'static str {
 fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
     let execution_target_json: String = row.try_get("execution_target_json")?;
     let result_json: Option<String> = row.try_get("result_json")?;
+    let run_budget_json: String = row.try_get("run_budget_json")?;
+    let budget_consumption_json: String = row.try_get("budget_consumption_json")?;
     Ok(StoredRun {
         id: RunId::new(row.try_get::<String, _>("id")?),
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
@@ -5309,6 +5825,9 @@ fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
         execution_target_json: serde_json::from_str(&execution_target_json)?,
         origin: row.try_get("origin")?,
         created_by: row.try_get("created_by")?,
+        run_budget: serde_json::from_str(&run_budget_json)?,
+        budget_consumption: serde_json::from_str(&budget_consumption_json)?,
+        stop_reason: row.try_get("stop_reason")?,
     })
 }
 
@@ -5987,10 +6506,13 @@ pub enum StoreError {
 mod tests {
     use super::SqliteStore;
     use crate::{
-        ApprovalListFilter, ApprovalSummaryFilter, CreateAuditEvent, CreateCapabilityVerification,
-        CreateRun, CreateSession, RunListFilter, RunSummaryFilter,
+        ApprovalListFilter, ApprovalSummaryFilter, CreateAuditEvent, CreateBudgetExtension,
+        CreateCapabilityVerification, CreateRun, CreateSession, CreateWorkItem, RunListFilter,
+        RunSummaryFilter, StoreError,
     };
-    use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
+    use pharness_core::{
+        AgentEvent, EventId, EventKind, RunBudget, RunBudgetConsumption, RunId, SessionId,
+    };
 
     #[tokio::test]
     async fn persists_runs_and_events() {
@@ -6036,6 +6558,181 @@ mod tests {
         assert_eq!(run.status, "queued");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::RunStarted);
+    }
+
+    #[tokio::test]
+    async fn budget_extension_requires_the_exact_pause_boundary_and_hard_limit_headroom() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let work_item_id = "witem_budget_extension_store";
+        let session_id = SessionId::new("ses_budget_extension_store");
+        let run_id = RunId::new("run_budget_extension_store");
+        store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.to_string(),
+                status: "executing".to_string(),
+                title: "Budget extension store guard".to_string(),
+                intent: "Resume only the exact paused run".to_string(),
+                acceptance_criteria: vec!["cargo test --workspace".to_string()],
+                source_repo: "https://github.com/example/project.git".to_string(),
+                source_ref: "main".to_string(),
+                source_commit: None,
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 3_600,
+                created_by: Some("tester".to_string()),
+                environment_profile_id: None,
+                run_budget: RunBudget::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "budget extension".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "exercise budget extension guards".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 48,
+                initial_status: "queued".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+        let budget = RunBudget::default();
+        let initial = RunBudgetConsumption {
+            allowed_turns: budget.initial_turns,
+            allowed_tokens: budget.initial_tokens,
+            turns_used: budget.initial_turns,
+            tokens_used: budget.initial_tokens,
+            active_execution_seconds_used: 10,
+            extensions: 0,
+        };
+        store
+            .set_run_budget(&run_id, &budget, &initial)
+            .await
+            .unwrap();
+        store
+            .pause_run_for_budget(
+                &run_id,
+                serde_json::json!({"transcript": []}),
+                "turn_budget",
+            )
+            .await
+            .unwrap();
+        let first = store
+            .create_budget_extension(CreateBudgetExtension {
+                id: "budgetext_store_first".to_string(),
+                work_item_id: work_item_id.to_string(),
+                run_id: run_id.clone(),
+                state_hash: "state-first".to_string(),
+            })
+            .await
+            .unwrap();
+        let (approved, resumed) = store
+            .approve_budget_extension(
+                &first.id,
+                &first.state_hash,
+                "tester",
+                "continue the same workspace",
+            )
+            .await
+            .unwrap();
+        assert_eq!(approved.status, "approved");
+        assert_eq!(resumed.status, "queued");
+        assert_eq!(resumed.budget_consumption.allowed_turns, 68);
+        assert_eq!(resumed.budget_consumption.allowed_tokens, 600_000);
+
+        let second = store
+            .create_budget_extension(CreateBudgetExtension {
+                id: "budgetext_store_second".to_string(),
+                work_item_id: work_item_id.to_string(),
+                run_id: run_id.clone(),
+                state_hash: "state-second".to_string(),
+            })
+            .await
+            .unwrap();
+        let wrong_boundary = store
+            .approve_budget_extension(
+                &second.id,
+                &second.state_hash,
+                "tester",
+                "must still be paused",
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(wrong_boundary, StoreError::Conflict(_)));
+        assert_eq!(
+            store
+                .get_budget_extension(&second.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "pending"
+        );
+
+        let exhausted = RunBudgetConsumption {
+            allowed_turns: budget.hard_turns,
+            allowed_tokens: budget.hard_tokens,
+            ..resumed.budget_consumption
+        };
+        store
+            .set_run_budget(&run_id, &budget, &exhausted)
+            .await
+            .unwrap();
+        store
+            .pause_run_for_budget(
+                &run_id,
+                serde_json::json!({"transcript": []}),
+                "hard_budget",
+            )
+            .await
+            .unwrap();
+        let hard_limit = store
+            .approve_budget_extension(
+                &second.id,
+                &second.state_hash,
+                "tester",
+                "cannot exceed the hard cap",
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(hard_limit, StoreError::Conflict(_)));
+        assert_eq!(
+            store.get_run(&run_id).await.unwrap().unwrap().status,
+            "budget_extension_required"
+        );
+        assert_eq!(
+            store
+                .get_budget_extension(&second.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "pending"
+        );
     }
 
     #[tokio::test]
@@ -7725,6 +8422,11 @@ mod tests {
                 max_attempts: 2,
                 max_elapsed_seconds: 900,
                 created_by: Some("operator".to_string()),
+                environment_profile_id: None,
+                run_budget: pharness_core::RunBudget::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
             })
             .await
             .unwrap();
@@ -7976,6 +8678,11 @@ mod tests {
                 max_attempts: 1,
                 max_elapsed_seconds: 60,
                 created_by: Some("tester".to_string()),
+                environment_profile_id: None,
+                run_budget: pharness_core::RunBudget::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
             })
             .await
             .unwrap();

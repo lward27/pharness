@@ -1,13 +1,20 @@
 # Pharness runtime image: pharness-api (default entrypoint) and
 # pharness-worker (Job entrypoint) in one image so the control plane and
 # worker attempts stay version-locked.
-FROM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
+FROM --platform=$BUILDPLATFORM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
 ARG PHARNESS_BUILD_REVISION=unknown
+ARG TARGETARCH
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
 WORKDIR /build
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
-RUN cargo build --release -p pharness-api -p pharness-worker
+RUN test "${TARGETARCH}" = "amd64" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup target add x86_64-unknown-linux-gnu
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-api -p pharness-worker
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 ARG KUBECTL_VERSION=v1.34.4
@@ -23,8 +30,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /home/pharness --create-home pharness
 
-COPY --from=builder /build/target/release/pharness-api /usr/local/bin/pharness-api
-COPY --from=builder /build/target/release/pharness-worker /usr/local/bin/pharness-worker
+COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-api /usr/local/bin/pharness-api
+COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-worker /usr/local/bin/pharness-worker
 
 USER 65532:65532
 ENTRYPOINT ["pharness-api"]

@@ -158,6 +158,8 @@ impl SafetyPolicy {
             | AgentAction::ReadFile { .. }
             | AgentAction::ListDir { .. }
             | AgentAction::SearchFiles { .. }
+            | AgentAction::EnvironmentInfo { .. }
+            | AgentAction::RunAcceptanceCommand { .. }
             | AgentAction::GitDiff { .. }
             | AgentAction::GitStatus { .. } => PolicyDecision::allow(
                 RiskLevel::Low,
@@ -223,7 +225,9 @@ impl SafetyPolicy {
                 action.kind_name(),
                 [Some(image_ref.as_str()), registry_base_url.as_deref(), None],
             ),
-            AgentAction::WriteFile { path, .. } | AgentAction::PatchFile { path, .. } => {
+            AgentAction::WriteFile { path, .. }
+            | AgentAction::PatchFile { path, .. }
+            | AgentAction::CreateDirectory { path, .. } => {
                 self.evaluate_write_action(path.as_str())
             }
             AgentAction::RunShell { cmd, .. } => self.evaluate_command(cmd),
@@ -337,6 +341,12 @@ impl SafetyPolicy {
                 RiskLevel::High,
                 format!("network command allowed by policy: {command}"),
             ),
+            CommandClass::EnvironmentSetup => PolicyDecision::Deny {
+                risk: RiskLevel::High,
+                summary: format!(
+                    "environment discovery, package installation, or direct network probing is denied during model execution: {command}"
+                ),
+            },
             CommandClass::Privileged if self.deny_privileged => PolicyDecision::Deny {
                 risk: RiskLevel::Critical,
                 summary: format!("privileged command denied: {command}"),
@@ -403,10 +413,13 @@ impl PermissionGrant {
         self.subject == subject
             && self.scope.allows_environment(environment)
             && self.scope.allows_run_scope(run_scope)
+            && self.scope.allows_action_path(action)
             && self.policy.policy_mode == PolicyMode::TrustedWrites
             && matches!(
                 action,
-                AgentAction::WriteFile { .. } | AgentAction::PatchFile { .. }
+                AgentAction::WriteFile { .. }
+                    | AgentAction::PatchFile { .. }
+                    | AgentAction::CreateDirectory { .. }
             )
             && self.scope.allows_action(action)
             && self.scope.allows_risk(risk)
@@ -423,6 +436,12 @@ pub struct PermissionGrantScope {
     pub namespaces: Vec<String>,
     pub repos: Vec<String>,
     pub branches: Vec<String>,
+    #[serde(default)]
+    pub run_ids: Vec<String>,
+    #[serde(default)]
+    pub workspace_ids: Vec<String>,
+    #[serde(default)]
+    pub writable_path_globs: Vec<String>,
     #[serde(default)]
     pub work_item_ids: Vec<String>,
     pub work_plan_ids: Vec<String>,
@@ -478,12 +497,43 @@ impl PermissionGrantScope {
         string_scope_matches(&self.namespaces, run_scope.namespace.as_deref())
             && string_scope_matches(&self.repos, run_scope.repo.as_deref())
             && string_scope_matches(&self.branches, run_scope.branch.as_deref())
+            && string_scope_matches(&self.run_ids, run_scope.run_id.as_deref())
+            && string_scope_matches(&self.workspace_ids, run_scope.workspace_id.as_deref())
+            && string_scope_matches(&self.work_item_ids, run_scope.work_item_id.as_deref())
             && string_scope_matches(&self.work_plan_ids, run_scope.work_plan_id.as_deref())
             && string_scope_matches(&self.change_set_ids, run_scope.change_set_id.as_deref())
             && self
                 .production_impacting
                 .map(|required| required == run_scope.production_impacting)
                 .unwrap_or(true)
+    }
+
+    fn allows_action_path(&self, action: &AgentAction) -> bool {
+        let path = match action {
+            AgentAction::WriteFile { path, .. }
+            | AgentAction::PatchFile { path, .. }
+            | AgentAction::CreateDirectory { path, .. } => path.as_str(),
+            _ => return true,
+        };
+        !self.writable_path_globs.is_empty()
+            && self
+                .writable_path_globs
+                .iter()
+                .any(|pattern| path_glob_matches(pattern, path))
+    }
+}
+
+fn path_glob_matches(pattern: &str, path: &str) -> bool {
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.split('/').any(|part| part == ".." || part.is_empty())
+        || looks_secret_accessing(path)
+    {
+        return false;
+    }
+    match pattern.strip_suffix("/**") {
+        Some(prefix) => path == prefix || path.starts_with(&format!("{prefix}/")),
+        None => path == pattern,
     }
 }
 
@@ -508,8 +558,12 @@ fn capability_kind_for_action(action: &AgentAction) -> CapabilityKind {
         AgentAction::ReadFile { .. }
         | AgentAction::WriteFile { .. }
         | AgentAction::PatchFile { .. }
+        | AgentAction::CreateDirectory { .. }
         | AgentAction::ListDir { .. }
         | AgentAction::SearchFiles { .. } => CapabilityKind::Filesystem,
+        AgentAction::EnvironmentInfo { .. } | AgentAction::RunAcceptanceCommand { .. } => {
+            CapabilityKind::AgentControl
+        }
         AgentAction::RunShell { .. } => CapabilityKind::Shell,
         AgentAction::GitDiff { .. } | AgentAction::GitStatus { .. } => CapabilityKind::Git,
         AgentAction::KubernetesGet { .. } => CapabilityKind::KubernetesRead,
@@ -671,6 +725,7 @@ mod tests {
             ..SafetyPolicy::default()
         };
         let matching = RunScope {
+            run_id: None,
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
@@ -716,6 +771,7 @@ mod tests {
             ..SafetyPolicy::default()
         };
         let matching = RunScope {
+            run_id: None,
             namespace: Some("apps-dev".to_string()),
             repo: Some("git@example.test/team/app.git".to_string()),
             branch: Some("feature/pharness".to_string()),
@@ -748,6 +804,72 @@ mod tests {
         ));
         assert!(matches!(wrong_change_set, PolicyDecision::Ask { .. }));
         assert!(matches!(missing_change_set, PolicyDecision::Ask { .. }));
+    }
+
+    #[test]
+    fn attempt_grant_enforces_every_run_workspace_and_path_dimension() {
+        let mut grant = scoped_write_grant("grant_attempt");
+        grant.scope.actions = vec!["write_file".to_string()];
+        grant.scope.run_ids = vec!["run_1".to_string()];
+        grant.scope.workspace_ids = vec!["ws_1".to_string()];
+        grant.scope.work_item_ids = vec!["witem_1".to_string()];
+        grant.scope.work_plan_ids = vec!["wplan_1".to_string()];
+        grant.scope.writable_path_globs = vec!["src/**".to_string()];
+        let policy = SafetyPolicy {
+            permission_grants: vec![grant],
+            ..SafetyPolicy::default()
+        };
+        let matching = RunScope {
+            run_id: Some("run_1".to_string()),
+            namespace: Some("apps-dev".to_string()),
+            repo: Some("git@example.test/team/app.git".to_string()),
+            branch: Some("feature/pharness".to_string()),
+            work_item_id: Some("witem_1".to_string()),
+            workspace_id: Some("ws_1".to_string()),
+            work_plan_id: Some("wplan_1".to_string()),
+            change_set_id: None,
+            production_impacting: false,
+        };
+        let action = AgentAction::WriteFile {
+            id: "act_write".into(),
+            reason: "bounded attempt write".to_string(),
+            path: "src/validation.py".into(),
+            content: "ok = True".to_string(),
+        };
+
+        assert!(matches!(
+            policy.evaluate_action_in_scope(&action, &matching),
+            PolicyDecision::Allow { .. }
+        ));
+        for mismatched in [
+            RunScope {
+                run_id: Some("run_2".to_string()),
+                ..matching.clone()
+            },
+            RunScope {
+                workspace_id: Some("ws_2".to_string()),
+                ..matching.clone()
+            },
+            RunScope {
+                work_item_id: Some("witem_2".to_string()),
+                ..matching.clone()
+            },
+        ] {
+            assert!(matches!(
+                policy.evaluate_action_in_scope(&action, &mismatched),
+                PolicyDecision::Ask { .. }
+            ));
+        }
+        let outside_path = AgentAction::WriteFile {
+            id: "act_write_outside".into(),
+            reason: "outside declared paths".to_string(),
+            path: "tests/validation.py".into(),
+            content: "ok = True".to_string(),
+        };
+        assert!(matches!(
+            policy.evaluate_action_in_scope(&outside_path, &matching),
+            PolicyDecision::Ask { .. }
+        ));
     }
 
     #[test]
@@ -1033,6 +1155,9 @@ mod tests {
                 namespaces: Vec::new(),
                 repos: Vec::new(),
                 branches: Vec::new(),
+                run_ids: Vec::new(),
+                workspace_ids: Vec::new(),
+                writable_path_globs: vec!["README.md".to_string()],
                 work_item_ids: Vec::new(),
                 work_plan_ids: Vec::new(),
                 change_set_ids: Vec::new(),

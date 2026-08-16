@@ -66,6 +66,7 @@ export function ApprovalGatesView({ dashboard, selectedId, actionNotice, setActi
   }, {});
   const selectedGate = gates.find((gate: any) => gate.id === selectedId) ?? routeSelected ?? gates[0];
   const matchingCount = Number(response.count ?? 0);
+  const gateIsActionable = (gate: any) => gate?.status === "pending" && gate?.actionable !== false;
 
   useEffect(() => {
     if (operatorName?.trim()) {
@@ -96,7 +97,7 @@ export function ApprovalGatesView({ dashboard, selectedId, actionNotice, setActi
   });
 
   const toggleGateGroup = (gatesInGroup: any[]) => setSelectedGateIds((current) => {
-    const pendingIds = gatesInGroup.filter((gate) => gate.status === "pending").map((gate) => gate.id);
+    const pendingIds = gatesInGroup.filter(gateIsActionable).map((gate) => gate.id);
     const shouldSelect = pendingIds.some((gateId) => !current.has(gateId));
     const next = new Set(current);
     for (const gateId of pendingIds) shouldSelect ? next.add(gateId) : next.delete(gateId);
@@ -144,9 +145,9 @@ export function ApprovalGatesView({ dashboard, selectedId, actionNotice, setActi
       {gates.length ? <div className="gate-layout">
         <div className="approval-stack">
           {Object.entries(gateGroups).map(([planId, planGates]) => <div className="gate-group" key={planId}>
-            <div className="gate-group-heading"><button className="gate-group-title" type="button" title={planId} onClick={() => planId !== "ungrouped" && navigate("Remediation Plans", planId)}>plan {compactId(planId)} · {planGates.length} gate{planGates.length === 1 ? "" : "s"}</button>{planGates.some((gate: any) => gate.status === "pending") ? <button type="button" onClick={() => toggleGateGroup(planGates)}>Select pending group</button> : null}</div>
+            <div className="gate-group-heading"><button className="gate-group-title" type="button" title={planId} onClick={() => planId !== "ungrouped" && navigate("Remediation Plans", planId)}>plan {compactId(planId)} · {planGates.length} gate{planGates.length === 1 ? "" : "s"}</button>{planGates.some(gateIsActionable) ? <button type="button" onClick={() => toggleGateGroup(planGates)}>Select actionable group</button> : null}</div>
             {planGates.map((gate: any) => <div className="gate-selectable" key={gate.id}>
-              {gate.status === "pending" ? <label title={`Select ${gate.title} for a batch decision`}><input type="checkbox" checked={selectedGateIds.has(gate.id)} onChange={() => toggleBatchGate(gate.id)} /><span className="sr-only">Select {gate.title}</span></label> : <span className="gate-select-spacer" />}
+              {gate.status === "pending" ? <label title={gateIsActionable(gate) ? `Select ${gate.title} for a batch decision` : (gate.lifecycle_blocker ?? "This future gate is not at its lifecycle boundary.")}><input type="checkbox" checked={selectedGateIds.has(gate.id)} disabled={!gateIsActionable(gate)} onChange={() => toggleBatchGate(gate.id)} /><span className="sr-only">Select {gate.title}</span></label> : <span className="gate-select-spacer" />}
               <button className={`approval-card ${gate.id === selectedGate?.id ? "is-active" : ""}`} type="button" onClick={() => navigate("Approval Gates", gate.id)}><span>{gate.gate_kind} · {statusText(gate.status)}</span><strong>{gate.title}</strong><small>{resourceLabel(gate)} · {compactId(gate.id)}</small><b>{gate.risk_level}</b></button>
             </div>)}
           </div>)}
@@ -165,12 +166,13 @@ export function ApprovalGatesView({ dashboard, selectedId, actionNotice, setActi
             {selectedGate?.decision_reason ? <ReviewItem label="Reason" value={selectedGate.decision_reason} /> : null}
             {selectedGate?.stale_at ? <ReviewItem label="Stale" value={<>{selectedGate?.stale_reason ?? "superseded"} · <time title={timestampTitle(selectedGate?.stale_at)}>{formatTimestamp(selectedGate?.stale_at)}</time></>} tone="pending" /> : null}
           </div>
+          {selectedGate?.status === "pending" && selectedGate?.actionable === false ? <div className="api-banner" role="status"><strong>Future lifecycle gate</strong><br />{selectedGate.lifecycle_blocker ?? "This gate becomes actionable only when its declared lifecycle boundary is reached."}</div> : null}
           <div className="diff-box"><div><FileText size={18} /> gate payload · plan {compactId(selectedGate?.remediation_plan_id)}</div><pre>{JSON.stringify(selectedGate?.gate_json ?? {}, null, 2)}</pre></div>
           <div className="gate-decision-context"><label>Operator<input value={decisionActor} onChange={(event) => setDecisionActor(event.target.value)} /></label><label>Rationale<textarea rows={2} value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder="Required and written to the audit record" /></label></div>
           <div className="decision-row">
-            <button className="approve" type="button" disabled={selectedGate?.status !== "pending" || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("satisfied")}><CheckCircle size={18} /> Satisfy</button>
-            <button className="waive" type="button" disabled={selectedGate?.status !== "pending" || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("waived")}><ShieldWarning size={18} /> Waive</button>
-            <button className="deny" type="button" disabled={selectedGate?.status !== "pending" || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("rejected")}><X size={18} /> Reject</button>
+            <button className="approve" type="button" disabled={!gateIsActionable(selectedGate) || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("satisfied")}><CheckCircle size={18} /> Satisfy</button>
+            <button className="waive" type="button" disabled={!gateIsActionable(selectedGate) || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("waived")}><ShieldWarning size={18} /> Waive</button>
+            <button className="deny" type="button" disabled={!gateIsActionable(selectedGate) || !decisionActor.trim() || !decisionReason.trim()} onClick={() => decideGate("rejected")}><X size={18} /> Reject</button>
           </div>
         </div>
       </div> : listState.status === "loading" ? <EmptyState title="Loading approval gates" body="Reading durable governance records from the control plane." /> : (listFilters.search || listFilters.status || listFilters.actor || listFilters.origin) ? <EmptyState title="No approval gates match these filters" body="Clear or adjust filters to review other durable governance decisions." /> : gateFilter === "pending" ? <EmptyState title="No pending approval gates" body="Decided and stale gates are available under the all filter." /> : <EmptyState title="No approval gates" body="Release, deployment, and remediation gates will appear here when governance state exists." />}

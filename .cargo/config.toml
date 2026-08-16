@@ -1,0 +1,6 @@
+[env]
+# The API's end-to-end controller tests intentionally exercise a large typed
+# lifecycle response in one async task. Keep the test harness from inheriting
+# the platform's smaller default thread stack while still allowing an explicit
+# caller override.
+RUST_MIN_STACK = { value = "16777216", force = false }

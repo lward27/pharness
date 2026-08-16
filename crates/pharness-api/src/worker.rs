@@ -1,19 +1,21 @@
 use pharness_core::{
-    AgentEvent, CancellationFlag, ContextBudget, EventId, EventKind, ReadOnlyClusterTools,
-    ResourceRef, RunId, RunScope, SafetyPolicy, TaskContract, TaskKind,
+    AgentEvent, CancellationFlag, ContextBudget, EventId, EventKind, PermissionGrantScope,
+    ReadOnlyClusterTools, ResourceRef, RunId, RunScope, SafetyPolicy, TaskContract, TaskKind,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
     execute_attempt, ApprovalRequestPayload, AttemptBackend, AttemptHost, AttemptOutcome,
-    AttemptSpec, ResumeSpec, RunSpec, WorkspaceGitEvidence, WorkspaceSourceSpec,
+    AttemptSpec, BudgetResumeSpec, ResumeSpec, RunSpec, WorkspaceGitEvidence, WorkspaceSourceSpec,
 };
 use pharness_store::{
-    CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateFileChange,
-    CreateIncident, CreateObservation, CreateRemediationPlan, SqliteStore, StoreError,
-    StoredApproval, StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun,
+    CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateBudgetExtension,
+    CreateFileChange, CreateIncident, CreateObservation, CreateRemediationPlan, SqliteStore,
+    StoreError, StoredApproval, StoredIncident, StoredObservation, StoredRemediationPlan,
+    StoredRun,
 };
 use secrecy::SecretString;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -180,10 +182,41 @@ pub(crate) async fn attempt_spec_for_run(
             execution_target_json: run.execution_target_json.clone(),
             workspace_source,
             task_contract: task_contract_for_run(store, run).await?,
+            run_budget: run
+                .execution_target_json
+                .get("run_budget")
+                .cloned()
+                .and_then(|value| serde_json::from_value(value).ok()),
+            budget_consumption: run.budget_consumption.clone(),
         },
         event_seq_start,
         resume,
+        budget_resume: budget_resume_from_run(run)?,
     })
+}
+
+fn budget_resume_from_run(run: &StoredRun) -> anyhow::Result<Option<BudgetResumeSpec>> {
+    if run.status != "queued" || run.budget_consumption.extensions == 0 {
+        return Ok(None);
+    }
+    let Some(extension) = run
+        .result_json
+        .as_ref()
+        .and_then(|result| result.get("budget_extension"))
+    else {
+        return Ok(None);
+    };
+    Ok(Some(BudgetResumeSpec {
+        resume_messages_json: extension
+            .get("resume_messages")
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("budget resume transcript is missing"))?,
+        turns_completed: extension
+            .get("turns_completed")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| anyhow::anyhow!("budget resume turn count is invalid"))?,
+    }))
 }
 
 fn workspace_source_for_run(
@@ -286,6 +319,24 @@ pub(crate) async fn finish_run_from_attempt(
     run: &StoredRun,
     outcome: AttemptOutcome,
 ) -> anyhow::Result<()> {
+    let consumption =
+        if outcome.consumption.allowed_turns == 0 && outcome.consumption.allowed_tokens == 0 {
+            run.budget_consumption.clone()
+        } else {
+            outcome.consumption.clone()
+        };
+    if consumption.allowed_turns != run.budget_consumption.allowed_turns
+        || consumption.allowed_tokens != run.budget_consumption.allowed_tokens
+        || consumption.turns_used < run.budget_consumption.turns_used
+        || consumption.tokens_used < run.budget_consumption.tokens_used
+        || consumption.active_execution_seconds_used
+            < run.budget_consumption.active_execution_seconds_used
+    {
+        anyhow::bail!("attempt consumption does not match the durable RunBudget");
+    }
+    store
+        .update_run_budget_consumption(&run.id, &consumption)
+        .await?;
     persist_workspace_evidence(store, run, &outcome).await?;
     let error = outcome.error.clone();
     let approval_id = if outcome.status == "approval_required" {
@@ -307,6 +358,54 @@ pub(crate) async fn finish_run_from_attempt(
         "approval_required" => {
             store
                 .mark_run_approval_required(&run.id, result_json)
+                .await?;
+        }
+        "budget_extension_required" => {
+            let payload = outcome
+                .budget_extension
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("budget pause has no resumable payload"))?;
+            if payload.consumption.allowed_turns != run.budget_consumption.allowed_turns
+                || payload.consumption.allowed_tokens != run.budget_consumption.allowed_tokens
+                || payload.consumption.turns_used > payload.consumption.allowed_turns
+                || payload.consumption.tokens_used < run.budget_consumption.tokens_used
+            {
+                anyhow::bail!("budget pause consumption does not match the durable RunBudget");
+            }
+            store
+                .update_run_budget_consumption(&run.id, &payload.consumption)
+                .await?;
+            let work_item_id = run_scope_for_run(run)
+                .work_item_id
+                .ok_or_else(|| anyhow::anyhow!("budget extension requires WorkItem scope"))?;
+            let state_payload = serde_json::json!({
+                "run_id": run.id,
+                "work_item_id": work_item_id,
+                "run_budget": run.run_budget,
+                "consumption": payload.consumption,
+                "reason": payload.reason,
+            });
+            let state_hash = format!("{:x}", Sha256::digest(state_payload.to_string().as_bytes()));
+            let result_json = serde_json::json!({
+                "status": "budget_extension_required",
+                "turns": outcome.turns,
+                "stop_reason": payload.reason,
+                "budget_extension": {
+                    "resume_messages": payload.resume_messages_json,
+                    "turns_completed": payload.turns_completed,
+                    "consumption": payload.consumption,
+                },
+            });
+            store
+                .pause_run_for_budget(&run.id, result_json, &payload.reason)
+                .await?;
+            store
+                .create_budget_extension(CreateBudgetExtension {
+                    id: format!("budget_{}", unique_suffix()),
+                    work_item_id,
+                    run_id: run.id.clone(),
+                    state_hash,
+                })
                 .await?;
         }
         "failed" => {
@@ -425,6 +524,41 @@ async fn persist_workspace_evidence(
     Ok(())
 }
 
+async fn expire_attempt_workspace_grants(
+    store: &SqliteStore,
+    run: &StoredRun,
+    actor: &str,
+) -> anyhow::Result<()> {
+    for grant in store.list_permission_grants(Some("active"), 200).await? {
+        let scope: PermissionGrantScope = serde_json::from_value(grant.scope_json.clone())?;
+        if !scope.run_ids.iter().any(|run_id| run_id == run.id.as_str()) {
+            continue;
+        }
+        let grant = store
+            .stale_permission_grant(
+                &grant.id,
+                Some(actor.to_string()),
+                Some(format!("attempt {} reached a terminal state", run.id)),
+            )
+            .await?;
+        store
+            .create_audit_event(CreateAuditEvent {
+                id: format!("aud_{}_{}", grant.id, unique_suffix()),
+                kind: "permission_grant.stale".to_string(),
+                actor: Some(actor.to_string()),
+                resource_kind: "permission_grant".to_string(),
+                resource_id: grant.id,
+                run_id: Some(run.id.clone()),
+                payload_json: serde_json::json!({
+                    "reason": "attempt reached a terminal state",
+                    "run_id": run.id,
+                }),
+            })
+            .await?;
+    }
+    Ok(())
+}
+
 fn validate_workspace_evidence(
     source: &WorkspaceSourceSpec,
     evidence: &WorkspaceGitEvidence,
@@ -470,6 +604,7 @@ async fn sync_work_item_attempt(
         "failed" => ("blocked", "blocked"),
         "cancelled" => ("cancelled", "cancelled"),
         "approval_required" => return Ok(()),
+        "budget_extension_required" => return Ok(()),
         _ => return Ok(()),
     };
     let events = store.list_events(&run.id).await?;
@@ -525,6 +660,7 @@ async fn sync_work_item_attempt(
             }),
         })
         .await?;
+    expire_attempt_workspace_grants(store, run, actor).await?;
     Ok(())
 }
 
@@ -660,6 +796,12 @@ fn result_json_for_attempt(
         "error": &outcome.error,
         "approval_id": approval_id,
         "run_scope": run_scope.to_optional_json(),
+        "budget_extension": outcome.budget_extension.as_ref().map(|payload| serde_json::json!({
+            "reason": payload.reason,
+            "resume_messages": payload.resume_messages_json,
+            "turns_completed": payload.turns_completed,
+            "consumption": payload.consumption,
+        })),
     })
 }
 
@@ -1366,6 +1508,8 @@ mod tests {
             error: None,
             approval: None,
             workspace_evidence: None,
+            budget_extension: None,
+            consumption: run.budget_consumption.clone(),
         };
 
         let result = result_json_for_attempt(&run, &outcome, None);
@@ -1500,6 +1644,11 @@ mod tests {
                 production_impacting: false,
                 max_attempts: 1,
                 max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".to_string(),
                 created_by: None,
             })
             .await
@@ -1572,6 +1721,8 @@ mod tests {
                     diff: "diff --git a/README.md b/README.md\n+index 1..2 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-before\n+after\n".to_string(),
                     changed_paths: vec!["README.md".to_string()],
                 }),
+                budget_extension: None,
+                consumption: run.budget_consumption.clone(),
             },
         )
         .await
@@ -1622,6 +1773,8 @@ mod tests {
             error: None,
             approval: None,
             workspace_evidence: None,
+            budget_extension: None,
+            consumption: run.budget_consumption.clone(),
         };
 
         let result = result_json_for_attempt(&run, &outcome, None);
@@ -1965,6 +2118,9 @@ mod tests {
             status: "queued".to_string(),
             user_task: "test".to_string(),
             max_turns: 40,
+            run_budget: Default::default(),
+            budget_consumption: Default::default(),
+            stop_reason: None,
             started_at: "0".to_string(),
             finished_at: None,
             cancel_requested_at: None,

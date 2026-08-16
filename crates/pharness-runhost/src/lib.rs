@@ -15,10 +15,11 @@ pub use preview::approval_preview_for_action;
 pub use prompt::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
 
 use pharness_core::{
-    AgentEvent, AgentRuntime, ApprovedAction, CancellationFlag, CompositeToolExecutor,
-    ContextBudget, EventSink, LocalReadOnlyFsTools, LocalShellTools, ModelMessage,
-    ReadOnlyClusterTools, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome, RunScope,
-    RunStatus, SafetyPolicy, TaskContract, ToolProtocolMode,
+    AgentEvent, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag,
+    CompositeToolExecutor, ContextBudget, EnvironmentSnapshot, EventSink, LocalReadOnlyFsTools,
+    LocalShellTools, ModelMessage, ProjectContract, ReadOnlyClusterTools, RecoveryPolicy,
+    RepositoryInstruction, RunBudget, RunBudgetConsumption, RunConfig, RunOutcome, RunScope,
+    RunStatus, SafetyPolicy, TaskContract, ToolError, ToolExecutor, ToolProtocolMode, ToolResult,
 };
 use pharness_fireworks::FireworksClient;
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,10 @@ pub struct RunSpec {
     pub workspace_source: Option<WorkspaceSourceSpec>,
     #[serde(default)]
     pub task_contract: TaskContract,
+    #[serde(default)]
+    pub run_budget: Option<RunBudget>,
+    #[serde(default)]
+    pub budget_consumption: RunBudgetConsumption,
 }
 
 /// Typed remote source checkout contract for one workspace attempt.
@@ -97,6 +102,14 @@ pub struct AttemptSpec {
     pub run: RunSpec,
     pub event_seq_start: u64,
     pub resume: Option<ResumeSpec>,
+    #[serde(default)]
+    pub budget_resume: Option<BudgetResumeSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetResumeSpec {
+    pub resume_messages_json: serde_json::Value,
+    pub turns_completed: u32,
 }
 
 /// Approval request produced by an attempt that paused for approval.
@@ -124,6 +137,18 @@ pub struct AttemptOutcome {
     pub approval: Option<ApprovalRequestPayload>,
     #[serde(default)]
     pub workspace_evidence: Option<WorkspaceGitEvidence>,
+    #[serde(default)]
+    pub budget_extension: Option<BudgetExtensionPayload>,
+    #[serde(default)]
+    pub consumption: RunBudgetConsumption,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetExtensionPayload {
+    pub reason: String,
+    pub resume_messages_json: serde_json::Value,
+    pub turns_completed: u32,
+    pub consumption: RunBudgetConsumption,
 }
 
 /// Bounded Git evidence collected by the process that owns the workspace.
@@ -148,6 +173,8 @@ impl AttemptOutcome {
             error: Some(error.into()),
             approval: None,
             workspace_evidence: None,
+            budget_extension: None,
+            consumption: RunBudgetConsumption::default(),
         }
     }
 }
@@ -174,6 +201,7 @@ pub fn run_status_str(status: RunStatus) -> &'static str {
     match status {
         RunStatus::Completed => "completed",
         RunStatus::ApprovalRequired => "approval_required",
+        RunStatus::BudgetExtensionRequired => "budget_extension_required",
         RunStatus::Failed => "failed",
         RunStatus::Cancelled => "cancelled",
     }
@@ -333,8 +361,11 @@ pub async fn execute_attempt<B: AttemptBackend>(
 
     let cwd = PathBuf::from(&spec.run.cwd);
     let tools = CompositeToolExecutor::new(
-        CompositeToolExecutor::new(LocalReadOnlyFsTools::new(&cwd)?, host.cluster_tools),
-        LocalShellTools::new(&cwd)?,
+        ProjectTools::for_run(&cwd, &spec.run)?,
+        CompositeToolExecutor::new(
+            CompositeToolExecutor::new(LocalReadOnlyFsTools::new(&cwd)?, host.cluster_tools),
+            LocalShellTools::new(&cwd)?,
+        ),
     );
     let runtime = AgentRuntime::with_tools(host.provider, sink, tools);
 
@@ -343,16 +374,27 @@ pub async fn execute_attempt<B: AttemptBackend>(
     let session_id = pharness_core::SessionId::new(spec.run.session_id.clone());
     let run_id = pharness_core::RunId::new(spec.run.run_id.clone());
 
-    let outcome = match &spec.resume {
-        None => {
+    let recovery_policy = spec
+        .run
+        .run_budget
+        .as_ref()
+        .map(|budget| RecoveryPolicy {
+            max_recoverable_errors: budget.recoverable_tool_errors,
+            max_identical_failures: budget.identical_failures,
+        })
+        .unwrap_or_default();
+    let outcome = match (&spec.resume, &spec.budget_resume) {
+        (None, None) => {
             let (repository_instruction_content, repository_instruction_files) =
                 repository_instructions(&cwd)?;
+            let environment_content = environment_instructions(&spec.run)?;
             let config = RunConfig {
                 session_id,
                 run_id,
                 messages: vec![
                     ModelMessage::system(system_prompt()),
                     ModelMessage::system(repository_instruction_content),
+                    ModelMessage::system(environment_content),
                     ModelMessage::user(spec.run.user_task.clone()),
                 ],
                 tools: worker_tool_specs(),
@@ -361,16 +403,18 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 max_tokens: 4096,
                 max_turns: spec.run.max_turns,
                 context_budget: host.context_budget.clone(),
-                recovery_policy: RecoveryPolicy::default(),
+                recovery_policy: recovery_policy.clone(),
                 task_contract: spec.run.task_contract.clone(),
                 repository_instruction_files,
                 policy,
                 run_scope,
                 event_seq_start: spec.event_seq_start,
+                run_budget: spec.run.run_budget.clone(),
+                budget_consumption: spec.run.budget_consumption.clone(),
             };
             runtime.run(config, cancellation).await
         }
-        Some(resume) => {
+        (Some(resume), None) => {
             let approved = ApprovedAction {
                 approval_id: resume.approval_id.clone(),
                 action: serde_json::from_value(resume.action_json.clone())?,
@@ -389,16 +433,51 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 max_tokens: 4096,
                 max_turns: spec.run.max_turns,
                 context_budget: host.context_budget.clone(),
-                recovery_policy: RecoveryPolicy::default(),
+                recovery_policy: recovery_policy.clone(),
                 task_contract: spec.run.task_contract.clone(),
                 repository_instruction_files: Vec::new(),
                 policy,
                 run_scope,
                 event_seq_start: spec.event_seq_start,
+                run_budget: spec.run.run_budget.clone(),
+                budget_consumption: spec.run.budget_consumption.clone(),
             };
             runtime
                 .resume_after_approval(config, cancellation, approved)
                 .await
+        }
+        (None, Some(resume)) => {
+            let resume = BudgetResume {
+                resume_messages: serde_json::from_value::<Vec<ModelMessage>>(
+                    resume.resume_messages_json.clone(),
+                )?,
+                turns_completed: resume.turns_completed,
+            };
+            let config = RunConfig {
+                session_id,
+                run_id,
+                messages: Vec::new(),
+                tools: worker_tool_specs(),
+                tool_protocol: ToolProtocolMode::NativeTools,
+                temperature: 0.1,
+                max_tokens: 4096,
+                max_turns: spec.run.max_turns,
+                context_budget: host.context_budget.clone(),
+                recovery_policy,
+                task_contract: spec.run.task_contract.clone(),
+                repository_instruction_files: Vec::new(),
+                policy,
+                run_scope,
+                event_seq_start: spec.event_seq_start,
+                run_budget: spec.run.run_budget.clone(),
+                budget_consumption: spec.run.budget_consumption.clone(),
+            };
+            runtime
+                .resume_after_budget(config, cancellation, resume)
+                .await
+        }
+        (Some(_), Some(_)) => {
+            anyhow::bail!("attempt cannot resume approval and budget simultaneously")
         }
     };
 
@@ -436,6 +515,15 @@ async fn attempt_outcome(run: &RunSpec, outcome: RunOutcome) -> anyhow::Result<A
     };
 
     let status = run_status_str(outcome.status).to_string();
+    let budget_extension = match outcome.budget_pause.as_ref() {
+        Some(pause) => Some(BudgetExtensionPayload {
+            reason: pause.reason.clone(),
+            resume_messages_json: serde_json::to_value(&pause.resume_messages)?,
+            turns_completed: pause.turns_completed,
+            consumption: pause.consumption.clone(),
+        }),
+        None => None,
+    };
     let workspace_evidence = match (&run.workspace_source, status.as_str()) {
         (Some(source), "completed") => {
             Some(collect_workspace_git_evidence(&run.cwd, source).await?)
@@ -450,7 +538,28 @@ async fn attempt_outcome(run: &RunSpec, outcome: RunOutcome) -> anyhow::Result<A
         error: outcome.error,
         approval,
         workspace_evidence,
+        budget_extension,
+        consumption: outcome.consumption,
     })
+}
+
+fn environment_instructions(run: &RunSpec) -> anyhow::Result<String> {
+    let Some(snapshot) = run.execution_target_json.get("environment_snapshot") else {
+        return Ok("No durable environment snapshot is available. Do not assume package installation or network access; use exposed tools only.".to_string());
+    };
+    let snapshot: pharness_core::EnvironmentSnapshot = serde_json::from_value(snapshot.clone())?;
+    let contract = run
+        .execution_target_json
+        .get("repository_contract")
+        .cloned()
+        .map(serde_json::from_value::<pharness_core::ProjectContract>)
+        .transpose()?
+        .ok_or_else(|| anyhow::anyhow!("prepared run has no repository contract"))?;
+    Ok(format!(
+        "Environment readiness snapshot and repository contract were verified before turn zero. Treat these as authoritative; do not rediscover Python, Docker, package-manager, operating-system, or network facts and do not request runtime package installation. Agent shell network is denied. Use only declared acceptance commands through the typed acceptance tool.\nEnvironmentSnapshot:\n{}\nProjectContract:\n{}",
+        serde_json::to_string_pretty(&snapshot)?,
+        serde_json::to_string_pretty(&contract)?,
+    ))
 }
 
 async fn collect_workspace_git_evidence(
@@ -525,6 +634,228 @@ fn secret_shaped_path(path: &str) -> bool {
         || name.contains("credential")
         || name.contains("secret")
         || name.contains("token")
+}
+
+#[derive(Debug, Clone)]
+struct ProjectTools {
+    workspace: PathBuf,
+    canonical_workspace: PathBuf,
+    contract: Option<ProjectContract>,
+    snapshot: Option<EnvironmentSnapshot>,
+    selected_acceptance_commands: Vec<String>,
+}
+
+impl ProjectTools {
+    fn for_run(workspace: &Path, run: &RunSpec) -> anyhow::Result<Self> {
+        let contract = run
+            .execution_target_json
+            .get("repository_contract")
+            .filter(|value| !value.is_null())
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?;
+        let snapshot = run
+            .execution_target_json
+            .get("environment_snapshot")
+            .filter(|value| !value.is_null())
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?;
+        let selected_acceptance_commands = run
+            .execution_target_json
+            .get("selected_acceptance_commands")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default();
+        Ok(Self {
+            workspace: workspace.to_path_buf(),
+            canonical_workspace: workspace.canonicalize()?,
+            contract,
+            snapshot,
+            selected_acceptance_commands,
+        })
+    }
+
+    fn writable_path(&self, value: &camino::Utf8Path) -> Result<PathBuf, ToolError> {
+        let path = value.as_str();
+        if path.is_empty()
+            || path.starts_with('/')
+            || path.split('/').any(|part| part.is_empty() || part == "..")
+            || secret_shaped_project_path(path)
+        {
+            return Err(ToolError::OutsideWorkspace {
+                path: path.to_string(),
+            });
+        }
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| ToolError::UnsupportedAction {
+                action: "create_directory".to_string(),
+            })?;
+        if !contract
+            .writable_paths
+            .iter()
+            .any(|pattern| project_path_glob_matches(pattern, path))
+        {
+            return Err(ToolError::OutsideWorkspace {
+                path: path.to_string(),
+            });
+        }
+        Ok(self.workspace.join(path))
+    }
+
+    async fn run_acceptance(&self, name: &str) -> Result<ToolResult, ToolError> {
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| ToolError::UnsupportedAction {
+                action: "run_acceptance_command".to_string(),
+            })?;
+        let declared = contract
+            .command(name)
+            .ok_or_else(|| ToolError::InvalidArguments {
+                message: format!("acceptance command is not declared: {name}"),
+            })?;
+        if !self
+            .selected_acceptance_commands
+            .iter()
+            .any(|command| command == &declared.command)
+        {
+            return Err(ToolError::InvalidArguments {
+                message: format!("acceptance command was not selected by the WorkItem: {name}"),
+            });
+        }
+        let existing_path = std::env::var("PATH").unwrap_or_default();
+        let venv_bin = self.workspace.join(".pharness-runtime/venv/bin");
+        let python_path = contract
+            .roots
+            .source
+            .iter()
+            .map(|root| self.workspace.join(root).to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(":");
+        let mut child = Command::new("/bin/sh");
+        child
+            .arg("-c")
+            .arg(&declared.command)
+            .current_dir(&self.workspace)
+            .env("PATH", format!("{}:{existing_path}", venv_bin.display()))
+            .env("PYTHONPATH", python_path)
+            .kill_on_drop(true);
+        let started = std::time::Instant::now();
+        let output = tokio::time::timeout(std::time::Duration::from_secs(600), child.output())
+            .await
+            .map_err(|_| ToolError::TimedOut {
+                command: declared.command.clone(),
+                timeout_ms: 600_000,
+            })?
+            .map_err(|error| ToolError::Io {
+                message: error.to_string(),
+            })?;
+        let content = serde_json::json!({
+            "acceptance_command": true,
+            "name": name,
+            "command": declared.command,
+            "exit_code": output.status.code(),
+            "stdout": bounded_output(&output.stdout),
+            "stderr": bounded_output(&output.stderr),
+            "duration_ms": started.elapsed().as_millis(),
+        });
+        if output.status.success() {
+            Ok(ToolResult::ok(
+                format!("acceptance command {name} passed"),
+                content,
+            ))
+        } else {
+            Ok(ToolResult::error(
+                format!("acceptance command {name} failed"),
+                content,
+            ))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolExecutor for ProjectTools {
+    async fn execute(&self, action: &pharness_core::AgentAction) -> Result<ToolResult, ToolError> {
+        match action {
+            pharness_core::AgentAction::EnvironmentInfo { .. } => {
+                let (Some(snapshot), Some(contract)) = (&self.snapshot, &self.contract) else {
+                    return Err(ToolError::UnsupportedAction {
+                        action: action.kind_name().to_string(),
+                    });
+                };
+                Ok(ToolResult::ok(
+                    "returned durable environment information",
+                    serde_json::json!({
+                        "environment_snapshot": snapshot,
+                        "project_contract": contract,
+                    }),
+                ))
+            }
+            pharness_core::AgentAction::CreateDirectory { path, .. } => {
+                let target = self.writable_path(path)?;
+                tokio::fs::create_dir_all(&target)
+                    .await
+                    .map_err(|error| ToolError::Io {
+                        message: error.to_string(),
+                    })?;
+                let canonical = target.canonicalize().map_err(|error| ToolError::Io {
+                    message: error.to_string(),
+                })?;
+                if !canonical.starts_with(&self.canonical_workspace) {
+                    return Err(ToolError::OutsideWorkspace {
+                        path: path.to_string(),
+                    });
+                }
+                Ok(ToolResult::ok(
+                    format!("created directory {path}"),
+                    serde_json::json!({ "path": path }),
+                ))
+            }
+            pharness_core::AgentAction::RunAcceptanceCommand { name, .. } => {
+                self.run_acceptance(name).await
+            }
+            _ => Err(ToolError::UnsupportedAction {
+                action: action.kind_name().to_string(),
+            }),
+        }
+    }
+}
+
+fn project_path_glob_matches(pattern: &str, path: &str) -> bool {
+    pattern
+        .strip_suffix("/**")
+        .map(|prefix| path == prefix || path.starts_with(&format!("{prefix}/")))
+        .unwrap_or(pattern == path)
+}
+
+fn secret_shaped_project_path(path: &str) -> bool {
+    path.to_ascii_lowercase().split('/').any(|part| {
+        part == ".env"
+            || part.starts_with(".env.")
+            || part.ends_with(".pem")
+            || part.ends_with(".key")
+            || part.contains("secret")
+            || part.contains("credential")
+            || part.contains("token")
+            || part.contains("kubeconfig")
+    })
+}
+
+fn bounded_output(bytes: &[u8]) -> String {
+    const MAX: usize = 64 * 1024;
+    let text = String::from_utf8_lossy(bytes);
+    if text.len() <= MAX {
+        return text.into_owned();
+    }
+    let mut end = MAX;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...[truncated]", &text[..end])
 }
 
 async fn forward_events<B: AttemptBackend>(

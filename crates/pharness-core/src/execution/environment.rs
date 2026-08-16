@@ -33,6 +33,7 @@ pub enum EnvironmentTier {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunScope {
+    pub run_id: Option<String>,
     pub namespace: Option<String>,
     pub repo: Option<String>,
     pub branch: Option<String>,
@@ -46,6 +47,7 @@ pub struct RunScope {
 impl RunScope {
     pub fn is_empty(&self) -> bool {
         self.namespace.is_none()
+            && self.run_id.is_none()
             && self.repo.is_none()
             && self.branch.is_none()
             && self.work_item_id.is_none()

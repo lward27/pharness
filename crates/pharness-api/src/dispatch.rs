@@ -7,6 +7,7 @@
 
 use crate::worker::{fail_run_from_dispatch, LocalWorker};
 use pharness_config::WorkerKubernetesConfig;
+use pharness_core::EnvironmentProfile;
 use pharness_store::{
     CreateAuditEvent, PipelineIntentListFilter, SqliteStore, StoredApproval, StoredPipelineIntent,
     StoredRun, UpdatePipelineIntentExecution,
@@ -27,6 +28,7 @@ const GITOPS_WRITER_JOB_NAME_VALUE: &str = "pharness-gitops-writer";
 const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
 const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
 const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
+const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-preparation";
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
 const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
 const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
@@ -133,6 +135,11 @@ pub struct CapabilityVerificationOutcome {
     pub principal: Option<String>,
     pub repository: Option<String>,
     pub permission: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvironmentPreparationReceipt {
+    pub job_name: String,
 }
 
 #[derive(Clone)]
@@ -261,6 +268,18 @@ impl RunDispatcher {
         }
     }
 
+    pub async fn verify_environment_profile(
+        &self,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<CapabilityVerificationOutcome> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.verify_environment_profile(profile).await,
+            _ => anyhow::bail!(
+                "environment profile verification requires kubernetes_job worker mode"
+            ),
+        }
+    }
+
     pub fn spawn_run(&self, run: StoredRun, cwd: String) {
         match self {
             Self::Disabled => {}
@@ -274,6 +293,26 @@ impl RunDispatcher {
             Self::Disabled => {}
             Self::Local(worker) => worker.resume_run(run, approval),
             Self::Kubernetes(dispatcher) => dispatcher.clone().launch(run, Some(approval)),
+        }
+    }
+
+    pub async fn dispatch_environment_preparation(
+        &self,
+        run: &StoredRun,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<EnvironmentPreparationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .create_environment_preparation_job(run, profile)
+                    .await
+            }
+            Self::Disabled => {
+                anyhow::bail!("environment preparation requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("immutable environment profiles are unavailable in local worker mode")
+            }
         }
     }
 
@@ -597,6 +636,145 @@ impl KubernetesJobDispatcher {
         })
     }
 
+    async fn verify_environment_profile(
+        &self,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<CapabilityVerificationOutcome> {
+        profile.validate().map_err(|error| anyhow::anyhow!(error))?;
+        let suffix = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let job_name = format!("pharness-profile-preflight-{suffix}");
+        let executable_checks = profile
+            .required_executables
+            .iter()
+            .map(|executable| format!("command -v {executable} >/dev/null"))
+            .collect::<Vec<_>>()
+            .join(" && ");
+        let script = format!(
+            "set -eu; test \"$(uname -s)\" = Linux; test \"$(uname -m)\" = x86_64; test \"$PHARNESS_BUILD_REVISION\" = \"$EXPECTED_REVISION\"; {executable_checks}; python -m venv /tmp/profile-venv; /tmp/profile-venv/bin/pip --version >/dev/null; git ls-remote --exit-code \"$PROFILE_REPOSITORY\" HEAD >/dev/null; /tmp/profile-venv/bin/python -c \"import urllib.request; urllib.request.urlopen('https://pypi.org/simple/', timeout=15).read(1)\""
+        );
+        let proxy_url = format!(
+            "http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",
+            self.config.namespace
+        );
+        let repository = profile
+            .repository_allowlist
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("environment profile repository allowlist is empty"))?;
+        let manifest = serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": { "name": job_name, "namespace": self.config.namespace },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": 120,
+                "ttlSecondsAfterFinished": 300,
+                "template": {
+                    "metadata": { "labels": {
+                        "app": "pharness-runner",
+                        "agentic.lucas.engineering/phase": "preparation",
+                        "agentic.lucas.engineering/environment-profile": profile.id,
+                    }},
+                    "spec": {
+                        "serviceAccountName": profile.service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "verify",
+                            "image": profile.image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": ["/bin/sh", "-c", script],
+                            "env": [
+                                { "name": "EXPECTED_REVISION", "value": profile.revision },
+                                { "name": "PROFILE_REPOSITORY", "value": repository },
+                                { "name": "HTTPS_PROXY", "value": proxy_url },
+                                { "name": "https_proxy", "value": proxy_url },
+                                { "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
+                                { "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" }
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "volumeMounts": [{ "name": "tmp", "mountPath": "/tmp" }],
+                            "resources": {
+                                "requests": { "cpu": "50m", "memory": "128Mi" },
+                                "limits": { "cpu": profile.limits.cpu, "memory": profile.limits.memory },
+                            },
+                        }],
+                        "volumes": [{ "name": "tmp", "emptyDir": {} }],
+                    },
+                },
+            },
+        });
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let mut available = false;
+        for _ in 0..120 {
+            let output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "get",
+                    "job",
+                    &job_name,
+                    "-n",
+                    &self.config.namespace,
+                    "-o",
+                    "json",
+                ])
+                .output()
+                .await?;
+            if !output.status.success() {
+                break;
+            }
+            let job: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+            if job
+                .pointer("/status/succeeded")
+                .and_then(serde_json::Value::as_u64)
+                == Some(1)
+            {
+                available = true;
+                break;
+            }
+            if job
+                .pointer("/status/failed")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+                > 0
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        let _ = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "delete",
+                "job",
+                &job_name,
+                "-n",
+                &self.config.namespace,
+                "--ignore-not-found=true",
+                "--wait=false",
+            ])
+            .output()
+            .await;
+        Ok(CapabilityVerificationOutcome {
+            available,
+            principal: Some(format!(
+                "system:serviceaccount:{}:{}",
+                self.config.namespace, profile.service_account
+            )),
+            repository: Some(repository),
+            permission: Some(
+                "runner_revision_platform_executables_venv_and_preparation_egress".to_string(),
+            ),
+        })
+    }
+
     fn capability_preflight_manifest(
         &self,
         capability: &str,
@@ -605,6 +783,23 @@ impl KubernetesJobDispatcher {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         let job_name = format!("pharness-cap-preflight-{suffix}");
         let mut env = Vec::new();
+        let proxy_phase = match capability {
+            "model_provider" => Some("coding"),
+            "source_workspace" => Some("preparation"),
+            _ => None,
+        };
+        if let Some(phase) = proxy_phase {
+            let proxy_url = format!(
+                "http://pharness-{phase}-egress-proxy.{}.svc.cluster.local:8080",
+                self.config.namespace
+            );
+            env.extend([
+                serde_json::json!({"name":"HTTPS_PROXY","value":proxy_url}),
+                serde_json::json!({"name":"https_proxy","value":proxy_url}),
+                serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+                serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            ]);
+        }
         let (service_account, principal, permission, repository, script) = match capability {
             "model_provider" => {
                 env.push(serde_json::json!({"name":"FIREWORKS_API_KEY","valueFrom":{"secretKeyRef":{"name":self.config.fireworks_secret_name,"key":"api-key"}}}));
@@ -647,11 +842,17 @@ impl KubernetesJobDispatcher {
             ),
             _ => anyhow::bail!("unsupported capability {capability}"),
         };
+        let mut pod_labels =
+            serde_json::json!({JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE});
+        if let Some(phase) = proxy_phase {
+            pod_labels["app"] = serde_json::json!("pharness-runner");
+            pod_labels["agentic.lucas.engineering/phase"] = serde_json::json!(phase);
+        }
         let manifest = serde_json::json!({
             "apiVersion":"batch/v1","kind":"Job",
             "metadata":{"name":job_name,"namespace":self.config.namespace,"labels":{JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE}},
             "spec":{"backoffLimit":0,"activeDeadlineSeconds":75,"ttlSecondsAfterFinished":300,
-                "template":{"metadata":{"labels":{JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE}},
+                "template":{"metadata":{"labels":pod_labels},
                     "spec":{"serviceAccountName":service_account,"restartPolicy":"Never",
                         "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
                         "containers":[{"name":"preflight","image":self.config.image,"imagePullPolicy":"IfNotPresent","command":["/bin/sh","-ec"],"args":[script],"env":env,
@@ -735,6 +936,23 @@ impl KubernetesJobDispatcher {
         );
 
         Ok(())
+    }
+
+    async fn create_environment_preparation_job(
+        &self,
+        run: &StoredRun,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<EnvironmentPreparationReceipt> {
+        profile
+            .validate()
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        self.ensure_run_job_capacity().await?;
+        self.ensure_workspace_claim(run).await?;
+        let manifest = self.environment_preparation_job_manifest(run, profile);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let job_name = environment_preparation_job_name(run.id.as_str());
+        tracing::info!(run_id = %run.id, job = %job_name, profile = %profile.id, "created isolated environment preparation job");
+        Ok(EnvironmentPreparationReceipt { job_name })
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
@@ -1509,10 +1727,54 @@ impl KubernetesJobDispatcher {
         approval: Option<&StoredApproval>,
     ) -> serde_json::Value {
         let job_name = job_name(run.id.as_str(), approval);
+        let runner_profile = run.execution_target_json.get("runner_profile");
+        let runner_image = runner_profile
+            .and_then(|profile| profile.get("image"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&self.config.image);
+        let service_account = runner_profile
+            .and_then(|profile| profile.get("service_account"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&self.config.service_account);
+        let cpu_limit = runner_profile
+            .and_then(|profile| profile.pointer("/limits/cpu"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("1");
+        let memory_limit = runner_profile
+            .and_then(|profile| profile.pointer("/limits/memory"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("1Gi");
+        let ephemeral_limit = runner_profile
+            .and_then(|profile| profile.pointer("/limits/ephemeral_storage"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&self.config.workspace_ephemeral_storage_limit);
+        let remaining_active_seconds = run
+            .run_budget
+            .active_execution_seconds
+            .saturating_sub(run.budget_consumption.active_execution_seconds_used)
+            .max(1);
+        let active_deadline_seconds = self
+            .config
+            .active_deadline_seconds
+            .min(remaining_active_seconds);
         let mut env = vec![
             serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
             serde_json::json!({ "name": "PHARNESS_RUN_ID", "value": run.id.as_str() }),
             serde_json::json!({ "name": "HOME", "value": self.config.workspace_dir }),
+            serde_json::json!({
+                "name": "PATH",
+                "value": format!("{}/.pharness-runtime/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", self.config.workspace_dir),
+            }),
+            serde_json::json!({
+                "name": "HTTPS_PROXY",
+                "value": format!("http://pharness-coding-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace),
+            }),
+            serde_json::json!({
+                "name": "https_proxy",
+                "value": format!("http://pharness-coding-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace),
+            }),
+            serde_json::json!({ "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
             serde_json::json!({
                 "name": "PHARNESS_WORKER_TOKEN",
                 "valueFrom": {
@@ -1555,17 +1817,19 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.active_deadline_seconds,
+                "activeDeadlineSeconds": active_deadline_seconds,
                 "ttlSecondsAfterFinished": self.config.ttl_seconds_after_finished,
                 "template": {
                     "metadata": {
                         "labels": {
+                            "app": "pharness-runner",
+                            "agentic.lucas.engineering/phase": "coding",
                             JOB_NAME_LABEL: JOB_NAME_VALUE,
                             RUN_ID_LABEL: job_label_value(run.id.as_str()),
                         },
                     },
                     "spec": {
-                        "serviceAccountName": self.config.service_account,
+                        "serviceAccountName": service_account,
                         "restartPolicy": "Never",
                         "securityContext": {
                             "runAsNonRoot": true,
@@ -1576,8 +1840,8 @@ impl KubernetesJobDispatcher {
                         },
                         "containers": [{
                             "name": "worker",
-                            "image": self.config.image,
-                            "imagePullPolicy": "Always",
+                            "image": runner_image,
+                            "imagePullPolicy": "IfNotPresent",
                             "command": ["pharness-worker"],
                             "env": env,
                             "volumeMounts": [
@@ -1599,9 +1863,9 @@ impl KubernetesJobDispatcher {
                                     "ephemeral-storage": self.config.workspace_ephemeral_storage_request,
                                 },
                                 "limits": {
-                                    "cpu": "1",
-                                    "memory": "1Gi",
-                                    "ephemeral-storage": self.config.workspace_ephemeral_storage_limit,
+                                    "cpu": cpu_limit,
+                                    "memory": memory_limit,
+                                    "ephemeral-storage": ephemeral_limit,
                                 },
                             },
                         }],
@@ -1634,6 +1898,91 @@ impl KubernetesJobDispatcher {
             });
         }
         manifest
+    }
+
+    fn environment_preparation_job_manifest(
+        &self,
+        run: &StoredRun,
+        profile: &EnvironmentProfile,
+    ) -> serde_json::Value {
+        let job_name = environment_preparation_job_name(run.id.as_str());
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": job_name,
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: ENVIRONMENT_PREPARATION_JOB_NAME_VALUE,
+                    RUN_ID_LABEL: job_label_value(run.id.as_str()),
+                },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": 1800,
+                "ttlSecondsAfterFinished": self.config.ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        "app": "pharness-runner",
+                        "agentic.lucas.engineering/phase": "preparation",
+                        JOB_NAME_LABEL: ENVIRONMENT_PREPARATION_JOB_NAME_VALUE,
+                        RUN_ID_LABEL: job_label_value(run.id.as_str()),
+                    }},
+                    "spec": {
+                        "serviceAccountName": profile.service_account,
+                        "restartPolicy": "Never",
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "fsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "containers": [{
+                            "name": "prepare",
+                            "image": profile.image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": ["pharness-worker"],
+                            "env": [
+                                { "name": "PHARNESS_EXECUTION_KIND", "value": "environment_prepare" },
+                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
+                                { "name": "PHARNESS_RUN_ID", "value": run.id.as_str() },
+                                { "name": "PHARNESS_ENVIRONMENT_PROFILE_ID", "value": profile.id },
+                                { "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image },
+                                { "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision },
+                                { "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform },
+                                { "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) },
+                                { "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
+                                { "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
+                                { "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
+                                { "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
+                                { "name": "HOME", "value": self.config.workspace_dir },
+                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+                                }},
+                            ],
+                            "volumeMounts": [
+                                { "name": "workspace", "mountPath": self.config.workspace_dir },
+                                { "name": "tmp", "mountPath": "/tmp" },
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "100m", "memory": "256Mi", "ephemeral-storage": "512Mi" },
+                                "limits": { "cpu": profile.limits.cpu, "memory": profile.limits.memory, "ephemeral-storage": profile.limits.ephemeral_storage },
+                            },
+                        }],
+                        "volumes": [
+                            { "name": "workspace", "persistentVolumeClaim": { "claimName": workspace_claim_name(run.id.as_str()) } },
+                            { "name": "tmp", "emptyDir": {} },
+                        ],
+                    },
+                },
+            },
+        })
     }
 
     /// Reconcile worker and executor jobs that stopped without reporting a
@@ -2076,6 +2425,10 @@ fn workspace_claim_name(run_id: &str) -> String {
     format!("pharness-{}-ws", job_label_value(run_id))
 }
 
+fn environment_preparation_job_name(run_id: &str) -> String {
+    format!("pharness-{}-prepare", job_label_value(run_id))
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -2183,7 +2536,9 @@ mod tests {
         GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
     };
     use pharness_config::WorkerKubernetesConfig;
-    use pharness_core::{RunId, SessionId};
+    use pharness_core::{
+        EnvironmentProfile, EnvironmentProfileLimits, PreparationStrategy, RunId, SessionId,
+    };
     use pharness_store::{SqliteStore, StoredRun};
     use serde_json::json;
     use std::sync::Arc;
@@ -2284,6 +2639,54 @@ mod tests {
             manifest.pointer("/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0"),
             Some(&json!("roomier-node"))
         );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
+        }));
+    }
+
+    #[tokio::test]
+    async fn preparation_manifest_uses_only_the_preparation_proxy() {
+        let dispatcher = test_dispatcher(None).await;
+        let profile = EnvironmentProfile {
+            id: "python-3.11".to_string(),
+            active: true,
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".to_string(),
+            required_executables: vec!["pharness-worker".to_string(), "python".to_string()],
+            preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+            service_account: "pharness-python-runner".to_string(),
+            repository_allowlist: vec!["https://github.com/example/test.git".to_string()],
+            limits: EnvironmentProfileLimits {
+                cpu: "1".to_string(),
+                memory: "1Gi".to_string(),
+                ephemeral_storage: "2Gi".to_string(),
+            },
+        };
+        let manifest = dispatcher.environment_preparation_job_manifest(&test_run(), &profile);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-preparation-egress-proxy"))
+        }));
+        assert!(env.iter().all(|entry| {
+            !entry["value"]
+                .as_str()
+                .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
+        }));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
     }
 
     #[tokio::test]
@@ -2531,6 +2934,9 @@ mod tests {
             status: "queued".to_string(),
             user_task: "test".to_string(),
             max_turns: 1,
+            run_budget: Default::default(),
+            budget_consumption: Default::default(),
+            stop_reason: None,
             started_at: "0".to_string(),
             finished_at: None,
             cancel_requested_at: None,

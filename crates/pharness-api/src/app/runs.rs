@@ -1,4 +1,5 @@
 use super::*;
+use hmac::{Hmac, Mac};
 
 pub(super) fn internal_router() -> Router<AppState> {
     Router::new()
@@ -13,6 +14,10 @@ pub(super) fn internal_router() -> Router<AppState> {
         .route(
             "/api/internal/runs/:run_id/workspace-provisioned",
             post(internal_workspace_provisioned),
+        )
+        .route(
+            "/api/internal/runs/:run_id/environment-preparation",
+            post(internal_environment_preparation),
         )
         .route(
             "/api/internal/runs/:run_id/events",
@@ -44,6 +49,228 @@ pub(super) fn router() -> Router<AppState> {
         .route("/api/runs/:run_id/observations", get(list_run_observations))
         .route("/api/runs/:run_id/cancel", post(cancel_run))
         .route("/api/runs/:run_id/approvals", post(decide_run_approval))
+        .route(
+            "/api/runs/:run_id/environment-preparation",
+            get(get_run_environment_preparation),
+        )
+        .route(
+            "/api/runs/:run_id/budget-extensions/:extension_id/approve",
+            post(approve_run_budget_extension),
+        )
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub(super) struct InternalEnvironmentPreparationRequest {
+    status: String,
+    #[serde(default)]
+    project_contract: Option<serde_json::Value>,
+    #[serde(default)]
+    project_contract_hash: Option<String>,
+    #[serde(default)]
+    environment_snapshot: Option<serde_json::Value>,
+    #[serde(default)]
+    snapshot_signature: Option<String>,
+    #[serde(default = "empty_array")]
+    logs: serde_json::Value,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+fn empty_array() -> serde_json::Value {
+    serde_json::json!([])
+}
+
+pub(super) async fn internal_environment_preparation(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    Json(request): Json<InternalEnvironmentPreparationRequest>,
+) -> Result<Json<EnvironmentPreparationResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    let run = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    if run.status != "preparing" {
+        return Err(ApiError::conflict(
+            "run is not awaiting environment preparation",
+        ));
+    }
+    let preparation = state
+        .store
+        .get_environment_preparation_by_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("run has no environment preparation record"))?;
+    let work_item = state
+        .store
+        .get_work_item(&preparation.work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", &preparation.work_item_id))?;
+
+    if request.status == "failed" {
+        let error = request
+            .error
+            .clone()
+            .unwrap_or_else(|| "environment preparation failed".to_string());
+        let preparation = state
+            .store
+            .update_environment_preparation(UpdateEnvironmentPreparation {
+                id: preparation.id,
+                status: "failed".to_string(),
+                project_contract_json: request.project_contract,
+                project_contract_hash: request.project_contract_hash,
+                environment_snapshot_json: None,
+                logs_json: request.logs,
+                error: Some(error.clone()),
+            })
+            .await?;
+        state
+            .store
+            .set_work_item_environment_snapshot(&work_item.id, "failed", None, None, None)
+            .await?;
+        state
+            .store
+            .complete_run(
+                &run_id,
+                "failed",
+                json!({"stop_reason":"environment_preparation_failed"}),
+                Some(error.clone()),
+            )
+            .await?;
+        state
+            .store
+            .update_work_item_status(
+                &work_item.id,
+                "blocked",
+                Some("agent:environment-preparer".to_string()),
+                Some(error),
+            )
+            .await?;
+        return Ok(Json(preparation.into()));
+    }
+    if request.status != "succeeded" {
+        return Err(ApiError::bad_request(
+            "preparation status must be succeeded or failed",
+        ));
+    }
+    let contract_json = request
+        .project_contract
+        .clone()
+        .ok_or_else(|| ApiError::conflict("successful preparation has no project contract"))?;
+    let contract = serde_json::from_value::<pharness_core::ProjectContract>(contract_json.clone())
+        .map_err(|error| {
+            ApiError::conflict(format!("prepared project contract is invalid: {error}"))
+        })?;
+    let contract_hash = request
+        .project_contract_hash
+        .clone()
+        .ok_or_else(|| ApiError::conflict("successful preparation has no contract hash"))?;
+    let snapshot_json = request
+        .environment_snapshot
+        .clone()
+        .ok_or_else(|| ApiError::conflict("successful preparation has no environment snapshot"))?;
+    let snapshot =
+        serde_json::from_value::<pharness_core::EnvironmentSnapshot>(snapshot_json.clone())
+            .map_err(|error| {
+                ApiError::conflict(format!("environment snapshot is invalid: {error}"))
+            })?;
+    let token = state.worker_token.as_deref().ok_or_else(|| {
+        ApiError::conflict("worker token is unavailable for snapshot verification")
+    })?;
+    if !request
+        .snapshot_signature
+        .as_deref()
+        .is_some_and(|signature| verify_environment_snapshot(token, &snapshot_json, signature))
+    {
+        return Err(ApiError::conflict(
+            "environment snapshot signature is invalid",
+        ));
+    }
+    let profile = environment::select_profile(
+        &state.environment_profiles,
+        &preparation.environment_profile_id,
+        &work_item.source_repo,
+    )
+    .map_err(ApiError::conflict)?;
+    if snapshot.source_sha != preparation.source_commit
+        || snapshot.manifest_sha256 != contract_hash
+        || contract.environment_profile != profile.id
+        || snapshot.runner_image_digest != profile.image
+        || snapshot.runner_revision != profile.revision
+        || work_item.repository_contract_hash.as_deref() != Some(contract_hash.as_str())
+    {
+        return Err(ApiError::conflict(
+            "environment snapshot does not match the immutable WorkItem and runner profile",
+        ));
+    }
+    let declared = contract
+        .acceptance_commands
+        .iter()
+        .map(|command| command.command.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    if work_item
+        .acceptance_criteria
+        .iter()
+        .any(|command| !declared.contains(command.as_str()))
+    {
+        return Err(ApiError::conflict(
+            "WorkItem acceptance command is not declared by prepared contract",
+        ));
+    }
+    let preparation = state
+        .store
+        .update_environment_preparation(UpdateEnvironmentPreparation {
+            id: preparation.id,
+            status: "succeeded".to_string(),
+            project_contract_json: Some(contract_json.clone()),
+            project_contract_hash: Some(contract_hash.clone()),
+            environment_snapshot_json: Some(snapshot_json.clone()),
+            logs_json: request.logs,
+            error: None,
+        })
+        .await?;
+    state
+        .store
+        .set_work_item_environment_snapshot(
+            &work_item.id,
+            "succeeded",
+            Some(preparation.id.clone()),
+            Some(contract_json),
+            Some(contract_hash),
+        )
+        .await?;
+    let run = state
+        .store
+        .set_run_environment_snapshot(&run_id, snapshot_json)
+        .await?;
+    state.worker.spawn_run(run.clone(), run.cwd.clone());
+    Ok(Json(preparation.into()))
+}
+
+fn verify_environment_snapshot(token: &str, payload: &serde_json::Value, signature: &str) -> bool {
+    let Some(signature) = signature.strip_prefix("hmac-sha256:") else {
+        return false;
+    };
+    let Some(signature) = decode_sha256(signature) else {
+        return false;
+    };
+    let mut mac = Hmac::<Sha256>::new_from_slice(token.as_bytes())
+        .expect("HMAC-SHA256 accepts keys of any size");
+    mac.update(payload.to_string().as_bytes());
+    mac.verify_slice(&signature).is_ok()
+}
+
+fn decode_sha256(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64 {
+        return None;
+    }
+    let mut decoded = [0_u8; 32];
+    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = (chunk[0] as char).to_digit(16)?;
+        let low = (chunk[1] as char).to_digit(16)?;
+        decoded[index] = u8::try_from((high << 4) | low).ok()?;
+    }
+    Some(decoded)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -468,6 +695,54 @@ pub(super) async fn get_run(
     Ok(Json(run.into()))
 }
 
+pub(super) async fn get_run_environment_preparation(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<EnvironmentPreparationResponse>, ApiError> {
+    let run_id = RunId::new(run_id);
+    state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let preparation = state
+        .store
+        .get_environment_preparation_by_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("environment_preparation", run_id.as_str()))?;
+    Ok(Json(preparation.into()))
+}
+
+pub(super) async fn approve_run_budget_extension(
+    State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Path((run_id, extension_id)): Path<(String, String)>,
+    Json(request): Json<ApproveBudgetExtensionRequest>,
+) -> Result<Json<BudgetExtensionResponse>, ApiError> {
+    let actor = identity
+        .map(|Extension(OperatorIdentity(name))| name)
+        .unwrap_or(request.actor);
+    let actor = required_text(actor, "actor")?;
+    let reason = required_text(request.reason, "reason")?;
+    let run_id = RunId::new(run_id);
+    let extension = state
+        .store
+        .get_budget_extension(&extension_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("budget_extension", &extension_id))?;
+    if extension.run_id != run_id {
+        return Err(ApiError::conflict(
+            "budget extension does not belong to the requested run",
+        ));
+    }
+    let (extension, run) = state
+        .store
+        .approve_budget_extension(&extension_id, &request.state_hash, &actor, &reason)
+        .await?;
+    state.worker.spawn_run(run.clone(), run.cwd.clone());
+    Ok(Json(extension.into()))
+}
+
 pub(super) async fn get_run_events(
     State(state): State<AppState>,
     Path(run_id): Path<String>,
@@ -481,14 +756,28 @@ pub(super) async fn get_run_operator_summary(
     Path(run_id): Path<String>,
 ) -> Result<Json<RunOperatorSummaryResponse>, ApiError> {
     let run_id = RunId::new(run_id);
-    state
+    let run = state
         .store
         .get_run(&run_id)
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
     let events = state.store.list_events(&run_id).await?;
     let changes = state.store.list_file_changes(&run_id).await?;
-    let artifacts = state.store.list_artifacts(&run_id).await?;
+    let scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();
+    let acceptance_commands = match scope.work_item_id.as_deref() {
+        Some(work_item_id) => state
+            .store
+            .get_work_item(work_item_id)
+            .await?
+            .map(|item| item.acceptance_criteria)
+            .unwrap_or_default(),
+        None => Vec::new(),
+    };
+    let contract = run
+        .execution_target_json
+        .get("repository_contract")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<ProjectContract>(value).ok());
     let pending_approvals = state
         .store
         .pending_approval_for_run(&run_id)
@@ -509,7 +798,8 @@ pub(super) async fn get_run_operator_summary(
     let mut tools_failed = 0;
     let mut test_commands = Vec::new();
     let mut test_results = Vec::new();
-    let mut awaiting_test_result = false;
+    let mut awaiting_test_result: Option<String> = None;
+    let mut environment_discovery_turns = 0;
     for event in &events {
         match event.kind {
             EventKind::ModelRequestStarted => {
@@ -555,24 +845,33 @@ pub(super) async fn get_run_operator_summary(
                     .unwrap_or(0);
             }
             EventKind::ActionProposed => {
-                awaiting_test_result = false;
+                awaiting_test_result = None;
                 if event.payload.get("action").and_then(Value::as_str) == Some("run_shell") {
                     if let Some(command) = event.payload.get("cmd").and_then(Value::as_str) {
-                        let command_lower = command.to_ascii_lowercase();
-                        if [
-                            "test",
-                            "unittest",
-                            "pytest",
-                            "cargo",
-                            "compileall",
-                            "npm run",
-                        ]
-                        .iter()
-                        .any(|needle| command_lower.contains(needle))
+                        if acceptance_commands
+                            .iter()
+                            .any(|declared| declared == command)
                         {
                             test_commands.push(command.to_string());
-                            awaiting_test_result = true;
+                            awaiting_test_result = Some(command.to_string());
                         }
+                        if environment_discovery_command(command) {
+                            environment_discovery_turns += 1;
+                        }
+                    }
+                } else if event.payload.get("action").and_then(Value::as_str)
+                    == Some("run_acceptance_command")
+                {
+                    if let Some(command) = event
+                        .payload
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .and_then(|name| contract.as_ref()?.command(name))
+                        .map(|command| command.command.clone())
+                        .filter(|command| acceptance_commands.iter().any(|item| item == command))
+                    {
+                        test_commands.push(command.clone());
+                        awaiting_test_result = Some(command);
                     }
                 }
             }
@@ -580,6 +879,7 @@ pub(super) async fn get_run_operator_summary(
             EventKind::ToolFinished => {
                 tools_completed += 1;
                 let failed = event.payload.get("success").and_then(Value::as_bool) == Some(false)
+                    || event.payload.get("status").and_then(Value::as_str) == Some("error")
                     || event.payload.get("error").is_some()
                     || event.payload.pointer("/content/error").is_some();
                 if failed {
@@ -593,29 +893,66 @@ pub(super) async fn get_run_operator_summary(
                 {
                     recoverable_failures += 1;
                 }
-                if awaiting_test_result {
-                    test_results.push(event.payload.clone());
-                    awaiting_test_result = false;
+                if let Some(command) = awaiting_test_result.take() {
+                    test_results.push(json!({
+                        "command": command,
+                        "passed": !failed,
+                        "result": event.payload,
+                    }));
                 }
             }
             _ => {}
         }
     }
-    let acceptance_evidence = artifacts
+    let acceptance_evidence = test_results
         .iter()
-        .filter(|artifact| {
-            let value = format!("{} {}", artifact.kind, artifact.label).to_ascii_lowercase();
-            value.contains("test") || value.contains("acceptance") || value.contains("evidence")
-        })
-        .map(|artifact| {
-            json!({
-                "artifact_id": artifact.id,
-                "kind": artifact.kind,
-                "label": artifact.label,
-                "path": artifact.path,
-            })
-        })
+        .filter(|result| result.get("passed").and_then(Value::as_bool) == Some(true))
+        .cloned()
         .collect();
+    let mut seen_paths = std::collections::HashSet::new();
+    let changed_paths = changes
+        .iter()
+        .filter(|change| seen_paths.insert(change.path.clone()))
+        .map(|change| change.path.clone())
+        .collect();
+    let approvals = state
+        .store
+        .list_approvals(ApprovalListFilter {
+            search: Some(run_id.to_string()),
+            limit: 200,
+            ..ApprovalListFilter::default()
+        })
+        .await?
+        .into_iter()
+        .filter(|approval| approval.run_id == run_id)
+        .collect::<Vec<_>>();
+    let now = current_millis() as u64;
+    let approval_wait_ms = approvals
+        .iter()
+        .map(|approval| {
+            let requested = approval.requested_at.parse::<u64>().unwrap_or(0);
+            let decided = approval
+                .decided_at
+                .as_deref()
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(now);
+            decided.saturating_sub(requested)
+        })
+        .sum();
+    let preparation = state
+        .store
+        .get_environment_preparation_by_run(&run_id)
+        .await?;
+    let preparation_duration_ms = preparation.and_then(|preparation| {
+        let started = preparation.started_at?.parse::<u64>().ok()?;
+        let finished = preparation.finished_at?.parse::<u64>().ok()?;
+        Some(finished.saturating_sub(started))
+    });
+    let budget_extensions = state
+        .store
+        .list_budget_extensions_for_run(&run_id)
+        .await?
+        .len() as u32;
     Ok(Json(RunOperatorSummaryResponse {
         run_id: run_id.clone(),
         turns,
@@ -630,13 +967,40 @@ pub(super) async fn get_run_operator_summary(
         tools_started,
         tools_completed,
         tools_failed,
-        changed_paths: changes.iter().map(|change| change.path.clone()).collect(),
+        changed_paths,
         diff_reference: format!("/api/runs/{}/diff", run_id.as_str()),
         test_commands,
         test_results,
         acceptance_evidence,
         pending_approvals,
+        environment_discovery_turns,
+        approval_count: approvals.len() as u32,
+        approval_wait_ms,
+        preparation_duration_ms,
+        budget_extensions,
+        stop_reason: run.stop_reason,
     }))
+}
+
+fn environment_discovery_command(command: &str) -> bool {
+    let command = command.to_ascii_lowercase();
+    [
+        "which python",
+        "command -v python",
+        "python --version",
+        "python3 --version",
+        "which docker",
+        "command -v docker",
+        "docker version",
+        "apt-get",
+        "apk ",
+        "pip install",
+        "import httpx",
+        "import requests",
+        "import socket",
+    ]
+    .iter()
+    .any(|needle| command.contains(needle))
 }
 
 pub(super) async fn get_run_diff(

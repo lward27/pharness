@@ -5,7 +5,8 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use pharness_core::{
-    AgentEvent, CancellationFlag, EventKind, PolicyMode, ReadOnlyClusterTools, SafetyPolicy,
+    AgentEvent, CancellationFlag, ContextBudget, EventKind, PolicyMode, ReadOnlyClusterTools,
+    SafetyPolicy, TaskContract, TaskKind,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -19,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const FIXTURE_REVISION: &str = "coding-v1.6";
+const FIXTURE_REVISION: &str = "coding-v1.7";
 const TEMPERATURE_MILLI: u16 = 100;
 const MAX_TOKENS: u32 = 4_096;
 const MAX_TURNS: u32 = 24;
@@ -37,7 +38,7 @@ const FIXTURES: [Fixture; 8] = [
     Fixture { id: "new-module", task: "First use the read_file tool to inspect `.pharness/previous-run.txt`. That path is deliberately absent; treat the resulting tool error as expected and continue. Then add the missing greeting module and expose its greet function from the crate root. The existing integration test must compile and pass; run the Rust tests.", allowed_paths: &["src/lib.rs", "src/greeting.rs"], required_recoverable_failures: 1 },
     Fixture { id: "large-file-navigation", task: "First use the read_file tool to inspect `.pharness/previous-run.txt`. That path is deliberately absent; treat the resulting tool error as expected and continue. src/lib.rs deliberately has a large prefix: find the checksum implementation near the end and make checksum(&[2, 3]) return 5. Do not rewrite unrelated filler; run the Rust tests.", allowed_paths: &["src/lib.rs"], required_recoverable_failures: 1 },
     Fixture { id: "ambiguous-edit-recovery", task: "Update settings.toml so retries is exactly 3 while preserving cache_retries = 5 and the protected file. The similarly named settings are intentional; inspect before editing.", allowed_paths: &["settings.toml"], required_recoverable_failures: 0 },
-    Fixture { id: "configuration-change", task: "Update config/app.toml: feature_enabled must be true and max_connections must be 20. Preserve environment = \"staging\" and every protected field exactly.", allowed_paths: &["config/app.toml"], required_recoverable_failures: 0 },
+    Fixture { id: "python-environment-ready", task: "Use the injected EnvironmentSnapshot and ProjectContract as authoritative. Do not probe Python, Docker, package managers, the operating system, or network access. Fix normalize_ticker in src/validation.py so it strips surrounding whitespace and returns uppercase text, then run the declared `unit` acceptance command through run_acceptance_command.", allowed_paths: &["src/validation.py"], required_recoverable_failures: 0 },
     Fixture { id: "documentation-only", task: "Correct the installation command in README.md to use cargo install widget-cli. This is documentation-only: do not create or modify source files.", allowed_paths: &["README.md"], required_recoverable_failures: 0 },
     Fixture { id: "mixed-implementation", task: "Fix is_even in src/lib.rs and update README.md with the correct example for is_even(4). Keep the scope focused and run the Rust tests.", allowed_paths: &["src/lib.rs", "README.md"], required_recoverable_failures: 0 },
 ];
@@ -71,6 +72,7 @@ struct EvalResult {
     estimated_input_tokens: u64,
     compacted_exchanges: u32,
     context_budget_failures: u32,
+    environment_probe_actions: u32,
     changed_paths: Vec<String>,
     protected_paths_ok: bool,
     acceptance_ok: bool,
@@ -132,6 +134,7 @@ async fn run_fixture(
         provider,
         cluster_tools: ReadOnlyClusterTools::from_env(),
         default_policy: trusted_eval_policy(),
+        context_budget: ContextBudget::default(),
     };
     let spec = AttemptSpec {
         run: RunSpec {
@@ -142,6 +145,12 @@ async fn run_fixture(
             max_turns: MAX_TURNS,
             execution_target_json: serde_json::json!({}),
             workspace_source: None,
+            task_contract: TaskContract {
+                kind: TaskKind::Coding,
+                acceptance_criteria: vec![fixture.task.to_string()],
+                require_workspace_change: true,
+                require_post_change_diff: true,
+            },
         },
         event_seq_start: 0,
         resume: None,
@@ -189,6 +198,7 @@ async fn run_fixture(
         estimated_input_tokens: metrics.estimated_input_tokens,
         compacted_exchanges: 0,
         context_budget_failures: 0,
+        environment_probe_actions: metrics.environment_probe_actions,
         changed_paths,
         protected_paths_ok,
         acceptance_ok,
@@ -202,12 +212,18 @@ struct Metrics {
     tool_calls: u32,
     approval_pauses: u32,
     estimated_input_tokens: u64,
+    environment_probe_actions: u32,
 }
 fn metrics_from_events(events: &[AgentEvent]) -> Metrics {
     let mut metrics = Metrics::default();
     for event in events {
         match event.kind {
-            EventKind::ToolStarted => metrics.tool_calls += 1,
+            EventKind::ToolStarted => {
+                metrics.tool_calls += 1;
+                if event.payload["action"].as_str() == Some("run_shell") {
+                    metrics.environment_probe_actions += 1;
+                }
+            }
             EventKind::ApprovalRequired => metrics.approval_pauses += 1,
             EventKind::ModelRequestStarted => {
                 metrics.estimated_input_tokens += event.payload["estimated_input_tokens"]
@@ -303,14 +319,17 @@ fn prepare_fixture(fixture: &Fixture, attempt: u32) -> Result<PathBuf> {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root)?;
     fs::write(root.join("protected.txt"), "do not modify\n")?;
-    fs::write(root.join(".gitignore"), "target/\nCargo.lock\n")?;
+    fs::write(
+        root.join(".gitignore"),
+        "target/\nCargo.lock\n.pharness-runtime/\n__pycache__/\n*.pyc\n",
+    )?;
     match fixture.id {
         "single-file-rust" => write_rust(&root, "pub fn add(left: i32, right: i32) -> i32 { left - right }\n\n#[cfg(test)] mod tests { use super::add; #[test] fn adds() { assert_eq!(add(2, 3), 5); } }\n", "# Single-file Rust fixture\n")?,
         "multi-file-rust" => { write_rust(&root, "pub mod units;\npub mod route;\n\n#[cfg(test)] mod tests { use crate::{route::route_length_meters, units::Kilometers}; #[test] fn converts_route_distance() { assert_eq!(route_length_meters(Kilometers(2)), 2000); } }\n", "# Multi-file Rust fixture\n")?; write_file(&root, "src/units.rs", "#[derive(Clone, Copy)]\npub struct Kilometers(pub u32);\n\npub fn meters(value: Kilometers) -> u32 { value.0 * 100 }\n")?; write_file(&root, "src/route.rs", "use crate::units::{meters, Kilometers};\n\npub fn route_length_meters(distance: Kilometers) -> u32 { meters(distance) }\n")?; }
         "new-module" => { write_rust(&root, "// The greeting module has not been registered yet.\n", "# New module fixture\n")?; write_file(&root, "tests/greeting.rs", "use eval_fixture::greet;\n\n#[test] fn greets_a_name() { assert_eq!(greet(\"Ada\"), \"Hello, Ada!\"); }\n")?; }
         "large-file-navigation" => write_rust(&root, &format!("{}\npub fn checksum(values: &[u32]) -> u32 {{ values.iter().sum::<u32>() - 1 }}\n\n#[cfg(test)] mod tests {{ use super::checksum; #[test] fn checksums() {{ assert_eq!(checksum(&[2, 3]), 5); }} }}\n", "// intentionally unrelated filler\n".repeat(LARGE_FILE_FILLER_LINES)), "# Large file fixture\n")?,
         "ambiguous-edit-recovery" => { fs::write(root.join("settings.toml"), "retries = 1\ncache_retries = 5\nmode = \"safe\"\n")?; fs::write(root.join("README.md"), "# Ambiguous edit fixture\n")?; }
-        "configuration-change" => { write_file(&root, "config/app.toml", "environment = \"staging\"\nfeature_enabled = false\nmax_connections = 5\nprotected_mode = \"strict\"\n")?; fs::write(root.join("README.md"), "# Configuration fixture\n")?; }
+        "python-environment-ready" => write_python_environment_fixture(&root)?,
         "documentation-only" => fs::write(root.join("README.md"), "# Widget CLI\n\nInstall with `apt-get install widget-cli`.\n")?,
         "mixed-implementation" => write_rust(&root, "pub fn is_even(value: u32) -> bool { value % 2 == 1 }\n\n#[cfg(test)] mod tests { use super::is_even; #[test] fn recognizes_even_values() { assert!(is_even(4)); } }\n", "# Mixed fixture\n\n`is_even(4)` is false.\n")?,
         other => bail!("unknown fixture {other}"),
@@ -330,6 +349,30 @@ fn prepare_fixture(fixture: &Fixture, attempt: u32) -> Result<PathBuf> {
         ],
     )?;
     Ok(root)
+}
+fn write_python_environment_fixture(root: &Path) -> Result<()> {
+    write_file(
+        root,
+        "src/validation.py",
+        "def normalize_ticker(value: str) -> str:\n    return value.strip()\n",
+    )?;
+    write_file(
+        root,
+        "tests/test_validation.py",
+        "import unittest\n\nfrom src.validation import normalize_ticker\n\n\nclass ValidationTests(unittest.TestCase):\n    def test_normalizes_ticker(self):\n        self.assertEqual(normalize_ticker(\"  aapl  \"), \"AAPL\")\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n",
+    )?;
+    fs::write(root.join("requirements.lock"), "typing-extensions==4.15.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000\n")?;
+    write_file(
+        root,
+        ".pharness/project.yaml",
+        "api_version: pharness.dev/v1alpha1\nenvironment_profile: python-3.11\ndependency_lock:\n  kind: pip_requirements\n  path: requirements.lock\n  sha256: bed549b6313d0c4deb9f64065d81670c59f23095816171c310fc3340c432620e\nwritable_paths:\n  - src/**\n  - tests/**\nacceptance_commands:\n  - name: unit\n    command: python -m unittest discover -s tests -v\nroots:\n  source:\n    - src\n  tests:\n    - tests\n  documentation: []\nagent_network: denied\npackage_installation: preparation_only\n",
+    )?;
+    write_file(
+        root,
+        ".pharness/instructions.md",
+        "Use the prepared Python environment and the declared acceptance command. Do not probe or install tools.\n",
+    )?;
+    Ok(())
 }
 fn write_rust(root: &Path, lib: &str, readme: &str) -> Result<()> {
     fs::write(
@@ -353,7 +396,7 @@ fn fixture_acceptance_ok(root: &Path, fixture: &Fixture) -> Result<bool> {
         "new-module" => { let lib = fs::read_to_string(root.join("src/lib.rs"))?; root.join("src/greeting.rs").is_file() && lib.contains("mod greeting") && lib.contains("pub use greeting::greet") },
         "large-file-navigation" => fs::read_to_string(root.join("src/lib.rs"))?.lines().count() > LARGE_FILE_FILLER_LINES,
         "ambiguous-edit-recovery" => fs::read_to_string(root.join("settings.toml"))? == "retries = 3\ncache_retries = 5\nmode = \"safe\"\n",
-        "configuration-change" => fs::read_to_string(root.join("config/app.toml"))? == "environment = \"staging\"\nfeature_enabled = true\nmax_connections = 20\nprotected_mode = \"strict\"\n",
+        "python-environment-ready" => fs::read_to_string(root.join("src/validation.py"))?.contains(".strip().upper()"),
         "documentation-only" => fs::read_to_string(root.join("README.md"))?.contains("cargo install widget-cli") && !root.join("src").exists(),
         "mixed-implementation" => fs::read_to_string(root.join("src/lib.rs"))?.contains("value % 2 == 0") && fs::read_to_string(root.join("README.md"))?.contains("`is_even(4)` is true"),
         other => bail!("unknown fixture {other}"),
@@ -368,7 +411,13 @@ fn fixture_acceptance_ok(root: &Path, fixture: &Fixture) -> Result<bool> {
     );
     Ok(matches
         && succeeds(root, "git", &["diff", "--check"])
-        && (!rust || succeeds(root, "cargo", &["test", "--offline", "--quiet"])))
+        && (!rust || succeeds(root, "cargo", &["test", "--offline", "--quiet"]))
+        && (fixture.id != "python-environment-ready"
+            || succeeds(
+                root,
+                "sh",
+                &["-c", "python3 -m unittest discover -s tests -v"],
+            )))
 }
 fn trusted_eval_policy() -> SafetyPolicy {
     SafetyPolicy {
@@ -425,7 +474,11 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
-        if matches!(entry.file_name().to_str(), Some(".git" | "target")) {
+        if matches!(
+            entry.file_name().to_str(),
+            Some(".git" | "target" | ".pharness-runtime" | "__pycache__")
+        ) || entry.path().extension().and_then(|value| value.to_str()) == Some("pyc")
+        {
             continue;
         }
         let dest = destination.join(entry.file_name());
