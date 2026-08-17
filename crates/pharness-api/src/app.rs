@@ -16969,7 +16969,7 @@ async fn matching_pipeline_execution_grant(
     intent: &StoredPipelineIntent,
     execution: &TektonExecutionSpec,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
-    let now = unique_suffix();
+    let now = current_millis();
     let work_plan = store
         .get_work_plan(&intent.work_plan_id)
         .await?
@@ -17404,7 +17404,7 @@ async fn matching_deployment_execution_grant(
     work_item: &StoredWorkItem,
     target: &DeploymentTarget,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
-    let now = unique_suffix();
+    let now = current_millis();
     let production_binding = if work_item.production_impacting {
         let pipeline_intent = store
             .get_pipeline_intent(&intent.pipeline_intent_id)
@@ -24458,7 +24458,7 @@ async fn matching_git_delivery_grant(
     branch: &str,
     plan_artifact_id: &str,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
-    let now = unique_suffix();
+    let now = current_millis();
     for grant in store.list_permission_grants(Some("active"), 200).await? {
         if !grant_is_unexpired(&grant, now) {
             continue;
@@ -24509,7 +24509,7 @@ async fn matching_gitops_delivery_grant(
     work_item: &StoredWorkItem,
     plan_artifact_id: &str,
 ) -> Result<Option<StoredPermissionGrant>, ApiError> {
-    let now = unique_suffix();
+    let now = current_millis();
     for grant in store.list_permission_grants(Some("active"), 200).await? {
         if !grant_is_unexpired(&grant, now) {
             continue;
@@ -35848,7 +35848,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 subject: None,
                 created_by: Some("lucas".to_string()),
                 reason: "authorize one reviewed Git delivery".to_string(),
-                expires_at: None,
+                expires_at: Some((super::current_millis() + 60_000).to_string()),
             }),
         )
         .await
