@@ -29,6 +29,12 @@ const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
 const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
 const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
 const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-preparation";
+// K3s's selector-backed NetworkPolicy rules converge asynchronously after a
+// Pod receives its IP. Short-lived Jobs otherwise race the policy controller
+// and fail their first API or proxy connection before the rule includes them.
+// Keep this delay outside the worker/model process so no model turn or active
+// execution budget is consumed while the dataplane catches up.
+const NETWORK_POLICY_STABILIZATION_SECONDS: u64 = 15;
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
 const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
 const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
@@ -502,6 +508,25 @@ pub struct KubernetesJobDispatcher {
     worker_env: Vec<(String, String)>,
 }
 
+fn network_policy_stabilization_container(image: &str) -> serde_json::Value {
+    serde_json::json!({
+        "name": "network-policy-stabilization",
+        "image": image,
+        "imagePullPolicy": "IfNotPresent",
+        "command": ["/bin/sh", "-ec"],
+        "args": [format!("sleep {NETWORK_POLICY_STABILIZATION_SECONDS}")],
+        "securityContext": {
+            "allowPrivilegeEscalation": false,
+            "readOnlyRootFilesystem": true,
+            "capabilities": { "drop": ["ALL"] },
+        },
+        "resources": {
+            "requests": { "cpu": "1m", "memory": "4Mi" },
+            "limits": { "cpu": "10m", "memory": "16Mi" },
+        },
+    })
+}
+
 impl KubernetesJobDispatcher {
     pub fn new(
         store: Arc<SqliteStore>,
@@ -581,7 +606,7 @@ impl KubernetesJobDispatcher {
             .to_string();
         create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
         let mut available = false;
-        for _ in 0..60 {
+        for _ in 0..(60 + NETWORK_POLICY_STABILIZATION_SECONDS) {
             let output = tokio::process::Command::new(&self.kubectl_bin)
                 .args([
                     "get",
@@ -667,7 +692,7 @@ impl KubernetesJobDispatcher {
             "metadata": { "name": job_name, "namespace": self.config.namespace },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": 120,
+                "activeDeadlineSeconds": 120 + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": 300,
                 "template": {
                     "metadata": { "labels": {
@@ -684,6 +709,7 @@ impl KubernetesJobDispatcher {
                             "runAsGroup": 65532,
                             "seccompProfile": { "type": "RuntimeDefault" },
                         },
+                        "initContainers": [network_policy_stabilization_container(&profile.image)],
                         "containers": [{
                             "name": "verify",
                             "image": profile.image,
@@ -715,7 +741,7 @@ impl KubernetesJobDispatcher {
         });
         create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
         let mut available = false;
-        for _ in 0..120 {
+        for _ in 0..(120 + NETWORK_POLICY_STABILIZATION_SECONDS) {
             let output = tokio::process::Command::new(&self.kubectl_bin)
                 .args([
                     "get",
@@ -848,10 +874,10 @@ impl KubernetesJobDispatcher {
             pod_labels["app"] = serde_json::json!("pharness-runner");
             pod_labels["agentic.lucas.engineering/phase"] = serde_json::json!(phase);
         }
-        let manifest = serde_json::json!({
+        let mut manifest = serde_json::json!({
             "apiVersion":"batch/v1","kind":"Job",
             "metadata":{"name":job_name,"namespace":self.config.namespace,"labels":{JOB_NAME_LABEL:CAPABILITY_PREFLIGHT_JOB_NAME_VALUE}},
-            "spec":{"backoffLimit":0,"activeDeadlineSeconds":75,"ttlSecondsAfterFinished":300,
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":75 + if proxy_phase.is_some() { NETWORK_POLICY_STABILIZATION_SECONDS } else { 0 },"ttlSecondsAfterFinished":300,
                 "template":{"metadata":{"labels":pod_labels},
                     "spec":{"serviceAccountName":service_account,"restartPolicy":"Never",
                         "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
@@ -861,6 +887,10 @@ impl KubernetesJobDispatcher {
                             "resources":{"requests":{"cpu":"25m","memory":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi"}}}],
                         "volumes":[{"name":"tmp","emptyDir":{}}]}}}
         });
+        if proxy_phase.is_some() {
+            manifest["spec"]["template"]["spec"]["initContainers"] =
+                serde_json::json!([network_policy_stabilization_container(&self.config.image)]);
+        }
         Ok((principal, permission, repository, manifest))
     }
 
@@ -1753,10 +1783,12 @@ impl KubernetesJobDispatcher {
             .active_execution_seconds
             .saturating_sub(run.budget_consumption.active_execution_seconds_used)
             .max(1);
-        let active_deadline_seconds = self
+        let active_execution_deadline_seconds = self
             .config
             .active_deadline_seconds
             .min(remaining_active_seconds);
+        let active_deadline_seconds =
+            active_execution_deadline_seconds.saturating_add(NETWORK_POLICY_STABILIZATION_SECONDS);
         let mut env = vec![
             serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
             serde_json::json!({ "name": "PHARNESS_RUN_ID", "value": run.id.as_str() }),
@@ -1838,6 +1870,7 @@ impl KubernetesJobDispatcher {
                             "fsGroup": 65532,
                             "seccompProfile": { "type": "RuntimeDefault" },
                         },
+                        "initContainers": [network_policy_stabilization_container(runner_image)],
                         "containers": [{
                             "name": "worker",
                             "image": runner_image,
@@ -1919,7 +1952,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": 1800,
+                "activeDeadlineSeconds": 1800 + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1938,6 +1971,7 @@ impl KubernetesJobDispatcher {
                             "fsGroup": 65532,
                             "seccompProfile": { "type": "RuntimeDefault" },
                         },
+                        "initContainers": [network_policy_stabilization_container(&profile.image)],
                         "containers": [{
                             "name": "prepare",
                             "image": profile.image,
@@ -2534,6 +2568,7 @@ mod tests {
         run_label_to_run_id, workspace_claim_name, ArgoSyncExecutionRequest,
         ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
         GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
+        NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -2649,6 +2684,16 @@ mod tests {
                     .as_str()
                     .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
         }));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/0/name"),
+            Some(&json!("network-policy-stabilization"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/0/args/0"),
+            Some(&json!(format!(
+                "sleep {NETWORK_POLICY_STABILIZATION_SECONDS}"
+            )))
+        );
     }
 
     #[tokio::test]
@@ -2687,6 +2732,49 @@ mod tests {
                 .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
         }));
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/0/image"),
+            Some(&json!(profile.image))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/0/args/0"),
+            Some(&json!(format!(
+                "sleep {NETWORK_POLICY_STABILIZATION_SECONDS}"
+            )))
+        );
+    }
+
+    #[tokio::test]
+    async fn proxy_capability_preflights_wait_for_network_policy_convergence() {
+        let dispatcher = test_dispatcher(None).await;
+        let (_, _, _, source_manifest) = dispatcher
+            .capability_preflight_manifest(
+                "source_workspace",
+                Some("https://github.com/example/test.git"),
+            )
+            .unwrap();
+        assert_eq!(
+            source_manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(75 + NETWORK_POLICY_STABILIZATION_SECONDS))
+        );
+        assert_eq!(
+            source_manifest.pointer("/spec/template/spec/initContainers/0/name"),
+            Some(&json!("network-policy-stabilization"))
+        );
+
+        let (_, _, _, writer_manifest) = dispatcher
+            .capability_preflight_manifest(
+                "source_writer",
+                Some("https://github.com/example/test.git"),
+            )
+            .unwrap();
+        assert_eq!(
+            writer_manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(75))
+        );
+        assert!(writer_manifest
+            .pointer("/spec/template/spec/initContainers")
+            .is_none());
     }
 
     #[tokio::test]
