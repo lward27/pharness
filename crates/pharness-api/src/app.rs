@@ -2813,7 +2813,10 @@ async fn work_item_flow(
                 plan.revision,
                 false,
             ));
-        } else if plan.status == "approved" && work_item.status == "awaiting_approval" {
+        } else if plan.status == "approved"
+            && work_item.status == "awaiting_approval"
+            && reconcile_preview.action == WorkItemReconcileAction::StartCodingAttempt.as_str()
+        {
             action_rail.push(WorkItemActionResponse {
                 id: "authorize_workspace_and_start".to_string(),
                 lifecycle_stage: "attempt".to_string(),
@@ -22019,6 +22022,21 @@ async fn transition_change_set(
     }))
 }
 
+fn coding_run_scope_matches_source(
+    run_scope: &RunScope,
+    work_item_id: &str,
+    workspace_id: &str,
+    source_repo: &str,
+    branch: &str,
+    production_impacting: bool,
+) -> bool {
+    run_scope.work_item_id.as_deref() == Some(work_item_id)
+        && run_scope.workspace_id.as_deref() == Some(workspace_id)
+        && run_scope.repo.as_deref() == Some(source_repo)
+        && run_scope.branch.as_deref() == Some(branch)
+        && run_scope.production_impacting == production_impacting
+}
+
 async fn prepare_change_set_git_delivery(
     State(state): State<AppState>,
     Path(change_set_id): Path<String>,
@@ -22098,12 +22116,14 @@ async fn prepare_change_set_git_delivery(
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
     let run_scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();
-    if run_scope.work_item_id.as_deref() != Some(work_item.id.as_str())
-        || run_scope.workspace_id.as_deref() != Some(workspace.id.as_str())
-        || run_scope.repo.as_deref() != Some(work_item.source_repo.as_str())
-        || run_scope.branch.as_deref() != Some(branch.as_str())
-        || run_scope.production_impacting
-    {
+    if !coding_run_scope_matches_source(
+        &run_scope,
+        &work_item.id,
+        &workspace.id,
+        &work_item.source_repo,
+        &branch,
+        work_item.production_impacting,
+    ) {
         return Err(ApiError::conflict(
             "ChangeSet source provenance does not match the coding run scope",
         ));
@@ -27046,25 +27066,26 @@ mod tests {
         attach_release_evidence, authorize_change_set_git_delivery,
         authorize_gitops_change_set_delivery, block_work_item_from_delivery_failure,
         build_pipeline_run_manifest, cancel_run, cancel_work_item, capability_verification_summary,
-        change_set_flow, change_set_readiness, complete_work_item_from_verified_release,
-        config_effective, create_change_set, create_change_set_trusted_envelope,
-        create_declared_deployment_handoff, create_deployment_contract,
-        create_deployment_intent_from_pipeline_intent, create_deployment_intent_trusted_envelope,
-        create_incident, create_observation, create_operator_run,
-        create_pipeline_intent_from_change_set, create_pipeline_intent_trusted_envelope,
-        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
-        create_release_from_deployment_intent, create_remediation_plan, create_run,
-        create_work_item, create_work_item_pipeline_intent, create_work_plan_from_remediation_plan,
-        create_work_plan_from_work_item, create_work_plan_trusted_envelope,
-        current_pipeline_build_output, decide_run_approval, deny_approval,
-        deployment_intent_reconcile_action, ensure_pipeline_evidence_ready_for_deployment,
-        environment_profile_readiness_blocker, execute_capability, execute_deployment_intent,
-        execute_work_item_action, execution_matches_pipeline_contract, get_approval,
-        get_approval_gate, get_artifact, get_deployment_contract, get_deployment_intent,
-        get_incident, get_observation, get_permission_grant, get_pipeline_intent,
-        get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
-        get_run_events, get_run_operator_summary, get_work_plan, git_delivery_reconcile_action,
-        gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
+        change_set_flow, change_set_readiness, coding_run_scope_matches_source,
+        complete_work_item_from_verified_release, config_effective, create_change_set,
+        create_change_set_trusted_envelope, create_declared_deployment_handoff,
+        create_deployment_contract, create_deployment_intent_from_pipeline_intent,
+        create_deployment_intent_trusted_envelope, create_incident, create_observation,
+        create_operator_run, create_pipeline_intent_from_change_set,
+        create_pipeline_intent_trusted_envelope, create_registry_evidence_from_registry_inspection,
+        create_registry_evidence_from_release, create_release_from_deployment_intent,
+        create_remediation_plan, create_run, create_work_item, create_work_item_pipeline_intent,
+        create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
+        create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
+        deny_approval, deployment_intent_reconcile_action,
+        ensure_pipeline_evidence_ready_for_deployment, environment_profile_readiness_blocker,
+        execute_capability, execute_deployment_intent, execute_work_item_action,
+        execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
+        get_deployment_contract, get_deployment_intent, get_incident, get_observation,
+        get_permission_grant, get_pipeline_intent, get_registry_evidence, get_release,
+        get_remediation_plan, get_run, get_run_diff, get_run_events, get_run_operator_summary,
+        get_work_plan, git_delivery_reconcile_action, gitops_change_set_reconcile_action,
+        gitops_delivery_flow, internal_argo_sync_outcome,
         internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
         last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
         list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
@@ -27165,6 +27186,38 @@ mod tests {
             protected_target: super::ProtectedTargetConfiguration::from_env(),
             environment_profiles: Arc::new(Vec::new()),
         }
+    }
+
+    #[test]
+    fn coding_run_scope_requires_matching_production_classification() {
+        let scope = RunScope {
+            run_id: Some("run_1".to_string()),
+            namespace: Some("apps-prod".to_string()),
+            repo: Some("https://github.com/lward27/yfinance_wrapper.git".to_string()),
+            branch: Some("pharness/witem_1/attempt-1".to_string()),
+            work_item_id: Some("witem_1".to_string()),
+            workspace_id: Some("ws_1".to_string()),
+            work_plan_id: Some("wplan_1".to_string()),
+            change_set_id: None,
+            production_impacting: true,
+        };
+
+        assert!(coding_run_scope_matches_source(
+            &scope,
+            "witem_1",
+            "ws_1",
+            "https://github.com/lward27/yfinance_wrapper.git",
+            "pharness/witem_1/attempt-1",
+            true,
+        ));
+        assert!(!coding_run_scope_matches_source(
+            &scope,
+            "witem_1",
+            "ws_1",
+            "https://github.com/lward27/yfinance_wrapper.git",
+            "pharness/witem_1/attempt-1",
+            false,
+        ));
     }
 
     #[test]
@@ -35701,6 +35754,19 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
+
+        let Json(captured_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        assert!(!captured_flow
+            .action_rail
+            .iter()
+            .any(|action| action.id == "authorize_workspace_and_start"));
+        assert!(captured_flow.action_rail.iter().any(|action| {
+            action.id == WorkItemReconcileAction::PrepareGitDelivery.as_str()
+                && action.status == "ready"
+        }));
 
         let missing_plan = authorize_change_set_git_delivery(
             State(state.clone()),
