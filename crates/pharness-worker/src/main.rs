@@ -18,6 +18,7 @@ use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
     execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, WorkspaceSourceSpec,
 };
+use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
 use sha2::Sha256;
 use std::sync::Arc;
@@ -634,6 +635,60 @@ fn signed_payload(token: &str, payload: &serde_json::Value) -> String {
     format!("hmac-sha256:{:x}", mac.finalize().into_bytes())
 }
 
+async fn fetch_internal_context_with_retry<T: DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+) -> anyhow::Result<T> {
+    fetch_internal_context(
+        client,
+        url,
+        token,
+        CONTEXT_FETCH_ATTEMPTS,
+        CONTEXT_FETCH_RETRY_DELAY,
+    )
+    .await
+}
+
+async fn fetch_internal_context<T: DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    attempts: u32,
+    retry_delay: Duration,
+) -> anyhow::Result<T> {
+    let attempts = attempts.max(1);
+    let mut last_error = None;
+    for attempt in 1..=attempts {
+        match client.get(url).bearer_auth(token).send().await {
+            Ok(response) if response.status().is_client_error() => {
+                anyhow::bail!(
+                    "internal context request was rejected with {}",
+                    response.status()
+                );
+            }
+            Ok(response) if !response.status().is_success() => {
+                last_error = Some(anyhow::anyhow!(
+                    "internal context request returned {}",
+                    response.status()
+                ));
+            }
+            Ok(response) => {
+                return response
+                    .json::<T>()
+                    .await
+                    .context("internal context response was invalid");
+            }
+            Err(error) => last_error = Some(error.into()),
+        }
+        if attempt < attempts {
+            tracing::warn!(attempt, "internal context fetch failed; retrying");
+            tokio::time::sleep(retry_delay).await;
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("internal context request failed")))
+}
+
 /// Submit and observe one prevalidated PipelineRun. This mode deliberately
 /// does not load model credentials or run an agent loop.
 async fn execute_tekton_trigger() -> anyhow::Result<()> {
@@ -744,17 +799,10 @@ async fn execute_argo_sync() -> anyhow::Result<()> {
     let context_url = format!(
         "{api_url}/api/internal/deployment-intents/{deployment_intent_id}/argo-sync-context?execution_id={execution_id}"
     );
-    let context = client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-        .context("failed to fetch Argo sync context")?
-        .error_for_status()
-        .context("Argo sync context request was rejected")?
-        .json::<ArgoSyncContext>()
-        .await
-        .context("Argo sync context was invalid")?;
+    let context =
+        fetch_internal_context_with_retry::<ArgoSyncContext>(&client, &context_url, &worker_token)
+            .await
+            .context("failed to fetch Argo sync context")?;
     if context.execution_id != execution_id {
         anyhow::bail!("Argo sync context execution id did not match");
     }
@@ -1113,20 +1161,13 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
         .build()
         .context("failed to build Git writer http client")?;
     let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-context?execution_id={execution_id}");
-    let context = match client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-    {
-        Ok(response) => response
-            .error_for_status()
-            .context("Git writer context request was rejected")?
-            .json::<GitDeliveryContext>()
-            .await
-            .context("Git writer context was invalid")?,
-        Err(error) => return Err(error).context("failed to fetch Git writer context"),
-    };
+    let context = fetch_internal_context_with_retry::<GitDeliveryContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch Git writer context")?;
 
     let result = execute_git_delivery_plan(&client, &context, &git_token, &execution_id).await;
     let outcome = match result {
@@ -1163,17 +1204,13 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
         .build()
         .context("failed to build Git observer http client")?;
     let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-observation-context?execution_id={execution_id}");
-    let context = client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-        .context("failed to fetch Git observer context")?
-        .error_for_status()
-        .context("Git observer context request was rejected")?
-        .json::<GitDeliveryObservationContext>()
-        .await
-        .context("Git observer context was invalid")?;
+    let context = fetch_internal_context_with_retry::<GitDeliveryObservationContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch Git observer context")?;
     let outcome = match observe_github_pull_request(&client, &context, &git_token).await {
         Ok(observation) => serde_json::json!({
             "execution_id": execution_id,
@@ -1216,17 +1253,13 @@ async fn execute_gitops_base_revision_resolution() -> anyhow::Result<()> {
     let context_url = format!(
         "{api_url}/api/internal/gitops-change-sets/{change_set_id}/base-revision-context?execution_id={execution_id}"
     );
-    let context = client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-        .context("failed to fetch GitOps base revision context")?
-        .error_for_status()
-        .context("GitOps base revision context request was rejected")?
-        .json::<GitOpsBaseRevisionContext>()
-        .await
-        .context("GitOps base revision context was invalid")?;
+    let context = fetch_internal_context_with_retry::<GitOpsBaseRevisionContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch GitOps base revision context")?;
     let outcome = match resolve_github_base_revision(&client, &context, &git_token).await {
         Ok(base_commit) => serde_json::json!({
             "execution_id": execution_id,
@@ -1264,17 +1297,13 @@ async fn execute_gitops_delivery() -> anyhow::Result<()> {
     let context_url = format!(
         "{api_url}/api/internal/gitops-change-sets/{change_set_id}/delivery-context?execution_id={execution_id}"
     );
-    let context = client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-        .context("failed to fetch GitOps writer context")?
-        .error_for_status()
-        .context("GitOps writer context request was rejected")?
-        .json::<GitOpsDeliveryContext>()
-        .await
-        .context("GitOps writer context was invalid")?;
+    let context = fetch_internal_context_with_retry::<GitOpsDeliveryContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch GitOps writer context")?;
     let outcome = match execute_gitops_delivery_plan(&client, &context, &git_token, &execution_id)
         .await
     {
@@ -1313,17 +1342,13 @@ async fn execute_gitops_delivery_observation() -> anyhow::Result<()> {
         .build()
         .context("failed to build GitOps observer http client")?;
     let context_url = format!("{api_url}/api/internal/gitops-change-sets/{change_set_id}/delivery-observation-context?execution_id={execution_id}");
-    let context = client
-        .get(&context_url)
-        .bearer_auth(&worker_token)
-        .send()
-        .await
-        .context("failed to fetch GitOps observer context")?
-        .error_for_status()
-        .context("GitOps observer context request was rejected")?
-        .json::<GitOpsDeliveryObservationContext>()
-        .await
-        .context("GitOps observer context was invalid")?;
+    let context = fetch_internal_context_with_retry::<GitOpsDeliveryObservationContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch GitOps observer context")?;
     let source_context = GitDeliveryObservationContext {
         execution_id: context.execution_id,
         repository: context.repository,
@@ -2733,13 +2758,59 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        parse_github_repository, pipeline_run_terminal, update_kustomization_image,
-        validate_git_delivery_context, validate_resumed_workspace_identity, workspace_git_args,
-        ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
+        fetch_internal_context, parse_github_repository, pipeline_run_terminal,
+        update_kustomization_image, validate_git_delivery_context,
+        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
+        GitDeliveryContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
     use std::path::Path;
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn retries_transient_internal_context_fetches_for_fresh_executor_pods() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for response in [
+                None,
+                Some("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()),
+                Some({
+                    let body = r#"{"execution_id":"gexec_retry"}"#;
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                }),
+            ] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = [0_u8; 1024];
+                let _ = stream.read(&mut request).await.unwrap();
+                if let Some(response) = response {
+                    stream.write_all(response.as_bytes()).await.unwrap();
+                }
+            }
+        });
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(1))
+            .build()
+            .unwrap();
+
+        let context: serde_json::Value = fetch_internal_context(
+            &client,
+            &format!("http://{address}/context"),
+            "worker-token",
+            3,
+            Duration::from_millis(1),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(context["execution_id"], "gexec_retry");
+        server.await.unwrap();
+    }
 
     #[test]
     fn connect_proxy_accepts_only_exact_allowlisted_https_hosts() {
