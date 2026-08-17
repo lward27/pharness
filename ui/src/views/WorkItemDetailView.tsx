@@ -3,6 +3,7 @@ import { RocketLaunch, X } from "@phosphor-icons/react";
 import { DeliveryChain } from "../components/DeliveryChain";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
+import { selectPrimaryWorkItemAction } from "../lib/workItemActions";
 import { advanceWorkItem, applyWorkItemReconcile, executeWorkItemAction, getOperatorName, loadRollbackIntent, loadWorkItem, loadWorkItemFlow, previewWorkItemReconcile } from "../pharnessApi";
 import { RunDetailView } from "./RunDetailView";
 
@@ -142,7 +143,7 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
 
   const workspace = state.flow?.workspaces?.slice(-1)[0] ?? preview?.workspace;
   const wait = state.flow?.controller_waits?.find((entry: any) => entry.status === "active") ?? preview?.controller_wait;
-  const railAction = state.flow?.action_rail?.find((entry: any) => entry.status === "ready") ?? state.flow?.action_rail?.[0];
+  const railAction = selectPrimaryWorkItemAction(state.flow?.action_rail, preview);
   const canApply = railAction ? railAction.status === "ready" : (preview?.can_apply ?? false);
   const action = railAction?.id ?? preview?.action ?? "reconcile";
   const blockers = preview?.blockers ?? [];
