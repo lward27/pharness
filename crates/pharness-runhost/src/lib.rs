@@ -602,10 +602,9 @@ async fn collect_workspace_git_evidence(
 }
 
 async fn git_output(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let command_args = git_evidence_args(cwd, args);
     let output = Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args(args)
+        .args(&command_args)
         .output()
         .await
         .map_err(|error| anyhow::anyhow!("could not execute Git workspace command: {error}"))?;
@@ -613,6 +612,17 @@ async fn git_output(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
         anyhow::bail!("Git workspace evidence command failed");
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_evidence_args(cwd: &Path, args: &[&str]) -> Vec<String> {
+    let mut command_args = vec![
+        "-c".to_string(),
+        format!("safe.directory={}", cwd.display()),
+        "-C".to_string(),
+        cwd.display().to_string(),
+    ];
+    command_args.extend(args.iter().map(|arg| (*arg).to_string()));
+    command_args
 }
 
 fn nonempty_lines(value: &str) -> Vec<String> {
@@ -882,7 +892,10 @@ impl EventSink for ChannelEventSink {
 
 #[cfg(test)]
 mod workspace_source_tests {
-    use super::{collect_workspace_git_evidence, repository_instructions, WorkspaceSourceSpec};
+    use super::{
+        collect_workspace_git_evidence, git_evidence_args, repository_instructions,
+        WorkspaceSourceSpec,
+    };
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1033,6 +1046,24 @@ mod workspace_source_tests {
         assert!(evidence.diff.contains("-before"));
         assert!(evidence.diff.contains("+after"));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn evidence_git_commands_trust_only_the_issued_workspace() {
+        assert_eq!(
+            git_evidence_args(
+                std::path::Path::new("/workspace"),
+                &["diff", "--no-ext-diff"]
+            ),
+            vec![
+                "-c",
+                "safe.directory=/workspace",
+                "-C",
+                "/workspace",
+                "diff",
+                "--no-ext-diff",
+            ]
+        );
     }
 
     fn git(cwd: &std::path::Path, args: &[&str]) -> String {

@@ -85,11 +85,11 @@ impl LocalShellTools {
     }
 
     async fn git_status(&self) -> Result<ToolResult, ToolError> {
-        let args = vec![
+        let args = self.git_args(&[
             "status".to_string(),
             "--short".to_string(),
             "--branch".to_string(),
-        ];
+        ]);
         let output = self
             .run_program("git", &args, &self.workspace_root, Some(30_000))
             .await?;
@@ -117,11 +117,12 @@ impl LocalShellTools {
             }
         }
 
-        let mut args = vec!["diff".to_string(), "--no-ext-diff".to_string()];
+        let mut git_args = vec!["diff".to_string(), "--no-ext-diff".to_string()];
         if let Some(pathspec) = pathspec {
-            args.push("--".to_string());
-            args.push(pathspec.to_string());
+            git_args.push("--".to_string());
+            git_args.push(pathspec.to_string());
         }
+        let args = self.git_args(&git_args);
 
         let output = self
             .run_program("git", &args, &self.workspace_root, Some(30_000))
@@ -235,6 +236,15 @@ impl LocalShellTools {
             .to_string_lossy()
             .trim_start_matches('/')
             .to_string()
+    }
+
+    fn git_args(&self, args: &[String]) -> Vec<String> {
+        let mut command_args = vec![
+            "-c".to_string(),
+            format!("safe.directory={}", self.canonical_root.display()),
+        ];
+        command_args.extend_from_slice(args);
+        command_args
     }
 }
 
@@ -504,6 +514,25 @@ mod tests {
 
         assert_eq!(result.status, ToolResultStatus::Error);
         assert!(result.content["stderr"].as_str().unwrap().contains("git"));
+    }
+
+    #[test]
+    fn typed_git_commands_trust_only_the_canonical_workspace() {
+        let temp = unique_temp_dir("git-safe-directory");
+        fs::create_dir_all(&temp).unwrap();
+        let tools = LocalShellTools::new(&temp).unwrap();
+
+        assert_eq!(
+            tools.git_args(&["status".to_string(), "--short".to_string()]),
+            vec![
+                "-c".to_string(),
+                format!("safe.directory={}", tools.canonical_root.display()),
+                "status".to_string(),
+                "--short".to_string(),
+            ]
+        );
+
+        fs::remove_dir_all(temp).unwrap();
     }
 
     #[test]
