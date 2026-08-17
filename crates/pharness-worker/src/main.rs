@@ -1911,13 +1911,16 @@ fn validate_git_delivery_context(context: &GitDeliveryContext) -> anyhow::Result
         &context.base_commit,
         &context.head_branch,
         &context.commit_subject,
-        &context.commit_body,
         &context.pull_request_title,
-        &context.pull_request_body,
         &context.author_name,
         &context.author_email,
     ] {
         if value.trim().is_empty() || value.contains(['\0', '\r', '\n']) {
+            anyhow::bail!("invalid_git_delivery_context");
+        }
+    }
+    for value in [&context.commit_body, &context.pull_request_body] {
+        if value.trim().is_empty() || value.contains(['\0', '\r']) {
             anyhow::bail!("invalid_git_delivery_context");
         }
     }
@@ -3032,14 +3035,18 @@ mod tests {
             head_branch: "pharness/work-item-1".to_string(),
             diff: "diff --git a/a b/a\n".to_string(),
             commit_subject: "Change".to_string(),
-            commit_body: "Body".to_string(),
+            commit_body: "Body\n\nPharness ChangeSet: cset_1".to_string(),
             pull_request_title: "Change".to_string(),
-            pull_request_body: "Body".to_string(),
+            pull_request_body: "Body\n\nWorkItem: witem_1".to_string(),
             github_api_url: "https://api.github.com".to_string(),
             author_name: "Pharness".to_string(),
             author_email: "pharness@example.test".to_string(),
         };
         assert!(validate_git_delivery_context(&context).is_ok());
+
+        let mut invalid = context;
+        invalid.commit_subject = "Change\nInjected trailer".to_string();
+        assert!(validate_git_delivery_context(&invalid).is_err());
     }
 
     #[test]
