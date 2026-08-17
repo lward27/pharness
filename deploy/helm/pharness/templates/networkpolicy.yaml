@@ -139,7 +139,13 @@ spec:
   policyTypes: ["Ingress", "Egress"]
   ingress:
     - from:
-        - podSelector:
+        # Keep the runner source namespace explicit. The K3s network-policy
+        # controller used by the protected cluster did not admit matching
+        # same-namespace Pods when this relied on the implicit namespace.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
             matchLabels:
               app: pharness-runner
       ports:
