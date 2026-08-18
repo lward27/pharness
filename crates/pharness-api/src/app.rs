@@ -3079,6 +3079,20 @@ async fn work_item_flow(
                 0,
             ));
         }
+        if let Some(change_set) = flow
+            .gitops_change_set
+            .as_ref()
+            .filter(|item| item.status == "proposed")
+        {
+            action_rail.extend(resource_review_actions(
+                "gitops_change_set",
+                "gitops",
+                &change_set.id,
+                &change_set.status,
+                change_set.updated_at.as_deref(),
+                change_set.revision,
+            ));
+        }
         if let Some(release) = flow
             .release
             .as_ref()
@@ -5481,6 +5495,19 @@ async fn execute_work_item_action(
                     State(state.clone()),
                     Path(action.resource.clone()),
                     Json(TransitionDeploymentIntentRequest {
+                        target_status: transition_target.to_string(),
+                        actor: Some(actor.clone()),
+                        reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "approve_gitops_change_set" | "reject_gitops_change_set" => serde_json::to_value(
+                transition_gitops_change_set(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(TransitionGitOpsChangeSetRequest {
                         target_status: transition_target.to_string(),
                         actor: Some(actor.clone()),
                         reason: Some(request.reason.clone()),
@@ -38122,7 +38149,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
-        state
+        let gitops_change_set = state
             .store
             .create_gitops_change_set(CreateGitOpsChangeSet {
                 id: gitops_change_set_id.to_string(),
@@ -38134,7 +38161,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 gitops_update_plan_artifact_id: "art_gitops_controller_update".to_string(),
                 session_id: session_id.clone(),
                 run_id: run_id.clone(),
-                status: "approved".to_string(),
+                status: "proposed".to_string(),
                 title: "Disposable finance GitOps ChangeSet".to_string(),
                 summary: "Digest-pin the approved dev image.".to_string(),
                 risk_level: "high".to_string(),
@@ -38149,6 +38176,33 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
+        let Json(review_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let approve_gitops_change_set = review_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "approve_gitops_change_set")
+            .expect("proposed GitOps ChangeSet must be reviewable from the action rail");
+        assert_eq!(approve_gitops_change_set.resource, gitops_change_set.id);
+        assert_eq!(approve_gitops_change_set.status, "ready");
+        let Json(reviewed) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((
+                work_item_id.to_string(),
+                approve_gitops_change_set.id.clone(),
+            )),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "approve the exact digest-pinned GitOps update".to_string(),
+                state_hash: approve_gitops_change_set.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reviewed["gitops_change_set"]["status"], json!("approved"));
         state
             .store
             .create_artifact(CreateArtifact {
