@@ -7362,12 +7362,32 @@ async fn reconcile_work_item(
         }
         None => None,
     };
-    let deployment_execution_preflight = match deployment_intent
-        .as_ref()
-        .filter(|intent| intent.status == "approved")
-    {
-        Some(intent) => Some(deployment_intent_execution_preflight(&state, &intent.id).await?),
+    let gitops_change_set = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_gitops_change_set_by_pipeline_intent(&intent.id)
+                .await?
+        }
         None => None,
+    };
+    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
+    let gitops_merge_observed = gitops_delivery
+        .as_ref()
+        .and_then(|delivery| delivery.latest_merge.as_ref())
+        .is_some();
+    let deployment_execution_preflight = match deployment_intent.as_ref() {
+        Some(intent)
+            if deployment_intent_requires_execution_preflight(
+                work_item.gitops_repo.as_deref(),
+                work_item.gitops_ref.as_deref(),
+                &intent.status,
+                gitops_merge_observed,
+            )? =>
+        {
+            Some(deployment_intent_execution_preflight(&state, &intent.id).await?)
+        }
+        _ => None,
     };
     let deployment_dispatch_ready = deployment_execution_preflight.as_ref().map(|preflight| {
         state.worker.argo_executor_available()
@@ -7381,16 +7401,6 @@ async fn reconcile_work_item(
     });
     let deployment_delivery =
         deployment_intent_delivery_flow(&state.store, deployment_intent.as_ref()).await?;
-    let gitops_change_set = match pipeline_intent.as_ref() {
-        Some(intent) => {
-            state
-                .store
-                .get_gitops_change_set_by_pipeline_intent(&intent.id)
-                .await?
-        }
-        None => None,
-    };
-    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
     let gitops_base_revision = match gitops_change_set.as_ref() {
         Some(change_set) => {
             Some(gitops_base_revision_reconcile_state(&state.store, change_set).await?)
@@ -9442,6 +9452,27 @@ fn pipeline_intent_requires_execution_preflight(intent: &StoredPipelineIntent) -
     intent.status == "approved" && pipeline_intent_execution_state(intent).is_none()
 }
 
+/// Deployment execution preflight validates immutable GitOps merge provenance.
+/// Keep it out of earlier review stages so an approved DeploymentIntent can
+/// still expose the proposed GitOps ChangeSet and its delivery actions.
+fn deployment_intent_requires_execution_preflight(
+    gitops_repo: Option<&str>,
+    gitops_ref: Option<&str>,
+    intent_status: &str,
+    gitops_merge_observed: bool,
+) -> Result<bool, ApiError> {
+    if intent_status != "approved" {
+        return Ok(false);
+    }
+    match (gitops_repo, gitops_ref) {
+        (None, None) => Ok(true),
+        (Some(_), Some(_)) => Ok(gitops_merge_observed),
+        _ => Err(ApiError::conflict(
+            "WorkItem must declare both gitops_repo and gitops_ref before Argo execution",
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GitOpsBaseRevisionReconcileState {
     Missing,
@@ -9925,12 +9956,32 @@ async fn reconcile_work_item_response(
         }
         None => None,
     };
-    let deployment_execution_preflight = match deployment_intent
-        .as_ref()
-        .filter(|intent| intent.status == "approved")
-    {
-        Some(intent) => Some(deployment_intent_execution_preflight(state, &intent.id).await?),
+    let gitops_change_set = match pipeline_intent.as_ref() {
+        Some(intent) => {
+            state
+                .store
+                .get_gitops_change_set_by_pipeline_intent(&intent.id)
+                .await?
+        }
         None => None,
+    };
+    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
+    let gitops_merge_observed = gitops_delivery
+        .as_ref()
+        .and_then(|delivery| delivery.latest_merge.as_ref())
+        .is_some();
+    let deployment_execution_preflight = match deployment_intent.as_ref() {
+        Some(intent)
+            if deployment_intent_requires_execution_preflight(
+                work_item.gitops_repo.as_deref(),
+                work_item.gitops_ref.as_deref(),
+                &intent.status,
+                gitops_merge_observed,
+            )? =>
+        {
+            Some(deployment_intent_execution_preflight(state, &intent.id).await?)
+        }
+        _ => None,
     };
     let deployment_dispatch_ready = deployment_execution_preflight.as_ref().map(|preflight| {
         state.worker.argo_executor_available()
@@ -9944,16 +9995,6 @@ async fn reconcile_work_item_response(
     });
     let deployment_delivery =
         deployment_intent_delivery_flow(&state.store, deployment_intent.as_ref()).await?;
-    let gitops_change_set = match pipeline_intent.as_ref() {
-        Some(intent) => {
-            state
-                .store
-                .get_gitops_change_set_by_pipeline_intent(&intent.id)
-                .await?
-        }
-        None => None,
-    };
-    let gitops_delivery = gitops_delivery_flow(&state.store, gitops_change_set.as_ref()).await?;
     let gitops_delivery_preflight =
         gitops_delivery_preflight_response(&state.store, gitops_delivery.as_ref()).await?;
 
@@ -39027,6 +39068,42 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             pipeline_intent_reconcile_action(Some(&stale), None, None),
             WorkItemReconcileAction::PipelineIntentBlocked
         );
+    }
+
+    #[test]
+    fn deployment_preflight_waits_for_gitops_merge_provenance() {
+        assert!(!super::deployment_intent_requires_execution_preflight(
+            Some("https://github.com/team/gitops.git"),
+            Some("main"),
+            "proposed",
+            false,
+        )
+        .unwrap());
+        assert!(!super::deployment_intent_requires_execution_preflight(
+            Some("https://github.com/team/gitops.git"),
+            Some("main"),
+            "approved",
+            false,
+        )
+        .unwrap());
+        assert!(super::deployment_intent_requires_execution_preflight(
+            Some("https://github.com/team/gitops.git"),
+            Some("main"),
+            "approved",
+            true,
+        )
+        .unwrap());
+        assert!(super::deployment_intent_requires_execution_preflight(
+            None, None, "approved", false
+        )
+        .unwrap());
+        assert!(super::deployment_intent_requires_execution_preflight(
+            Some("https://github.com/team/gitops.git"),
+            None,
+            "approved",
+            false,
+        )
+        .is_err());
     }
 
     #[test]
