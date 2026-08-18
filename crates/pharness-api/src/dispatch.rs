@@ -1353,7 +1353,7 @@ impl KubernetesJobDispatcher {
                                 { "name": "PHARNESS_GITOPS_CHANGE_SET_ID", "value": request.gitops_change_set_id },
                                 { "name": "PHARNESS_GITOPS_DELIVERY_EXECUTION_ID", "value": request.execution_id },
                                 { "name": "HOME", "value": "/work" },
-                                { "name": "TMPDIR", "value": "/work/tmp" },
+                                { "name": "TMPDIR", "value": "/work" },
                                 { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
                                     "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
                                 }},
@@ -1432,7 +1432,7 @@ impl KubernetesJobDispatcher {
                                 { "name": "PHARNESS_CHANGE_SET_ID", "value": request.change_set_id },
                                 { "name": "PHARNESS_GIT_DELIVERY_EXECUTION_ID", "value": request.execution_id },
                                 { "name": "HOME", "value": "/work" },
-                                { "name": "TMPDIR", "value": "/work/tmp" },
+                                { "name": "TMPDIR", "value": "/work" },
                                 { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
                                     "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
                                 }},
@@ -2807,6 +2807,9 @@ mod tests {
         assert!(env
             .iter()
             .any(|entry| entry["name"] == "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "TMPDIR" && entry["value"] == "/work"));
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
         assert_eq!(
             manifest.pointer("/spec/template/spec/serviceAccountName"),
@@ -2875,6 +2878,9 @@ mod tests {
         assert!(env
             .iter()
             .any(|entry| entry["name"] == "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "TMPDIR" && entry["value"] == "/work"));
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
         assert!(env
             .iter()
