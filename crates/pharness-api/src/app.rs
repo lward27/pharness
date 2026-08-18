@@ -7907,6 +7907,89 @@ async fn reconcile_work_item(
             .map(Json)
         })
         .await,
+        WorkItemReconcileAction::AwaitingGitOpsBaseRevision => Box::pin(async {
+            let gitops_change_set = gitops_change_set
+                .as_ref()
+                .expect("GitOps base revision resolution requires a GitOps ChangeSet");
+            let Json(resolution) = resolve_gitops_base_revision(
+                State(state.clone()),
+                identity.clone(),
+                Path(gitops_change_set.id.clone()),
+                Json(ResolveGitOpsBaseRevisionRequest {
+                    actor: actor.clone(),
+                    reason: reason.clone().unwrap_or_else(|| {
+                        "controller applied the read-only GitOps base-revision boundary"
+                            .to_string()
+                    }),
+                }),
+            )
+            .await?;
+            append_work_item_audit_event(
+                &state.store,
+                &work_item,
+                "work_item.gitops_base_revision_dispatched",
+                actor.clone(),
+                json!({
+                    "gitops_change_set_id": gitops_change_set.id,
+                    "execution_artifact_id": resolution.execution.id,
+                    "job_name": resolution.job_name,
+                    "status": resolution.status,
+                    "created": resolution.created,
+                    "automatic_execution": false,
+                }),
+            )
+            .await?;
+
+            if resolution.status == "dispatch_failed" {
+                supersede_active_controller_wait_if_present(
+                    &state,
+                    &work_item_id,
+                    "read-only GitOps base-revision observer dispatch failed".to_string(),
+                    actor,
+                )
+                .await?;
+                return reconcile_work_item_response(
+                    &state,
+                    &work_item_id,
+                    action,
+                    true,
+                    recorded_preflight,
+                    "recorded read-only GitOps base-revision observer dispatch failure; review executor configuration before retrying"
+                        .to_string(),
+                )
+                .await
+                .map(Json);
+            }
+
+            let (controller_wait, created) = schedule_controller_wait(
+                &state,
+                &work_item,
+                WorkItemReconcileAction::WaitForGitOpsBaseRevision,
+                actor,
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                if created {
+                    format!(
+                        "dispatched the configured read-only GitOps base-revision observer and scheduled bounded {} wait {} for WorkItem {}",
+                        controller_wait.wait_kind, controller_wait.id, work_item_id
+                    )
+                } else {
+                    format!(
+                        "reused the read-only GitOps base-revision observer dispatch and retained active {} wait {} for WorkItem {}",
+                        controller_wait.wait_kind, controller_wait.id, work_item_id
+                    )
+                },
+            )
+            .await
+            .map(Json)
+        })
+        .await,
         WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation => Box::pin(async {
             let gitops_change_set = gitops_change_set
                 .as_ref()
@@ -38203,6 +38286,57 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         .await
         .unwrap();
         assert_eq!(reviewed["gitops_change_set"]["status"], json!("approved"));
+        let Json(base_revision_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let base_revision_action = base_revision_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "awaiting_gitops_base_revision")
+            .expect("approved GitOps ChangeSet must expose base-revision observation");
+        assert_eq!(base_revision_action.status, "ready");
+        let Json(base_revision_dispatch) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item_id.to_string(), base_revision_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "observe the exact disposable GitOps base revision".to_string(),
+                state_hash: base_revision_action.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(base_revision_dispatch["applied"], json!(true));
+        assert_eq!(
+            base_revision_dispatch["action"],
+            json!("awaiting_gitops_base_revision")
+        );
+        assert_eq!(
+            base_revision_dispatch["controller_wait"]["wait_kind"],
+            json!("gitops_base_revision")
+        );
+        let artifacts = state.store.list_artifacts(&run_id).await.unwrap();
+        assert_eq!(
+            artifacts
+                .iter()
+                .filter(|artifact| artifact.kind == "gitops_base_revision_execution")
+                .count(),
+            1
+        );
+        let audit = state
+            .store
+            .list_audit_events(Some("work_item"), Some(work_item_id), None, 20)
+            .await
+            .unwrap();
+        assert_eq!(
+            audit
+                .iter()
+                .filter(|event| event.kind == "work_item.gitops_base_revision_dispatched")
+                .count(),
+            1
+        );
         state
             .store
             .create_artifact(CreateArtifact {
