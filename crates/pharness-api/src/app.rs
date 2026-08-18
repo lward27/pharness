@@ -2871,6 +2871,116 @@ async fn work_item_flow(
             ));
         }
         if let Some(intent) = flow
+            .pipeline_intent
+            .as_ref()
+            .filter(|item| item.status == "failed")
+        {
+            let execution_attempt = pipeline_execution_attempt(&intent.intent_json)?;
+            let failed_execution_id = intent
+                .intent_json
+                .pointer("/execution_state/execution_id")
+                .and_then(Value::as_str);
+            let failed_pipeline_run = intent
+                .intent_json
+                .pointer("/execution_state/pipeline_run_name")
+                .and_then(Value::as_str);
+            let failure_artifact_id = intent
+                .intent_json
+                .pointer("/execution_evidence/artifact_id")
+                .and_then(Value::as_str);
+            let source_merge_sha = intent
+                .intent_json
+                .pointer("/source_provenance/merge_commit_sha")
+                .and_then(Value::as_str);
+            let mut blockers = Vec::new();
+            if execution_attempt >= MAX_PIPELINE_EXECUTION_ATTEMPTS {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_retry_budget_exhausted".to_string(),
+                    summary: format!(
+                        "PipelineIntent has used all {MAX_PIPELINE_EXECUTION_ATTEMPTS} supervised execution attempts."
+                    ),
+                });
+            }
+            if intent
+                .intent_json
+                .pointer("/execution_evidence/status")
+                .and_then(Value::as_str)
+                != Some("failed")
+                || failed_execution_id.is_none()
+                || failed_pipeline_run.is_none()
+                || failure_artifact_id.is_none()
+            {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_failure_evidence_missing".to_string(),
+                    summary: "A supervised retry requires durable failed execution evidence and the exact failed PipelineRun identity."
+                        .to_string(),
+                });
+            }
+            if source_merge_sha.map_or(true, |sha| !is_git_sha(sha)) {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_retry_source_provenance_missing".to_string(),
+                    summary: "A supervised retry requires the original immutable source merge SHA."
+                        .to_string(),
+                });
+            }
+            if flow
+                .change_set
+                .as_ref()
+                .map_or(true, |change_set| change_set.status != "approved")
+            {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_retry_change_set_not_approved".to_string(),
+                    summary: "The source ChangeSet must remain approved before a PipelineIntent can be retried."
+                        .to_string(),
+                });
+            }
+            if flow.deployment_intent.is_some() || flow.gitops_change_set.is_some() {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_retry_downstream_delivery_started".to_string(),
+                    summary: "Pipeline retry is disabled after DeploymentIntent or GitOps delivery records exist."
+                        .to_string(),
+                });
+            }
+            let mut approval_requirements = vec![
+                "pipeline_retry".to_string(),
+                "pipeline_mutation".to_string(),
+            ];
+            if work_item.production_impacting {
+                approval_requirements.push("production_impact".to_string());
+            }
+            action_rail.push(WorkItemActionResponse {
+                id: "retry_pipeline_intent".to_string(),
+                lifecycle_stage: "pipeline".to_string(),
+                resource: intent.id.clone(),
+                status: if blockers.is_empty() { "ready" } else { "blocked" }.to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers,
+                approval_required: true,
+                approval_requirements,
+                external_effect_summary: format!(
+                    "After review, repropose PipelineIntent {} for supervised execution attempt {} of {}/{} at source {}. Failed PipelineRun {} and artifact {} remain durable. This action does not start Tekton; PipelineIntent approval, a fresh grant, and explicit execution remain separate boundaries.",
+                    intent.id,
+                    execution_attempt + 1,
+                    intent.intent_json.pointer("/execution/namespace").and_then(Value::as_str).unwrap_or("unknown"),
+                    intent.intent_json.pointer("/execution/pipeline_ref").and_then(Value::as_str).unwrap_or("unknown"),
+                    source_merge_sha.unwrap_or("unknown"),
+                    failed_pipeline_run.unwrap_or("unknown"),
+                    failure_artifact_id.unwrap_or("unknown"),
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "retry_pipeline_intent",
+                    "pipeline_intent": intent.id,
+                    "status": intent.status,
+                    "updated_at": intent.updated_at,
+                    "execution_attempt": execution_attempt,
+                    "failed_execution_id": failed_execution_id,
+                    "failed_pipeline_run": failed_pipeline_run,
+                    "failure_artifact_id": failure_artifact_id,
+                    "source_merge_sha": source_merge_sha,
+                })),
+            });
+        }
+        if let Some(intent) = flow
             .deployment_intent
             .as_ref()
             .filter(|item| item.status == "proposed")
@@ -5254,6 +5364,15 @@ async fn execute_work_item_action(
                 )
                 .await?
                 .0,
+            ),
+            "retry_pipeline_intent" => serde_json::to_value(
+                retry_failed_pipeline_intent(
+                    &state,
+                    &action.resource,
+                    actor.clone(),
+                    request.reason.clone(),
+                )
+                .await?,
             ),
             "approve_deployment_intent" | "reject_deployment_intent" => serde_json::to_value(
                 transition_deployment_intent(
@@ -9181,6 +9300,24 @@ fn pipeline_intent_execution_state(intent: &StoredPipelineIntent) -> Option<&str
         .intent_json
         .pointer("/execution_state/state")
         .and_then(Value::as_str)
+}
+
+fn pipeline_execution_attempt(intent_json: &Value) -> Result<u64, ApiError> {
+    let attempt = intent_json
+        .get("execution_attempt")
+        .map(|value| {
+            value.as_u64().ok_or_else(|| {
+                ApiError::conflict("PipelineIntent execution_attempt must be a positive integer")
+            })
+        })
+        .transpose()?
+        .unwrap_or(1);
+    if !(1..=MAX_PIPELINE_EXECUTION_ATTEMPTS).contains(&attempt) {
+        return Err(ApiError::conflict(format!(
+            "PipelineIntent execution_attempt must be between 1 and {MAX_PIPELINE_EXECUTION_ATTEMPTS}"
+        )));
+    }
+    Ok(attempt)
 }
 
 fn pipeline_build_output_is_verified(intent: &StoredPipelineIntent) -> bool {
@@ -15371,6 +15508,201 @@ async fn transition_pipeline_intent(
     }))
 }
 
+const MAX_PIPELINE_EXECUTION_ATTEMPTS: u64 = 2;
+
+async fn retry_failed_pipeline_intent(
+    state: &AppState,
+    pipeline_intent_id: &str,
+    actor: String,
+    reason: String,
+) -> Result<PipelineIntentResponse, ApiError> {
+    let current = state
+        .store
+        .get_pipeline_intent(pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", pipeline_intent_id))?;
+    if current.status != "failed"
+        || !matches!(
+            pipeline_intent_execution_state(&current),
+            Some("pipeline_run_failed" | "failed" | "dispatch_failed")
+        )
+        || current
+            .intent_json
+            .pointer("/execution_evidence/status")
+            .and_then(Value::as_str)
+            != Some("failed")
+    {
+        return Err(ApiError::conflict(
+            "PipelineIntent retry requires durable terminal failure evidence",
+        ));
+    }
+    let execution_attempt = pipeline_execution_attempt(&current.intent_json)?;
+    if execution_attempt >= MAX_PIPELINE_EXECUTION_ATTEMPTS {
+        return Err(ApiError::conflict(format!(
+            "PipelineIntent has used all {MAX_PIPELINE_EXECUTION_ATTEMPTS} supervised execution attempts"
+        )));
+    }
+    let change_set = state
+        .store
+        .get_change_set(&current.change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("change_set", &current.change_set_id))?;
+    let work_plan = state
+        .store
+        .get_work_plan(&current.work_plan_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_plan", &current.work_plan_id))?;
+    if change_set.status != "approved" || work_plan.status != "approved" {
+        return Err(ApiError::conflict(
+            "PipelineIntent retry requires the original approved WorkPlan and ChangeSet",
+        ));
+    }
+    if state
+        .store
+        .get_deployment_intent_by_pipeline_intent(&current.id)
+        .await?
+        .is_some()
+        || state
+            .store
+            .get_gitops_change_set_by_pipeline_intent(&current.id)
+            .await?
+            .is_some()
+    {
+        return Err(ApiError::conflict(
+            "PipelineIntent retry is disabled after downstream delivery has started",
+        ));
+    }
+    if change_set.work_item_id.is_some()
+        && immutable_pipeline_source_revision(&current, true)?.is_none()
+    {
+        return Err(ApiError::conflict(
+            "WorkItem PipelineIntent retry requires immutable source merge provenance",
+        ));
+    }
+
+    let previous_execution_id = current
+        .intent_json
+        .pointer("/execution_state/execution_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("failed execution ID is unavailable"))?
+        .to_string();
+    let previous_pipeline_run_name = current
+        .intent_json
+        .pointer("/execution_state/pipeline_run_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("failed PipelineRun name is unavailable"))?
+        .to_string();
+    let failure_artifact_id = current
+        .intent_json
+        .pointer("/execution_evidence/artifact_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("failed execution artifact is unavailable"))?
+        .to_string();
+    let previous_permission_grant_id = current
+        .intent_json
+        .pointer("/execution_state/permission_grant_id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let next_attempt = execution_attempt + 1;
+    let mut intent_json = current.intent_json.clone();
+    let history_entry = json!({
+        "attempt": execution_attempt,
+        "status": current.status,
+        "execution_state": intent_json.get("execution_state"),
+        "execution_evidence": intent_json.get("execution_evidence"),
+        "pipeline_run_analysis": intent_json.get("evidence"),
+        "build_output": intent_json.get("build_output"),
+    });
+    let object = intent_json
+        .as_object_mut()
+        .ok_or_else(|| ApiError::conflict("PipelineIntent body must be an object"))?;
+    let history = object
+        .entry("execution_history")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+        .ok_or_else(|| ApiError::conflict("PipelineIntent execution_history must be an array"))?;
+    history.push(history_entry);
+    object.remove("execution_state");
+    object.remove("execution_evidence");
+    object.remove("evidence");
+    object.remove("build_output");
+    object.insert("execution_attempt".to_string(), json!(next_attempt));
+    object.insert(
+        "retry_context".to_string(),
+        json!({
+            "previous_attempt": execution_attempt,
+            "previous_execution_id": previous_execution_id,
+            "previous_pipeline_run_name": previous_pipeline_run_name,
+            "failure_artifact_id": failure_artifact_id,
+            "reproposed_at": current_millis(),
+            "reproposed_by": actor,
+            "reason": reason,
+        }),
+    );
+
+    if let Some(grant_id) = previous_permission_grant_id.as_deref() {
+        if let Some(grant) = state.store.get_permission_grant(grant_id).await? {
+            if grant.status == "active" {
+                let revoked = state
+                    .store
+                    .revoke_permission_grant(
+                        grant_id,
+                        Some(actor.clone()),
+                        Some(format!(
+                            "superseded by supervised PipelineIntent execution attempt {next_attempt}"
+                        )),
+                    )
+                    .await?;
+                append_permission_grant_audit_event(
+                    &state.store,
+                    "permission_grant.revoked",
+                    &revoked,
+                    Some(actor.clone()),
+                )
+                .await?;
+            }
+        }
+    }
+
+    let pipeline_intent = state
+        .store
+        .revise_pipeline_intent_draft(
+            &current.id,
+            UpdatePipelineIntentDraft {
+                title: current.title.clone(),
+                summary: current.summary.clone(),
+                risk_level: current.risk_level.clone(),
+                intent_kind: current.intent_kind.clone(),
+                resource_namespace: current.resource_namespace.clone(),
+                resource_kind: current.resource_kind.clone(),
+                resource_name: current.resource_name.clone(),
+                intent_json,
+                actor: Some(actor.clone()),
+                reason: Some(reason.clone()),
+            },
+        )
+        .await?;
+    append_pipeline_intent_audit_event(
+        &state.store,
+        &pipeline_intent,
+        "pipeline_intent.retry_proposed",
+        Some(actor),
+        Some(reason),
+        json!({
+            "previous_attempt": execution_attempt,
+            "execution_attempt": next_attempt,
+            "previous_execution_id": previous_execution_id,
+            "previous_pipeline_run_name": previous_pipeline_run_name,
+            "failure_artifact_id": failure_artifact_id,
+            "previous_permission_grant_id": previous_permission_grant_id,
+            "automatic_execution": false,
+        }),
+    )
+    .await?;
+
+    Ok(pipeline_intent.into())
+}
+
 async fn attach_pipeline_intent_evidence(
     State(state): State<AppState>,
     Path(pipeline_intent_id): Path<String>,
@@ -17824,7 +18156,12 @@ fn build_pipeline_run_manifest(
 ) -> Result<Value, ApiError> {
     let intent_label = dns_label_fragment(&intent.id);
     let change_set_label = dns_label_fragment(&intent.change_set_id);
-    let name = format!("pharness-{intent_label}");
+    let execution_attempt = pipeline_execution_attempt(&intent.intent_json)?;
+    let name = if execution_attempt == 1 {
+        format!("pharness-{intent_label}")
+    } else {
+        format!("pharness-{intent_label}-{execution_attempt}")
+    };
     let params = execution
         .params
         .iter()
@@ -32846,7 +33183,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             }
         });
         let execution = tekton_execution_spec(&intent_json).unwrap();
-        let intent = StoredPipelineIntent {
+        let mut intent = StoredPipelineIntent {
             id: "pint_123".to_string(),
             change_set_id: "cset_456".to_string(),
             work_plan_id: "wplan_789".to_string(),
@@ -32886,6 +33223,224 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert!(manifest
             .pointer("/spec/taskRunTemplate/serviceAccountName")
             .is_none());
+
+        intent.intent_json["execution_attempt"] = json!(2);
+        let retry_manifest = build_pipeline_run_manifest(&intent, &execution).unwrap();
+        assert_eq!(retry_manifest["metadata"]["name"], "pharness-pint-123-2");
+    }
+
+    #[tokio::test]
+    async fn failed_pipeline_intent_requires_review_and_preserves_evidence_for_one_retry() {
+        let state = test_state().await;
+        let source_merge_sha = "0123456789abcdef0123456789abcdef01234567";
+        let Json(work_item) = create_work_item(
+            State(state.clone()),
+            None,
+            Json(CreateWorkItemRequest {
+                title: "Retry a reviewed pipeline failure".to_string(),
+                intent: "Preserve the failed execution before a supervised retry.".to_string(),
+                acceptance_criteria: vec!["Pipeline retry remains explicit".to_string()],
+                source_repo: "team/finance-api".to_string(),
+                source_ref: "main".to_string(),
+                source_commit: Some(source_merge_sha.to_string()),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: Some("team/finance-gitops".to_string()),
+                gitops_ref: Some("main".to_string()),
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "dev".to_string(),
+                target_namespace: Some("apps-dev".to_string()),
+                argo_application: Some("finance-api".to_string()),
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: Some(2),
+                max_elapsed_seconds: Some(900),
+                preflight_state_hash: None,
+                environment_profile_id: None,
+                initial_turn_budget: None,
+                hard_turn_budget: None,
+                initial_token_budget: None,
+                hard_token_budget: None,
+                active_execution_seconds: None,
+                recoverable_tool_error_limit: None,
+                identical_failure_limit: None,
+                actor: Some("operator".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(planned) = reconcile_work_item(
+            State(state.clone()),
+            None,
+            Path(work_item.id.clone()),
+            Json(ReconcileWorkItemRequest {
+                apply: true,
+                actor: Some("operator".to_string()),
+                reason: Some("declare the retry fixture WorkPlan".to_string()),
+                max_turns: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let work_plan_id = planned.work_plan.unwrap().id;
+        let _ = transition_work_plan(
+            State(state.clone()),
+            Path(work_plan_id.clone()),
+            Json(TransitionWorkPlanRequest {
+                target_status: "approved".to_string(),
+                actor: Some("operator".to_string()),
+                reason: Some("approve the retry fixture WorkPlan".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+        let work_plan = state
+            .store
+            .get_work_plan(&work_plan_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let change_set = state
+            .store
+            .create_change_set(CreateChangeSet {
+                id: "cset_pipeline_retry".to_string(),
+                work_item_id: Some(work_item.id.clone()),
+                work_plan_id: work_plan.id.clone(),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id.clone(),
+                run_id: work_plan.run_id.clone(),
+                status: "approved".to_string(),
+                title: "Reviewed source change".to_string(),
+                summary: "Source delivery already completed.".to_string(),
+                risk_level: "high".to_string(),
+                material_hash: "material_pipeline_retry".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                change_set_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let pipeline_intent = state
+            .store
+            .create_pipeline_intent(CreatePipelineIntent {
+                id: "pint_pipeline_retry".to_string(),
+                change_set_id: change_set.id,
+                work_plan_id: work_plan.id,
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: work_plan.session_id,
+                run_id: work_plan.run_id,
+                status: "failed".to_string(),
+                title: "Build reviewed source".to_string(),
+                summary: "The first supervised execution failed.".to_string(),
+                risk_level: "high".to_string(),
+                intent_kind: "tekton_build_test_package".to_string(),
+                resource_namespace: Some("apps-dev".to_string()),
+                resource_kind: Some("application".to_string()),
+                resource_name: Some("finance-api".to_string()),
+                intent_json: json!({
+                    "source_provenance": {
+                        "kind": "github_merged_pull_request",
+                        "immutable": true,
+                        "merge_commit_sha": source_merge_sha,
+                    },
+                    "execution": {
+                        "enabled": true,
+                        "namespace": "tekton-pipelines",
+                        "pipeline_ref": "finance-build",
+                        "params": { "revision": source_merge_sha },
+                        "workspaces": [],
+                        "production_impacting": false,
+                    },
+                    "execution_state": {
+                        "execution_id": "pexec_failed_1",
+                        "state": "pipeline_run_failed",
+                        "pipeline_run_namespace": "tekton-pipelines",
+                        "pipeline_run_name": "pharness-pint-pipeline-retry",
+                        "permission_grant_id": "pgrant_failed_1",
+                    },
+                    "execution_evidence": {
+                        "status": "failed",
+                        "artifact_id": "art_pipeline_failed_1",
+                        "observation_id": "obs_pipeline_failed_1",
+                        "pipeline_run": {
+                            "namespace": "tekton-pipelines",
+                            "name": "pharness-pint-pipeline-retry",
+                        },
+                    },
+                    "evidence": {
+                        "status": "failed",
+                        "artifact_id": "art_pipeline_analysis_failed_1",
+                    },
+                }),
+            })
+            .await
+            .unwrap();
+
+        let Json(flow) = work_item_flow(State(state.clone()), Path(work_item.id.clone()))
+            .await
+            .unwrap();
+        let retry = flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "retry_pipeline_intent")
+            .expect("failed PipelineIntent must expose one supervised retry review");
+        assert_eq!(retry.status, "ready");
+        assert!(retry.approval_required);
+        assert!(retry
+            .external_effect_summary
+            .contains("does not start Tekton"));
+
+        let Json(reproposed) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item.id.clone(), retry.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("operator".to_string()),
+                reason: "reviewed the exact failed PipelineRun evidence".to_string(),
+                state_hash: retry.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reproposed["status"], "proposed");
+        let stored = state
+            .store
+            .get_pipeline_intent(&pipeline_intent.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.intent_json["execution_attempt"], json!(2));
+        assert_eq!(
+            stored.intent_json["execution_history"][0]["execution_evidence"]["artifact_id"],
+            "art_pipeline_failed_1"
+        );
+        assert!(stored.intent_json.get("execution_state").is_none());
+        assert!(stored.intent_json.get("execution_evidence").is_none());
+        let Json(after) = work_item_flow(State(state.clone()), Path(work_item.id.clone()))
+            .await
+            .unwrap();
+        assert!(after
+            .action_rail
+            .iter()
+            .any(|action| action.id == "approve_pipeline_intent" && action.status == "ready"));
+        assert!(!after
+            .action_rail
+            .iter()
+            .any(|action| action.id == "retry_pipeline_intent"));
+        let audit_events = state
+            .store
+            .list_audit_events(Some("pipeline_intent"), Some(&pipeline_intent.id), None, 20)
+            .await
+            .unwrap();
+        assert!(audit_events
+            .iter()
+            .any(|event| event.kind == "pipeline_intent.retry_proposed"));
     }
 
     #[test]

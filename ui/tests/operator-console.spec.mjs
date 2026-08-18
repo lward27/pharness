@@ -555,7 +555,7 @@ test("wizard preserves a blocked preparation preflight without creating durable 
   await mockApi(page, {
     "/api/environment-profiles": { profiles: [{ id: "python-3.11", status: "configured_unverified", image: `registry.lucas.engineering/pharness-python-runner@sha256:${"a".repeat(64)}` }] },
     "/api/pipeline-contracts": { pipeline_contracts: [{ id: "pcontract_yfinance", namespace: "tekton-pipelines", pipeline_ref: "pharness-yfinance-build" }] },
-    "/api/deployment-contracts": { deployment_contracts: [{ id: "dcontract_yfinance", environment: "production", namespace: "apps-prod" }] },
+    "/api/deployment-contracts": { deployment_contracts: [{ id: "dcontract_yfinance", target_environment: "production", target_namespace: "apps-prod" }] },
     "/api/system/readiness": { capabilities: [{ capability: "environment_profile:python-3.11", status: "configured_unverified" }] },
     "/api/work-items/preflight": { ready: false, checks: [{ capability: "environment_profile:python-3.11", status: "unavailable", summary: "The isolated runner could not create a Python venv." }], blockers: ["Runner preparation capability has not passed."], warnings: [], predicted_external_mutations: [] },
   });
