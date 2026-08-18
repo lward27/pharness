@@ -1281,9 +1281,9 @@ impl KubernetesJobDispatcher {
             "metadata":{"name":job_name,"namespace":self.config.namespace,
                 "labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)},
                 "annotations":{EXECUTION_ID_ANNOTATION:request.execution_id}},
-            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.gitops_observer_active_deadline_seconds,"ttlSecondsAfterFinished":self.config.gitops_observer_ttl_seconds_after_finished,
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.gitops_observer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,"ttlSecondsAfterFinished":self.config.gitops_observer_ttl_seconds_after_finished,
                 "template":{"metadata":{"labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)}},
-                    "spec":{"serviceAccountName":self.config.gitops_observer_service_account,"restartPolicy":"Never",
+                    "spec":{"serviceAccountName":self.config.gitops_observer_service_account,"restartPolicy":"Never","initContainers":[network_policy_stabilization_container(&self.config.image)],
                         "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
                         "containers":[{"name":"gitops-observer","image":self.config.image,"imagePullPolicy":"Always","command":["pharness-worker"],
                             "env":[
@@ -1324,7 +1324,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.gitops_writer_active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.gitops_writer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.gitops_writer_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1334,6 +1334,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.gitops_writer_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -1402,7 +1403,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.git_writer_active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.git_writer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.git_writer_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1412,6 +1413,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.git_writer_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -1475,7 +1477,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.argo_executor_active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.argo_executor_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.argo_executor_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1485,6 +1487,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.argo_executor_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -1553,7 +1556,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.git_observer_active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.git_observer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.git_observer_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1563,6 +1566,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.git_observer_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -1626,7 +1630,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.gitops_observer_active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.gitops_observer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.gitops_observer_ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1636,6 +1640,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.gitops_observer_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -1697,7 +1702,7 @@ impl KubernetesJobDispatcher {
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": self.config.active_deadline_seconds,
+                "activeDeadlineSeconds": self.config.active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
                 "ttlSecondsAfterFinished": self.config.ttl_seconds_after_finished,
                 "template": {
                     "metadata": { "labels": {
@@ -1707,6 +1712,7 @@ impl KubernetesJobDispatcher {
                     "spec": {
                         "serviceAccountName": self.config.tekton_executor_service_account,
                         "restartPolicy": "Never",
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
                         "securityContext": {
                             "runAsNonRoot": true,
                             "runAsUser": 65532,
@@ -2807,6 +2813,10 @@ mod tests {
             Some(&json!("pharness-git-writer"))
         );
         assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/0/name"),
+            Some(&json!("network-policy-stabilization"))
+        );
     }
 
     #[tokio::test]
@@ -2937,7 +2947,7 @@ mod tests {
         assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
         assert_eq!(
             manifest.pointer("/spec/activeDeadlineSeconds"),
-            Some(&json!(600))
+            Some(&json!(600 + NETWORK_POLICY_STABILIZATION_SECONDS))
         );
     }
 
