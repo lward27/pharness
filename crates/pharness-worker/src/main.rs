@@ -2020,16 +2020,36 @@ async fn git_delivery_command(args: &[&str], askpass: &std::path::Path) -> anyho
     if git_delivery_command_status(args, askpass).await? {
         Ok(())
     } else {
-        anyhow::bail!("git_command_failed")
+        anyhow::bail!(git_delivery_command_error_code(args))
     }
 }
 
 async fn git_delivery_stdout(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<String> {
     let output = git_delivery_output(args, askpass).await?;
     if !output.status.success() {
-        anyhow::bail!("git_command_failed");
+        anyhow::bail!(git_delivery_command_error_code(args));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_delivery_command_error_code(args: &[&str]) -> &'static str {
+    for (command, error_code) in [
+        ("clone", "git_clone_failed"),
+        ("fetch", "git_fetch_failed"),
+        ("checkout", "git_checkout_failed"),
+        ("switch", "git_switch_failed"),
+        ("apply", "git_apply_failed"),
+        ("add", "git_add_failed"),
+        ("config", "git_config_failed"),
+        ("commit", "git_commit_failed"),
+        ("rev-parse", "git_revision_failed"),
+        ("push", "git_push_failed"),
+    ] {
+        if args.contains(&command) {
+            return error_code;
+        }
+    }
+    "git_command_failed"
 }
 
 async fn git_delivery_command_status(
@@ -2129,6 +2149,15 @@ fn git_delivery_error_code(error: &anyhow::Error) -> &'static str {
         "invalid_branch" => "invalid_branch",
         "repository_not_github_https" => "repository_not_github_https",
         "github_pull_request_failed" => "github_pull_request_failed",
+        "git_clone_failed" => "git_clone_failed",
+        "git_fetch_failed" => "git_fetch_failed",
+        "git_checkout_failed" => "git_checkout_failed",
+        "git_switch_failed" => "git_switch_failed",
+        "git_apply_failed" => "git_apply_failed",
+        "git_config_failed" => "git_config_failed",
+        "git_commit_failed" => "git_commit_failed",
+        "git_revision_failed" => "git_revision_failed",
+        "git_push_failed" => "git_push_failed",
         "git_command_failed" => "git_command_failed",
         _ => "git_writer_failed",
     }
@@ -2144,6 +2173,15 @@ fn gitops_delivery_error_code(error: &anyhow::Error) -> &'static str {
         "kustomization image entry is ambiguous" => "kustomization_image_ambiguous",
         "repository_not_github_https" => "repository_not_github_https",
         "github_pull_request_failed" => "github_pull_request_failed",
+        "git_clone_failed" => "git_clone_failed",
+        "git_fetch_failed" => "git_fetch_failed",
+        "git_checkout_failed" => "git_checkout_failed",
+        "git_switch_failed" => "git_switch_failed",
+        "git_add_failed" => "git_add_failed",
+        "git_config_failed" => "git_config_failed",
+        "git_commit_failed" => "git_commit_failed",
+        "git_revision_failed" => "git_revision_failed",
+        "git_push_failed" => "git_push_failed",
         "git_command_failed" => "git_command_failed",
         _ => "gitops_writer_failed",
     }
@@ -2761,8 +2799,8 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        fetch_internal_context, parse_github_repository, pipeline_run_terminal,
-        update_kustomization_image, validate_git_delivery_context,
+        fetch_internal_context, git_delivery_command_error_code, parse_github_repository,
+        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
         GitDeliveryContext, PipelineRunTerminal,
     };
@@ -3047,6 +3085,34 @@ mod tests {
         let mut invalid = context;
         invalid.commit_subject = "Change\nInjected trailer".to_string();
         assert!(validate_git_delivery_context(&invalid).is_err());
+    }
+
+    #[test]
+    fn git_writer_reports_only_the_failed_typed_git_stage() {
+        assert_eq!(
+            git_delivery_command_error_code(&[
+                "-C",
+                "/work/git-gexec/repo",
+                "apply",
+                "--index",
+                "/work/change.patch",
+            ]),
+            "git_apply_failed"
+        );
+        assert_eq!(
+            git_delivery_command_error_code(&[
+                "-C",
+                "/work/git-gexec/repo",
+                "push",
+                "origin",
+                "HEAD:refs/heads/pharness/work-item-1",
+            ]),
+            "git_push_failed"
+        );
+        assert_eq!(
+            git_delivery_command_error_code(&["-C", "/work/git-gexec/repo", "status"]),
+            "git_command_failed"
+        );
     }
 
     #[test]
