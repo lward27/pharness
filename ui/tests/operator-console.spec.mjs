@@ -422,6 +422,39 @@ test("production action confirmation is bound to the exact server action and sta
   expect(calls[0]).toMatchObject({ reason: "reviewed exact production target and digest", state_hash: action.state_hash });
 });
 
+test("PipelineIntent execution authorization is actionable without starting Tekton", async ({ page }) => {
+  const workItem = { ...workItemFixture("witem_pipeline_auth_1234567890"), status: "awaiting_approval", target_environment: "production", target_namespace: "apps-prod", production_impacting: true };
+  const sourceSha = "d".repeat(40);
+  const action = {
+    id: "authorize_pipeline_execution",
+    lifecycle_stage: "pipeline",
+    resource: "pint_pipeline_auth_1234567890",
+    status: "ready",
+    effect_class: "approval_boundary",
+    blockers: [],
+    approval_required: true,
+    approval_requirements: ["pipeline_execution_authorization", "pipeline_mutation", "production_impact"],
+    external_effect_summary: `Authorize one supervised Tekton execution attempt 2 for exact PipelineIntent pint_pipeline_auth_1234567890 using tekton-pipelines/pharness-yfinance-build at immutable source ${sourceSha}. The grant expires within 30 minutes for production. This action does not start Tekton.`,
+    state_hash: "state-pipeline-authorization-2",
+  };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "awaiting_pipeline_execution_authorization", boundary: "pipeline", effect_summary: "A fresh attempt-scoped grant is required.", blockers: [{ code: "awaiting_pipeline_execution_authorization", summary: "A fresh attempt-scoped grant is required." }] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { grant: { id: "pgrant_pipeline_attempt_2", status: "active" } }; },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByRole("button", { name: "Authorize Pipeline Execution" })).toBeEnabled();
+  await page.getByRole("button", { name: "Authorize Pipeline Execution" }).click();
+  await expect(page.locator(".reconcile-confirmation").getByText("This action does not start Tekton.")).toBeVisible();
+  await page.getByLabel("Reason").fill("authorize only supervised PipelineIntent attempt 2");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ reason: "authorize only supervised PipelineIntent attempt 2", state_hash: action.state_hash });
+});
+
 test("rollback rail exposes exact approvals and digest-bound delivery evidence", async ({ page }) => {
   const workItem = { ...workItemFixture("witem_rollback_1234567890"), status: "failed", target_environment: "production", target_namespace: "apps-prod", production_impacting: true };
   const controllerAction = { id: "review_failure", lifecycle_stage: "release", resource: workItem.id, status: "blocked", effect_class: "internal", blockers: [], approval_requirements: [], external_effect_summary: "Review failed production verification.", state_hash: "state-controller-rollback" };

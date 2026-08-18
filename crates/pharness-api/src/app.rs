@@ -2980,6 +2980,91 @@ async fn work_item_flow(
                 })),
             });
         }
+        if let Some(intent) = flow.pipeline_intent.as_ref().filter(|item| {
+            item.status == "approved"
+                && reconcile_preview.action
+                    == WorkItemReconcileAction::AwaitingPipelineExecutionAuthorization.as_str()
+        }) {
+            let mut blockers = Vec::new();
+            let preflight_checks = reconcile_preview
+                .pipeline_execution_preflight
+                .as_ref()
+                .map(|preflight| preflight.checks.clone())
+                .unwrap_or_default();
+            if reconcile_preview.pipeline_execution_preflight.is_none() {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "pipeline_execution_preflight_unavailable".to_string(),
+                    summary: "Pipeline execution preflight is unavailable; authorization cannot be scoped safely."
+                        .to_string(),
+                });
+            }
+            blockers.extend(preflight_checks.iter().filter_map(|check| {
+                let code = check.get("code").and_then(Value::as_str)?;
+                let passed = check.get("passed").and_then(Value::as_bool) == Some(true);
+                if passed || code == "trusted_execution_envelope" {
+                    return None;
+                }
+                Some(ReconcileBlockerResponse {
+                    code: code.to_string(),
+                    summary: check
+                        .get("summary")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Pipeline execution preflight failed")
+                        .to_string(),
+                })
+            }));
+            let namespace = intent
+                .intent_json
+                .pointer("/execution/namespace")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let pipeline_ref = intent
+                .intent_json
+                .pointer("/execution/pipeline_ref")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let source_merge_sha = intent
+                .intent_json
+                .pointer("/source_provenance/merge_commit_sha")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let execution_attempt = pipeline_execution_attempt(&intent.intent_json)?;
+            let mut approval_requirements = vec![
+                "pipeline_execution_authorization".to_string(),
+                "pipeline_mutation".to_string(),
+            ];
+            if work_item.production_impacting {
+                approval_requirements.push("production_impact".to_string());
+            }
+            action_rail.push(WorkItemActionResponse {
+                id: "authorize_pipeline_execution".to_string(),
+                lifecycle_stage: "pipeline".to_string(),
+                resource: intent.id.clone(),
+                status: if blockers.is_empty() { "ready" } else { "blocked" }.to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers,
+                approval_required: true,
+                approval_requirements,
+                external_effect_summary: format!(
+                    "Authorize one supervised Tekton execution attempt {execution_attempt} for exact PipelineIntent {} using {namespace}/{pipeline_ref} at immutable source {source_merge_sha}. The grant expires within 30 minutes for production. This action does not start Tekton.",
+                    intent.id,
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "authorize_pipeline_execution",
+                    "work_item": work_item.id,
+                    "work_item_updated_at": work_item.updated_at,
+                    "pipeline_intent": intent.id,
+                    "status": intent.status,
+                    "updated_at": intent.updated_at,
+                    "execution_attempt": execution_attempt,
+                    "namespace": namespace,
+                    "pipeline_ref": pipeline_ref,
+                    "source_merge_sha": source_merge_sha,
+                    "preflight_checks": preflight_checks,
+                    "permission_grant_id": reconcile_preview.pipeline_execution_preflight.as_ref().and_then(|preflight| preflight.permission_grant_id.as_deref()),
+                })),
+            });
+        }
         if let Some(intent) = flow
             .deployment_intent
             .as_ref()
@@ -5373,6 +5458,23 @@ async fn execute_work_item_action(
                     request.reason.clone(),
                 )
                 .await?,
+            ),
+            "authorize_pipeline_execution" => serde_json::to_value(
+                create_pipeline_intent_trusted_envelope(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(CreatePipelineIntentTrustedEnvelopeRequest {
+                        subject: None,
+                        created_by: Some(actor.clone()),
+                        reason: request.reason.clone(),
+                        expires_at: flow
+                            .work_item
+                            .production_impacting
+                            .then(|| (current_millis() + 30 * 60 * 1_000).to_string()),
+                    }),
+                )
+                .await?
+                .0,
             ),
             "approve_deployment_intent" | "reject_deployment_intent" => serde_json::to_value(
                 transition_deployment_intent(
@@ -9871,7 +9973,12 @@ async fn reconcile_work_item_response(
             summary: message.clone(),
         });
     }
-    let authorization_checks = reconcile_authorization_checks(action);
+    let authorization_checks =
+        if action == WorkItemReconcileAction::AwaitingPipelineExecutionAuthorization {
+            pipeline_execution_authorization_checks(pipeline_execution_preflight.as_ref())
+        } else {
+            reconcile_authorization_checks(action)
+        };
     let effect_summary = if can_apply {
         format!(
             "Applying this controller action will {}",
@@ -10003,6 +10110,105 @@ fn reconcile_authorization_checks(
             }
             .to_string(),
             resource_id: None,
+        },
+    ]
+}
+
+fn pipeline_execution_authorization_checks(
+    preflight: Option<&PipelineIntentExecutionPreflight>,
+) -> Vec<ReconcileAuthorizationCheckResponse> {
+    let Some(preflight) = preflight else {
+        return vec![
+            ReconcileAuthorizationCheckResponse {
+                kind: "pipeline_contract".to_string(),
+                status: "unavailable".to_string(),
+                summary: "Pipeline execution preflight is unavailable.".to_string(),
+                resource_id: None,
+            },
+            ReconcileAuthorizationCheckResponse {
+                kind: "approval_gate".to_string(),
+                status: "unavailable".to_string(),
+                summary: "Pipeline gate state cannot be verified without preflight.".to_string(),
+                resource_id: None,
+            },
+            ReconcileAuthorizationCheckResponse {
+                kind: "permission_grant".to_string(),
+                status: "unavailable".to_string(),
+                summary: "Pipeline grant state cannot be verified without preflight.".to_string(),
+                resource_id: None,
+            },
+        ];
+    };
+    let failed_summaries = |predicate: &dyn Fn(&str) -> bool| {
+        preflight
+            .checks
+            .iter()
+            .filter_map(|check| {
+                let code = check.get("code").and_then(Value::as_str)?;
+                (predicate(code) && check.get("passed").and_then(Value::as_bool) != Some(true))
+                    .then(|| {
+                        check
+                            .get("summary")
+                            .and_then(Value::as_str)
+                            .unwrap_or("Preflight check failed")
+                            .to_string()
+                    })
+            })
+            .collect::<Vec<_>>()
+    };
+    let gate_failures = failed_summaries(&|code| code.starts_with("approval_gate_"));
+    let contract_failures = failed_summaries(&|code| {
+        !code.starts_with("approval_gate_") && code != "trusted_execution_envelope"
+    });
+    let grant_check = preflight.checks.iter().find(|check| {
+        check.get("code").and_then(Value::as_str) == Some("trusted_execution_envelope")
+    });
+    let grant_ready = grant_check
+        .and_then(|check| check.get("passed"))
+        .and_then(Value::as_bool)
+        == Some(true);
+    vec![
+        ReconcileAuthorizationCheckResponse {
+            kind: "pipeline_contract".to_string(),
+            status: if contract_failures.is_empty() {
+                "ready"
+            } else {
+                "blocked"
+            }
+            .to_string(),
+            summary: if contract_failures.is_empty() {
+                "PipelineIntent, source provenance, and pinned PipelineContract checks passed."
+                    .to_string()
+            } else {
+                contract_failures.join("; ")
+            },
+            resource_id: None,
+        },
+        ReconcileAuthorizationCheckResponse {
+            kind: "approval_gate".to_string(),
+            status: if gate_failures.is_empty() {
+                "ready"
+            } else {
+                "missing"
+            }
+            .to_string(),
+            summary: if gate_failures.is_empty() {
+                "Required pipeline mutation and production-impact gates are satisfied or waived."
+                    .to_string()
+            } else {
+                gate_failures.join("; ")
+            },
+            resource_id: None,
+        },
+        ReconcileAuthorizationCheckResponse {
+            kind: "permission_grant".to_string(),
+            status: if grant_ready { "ready" } else { "missing" }.to_string(),
+            summary: grant_check
+                .and_then(|check| check.get("summary"))
+                .and_then(Value::as_str)
+                .unwrap_or("Pipeline execution grant check is unavailable")
+                .to_string(),
+            resource_id: preflight.grant_id.clone(),
         },
     ]
 }
@@ -27409,20 +27615,19 @@ mod tests {
         create_deployment_contract, create_deployment_intent_from_pipeline_intent,
         create_deployment_intent_trusted_envelope, create_incident, create_observation,
         create_operator_run, create_pipeline_intent_from_change_set,
-        create_pipeline_intent_trusted_envelope, create_registry_evidence_from_registry_inspection,
-        create_registry_evidence_from_release, create_release_from_deployment_intent,
-        create_remediation_plan, create_run, create_work_item, create_work_item_pipeline_intent,
-        create_work_plan_from_remediation_plan, create_work_plan_from_work_item,
-        create_work_plan_trusted_envelope, current_pipeline_build_output, decide_run_approval,
-        deny_approval, deployment_intent_reconcile_action,
-        ensure_pipeline_evidence_ready_for_deployment, environment_profile_readiness_blocker,
-        execute_capability, execute_deployment_intent, execute_work_item_action,
-        execution_matches_pipeline_contract, get_approval, get_approval_gate, get_artifact,
-        get_deployment_contract, get_deployment_intent, get_incident, get_observation,
-        get_permission_grant, get_pipeline_intent, get_registry_evidence, get_release,
-        get_remediation_plan, get_run, get_run_diff, get_run_events, get_run_operator_summary,
-        get_work_plan, git_delivery_reconcile_action, gitops_change_set_reconcile_action,
-        gitops_delivery_flow, internal_argo_sync_outcome,
+        create_registry_evidence_from_registry_inspection, create_registry_evidence_from_release,
+        create_release_from_deployment_intent, create_remediation_plan, create_run,
+        create_work_item, create_work_item_pipeline_intent, create_work_plan_from_remediation_plan,
+        create_work_plan_from_work_item, create_work_plan_trusted_envelope,
+        current_pipeline_build_output, decide_run_approval, deny_approval,
+        deployment_intent_reconcile_action, ensure_pipeline_evidence_ready_for_deployment,
+        environment_profile_readiness_blocker, execute_capability, execute_deployment_intent,
+        execute_work_item_action, execution_matches_pipeline_contract, get_approval,
+        get_approval_gate, get_artifact, get_deployment_contract, get_deployment_intent,
+        get_incident, get_observation, get_permission_grant, get_pipeline_intent,
+        get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
+        get_run_events, get_run_operator_summary, get_work_plan, git_delivery_reconcile_action,
+        gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
         internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
         last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
         list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
@@ -27467,10 +27672,9 @@ mod tests {
         CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
         CreateGitOpsDeliveryAuthorizationRequest, CreateIncidentRequest, CreateObservationRequest,
         CreatePermissionGrantRequest, CreatePipelineIntentFromChangeSetRequest,
-        CreatePipelineIntentTrustedEnvelopeRequest, CreateRegistryEvidenceFromInspectionRequest,
-        CreateRegistryEvidenceFromReleaseRequest, CreateReleaseFromDeploymentIntentRequest,
-        CreateRemediationPlanRequest, CreateRunRequest, CreateTrustedEnvelopeRequest,
-        CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
+        CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromReleaseRequest,
+        CreateReleaseFromDeploymentIntentRequest, CreateRemediationPlanRequest, CreateRunRequest,
+        CreateTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
         DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
         ExecuteCapabilityRequest, ExecuteDeploymentIntentRequest, ExecuteWorkItemActionRequest,
@@ -37493,25 +37697,69 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .await
                 .unwrap();
         }
-        let Json(envelope) = create_pipeline_intent_trusted_envelope(
+        let Json(authorization_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.clone()))
+                .await
+                .unwrap();
+        let authorization_action = authorization_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "authorize_pipeline_execution")
+            .expect("approved PipelineIntent must expose exact execution authorization");
+        assert!(authorization_flow
+            .reconcile_preview
+            .authorization_checks
+            .iter()
+            .any(|check| check.kind == "approval_gate" && check.status == "ready"));
+        assert!(authorization_flow
+            .reconcile_preview
+            .authorization_checks
+            .iter()
+            .any(|check| check.kind == "permission_grant" && check.status == "missing"));
+        assert_eq!(authorization_action.status, "ready");
+        assert!(authorization_action.approval_required);
+        assert!(authorization_action
+            .external_effect_summary
+            .contains("does not start Tekton"));
+
+        let stale = execute_work_item_action(
             State(state.clone()),
-            Path(pipeline.pipeline_intent.id.clone()),
-            Json(CreatePipelineIntentTrustedEnvelopeRequest {
-                subject: None,
-                created_by: Some("lucas".to_string()),
+            None,
+            Path((work_item_id.clone(), authorization_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "reject stale execution authorization preview".to_string(),
+                state_hash: "stale-pipeline-authorization-state".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(stale.status, StatusCode::CONFLICT);
+
+        let Json(envelope_value) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item_id.clone(), authorization_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
                 reason: "authorize one exact disposable Tekton execution".to_string(),
-                expires_at: None,
+                state_hash: authorization_action.state_hash.clone(),
             }),
         )
         .await
         .unwrap();
+        let envelope_grant_id = envelope_value
+            .pointer("/grant/id")
+            .and_then(Value::as_str)
+            .expect("authorization action must return the scoped PermissionGrant")
+            .to_string();
         let preflight = pipeline_intent_execution_preflight(&state, &pipeline.pipeline_intent.id)
             .await
             .unwrap();
         assert!(preflight.ready, "preflight checks: {:?}", preflight.checks);
         assert_eq!(
             preflight.grant_id.as_deref(),
-            Some(envelope.grant.id.as_str())
+            Some(envelope_grant_id.as_str())
         );
 
         let Json(preview) = reconcile_work_item(
