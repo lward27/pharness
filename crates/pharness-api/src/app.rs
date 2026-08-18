@@ -3393,6 +3393,8 @@ fn work_item_action_response(preview: &ReconcileWorkItemResponse) -> WorkItemAct
         "pipeline"
     } else if action.contains("gitops") {
         "gitops"
+    } else if action.contains("rollback") {
+        "rollback"
     } else if action.contains("deployment") || action.contains("argo") {
         "deployment"
     } else if action.contains("release") || action == "complete_work_item" {
@@ -3412,6 +3414,7 @@ fn work_item_action_response(preview: &ReconcileWorkItemResponse) -> WorkItemAct
             | "awaiting_pull_request_observation"
             | "awaiting_pipeline_execution"
             | "awaiting_gitops_base_revision"
+            | "prepare_rollback_intent"
             | "awaiting_gitops_delivery_execution"
             | "awaiting_gitops_pull_request_observation"
             | "awaiting_deployment_execution"
@@ -5612,6 +5615,7 @@ async fn advance_work_item(
             "declare_work_plan"
                 | "capture_change_set"
                 | "prepare_git_delivery"
+                | "awaiting_gitops_delivery_plan"
                 | "complete_work_item"
         );
         if !safe_internal || !preview.can_apply {
@@ -5799,9 +5803,8 @@ async fn prepare_work_item_rollback_intent(
         .get_work_plan_by_work_item(&item.id)
         .await?
         .ok_or_else(|| ApiError::conflict("RollbackIntent requires a WorkPlan"))?;
-    let run_id = item
-        .current_run_id
-        .clone()
+    let run_id = work_item_provenance_run_id(&state, &item)
+        .await?
         .ok_or_else(|| ApiError::conflict("RollbackIntent requires coding run provenance"))?;
     let run = state
         .store
@@ -7248,9 +7251,11 @@ async fn rollback_intent_context(
         if let Some(current) =
             latest_rollback_intent(state, &item, Some(rollback_intent_id)).await?
         {
-            let run_id = item.current_run_id.clone().ok_or_else(|| {
-                ApiError::conflict("RollbackIntent run provenance is unavailable")
-            })?;
+            let run_id = work_item_provenance_run_id(state, &item)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict("RollbackIntent run provenance is unavailable")
+                })?;
             let run = state
                 .store
                 .get_run(&run_id)
@@ -7267,12 +7272,12 @@ async fn latest_rollback_intent(
     item: &StoredWorkItem,
     rollback_intent_id: Option<&str>,
 ) -> Result<Option<Value>, ApiError> {
-    let Some(run_id) = item.current_run_id.as_ref() else {
+    let Some(run_id) = work_item_provenance_run_id(state, item).await? else {
         return Ok(None);
     };
     let artifact = state
         .store
-        .list_artifacts(run_id)
+        .list_artifacts(&run_id)
         .await?
         .into_iter()
         .filter(|artifact| artifact.kind == "rollback_intent")
@@ -7296,6 +7301,32 @@ async fn latest_rollback_intent(
         })
         .max_by_key(|artifact| (artifact.created_at.clone(), artifact.id.clone()));
     Ok(artifact.as_ref().map(rollback_intent_response))
+}
+
+/// Resolve the durable run that owns delivery and rollback evidence after a
+/// coding attempt has finished. `current_run_id` is intentionally cleared at
+/// attempt termination, so completed WorkItems must fall back to the captured
+/// ChangeSet or WorkPlan provenance instead of losing their evidence graph.
+async fn work_item_provenance_run_id(
+    state: &AppState,
+    item: &StoredWorkItem,
+) -> Result<Option<RunId>, ApiError> {
+    if let Some(run_id) = item.current_run_id.clone() {
+        return Ok(Some(run_id));
+    }
+    let Some(work_plan) = state.store.get_work_plan_by_work_item(&item.id).await? else {
+        return Ok(None);
+    };
+    if let Some(change_set) = state
+        .store
+        .get_change_set_by_work_plan(&work_plan.id)
+        .await?
+    {
+        if change_set.run_id.is_some() {
+            return Ok(change_set.run_id);
+        }
+    }
+    Ok(work_plan.run_id)
 }
 
 async fn append_rollback_intent_artifact(
@@ -7434,6 +7465,19 @@ async fn reconcile_work_item(
         }
         None => None,
     };
+    let rollback_prepared = if work_item.production_impacting {
+        latest_rollback_intent(&state, &work_item, None)
+            .await?
+            .and_then(|intent| {
+                intent
+                    .pointer("/content/status")
+                    .and_then(Value::as_str)
+                    .map(|status| matches!(status, "prepared" | "approved"))
+            })
+            .unwrap_or(false)
+    } else {
+        true
+    };
     let action = work_item_reconcile_action(
         &work_item,
         work_plan.as_ref(),
@@ -7451,6 +7495,7 @@ async fn reconcile_work_item(
             gitops_change_set: gitops_change_set.as_ref(),
             gitops_delivery: gitops_delivery.as_ref(),
             gitops_base_revision,
+            rollback_prepared,
         },
     );
     let recorded_preflight =
@@ -7990,6 +8035,96 @@ async fn reconcile_work_item(
             .map(Json)
         })
         .await,
+        WorkItemReconcileAction::PrepareRollbackIntent => {
+            let Json(rollback) = prepare_work_item_rollback_intent(
+                State(state.clone()),
+                identity,
+                Path(work_item_id.clone()),
+                Json(RollbackIntentRequest {
+                    actor: actor.clone(),
+                    reason: reason.clone().unwrap_or_else(|| {
+                        "controller captured the protected production baseline and prepared the digest-bound RollbackIntent"
+                            .to_string()
+                    }),
+                    expires_at: None,
+                }),
+            )
+            .await?;
+            append_work_item_audit_event(
+                &state.store,
+                &work_item,
+                "work_item.rollback_intent_prepared",
+                actor,
+                json!({
+                    "rollback_intent_id": rollback.pointer("/content/rollback_intent_id"),
+                    "baseline_digest": rollback.pointer("/content/baseline/image_digest"),
+                    "rollback_owner": rollback.pointer("/content/rollback_owner"),
+                    "automatic_rollback": false,
+                    "mutation_performed": false,
+                }),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                "captured the healthy protected-production baseline and prepared a digest-bound RollbackIntent; no rollback was executed"
+                    .to_string(),
+            )
+            .await
+            .map(Json)
+        }
+        WorkItemReconcileAction::AwaitingGitOpsDeliveryPlan => {
+            let gitops_change_set = gitops_change_set
+                .as_ref()
+                .expect("GitOps delivery planning requires a GitOps ChangeSet");
+            let Json(plan) = prepare_gitops_change_set_delivery(
+                State(state.clone()),
+                Path(gitops_change_set.id.clone()),
+                Json(PrepareGitOpsDeliveryRequest {
+                    actor: actor.clone(),
+                    reason: reason.clone().or_else(|| {
+                        Some(
+                            "controller prepared the immutable, base-revision-bound GitOps delivery plan"
+                                .to_string(),
+                        )
+                    }),
+                }),
+            )
+            .await?;
+            append_work_item_audit_event(
+                &state.store,
+                &work_item,
+                "work_item.gitops_delivery_plan_prepared",
+                actor,
+                json!({
+                    "gitops_change_set_id": gitops_change_set.id,
+                    "gitops_delivery_plan_artifact_id": plan.artifact.id,
+                    "gitops_base_revision_artifact_id": plan.base_revision.id,
+                    "created": plan.created,
+                    "mutation_performed": false,
+                }),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                if plan.created {
+                    "prepared the immutable GitOps delivery plan; writer authorization is now required"
+                        .to_string()
+                } else {
+                    "reused the existing immutable GitOps delivery plan; writer authorization remains required"
+                        .to_string()
+                },
+            )
+            .await
+            .map(Json)
+        }
         WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation => Box::pin(async {
             let gitops_change_set = gitops_change_set
                 .as_ref()
@@ -9054,6 +9189,7 @@ enum WorkItemReconcileAction {
     AwaitingGitOpsChangeSetApproval,
     AwaitingGitOpsBaseRevision,
     WaitForGitOpsBaseRevision,
+    PrepareRollbackIntent,
     AwaitingGitOpsDeliveryPlan,
     AwaitingGitOpsDeliveryAuthorization,
     AwaitingGitOpsWriterAvailability,
@@ -9112,6 +9248,7 @@ impl WorkItemReconcileAction {
             Self::AwaitingGitOpsChangeSetApproval => "awaiting_gitops_change_set_approval",
             Self::AwaitingGitOpsBaseRevision => "awaiting_gitops_base_revision",
             Self::WaitForGitOpsBaseRevision => "wait_for_gitops_base_revision",
+            Self::PrepareRollbackIntent => "prepare_rollback_intent",
             Self::AwaitingGitOpsDeliveryPlan => "awaiting_gitops_delivery_plan",
             Self::AwaitingGitOpsDeliveryAuthorization => "awaiting_gitops_delivery_authorization",
             Self::AwaitingGitOpsWriterAvailability => "awaiting_gitops_writer_availability",
@@ -9169,6 +9306,8 @@ impl WorkItemReconcileAction {
                 | Self::AwaitingPullRequestObservation
                 | Self::AwaitingPipelineExecution
                 | Self::AwaitingGitOpsBaseRevision
+                | Self::PrepareRollbackIntent
+                | Self::AwaitingGitOpsDeliveryPlan
                 | Self::AwaitingGitOpsDeliveryExecution
                 | Self::AwaitingGitOpsPullRequestObservation
                 | Self::AwaitingDeploymentExecution
@@ -9270,6 +9409,10 @@ impl WorkItemReconcileAction {
             }
             Self::WaitForGitOpsBaseRevision => {
                 "GitOps base-revision observation is in progress; wait for immutable base commit evidence"
+                    .to_string()
+            }
+            Self::PrepareRollbackIntent => {
+                "GitOps base revision is resolved; explicitly capture the healthy protected-production baseline and prepare the digest-bound RollbackIntent before writer planning"
                     .to_string()
             }
             Self::AwaitingGitOpsDeliveryPlan => {
@@ -9424,6 +9567,7 @@ struct WorkItemDeliveryReconcileContext<'a> {
     gitops_change_set: Option<&'a StoredGitOpsChangeSet>,
     gitops_delivery: Option<&'a GitOpsDeliveryFlowResponse>,
     gitops_base_revision: Option<GitOpsBaseRevisionReconcileState>,
+    rollback_prepared: bool,
 }
 
 fn work_item_reconcile_action(
@@ -9448,6 +9592,12 @@ fn work_item_reconcile_action(
                             delivery.gitops_delivery,
                             delivery.gitops_base_revision,
                         );
+                        if gitops_action == WorkItemReconcileAction::AwaitingGitOpsDeliveryPlan
+                            && work_item.production_impacting
+                            && !delivery.rollback_prepared
+                        {
+                            return WorkItemReconcileAction::PrepareRollbackIntent;
+                        }
                         if gitops_action == WorkItemReconcileAction::AwaitingDeploymentIntentReview
                         {
                             deployment_intent_reconcile_action(
@@ -10194,6 +10344,12 @@ fn action_effect(action: WorkItemReconcileAction) -> &'static str {
         }
         WorkItemReconcileAction::AwaitingGitOpsBaseRevision => {
             "dispatch one read-only GitOps base-revision observer"
+        }
+        WorkItemReconcileAction::PrepareRollbackIntent => {
+            "observe the protected production baseline and prepare one digest-bound RollbackIntent without executing it"
+        }
+        WorkItemReconcileAction::AwaitingGitOpsDeliveryPlan => {
+            "prepare one immutable, base-revision-bound GitOps delivery plan"
         }
         WorkItemReconcileAction::AwaitingGitOpsDeliveryExecution => {
             "dispatch one isolated GitOps branch-and-pull-request writer"
@@ -38361,16 +38517,56 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             })
             .await
             .unwrap();
-        let Json(plan) = prepare_gitops_change_set_delivery(
+        let wait = state
+            .store
+            .get_active_controller_wait_for_work_item(work_item_id)
+            .await
+            .unwrap()
+            .expect("base-revision dispatch must create a controller wait");
+        state
+            .store
+            .resolve_controller_wait(
+                &wait.id,
+                "resolved",
+                "durable base-revision fixture is present".to_string(),
+            )
+            .await
+            .unwrap();
+        let Json(delivery_plan_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let delivery_plan_action = delivery_plan_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "awaiting_gitops_delivery_plan")
+            .expect("resolved base revision must expose GitOps delivery planning");
+        assert_eq!(delivery_plan_action.status, "ready");
+        assert_eq!(delivery_plan_action.effect_class, "internal");
+        let Json(prepared) = execute_work_item_action(
             State(state.clone()),
-            Path(gitops_change_set_id.to_string()),
-            Json(PrepareGitOpsDeliveryRequest {
+            None,
+            Path((work_item_id.to_string(), delivery_plan_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
                 actor: Some("lucas".to_string()),
-                reason: Some("prepare exact disposable GitOps writer input".to_string()),
+                reason: "prepare exact disposable GitOps writer input".to_string(),
+                state_hash: delivery_plan_action.state_hash.clone(),
             }),
         )
         .await
         .unwrap();
+        assert_eq!(prepared["applied"], json!(true));
+        assert_eq!(prepared["action"], json!("awaiting_gitops_delivery_plan"));
+        let plan_artifact_id = state
+            .store
+            .list_artifacts(&run_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|artifact| artifact.kind == "gitops_delivery_plan")
+            .max_by_key(|artifact| (artifact.created_at.clone(), artifact.id.clone()))
+            .expect("controller action must persist one GitOps delivery plan")
+            .id;
         for gate in approval_gates_from_work_item(&work_item, &work_plan) {
             state.store.create_approval_gate(gate).await.unwrap();
         }
@@ -38430,7 +38626,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .map(|grant| grant.id.as_str()),
             Some(envelope.grant.id.as_str())
         );
-        assert_eq!(plan.artifact.id, preflight.plan.id);
+        assert_eq!(plan_artifact_id, preflight.plan.id);
 
         let Json(preview) = reconcile_work_item(
             State(state.clone()),
@@ -41264,6 +41460,29 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .await
             .unwrap();
         state.store.create_artifact(CreateArtifact { id: "art_rollback_intent_contract".to_string(), session_id: session_id.clone(), run_id: Some(run_id.clone()), kind: "rollback_intent".to_string(), label: "RollbackIntent contract".to_string(), mime_type: Some("application/json".to_string()), path: None, content_text: None, content_json: Some(json!({ "rollback_intent_id": rollback_id, "work_item_id": "witem_rollback_contract", "status": "prepared", "approval_gate_id": "agate_rollback_contract", "baseline": { "image_digest": baseline_digest, "gitops_revision": base_commit } })) }).await.unwrap();
+        state
+            .store
+            .finish_work_item_attempt(
+                "witem_rollback_contract",
+                "awaiting_approval",
+                Some("tester".to_string()),
+                Some("coding completed before delivery and rollback planning".to_string()),
+            )
+            .await
+            .unwrap();
+        let completed_attempt_item = state
+            .store
+            .get_work_item("witem_rollback_contract")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(completed_attempt_item.current_run_id.is_none());
+        assert!(
+            super::latest_rollback_intent(&state, &completed_attempt_item, Some(rollback_id),)
+                .await
+                .unwrap()
+                .is_some()
+        );
         let Json(writer_approved) = super::approve_rollback_intent(
             State(state.clone()),
             None,
