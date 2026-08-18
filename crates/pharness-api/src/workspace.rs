@@ -227,7 +227,7 @@ pub(crate) async fn collect_git_evidence(
             "workspace diff includes a secret-shaped path; refusing to capture it",
         ));
     }
-    let diff = run_git(&["-C", &cwd, "diff", "--no-ext-diff", "--binary", base_commit]).await?;
+    let diff = run_git_raw(&["-C", &cwd, "diff", "--no-ext-diff", "--binary", base_commit]).await?;
     if diff.len() > 512 * 1024 {
         return Err(WorkspaceError::new(
             "workspace Git diff exceeds the 512 KiB capture limit",
@@ -279,6 +279,10 @@ impl std::fmt::Display for WorkspaceError {
 impl std::error::Error for WorkspaceError {}
 
 async fn run_git(args: &[&str]) -> Result<String, WorkspaceError> {
+    Ok(run_git_raw(args).await?.trim().to_string())
+}
+
+async fn run_git_raw(args: &[&str]) -> Result<String, WorkspaceError> {
     let output = Command::new("git")
         .args(args)
         .output()
@@ -287,12 +291,12 @@ async fn run_git(args: &[&str]) -> Result<String, WorkspaceError> {
     if !output.status.success() {
         return Err(WorkspaceError::new("Git workspace operation failed"));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceProvisioner;
+    use super::{collect_git_evidence, WorkspaceProvisioner};
     use pharness_runhost::WorkspaceSourceSpec;
     use std::path::Path;
     use std::process::Command;
@@ -344,6 +348,30 @@ mod tests {
             .provision("witem_test", 1, source.to_str().unwrap(), "HEAD", None)
             .await
             .is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn captured_diff_preserves_git_patch_termination() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-workspace-evidence-test-{}-{}",
+            std::process::id(),
+            NEXT_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        git(&root, &["init"]);
+        git(&root, &["config", "user.email", "test@example.invalid"]);
+        git(&root, &["config", "user.name", "test"]);
+        std::fs::write(root.join("README.md"), "before\n").unwrap();
+        git(&root, &["add", "README.md"]);
+        git(&root, &["commit", "-m", "base"]);
+        let base = git(&root, &["rev-parse", "HEAD"]);
+        std::fs::write(root.join("README.md"), "after\n").unwrap();
+
+        let evidence = collect_git_evidence(&root, &base).await.unwrap();
+
+        assert_eq!(evidence.changed_paths, vec!["README.md"]);
+        assert!(evidence.diff.ends_with('\n'));
         let _ = std::fs::remove_dir_all(root);
     }
 

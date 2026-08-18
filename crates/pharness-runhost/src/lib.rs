@@ -587,7 +587,7 @@ async fn collect_workspace_git_evidence(
     if changed_paths.iter().any(|path| secret_shaped_path(path)) {
         anyhow::bail!("workspace diff includes a secret-shaped path");
     }
-    let diff = git_output(root, &["diff", "--no-ext-diff", "--binary", base_commit]).await?;
+    let diff = git_output_raw(root, &["diff", "--no-ext-diff", "--binary", base_commit]).await?;
     if diff.len() > 512 * 1024 {
         anyhow::bail!("workspace Git diff exceeds the 512 KiB capture limit");
     }
@@ -602,6 +602,10 @@ async fn collect_workspace_git_evidence(
 }
 
 async fn git_output(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
+    Ok(git_output_raw(cwd, args).await?.trim().to_string())
+}
+
+async fn git_output_raw(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
     let command_args = git_evidence_args(cwd, args);
     let output = Command::new("git")
         .args(&command_args)
@@ -611,7 +615,7 @@ async fn git_output(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
     if !output.status.success() {
         anyhow::bail!("Git workspace evidence command failed");
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 fn git_evidence_args(cwd: &Path, args: &[&str]) -> Vec<String> {
@@ -1045,6 +1049,7 @@ mod workspace_source_tests {
         assert_eq!(evidence.changed_paths, vec!["README.md"]);
         assert!(evidence.diff.contains("-before"));
         assert!(evidence.diff.contains("+after"));
+        assert!(evidence.diff.ends_with('\n'));
         let _ = std::fs::remove_dir_all(root);
     }
 

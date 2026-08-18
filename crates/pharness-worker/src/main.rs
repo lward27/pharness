@@ -1641,7 +1641,7 @@ async fn execute_git_delivery_plan(
         )
         .await?;
         let patch = root.join("change.patch");
-        tokio::fs::write(&patch, &context.diff).await?;
+        tokio::fs::write(&patch, git_patch_for_apply(&context.diff)).await?;
         git_delivery_command(
             &[
                 "-C",
@@ -2014,6 +2014,14 @@ fn is_github_pr_url(value: &str) -> bool {
         .strip_prefix("https://github.com/")
         .map(|value| value.split('/').collect::<Vec<_>>());
     matches!(parts, Some(parts) if parts.len() == 4 && parts[2] == "pull" && parts[3].parse::<u64>().is_ok())
+}
+
+fn git_patch_for_apply(diff: &str) -> String {
+    if diff.ends_with('\n') {
+        diff.to_string()
+    } else {
+        format!("{diff}\n")
+    }
 }
 
 async fn git_delivery_command(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<()> {
@@ -2799,10 +2807,10 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        fetch_internal_context, git_delivery_command_error_code, parse_github_repository,
-        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
-        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
-        GitDeliveryContext, PipelineRunTerminal,
+        fetch_internal_context, git_delivery_command_error_code, git_patch_for_apply,
+        parse_github_repository, pipeline_run_terminal, update_kustomization_image,
+        validate_git_delivery_context, validate_resumed_workspace_identity, workspace_git_args,
+        ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
@@ -3112,6 +3120,18 @@ mod tests {
         assert_eq!(
             git_delivery_command_error_code(&["-C", "/work/git-gexec/repo", "status"]),
             "git_command_failed"
+        );
+    }
+
+    #[test]
+    fn git_writer_repairs_only_a_missing_patch_terminator() {
+        assert_eq!(
+            git_patch_for_apply("diff --git a/a b/a"),
+            "diff --git a/a b/a\n"
+        );
+        assert_eq!(
+            git_patch_for_apply("diff --git a/a b/a\n"),
+            "diff --git a/a b/a\n"
         );
     }
 
