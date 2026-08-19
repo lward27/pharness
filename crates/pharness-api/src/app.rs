@@ -5890,6 +5890,22 @@ struct RollbackIntentRequest {
     expires_at: Option<String>,
 }
 
+fn required_baseline_capability_result(
+    response: ExecuteCapabilityResponse,
+    resource: &str,
+) -> Result<ToolResult, ApiError> {
+    response.result.ok_or_else(|| {
+        let detail = response
+            .error
+            .as_deref()
+            .filter(|error| !error.trim().is_empty())
+            .unwrap_or(response.status.as_str());
+        ApiError::conflict(format!(
+            "production baseline {resource} observation failed: {detail}"
+        ))
+    })
+}
+
 async fn prepare_work_item_rollback_intent(
     State(state): State<AppState>,
     identity: Option<Extension<OperatorIdentity>>,
@@ -5948,15 +5964,9 @@ async fn prepare_work_item_rollback_intent(
         None,
     )
     .await?;
-    let deployment_result = deployment.result.ok_or_else(|| {
-        ApiError::conflict("production baseline Deployment observation did not execute")
-    })?;
-    let argo_result = argo.result.ok_or_else(|| {
-        ApiError::conflict("production baseline Argo observation did not execute")
-    })?;
-    let pods_result = pods
-        .result
-        .ok_or_else(|| ApiError::conflict("production baseline Pod observation did not execute"))?;
+    let deployment_result = required_baseline_capability_result(deployment, "Deployment")?;
+    let argo_result = required_baseline_capability_result(argo, "Argo Application")?;
+    let pods_result = required_baseline_capability_result(pods, "Pod")?;
     let expected_image = item
         .gitops_image_name
         .as_deref()
@@ -28319,13 +28329,13 @@ mod tests {
         preflight_change_set_git_delivery, preflight_deployment_intent,
         preflight_gitops_change_set_delivery, prepare_change_set_git_delivery,
         prepare_gitops_change_set_delivery, reconcile_due_controller_waits, reconcile_work_item,
-        release_reconcile_action, replan_work_item, revise_change_set, revise_work_plan,
-        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
-        schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
-        supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
-        transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
-        transition_registry_evidence, transition_release, transition_remediation_plan,
-        transition_work_item, transition_work_plan, unique_suffix,
+        release_reconcile_action, replan_work_item, required_baseline_capability_result,
+        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
+        run_summary, satisfy_approval_gate, schedule_controller_wait, set_pipeline_intent_evidence,
+        stream_start_seq, supersede_active_controller_wait_if_present, tekton_execution_spec,
+        transition_change_set, transition_deployment_contract, transition_deployment_intent,
+        transition_pipeline_intent, transition_registry_evidence, transition_release,
+        transition_remediation_plan, transition_work_item, transition_work_plan, unique_suffix,
         validate_permission_grant_request, validate_pipeline_deployment_handoff,
         validate_terminal_pipeline_run_analysis, verify_release, work_item_flow,
         work_item_pipeline_intent_context, work_plan_flow, work_plan_readiness, AppState,
@@ -28354,12 +28364,13 @@ mod tests {
         CreateTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest, CreateWorkItemRequest,
         CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
         DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
-        ExecuteCapabilityRequest, ExecuteDeploymentIntentRequest, ExecuteWorkItemActionRequest,
-        GitDeliveryPreflightRequest, GitOpsDeliveryObservationOutcomeRequest,
-        GitOpsDeliveryOutcomeRequest, GitOpsDeliveryPreflightRequest,
-        PipelineIntentExecutionOutcomeRequest, PrepareGitDeliveryRequest,
-        PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest, ReconcileWorkItemRequest,
-        ReleaseResponse, ReplanWorkItemRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
+        ExecuteCapabilityRequest, ExecuteCapabilityResponse, ExecuteDeploymentIntentRequest,
+        ExecuteWorkItemActionRequest, GitDeliveryPreflightRequest,
+        GitOpsDeliveryObservationOutcomeRequest, GitOpsDeliveryOutcomeRequest,
+        GitOpsDeliveryPreflightRequest, PipelineIntentExecutionOutcomeRequest,
+        PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest,
+        ReconcileDueControllerWaitsRequest, ReconcileWorkItemRequest, ReleaseResponse,
+        ReplanWorkItemRequest, ReviewApprovalRequest, ReviseChangeSetRequest,
         ReviseWorkPlanRequest, RevokePermissionGrantRequest, TransitionChangeSetRequest,
         TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
         TransitionPipelineIntentRequest, TransitionRegistryEvidenceRequest,
@@ -28372,8 +28383,8 @@ mod tests {
     use axum::{Extension, Json};
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
-        AgentAction, AgentEvent, EventId, EventKind, PolicyMode, ReadOnlyClusterTools, RunId,
-        RunScope, SafetyPolicy, SessionId,
+        AgentAction, AgentEvent, EventId, EventKind, PolicyDecision, PolicyMode,
+        ReadOnlyClusterTools, RiskLevel, RunId, RunScope, SafetyPolicy, SessionId,
     };
     use pharness_store::{
         ApprovalGateListFilter, ApprovalGateSummaryFilter, CreateApproval, CreateApprovalGate,
@@ -30272,6 +30283,36 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                     .unwrap()
                     .contains("not configured")
         }));
+    }
+
+    #[test]
+    fn production_baseline_surfaces_the_exact_read_only_capability_failure() {
+        let error = required_baseline_capability_result(
+            ExecuteCapabilityResponse {
+                status: "tool_error".to_string(),
+                action: "kubernetes_get".to_string(),
+                decision: PolicyDecision::Allow {
+                    risk: RiskLevel::Low,
+                    summary: "typed read-only observation".to_string(),
+                    grant_id: None,
+                },
+                executed: true,
+                cancelled: false,
+                timeout_ms: 60_000,
+                artifact_id: None,
+                observation_id: None,
+                result: None,
+                error: Some(
+                    "deployments.apps yfinance-wrapper is forbidden for pharness-api".to_string(),
+                ),
+            },
+            "Deployment",
+        )
+        .unwrap_err();
+
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert!(error.message.contains("production baseline Deployment"));
+        assert!(error.message.contains("yfinance-wrapper is forbidden"));
     }
 
     #[tokio::test]
