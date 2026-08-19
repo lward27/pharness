@@ -1,0 +1,74 @@
+{{- if .Values.protectedProductionTarget.enabled }}
+# The API captures a fail-closed rollback baseline before the protected
+# production GitOps writer is authorized. These permissions are deliberately
+# read-only and limited to the one locked production namespace/Application.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-protected-production-observer
+  namespace: {{ .Values.protectedProductionTarget.namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: protected-production-observer
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames:
+      - {{ .Values.protectedProductionTarget.workloadName | quote }}
+    verbs: ["get"]
+  # Kubernetes RBAC cannot restrict list by label selector. This namespace-only
+  # list permission is needed to verify the running imageIDs for the exact
+  # protected Deployment; it grants no pod logs, exec, mutation, or Secret access.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-protected-production-observer
+  namespace: {{ .Values.protectedProductionTarget.namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: protected-production-observer
+subjects:
+  - kind: ServiceAccount
+    name: pharness-api
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-protected-production-observer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-protected-production-observer
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: protected-production-observer
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    resourceNames:
+      - {{ .Values.protectedProductionTarget.argoApplication | quote }}
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-protected-production-observer
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: protected-production-observer
+subjects:
+  - kind: ServiceAccount
+    name: pharness-api
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-protected-production-observer
+{{- end }}
