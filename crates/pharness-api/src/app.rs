@@ -1126,7 +1126,7 @@ async fn preflight_system_capability(
             .find(|entry| entry.capability == capability)
             .ok_or_else(|| ApiError::not_found("capability", &capability))?
     };
-    if configured.status == "unavailable" {
+    if capability_preflight_is_statically_unavailable(&configured) {
         return Ok(Json(configured));
     }
     let repository = (capability == "source_workspace")
@@ -1187,6 +1187,10 @@ async fn preflight_system_capability(
         verified_at: Some(verification.verified_at),
         expires_at: Some(verification.expires_at),
     }))
+}
+
+fn capability_preflight_is_statically_unavailable(status: &CapabilityStatusResponse) -> bool {
+    status.status == "unavailable" && status.verified_at.is_none()
 }
 
 fn protected_target_json() -> Value {
@@ -28467,7 +28471,8 @@ mod tests {
         attach_deployment_intent_evidence, attach_pipeline_intent_evidence,
         attach_release_evidence, authorize_change_set_git_delivery,
         authorize_gitops_change_set_delivery, block_work_item_from_delivery_failure,
-        build_pipeline_run_manifest, cancel_run, cancel_work_item, capability_verification_summary,
+        build_pipeline_run_manifest, cancel_run, cancel_work_item,
+        capability_preflight_is_statically_unavailable, capability_verification_summary,
         change_set_flow, change_set_readiness, coding_run_scope_matches_source,
         complete_work_item_from_verified_release, config_effective, create_change_set,
         create_change_set_trusted_envelope, create_declared_deployment_handoff,
@@ -28586,6 +28591,30 @@ mod tests {
             2
         );
         assert_ne!(gitops_artifact_change_set_revision(&json!({})), 2);
+    }
+
+    #[test]
+    fn failed_capability_verification_can_retry_but_static_unavailability_cannot() {
+        let static_unavailable = super::CapabilityStatusResponse {
+            capability: "gitops_writer".to_string(),
+            status: "unavailable".to_string(),
+            summary: "GitOps writer is not configured".to_string(),
+            verified_at: None,
+            expires_at: None,
+        };
+        assert!(capability_preflight_is_statically_unavailable(
+            &static_unavailable
+        ));
+
+        let failed_verification = super::CapabilityStatusResponse {
+            verified_at: Some("1787134555765".to_string()),
+            expires_at: Some("1787135455765".to_string()),
+            summary: "Isolated identity did not verify repository_push".to_string(),
+            ..static_unavailable
+        };
+        assert!(!capability_preflight_is_statically_unavailable(
+            &failed_verification
+        ));
     }
 
     async fn test_state() -> AppState {
