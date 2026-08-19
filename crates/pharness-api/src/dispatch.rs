@@ -848,9 +848,35 @@ impl KubernetesJobDispatcher {
                 let repo = repos.first().ok_or_else(|| anyhow::anyhow!("{capability} repository allowlist is empty"))?;
                 let repo_path = repo.trim_end_matches('/').trim_end_matches(".git").strip_prefix("https://github.com/").ok_or_else(|| anyhow::anyhow!("{capability} repository is not a safe GitHub HTTPS URL"))?;
                 env.push(serde_json::json!({"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"name":secret.expect("availability requires Secret"),"key":"token"}}}));
+                env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
                 env.push(serde_json::json!({"name":"REPOSITORY_API","value":format!("https://api.github.com/repos/{repo_path}")}));
                 env.push(serde_json::json!({"name":"REQUIRED_PERMISSION","value":required_permission}));
-                (service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, service_account), format!("repository_{required_permission}"), Some(repo.clone()), "curl -fsS -H \"Authorization: Bearer $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" \"$REPOSITORY_API\" -o /tmp/repository.json && grep -Eq \"\\\"$REQUIRED_PERMISSION\\\"[[:space:]]*:[[:space:]]*true\" /tmp/repository.json".to_string())
+                let script = if required_permission == "push" {
+                    env.push(serde_json::json!({
+                        "name":"PREFLIGHT_REF",
+                        "value":format!("refs/heads/pharness/capability-preflight-{suffix}")
+                    }));
+                    r#"curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$REPOSITORY_API" -o /tmp/repository.json
+grep -Eq "\"$REQUIRED_PERMISSION\"[[:space:]]*:[[:space:]]*true" /tmp/repository.json
+cat > /tmp/askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' x-access-token ;;
+  *) printf '%s\n' "$GITHUB_TOKEN" ;;
+esac
+EOF
+chmod 700 /tmp/askpass
+git init -q /tmp/push-preflight
+git -C /tmp/push-preflight config user.name Pharness
+git -C /tmp/push-preflight config user.email pharness@example.invalid
+printf '%s\n' capability-preflight > /tmp/push-preflight/probe
+git -C /tmp/push-preflight add probe
+git -C /tmp/push-preflight commit -qm capability-preflight
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp/push-preflight push --dry-run "$REPOSITORY" "HEAD:$PREFLIGHT_REF" >/dev/null 2>&1"#.to_string()
+                } else {
+                    "curl -fsS -H \"Authorization: Bearer $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" \"$REPOSITORY_API\" -o /tmp/repository.json && grep -Eq \"\\\"$REQUIRED_PERMISSION\\\"[[:space:]]*:[[:space:]]*true\" /tmp/repository.json".to_string()
+                };
+                (service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, service_account), format!("repository_{required_permission}"), Some(repo.clone()), script)
             }
             "tekton" => (self.config.tekton_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.tekton_executor_service_account), "create_pipelineruns".to_string(), None, format!("kubectl auth can-i create pipelineruns.tekton.dev -n {} | grep -qx yes", self.config.tekton_allowed_namespaces.first().ok_or_else(|| anyhow::anyhow!("Tekton namespace allowlist is empty"))?)),
             "argo" => (self.config.argo_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.argo_executor_service_account), "get_and_patch_application".to_string(), None, format!("kubectl auth can-i get applications.argoproj.io/{} -n {} | grep -qx yes && kubectl auth can-i patch applications.argoproj.io/{} -n {} | grep -qx yes", self.config.argo_executor_allowed_applications.first().ok_or_else(|| anyhow::anyhow!("Argo Application allowlist is empty"))?, self.config.argo_executor_namespace, self.config.argo_executor_allowed_applications.first().unwrap(), self.config.argo_executor_namespace)),
@@ -2781,6 +2807,45 @@ mod tests {
         assert!(writer_manifest
             .pointer("/spec/template/spec/initContainers")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn writer_capability_preflight_exercises_git_transport_without_mutating_a_ref() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.gitops_writer_enabled = true;
+        dispatcher.config.gitops_writer_token_secret_name =
+            Some("pharness-gitops-writer-token".to_string());
+        dispatcher.config.gitops_writer_allowed_repos =
+            vec!["https://github.com/example/test.git".to_string()];
+        let (_, permission, repository, manifest) = dispatcher
+            .capability_preflight_manifest(
+                "gitops_writer",
+                Some("https://github.com/example/test.git"),
+            )
+            .unwrap();
+        let script = manifest
+            .pointer("/spec/template/spec/containers/0/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+
+        assert_eq!(permission, "repository_push");
+        assert_eq!(
+            repository.as_deref(),
+            Some("https://github.com/example/test.git")
+        );
+        assert!(script.contains("push --dry-run"));
+        assert!(script.contains("GIT_ASKPASS=/tmp/askpass"));
+        assert!(!script.contains("https://x-access-token:"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "PREFLIGHT_REF"
+                && entry["value"].as_str().is_some_and(|value| {
+                    value.starts_with("refs/heads/pharness/capability-preflight-")
+                })
+        }));
     }
 
     #[tokio::test]

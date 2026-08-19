@@ -2323,6 +2323,42 @@ impl SqliteStore {
             })
     }
 
+    pub async fn repropose_gitops_change_set(
+        &self,
+        change_set_id: &str,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredGitOpsChangeSet, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE gitops_change_sets
+            SET status = 'proposed', revision = revision + 1,
+                updated_at = ?2, status_changed_at = ?2,
+                status_changed_by = ?3, status_reason = ?4
+            WHERE id = ?1 AND status = 'approved'
+            "#,
+        )
+        .bind(change_set_id)
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(format!(
+                "GitOps ChangeSet {change_set_id} is no longer approved for re-proposal"
+            )));
+        }
+
+        self.get_gitops_change_set(change_set_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "gitops_change_set".to_string(),
+                id: change_set_id.to_string(),
+            })
+    }
+
     pub async fn create_pipeline_intent(
         &self,
         intent: CreatePipelineIntent,
