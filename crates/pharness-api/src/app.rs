@@ -3093,6 +3093,178 @@ async fn work_item_flow(
                 change_set.revision,
             ));
         }
+        if let Some(change_set) = flow.gitops_change_set.as_ref().filter(|item| {
+            item.status == "approved"
+                && reconcile_preview.action
+                    == WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization.as_str()
+        }) {
+            let gitops_gate = state
+                .store
+                .list_approval_gates(ApprovalGateListFilter {
+                    work_item_id: Some(work_item_id.clone()),
+                    gate_kind: Some("gitops_mutation".to_string()),
+                    limit: 20,
+                    ..ApprovalGateListFilter::default()
+                })
+                .await?
+                .into_iter()
+                .find(|gate| {
+                    work_plan.as_ref().is_some_and(|plan| {
+                        work_item_gate_scope_matches(gate, &work_item, plan, "gitops_mutation")
+                    })
+                });
+            let gate_ready = gitops_gate
+                .as_ref()
+                .is_some_and(|gate| matches!(gate.status.as_str(), "satisfied" | "waived"));
+            let writer_ready = state
+                .worker
+                .gitops_writer_settings()
+                .is_some_and(|settings| {
+                    settings
+                        .allowed_repos
+                        .iter()
+                        .any(|repo| repo == &change_set.gitops_repo)
+                });
+            let plan_id = flow
+                .gitops_delivery
+                .as_ref()
+                .map(|delivery| delivery.plan.id.as_str());
+            let mut blockers = Vec::new();
+            if !gate_ready {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "gitops_mutation_gate_pending".to_string(),
+                    summary: "Satisfy the exact WorkItem gitops_mutation gate before authorizing the dedicated GitOps writer."
+                        .to_string(),
+                });
+            }
+            if plan_id.is_none() {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "gitops_delivery_plan_missing".to_string(),
+                    summary:
+                        "The immutable base-revision-bound GitOps delivery plan is unavailable."
+                            .to_string(),
+                });
+            }
+            if !writer_ready {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "gitops_writer_unavailable".to_string(),
+                    summary: format!(
+                        "The dedicated GitOps writer is not configured for {}.",
+                        change_set.gitops_repo
+                    ),
+                });
+            }
+            let mut approval_requirements = vec![
+                "gitops_delivery_authorization".to_string(),
+                "gitops_mutation".to_string(),
+            ];
+            if work_item.production_impacting {
+                approval_requirements.push("production_impact".to_string());
+            }
+            action_rail.push(WorkItemActionResponse {
+                id: "authorize_gitops_delivery".to_string(),
+                lifecycle_stage: "gitops".to_string(),
+                resource: change_set.id.clone(),
+                status: if blockers.is_empty() { "ready" } else { "blocked" }.to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers,
+                approval_required: true,
+                approval_requirements,
+                external_effect_summary: format!(
+                    "Authorize one isolated GitOps branch-and-pull-request writer for {} at immutable plan {}. The production grant expires within 30 minutes. This action does not create the branch or pull request.",
+                    change_set.gitops_repo,
+                    plan_id.unwrap_or("unavailable"),
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "authorize_gitops_delivery",
+                    "work_item": work_item.id,
+                    "work_item_updated_at": work_item.updated_at,
+                    "gitops_change_set": change_set.id,
+                    "status": change_set.status,
+                    "updated_at": change_set.updated_at,
+                    "revision": change_set.revision,
+                    "material_hash": change_set.material_hash,
+                    "repository": change_set.gitops_repo,
+                    "head_branch": change_set.head_branch,
+                    "plan_id": plan_id,
+                    "gate_id": gitops_gate.as_ref().map(|gate| gate.id.as_str()),
+                    "gate_status": gitops_gate.as_ref().map(|gate| gate.status.as_str()),
+                    "writer_ready": writer_ready,
+                })),
+            });
+        }
+        if let Some(intent) = flow.deployment_intent.as_ref().filter(|item| {
+            item.status == "approved"
+                && reconcile_preview.action
+                    == WorkItemReconcileAction::AwaitingDeploymentAuthorization.as_str()
+        }) {
+            let preflight = reconcile_preview.deployment_execution_preflight.as_ref();
+            let preflight_checks = preflight
+                .map(|preflight| preflight.checks.clone())
+                .unwrap_or_default();
+            let mut blockers = Vec::new();
+            if preflight.is_none() {
+                blockers.push(ReconcileBlockerResponse {
+                    code: "deployment_execution_preflight_unavailable".to_string(),
+                    summary: "Deployment execution preflight is unavailable; the production window cannot be bound safely."
+                        .to_string(),
+                });
+            }
+            blockers.extend(preflight_checks.iter().filter_map(|check| {
+                let code = check.get("code").and_then(Value::as_str)?;
+                let passed = check.get("passed").and_then(Value::as_bool) == Some(true);
+                if passed || code == "trusted_execution_envelope" {
+                    return None;
+                }
+                Some(ReconcileBlockerResponse {
+                    code: code.to_string(),
+                    summary: check
+                        .get("summary")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Deployment execution preflight failed")
+                        .to_string(),
+                })
+            }));
+            let mut approval_requirements = vec![
+                "deployment_execution_authorization".to_string(),
+                "cluster_mutation".to_string(),
+            ];
+            if work_item.production_impacting {
+                approval_requirements.extend([
+                    "production_impact".to_string(),
+                    "production_deployment".to_string(),
+                ]);
+            }
+            action_rail.push(WorkItemActionResponse {
+                id: "authorize_deployment_execution".to_string(),
+                lifecycle_stage: "deployment".to_string(),
+                resource: intent.id.clone(),
+                status: if blockers.is_empty() { "ready" } else { "blocked" }.to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers,
+                approval_required: true,
+                approval_requirements,
+                external_effect_summary: format!(
+                    "Open one production authorization window, lasting at most 30 minutes, for exact Argo Application {} in {}/{}. This action does not dispatch an Argo sync.",
+                    intent.argo_application.as_deref().unwrap_or("unavailable"),
+                    intent.target_environment.as_deref().unwrap_or("unavailable"),
+                    intent.target_namespace.as_deref().unwrap_or("unavailable"),
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "authorize_deployment_execution",
+                    "work_item": work_item.id,
+                    "work_item_updated_at": work_item.updated_at,
+                    "deployment_intent": intent.id,
+                    "status": intent.status,
+                    "updated_at": intent.updated_at,
+                    "target_environment": intent.target_environment,
+                    "target_namespace": intent.target_namespace,
+                    "argo_application": intent.argo_application,
+                    "preflight_checks": preflight_checks,
+                    "permission_grant_id": preflight.and_then(|preflight| preflight.permission_grant.as_ref()).map(|grant| grant.id.as_str()),
+                })),
+            });
+        }
         if let Some(release) = flow
             .release
             .as_ref()
@@ -5493,6 +5665,42 @@ async fn execute_work_item_action(
                 .await?
                 .0,
             ),
+            "authorize_gitops_delivery" => {
+                let expires_at = flow
+                    .work_item
+                    .production_impacting
+                    .then(|| (current_millis() + 30 * 60 * 1_000).to_string());
+                let Json(authorization) = authorize_gitops_change_set_delivery(
+                    State(state.clone()),
+                    identity.clone(),
+                    Path(action.resource.clone()),
+                    Json(CreateGitOpsDeliveryAuthorizationRequest {
+                        subject: None,
+                        created_by: Some(actor.clone()),
+                        reason: request.reason.clone(),
+                        expires_at,
+                    }),
+                )
+                .await?;
+                let Json(preflight) = preflight_gitops_change_set_delivery(
+                    State(state.clone()),
+                    identity.clone(),
+                    Path(action.resource.clone()),
+                    Json(GitOpsDeliveryPreflightRequest {
+                        subject: None,
+                        actor: Some(actor.clone()),
+                        reason: Some(
+                            "record readiness after the state-hashed GitOps writer authorization"
+                                .to_string(),
+                        ),
+                    }),
+                )
+                .await?;
+                serde_json::to_value(json!({
+                    "authorization": authorization,
+                    "preflight": preflight,
+                }))
+            }
             "approve_deployment_intent" | "reject_deployment_intent" => serde_json::to_value(
                 transition_deployment_intent(
                     State(state.clone()),
@@ -5501,6 +5709,23 @@ async fn execute_work_item_action(
                         target_status: transition_target.to_string(),
                         actor: Some(actor.clone()),
                         reason: Some(request.reason.clone()),
+                    }),
+                )
+                .await?
+                .0,
+            ),
+            "authorize_deployment_execution" => serde_json::to_value(
+                create_deployment_intent_trusted_envelope(
+                    State(state.clone()),
+                    Path(action.resource.clone()),
+                    Json(CreateDeploymentIntentTrustedEnvelopeRequest {
+                        subject: None,
+                        created_by: Some(actor.clone()),
+                        reason: request.reason.clone(),
+                        expires_at: flow
+                            .work_item
+                            .production_impacting
+                            .then(|| (current_millis() + 30 * 60 * 1_000).to_string()),
                     }),
                 )
                 .await?
@@ -5616,6 +5841,7 @@ async fn advance_work_item(
                 | "capture_change_set"
                 | "prepare_git_delivery"
                 | "awaiting_gitops_delivery_plan"
+                | "awaiting_release_definition"
                 | "complete_work_item"
         );
         if !safe_internal || !preview.can_apply {
@@ -7851,6 +8077,146 @@ async fn reconcile_work_item(
             .map(Json)
         })
         .await,
+        WorkItemReconcileAction::AwaitingReleaseDefinition => {
+            let deployment_intent = deployment_intent
+                .as_ref()
+                .expect("Release definition requires a DeploymentIntent");
+            let commit_sha = gitops_delivery
+                .as_ref()
+                .and_then(|delivery| delivery.latest_merge.as_ref())
+                .and_then(|artifact| artifact.content_json.as_ref())
+                .and_then(|content| content.get("merge_commit_sha"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let rollback_ref = latest_rollback_intent(&state, &work_item, None)
+                .await?
+                .and_then(|intent| {
+                    intent
+                        .pointer("/content/baseline/image_ref")
+                        .or_else(|| intent.pointer("/content/baseline/image_digest"))
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                });
+            let Json(created) = create_release_from_deployment_intent(
+                State(state.clone()),
+                Json(CreateReleaseFromDeploymentIntentRequest {
+                    deployment_intent_id: deployment_intent.id.clone(),
+                    title: None,
+                    summary: None,
+                    risk_level: None,
+                    release_kind: None,
+                    version: None,
+                    commit_sha,
+                    image_digest: None,
+                    rollback_ref,
+                    release_json: None,
+                    actor: actor.clone(),
+                    reason: reason.clone().or_else(|| {
+                        Some(
+                            "controller proposed the Release from the completed exact Argo sync"
+                                .to_string(),
+                        )
+                    }),
+                }),
+            )
+            .await?;
+            append_work_item_audit_event(
+                &state.store,
+                &work_item,
+                "work_item.release_proposed",
+                actor,
+                json!({
+                    "release_id": created.release.id,
+                    "deployment_intent_id": deployment_intent.id,
+                    "commit_sha": created.release.commit_sha,
+                    "image_digest": created.release.image_digest,
+                    "rollback_ref": created.release.rollback_ref,
+                    "created": created.created,
+                    "mutation_performed": false,
+                }),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                if created.created {
+                    format!(
+                        "proposed Release {}; explicit Release review is now required",
+                        created.release.id
+                    )
+                } else {
+                    format!(
+                        "reused existing Release {}; explicit Release review remains required",
+                        created.release.id
+                    )
+                },
+            )
+            .await
+            .map(Json)
+        }
+        WorkItemReconcileAction::AwaitingReleaseVerification => {
+            let release = deployment_delivery
+                .as_ref()
+                .and_then(|delivery| delivery.release.as_ref())
+                .expect("Release verification requires a Release");
+            let Json(verification) = verify_release(
+                State(state.clone()),
+                identity,
+                Path(release.id.clone()),
+                Json(VerifyReleaseRequest {
+                    complete: true,
+                    actor: actor.clone(),
+                    reason: Some(reason.clone().unwrap_or_else(|| {
+                        "controller performed the explicit bounded post-sync verification"
+                            .to_string()
+                    })),
+                    timeout_ms: None,
+                }),
+            )
+            .await?;
+            append_work_item_audit_event(
+                &state.store,
+                &work_item,
+                if verification.completed {
+                    "work_item.release_verified"
+                } else {
+                    "work_item.release_verification_attention_required"
+                },
+                actor,
+                json!({
+                    "release_id": verification.release.id,
+                    "verified": verification.verified,
+                    "completed": verification.completed,
+                    "checks": verification.checks,
+                    "automatic_rollback": false,
+                    "mutation_performed": false,
+                }),
+            )
+            .await?;
+            reconcile_work_item_response(
+                &state,
+                &work_item_id,
+                action,
+                true,
+                recorded_preflight,
+                if verification.completed {
+                    format!(
+                        "verified and completed Release {}; WorkItem completion is now eligible",
+                        verification.release.id
+                    )
+                } else {
+                    format!(
+                        "Release {} did not pass every required post-sync check; review the durable evidence before rollback consideration",
+                        verification.release.id
+                    )
+                },
+            )
+            .await
+            .map(Json)
+        }
         WorkItemReconcileAction::CompleteWorkItem => {
             let completed =
                 complete_work_item_from_verified_release(&state, &work_item_id, actor, reason)
@@ -9311,6 +9677,7 @@ impl WorkItemReconcileAction {
                 | Self::AwaitingGitOpsDeliveryExecution
                 | Self::AwaitingGitOpsPullRequestObservation
                 | Self::AwaitingDeploymentExecution
+                | Self::AwaitingReleaseDefinition
                 | Self::AwaitingReleaseVerification
                 | Self::CompleteWorkItem
         )
@@ -10359,6 +10726,9 @@ fn action_effect(action: WorkItemReconcileAction) -> &'static str {
         }
         WorkItemReconcileAction::AwaitingDeploymentExecution => {
             "dispatch one isolated Argo reconciliation runner"
+        }
+        WorkItemReconcileAction::AwaitingReleaseDefinition => {
+            "create one proposed Release bound to the completed Argo sync and verified build digest"
         }
         WorkItemReconcileAction::AwaitingReleaseVerification => {
             "record the bounded release verification action"
@@ -38592,41 +38962,53 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             )
             .await
             .unwrap();
-        let Json(envelope) = authorize_gitops_change_set_delivery(
+        let Json(authorization_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let authorization_action = authorization_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "authorize_gitops_delivery")
+            .expect("satisfied GitOps gate must expose writer authorization");
+        assert_eq!(authorization_action.status, "ready");
+        assert_eq!(authorization_action.effect_class, "approval_boundary");
+        let Json(authorization) = execute_work_item_action(
             State(state.clone()),
             None,
-            Path(gitops_change_set_id.to_string()),
-            Json(CreateGitOpsDeliveryAuthorizationRequest {
-                subject: None,
-                created_by: Some("lucas".to_string()),
-                reason: "authorize one exact disposable GitOps update".to_string(),
-                expires_at: None,
-            }),
-        )
-        .await
-        .unwrap();
-        let Json(preflight) = preflight_gitops_change_set_delivery(
-            State(state.clone()),
-            None,
-            Path(gitops_change_set_id.to_string()),
-            Json(GitOpsDeliveryPreflightRequest {
-                subject: None,
+            Path((work_item_id.to_string(), authorization_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
                 actor: Some("lucas".to_string()),
-                reason: Some("record controller dispatch readiness".to_string()),
+                reason: "authorize one exact disposable GitOps update".to_string(),
+                state_hash: authorization_action.state_hash.clone(),
             }),
         )
         .await
         .unwrap();
-        assert_eq!(preflight.status, "ready_for_writer");
-        assert!(preflight.dispatch_ready);
         assert_eq!(
-            preflight
-                .permission_grant
-                .as_ref()
-                .map(|grant| grant.id.as_str()),
-            Some(envelope.grant.id.as_str())
+            authorization.pointer("/preflight/status"),
+            Some(&json!("ready_for_writer"))
         );
-        assert_eq!(plan_artifact_id, preflight.plan.id);
+        assert_eq!(
+            authorization.pointer("/preflight/dispatch_ready"),
+            Some(&json!(true))
+        );
+        let grant_id = authorization
+            .pointer("/authorization/grant/id")
+            .and_then(Value::as_str)
+            .expect("authorization action must return its exact PermissionGrant");
+        assert_eq!(
+            authorization
+                .pointer("/preflight/permission_grant/id")
+                .and_then(Value::as_str),
+            Some(grant_id)
+        );
+        assert_eq!(
+            authorization
+                .pointer("/preflight/plan/id")
+                .and_then(Value::as_str),
+            Some(plan_artifact_id.as_str())
+        );
 
         let Json(preview) = reconcile_work_item(
             State(state.clone()),
@@ -39061,14 +39443,25 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             )
             .await
             .unwrap();
-        let Json(envelope) = create_deployment_intent_trusted_envelope(
+        let Json(authorization_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let authorization_action = authorization_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "authorize_deployment_execution")
+            .expect("satisfied deployment gates must expose Argo authorization");
+        assert_eq!(authorization_action.status, "ready");
+        assert_eq!(authorization_action.effect_class, "approval_boundary");
+        let Json(envelope) = execute_work_item_action(
             State(state.clone()),
-            Path(deployment_intent_id.to_string()),
-            Json(CreateDeploymentIntentTrustedEnvelopeRequest {
-                subject: None,
-                created_by: Some("lucas".to_string()),
+            None,
+            Path((work_item_id.to_string(), authorization_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
                 reason: "authorize one exact disposable Argo sync".to_string(),
-                expires_at: None,
+                state_hash: authorization_action.state_hash.clone(),
             }),
         )
         .await
@@ -39091,7 +39484,7 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .permission_grant
                 .as_ref()
                 .map(|grant| grant.id.as_str()),
-            Some(envelope.grant.id.as_str())
+            envelope.pointer("/grant/id").and_then(Value::as_str)
         );
         assert_eq!(
             preflight
@@ -39176,6 +39569,92 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .count(),
             1
         );
+        let execution = artifacts
+            .iter()
+            .find(|artifact| artifact.kind == "argo_sync_execution")
+            .expect("controller dispatch must persist one Argo execution");
+        let execution_id = execution
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("execution_id"))
+            .and_then(Value::as_str)
+            .expect("Argo execution must have an immutable execution ID");
+        state
+            .store
+            .create_artifact(CreateArtifact {
+                id: "art_argo_controller_sync_result".to_string(),
+                session_id: session_id.clone(),
+                run_id: Some(run_id.clone()),
+                kind: "argo_sync_result".to_string(),
+                label: "Completed disposable Argo sync".to_string(),
+                mime_type: Some("application/json".to_string()),
+                path: None,
+                content_text: None,
+                content_json: Some(json!({
+                    "execution_id": execution_id,
+                    "status": "completed",
+                    "deployment_intent_id": deployment_intent_id,
+                    "details": {
+                        "sync_status": "Synced",
+                        "operation_phase": "Succeeded",
+                        "revision": gitops_commit,
+                    }
+                })),
+            })
+            .await
+            .unwrap();
+        let deployment_wait = state
+            .store
+            .get_active_controller_wait_for_work_item(work_item_id)
+            .await
+            .unwrap()
+            .expect("Argo dispatch must create a controller wait");
+        state
+            .store
+            .resolve_controller_wait(
+                &deployment_wait.id,
+                "resolved",
+                "durable Argo completion fixture is present".to_string(),
+            )
+            .await
+            .unwrap();
+
+        let Json(release_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let release_action = release_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "awaiting_release_definition")
+            .expect("completed Argo sync must expose Release definition");
+        assert_eq!(release_action.status, "ready");
+        assert_eq!(release_action.effect_class, "internal");
+        let Json(release_result) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item_id.to_string(), release_action.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "propose exact disposable release".to_string(),
+                state_hash: release_action.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(release_result["applied"], json!(true));
+        assert_eq!(
+            release_result["action"],
+            json!("awaiting_release_definition")
+        );
+        let release = state
+            .store
+            .get_release_by_deployment_intent(deployment_intent_id)
+            .await
+            .unwrap()
+            .expect("Release definition action must persist a proposed Release");
+        assert_eq!(release.status, "proposed");
+        assert_eq!(release.commit_sha.as_deref(), Some(gitops_commit));
         fs::remove_file(kubectl_stub).unwrap();
     }
 
