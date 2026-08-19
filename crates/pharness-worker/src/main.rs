@@ -2025,19 +2025,63 @@ fn git_patch_for_apply(diff: &str) -> String {
 }
 
 async fn git_delivery_command(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<()> {
-    if git_delivery_command_status(args, askpass).await? {
+    let output = git_delivery_output(args, askpass).await?;
+    if output.status.success() {
         Ok(())
     } else {
-        anyhow::bail!(git_delivery_command_error_code(args))
+        anyhow::bail!(git_delivery_command_error_code_for_stderr(
+            args,
+            &output.stderr
+        ))
     }
 }
 
 async fn git_delivery_stdout(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<String> {
     let output = git_delivery_output(args, askpass).await?;
     if !output.status.success() {
-        anyhow::bail!(git_delivery_command_error_code(args));
+        anyhow::bail!(git_delivery_command_error_code_for_stderr(
+            args,
+            &output.stderr
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_delivery_command_error_code_for_stderr(args: &[&str], stderr: &[u8]) -> &'static str {
+    let default = git_delivery_command_error_code(args);
+    if default != "git_push_failed" {
+        return default;
+    }
+    let stderr = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+    if stderr.contains("authentication failed")
+        || stderr.contains("invalid username or password")
+        || stderr.contains("could not read username")
+        || stderr.contains("authentication required")
+    {
+        "git_push_authentication_failed"
+    } else if (stderr.contains("permission to") && stderr.contains("denied"))
+        || stderr.contains("write access to repository not granted")
+        || stderr.contains("requested url returned error: 403")
+    {
+        "git_push_permission_denied"
+    } else if stderr.contains("non-fast-forward") || stderr.contains("fetch first") {
+        "git_push_non_fast_forward"
+    } else if stderr.contains("cannot lock ref") || stderr.contains("exists; cannot create") {
+        "git_push_ref_conflict"
+    } else if stderr.contains("repository rule violations")
+        || stderr.contains("protected branch hook declined")
+        || stderr.contains("push declined")
+    {
+        "git_push_policy_rejected"
+    } else if stderr.contains("could not resolve host")
+        || stderr.contains("failed to connect")
+        || stderr.contains("connection timed out")
+        || stderr.contains("network is unreachable")
+    {
+        "git_push_transport_failed"
+    } else {
+        default
+    }
 }
 
 fn git_delivery_command_error_code(args: &[&str]) -> &'static str {
@@ -2166,6 +2210,12 @@ fn git_delivery_error_code(error: &anyhow::Error) -> &'static str {
         "git_commit_failed" => "git_commit_failed",
         "git_revision_failed" => "git_revision_failed",
         "git_push_failed" => "git_push_failed",
+        "git_push_authentication_failed" => "git_push_authentication_failed",
+        "git_push_permission_denied" => "git_push_permission_denied",
+        "git_push_non_fast_forward" => "git_push_non_fast_forward",
+        "git_push_ref_conflict" => "git_push_ref_conflict",
+        "git_push_policy_rejected" => "git_push_policy_rejected",
+        "git_push_transport_failed" => "git_push_transport_failed",
         "git_command_failed" => "git_command_failed",
         _ => "git_writer_failed",
     }
@@ -2190,6 +2240,12 @@ fn gitops_delivery_error_code(error: &anyhow::Error) -> &'static str {
         "git_commit_failed" => "git_commit_failed",
         "git_revision_failed" => "git_revision_failed",
         "git_push_failed" => "git_push_failed",
+        "git_push_authentication_failed" => "git_push_authentication_failed",
+        "git_push_permission_denied" => "git_push_permission_denied",
+        "git_push_non_fast_forward" => "git_push_non_fast_forward",
+        "git_push_ref_conflict" => "git_push_ref_conflict",
+        "git_push_policy_rejected" => "git_push_policy_rejected",
+        "git_push_transport_failed" => "git_push_transport_failed",
         "git_command_failed" => "git_command_failed",
         _ => "gitops_writer_failed",
     }
@@ -2807,10 +2863,11 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        fetch_internal_context, git_delivery_command_error_code, git_patch_for_apply,
-        parse_github_repository, pipeline_run_terminal, update_kustomization_image,
-        validate_git_delivery_context, validate_resumed_workspace_identity, workspace_git_args,
-        ArgoApplicationTerminal, GitDeliveryContext, PipelineRunTerminal,
+        fetch_internal_context, git_delivery_command_error_code,
+        git_delivery_command_error_code_for_stderr, git_patch_for_apply, parse_github_repository,
+        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
+        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
+        GitDeliveryContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
@@ -3120,6 +3177,42 @@ mod tests {
         assert_eq!(
             git_delivery_command_error_code(&["-C", "/work/git-gexec/repo", "status"]),
             "git_command_failed"
+        );
+    }
+
+    #[test]
+    fn git_writer_classifies_push_failures_without_persisting_provider_output() {
+        let push = [
+            "-C",
+            "/work/git-gexec/repo",
+            "push",
+            "origin",
+            "HEAD:refs/heads/pharness/work-item-1",
+        ];
+        assert_eq!(
+            git_delivery_command_error_code_for_stderr(
+                &push,
+                b"remote: Write access to repository not granted. requested URL returned error: 403",
+            ),
+            "git_push_permission_denied"
+        );
+        assert_eq!(
+            git_delivery_command_error_code_for_stderr(
+                &push,
+                b"fatal: Authentication failed for a redacted repository",
+            ),
+            "git_push_authentication_failed"
+        );
+        assert_eq!(
+            git_delivery_command_error_code_for_stderr(
+                &push,
+                b"! [rejected] HEAD -> branch (non-fast-forward)",
+            ),
+            "git_push_non_fast_forward"
+        );
+        assert_eq!(
+            git_delivery_command_error_code_for_stderr(&push, b"unrecognized safe failure"),
+            "git_push_failed"
         );
     }
 

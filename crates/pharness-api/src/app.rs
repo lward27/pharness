@@ -3383,6 +3383,43 @@ async fn work_item_flow(
             })),
         });
     }
+    if reconcile_preview.action == WorkItemReconcileAction::GitOpsDeliveryFailed.as_str() {
+        if let (Some(change_set), Some(result)) = (
+            sdlc_flow
+                .as_ref()
+                .and_then(|flow| flow.gitops_change_set.as_ref()),
+            sdlc_flow
+                .as_ref()
+                .and_then(|flow| flow.gitops_delivery.as_ref())
+                .and_then(|delivery| delivery.latest_result.as_ref()),
+        ) {
+            action_rail.push(WorkItemActionResponse {
+                id: "repropose_gitops_change_set".to_string(),
+                lifecycle_stage: "gitops".to_string(),
+                resource: change_set.id.clone(),
+                status: "ready".to_string(),
+                effect_class: "approval_boundary".to_string(),
+                blockers: Vec::new(),
+                approval_required: true,
+                approval_requirements: vec!["gitops_retry_review".to_string()],
+                external_effect_summary: format!(
+                    "Re-propose GitOps ChangeSet {} as reviewed revision {} after failed delivery {}; revoke the failed writer grant and require fresh base-revision evidence, review, and authorization. This action does not contact GitHub.",
+                    change_set.id,
+                    change_set.revision + 1,
+                    result.id,
+                ),
+                state_hash: lifecycle_action_hash(json!({
+                    "action": "repropose_gitops_change_set",
+                    "gitops_change_set_id": change_set.id,
+                    "status": change_set.status,
+                    "revision": change_set.revision,
+                    "updated_at": change_set.updated_at,
+                    "failed_result_id": result.id,
+                    "failed_result": result.content_json,
+                })),
+            });
+        }
+    }
     action_rail.push(work_item_action_response(&reconcile_preview));
     let rollback_intent = latest_rollback_intent(&state, &work_item, None).await?;
     let rollback_writer_base_ready = sdlc_flow
@@ -5641,6 +5678,15 @@ async fn execute_work_item_action(
             ),
             "retry_pipeline_intent" => serde_json::to_value(
                 retry_failed_pipeline_intent(
+                    &state,
+                    &action.resource,
+                    actor.clone(),
+                    request.reason.clone(),
+                )
+                .await?,
+            ),
+            "repropose_gitops_change_set" => serde_json::to_value(
+                repropose_failed_gitops_change_set(
                     &state,
                     &action.resource,
                     actor.clone(),
@@ -9869,7 +9915,7 @@ impl WorkItemReconcileAction {
                     .to_string()
             }
             Self::GitOpsDeliveryFailed => {
-                "GitOps delivery failed; inspect its bounded result and create a newly reviewed GitOps ChangeSet"
+                "GitOps delivery failed; inspect its bounded result and explicitly re-propose this GitOps ChangeSet as a new reviewed revision before another authorized attempt"
                     .to_string()
             }
             Self::GitOpsChangeSetBlocked => {
@@ -10137,6 +10183,7 @@ async fn gitops_base_revision_reconcile_state(
                         == Some(change_set.id.as_str())
                         && content.get("material_hash").and_then(Value::as_str)
                             == Some(change_set.material_hash.as_str())
+                        && gitops_artifact_change_set_revision(content) == change_set.revision
                 })
         })
         .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
@@ -13315,6 +13362,117 @@ async fn transition_gitops_change_set(
     }))
 }
 
+async fn repropose_failed_gitops_change_set(
+    state: &AppState,
+    gitops_change_set_id: &str,
+    actor: String,
+    reason: String,
+) -> Result<TransitionGitOpsChangeSetResponse, ApiError> {
+    let current = state
+        .store
+        .get_gitops_change_set(gitops_change_set_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("gitops_change_set", gitops_change_set_id))?;
+    if current.status != "approved" {
+        return Err(ApiError::conflict(
+            "GitOps delivery retry review requires an approved GitOps ChangeSet",
+        ));
+    }
+    let artifacts = state.store.list_artifacts(&current.run_id).await?;
+    let plan = artifacts
+        .iter()
+        .filter(|artifact| gitops_delivery_plan_matches_change_set(artifact, &current))
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .ok_or_else(|| ApiError::conflict("failed GitOps delivery has no current plan"))?;
+    let result = artifacts
+        .iter()
+        .filter(|artifact| {
+            gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_result", &plan.id)
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .ok_or_else(|| ApiError::conflict("GitOps delivery has no terminal result"))?;
+    let failed = result
+        .content_json
+        .as_ref()
+        .and_then(|content| content.get("status"))
+        .and_then(Value::as_str)
+        .is_some_and(|status| matches!(status, "failed" | "dispatch_failed"));
+    if !failed {
+        return Err(ApiError::conflict(
+            "GitOps ChangeSet can be re-proposed only after a failed bounded delivery",
+        ));
+    }
+    if artifacts.iter().any(|artifact| {
+        gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_merge", &plan.id)
+            || gitops_delivery_artifact_matches_plan(
+                artifact,
+                "gitops_delivery_pr_observation",
+                &plan.id,
+            )
+    }) {
+        return Err(ApiError::conflict(
+            "GitOps ChangeSet cannot be re-proposed after pull-request observation or merge",
+        ));
+    }
+    let grant_id = artifacts
+        .iter()
+        .filter(|artifact| {
+            gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_execution", &plan.id)
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        .and_then(|artifact| artifact.content_json.as_ref())
+        .and_then(|content| content.get("permission_grant_id"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    if let Some(grant_id) = grant_id.as_deref() {
+        if state
+            .store
+            .get_permission_grant(grant_id)
+            .await?
+            .is_some_and(|grant| grant.status == "active")
+        {
+            state
+                .store
+                .revoke_permission_grant(
+                    grant_id,
+                    Some(actor.clone()),
+                    Some(format!(
+                        "GitOps ChangeSet {gitops_change_set_id} delivery failed; fresh review and authorization are required"
+                    )),
+                )
+                .await?;
+        }
+    }
+    let previous_revision = current.revision;
+    let change_set = state
+        .store
+        .repropose_gitops_change_set(
+            gitops_change_set_id,
+            Some(actor.clone()),
+            Some(reason.clone()),
+        )
+        .await?;
+    append_gitops_change_set_audit_event(
+        &state.store,
+        &change_set,
+        "gitops_change_set.reproposed_after_delivery_failure",
+        Some(actor),
+        Some(reason),
+        json!({
+            "previous_revision": previous_revision,
+            "revision": change_set.revision,
+            "failed_result_artifact_id": result.id,
+            "failed_plan_artifact_id": plan.id,
+            "revoked_permission_grant_id": grant_id,
+            "external_mutation_observed": false,
+        }),
+    )
+    .await?;
+    Ok(TransitionGitOpsChangeSetResponse {
+        gitops_change_set: change_set.into(),
+    })
+}
+
 /// Resolve the declared GitOps base ref through the read-only observer
 /// identity. The result is durable evidence for a later, separately guarded
 /// writer; this route itself cannot mutate a repository.
@@ -13359,6 +13517,7 @@ async fn resolve_gitops_base_revision(
                         == Some(change_set.id.as_str())
                         && content.get("material_hash").and_then(Value::as_str)
                             == Some(change_set.material_hash.as_str())
+                        && gitops_artifact_change_set_revision(content) == change_set.revision
                 })
         })
         .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
@@ -13412,6 +13571,7 @@ async fn resolve_gitops_base_revision(
                 "execution_id": execution_id,
                 "status": "dispatched",
                 "gitops_change_set_id": change_set.id,
+                "gitops_change_set_revision": change_set.revision,
                 "material_hash": change_set.material_hash,
                 "repository": change_set.gitops_repo,
                 "base_ref": change_set.gitops_ref,
@@ -13466,6 +13626,7 @@ async fn resolve_gitops_base_revision(
                         "execution_id": execution_id,
                         "status": "failed",
                         "gitops_change_set_id": change_set.id,
+                        "gitops_change_set_revision": change_set.revision,
                         "material_hash": change_set.material_hash,
                         "repository": change_set.gitops_repo,
                         "base_ref": change_set.gitops_ref,
@@ -13659,6 +13820,7 @@ fn gitops_base_revision_matches_change_set(
                     == Some(change_set.id.as_str())
                 && content.get("material_hash").and_then(Value::as_str)
                     == Some(change_set.material_hash.as_str())
+                && gitops_artifact_change_set_revision(content) == change_set.revision
                 && content.get("repository").and_then(Value::as_str)
                     == Some(change_set.gitops_repo.as_str())
                 && content.get("base_ref").and_then(Value::as_str)
@@ -13668,6 +13830,13 @@ fn gitops_base_revision_matches_change_set(
                     .and_then(Value::as_str)
                     .is_some_and(is_git_sha)
         })
+}
+
+fn gitops_artifact_change_set_revision(content: &Value) -> i64 {
+    content
+        .get("gitops_change_set_revision")
+        .and_then(Value::as_i64)
+        .unwrap_or(1)
 }
 
 fn gitops_delivery_plan_matches_change_set(
@@ -24656,6 +24825,7 @@ async fn internal_gitops_base_revision_outcome(
                         "execution_id": request.execution_id,
                         "status": "resolved",
                         "gitops_change_set_id": change_set.id,
+                        "gitops_change_set_revision": change_set.revision,
                         "material_hash": change_set.material_hash,
                         "repository": change_set.gitops_repo,
                         "base_ref": change_set.gitops_ref,
@@ -24681,6 +24851,7 @@ async fn internal_gitops_base_revision_outcome(
                     "execution_id": request.execution_id,
                     "status": "failed",
                     "gitops_change_set_id": change_set.id,
+                    "gitops_change_set_revision": change_set.revision,
                     "material_hash": change_set.material_hash,
                     "repository": change_set.gitops_repo,
                     "base_ref": change_set.gitops_ref,
@@ -24731,6 +24902,7 @@ async fn current_gitops_base_revision_execution(
                             == Some(change_set.id.as_str())
                         && content.get("material_hash").and_then(Value::as_str)
                             == Some(change_set.material_hash.as_str())
+                        && gitops_artifact_change_set_revision(content) == change_set.revision
                 })
         })
         .ok_or_else(|| ApiError::conflict("GitOps base revision execution is not current"))?;
@@ -28314,28 +28486,30 @@ mod tests {
         get_incident, get_observation, get_permission_grant, get_pipeline_intent,
         get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
         get_run_events, get_run_operator_summary, get_work_plan, git_delivery_reconcile_action,
-        gitops_change_set_reconcile_action, gitops_delivery_flow, internal_argo_sync_outcome,
-        internal_gitops_delivery_observation_outcome, internal_workspace_provisioned,
-        last_event_seq, list_approval_gates, list_approvals, list_audit_events, list_change_sets,
-        list_deployment_contracts, list_deployment_intents, list_incidents, list_observations,
-        list_permission_grants, list_pipeline_intents, list_registry_evidence, list_releases,
-        list_remediation_plans, list_run_artifacts, list_run_observations, list_runs,
-        list_work_item_controller_waits, list_work_item_events, list_work_items, list_work_plans,
-        list_workspaces, merge_pipeline_execution_state, observe_due_controller_wait,
-        observed_gitops_merge_for_deployment, parse_last_event_id, persist_pipeline_build_output,
-        persist_pipeline_execution_evidence, persist_pipeline_run_analysis,
-        pipeline_build_output_from_analysis, pipeline_intent_execution_preflight,
-        pipeline_intent_is_gitops_update_eligible, pipeline_intent_reconcile_action, policy_json,
-        preflight_change_set_git_delivery, preflight_deployment_intent,
-        preflight_gitops_change_set_delivery, prepare_change_set_git_delivery,
-        prepare_gitops_change_set_delivery, reconcile_due_controller_waits, reconcile_work_item,
-        release_reconcile_action, replan_work_item, required_baseline_capability_result,
-        revise_change_set, revise_work_plan, revoke_permission_grant, router, run_policy,
-        run_summary, satisfy_approval_gate, schedule_controller_wait, set_pipeline_intent_evidence,
-        stream_start_seq, supersede_active_controller_wait_if_present, tekton_execution_spec,
-        transition_change_set, transition_deployment_contract, transition_deployment_intent,
-        transition_pipeline_intent, transition_registry_evidence, transition_release,
-        transition_remediation_plan, transition_work_item, transition_work_plan, unique_suffix,
+        gitops_artifact_change_set_revision, gitops_change_set_reconcile_action,
+        gitops_delivery_flow, internal_argo_sync_outcome,
+        internal_gitops_delivery_observation_outcome, internal_gitops_delivery_outcome,
+        internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
+        list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
+        list_incidents, list_observations, list_permission_grants, list_pipeline_intents,
+        list_registry_evidence, list_releases, list_remediation_plans, list_run_artifacts,
+        list_run_observations, list_runs, list_work_item_controller_waits, list_work_item_events,
+        list_work_items, list_work_plans, list_workspaces, merge_pipeline_execution_state,
+        observe_due_controller_wait, observed_gitops_merge_for_deployment, parse_last_event_id,
+        persist_pipeline_build_output, persist_pipeline_execution_evidence,
+        persist_pipeline_run_analysis, pipeline_build_output_from_analysis,
+        pipeline_intent_execution_preflight, pipeline_intent_is_gitops_update_eligible,
+        pipeline_intent_reconcile_action, policy_json, preflight_change_set_git_delivery,
+        preflight_deployment_intent, preflight_gitops_change_set_delivery,
+        prepare_change_set_git_delivery, prepare_gitops_change_set_delivery,
+        reconcile_due_controller_waits, reconcile_work_item, release_reconcile_action,
+        replan_work_item, required_baseline_capability_result, revise_change_set, revise_work_plan,
+        revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
+        schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
+        supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
+        transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
+        transition_registry_evidence, transition_release, transition_remediation_plan,
+        transition_work_item, transition_work_plan, unique_suffix,
         validate_permission_grant_request, validate_pipeline_deployment_handoff,
         validate_terminal_pipeline_run_analysis, verify_release, work_item_flow,
         work_item_pipeline_intent_context, work_plan_flow, work_plan_readiness, AppState,
@@ -28401,6 +28575,18 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::sync::Arc;
+
+    #[test]
+    fn gitops_artifact_revision_keeps_legacy_revision_one_but_not_retry_evidence() {
+        assert_eq!(gitops_artifact_change_set_revision(&json!({})), 1);
+        assert_eq!(
+            gitops_artifact_change_set_revision(&json!({
+                "gitops_change_set_revision": 2
+            })),
+            2
+        );
+        assert_ne!(gitops_artifact_change_set_revision(&json!({})), 2);
+    }
 
     async fn test_state() -> AppState {
         AppState {
@@ -39125,6 +39311,83 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .filter(|event| event.kind == "work_item.gitops_delivery_dispatched")
                 .count(),
             1
+        );
+
+        let execution_id = artifacts
+            .iter()
+            .find(|artifact| artifact.kind == "gitops_delivery_execution")
+            .and_then(|artifact| artifact.content_json.as_ref())
+            .and_then(|content| content.get("execution_id"))
+            .and_then(Value::as_str)
+            .expect("dispatched GitOps delivery must have an execution id")
+            .to_string();
+        let Json(_) = internal_gitops_delivery_outcome(
+            State(state.clone()),
+            Path(gitops_change_set_id.to_string()),
+            Json(GitOpsDeliveryOutcomeRequest {
+                execution_id,
+                status: "failed".to_string(),
+                error_code: Some("git_push_permission_denied".to_string()),
+                branch: None,
+                commit_sha: None,
+                pull_request_url: None,
+                pull_request_number: None,
+            }),
+        )
+        .await
+        .unwrap();
+        let Json(failed_flow) =
+            work_item_flow(State(state.clone()), Path(work_item_id.to_string()))
+                .await
+                .unwrap();
+        let retry_review = failed_flow
+            .action_rail
+            .iter()
+            .find(|action| action.id == "repropose_gitops_change_set")
+            .expect("failed GitOps delivery must expose an explicit retry review action");
+        assert_eq!(retry_review.status, "ready");
+        assert_eq!(retry_review.effect_class, "approval_boundary");
+        let Json(reproposed) = execute_work_item_action(
+            State(state.clone()),
+            None,
+            Path((work_item_id.to_string(), retry_review.id.clone())),
+            Json(ExecuteWorkItemActionRequest {
+                actor: Some("lucas".to_string()),
+                reason: "review a new immutable GitOps delivery attempt".to_string(),
+                state_hash: retry_review.state_hash.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            reproposed.pointer("/gitops_change_set/status"),
+            Some(&json!("proposed"))
+        );
+        assert_eq!(
+            reproposed.pointer("/gitops_change_set/revision"),
+            Some(&json!(2))
+        );
+        assert_eq!(
+            state
+                .store
+                .get_permission_grant(grant_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "revoked"
+        );
+        let reproposed_change_set = state
+            .store
+            .get_gitops_change_set(gitops_change_set_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            super::gitops_base_revision_reconcile_state(&state.store, &reproposed_change_set)
+                .await
+                .unwrap(),
+            GitOpsBaseRevisionReconcileState::Missing
         );
         fs::remove_file(kubectl_stub).unwrap();
     }
