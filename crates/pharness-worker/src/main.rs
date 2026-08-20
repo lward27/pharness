@@ -47,16 +47,20 @@ fn update_kustomization_image(
     image_ref: &str,
 ) -> anyhow::Result<String> {
     validate_kustomization_image_name(image_name)?;
-    let (new_name, digest) = parse_digest_pinned_image_reference(image_ref)?;
-    let mut document: YamlValue =
+    let (desired_reference, digest) = parse_digest_pinned_image_reference(image_ref)?;
+    let desired_repository = image_repository_without_optional_tag(&desired_reference)?;
+    if desired_repository != image_name {
+        anyhow::bail!("kustomization image repository does not match the declared image name");
+    }
+    let document: YamlValue =
         serde_yaml::from_str(source).context("kustomization document is not valid YAML")?;
     let root = document
-        .as_mapping_mut()
+        .as_mapping()
         .context("kustomization document must be a YAML mapping")?;
     let images_key = YamlValue::String("images".to_string());
     let images = root
-        .get_mut(&images_key)
-        .and_then(YamlValue::as_sequence_mut)
+        .get(&images_key)
+        .and_then(YamlValue::as_sequence)
         .context("kustomization document must contain an images sequence")?;
 
     let matching = images
@@ -77,20 +81,102 @@ fn update_kustomization_image(
         _ => anyhow::bail!("kustomization image entry is ambiguous"),
     };
     let entry = images[index]
-        .as_mapping_mut()
+        .as_mapping()
         .context("kustomization image entry must be a mapping")?;
-    entry.insert(
-        YamlValue::String("newName".to_string()),
-        YamlValue::String(new_name),
-    );
-    entry.insert(
-        YamlValue::String("digest".to_string()),
-        YamlValue::String(digest),
-    );
-    // A mutable tag combined with a digest makes the desired image ambiguous.
-    entry.remove(YamlValue::String("newTag".to_string()));
+    if entry
+        .get(YamlValue::String("newName".to_string()))
+        .and_then(YamlValue::as_str)
+        .is_some_and(|new_name| new_name != image_name)
+    {
+        anyhow::bail!("kustomization image newName does not match the declared image name");
+    }
+    if entry.contains_key(YamlValue::String("newTag".to_string())) {
+        anyhow::bail!("kustomization image entry must not contain newTag");
+    }
+    let existing_digest = entry
+        .get(YamlValue::String("digest".to_string()))
+        .and_then(YamlValue::as_str)
+        .filter(|value| valid_sha256_digest(value))
+        .context("kustomization image entry must already contain an immutable sha256 digest")?;
+    let (digest_start, digest_end) =
+        standard_kustomization_digest_span(source, image_name, existing_digest)?;
 
-    serde_yaml::to_string(&document).context("failed to serialize updated kustomization")
+    // Preserve the reviewed Kustomization byte-for-byte except for the one
+    // immutable digest scalar. Re-serializing YAML creates unrelated formatting
+    // changes, and copying the convenience tag into `newName` broadens the
+    // approved GitOps mutation beyond a digest-only promotion.
+    let mut updated = String::with_capacity(source.len());
+    updated.push_str(&source[..digest_start]);
+    updated.push_str(&digest);
+    updated.push_str(&source[digest_end..]);
+    Ok(updated)
+}
+
+fn standard_kustomization_digest_span(
+    source: &str,
+    image_name: &str,
+    existing_digest: &str,
+) -> anyhow::Result<(usize, usize)> {
+    let mut lines = Vec::new();
+    let mut offset = 0;
+    for raw_line in source.split_inclusive('\n') {
+        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let trimmed = line.trim_start_matches(' ');
+        if trimmed.starts_with('\t') {
+            anyhow::bail!("kustomization image entry must use standard space indentation");
+        }
+        lines.push((offset, line, line.len() - trimmed.len(), trimmed));
+        offset += raw_line.len();
+    }
+    if source.is_empty() {
+        anyhow::bail!("kustomization image entry was not found in standard YAML form");
+    }
+
+    let matching_entries = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (_, _, indent, trimmed))| {
+            trimmed
+                .strip_prefix("- ")
+                .and_then(|value| value.strip_prefix("name:"))
+                .map(str::trim)
+                .filter(|value| *value == image_name)
+                .map(|_| (index, *indent))
+        })
+        .collect::<Vec<_>>();
+    let (entry_index, entry_indent) = match matching_entries.as_slice() {
+        [(index, indent)] => (*index, *indent),
+        [] => anyhow::bail!("kustomization image entry was not found in standard YAML form"),
+        _ => anyhow::bail!("kustomization image entry is ambiguous in source text"),
+    };
+
+    let mut digest_spans = Vec::new();
+    for (line_offset, line, indent, trimmed) in lines.iter().skip(entry_index + 1) {
+        if !trimmed.is_empty()
+            && (*indent < entry_indent || (*indent == entry_indent && trimmed.starts_with("- ")))
+        {
+            break;
+        }
+        let Some(value) = trimmed.strip_prefix("digest:") else {
+            continue;
+        };
+        if *indent <= entry_indent || !value.contains(existing_digest) {
+            continue;
+        }
+        let local_start = line
+            .find(existing_digest)
+            .expect("digest presence checked above");
+        digest_spans.push((
+            line_offset + local_start,
+            line_offset + local_start + existing_digest.len(),
+        ));
+    }
+    match digest_spans.as_slice() {
+        [span] => Ok(*span),
+        [] => anyhow::bail!("kustomization image digest was not found in standard YAML form"),
+        _ => anyhow::bail!("kustomization image digest occurrence is ambiguous"),
+    }
 }
 
 fn validate_kustomization_image_name(image_name: &str) -> anyhow::Result<()> {
@@ -119,6 +205,31 @@ fn parse_digest_pinned_image_reference(image_ref: &str) -> anyhow::Result<(Strin
         anyhow::bail!("image reference must contain a valid sha256 digest");
     }
     Ok((repository.to_string(), digest.to_string()))
+}
+
+fn image_repository_without_optional_tag(reference: &str) -> anyhow::Result<&str> {
+    let last_slash = reference.rfind('/');
+    let last_colon = reference.rfind(':');
+    if last_colon.is_some_and(|colon| match last_slash {
+        Some(slash) => colon > slash,
+        None => true,
+    }) {
+        let colon = last_colon.expect("checked above");
+        if colon + 1 == reference.len() {
+            anyhow::bail!("image reference contains an empty tag");
+        }
+        Ok(&reference[..colon])
+    } else {
+        Ok(reference)
+    }
+}
+
+fn valid_sha256_digest(value: &str) -> bool {
+    value.starts_with("sha256:")
+        && value.len() == "sha256:".len() + 64
+        && value["sha256:".len()..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[tokio::main]
@@ -2229,6 +2340,25 @@ fn gitops_delivery_error_code(error: &anyhow::Error) -> &'static str {
         "invalid_kustomization_path" => "invalid_kustomization_path",
         "kustomization image entry was not found" => "kustomization_image_not_found",
         "kustomization image entry is ambiguous" => "kustomization_image_ambiguous",
+        "kustomization image repository does not match the declared image name" => {
+            "kustomization_image_repository_mismatch"
+        }
+        "kustomization image newName does not match the declared image name" => {
+            "kustomization_image_new_name_mismatch"
+        }
+        "kustomization image entry must not contain newTag" => "kustomization_image_mutable_tag",
+        "kustomization image entry must already contain an immutable sha256 digest" => {
+            "kustomization_image_not_digest_pinned"
+        }
+        "kustomization image digest occurrence is ambiguous" => {
+            "kustomization_image_digest_ambiguous"
+        }
+        "kustomization image entry must use standard space indentation"
+        | "kustomization image entry was not found in standard YAML form"
+        | "kustomization image entry is ambiguous in source text"
+        | "kustomization image digest was not found in standard YAML form" => {
+            "kustomization_image_nonstandard_yaml"
+        }
         "repository_not_github_https" => "repository_not_github_https",
         "github_pull_request_failed" => "github_pull_request_failed",
         "git_clone_failed" => "git_clone_failed",
@@ -3232,36 +3362,23 @@ mod tests {
     fn updates_exactly_one_declared_kustomization_image_with_an_immutable_digest() {
         const DIGEST: &str =
             "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let source = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n\nresources:\n  - deployment.yaml\n\nimages:\n  - name: registry.example.test/team/api\n    newName: registry.example.test/team/api\n    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n  - name: registry.example.test/team/worker\n    newName: registry.example.test/team/worker\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n";
         let output = update_kustomization_image(
-            "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nimages:\n  - name: registry.example.test/team/api\n    newTag: old\n  - name: registry.example.test/team/worker\n    newName: registry.example.test/team/worker\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+            source,
             "registry.example.test/team/api",
-            &format!("registry.dev.example/team/api@{DIGEST}"),
+            &format!("registry.example.test/team/api:git-0123456789abcdef@{DIGEST}"),
         )
         .unwrap();
 
-        let document: serde_yaml::Value = serde_yaml::from_str(&output).unwrap();
-        let images = document
-            .get("images")
-            .and_then(serde_yaml::Value::as_sequence)
-            .unwrap();
-        let api = images[0].as_mapping().unwrap();
         assert_eq!(
-            api.get("name").and_then(serde_yaml::Value::as_str),
-            Some("registry.example.test/team/api")
+            output,
+            source.replacen(
+                "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                DIGEST,
+                1,
+            )
         );
-        assert_eq!(
-            api.get("newName").and_then(serde_yaml::Value::as_str),
-            Some("registry.dev.example/team/api")
-        );
-        assert_eq!(
-            api.get("digest").and_then(serde_yaml::Value::as_str),
-            Some(DIGEST)
-        );
-        assert!(!api.contains_key("newTag"));
-        assert_eq!(
-            images[1].get("digest").and_then(serde_yaml::Value::as_str),
-            Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        );
+        assert!(!output.contains("git-0123456789abcdef"));
     }
 
     #[test]
@@ -3269,7 +3386,7 @@ mod tests {
         const DIGEST: &str =
             "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let missing = update_kustomization_image(
-            "images:\n  - name: registry.example.test/team/other\n",
+            "images:\n  - name: registry.example.test/team/other\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
             "registry.example.test/team/api",
             &format!("registry.example.test/team/api@{DIGEST}"),
         )
@@ -3277,7 +3394,7 @@ mod tests {
         assert!(missing.to_string().contains("not found"));
 
         let ambiguous = update_kustomization_image(
-            "images:\n  - name: registry.example.test/team/api\n  - name: registry.example.test/team/api\n",
+            "images:\n  - name: registry.example.test/team/api\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  - name: registry.example.test/team/api\n    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
             "registry.example.test/team/api",
             &format!("registry.example.test/team/api@{DIGEST}"),
         )
@@ -3288,12 +3405,65 @@ mod tests {
     #[test]
     fn rejects_non_digest_pinned_kustomization_image_references() {
         let error = update_kustomization_image(
-            "images:\n  - name: registry.example.test/team/api\n",
+            "images:\n  - name: registry.example.test/team/api\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
             "registry.example.test/team/api",
             "registry.example.test/team/api:latest",
         )
         .unwrap_err();
 
         assert!(error.to_string().contains("digest pinned"));
+    }
+
+    #[test]
+    fn rejects_kustomization_mutations_that_are_not_digest_only() {
+        const DIGEST: &str =
+            "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mutable_tag = update_kustomization_image(
+            "images:\n  - name: registry.example.test/team/api\n    newTag: latest\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+            "registry.example.test/team/api",
+            &format!("registry.example.test/team/api@{DIGEST}"),
+        )
+        .unwrap_err();
+        assert!(mutable_tag.to_string().contains("must not contain newTag"));
+
+        let renamed = update_kustomization_image(
+            "images:\n  - name: registry.example.test/team/api\n    newName: mirror.example.test/team/api\n    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+            "registry.example.test/team/api",
+            &format!("registry.example.test/team/api@{DIGEST}"),
+        )
+        .unwrap_err();
+        assert!(renamed.to_string().contains("newName does not match"));
+
+        let missing_digest = update_kustomization_image(
+            "images:\n  - name: registry.example.test/team/api\n",
+            "registry.example.test/team/api",
+            &format!("registry.example.test/team/api@{DIGEST}"),
+        )
+        .unwrap_err();
+        assert!(missing_digest
+            .to_string()
+            .contains("already contain an immutable sha256 digest"));
+    }
+
+    #[test]
+    fn scopes_a_shared_existing_digest_to_the_named_image_entry() {
+        const OLD: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const NEW: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let source = format!(
+            "images:\n  - name: registry.example.test/team/worker\n    newName: registry.example.test/team/worker\n    digest: {OLD}\n  - name: registry.example.test/team/api\n    newName: registry.example.test/team/api\n    digest: {OLD}\n"
+        );
+        let output = update_kustomization_image(
+            &source,
+            "registry.example.test/team/api",
+            &format!("registry.example.test/team/api:git-deadbeef@{NEW}"),
+        )
+        .unwrap();
+
+        assert!(output.contains(&format!(
+            "name: registry.example.test/team/worker\n    newName: registry.example.test/team/worker\n    digest: {OLD}"
+        )));
+        assert!(output.contains(&format!(
+            "name: registry.example.test/team/api\n    newName: registry.example.test/team/api\n    digest: {NEW}"
+        )));
     }
 }

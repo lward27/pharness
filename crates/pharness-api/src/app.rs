@@ -3388,40 +3388,52 @@ async fn work_item_flow(
         });
     }
     if reconcile_preview.action == WorkItemReconcileAction::GitOpsDeliveryFailed.as_str() {
-        if let (Some(change_set), Some(result)) = (
-            sdlc_flow
-                .as_ref()
-                .and_then(|flow| flow.gitops_change_set.as_ref()),
-            sdlc_flow
-                .as_ref()
-                .and_then(|flow| flow.gitops_delivery.as_ref())
-                .and_then(|delivery| delivery.latest_result.as_ref()),
-        ) {
-            action_rail.push(WorkItemActionResponse {
-                id: "repropose_gitops_change_set".to_string(),
-                lifecycle_stage: "gitops".to_string(),
-                resource: change_set.id.clone(),
-                status: "ready".to_string(),
-                effect_class: "approval_boundary".to_string(),
-                blockers: Vec::new(),
-                approval_required: true,
-                approval_requirements: vec!["gitops_retry_review".to_string()],
-                external_effect_summary: format!(
-                    "Re-propose GitOps ChangeSet {} as reviewed revision {} after failed delivery {}; revoke the failed writer grant and require fresh base-revision evidence, review, and authorization. This action does not contact GitHub.",
-                    change_set.id,
-                    change_set.revision + 1,
-                    result.id,
-                ),
-                state_hash: lifecycle_action_hash(json!({
-                    "action": "repropose_gitops_change_set",
-                    "gitops_change_set_id": change_set.id,
-                    "status": change_set.status,
-                    "revision": change_set.revision,
-                    "updated_at": change_set.updated_at,
-                    "failed_result_id": result.id,
-                    "failed_result": result.content_json,
-                })),
+        let change_set = sdlc_flow
+            .as_ref()
+            .and_then(|flow| flow.gitops_change_set.as_ref());
+        let delivery = sdlc_flow
+            .as_ref()
+            .and_then(|flow| flow.gitops_delivery.as_ref());
+        if let (Some(change_set), Some(delivery)) = (change_set, delivery) {
+            let closed_observation = delivery.latest_observation.as_ref().filter(|observation| {
+                gitops_observation_closed_unmerged(observation.content_json.as_ref())
             });
+            let terminal_evidence = closed_observation.or(delivery.latest_result.as_ref());
+            if let Some(terminal_evidence) = terminal_evidence {
+                let terminal_summary = if closed_observation.is_some() {
+                    format!(
+                        "closed, unmerged pull request observation {}",
+                        terminal_evidence.id
+                    )
+                } else {
+                    format!("failed delivery {}", terminal_evidence.id)
+                };
+                action_rail.push(WorkItemActionResponse {
+                    id: "repropose_gitops_change_set".to_string(),
+                    lifecycle_stage: "gitops".to_string(),
+                    resource: change_set.id.clone(),
+                    status: "ready".to_string(),
+                    effect_class: "approval_boundary".to_string(),
+                    blockers: Vec::new(),
+                    approval_required: true,
+                    approval_requirements: vec!["gitops_retry_review".to_string()],
+                    external_effect_summary: format!(
+                        "Re-propose GitOps ChangeSet {} as reviewed revision {} after {}; use a fresh revision-scoped branch, revoke the previous writer grant, and require fresh base-revision evidence, review, and authorization. This action does not contact GitHub.",
+                        change_set.id,
+                        change_set.revision + 1,
+                        terminal_summary,
+                    ),
+                    state_hash: lifecycle_action_hash(json!({
+                        "action": "repropose_gitops_change_set",
+                        "gitops_change_set_id": change_set.id,
+                        "status": change_set.status,
+                        "revision": change_set.revision,
+                        "updated_at": change_set.updated_at,
+                        "terminal_evidence_id": terminal_evidence.id,
+                        "terminal_evidence": terminal_evidence.content_json,
+                    })),
+                });
+            }
         }
     }
     action_rail.push(work_item_action_response(&reconcile_preview));
@@ -10259,6 +10271,9 @@ fn gitops_delivery_reconcile_action(
         if status == Some("failed") {
             return WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation;
         }
+        if gitops_observation_closed_unmerged(observation.content_json.as_ref()) {
+            return WorkItemReconcileAction::GitOpsDeliveryFailed;
+        }
         let merged = observation
             .content_json
             .as_ref()
@@ -10311,6 +10326,14 @@ fn gitops_delivery_reconcile_action(
         }
         _ => WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization,
     }
+}
+
+fn gitops_observation_closed_unmerged(content: Option<&Value>) -> bool {
+    content.is_some_and(|content| {
+        content.get("status").and_then(Value::as_str) == Some("observed")
+            && content.get("pull_request_state").and_then(Value::as_str) == Some("closed")
+            && content.get("merged").and_then(Value::as_bool) == Some(false)
+    })
 }
 
 fn deployment_intent_reconcile_action(
@@ -13395,27 +13418,35 @@ async fn repropose_failed_gitops_change_set(
         })
         .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
         .ok_or_else(|| ApiError::conflict("GitOps delivery has no terminal result"))?;
+    let observation = artifacts
+        .iter()
+        .filter(|artifact| {
+            gitops_delivery_artifact_matches_plan(
+                artifact,
+                "gitops_delivery_pr_observation",
+                &plan.id,
+            )
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id));
     let failed = result
         .content_json
         .as_ref()
         .and_then(|content| content.get("status"))
         .and_then(Value::as_str)
         .is_some_and(|status| matches!(status, "failed" | "dispatch_failed"));
-    if !failed {
+    let closed_unmerged = observation.is_some_and(|observation| {
+        gitops_observation_closed_unmerged(observation.content_json.as_ref())
+    });
+    if !failed && !closed_unmerged {
         return Err(ApiError::conflict(
-            "GitOps ChangeSet can be re-proposed only after a failed bounded delivery",
+            "GitOps ChangeSet can be re-proposed only after a failed bounded delivery or a closed, unmerged pull request",
         ));
     }
     if artifacts.iter().any(|artifact| {
         gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_merge", &plan.id)
-            || gitops_delivery_artifact_matches_plan(
-                artifact,
-                "gitops_delivery_pr_observation",
-                &plan.id,
-            )
     }) {
         return Err(ApiError::conflict(
-            "GitOps ChangeSet cannot be re-proposed after pull-request observation or merge",
+            "GitOps ChangeSet cannot be re-proposed after an observed merge",
         ));
     }
     let grant_id = artifacts
@@ -13441,17 +13472,34 @@ async fn repropose_failed_gitops_change_set(
                     grant_id,
                     Some(actor.clone()),
                     Some(format!(
-                        "GitOps ChangeSet {gitops_change_set_id} delivery failed; fresh review and authorization are required"
+                        "GitOps ChangeSet {gitops_change_set_id} delivery reached a terminal state without merge; fresh review and authorization are required"
                     )),
                 )
                 .await?;
         }
     }
     let previous_revision = current.revision;
+    let next_revision = previous_revision + 1;
+    let base_branch = current
+        .gitops_change_set_json
+        .pointer("/source_plan/gitops/head_branch")
+        .and_then(Value::as_str)
+        .unwrap_or(current.head_branch.as_str());
+    let next_head_branch = format!("{base_branch}/revision-{next_revision}");
+    if next_head_branch.len() > 240
+        || next_head_branch.starts_with('-')
+        || next_head_branch.contains([' ', '~', '^', ':', '?', '*', '[', '\\', '\n'])
+        || next_head_branch.contains("..")
+    {
+        return Err(ApiError::conflict(
+            "GitOps ChangeSet cannot derive a safe revision-scoped retry branch",
+        ));
+    }
     let change_set = state
         .store
         .repropose_gitops_change_set(
             gitops_change_set_id,
+            &next_head_branch,
             Some(actor.clone()),
             Some(reason.clone()),
         )
@@ -13467,8 +13515,10 @@ async fn repropose_failed_gitops_change_set(
             "revision": change_set.revision,
             "failed_result_artifact_id": result.id,
             "failed_plan_artifact_id": plan.id,
+            "closed_pull_request_observation_artifact_id": observation.map(|artifact| &artifact.id),
             "revoked_permission_grant_id": grant_id,
-            "external_mutation_observed": false,
+            "external_mutation_observed": closed_unmerged,
+            "next_head_branch": change_set.head_branch,
         }),
     )
     .await?;
@@ -28492,7 +28542,7 @@ mod tests {
         get_registry_evidence, get_release, get_remediation_plan, get_run, get_run_diff,
         get_run_events, get_run_operator_summary, get_work_plan, git_delivery_reconcile_action,
         gitops_artifact_change_set_revision, gitops_change_set_reconcile_action,
-        gitops_delivery_flow, internal_argo_sync_outcome,
+        gitops_delivery_flow, gitops_observation_closed_unmerged, internal_argo_sync_outcome,
         internal_gitops_delivery_observation_outcome, internal_gitops_delivery_outcome,
         internal_workspace_provisioned, last_event_seq, list_approval_gates, list_approvals,
         list_audit_events, list_change_sets, list_deployment_contracts, list_deployment_intents,
@@ -28591,6 +28641,25 @@ mod tests {
             2
         );
         assert_ne!(gitops_artifact_change_set_revision(&json!({})), 2);
+    }
+
+    #[test]
+    fn recognizes_only_a_closed_unmerged_gitops_observation_as_retryable() {
+        assert!(gitops_observation_closed_unmerged(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "closed",
+            "merged": false,
+        }))));
+        assert!(!gitops_observation_closed_unmerged(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "open",
+            "merged": false,
+        }))));
+        assert!(!gitops_observation_closed_unmerged(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "closed",
+            "merged": true,
+        }))));
     }
 
     #[test]
@@ -39413,6 +39482,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .unwrap()
             .unwrap();
         assert_eq!(
+            reproposed_change_set.head_branch,
+            "pharness/witem-gitops-controller/gitops/revision-2"
+        );
+        assert_eq!(
             super::gitops_base_revision_reconcile_state(&state.store, &reproposed_change_set)
                 .await
                 .unwrap(),
@@ -40497,7 +40570,23 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         );
         flow.latest_observation = Some(reconcile_artifact(
             "gitops_delivery_pr_observation",
-            json!({ "status": "observed", "merged": true }),
+            json!({
+                "status": "observed",
+                "pull_request_state": "closed",
+                "merged": false
+            }),
+        ));
+        assert_eq!(
+            gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
+            WorkItemReconcileAction::GitOpsDeliveryFailed
+        );
+        flow.latest_observation = Some(reconcile_artifact(
+            "gitops_delivery_pr_observation",
+            json!({
+                "status": "observed",
+                "pull_request_state": "closed",
+                "merged": true
+            }),
         ));
         assert_eq!(
             gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),

@@ -2326,6 +2326,7 @@ impl SqliteStore {
     pub async fn repropose_gitops_change_set(
         &self,
         change_set_id: &str,
+        head_branch: &str,
         actor: Option<String>,
         reason: Option<String>,
     ) -> Result<StoredGitOpsChangeSet, StoreError> {
@@ -2335,7 +2336,8 @@ impl SqliteStore {
             UPDATE gitops_change_sets
             SET status = 'proposed', revision = revision + 1,
                 updated_at = ?2, status_changed_at = ?2,
-                status_changed_by = ?3, status_reason = ?4
+                status_changed_by = ?3, status_reason = ?4,
+                head_branch = ?5
             WHERE id = ?1 AND status = 'approved'
             "#,
         )
@@ -2343,6 +2345,7 @@ impl SqliteStore {
         .bind(now)
         .bind(actor)
         .bind(reason)
+        .bind(head_branch)
         .execute(&self.pool)
         .await?;
         if result.rows_affected() != 1 {
