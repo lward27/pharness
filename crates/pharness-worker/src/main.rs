@@ -1618,6 +1618,13 @@ async fn observe_github_pull_request(
         .json()
         .await
         .context("GitHub pull request observation response was invalid")?;
+    parse_github_pull_request_observation(&value, context)
+}
+
+fn parse_github_pull_request_observation(
+    value: &serde_json::Value,
+    context: &GitDeliveryObservationContext,
+) -> anyhow::Result<GitPullRequestObservation> {
     let number = value.get("number").and_then(serde_json::Value::as_u64);
     let html_url = value.get("html_url").and_then(serde_json::Value::as_str);
     let head_branch = value
@@ -1639,11 +1646,18 @@ async fn observe_github_pull_request(
         .get("merged")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    let merge_commit_sha = value
-        .pointer("/merge_commit_sha")
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| is_git_sha(value))
-        .map(ToOwned::to_owned);
+    // GitHub may return a synthetic test-merge SHA for a closed pull request
+    // even when `merged` is false. It is not immutable merge provenance and
+    // must not be forwarded as one.
+    let merge_commit_sha = merged
+        .then(|| {
+            value
+                .pointer("/merge_commit_sha")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| is_git_sha(value))
+                .map(ToOwned::to_owned)
+        })
+        .flatten();
     if merged && merge_commit_sha.is_none() {
         anyhow::bail!("github_merge_commit_missing");
     }
@@ -2994,10 +3008,11 @@ mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
         fetch_internal_context, git_delivery_command_error_code,
-        git_delivery_command_error_code_for_stderr, git_patch_for_apply, parse_github_repository,
-        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
+        git_delivery_command_error_code_for_stderr, git_patch_for_apply,
+        parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
+        update_kustomization_image, validate_git_delivery_context,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
-        GitDeliveryContext, PipelineRunTerminal,
+        GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
@@ -3280,6 +3295,38 @@ mod tests {
         let mut invalid = context;
         invalid.commit_subject = "Change\nInjected trailer".to_string();
         assert!(validate_git_delivery_context(&invalid).is_err());
+    }
+
+    #[test]
+    fn closed_unmerged_github_pull_request_discards_synthetic_merge_sha() {
+        let context = GitDeliveryObservationContext {
+            execution_id: "gobserve_1".to_string(),
+            repository: "https://github.com/example/gitops.git".to_string(),
+            head_branch: "pharness/gitops/revision-2".to_string(),
+            source_commit_sha: "a".repeat(40),
+            pull_request_url: "https://github.com/example/gitops/pull/25".to_string(),
+            pull_request_number: 25,
+            github_api_url: "https://api.github.com".to_string(),
+        };
+        let value = json!({
+            "number": 25,
+            "html_url": "https://github.com/example/gitops/pull/25",
+            "state": "closed",
+            "merged": false,
+            "merge_commit_sha": "b".repeat(40),
+            "head": {
+                "ref": "pharness/gitops/revision-2",
+                "sha": "a".repeat(40),
+            },
+        });
+
+        let observation = parse_github_pull_request_observation(&value, &context).unwrap();
+
+        assert_eq!(observation.pull_request_state, "closed");
+        assert!(!observation.merged);
+        assert_eq!(observation.merge_commit_sha, None);
+        assert_eq!(observation.head_branch, "pharness/gitops/revision-2");
+        assert_eq!(observation.head_commit_sha, "a".repeat(40));
     }
 
     #[test]
