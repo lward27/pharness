@@ -13485,7 +13485,10 @@ async fn repropose_failed_gitops_change_set(
         .pointer("/source_plan/gitops/head_branch")
         .and_then(Value::as_str)
         .unwrap_or(current.head_branch.as_str());
-    let next_head_branch = format!("{base_branch}/revision-{next_revision}");
+    // A retry must be a sibling of the failed branch. Git cannot store both
+    // `refs/heads/<branch>` and `refs/heads/<branch>/revision-N`, so nesting a
+    // retry below a branch that was already pushed creates a ref-lock conflict.
+    let next_head_branch = format!("{base_branch}-revision-{next_revision}");
     if next_head_branch.len() > 240
         || next_head_branch.starts_with('-')
         || next_head_branch.contains([' ', '~', '^', ':', '?', '*', '[', '\\', '\n'])
@@ -39483,8 +39486,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             .unwrap();
         assert_eq!(
             reproposed_change_set.head_branch,
-            "pharness/witem-gitops-controller/gitops/revision-2"
+            "pharness/witem-gitops-controller/gitops-revision-2"
         );
+        assert!(!reproposed_change_set
+            .head_branch
+            .starts_with("pharness/witem-gitops-controller/gitops/"));
         assert_eq!(
             super::gitops_base_revision_reconcile_state(&state.store, &reproposed_change_set)
                 .await
