@@ -1,4 +1,5 @@
 use super::super::*;
+use super::attempts::{execute_work_item, replan_work_item};
 
 pub(in crate::app) async fn execute_work_item_action(
     State(state): State<AppState>,

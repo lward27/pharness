@@ -3,6 +3,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 pub(super) mod actions;
+pub(super) mod attempts;
 pub(super) mod flow;
 pub(super) mod preflight;
 pub(super) mod reconcile;
@@ -10,6 +11,10 @@ pub(super) mod rollback;
 pub(super) mod waits;
 
 use actions::{advance_work_item, execute_work_item_action};
+use attempts::{
+    cancel_work_item, capture_work_item_change_set, execute_work_item, get_workspace,
+    list_workspaces, replan_work_item, transition_work_item,
+};
 use flow::{get_work_item, list_work_items, work_item_flow};
 use preflight::{create_work_item, preflight_work_item};
 use reconcile::reconcile_work_item;
