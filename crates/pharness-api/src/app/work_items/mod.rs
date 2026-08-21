@@ -2,6 +2,20 @@ use super::*;
 use axum::routing::{get, post};
 use axum::Router;
 
+pub(super) mod actions;
+pub(super) mod flow;
+pub(super) mod preflight;
+pub(super) mod reconcile;
+pub(super) mod waits;
+
+use actions::{advance_work_item, execute_work_item_action};
+use flow::{get_work_item, list_work_items, work_item_flow};
+use preflight::{create_work_item, preflight_work_item};
+use reconcile::reconcile_work_item;
+use waits::{
+    list_work_item_controller_waits, list_work_item_events, reconcile_due_controller_waits,
+};
+
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
