@@ -21708,7 +21708,8 @@ async fn verify_release(
         .await?
         .ok_or_else(|| ApiError::internal("Argo verification observation was not persisted"))?;
 
-    let workload_action = release_workload_verification_action(&intent, &current.id)?;
+    let workload_action =
+        release_workload_verification_action(&intent, verification_contract.as_ref(), &current.id)?;
     let workload_response =
         execute_direct_capability(&state, workload_action, request.timeout_ms).await?;
     let workload_observation_id =
@@ -22068,25 +22069,29 @@ fn successful_direct_observation_id(
 
 fn release_workload_verification_action(
     intent: &StoredDeploymentIntent,
+    deployment_contract: Option<&StoredDeploymentContract>,
     release_id: &str,
 ) -> Result<AgentAction, ApiError> {
-    let resource_kind = intent
-        .resource_kind
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+    let (resource_kind, namespace, name) = if let Some(contract) = deployment_contract {
+        let spec = deployment_contract_spec(&contract.contract_json)?;
+        match (spec.workload_kind, spec.workload_name) {
+            (Some(kind), Some(name)) => (kind, contract.target_namespace.clone(), name),
+            (None, None) => release_intent_workload_target(intent)?,
+            _ => {
+                return Err(ApiError::conflict(
+                    "DeploymentContract post-sync verification must declare both workload_kind and workload_name",
+                ))
+            }
+        }
+    } else {
+        release_intent_workload_target(intent)?
+    };
+    let resource_kind = resource_kind.trim().to_ascii_lowercase();
     if !matches!(resource_kind.as_str(), "deployment" | "deployments") {
         return Err(ApiError::conflict(
             "post-sync verification currently supports only a declared Deployment resource",
         ));
     }
-    let namespace = intent.resource_namespace.clone().ok_or_else(|| {
-        ApiError::conflict("post-sync verification requires a declared Deployment namespace")
-    })?;
-    let name = intent.resource_name.clone().ok_or_else(|| {
-        ApiError::conflict("post-sync verification requires a declared Deployment name")
-    })?;
     Ok(AgentAction::KubernetesGet {
         id: "release.verify_deployment".into(),
         reason: format!("verify Release {release_id} declared Deployment rollout"),
@@ -22096,6 +22101,23 @@ fn release_workload_verification_action(
         all_namespaces: false,
         label_selector: None,
     })
+}
+
+fn release_intent_workload_target(
+    intent: &StoredDeploymentIntent,
+) -> Result<(String, String, String), ApiError> {
+    let resource_kind = intent.resource_kind.clone().ok_or_else(|| {
+        ApiError::conflict(
+            "post-sync verification currently supports only a declared Deployment resource",
+        )
+    })?;
+    let namespace = intent.resource_namespace.clone().ok_or_else(|| {
+        ApiError::conflict("post-sync verification requires a declared Deployment namespace")
+    })?;
+    let name = intent.resource_name.clone().ok_or_else(|| {
+        ApiError::conflict("post-sync verification requires a declared Deployment name")
+    })?;
+    Ok((resource_kind, namespace, name))
 }
 
 fn completed_argo_sync_result<'a>(
@@ -28613,7 +28635,8 @@ mod tests {
         preflight_deployment_intent, preflight_gitops_change_set_delivery,
         prepare_change_set_git_delivery, prepare_gitops_change_set_delivery,
         reconcile_due_controller_waits, reconcile_work_item, release_reconcile_action,
-        replan_work_item, required_baseline_capability_result, revise_change_set, revise_work_plan,
+        release_workload_verification_action, replan_work_item,
+        required_baseline_capability_result, revise_change_set, revise_work_plan,
         revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
         schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
         supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
@@ -28676,8 +28699,8 @@ mod tests {
         CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
         CreatePipelineContract, CreatePipelineIntent, CreateRelease, CreateRemediationPlan,
         CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace,
-        ObservationListFilter, SqliteStore, StoredDeploymentIntent, StoredGitOpsChangeSet,
-        StoredPipelineContract, StoredPipelineIntent, StoredRelease,
+        ObservationListFilter, SqliteStore, StoredDeploymentContract, StoredDeploymentIntent,
+        StoredGitOpsChangeSet, StoredPipelineContract, StoredPipelineIntent, StoredRelease,
     };
     use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
@@ -28738,6 +28761,50 @@ mod tests {
             "merged": true,
         }))));
         assert!(!super::gitops_observation_refreshable(None));
+    }
+
+    #[test]
+    fn release_verification_uses_the_pinned_contract_workload() {
+        let intent = reconcile_deployment_intent();
+        assert_eq!(intent.resource_kind.as_deref(), Some("Application"));
+        let contract = StoredDeploymentContract {
+            id: "dcontract_release_workload".to_string(),
+            status: "active".to_string(),
+            target_environment: "production".to_string(),
+            target_namespace: "apps-prod".to_string(),
+            argo_application: "yfinance-wrapper".to_string(),
+            version: "yfinance-v1".to_string(),
+            contract_json: json!({
+                "operation": "sync",
+                "prune": false,
+                "force": false,
+                "workload_kind": "Deployment",
+                "workload_name": "yfinance-wrapper"
+            }),
+            created_at: "1".to_string(),
+            updated_at: "1".to_string(),
+            status_changed_at: "1".to_string(),
+            status_changed_by: Some("lucas".to_string()),
+            status_reason: Some("bind exact workload".to_string()),
+        };
+
+        let action =
+            release_workload_verification_action(&intent, Some(&contract), "rel_contract_workload")
+                .unwrap();
+
+        match action {
+            AgentAction::KubernetesGet {
+                resource,
+                namespace,
+                name,
+                ..
+            } => {
+                assert_eq!(resource, "deployments");
+                assert_eq!(namespace.as_deref(), Some("apps-prod"));
+                assert_eq!(name.as_deref(), Some("yfinance-wrapper"));
+            }
+            other => panic!("expected KubernetesGet, got {other:?}"),
+        }
     }
 
     #[test]
