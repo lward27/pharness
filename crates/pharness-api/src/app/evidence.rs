@@ -1,3 +1,4 @@
+use super::approvals::append_approval_gate_audit_event;
 use super::*;
 use axum::routing::{get, post};
 use axum::Router;
