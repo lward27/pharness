@@ -6,6 +6,7 @@ pub(super) mod actions;
 pub(super) mod flow;
 pub(super) mod preflight;
 pub(super) mod reconcile;
+pub(super) mod rollback;
 pub(super) mod waits;
 
 use actions::{advance_work_item, execute_work_item_action};
