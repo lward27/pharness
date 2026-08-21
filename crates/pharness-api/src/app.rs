@@ -22036,15 +22036,41 @@ async fn verify_required_prometheus_inventory(
         .ok_or_else(|| {
             ApiError::internal("Prometheus verification observation was not persisted")
         })?;
-    let healthy = release_observability_status(&observation) == "observed";
+    let healthy = release_prometheus_inventory_collected(&observation.data_json);
     Ok((
         Some(observation.clone()),
         execution_check(
             "prometheus_inventory",
             healthy,
-            verification_observation_summary(&observation),
+            release_prometheus_inventory_summary(&observation.data_json),
         ),
     ))
+}
+
+fn release_prometheus_inventory_collected(data: &Value) -> bool {
+    ["targets", "rules", "alerts"].into_iter().all(|section| {
+        data.pointer(&format!("/inventory/{section}/status"))
+            .and_then(Value::as_str)
+            == Some("success")
+    })
+}
+
+fn release_prometheus_inventory_summary(data: &Value) -> String {
+    let unhealthy_targets = data
+        .pointer("/inventory/targets/unhealthy_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let problem_rules = data
+        .pointer("/inventory/rules/problem_rule_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let alerts = data
+        .pointer("/inventory/alerts/alert_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    format!(
+        "Prometheus inventory collected; recorded {unhealthy_targets} unhealthy target(s), {problem_rules} problem rule(s), and {alerts} alert(s) as non-workload-scoped evidence"
+    )
 }
 
 fn successful_direct_observation_id(
@@ -22183,7 +22209,7 @@ fn release_json_with_post_sync_verification(
                 "status": if !evidence.prometheus_inventory_required {
                     "disabled"
                 } else if evidence.observability_observation
-                    .map(|observation| release_observability_status(observation) == "observed")
+                    .map(|observation| release_prometheus_inventory_collected(&observation.data_json))
                     .unwrap_or(false)
                 {
                     "observed"
@@ -28805,6 +28831,45 @@ mod tests {
             }
             other => panic!("expected KubernetesGet, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn release_inventory_gate_requires_collection_not_unrelated_global_health() {
+        let inventory = json!({
+            "inventory": {
+                "targets": {
+                    "status": "success",
+                    "active_count": 35,
+                    "unhealthy_count": 3
+                },
+                "rules": {
+                    "status": "success",
+                    "problem_rule_count": 0
+                },
+                "alerts": {
+                    "status": "success",
+                    "alert_count": 0
+                }
+            }
+        });
+
+        assert!(super::release_prometheus_inventory_collected(&inventory));
+        assert_eq!(
+            super::prometheus_inventory_observability_status(&inventory),
+            "attention_required"
+        );
+        assert!(super::release_prometheus_inventory_summary(&inventory)
+            .contains("3 unhealthy target(s)"));
+
+        let missing_rules = json!({
+            "inventory": {
+                "targets": { "status": "success" },
+                "alerts": { "status": "success" }
+            }
+        });
+        assert!(!super::release_prometheus_inventory_collected(
+            &missing_rules
+        ));
     }
 
     #[test]
