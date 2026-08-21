@@ -44,16 +44,17 @@ use super::{
     required_baseline_capability_result, revise_change_set, revise_work_plan,
     revoke_permission_grant, router, run_policy, run_summary, satisfy_approval_gate,
     schedule_controller_wait, set_pipeline_intent_evidence, stream_start_seq,
-    supersede_active_controller_wait_if_present, tekton_execution_spec, transition_change_set,
-    transition_deployment_contract, transition_deployment_intent, transition_pipeline_intent,
-    transition_registry_evidence, transition_release, transition_remediation_plan,
-    transition_work_item, transition_work_plan, unique_suffix, validate_permission_grant_request,
-    validate_pipeline_deployment_handoff, validate_terminal_pipeline_run_analysis, verify_release,
-    work_item_flow, work_item_pipeline_intent_context, work_plan_flow, work_plan_readiness,
-    AppState, ApprovalGateSummaryQuery, ApprovalSummaryQuery, DeploymentIntentExecutionPreflight,
-    GitDeliveryFlowResponse, GitOpsBaseRevisionReconcileState, GitOpsDeliveryFlowResponse,
-    InternalWorkspaceProvisionedRequest, ListApprovalGatesQuery, ListApprovalsQuery,
-    ListAuditEventsQuery, ListChangeSetsQuery, ListControllerWaitsQuery,
+    supersede_active_controller_wait_if_present, system_readiness, tekton_execution_spec,
+    transition_change_set, transition_deployment_contract, transition_deployment_intent,
+    transition_pipeline_intent, transition_registry_evidence, transition_release,
+    transition_remediation_plan, transition_work_item, transition_work_plan, unique_suffix,
+    validate_permission_grant_request, validate_pipeline_deployment_handoff,
+    validate_terminal_pipeline_run_analysis, verify_release, work_item_flow,
+    work_item_pipeline_intent_context, work_plan_flow, work_plan_readiness, AppState,
+    ApprovalGateSummaryQuery, ApprovalSummaryQuery, BuildMetadata,
+    DeploymentIntentExecutionPreflight, GitDeliveryFlowResponse, GitOpsBaseRevisionReconcileState,
+    GitOpsDeliveryFlowResponse, InternalWorkspaceProvisionedRequest, ListApprovalGatesQuery,
+    ListApprovalsQuery, ListAuditEventsQuery, ListChangeSetsQuery, ListControllerWaitsQuery,
     ListDeploymentContractsQuery, ListDeploymentIntentsQuery, ListIncidentsQuery,
     ListObservationsQuery, ListPermissionGrantsQuery, ListPipelineIntentsQuery,
     ListRegistryEvidenceQuery, ListReleasesQuery, ListRemediationPlansQuery, ListRunsQuery,
@@ -459,6 +460,32 @@ fn readiness_explains_unverified_runner_profiles_without_empty_blockers() {
                 "environment_profile python-3.11: runner profile requires a fresh passing isolated verification"
             )
         );
+}
+
+#[tokio::test]
+async fn readiness_preserves_matching_and_mismatched_revision_semantics() {
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let mut matching = test_state().await;
+    matching.build = BuildMetadata {
+        api_revision: "b".repeat(40),
+        ui_revision: "b".repeat(40),
+        runtime_image_digest: digest.clone(),
+        ui_image_digest: digest.clone(),
+    };
+
+    let Json(matching_response) = system_readiness(State(matching)).await.unwrap();
+    assert!(matching_response.platform_versions_match);
+
+    let mut mismatched = test_state().await;
+    mismatched.build = BuildMetadata {
+        api_revision: "b".repeat(40),
+        ui_revision: "c".repeat(40),
+        runtime_image_digest: digest.clone(),
+        ui_image_digest: digest,
+    };
+
+    let Json(mismatched_response) = system_readiness(State(mismatched)).await.unwrap();
+    assert!(!mismatched_response.platform_versions_match);
 }
 
 #[test]

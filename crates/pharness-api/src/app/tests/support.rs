@@ -76,7 +76,21 @@ pub(super) fn route_inventory() -> Vec<RouteInventoryEntry> {
 
 pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
     let mut entries = Vec::new();
-    for source in [include_str!("../../app.rs"), include_str!("../runs.rs")] {
+    for source in [
+        include_str!("../mod.rs"),
+        include_str!("../system.rs"),
+        include_str!("../runs.rs"),
+        include_str!("../evidence.rs"),
+        include_str!("../work_items/mod.rs"),
+        include_str!("../operator.rs"),
+        include_str!("../source/mod.rs"),
+        include_str!("../gitops/mod.rs"),
+        include_str!("../pipeline/mod.rs"),
+        include_str!("../deployment/mod.rs"),
+        include_str!("../releases.rs"),
+        include_str!("../approvals.rs"),
+        include_str!("../internal.rs"),
+    ] {
         let mut remaining = source;
         while let Some(route_offset) = remaining.find(".route") {
             remaining = &remaining[route_offset + ".route".len()..];
