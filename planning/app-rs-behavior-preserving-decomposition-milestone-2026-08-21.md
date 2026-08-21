@@ -51,14 +51,16 @@ executing a rollback. Do not advance it during decomposition testing.
 
 `app.rs` is 42,859 lines and contains 573 top-level functions, types, or impls.
 Production code occupies roughly the first 28,637 lines; the in-module test
-suite occupies the remainder. The file mounts 136 routes and coordinates
-authentication, read models, WorkItems, reconciliation, approvals, contracts,
-source delivery, Tekton, GitOps, Argo, releases, rollback, audit evidence, and
-tests.
+suite occupies the remainder. The file contains 136 route registrations, and
+the already-extracted `app/runs.rs` module contains 20 more. Together they mount
+156 registrations representing 166 method/path pairs. The application
+coordinates authentication, read models, WorkItems, reconciliation, approvals,
+contracts, source delivery, Tekton, GitOps, Argo, releases, rollback, audit
+evidence, and tests.
 
 ```mermaid
 flowchart LR
-    HTTP["136 Axum routes"] --> APP["app.rs router and handlers"]
+    HTTP["166 Axum method/path pairs"] --> APP["app.rs router and handlers"]
     APP --> WI["WorkItem flow, actions, reconcile, waits"]
     APP --> SDLC["Plans, ChangeSets, contracts and delivery"]
     APP --> GOV["Approvals, grants, audit and readiness"]
@@ -172,7 +174,7 @@ Work:
 - Record the V3 identifiers and immutable digests from this document in the
   decomposition test-support module as constants used only by opt-in live
   characterization checks.
-- Add a checked-in route inventory covering all 136 method/path pairs and their
+- Add a checked-in route inventory covering all 166 method/path pairs and their
   operator-versus-worker authentication class.
 - Add router tests for representative static, parameterized, operator-only,
   worker-only, and not-found routes. Tests must make no external calls.
@@ -410,4 +412,3 @@ The milestone is complete only when:
   remain readable as characterization evidence.
 - The RollbackIntent is still unexecuted and bound to the captured known-good
   digest.
-
