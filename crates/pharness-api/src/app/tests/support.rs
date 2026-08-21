@@ -19,9 +19,9 @@ pub(super) const V3_ROLLBACK_BASELINE_DIGEST: &str =
     "sha256:850341f37100a0e90711b54733e06eeb52cb268244c6bbc07c25ef1b3c932cce";
 
 pub(super) const V3_CHARACTERIZATION_FIXTURE: &str =
-    include_str!("../../tests/fixtures/v3-characterization.json");
+    include_str!("../../../tests/fixtures/v3-characterization.json");
 pub(super) const APP_ROUTE_INVENTORY: &str =
-    include_str!("../../tests/fixtures/app-route-inventory.tsv");
+    include_str!("../../../tests/fixtures/app-route-inventory.tsv");
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum RouteAuthClass {
@@ -76,7 +76,7 @@ pub(super) fn route_inventory() -> Vec<RouteInventoryEntry> {
 
 pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
     let mut entries = Vec::new();
-    for source in [include_str!("../app.rs"), include_str!("runs.rs")] {
+    for source in [include_str!("../../app.rs"), include_str!("../runs.rs")] {
         let mut remaining = source;
         while let Some(route_offset) = remaining.find(".route") {
             remaining = &remaining[route_offset + ".route".len()..];
