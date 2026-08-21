@@ -2,6 +2,19 @@ use super::*;
 use axum::routing::{get, post};
 use axum::Router;
 
+pub(super) mod change_sets;
+pub(super) mod delivery;
+
+use change_sets::{
+    create_gitops_change_set, get_gitops_change_set, list_gitops_change_sets,
+    transition_gitops_change_set,
+};
+use delivery::{
+    authorize_gitops_change_set_delivery, execute_gitops_change_set_delivery,
+    observe_gitops_change_set_delivery, preflight_gitops_change_set_delivery,
+    prepare_gitops_change_set_delivery, resolve_gitops_base_revision,
+};
+
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
