@@ -1,13 +1,21 @@
-use super::*;
+use super::pipeline::intents::{
+    create_work_item_pipeline_intent, work_item_pipeline_intent_context,
+};
+use super::source::work_plans::create_work_plan_from_work_item;
+use super::AppState;
 use axum::routing::{get, post};
 use axum::Router;
 
 pub(super) mod actions;
 pub(super) mod attempts;
 pub(super) mod flow;
+pub(super) mod lifecycle;
 pub(super) mod preflight;
 pub(super) mod reconcile;
+pub(super) mod reconcile_model;
 pub(super) mod rollback;
+pub(super) mod rollback_state;
+pub(super) mod wait_state;
 pub(super) mod waits;
 
 use actions::{advance_work_item, execute_work_item_action};
@@ -18,6 +26,10 @@ use attempts::{
 use flow::{get_work_item, list_work_items, work_item_flow};
 use preflight::{create_work_item, preflight_work_item};
 use reconcile::reconcile_work_item;
+use rollback::{
+    approve_rollback_intent, execute_rollback_intent, get_work_item_rollback_intent,
+    observe_rollback_intent, preflight_rollback_intent, prepare_work_item_rollback_intent,
+};
 use waits::{
     list_work_item_controller_waits, list_work_item_events, reconcile_due_controller_waits,
 };

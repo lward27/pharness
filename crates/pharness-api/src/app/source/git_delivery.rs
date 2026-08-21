@@ -1,96 +1,47 @@
-use super::super::*;
-
-pub(in crate::app) async fn git_delivery_flow(
-    store: &SqliteStore,
-    change_set: Option<&StoredChangeSet>,
-) -> Result<Option<GitDeliveryFlowResponse>, ApiError> {
-    let Some(change_set) = change_set else {
-        return Ok(None);
-    };
-    let Some(run_id) = &change_set.run_id else {
-        return Ok(None);
-    };
-    let artifacts = store.list_artifacts(run_id).await?;
-    let Some(plan) = artifacts
-        .iter()
-        .find(|artifact| git_delivery_plan_matches_change_set(artifact, change_set))
-    else {
-        return Ok(None);
-    };
-    let latest_preflight = artifacts
-        .iter()
-        .filter(|artifact| {
-            artifact.kind == "git_delivery_preflight"
-                && artifact.content_json.as_ref().is_some_and(|content| {
-                    content
-                        .get("git_delivery_plan_artifact_id")
-                        .and_then(Value::as_str)
-                        == Some(plan.id.as_str())
-                })
-        })
-        .max_by(|left, right| {
-            left.created_at
-                .cmp(&right.created_at)
-                .then_with(|| left.id.cmp(&right.id))
-        })
-        .cloned()
-        .map(Into::into);
-    let latest_execution = artifacts
-        .iter()
-        .filter(|artifact| {
-            git_delivery_artifact_matches_plan(artifact, "git_delivery_execution", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_result = artifacts
-        .iter()
-        .filter(|artifact| {
-            git_delivery_artifact_matches_plan(artifact, "git_delivery_result", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_observation = artifacts
-        .iter()
-        .filter(|artifact| {
-            git_delivery_artifact_matches_plan(artifact, "git_delivery_pr_observation", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_merge = artifacts
-        .iter()
-        .filter(|artifact| {
-            git_delivery_artifact_matches_plan(artifact, "git_delivery_merge", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-
-    Ok(Some(GitDeliveryFlowResponse {
-        plan: plan.clone().into(),
-        latest_preflight,
-        latest_execution,
-        latest_result,
-        latest_observation,
-        latest_merge,
-    }))
-}
-
-pub(in crate::app) fn git_delivery_artifact_matches_plan(
-    artifact: &StoredArtifact,
-    kind: &str,
-    plan_id: &str,
-) -> bool {
-    artifact.kind == kind
-        && artifact.content_json.as_ref().is_some_and(|content| {
-            content
-                .get("git_delivery_plan_artifact_id")
-                .and_then(Value::as_str)
-                == Some(plan_id)
-        })
-}
+use super::super::approvals::{
+    create_permission_grant_record, ensure_approved_for_trusted_envelope, grant_is_unexpired,
+};
+use super::super::audit::append_change_set_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::delivery_actions::GIT_DELIVERY_ACTIONS;
+use super::super::execution_checks::execution_check;
+use super::super::identifiers::{is_git_sha, is_github_pr_url};
+use super::super::principals::DEFAULT_GIT_WRITER_SUBJECT;
+use super::super::risk::risk_rank;
+use super::super::text::compact_delivery_subject;
+use super::super::validation::{clean_optional_text, required_json_string};
+use super::super::work_items::lifecycle::work_item_gate_scope_matches;
+use super::super::work_items::preflight::{
+    bounded_production_grant_expiry, work_item_target_supported,
+};
+use super::super::{ApiError, AppState};
+use super::change_sets::coding_run_scope_matches_source;
+use super::delivery_flow::{
+    git_delivery_artifact_matches_plan, git_delivery_plan_matches_change_set,
+};
+use crate::dispatch::{GitDeliveryExecutionRequest, GitDeliveryObservationRequest};
+use crate::dto::{
+    ArtifactResponse, CreateGitDeliveryAuthorizationRequest, CreatePermissionGrantRequest,
+    ExecuteGitDeliveryRequest, ExecuteGitDeliveryResponse, GitDeliveryAuthorizationResponse,
+    GitDeliveryContextResponse, GitDeliveryObservationContextResponse,
+    GitDeliveryObservationOutcomeRequest, GitDeliveryOutcomeRequest, GitDeliveryPlanResponse,
+    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, ObserveGitDeliveryRequest,
+    ObserveGitDeliveryResponse, PrepareGitDeliveryRequest,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    CapabilityKind, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, RiskLevel, RunId,
+    RunScope,
+};
+use pharness_runhost::WorkspaceSourceSpec;
+use pharness_store::{
+    ApprovalGateListFilter, CreateArtifact, SqliteStore, StoredArtifact, StoredChangeSet,
+    StoredPermissionGrant, StoredWorkItem,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(in crate::app) async fn prepare_change_set_git_delivery(
     State(state): State<AppState>,
@@ -1577,29 +1528,6 @@ pub(in crate::app) async fn current_git_delivery_plan(
             ApiError::conflict(
                 "ChangeSet needs a current immutable Git delivery plan before authorization",
             )
-        })
-}
-
-pub(in crate::app) fn git_delivery_plan_matches_change_set(
-    artifact: &StoredArtifact,
-    change_set: &StoredChangeSet,
-) -> bool {
-    artifact.kind == "git_delivery_plan"
-        && artifact.content_json.as_ref().is_some_and(|plan| {
-            plan.get("change_set")
-                .and_then(|value| value.get("id"))
-                .and_then(Value::as_str)
-                == Some(change_set.id.as_str())
-                && plan
-                    .get("change_set")
-                    .and_then(|value| value.get("revision"))
-                    .and_then(Value::as_i64)
-                    == Some(change_set.revision)
-                && plan
-                    .get("change_set")
-                    .and_then(|value| value.get("material_hash"))
-                    .and_then(Value::as_str)
-                    == Some(change_set.material_hash.as_str())
         })
 }
 

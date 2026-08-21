@@ -1,5 +1,69 @@
-use super::super::*;
+use super::super::approvals::append_approval_gate_audit_event;
+use super::super::audit::{
+    append_incident_audit_event, append_observation_audit_event,
+    append_remediation_plan_audit_event, append_work_item_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::unique_suffix;
+use super::super::deployment::execution::{
+    deployment_intent_delivery_flow, deployment_intent_execution_preflight,
+    execute_deployment_intent, DeploymentIntentExecutionPreflight,
+};
+use super::super::deployment::target::deployment_target;
+use super::super::gitops::delivery::{
+    execute_gitops_change_set_delivery, observe_gitops_change_set_delivery,
+    prepare_gitops_change_set_delivery, resolve_gitops_base_revision,
+};
+use super::super::gitops::delivery_flow::{
+    gitops_artifact_change_set_revision, gitops_base_revision_matches_change_set,
+    gitops_delivery_flow,
+};
+use super::super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
+use super::super::gitops::observation::gitops_observation_closed_unmerged;
+use super::super::pipeline::evidence::pipeline_intent_attached_evidence_status;
+use super::super::pipeline::execution::{
+    execute_pipeline_intent, pipeline_execution_preflight_response,
+    pipeline_intent_execution_preflight, PipelineIntentExecutionPreflight,
+};
+use super::super::pipeline::state::pipeline_intent_execution_state;
+use super::super::releases::{
+    approval_gates_from_remediation_plan, create_release_from_deployment_intent,
+    incident_resource_label, verify_release,
+};
+use super::super::sessions::root_session_for_request;
+use super::super::source::delivery_flow::git_delivery_flow;
+use super::super::source::git_delivery::{
+    execute_change_set_git_delivery, observe_change_set_git_delivery,
+    preflight_change_set_git_delivery, prepare_change_set_git_delivery,
+};
+use super::super::source::work_plans::create_work_plan_from_work_item;
+use super::super::validation::clean_optional_text;
+use super::super::{ApiError, AppState};
 use super::attempts::{capture_work_item_change_set, execute_work_item};
+use super::preflight::work_item_target_supported;
+use super::reconcile_model::WorkItemReconcileAction;
+use super::rollback::{prepare_work_item_rollback_intent, RollbackIntentRequest};
+use super::rollback_state::latest_rollback_intent;
+use super::wait_state::{schedule_controller_wait, supersede_active_controller_wait_if_present};
+use crate::dto::{
+    CaptureWorkItemChangeSetRequest, CreateReleaseFromDeploymentIntentRequest,
+    DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightResponse,
+    ExecuteDeploymentIntentRequest, ExecuteGitDeliveryRequest, ExecuteGitOpsDeliveryRequest,
+    ExecutePipelineIntentRequest, ExecuteWorkItemRequest, GitDeliveryFlowResponse,
+    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, GitOpsDeliveryFlowResponse,
+    GitOpsDeliveryPreflightResponse, ObserveGitDeliveryRequest, ObserveGitOpsDeliveryRequest,
+    PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest, ReconcileAuthorizationCheckResponse,
+    ReconcileBlockerResponse, ReconcileWorkItemRequest, ReconcileWorkItemResponse, ReleaseResponse,
+    ResolveGitOpsBaseRevisionRequest, VerifyReleaseRequest,
+};
+use axum::extract::{Path, State};
+use axum::{Extension, Json};
+use pharness_store::{
+    CreateIncident, CreateObservation, CreateRemediationPlan, SqliteStore, StoredChangeSet,
+    StoredDeploymentIntent, StoredGitOpsChangeSet, StoredIncident, StoredPipelineIntent,
+    StoredRelease, StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, WorkspaceListFilter,
+};
+use serde_json::{json, Value};
 
 pub(in crate::app) async fn reconcile_work_item(
     State(state): State<AppState>,
@@ -1683,402 +1747,6 @@ pub(in crate::app) async fn complete_work_item_from_verified_release(
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::app) enum WorkItemReconcileAction {
-    DeclareWorkPlan,
-    AwaitingWorkPlanApproval,
-    StartCodingAttempt,
-    WaitForCodingAttempt,
-    CaptureChangeSet,
-    AwaitingChangeSetApproval,
-    PrepareGitDelivery,
-    AwaitingGitDeliveryAuthorization,
-    AwaitingGitWriterAvailability,
-    AwaitingGitDeliveryExecution,
-    WaitForGitDelivery,
-    AwaitingPullRequestObservation,
-    AwaitingPullRequestMerge,
-    AwaitingPipelineIntentDefinition,
-    AwaitingPipelineIntentApproval,
-    AwaitingPipelineExecutionAuthorization,
-    AwaitingPipelineExecution,
-    WaitForPipelineExecution,
-    PipelineExecutionFailed,
-    AwaitingPipelineEvidenceReview,
-    AwaitingPipelineBuildOutputReview,
-    AwaitingDeploymentIntentDefinition,
-    AwaitingGitOpsUpdatePlan,
-    AwaitingGitOpsChangeSetApproval,
-    AwaitingGitOpsBaseRevision,
-    WaitForGitOpsBaseRevision,
-    PrepareRollbackIntent,
-    AwaitingGitOpsDeliveryPlan,
-    AwaitingGitOpsDeliveryAuthorization,
-    AwaitingGitOpsWriterAvailability,
-    AwaitingGitOpsDeliveryExecution,
-    WaitForGitOpsDelivery,
-    AwaitingGitOpsPullRequestObservation,
-    AwaitingGitOpsPullRequestMerge,
-    AwaitingDeploymentIntentReview,
-    AwaitingDeploymentAuthorization,
-    AwaitingArgoRunnerAvailability,
-    AwaitingDeploymentExecution,
-    WaitForDeploymentExecution,
-    DeploymentExecutionFailed,
-    AwaitingReleaseDefinition,
-    AwaitingReleaseApproval,
-    AwaitingReleaseVerification,
-    CompleteWorkItem,
-    DeploymentIntentBlocked,
-    ReleaseBlocked,
-    GitOpsDeliveryFailed,
-    GitOpsChangeSetBlocked,
-    PipelineIntentBlocked,
-    GitDeliveryFailed,
-    RequiresReplan,
-    Terminal,
-}
-
-impl WorkItemReconcileAction {
-    pub(in crate::app) fn as_str(self) -> &'static str {
-        match self {
-            Self::DeclareWorkPlan => "declare_work_plan",
-            Self::AwaitingWorkPlanApproval => "awaiting_work_plan_approval",
-            Self::StartCodingAttempt => "start_coding_attempt",
-            Self::WaitForCodingAttempt => "wait_for_coding_attempt",
-            Self::CaptureChangeSet => "capture_change_set",
-            Self::AwaitingChangeSetApproval => "awaiting_change_set_approval",
-            Self::PrepareGitDelivery => "prepare_git_delivery",
-            Self::AwaitingGitDeliveryAuthorization => "awaiting_git_delivery_authorization",
-            Self::AwaitingGitWriterAvailability => "awaiting_git_writer_availability",
-            Self::AwaitingGitDeliveryExecution => "awaiting_git_delivery_execution",
-            Self::WaitForGitDelivery => "wait_for_git_delivery",
-            Self::AwaitingPullRequestObservation => "awaiting_pull_request_observation",
-            Self::AwaitingPullRequestMerge => "awaiting_pull_request_merge",
-            Self::AwaitingPipelineIntentDefinition => "awaiting_pipeline_intent_definition",
-            Self::AwaitingPipelineIntentApproval => "awaiting_pipeline_intent_approval",
-            Self::AwaitingPipelineExecutionAuthorization => {
-                "awaiting_pipeline_execution_authorization"
-            }
-            Self::AwaitingPipelineExecution => "awaiting_pipeline_execution",
-            Self::WaitForPipelineExecution => "wait_for_pipeline_execution",
-            Self::PipelineExecutionFailed => "pipeline_execution_failed",
-            Self::AwaitingPipelineEvidenceReview => "awaiting_pipeline_evidence_review",
-            Self::AwaitingPipelineBuildOutputReview => "awaiting_pipeline_build_output_review",
-            Self::AwaitingDeploymentIntentDefinition => "awaiting_deployment_intent_definition",
-            Self::AwaitingGitOpsUpdatePlan => "awaiting_gitops_update_plan",
-            Self::AwaitingGitOpsChangeSetApproval => "awaiting_gitops_change_set_approval",
-            Self::AwaitingGitOpsBaseRevision => "awaiting_gitops_base_revision",
-            Self::WaitForGitOpsBaseRevision => "wait_for_gitops_base_revision",
-            Self::PrepareRollbackIntent => "prepare_rollback_intent",
-            Self::AwaitingGitOpsDeliveryPlan => "awaiting_gitops_delivery_plan",
-            Self::AwaitingGitOpsDeliveryAuthorization => "awaiting_gitops_delivery_authorization",
-            Self::AwaitingGitOpsWriterAvailability => "awaiting_gitops_writer_availability",
-            Self::AwaitingGitOpsDeliveryExecution => "awaiting_gitops_delivery_execution",
-            Self::WaitForGitOpsDelivery => "wait_for_gitops_delivery",
-            Self::AwaitingGitOpsPullRequestObservation => {
-                "awaiting_gitops_pull_request_observation"
-            }
-            Self::AwaitingGitOpsPullRequestMerge => "awaiting_gitops_pull_request_merge",
-            Self::AwaitingDeploymentIntentReview => "awaiting_deployment_intent_review",
-            Self::AwaitingDeploymentAuthorization => "awaiting_deployment_authorization",
-            Self::AwaitingArgoRunnerAvailability => "awaiting_argo_runner_availability",
-            Self::AwaitingDeploymentExecution => "awaiting_deployment_execution",
-            Self::WaitForDeploymentExecution => "wait_for_deployment_execution",
-            Self::DeploymentExecutionFailed => "deployment_execution_failed",
-            Self::AwaitingReleaseDefinition => "awaiting_release_definition",
-            Self::AwaitingReleaseApproval => "awaiting_release_approval",
-            Self::AwaitingReleaseVerification => "awaiting_release_verification",
-            Self::CompleteWorkItem => "complete_work_item",
-            Self::DeploymentIntentBlocked => "deployment_intent_blocked",
-            Self::ReleaseBlocked => "release_blocked",
-            Self::GitOpsDeliveryFailed => "gitops_delivery_failed",
-            Self::GitOpsChangeSetBlocked => "gitops_change_set_blocked",
-            Self::PipelineIntentBlocked => "pipeline_intent_blocked",
-            Self::GitDeliveryFailed => "git_delivery_failed",
-            Self::RequiresReplan => "requires_replan",
-            Self::Terminal => "terminal",
-        }
-    }
-
-    pub(in crate::app) fn controller_wait_kind(self) -> Option<&'static str> {
-        match self {
-            Self::WaitForCodingAttempt => Some("coding_attempt"),
-            Self::WaitForGitDelivery => Some("git_delivery_execution"),
-            Self::AwaitingPullRequestObservation => Some("source_pull_request_observation"),
-            Self::AwaitingPullRequestMerge => Some("source_pull_request_merge"),
-            Self::WaitForPipelineExecution => Some("pipeline_execution"),
-            Self::WaitForGitOpsBaseRevision => Some("gitops_base_revision"),
-            Self::WaitForGitOpsDelivery => Some("gitops_delivery_execution"),
-            Self::AwaitingGitOpsPullRequestObservation => Some("gitops_pull_request_observation"),
-            Self::AwaitingGitOpsPullRequestMerge => Some("gitops_pull_request_merge"),
-            Self::WaitForDeploymentExecution => Some("deployment_execution"),
-            _ => None,
-        }
-    }
-
-    pub(in crate::app) fn is_applyable(self) -> bool {
-        matches!(
-            self,
-            Self::DeclareWorkPlan
-                | Self::StartCodingAttempt
-                | Self::CaptureChangeSet
-                | Self::PrepareGitDelivery
-                | Self::AwaitingGitDeliveryExecution
-                | Self::AwaitingPullRequestObservation
-                | Self::AwaitingPipelineExecution
-                | Self::AwaitingGitOpsBaseRevision
-                | Self::PrepareRollbackIntent
-                | Self::AwaitingGitOpsDeliveryPlan
-                | Self::AwaitingGitOpsDeliveryExecution
-                | Self::AwaitingGitOpsPullRequestObservation
-                | Self::AwaitingGitOpsPullRequestMerge
-                | Self::AwaitingDeploymentExecution
-                | Self::AwaitingReleaseDefinition
-                | Self::AwaitingReleaseVerification
-                | Self::CompleteWorkItem
-        )
-    }
-
-    pub(in crate::app) fn message(
-        self,
-        work_item: &StoredWorkItem,
-        work_plan: Option<&StoredWorkPlan>,
-        change_set: Option<&StoredChangeSet>,
-    ) -> String {
-        match self {
-            Self::AwaitingWorkPlanApproval => work_plan
-                .map(|plan| format!("WorkPlan {} is {} and requires approval", plan.id, plan.status))
-                .unwrap_or_else(|| "WorkItem requires a WorkPlan".to_string()),
-            Self::WaitForCodingAttempt => "coding attempt is still running or awaiting its durable outcome".to_string(),
-            Self::AwaitingChangeSetApproval => change_set
-                .map(|change_set| {
-                    format!(
-                        "ChangeSet {} is {} and requires source review",
-                        change_set.id, change_set.status
-                    )
-                })
-                .unwrap_or_else(|| "ChangeSet capture is pending".to_string()),
-            Self::AwaitingGitDeliveryAuthorization => {
-                "Git delivery plan is prepared; a matching scoped Git writer grant and git_mutation gate decision are required"
-                    .to_string()
-            }
-            Self::AwaitingGitWriterAvailability => {
-                "Git delivery is authorized, but the dedicated Git writer is not configured for this exact repository"
-                    .to_string()
-            }
-            Self::AwaitingGitDeliveryExecution => {
-                "Git delivery is ready; explicitly execute the isolated branch-and-PR writer"
-                    .to_string()
-            }
-            Self::WaitForGitDelivery => {
-                "Git writer execution is in progress; wait for its durable branch-and-PR result"
-                    .to_string()
-            }
-            Self::AwaitingPullRequestObservation => {
-                "Git writer created a pull request; dispatch the read-only observer before any build is defined"
-                    .to_string()
-            }
-            Self::AwaitingPullRequestMerge => {
-                "Pull request is observed but lacks immutable merge provenance; wait for merge and observe again"
-                    .to_string()
-            }
-            Self::AwaitingPipelineIntentDefinition => {
-                "Immutable source merge provenance is recorded; define the exact PipelineIntent and PipelineContract next"
-                    .to_string()
-            }
-            Self::AwaitingPipelineIntentApproval => {
-                "PipelineIntent is proposed; review and approve its pinned PipelineContract and exact Tekton inputs"
-                    .to_string()
-            }
-            Self::AwaitingPipelineExecutionAuthorization => {
-                "PipelineIntent is approved but its scoped Tekton gates or trusted execution envelope are not yet ready"
-                    .to_string()
-            }
-            Self::AwaitingPipelineExecution => {
-                "PipelineIntent preflight is ready; explicitly dispatch the isolated Tekton executor"
-                    .to_string()
-            }
-            Self::WaitForPipelineExecution => {
-                "Tekton execution is in progress; wait for its signed-in executor outcome and terminal analysis"
-                    .to_string()
-            }
-            Self::PipelineExecutionFailed => {
-                "Tekton execution failed; inspect terminal evidence and revise or replan before further delivery"
-                    .to_string()
-            }
-            Self::AwaitingPipelineEvidenceReview => {
-                "Tekton completed, but its terminal PipelineRunAnalysis is not satisfied; review evidence before delivery planning"
-                    .to_string()
-            }
-            Self::AwaitingPipelineBuildOutputReview => {
-                "Tekton completed, but its build output is missing or not trusted; inspect terminal evidence before GitOps planning"
-                    .to_string()
-            }
-            Self::AwaitingDeploymentIntentDefinition => {
-                "Verified build evidence is ready; declare the exact development DeploymentIntent before GitOps update planning"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsUpdatePlan => {
-                "Verified digest-pinned build output is ready; prepare the separate review-only GitOps update plan next"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsChangeSetApproval => {
-                "GitOps ChangeSet is proposed; review its exact digest-pinned Kustomize update before authorization"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsBaseRevision => {
-                "GitOps ChangeSet is approved; explicitly dispatch the read-only base-revision observer"
-                    .to_string()
-            }
-            Self::WaitForGitOpsBaseRevision => {
-                "GitOps base-revision observation is in progress; wait for immutable base commit evidence"
-                    .to_string()
-            }
-            Self::PrepareRollbackIntent => {
-                "GitOps base revision is resolved; explicitly capture the healthy protected-production baseline and prepare the digest-bound RollbackIntent before writer planning"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsDeliveryPlan => {
-                "GitOps base revision is resolved; prepare the immutable GitOps delivery plan next"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsDeliveryAuthorization => {
-                "GitOps delivery plan is prepared; a matching scoped GitOps writer grant and gitops_mutation gate decision are required"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsWriterAvailability => {
-                "GitOps delivery is authorized, but the dedicated GitOps writer is not configured for this exact repository"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsDeliveryExecution => {
-                "GitOps delivery is ready; explicitly execute the isolated GitOps branch-and-PR writer"
-                    .to_string()
-            }
-            Self::WaitForGitOpsDelivery => {
-                "GitOps writer execution is in progress; wait for its durable branch-and-PR result"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsPullRequestObservation => {
-                "GitOps writer created a pull request; dispatch the read-only observer before Argo can be considered"
-                    .to_string()
-            }
-            Self::AwaitingGitOpsPullRequestMerge => {
-                "GitOps pull request is observed but lacks immutable merge provenance; wait for merge and observe again"
-                    .to_string()
-            }
-            Self::AwaitingDeploymentIntentReview => {
-                "Immutable GitOps merge provenance is recorded; review the declared DeploymentIntent before any Argo sync"
-                    .to_string()
-            }
-            Self::AwaitingDeploymentAuthorization => {
-                "DeploymentIntent is approved; a matching dev Argo contract, cluster_mutation gate, and scoped runner grant are required"
-                    .to_string()
-            }
-            Self::AwaitingArgoRunnerAvailability => {
-                "DeploymentIntent is authorized, but the isolated Argo runner is unavailable for this exact Application"
-                    .to_string()
-            }
-            Self::AwaitingDeploymentExecution => {
-                "DeploymentIntent is ready; explicitly dispatch the isolated Argo sync runner"
-                    .to_string()
-            }
-            Self::WaitForDeploymentExecution => {
-                "Argo sync is in progress; wait for its durable terminal result before proposing a Release"
-                    .to_string()
-            }
-            Self::DeploymentExecutionFailed => {
-                "Argo sync failed; inspect the bounded result and create a reviewed remediation or deployment revision"
-                    .to_string()
-            }
-            Self::AwaitingReleaseDefinition => {
-                "Argo sync completed; create the linked Release record before post-sync verification"
-                    .to_string()
-            }
-            Self::AwaitingReleaseApproval => {
-                "Release is proposed; review its immutable deployment provenance before verification"
-                    .to_string()
-            }
-            Self::AwaitingReleaseVerification => {
-                "Release is approved; explicitly run bounded post-sync verification against its declared targets"
-                    .to_string()
-            }
-            Self::CompleteWorkItem => {
-                "Release verification is complete; apply reconciliation to record terminal WorkItem completion"
-                    .to_string()
-            }
-            Self::DeploymentIntentBlocked => {
-                "DeploymentIntent is stale or rejected; create and review a new deployment intent before Argo execution"
-                    .to_string()
-            }
-            Self::ReleaseBlocked => {
-                "Release is stale or rejected; revise and review release provenance before post-sync verification"
-                    .to_string()
-            }
-            Self::GitOpsDeliveryFailed => {
-                "GitOps delivery failed; inspect its bounded result and explicitly re-propose this GitOps ChangeSet as a new reviewed revision before another authorized attempt"
-                    .to_string()
-            }
-            Self::GitOpsChangeSetBlocked => {
-                "GitOps ChangeSet is stale or rejected; create a newly reviewed GitOps plan before delivery can continue"
-                    .to_string()
-            }
-            Self::PipelineIntentBlocked => {
-                "PipelineIntent is stale or rejected; create a newly reviewed PipelineIntent before delivery can continue"
-                    .to_string()
-            }
-            Self::GitDeliveryFailed => {
-                "Git delivery failed; inspect its bounded result and revise/review the ChangeSet before another delivery"
-                    .to_string()
-            }
-            Self::RequiresReplan => format!(
-                "WorkItem is {} after {}/{} coding attempts; explicit replan or cancellation is required",
-                work_item.status, work_item.attempt_count, work_item.max_attempts
-            ),
-            Self::Terminal => format!("WorkItem is terminal: {}", work_item.status),
-            _ => format!("next action is {}", self.as_str()),
-        }
-    }
-
-    pub(in crate::app) fn delivery_failure(self) -> Option<(&'static str, &'static str)> {
-        match self {
-            Self::GitDeliveryFailed => Some((
-                "source_git_delivery_failed",
-                "the bounded source Git writer reported a failed delivery",
-            )),
-            Self::PipelineExecutionFailed => Some((
-                "pipeline_execution_failed",
-                "the bounded Tekton execution reported a failed delivery",
-            )),
-            Self::GitOpsDeliveryFailed => Some((
-                "gitops_delivery_failed",
-                "the bounded GitOps writer reported a failed delivery",
-            )),
-            Self::DeploymentExecutionFailed => Some((
-                "deployment_execution_failed",
-                "the bounded Argo sync execution reported a failed delivery",
-            )),
-            Self::PipelineIntentBlocked => Some((
-                "pipeline_intent_blocked",
-                "the PipelineIntent is stale or rejected and cannot be executed",
-            )),
-            Self::GitOpsChangeSetBlocked => Some((
-                "gitops_change_set_blocked",
-                "the GitOps ChangeSet is stale or rejected and cannot be delivered",
-            )),
-            Self::DeploymentIntentBlocked => Some((
-                "deployment_intent_blocked",
-                "the DeploymentIntent is stale or rejected and cannot be executed",
-            )),
-            Self::ReleaseBlocked => Some((
-                "release_blocked",
-                "the Release is stale or rejected and cannot be verified",
-            )),
-            _ => None,
-        }
-    }
-}
-
 pub(in crate::app) struct WorkItemDeliveryReconcileContext<'a> {
     change_set: Option<&'a StoredChangeSet>,
     git_delivery: Option<&'a GitDeliveryFlowResponse>,
@@ -2191,33 +1859,6 @@ pub(in crate::app) fn pipeline_intent_reconcile_action(
     }
 }
 
-pub(in crate::app) fn pipeline_intent_execution_state(
-    intent: &StoredPipelineIntent,
-) -> Option<&str> {
-    intent
-        .intent_json
-        .pointer("/execution_state/state")
-        .and_then(Value::as_str)
-}
-
-pub(in crate::app) fn pipeline_execution_attempt(intent_json: &Value) -> Result<u64, ApiError> {
-    let attempt = intent_json
-        .get("execution_attempt")
-        .map(|value| {
-            value.as_u64().ok_or_else(|| {
-                ApiError::conflict("PipelineIntent execution_attempt must be a positive integer")
-            })
-        })
-        .transpose()?
-        .unwrap_or(1);
-    if !(1..=MAX_PIPELINE_EXECUTION_ATTEMPTS).contains(&attempt) {
-        return Err(ApiError::conflict(format!(
-            "PipelineIntent execution_attempt must be between 1 and {MAX_PIPELINE_EXECUTION_ATTEMPTS}"
-        )));
-    }
-    Ok(attempt)
-}
-
 pub(in crate::app) fn pipeline_build_output_is_verified(intent: &StoredPipelineIntent) -> bool {
     intent
         .intent_json
@@ -2228,12 +1869,6 @@ pub(in crate::app) fn pipeline_build_output_is_verified(intent: &StoredPipelineI
 
 pub(in crate::app) fn pipeline_evidence_is_satisfied(intent: &StoredPipelineIntent) -> bool {
     pipeline_intent_attached_evidence_status(intent) == Some("satisfied")
-}
-
-pub(in crate::app) fn pipeline_intent_is_gitops_update_eligible(
-    intent: &StoredPipelineIntent,
-) -> bool {
-    pipeline_intent_is_deployment_eligible(&intent.status) && pipeline_evidence_is_satisfied(intent)
 }
 
 pub(in crate::app) fn pipeline_intent_requires_execution_preflight(
@@ -2417,26 +2052,6 @@ pub(in crate::app) fn gitops_delivery_reconcile_action(
         }
         _ => WorkItemReconcileAction::AwaitingGitOpsDeliveryAuthorization,
     }
-}
-
-pub(in crate::app) fn gitops_observation_closed_unmerged(content: Option<&Value>) -> bool {
-    content.is_some_and(|content| {
-        content.get("status").and_then(Value::as_str) == Some("observed")
-            && content.get("pull_request_state").and_then(Value::as_str) == Some("closed")
-            && content.get("merged").and_then(Value::as_bool) == Some(false)
-    })
-}
-
-pub(in crate::app) fn gitops_observation_refreshable(content: Option<&Value>) -> bool {
-    content.is_some_and(|content| {
-        let status = content.get("status").and_then(Value::as_str);
-        if status == Some("failed") {
-            return true;
-        }
-        status == Some("observed")
-            && content.get("merged").and_then(Value::as_bool) != Some(true)
-            && content.get("pull_request_state").and_then(Value::as_str) != Some("closed")
-    })
 }
 
 pub(in crate::app) fn deployment_intent_reconcile_action(

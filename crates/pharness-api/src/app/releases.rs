@@ -1,6 +1,53 @@
-use super::*;
+use super::approval_policy::approval_gate_kind;
+use super::approvals::{append_approval_gate_audit_event, ensure_approved_for_trusted_envelope};
+use super::audit::{
+    append_incident_audit_event, append_registry_evidence_audit_event, append_release_audit_event,
+    append_remediation_plan_audit_event,
+};
+use super::auth::OperatorIdentity;
+use super::capabilities::execute_direct_capability;
+use super::clock::unique_suffix;
+use super::deployment::contracts::{
+    deployment_contract_spec, validate_deployment_contract_spec,
+    validate_protected_production_deployment_contract, VerificationRequirement,
+};
+use super::deployment::target::{
+    deployment_target, ensure_supported_deployment_target, DeploymentTarget,
+};
+use super::execution_checks::execution_check;
+use super::identifiers::{is_git_sha, is_sha256_digest, safe_id_fragment};
+use super::json_values::string_at;
+use super::pipeline::evidence::release_observability_evidence_status;
+use super::pipeline::execution::safe_oci_image_component;
+use super::pipeline::intents::{
+    current_pipeline_build_output, valid_digest_pinned_image_reference, VerifiedPipelineBuildOutput,
+};
+use super::system::{PROTECTED_ENVIRONMENT, PROTECTED_NAMESPACE};
+use super::validation::{clean_optional_text, ensure_json_object};
+use super::{ApiError, AppState};
+use crate::dto::{
+    AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse,
+    CreateRegistryEvidenceFromInspectionRequest, CreateRegistryEvidenceFromInspectionResponse,
+    CreateRegistryEvidenceFromReleaseRequest, CreateRegistryEvidenceResponse,
+    CreateReleaseFromDeploymentIntentRequest, CreateReleaseResponse, ExecuteCapabilityResponse,
+    RegistryEvidenceListResponse, RegistryEvidenceResponse, ReleaseResponse, ReleasesResponse,
+    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
+    TransitionReleaseRequest, TransitionReleaseResponse, VerifyReleaseRequest,
+    VerifyReleaseResponse,
+};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
-use axum::Router;
+use axum::{Extension, Json, Router};
+use pharness_core::{AgentAction, RunId, ToolResult};
+use pharness_store::{
+    CreateApprovalGate, CreateIncident, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, RegistryEvidenceListFilter, ReleaseListFilter, SqliteStore,
+    StoredArtifact, StoredDeploymentContract, StoredDeploymentIntent, StoredIncident,
+    StoredObservation, StoredRelease, StoredRemediationPlan, UpdateRegistryEvidenceDraft,
+    UpdateReleaseDraft, UpdateReleaseEvidence,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -1432,16 +1479,6 @@ pub(in crate::app) fn approval_gates_from_remediation_plan(
         .collect()
 }
 
-pub(in crate::app) fn approval_gate_kind(gate_json: &Value) -> Option<String> {
-    gate_json
-        .get("kind")
-        .and_then(Value::as_str)
-        .or_else(|| gate_json.as_str())
-        .map(str::trim)
-        .filter(|kind| !kind.is_empty())
-        .map(str::to_string)
-}
-
 pub(in crate::app) fn incident_resource_label(incident: &StoredIncident) -> String {
     match (
         incident.resource_namespace.as_deref(),
@@ -1455,19 +1492,6 @@ pub(in crate::app) fn incident_resource_label(incident: &StoredIncident) -> Stri
         (_, Some(kind), _) => kind.to_string(),
         _ => incident.id.clone(),
     }
-}
-
-pub(in crate::app) fn safe_id_fragment(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
 }
 
 pub(in crate::app) fn release_observability_incident_id(
@@ -2187,13 +2211,6 @@ pub(in crate::app) fn registry_evidence_draft_from_inspection(
         audit_source: "registry_inspection".to_string(),
         audit_execution_enabled: true,
     })
-}
-
-pub(in crate::app) fn string_at(source: &Value, pointer: &str) -> Option<String> {
-    source
-        .pointer(pointer)
-        .and_then(Value::as_str)
-        .map(str::to_string)
 }
 
 pub(in crate::app) async fn transition_registry_evidence(

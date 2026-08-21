@@ -1,10 +1,11 @@
-use super::*;
+use super::AppState;
 use axum::routing::{get, post};
 use axum::Router;
 
 pub(super) mod contracts;
 pub(super) mod execution;
 pub(super) mod intents;
+pub(super) mod target;
 
 use contracts::{
     create_deployment_contract, get_deployment_contract, list_deployment_contracts,

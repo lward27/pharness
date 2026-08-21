@@ -1,7 +1,32 @@
 use super::approvals::append_approval_gate_audit_event;
-use super::*;
+use super::audit::{
+    append_incident_audit_event, append_observation_audit_event,
+    append_remediation_plan_audit_event,
+};
+use super::clock::unique_suffix;
+use super::releases::approval_gates_from_remediation_plan;
+use super::sessions::root_session_for_request;
+use super::validation::{
+    clean_optional_text, ensure_json_object, required_text, validate_allowed_value,
+};
+use super::work_items::lifecycle::RemediationPlanStatus;
+use super::{ApiError, AppState};
+use crate::dto::{
+    ArtifactResponse, AuditEventsResponse, CreateIncidentRequest, CreateObservationRequest,
+    CreateRemediationPlanRequest, IncidentResponse, IncidentsResponse, ObservationResponse,
+    ObservationsResponse, RemediationPlanResponse, RemediationPlansResponse,
+    TransitionRemediationPlanRequest, TransitionRemediationPlanResponse,
+};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
+use axum::Json;
 use axum::Router;
+use pharness_core::RunId;
+use pharness_store::{
+    AuditEventListFilter, CreateIncident, CreateObservation, CreateRemediationPlan,
+    IncidentListFilter, ObservationListFilter, RemediationPlanListFilter,
+};
+use serde_json::json;
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()

@@ -1,4 +1,48 @@
-use super::super::*;
+use super::super::approvals::{
+    append_permission_grant_audit_event, create_permission_grant_record,
+    ensure_approved_for_trusted_envelope,
+};
+use super::super::audit::{append_pipeline_intent_audit_event, append_work_item_audit_event};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::gitops::change_sets::safe_relative_gitops_path;
+use super::super::identifiers::{is_git_sha, is_sha256_digest, safe_id_fragment};
+use super::super::source::delivery_flow::{
+    git_delivery_artifact_matches_plan, git_delivery_plan_matches_change_set,
+};
+use super::super::validation::{clean_optional_text, required_json_string, required_text};
+use super::super::work_items::preflight::{
+    bounded_production_grant_expiry, work_item_target_supported,
+};
+use super::super::{ApiError, AppState};
+use super::evidence::pipeline_intent_json_with_evidence;
+use super::execution::{
+    execution_matches_pipeline_contract, immutable_pipeline_source_revision,
+    safe_oci_image_component, tekton_execution_spec,
+};
+use super::state::{
+    pipeline_execution_attempt, pipeline_intent_execution_state,
+    pipeline_intent_is_gitops_update_eligible, MAX_PIPELINE_EXECUTION_ATTEMPTS,
+};
+use crate::dto::{
+    AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
+    CreateGitOpsUpdatePlanRequest, CreatePermissionGrantRequest,
+    CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
+    CreatePipelineIntentTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest,
+    GitOpsUpdatePlanResponse, PipelineIntentResponse, PipelineIntentsResponse,
+    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse, TrustedEnvelopeResponse,
+    WorkItemPipelineContextResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::RunId;
+use pharness_store::{
+    CreateArtifact, CreatePipelineIntent, PipelineContractListFilter, PipelineIntentListFilter,
+    SqliteStore, StoredArtifact, StoredChangeSet, StoredObservation, StoredPipelineIntent,
+    UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(in crate::app) async fn create_work_item_pipeline_intent(
     State(state): State<AppState>,
@@ -529,8 +573,6 @@ pub(in crate::app) async fn transition_pipeline_intent(
     }))
 }
 
-pub(in crate::app) const MAX_PIPELINE_EXECUTION_ATTEMPTS: u64 = 2;
-
 pub(in crate::app) async fn retry_failed_pipeline_intent(
     state: &AppState,
     pipeline_intent_id: &str,
@@ -883,131 +925,6 @@ pub(in crate::app) async fn create_pipeline_intent_trusted_envelope(
     }))
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::app) struct PipelineDeploymentHandoffSpec {
-    pub(in crate::app) target_environment: String,
-    pub(in crate::app) target_namespace: String,
-    pub(in crate::app) argo_application: String,
-    #[serde(default)]
-    pub(in crate::app) title: Option<String>,
-    #[serde(default)]
-    pub(in crate::app) summary: Option<String>,
-    #[serde(default)]
-    pub(in crate::app) risk_level: Option<String>,
-}
-
-pub(in crate::app) async fn create_declared_deployment_handoff(
-    state: &AppState,
-    pipeline_intent: &StoredPipelineIntent,
-) -> Result<Option<StoredDeploymentIntent>, ApiError> {
-    let remediation_plan_id = pipeline_intent.remediation_plan_id.clone();
-    let incident_id = pipeline_intent.incident_id.clone();
-    let Some(raw_handoff) = pipeline_intent.intent_json.get("deployment_handoff") else {
-        return Ok(None);
-    };
-    let handoff = serde_json::from_value::<PipelineDeploymentHandoffSpec>(raw_handoff.clone())
-        .map_err(|error| {
-            ApiError::bad_request(format!("pipeline deployment_handoff is invalid: {error}"))
-        })?;
-    validate_pipeline_deployment_handoff(&handoff)?;
-
-    if pipeline_intent
-        .intent_json
-        .pointer("/evidence/status")
-        .and_then(Value::as_str)
-        != Some("satisfied")
-    {
-        return Err(ApiError::conflict(
-            "pipeline deployment_handoff requires satisfied PipelineRunAnalysis evidence",
-        ));
-    }
-    if state
-        .store
-        .get_deployment_intent_by_pipeline_intent(&pipeline_intent.id)
-        .await?
-        .is_some()
-    {
-        return Ok(None);
-    }
-
-    let title = clean_optional_text(handoff.title)
-        .unwrap_or_else(|| format!("DeploymentIntent: {}", pipeline_intent.title));
-    let summary = clean_optional_text(handoff.summary).unwrap_or_else(|| {
-        format!(
-            "Proposed Argo CD sync for {} after terminal PipelineRunAnalysis",
-            handoff.argo_application
-        )
-    });
-    let risk_level = clean_optional_text(handoff.risk_level)
-        .unwrap_or_else(|| pipeline_intent.risk_level.clone());
-    let intent_json = deployment_intent_json(
-        pipeline_intent,
-        "argo_sync_deploy",
-        Some(&handoff.target_environment),
-        Some(&handoff.target_namespace),
-        Some(&handoff.argo_application),
-        None,
-    )?;
-    let deployment_intent = state
-        .store
-        .create_deployment_intent(CreateDeploymentIntent {
-            id: format!("dint_{}", unique_suffix()),
-            pipeline_intent_id: pipeline_intent.id.clone(),
-            change_set_id: pipeline_intent.change_set_id.clone(),
-            work_plan_id: pipeline_intent.work_plan_id.clone(),
-            remediation_plan_id,
-            incident_id,
-            session_id: pipeline_intent.session_id.clone(),
-            run_id: pipeline_intent.run_id.clone(),
-            status: "proposed".to_string(),
-            title,
-            summary,
-            risk_level,
-            intent_kind: "argo_sync_deploy".to_string(),
-            target_environment: Some(handoff.target_environment),
-            target_namespace: Some(handoff.target_namespace),
-            argo_application: Some(handoff.argo_application),
-            resource_namespace: pipeline_intent.resource_namespace.clone(),
-            resource_kind: pipeline_intent.resource_kind.clone(),
-            resource_name: pipeline_intent.resource_name.clone(),
-            intent_json,
-        })
-        .await?;
-    append_deployment_intent_audit_event(
-        &state.store,
-        &deployment_intent,
-        "deployment_intent.auto_proposed",
-        Some("executor:tekton".to_string()),
-        Some("created from declared terminal PipelineIntent handoff".to_string()),
-        json!({
-            "source": "pipeline_intent.deployment_handoff",
-            "pipeline_intent_id": pipeline_intent.id,
-            "pipeline_evidence_status": pipeline_intent.intent_json.pointer("/evidence/status"),
-            "execution_evidence": pipeline_intent.intent_json.get("execution_evidence"),
-        }),
-    )
-    .await?;
-    Ok(Some(deployment_intent))
-}
-
-pub(in crate::app) fn validate_pipeline_deployment_handoff(
-    handoff: &PipelineDeploymentHandoffSpec,
-) -> Result<(), ApiError> {
-    validate_kubernetes_name(
-        "deployment_handoff.target_environment",
-        &handoff.target_environment,
-    )?;
-    validate_kubernetes_name(
-        "deployment_handoff.target_namespace",
-        &handoff.target_namespace,
-    )?;
-    validate_kubernetes_name(
-        "deployment_handoff.argo_application",
-        &handoff.argo_application,
-    )
-}
-
 /// Prepare a reviewable, digest-pinned Kustomize update. This is deliberately
 /// a durable plan only: a later GitOps ChangeSet/PR executor must consume this
 /// exact artifact rather than treating Argo sync as source provenance.
@@ -1140,15 +1057,6 @@ pub(in crate::app) async fn create_gitops_update_plan(
     }))
 }
 
-pub(in crate::app) fn safe_relative_gitops_path(path: &str) -> bool {
-    !path.is_empty()
-        && !path.starts_with('/')
-        && !path
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
-        && path.len() <= 512
-}
-
 #[derive(Debug, Clone)]
 pub(in crate::app) struct VerifiedPipelineBuildOutput {
     pub(in crate::app) artifact_id: String,
@@ -1267,153 +1175,6 @@ pub(in crate::app) fn validate_pipeline_intent_observation(
     Ok(())
 }
 
-pub(in crate::app) fn pipeline_intent_json_with_evidence(
-    current: &StoredPipelineIntent,
-    observation: &StoredObservation,
-) -> Value {
-    let mut intent_json = current.intent_json.clone();
-    set_pipeline_intent_evidence(&mut intent_json, observation);
-
-    intent_json
-}
-
-pub(in crate::app) fn set_pipeline_intent_evidence(
-    intent_json: &mut Value,
-    observation: &StoredObservation,
-) {
-    let evidence = pipeline_intent_evidence_json(observation);
-    if let Some(object) = intent_json.as_object_mut() {
-        object.insert("evidence".to_string(), evidence);
-    }
-}
-
-pub(in crate::app) fn pipeline_intent_evidence_json(observation: &StoredObservation) -> Value {
-    let analysis = observation
-        .data_json
-        .get("analysis")
-        .cloned()
-        .unwrap_or_else(|| json!({}));
-    json!({
-        "status": pipeline_intent_evidence_status(&analysis),
-        "source": "observation",
-        "observation_id": observation.id,
-        "artifact_id": observation.artifact_id,
-        "kind": observation.kind,
-        "resource": {
-            "namespace": observation.resource_namespace,
-            "kind": observation.resource_kind,
-            "name": observation.resource_name,
-        },
-        "summary": {
-            "pipeline_run_status": analysis.pointer("/summary/status"),
-            "pipeline_run_reason": analysis.pointer("/summary/reason"),
-            "task_run_count": analysis.pointer("/summary/task_run_count"),
-            "failed_task_run_count": analysis.pointer("/summary/failed_task_run_count"),
-            "running_task_run_count": analysis.pointer("/summary/running_task_run_count"),
-            "succeeded_task_run_count": analysis.pointer("/summary/succeeded_task_run_count"),
-            "argo_sync_status": analysis.pointer("/summary/argo_sync_status"),
-            "argo_health_status": analysis.pointer("/summary/argo_health_status"),
-            "image_alignment_status": analysis.pointer("/summary/image_alignment/status"),
-        }
-    })
-}
-
-pub(in crate::app) fn pipeline_intent_evidence_status(analysis: &Value) -> &'static str {
-    match analysis.pointer("/summary/status").and_then(Value::as_str) {
-        Some("succeeded") => {
-            let failed_tasks = analysis
-                .pointer("/summary/failed_task_run_count")
-                .and_then(Value::as_i64)
-                .unwrap_or(0);
-            if failed_tasks != 0 || pipeline_analysis_needs_attention(analysis) {
-                "attention_required"
-            } else {
-                "satisfied"
-            }
-        }
-        Some("running") => "running",
-        Some("failed" | "cancelled") => "failed",
-        Some(_) => "attention_required",
-        None => "unknown",
-    }
-}
-
-pub(in crate::app) fn pipeline_analysis_needs_attention(analysis: &Value) -> bool {
-    let argo_sync = analysis
-        .pointer("/summary/argo_sync_status")
-        .and_then(Value::as_str);
-    if argo_sync.is_some_and(|status| status != "Synced") {
-        return true;
-    }
-
-    let argo_health = analysis
-        .pointer("/summary/argo_health_status")
-        .and_then(Value::as_str);
-    if argo_health.is_some_and(|status| status != "Healthy") {
-        return true;
-    }
-
-    let image_alignment = analysis
-        .pointer("/summary/image_alignment/status")
-        .and_then(Value::as_str);
-    image_alignment
-        .is_some_and(|status| !matches!(status, "exact_match" | "registry_alias_match" | "unknown"))
-}
-
-pub(in crate::app) fn pipeline_intent_attached_evidence_status(
-    pipeline_intent: &StoredPipelineIntent,
-) -> Option<&str> {
-    pipeline_intent
-        .intent_json
-        .pointer("/evidence/status")
-        .and_then(Value::as_str)
-}
-
-pub(in crate::app) fn pipeline_execution_evidence_status(
-    pipeline_intent: &StoredPipelineIntent,
-) -> Option<&str> {
-    pipeline_intent
-        .intent_json
-        .pointer("/execution_evidence/status")
-        .and_then(Value::as_str)
-}
-
-pub(in crate::app) fn deployment_intent_attached_evidence_status(
-    deployment_intent: &StoredDeploymentIntent,
-) -> Option<&str> {
-    deployment_intent
-        .intent_json
-        .pointer("/deployment_evidence/status")
-        .and_then(Value::as_str)
-}
-
-pub(in crate::app) fn release_observability_evidence_status(
-    release: &StoredRelease,
-) -> Option<&str> {
-    let evidence = release
-        .release_json
-        .pointer("/observability_evidence")
-        .and_then(Value::as_array)?;
-    if evidence.is_empty() {
-        return None;
-    }
-    if evidence.iter().any(|item| {
-        item.get("status")
-            .and_then(Value::as_str)
-            .is_some_and(|status| status == "attention_required")
-    }) {
-        return Some("attention_required");
-    }
-    if evidence.iter().any(|item| {
-        item.get("status")
-            .and_then(Value::as_str)
-            .map_or(true, |status| status == "unknown")
-    }) {
-        return Some("unknown");
-    }
-    Some("observed")
-}
-
 pub(in crate::app) fn pipeline_intent_json(
     change_set: &StoredChangeSet,
     intent_kind: &str,
@@ -1459,59 +1220,4 @@ pub(in crate::app) fn validate_pipeline_intent_transition(
             "cannot transition pipeline intent from {current} to {target}"
         ))),
     }
-}
-
-pub(in crate::app) fn pipeline_intent_is_deployment_eligible(status: &str) -> bool {
-    matches!(status, "approved" | "completed")
-}
-
-pub(in crate::app) fn ensure_pipeline_intent_ready_for_deployment(
-    intent: &StoredPipelineIntent,
-) -> Result<(), ApiError> {
-    if pipeline_intent_is_deployment_eligible(&intent.status) {
-        return Ok(());
-    }
-
-    Err(ApiError::conflict(format!(
-        "pipeline_intent {} must be approved with successful execution evidence before proposing deployment",
-        intent.id
-    )))
-}
-
-pub(in crate::app) fn ensure_pipeline_evidence_ready_for_deployment(
-    pipeline_intent: &StoredPipelineIntent,
-) -> Result<(), ApiError> {
-    if pipeline_intent_attached_evidence_status(pipeline_intent) != Some("satisfied") {
-        return Err(ApiError::conflict(format!(
-            "pipeline_intent {} needs satisfied PipelineRunAnalysis evidence before approving deployment",
-            pipeline_intent.id
-        )));
-    }
-
-    let expected_namespace = pipeline_intent
-        .intent_json
-        .pointer("/execution_evidence/pipeline_run/namespace")
-        .and_then(Value::as_str);
-    let expected_name = pipeline_intent
-        .intent_json
-        .pointer("/execution_evidence/pipeline_run/name")
-        .and_then(Value::as_str);
-    let evidence_namespace = pipeline_intent
-        .intent_json
-        .pointer("/evidence/resource/namespace")
-        .and_then(Value::as_str);
-    let evidence_name = pipeline_intent
-        .intent_json
-        .pointer("/evidence/resource/name")
-        .and_then(Value::as_str);
-    if expected_namespace.is_some_and(|value| evidence_namespace != Some(value))
-        || expected_name.is_some_and(|value| evidence_name != Some(value))
-    {
-        return Err(ApiError::conflict(format!(
-            "pipeline_intent {} evidence does not match the executed PipelineRun",
-            pipeline_intent.id
-        )));
-    }
-
-    Ok(())
 }

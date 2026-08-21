@@ -1,4 +1,41 @@
-use super::super::*;
+use super::super::approvals::{
+    append_approval_gate_audit_event, append_permission_grant_audit_event,
+    create_permission_grant_record, ensure_approved_for_trusted_envelope,
+    trusted_envelope_grant_request,
+};
+use super::super::audit::{
+    append_change_set_audit_event, append_deployment_intent_audit_event,
+    append_pipeline_intent_audit_event, append_registry_evidence_audit_event,
+    append_release_audit_event, append_work_item_audit_event, append_work_plan_audit_event,
+    append_workspace_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::unique_suffix;
+use super::super::operator::{
+    all_work_plans_for_operator_groups, group_operator_records, operator_resource_label,
+};
+use super::super::sdlc::{build_sdlc_flow, build_sdlc_readiness};
+use super::super::validation::clean_optional_text;
+use super::super::work_items::lifecycle::{
+    approval_gates_from_work_item, work_item_approval_gate_specs,
+};
+use super::super::{ApiError, AppState};
+use crate::dto::{
+    CreateTrustedEnvelopeRequest, CreateWorkPlanFromRemediationPlanRequest, CreateWorkPlanResponse,
+    ReviseWorkPlanRequest, ReviseWorkPlanResponse, SdlcFlowResponse, SdlcReadinessResponse,
+    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TrustedEnvelopeResponse,
+    WorkPlanResponse, WorkPlansResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{PermissionGrantScope, RunId, SessionId};
+use pharness_store::{
+    CreateSession, CreateWorkPlan, CreateWorkspace, SqliteStore, StoreError, StoredChangeSet,
+    StoredDeploymentIntent, StoredPermissionGrant, StoredPipelineIntent, StoredRegistryEvidence,
+    StoredRelease, StoredRemediationPlan, StoredWorkItem, UpdateWorkPlanRevision,
+    WorkPlanListFilter,
+};
+use serde_json::json;
 
 pub(in crate::app) async fn create_work_plan_from_work_item(
     State(state): State<AppState>,
