@@ -1,8 +1,7 @@
 use crate::dispatch::{
-    ArgoSyncExecutionRequest, CapabilityVerificationOutcome, GitDeliveryExecutionRequest,
-    GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
-    GitOpsDeliveryObservationRequest, GitOpsRevisionResolutionRequest, RunDispatcher,
-    TektonExecutionRequest,
+    ArgoSyncExecutionRequest, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
+    GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
+    GitOpsRevisionResolutionRequest, RunDispatcher, TektonExecutionRequest,
 };
 use crate::dto::{
     AdvanceWorkItemRequest, AdvanceWorkItemResponse, ApprovalDecision, ApprovalGateResponse,
@@ -13,8 +12,8 @@ use crate::dto::{
     AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
     AttachReleaseEvidenceRequest, AttachReleaseEvidenceResponse, AuditEventsResponse,
     BatchDecideApprovalGatesRequest, BatchDecideApprovalGatesResponse, BudgetExtensionResponse,
-    CapabilityStatusResponse, CaptureWorkItemChangeSetRequest, ChangeSetResponse,
-    ChangeSetsResponse, ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
+    CaptureWorkItemChangeSetRequest, ChangeSetResponse, ChangeSetsResponse,
+    ControllerWaitTickResult, ControllerWaitsResponse, CreateChangeSetRequest,
     CreateChangeSetResponse, CreateDeploymentContractRequest,
     CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
     CreateDeploymentIntentTrustedEnvelopeRequest, CreateGitDeliveryAuthorizationRequest,
@@ -32,14 +31,13 @@ use crate::dto::{
     DeliverySegmentResourceResponse, DeliverySegmentResponse, DeploymentContractResponse,
     DeploymentContractsResponse, DeploymentIntentDeliveryFlowResponse,
     DeploymentIntentPreflightRequest, DeploymentIntentPreflightResponse, DeploymentIntentResponse,
-    DeploymentIntentsResponse, EnvironmentPreparationResponse, EnvironmentProfileResponse,
-    EnvironmentProfilesResponse, EventsResponse, ExecuteCapabilityRequest,
-    ExecuteCapabilityResponse, ExecuteDeploymentIntentRequest, ExecuteDeploymentIntentResponse,
-    ExecuteGitDeliveryRequest, ExecuteGitDeliveryResponse, ExecuteGitOpsDeliveryRequest,
-    ExecuteGitOpsDeliveryResponse, ExecutePipelineIntentRequest, ExecutePipelineIntentResponse,
-    ExecuteWorkItemActionRequest, ExecuteWorkItemRequest, ExecuteWorkItemResponse,
-    FileChangeResponse, GitDeliveryAuthorizationResponse, GitDeliveryContextResponse,
-    GitDeliveryFlowResponse, GitDeliveryObservationContextResponse,
+    DeploymentIntentsResponse, EnvironmentPreparationResponse, EventsResponse,
+    ExecuteCapabilityRequest, ExecuteCapabilityResponse, ExecuteDeploymentIntentRequest,
+    ExecuteDeploymentIntentResponse, ExecuteGitDeliveryRequest, ExecuteGitDeliveryResponse,
+    ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse, ExecutePipelineIntentRequest,
+    ExecutePipelineIntentResponse, ExecuteWorkItemActionRequest, ExecuteWorkItemRequest,
+    ExecuteWorkItemResponse, FileChangeResponse, GitDeliveryAuthorizationResponse,
+    GitDeliveryContextResponse, GitDeliveryFlowResponse, GitDeliveryObservationContextResponse,
     GitDeliveryObservationOutcomeRequest, GitDeliveryOutcomeRequest, GitDeliveryPlanResponse,
     GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, GitOpsBaseRevisionContextResponse,
     GitOpsBaseRevisionOutcomeRequest, GitOpsChangeSetResponse, GitOpsChangeSetsResponse,
@@ -64,25 +62,24 @@ use crate::dto::{
     RevokePermissionGrantRequest, RunDiffResponse, RunOperatorSummaryResponse, RunResponse,
     RunSummaryResponse, RunsResponse, ScopeOptionsResponse, SdlcFlowResponse, SdlcReadinessFinding,
     SdlcReadinessGateSummary, SdlcReadinessGrantSummary, SdlcReadinessResponse,
-    SystemReadinessResponse, TransitionChangeSetRequest, TransitionChangeSetResponse,
-    TransitionDeploymentContractRequest, TransitionDeploymentIntentRequest,
-    TransitionDeploymentIntentResponse, TransitionGitOpsChangeSetRequest,
-    TransitionGitOpsChangeSetResponse, TransitionPipelineContractRequest,
-    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse,
-    TransitionRegistryEvidenceRequest, TransitionRegistryEvidenceResponse,
-    TransitionReleaseRequest, TransitionReleaseResponse, TransitionRemediationPlanRequest,
-    TransitionRemediationPlanResponse, TransitionWorkItemRequest, TransitionWorkPlanRequest,
-    TransitionWorkPlanResponse, TriageItemResponse, TriageResponse, TriageSummaryResponse,
-    TrustedEnvelopeResponse, VerifyReleaseRequest, VerifyReleaseResponse, WorkItemActionResponse,
-    WorkItemFlowResponse, WorkItemOperatorStateResponse, WorkItemPipelineContextResponse,
-    WorkItemPreflightResponse, WorkItemResponse, WorkItemsResponse, WorkPlanResponse,
-    WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
+    TransitionChangeSetRequest, TransitionChangeSetResponse, TransitionDeploymentContractRequest,
+    TransitionDeploymentIntentRequest, TransitionDeploymentIntentResponse,
+    TransitionGitOpsChangeSetRequest, TransitionGitOpsChangeSetResponse,
+    TransitionPipelineContractRequest, TransitionPipelineIntentRequest,
+    TransitionPipelineIntentResponse, TransitionRegistryEvidenceRequest,
+    TransitionRegistryEvidenceResponse, TransitionReleaseRequest, TransitionReleaseResponse,
+    TransitionRemediationPlanRequest, TransitionRemediationPlanResponse, TransitionWorkItemRequest,
+    TransitionWorkPlanRequest, TransitionWorkPlanResponse, TriageItemResponse, TriageResponse,
+    TriageSummaryResponse, TrustedEnvelopeResponse, VerifyReleaseRequest, VerifyReleaseResponse,
+    WorkItemActionResponse, WorkItemFlowResponse, WorkItemOperatorStateResponse,
+    WorkItemPipelineContextResponse, WorkItemPreflightResponse, WorkItemResponse,
+    WorkItemsResponse, WorkPlanResponse, WorkPlansResponse, WorkspaceResponse, WorkspacesResponse,
 };
 use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
 use crate::workspace::WorkspaceProvisioner;
-use axum::extract::{Path, Query, Request, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::middleware::{self, Next};
+use axum::middleware;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -111,11 +108,11 @@ use pharness_store::{
     WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 use pharness_store::{
-    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateCapabilityVerification,
-    CreateChangeSet, CreateControllerWait, CreateDeploymentContract, CreateDeploymentIntent,
-    CreateEnvironmentPreparation, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
-    CreatePermissionGrant, CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence,
-    CreateRelease, CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
+    CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateChangeSet, CreateControllerWait,
+    CreateDeploymentContract, CreateDeploymentIntent, CreateEnvironmentPreparation,
+    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePermissionGrant,
+    CreatePipelineContract, CreatePipelineIntent, CreateRegistryEvidence, CreateRelease,
+    CreateRemediationPlan, CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan,
     CreateWorkspace, ReplacePipelineContract, SqliteStore, StoreError,
     UpdateDeploymentIntentEvidence, UpdateEnvironmentPreparation, UpdatePipelineIntentEvidence,
     UpdateWorkspaceExecution,
@@ -131,8 +128,38 @@ use tokio::time::timeout;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+mod approvals;
+mod auth;
+mod deployment;
 mod environment;
+mod evidence;
+mod gitops;
+mod internal;
+mod operator;
+mod pipeline;
+mod releases;
 mod runs;
+mod source;
+mod system;
+mod work_items;
+
+use auth::{require_operator_token, require_worker_token, OperatorIdentity};
+use system::{
+    capability_statuses, immutable_git_object_id, immutable_image_digest, protected_target_json,
+    BuildMetadata, ProtectedTargetConfiguration, PROTECTED_ARGO_APPLICATION, PROTECTED_ENVIRONMENT,
+    PROTECTED_GITOPS_REPO, PROTECTED_IMAGE_NAME, PROTECTED_KUSTOMIZATION_PATH, PROTECTED_NAMESPACE,
+    PROTECTED_PIPELINE_NAMESPACE, PROTECTED_PIPELINE_REF, PROTECTED_ROLLBACK_OWNER,
+    PROTECTED_SOURCE_REPO, PROTECTED_WORKLOAD_KIND, PROTECTED_WORKLOAD_NAME,
+};
+
+#[cfg(test)]
+use system::{
+    capability_preflight_is_statically_unavailable, capability_verification_summary,
+    config_effective, environment_profile_readiness_blocker, system_readiness,
+};
+
+#[cfg(test)]
+use crate::dto::CapabilityStatusResponse;
 
 #[cfg(test)]
 use runs::*;
@@ -162,113 +189,6 @@ const CLUSTER_DELIVERY_ACTIONS: [&str; 2] = ["tekton_create_pipeline_run", "argo
 const PRODUCTION_DELIVERY_ACTIONS: [&str; 1] = ["production_action"];
 const CONTROLLER_WAIT_INTERVAL_MS: u128 = 15_000;
 const CONTROLLER_WAIT_MAX_CHECKS: u32 = 240;
-const PROTECTED_ENVIRONMENT: &str = "production";
-const PROTECTED_NAMESPACE: &str = "apps-prod";
-const PROTECTED_ARGO_APPLICATION: &str = "yfinance-wrapper";
-const PROTECTED_WORKLOAD_KIND: &str = "Deployment";
-const PROTECTED_WORKLOAD_NAME: &str = "yfinance-wrapper";
-const PROTECTED_SOURCE_REPO: &str = "https://github.com/lward27/yfinance_wrapper.git";
-const PROTECTED_GITOPS_REPO: &str = "https://github.com/lward27/lucas_engineering.git";
-const PROTECTED_KUSTOMIZATION_PATH: &str = "charts/yfinance-wrapper/kustomization.yaml";
-const PROTECTED_IMAGE_NAME: &str = "registry.lucas.engineering/yfinance_wrapper";
-const PROTECTED_ROLLBACK_OWNER: &str = "lucas";
-const PROTECTED_PIPELINE_NAMESPACE: &str = "tekton-pipelines";
-const PROTECTED_PIPELINE_REF: &str = "pharness-yfinance-build";
-
-#[derive(Clone)]
-struct BuildMetadata {
-    api_revision: String,
-    ui_revision: String,
-    runtime_image_digest: String,
-    ui_image_digest: String,
-}
-
-#[derive(Clone)]
-struct ProtectedTargetConfiguration {
-    exact_locked_match: bool,
-}
-
-impl ProtectedTargetConfiguration {
-    fn from_env() -> Self {
-        let expected = [
-            (
-                "PHARNESS_PROTECTED_TARGET_ENVIRONMENT",
-                PROTECTED_ENVIRONMENT,
-            ),
-            ("PHARNESS_PROTECTED_TARGET_NAMESPACE", PROTECTED_NAMESPACE),
-            (
-                "PHARNESS_PROTECTED_TARGET_ARGO_APPLICATION",
-                PROTECTED_ARGO_APPLICATION,
-            ),
-            (
-                "PHARNESS_PROTECTED_TARGET_WORKLOAD_KIND",
-                PROTECTED_WORKLOAD_KIND,
-            ),
-            (
-                "PHARNESS_PROTECTED_TARGET_WORKLOAD_NAME",
-                PROTECTED_WORKLOAD_NAME,
-            ),
-            (
-                "PHARNESS_PROTECTED_TARGET_SOURCE_REPO",
-                PROTECTED_SOURCE_REPO,
-            ),
-            (
-                "PHARNESS_PROTECTED_TARGET_GITOPS_REPO",
-                PROTECTED_GITOPS_REPO,
-            ),
-            (
-                "PHARNESS_PROTECTED_TARGET_KUSTOMIZATION_PATH",
-                PROTECTED_KUSTOMIZATION_PATH,
-            ),
-            ("PHARNESS_PROTECTED_TARGET_IMAGE_NAME", PROTECTED_IMAGE_NAME),
-            (
-                "PHARNESS_PROTECTED_TARGET_ROLLBACK_OWNER",
-                PROTECTED_ROLLBACK_OWNER,
-            ),
-        ];
-        let configured = expected
-            .iter()
-            .any(|(name, _)| std::env::var_os(name).is_some());
-        let enabled = std::env::var("PHARNESS_PROTECTED_TARGET_ENABLED")
-            .ok()
-            .map(|value| value == "true")
-            .unwrap_or(!configured);
-        Self {
-            exact_locked_match: enabled
-                && (!configured
-                    || expected
-                        .iter()
-                        .all(|(name, value)| std::env::var(name).ok().as_deref() == Some(*value))),
-        }
-    }
-}
-
-impl BuildMetadata {
-    fn from_env() -> Self {
-        let value = |name: &str, compiled: Option<&str>| {
-            std::env::var(name)
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    compiled
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .map(ToOwned::to_owned)
-                })
-                .unwrap_or_else(|| "unknown".to_string())
-        };
-        Self {
-            api_revision: value(
-                "PHARNESS_BUILD_REVISION",
-                option_env!("PHARNESS_BUILD_REVISION"),
-            ),
-            ui_revision: value("PHARNESS_UI_BUILD_REVISION", None),
-            runtime_image_digest: value("PHARNESS_RUNTIME_IMAGE_DIGEST", None),
-            ui_image_digest: value("PHARNESS_UI_IMAGE_DIGEST", None),
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -306,922 +226,29 @@ pub fn router(
         environment_profiles: Arc::new(environment::load_environment_profiles()),
     };
 
-    let internal = runs::internal_router()
-        .route(
-            "/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome",
-            post(internal_pipeline_intent_execution_outcome),
-        )
-        .route(
-            "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-context",
-            get(internal_argo_sync_context),
-        )
-        .route(
-            "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-control",
-            get(internal_argo_sync_control),
-        )
-        .route(
-            "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-outcome",
-            post(internal_argo_sync_outcome),
-        )
-        .route(
-            "/api/internal/change-sets/:change_set_id/git-delivery-context",
-            get(internal_git_delivery_context),
-        )
-        .route(
-            "/api/internal/change-sets/:change_set_id/git-delivery-outcome",
-            post(internal_git_delivery_outcome),
-        )
-        .route(
-            "/api/internal/change-sets/:change_set_id/git-delivery-observation-context",
-            get(internal_git_delivery_observation_context),
-        )
-        .route(
-            "/api/internal/change-sets/:change_set_id/git-delivery-observation-outcome",
-            post(internal_git_delivery_observation_outcome),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/base-revision-context",
-            get(internal_gitops_base_revision_context),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/base-revision-outcome",
-            post(internal_gitops_base_revision_outcome),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-context",
-            get(internal_gitops_delivery_context),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-outcome",
-            post(internal_gitops_delivery_outcome),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-observation-context",
-            get(internal_gitops_delivery_observation_context),
-        )
-        .route(
-            "/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-observation-outcome",
-            post(internal_gitops_delivery_observation_outcome),
-        )
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_worker_token,
-        ));
-
     Router::new()
         .merge(runs::router())
-        .route("/health", get(health))
-        .route("/api/config/effective", get(config_effective))
-        .route("/api/system/readiness", get(system_readiness))
-        .route("/api/environment-profiles", get(list_environment_profiles))
-        .route(
-            "/api/system/capabilities/:capability/preflight",
-            post(preflight_system_capability),
-        )
-        .route("/api/capabilities/execute", post(execute_capability))
-        .route("/api/artifacts/:artifact_id", get(get_artifact))
-        .route(
-            "/api/observations",
-            get(list_observations).post(create_observation),
-        )
-        .route("/api/observations/:observation_id", get(get_observation))
-        .route("/api/incidents", get(list_incidents).post(create_incident))
-        .route("/api/incidents/:incident_id", get(get_incident))
-        .route(
-            "/api/remediation-plans",
-            get(list_remediation_plans).post(create_remediation_plan),
-        )
-        .route("/api/remediation-plans/:plan_id", get(get_remediation_plan))
-        .route(
-            "/api/remediation-plans/:plan_id/transition",
-            post(transition_remediation_plan),
-        )
-        .route(
-            "/api/work-items",
-            get(list_work_items).post(create_work_item),
-        )
-        .route("/api/work-items/preflight", post(preflight_work_item))
-        .route("/api/triage", get(list_triage))
-        .route("/api/triage/summary", get(triage_summary))
-        .route("/api/work-items/:work_item_id", get(get_work_item))
-        .route("/api/work-items/:work_item_id/flow", get(work_item_flow))
-        .route(
-            "/api/work-items/:work_item_id/events",
-            get(list_work_item_events),
-        )
-        .route(
-            "/api/work-items/:work_item_id/controller-waits",
-            get(list_work_item_controller_waits),
-        )
-        .route(
-            "/api/controller-waits/reconcile-due",
-            post(reconcile_due_controller_waits),
-        )
-        .route(
-            "/api/work-items/:work_item_id/work-plan",
-            post(create_work_plan_from_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/reconcile",
-            post(reconcile_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/actions/:action_id/execute",
-            post(execute_work_item_action),
-        )
-        .route(
-            "/api/work-items/:work_item_id/advance",
-            post(advance_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/rollback-intents",
-            get(get_work_item_rollback_intent),
-        )
-        .route(
-            "/api/work-items/:work_item_id/rollback-intents/prepare",
-            post(prepare_work_item_rollback_intent),
-        )
-        .route(
-            "/api/rollback-intents/:rollback_intent_id/approve",
-            post(approve_rollback_intent),
-        )
-        .route(
-            "/api/rollback-intents/:rollback_intent_id/preflight",
-            post(preflight_rollback_intent),
-        )
-        .route(
-            "/api/rollback-intents/:rollback_intent_id/execute",
-            post(execute_rollback_intent),
-        )
-        .route(
-            "/api/rollback-intents/:rollback_intent_id/observe",
-            post(observe_rollback_intent),
-        )
-        .route(
-            "/api/work-items/:work_item_id/replan",
-            post(replan_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/execute",
-            post(execute_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/capture-change-set",
-            post(capture_work_item_change_set),
-        )
-        .route(
-            "/api/work-items/:work_item_id/pipeline-intent",
-            post(create_work_item_pipeline_intent),
-        )
-        .route(
-            "/api/work-items/:work_item_id/pipeline-intent-context",
-            get(work_item_pipeline_intent_context),
-        )
-        .route(
-            "/api/work-items/:work_item_id/transition",
-            post(transition_work_item),
-        )
-        .route(
-            "/api/work-items/:work_item_id/cancel",
-            post(cancel_work_item),
-        )
-        .route("/api/workspaces", get(list_workspaces))
-        .route("/api/scopes/options", get(scope_options))
-        .route("/api/workspaces/:workspace_id", get(get_workspace))
-        .route(
-            "/api/work-plans/from-remediation-plan",
-            post(create_work_plan_from_remediation_plan),
-        )
-        .route("/api/work-plans", get(list_work_plans))
-        .route("/api/work-plans/:work_plan_id", get(get_work_plan))
-        .route(
-            "/api/work-plans/:work_plan_id/readiness",
-            get(work_plan_readiness),
-        )
-        .route("/api/work-plans/:work_plan_id/flow", get(work_plan_flow))
-        .route(
-            "/api/work-plans/:work_plan_id/revise",
-            post(revise_work_plan),
-        )
-        .route(
-            "/api/work-plans/:work_plan_id/transition",
-            post(transition_work_plan),
-        )
-        .route(
-            "/api/work-plans/:work_plan_id/trusted-envelope",
-            post(create_work_plan_trusted_envelope),
-        )
-        .route(
-            "/api/change-sets",
-            get(list_change_sets).post(create_change_set),
-        )
-        .route("/api/change-sets/:change_set_id", get(get_change_set))
-        .route(
-            "/api/change-sets/:change_set_id/readiness",
-            get(change_set_readiness),
-        )
-        .route("/api/change-sets/:change_set_id/flow", get(change_set_flow))
-        .route(
-            "/api/change-sets/:change_set_id/revise",
-            post(revise_change_set),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/transition",
-            post(transition_change_set),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/trusted-envelope",
-            post(create_change_set_trusted_envelope),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/git-delivery/prepare",
-            post(prepare_change_set_git_delivery),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/git-delivery/authorize",
-            post(authorize_change_set_git_delivery),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/git-delivery/preflight",
-            post(preflight_change_set_git_delivery),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/git-delivery/execute",
-            post(execute_change_set_git_delivery),
-        )
-        .route(
-            "/api/change-sets/:change_set_id/git-delivery/observe",
-            post(observe_change_set_git_delivery),
-        )
-        .route(
-            "/api/gitops-change-sets",
-            get(list_gitops_change_sets).post(create_gitops_change_set),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id",
-            get(get_gitops_change_set),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/transition",
-            post(transition_gitops_change_set),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/resolve-base-revision",
-            post(resolve_gitops_base_revision),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/delivery-plan",
-            post(prepare_gitops_change_set_delivery),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/delivery/authorize",
-            post(authorize_gitops_change_set_delivery),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/delivery/preflight",
-            post(preflight_gitops_change_set_delivery),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/delivery/execute",
-            post(execute_gitops_change_set_delivery),
-        )
-        .route(
-            "/api/gitops-change-sets/:gitops_change_set_id/delivery/observe",
-            post(observe_gitops_change_set_delivery),
-        )
-        .route("/api/pipeline-intents", get(list_pipeline_intents))
-        .route(
-            "/api/pipeline-contracts",
-            get(list_pipeline_contracts).post(create_pipeline_contract),
-        )
-        .route(
-            "/api/pipeline-contracts/:pipeline_contract_id",
-            get(get_pipeline_contract),
-        )
-        .route(
-            "/api/pipeline-contracts/:pipeline_contract_id/transition",
-            post(transition_pipeline_contract),
-        )
-        .route(
-            "/api/pipeline-contracts/:pipeline_contract_id/replace",
-            post(replace_pipeline_contract),
-        )
-        .route(
-            "/api/pipeline-intents/from-change-set",
-            post(create_pipeline_intent_from_change_set),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id",
-            get(get_pipeline_intent),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id/transition",
-            post(transition_pipeline_intent),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id/evidence",
-            post(attach_pipeline_intent_evidence),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id/trusted-envelope",
-            post(create_pipeline_intent_trusted_envelope),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id/execute",
-            post(execute_pipeline_intent),
-        )
-        .route(
-            "/api/pipeline-intents/:pipeline_intent_id/gitops-update-plan",
-            post(create_gitops_update_plan),
-        )
-        .route(
-            "/api/deployment-contracts",
-            get(list_deployment_contracts).post(create_deployment_contract),
-        )
-        .route(
-            "/api/deployment-contracts/:deployment_contract_id",
-            get(get_deployment_contract),
-        )
-        .route(
-            "/api/deployment-contracts/:deployment_contract_id/transition",
-            post(transition_deployment_contract),
-        )
-        .route("/api/deployment-intents", get(list_deployment_intents))
-        .route(
-            "/api/deployment-intents/from-pipeline-intent",
-            post(create_deployment_intent_from_pipeline_intent),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id",
-            get(get_deployment_intent),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id/transition",
-            post(transition_deployment_intent),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id/evidence",
-            post(attach_deployment_intent_evidence),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id/trusted-envelope",
-            post(create_deployment_intent_trusted_envelope),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id/preflight",
-            post(preflight_deployment_intent),
-        )
-        .route(
-            "/api/deployment-intents/:deployment_intent_id/execute",
-            post(execute_deployment_intent),
-        )
-        .route("/api/releases", get(list_releases))
-        .route(
-            "/api/releases/from-deployment-intent",
-            post(create_release_from_deployment_intent),
-        )
-        .route("/api/releases/:release_id", get(get_release))
-        .route(
-            "/api/releases/:release_id/transition",
-            post(transition_release),
-        )
-        .route(
-            "/api/releases/:release_id/evidence",
-            post(attach_release_evidence),
-        )
-        .route("/api/releases/:release_id/verify", post(verify_release))
-        .route("/api/registry-evidence", get(list_registry_evidence))
-        .route(
-            "/api/registry-evidence/from-release",
-            post(create_registry_evidence_from_release),
-        )
-        .route(
-            "/api/registry-evidence/from-registry-inspection",
-            post(create_registry_evidence_from_registry_inspection),
-        )
-        .route(
-            "/api/registry-evidence/:evidence_id",
-            get(get_registry_evidence),
-        )
-        .route(
-            "/api/registry-evidence/:evidence_id/transition",
-            post(transition_registry_evidence),
-        )
-        .route("/api/approval-gates", get(list_approval_gates))
-        .route("/api/approval-gates/summary", get(approval_gate_summary))
-        .route(
-            "/api/approval-gates/batch-decide",
-            post(batch_decide_approval_gates),
-        )
-        .route("/api/approval-gates/:gate_id", get(get_approval_gate))
-        .route(
-            "/api/approval-gates/:gate_id/satisfy",
-            post(satisfy_approval_gate),
-        )
-        .route(
-            "/api/approval-gates/:gate_id/waive",
-            post(waive_approval_gate),
-        )
-        .route(
-            "/api/approval-gates/:gate_id/reject",
-            post(reject_approval_gate),
-        )
-        .route("/api/audit-events", get(list_audit_events))
-        .route("/api/approvals", get(list_approvals))
-        .route("/api/approvals/summary", get(approval_summary))
-        .route("/api/approvals/:approval_id", get(get_approval))
-        .route(
-            "/api/approvals/:approval_id/approve",
-            post(approve_approval),
-        )
-        .route("/api/approvals/:approval_id/deny", post(deny_approval))
-        .route(
-            "/api/permission-grants",
-            get(list_permission_grants).post(create_permission_grant),
-        )
-        .route(
-            "/api/permission-grants/:grant_id",
-            get(get_permission_grant),
-        )
-        .route(
-            "/api/permission-grants/:grant_id/revoke",
-            post(revoke_permission_grant),
-        )
+        .merge(system::router())
+        .merge(evidence::router())
+        .merge(work_items::router())
+        .merge(operator::router())
+        .merge(source::router())
+        .merge(gitops::router())
+        .merge(pipeline::router())
+        .merge(deployment::router())
+        .merge(releases::router())
+        .merge(approvals::router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_operator_token,
         ))
-        .merge(internal)
+        .merge(internal::router(state.clone()))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
         .with_state(state)
-}
-
-async fn health() -> Json<serde_json::Value> {
-    Json(json!({ "ok": true }))
-}
-
-async fn list_environment_profiles(
-    State(state): State<AppState>,
-) -> Result<Json<EnvironmentProfilesResponse>, ApiError> {
-    Ok(Json(EnvironmentProfilesResponse {
-        profiles: environment_profile_responses(&state).await?,
-        provider_transport_attempts: pharness_fireworks::DEFAULT_MAX_TRANSPORT_ATTEMPTS,
-    }))
-}
-
-async fn environment_profile_responses(
-    state: &AppState,
-) -> Result<Vec<crate::dto::EnvironmentProfileResponse>, ApiError> {
-    let now = current_millis();
-    let mut responses = Vec::new();
-    for profile in state.environment_profiles.iter() {
-        let mut response = environment::profile_response(profile);
-        if response.status == "configured_unverified" {
-            let capability = format!("environment_profile:{}", profile.id);
-            if let Some(verification) = state
-                .store
-                .latest_capability_verification(&capability)
-                .await?
-            {
-                response.status =
-                    if verification.expires_at.parse::<u128>().unwrap_or_default() <= now {
-                        response
-                            .blockers
-                            .push("isolated runner verification expired".to_string());
-                        "stale".to_string()
-                    } else {
-                        if verification.status != "available" {
-                            response.blockers.push(verification.summary);
-                        }
-                        verification.status
-                    };
-            }
-        }
-        responses.push(response);
-    }
-    Ok(responses)
-}
-
-fn environment_profile_readiness_blocker(profile: &EnvironmentProfileResponse) -> Option<String> {
-    if profile.status == "available" {
-        return None;
-    }
-    let detail = if profile.blockers.is_empty() {
-        match profile.status.as_str() {
-            "configured_unverified" => {
-                "runner profile requires a fresh passing isolated verification"
-            }
-            "stale" => "isolated runner verification expired",
-            _ => "runner profile is unavailable",
-        }
-        .to_string()
-    } else {
-        profile.blockers.join("; ")
-    };
-    Some(format!("environment_profile {}: {detail}", profile.id))
-}
-
-fn capability_verification_summary(outcome: &CapabilityVerificationOutcome) -> String {
-    let permission = outcome.permission.as_deref().unwrap_or("required access");
-    let repository = outcome
-        .repository
-        .as_deref()
-        .map(|repo| format!(" for {repo}"))
-        .unwrap_or_default();
-    if outcome.available {
-        format!("Isolated identity verified {permission}{repository}")
-    } else {
-        format!("Isolated identity did not verify {permission}{repository}")
-    }
-}
-
-/// Gate `/api/internal/*` behind the configured worker token.
-///
-/// Worker ingest is disabled entirely when no token is configured, so a
-/// loopback-only local deployment exposes no unauthenticated write surface
-/// for remote workers.
-async fn require_worker_token(
-    State(state): State<AppState>,
-    request: Request,
-    next: Next,
-) -> Response {
-    let Some(expected) = state.worker_token.as_deref() else {
-        return ApiError::conflict("worker ingest is disabled: no worker token is configured")
-            .into_response();
-    };
-
-    let provided = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
-
-    match provided {
-        Some(token) if token_matches(token, expected) => next.run(request).await,
-        _ => ApiError::unauthorized("invalid or missing worker token").into_response(),
-    }
-}
-
-fn token_matches(provided: &str, expected: &str) -> bool {
-    let provided = Sha256::digest(provided.as_bytes());
-    let expected = Sha256::digest(expected.as_bytes());
-    provided == expected
-}
-
-/// Authenticated operator identity resolved from the bearer token.
-#[derive(Debug, Clone)]
-pub struct OperatorIdentity(pub String);
-
-/// Gate operator routes behind `PHARNESS_OPERATOR_TOKENS` when configured.
-///
-/// `/health` stays open for probes. With no operator tokens configured the
-/// API keeps its loopback-trusting local behavior.
-async fn require_operator_token(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Response {
-    if state.operator_tokens.is_empty() || request.uri().path() == "/health" {
-        return next.run(request).await;
-    }
-
-    let provided = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
-
-    let matched = provided.and_then(|token| {
-        state
-            .operator_tokens
-            .iter()
-            .find(|(_, expected)| token_matches(token, expected))
-            .map(|(name, _)| name.clone())
-    });
-
-    match matched {
-        Some(name) => {
-            request.extensions_mut().insert(OperatorIdentity(name));
-            next.run(request).await
-        }
-        None => ApiError::unauthorized("invalid or missing operator token").into_response(),
-    }
-}
-
-async fn config_effective(
-    State(state): State<AppState>,
-    identity: Option<Extension<OperatorIdentity>>,
-) -> Json<serde_json::Value> {
-    let worker = state.worker.config_json();
-    let operator = json!({
-        "auth_required": !state.operator_tokens.is_empty(),
-        "name": identity.map(|Extension(OperatorIdentity(name))| name),
-    });
-
-    Json(json!({
-        "api": {
-            "name": "pharness-api",
-        },
-        "cluster": {
-            "kubectl_bin": state.cluster_tools.kubectl_bin(),
-            "argocd_namespace": state.cluster_tools.argocd_namespace(),
-            "prometheus_configured": state.cluster_tools.prometheus_configured(),
-            "loki_configured": state.cluster_tools.loki_configured(),
-            "registry_alias_count": state.cluster_tools.registry_alias_count(),
-        },
-        "policy": policy_json(&state.policy),
-        "worker": worker,
-        "workspace": {
-            "local_coding_enabled": state.worker.supports_local_workspace() && state.workspace.configured(),
-            "allowed_repo_count": state.workspace.allowed_repo_count(),
-        },
-        "operator": operator,
-    }))
-}
-
-async fn capability_statuses(state: &AppState) -> Result<Vec<CapabilityStatusResponse>, ApiError> {
-    let worker = state.worker.config_json();
-    let configured = |pointer: &str| {
-        worker
-            .pointer(pointer)
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-    };
-    let status = |capability: &str, is_configured: bool, configured_summary: &str| {
-        CapabilityStatusResponse {
-            capability: capability.to_string(),
-            status: if is_configured {
-                "configured_unverified"
-            } else {
-                "unavailable"
-            }
-            .to_string(),
-            summary: if is_configured {
-                configured_summary.to_string()
-            } else {
-                format!("{capability} is not configured for the isolated execution identity")
-            },
-            verified_at: None,
-            expires_at: None,
-        }
-    };
-    let mut statuses = vec![
-        status(
-            "model_provider",
-            worker.get("enabled").and_then(Value::as_bool).unwrap_or(false),
-            "Model provider is configured but has not passed a fresh isolated credential check.",
-        ),
-        status(
-            "source_workspace",
-            state.workspace.remote_configured() || state.workspace.configured(),
-            "At least one workspace repository is allowlisted.",
-        ),
-        status(
-            "source_writer",
-            configured("/git_writer/available"),
-            "Source writer identity and allowlist are configured but repository reachability is unverified.",
-        ),
-        status(
-            "source_observer",
-            configured("/git_observer/available"),
-            "Source observer identity and allowlist are configured but repository reachability is unverified.",
-        ),
-        status(
-            "gitops_writer",
-            configured("/gitops_writer/available"),
-            "GitOps writer identity and allowlist are configured but repository reachability is unverified.",
-        ),
-        status(
-            "gitops_observer",
-            configured("/gitops_observer/available"),
-            "GitOps observer identity and allowlist are configured but repository reachability is unverified.",
-        ),
-        status(
-            "tekton",
-            state.worker.supports_remote_workspace(),
-            "Tekton executor is configured but cluster authorization is unverified.",
-        ),
-        status(
-            "argo",
-            configured("/argo_executor/available"),
-            "Argo runner identity and exact Application allowlist are configured but authorization is unverified.",
-        ),
-        status(
-            "observability",
-            state.cluster_tools.prometheus_configured(),
-            "Prometheus endpoint is configured but target inventory has not been freshly verified.",
-        ),
-    ];
-    let now = current_millis();
-    for status in &mut statuses {
-        if status.status != "configured_unverified" {
-            continue;
-        }
-        let Some(verification) = state
-            .store
-            .latest_capability_verification(&status.capability)
-            .await?
-        else {
-            continue;
-        };
-        let expires = verification.expires_at.parse::<u128>().unwrap_or_default();
-        status.verified_at = Some(verification.verified_at.clone());
-        status.expires_at = Some(verification.expires_at.clone());
-        if expires <= now {
-            status.status = "stale".to_string();
-            status.summary = format!(
-                "{} verification expired; run the isolated preflight again",
-                status.capability
-            );
-        } else {
-            status.status = verification.status;
-            status.summary = verification.summary;
-        }
-    }
-    Ok(statuses)
-}
-
-async fn system_readiness(
-    State(state): State<AppState>,
-) -> Result<Json<SystemReadinessResponse>, ApiError> {
-    let worker = state.worker.config_json();
-    let capabilities = capability_statuses(&state).await?;
-    let mut blockers = capabilities
-        .iter()
-        .filter(|capability| capability.status != "available")
-        .map(|capability| format!("{}: {}", capability.capability, capability.summary))
-        .collect::<Vec<_>>();
-    if !state.protected_target.exact_locked_match {
-        blockers.push(
-            "protected_target: deployed configuration does not exactly match the locked yfinance-wrapper production target"
-                .to_string(),
-        );
-    }
-    let environment_profiles = environment_profile_responses(&state).await?;
-    if environment_profiles.is_empty() {
-        blockers
-            .push("environment_profiles: no immutable runner profile is configured".to_string());
-    }
-    blockers.extend(
-        environment_profiles
-            .iter()
-            .filter_map(environment_profile_readiness_blocker),
-    );
-    Ok(Json(SystemReadinessResponse {
-        api_revision: state.build.api_revision.clone(),
-        ui_revision: state.build.ui_revision.clone(),
-        runtime_image_digest: state.build.runtime_image_digest.clone(),
-        ui_image_digest: state.build.ui_image_digest.clone(),
-        platform_versions_match: state.build.api_revision != "unknown"
-            && state.build.api_revision == state.build.ui_revision
-            && immutable_image_digest(&state.build.runtime_image_digest)
-            && immutable_image_digest(&state.build.ui_image_digest),
-        capabilities,
-        repository_allowlists: json!({
-            "workspace": state.workspace.allowed_remote_repos(),
-            "source_writer": worker.pointer("/git_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
-            "source_observer": worker.pointer("/git_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
-            "gitops_writer": worker.pointer("/gitops_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
-            "gitops_observer": worker.pointer("/gitops_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
-        }),
-        targets: protected_target_json(),
-        environment_profiles,
-        blockers,
-    }))
-}
-
-async fn preflight_system_capability(
-    State(state): State<AppState>,
-    Path(capability): Path<String>,
-) -> Result<Json<CapabilityStatusResponse>, ApiError> {
-    let profile = capability
-        .strip_prefix("environment_profile:")
-        .and_then(|id| {
-            state
-                .environment_profiles
-                .iter()
-                .find(|profile| profile.id == id)
-        });
-    let configured = if let Some(profile) = profile {
-        let response = environment::profile_response(profile);
-        CapabilityStatusResponse {
-            capability: capability.clone(),
-            status: response.status,
-            summary: if response.blockers.is_empty() {
-                "Runner profile is configured but has not passed isolated verification.".to_string()
-            } else {
-                response.blockers.join("; ")
-            },
-            verified_at: None,
-            expires_at: None,
-        }
-    } else {
-        capability_statuses(&state)
-            .await?
-            .into_iter()
-            .find(|entry| entry.capability == capability)
-            .ok_or_else(|| ApiError::not_found("capability", &capability))?
-    };
-    if capability_preflight_is_statically_unavailable(&configured) {
-        return Ok(Json(configured));
-    }
-    let repository = (capability == "source_workspace")
-        .then(|| state.workspace.allowed_remote_repos().first().cloned())
-        .flatten();
-    let outcome = match profile {
-        Some(profile) => state.worker.verify_environment_profile(profile).await,
-        None => {
-            state
-                .worker
-                .verify_capability(&capability, repository.as_deref())
-                .await
-        }
-    };
-    let now = current_millis();
-    let (status, summary, principal, verified_repository, permission) = match outcome {
-        Ok(outcome) => (
-            if outcome.available {
-                "available"
-            } else {
-                "unavailable"
-            },
-            capability_verification_summary(&outcome),
-            outcome.principal,
-            outcome.repository,
-            outcome.permission,
-        ),
-        Err(_) => (
-            "unavailable",
-            "Isolated capability verification could not complete".to_string(),
-            None,
-            repository,
-            None,
-        ),
-    };
-    let verification = state
-        .store
-        .create_capability_verification(CreateCapabilityVerification {
-            id: format!(
-                "capverify_{}_{}",
-                safe_id_fragment(&capability),
-                unique_suffix()
-            ),
-            capability: capability.clone(),
-            status: status.to_string(),
-            summary: summary.clone(),
-            principal,
-            repository: verified_repository,
-            permission,
-            verified_at: now.to_string(),
-            expires_at: (now + 15 * 60 * 1_000).to_string(),
-        })
-        .await?;
-    Ok(Json(CapabilityStatusResponse {
-        capability,
-        status: verification.status,
-        summary: verification.summary,
-        verified_at: Some(verification.verified_at),
-        expires_at: Some(verification.expires_at),
-    }))
-}
-
-fn capability_preflight_is_statically_unavailable(status: &CapabilityStatusResponse) -> bool {
-    status.status == "unavailable" && status.verified_at.is_none()
-}
-
-fn protected_target_json() -> Value {
-    json!({
-        "environment": PROTECTED_ENVIRONMENT,
-        "namespace": PROTECTED_NAMESPACE,
-        "argo_application": PROTECTED_ARGO_APPLICATION,
-        "workload_kind": PROTECTED_WORKLOAD_KIND,
-        "workload_name": PROTECTED_WORKLOAD_NAME,
-        "source_repo": PROTECTED_SOURCE_REPO,
-        "gitops_repo": PROTECTED_GITOPS_REPO,
-        "kustomization_path": PROTECTED_KUSTOMIZATION_PATH,
-        "image_name": PROTECTED_IMAGE_NAME,
-        "rollback_owner": PROTECTED_ROLLBACK_OWNER,
-    })
-}
-
-fn immutable_image_digest(value: &str) -> bool {
-    value.strip_prefix("sha256:").is_some_and(|digest| {
-        digest.len() == 64
-            && digest
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    })
-}
-
-fn immutable_git_object_id(value: &str) -> bool {
-    matches!(value.len(), 40 | 64)
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 async fn execute_capability(
