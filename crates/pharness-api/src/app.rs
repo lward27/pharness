@@ -3631,6 +3631,8 @@ fn work_item_action_response(preview: &ReconcileWorkItemResponse) -> WorkItemAct
         "model_execution"
     } else if action.contains("approval") || action.contains("authorization") {
         "approval_boundary"
+    } else if action == "awaiting_gitops_pull_request_merge" {
+        "external_effect"
     } else if action.starts_with("wait_") || action.contains("merge") {
         "external_wait"
     } else if matches!(
@@ -8563,7 +8565,8 @@ async fn reconcile_work_item(
             .await
             .map(Json)
         }
-        WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation => Box::pin(async {
+        WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation
+        | WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge => Box::pin(async {
             let gitops_change_set = gitops_change_set
                 .as_ref()
                 .expect("GitOps pull-request observation requires a GitOps ChangeSet");
@@ -8573,9 +8576,15 @@ async fn reconcile_work_item(
                 Path(gitops_change_set.id.clone()),
                 Json(ObserveGitOpsDeliveryRequest {
                     actor: actor.clone(),
-                    reason: reason.clone().unwrap_or_else(|| {
-                        "controller applied the read-only GitOps delivery observation boundary"
-                            .to_string()
+                    reason: reason.clone().unwrap_or_else(|| match action {
+                        WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge => {
+                            "controller refreshed the read-only GitOps pull-request observation after the manual merge boundary"
+                                .to_string()
+                        }
+                        _ => {
+                            "controller applied the read-only GitOps delivery observation boundary"
+                                .to_string()
+                        }
                     }),
                 }),
             )
@@ -8620,7 +8629,7 @@ async fn reconcile_work_item(
             let (controller_wait, created) = schedule_controller_wait(
                 &state,
                 &work_item,
-                WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation,
+                action,
                 actor,
             )
             .await?;
@@ -9748,6 +9757,7 @@ impl WorkItemReconcileAction {
                 | Self::AwaitingGitOpsDeliveryPlan
                 | Self::AwaitingGitOpsDeliveryExecution
                 | Self::AwaitingGitOpsPullRequestObservation
+                | Self::AwaitingGitOpsPullRequestMerge
                 | Self::AwaitingDeploymentExecution
                 | Self::AwaitingReleaseDefinition
                 | Self::AwaitingReleaseVerification
@@ -10336,6 +10346,18 @@ fn gitops_observation_closed_unmerged(content: Option<&Value>) -> bool {
     })
 }
 
+fn gitops_observation_refreshable(content: Option<&Value>) -> bool {
+    content.is_some_and(|content| {
+        let status = content.get("status").and_then(Value::as_str);
+        if status == Some("failed") {
+            return true;
+        }
+        status == Some("observed")
+            && content.get("merged").and_then(Value::as_bool) != Some(true)
+            && content.get("pull_request_state").and_then(Value::as_str) != Some("closed")
+    })
+}
+
 fn deployment_intent_reconcile_action(
     intent: Option<&StoredDeploymentIntent>,
     preflight: Option<&DeploymentIntentExecutionPreflight>,
@@ -10807,6 +10829,9 @@ fn action_effect(action: WorkItemReconcileAction) -> &'static str {
         }
         WorkItemReconcileAction::AwaitingGitOpsPullRequestObservation => {
             "dispatch one read-only GitOps pull-request observer"
+        }
+        WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge => {
+            "refresh the read-only GitOps pull-request observation to capture manual merge provenance"
         }
         WorkItemReconcileAction::AwaitingDeploymentExecution => {
             "dispatch one isolated Argo reconciliation runner"
@@ -14539,46 +14564,73 @@ async fn observe_gitops_change_set_delivery(
             "GitOps delivery result has invalid GitHub provenance",
         ));
     }
-    if let Some(existing) = artifacts.iter().find(|artifact| {
-        artifact.kind == "gitops_delivery_observation_execution"
-            && artifact.content_json.as_ref().is_some_and(|content| {
-                content
-                    .get("gitops_delivery_plan_artifact_id")
-                    .and_then(Value::as_str)
-                    == Some(plan.id.as_str())
-                    && content
-                        .get("gitops_delivery_result_artifact_id")
+    if let Some(existing) = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.kind == "gitops_delivery_observation_execution"
+                && artifact.content_json.as_ref().is_some_and(|content| {
+                    content
+                        .get("gitops_delivery_plan_artifact_id")
                         .and_then(Value::as_str)
-                        == Some(delivery_result.id.as_str())
-                    && !artifacts.iter().any(|failure| {
-                        failure.kind == "gitops_delivery_observation_dispatch_failure"
-                            && failure
-                                .content_json
-                                .as_ref()
-                                .is_some_and(|failure_content| {
-                                    failure_content.get("execution_id").and_then(Value::as_str)
-                                        == content.get("execution_id").and_then(Value::as_str)
-                                })
+                        == Some(plan.id.as_str())
+                        && content
+                            .get("gitops_delivery_result_artifact_id")
+                            .and_then(Value::as_str)
+                            == Some(delivery_result.id.as_str())
+                        && !artifacts.iter().any(|failure| {
+                            failure.kind == "gitops_delivery_observation_dispatch_failure"
+                                && failure
+                                    .content_json
+                                    .as_ref()
+                                    .is_some_and(|failure_content| {
+                                        failure_content.get("execution_id").and_then(Value::as_str)
+                                            == content.get("execution_id").and_then(Value::as_str)
+                                    })
+                        })
+                })
+        })
+        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+    {
+        let execution_id = existing
+            .content_json
+            .as_ref()
+            .and_then(|content| content.get("execution_id"))
+            .and_then(Value::as_str);
+        let terminal_observation = execution_id.and_then(|execution_id| {
+            artifacts
+                .iter()
+                .filter(|artifact| {
+                    gitops_delivery_artifact_matches_plan(
+                        artifact,
+                        "gitops_delivery_pr_observation",
+                        &plan.id,
+                    ) && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("execution_id").and_then(Value::as_str) == Some(execution_id)
                     })
-            })
-    }) {
-        return Ok(Json(ObserveGitOpsDeliveryResponse {
-            status: existing
-                .content_json
-                .as_ref()
-                .and_then(|content| content.get("status"))
-                .and_then(Value::as_str)
-                .unwrap_or("dispatched")
-                .to_string(),
-            execution: existing.clone().into(),
-            job_name: existing
-                .content_json
-                .as_ref()
-                .and_then(|content| content.get("job_name"))
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned),
-            created: false,
-        }));
+                })
+                .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
+        });
+        if !terminal_observation.is_some_and(|observation| {
+            gitops_observation_refreshable(observation.content_json.as_ref())
+        }) {
+            return Ok(Json(ObserveGitOpsDeliveryResponse {
+                status: existing
+                    .content_json
+                    .as_ref()
+                    .and_then(|content| content.get("status"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("dispatched")
+                    .to_string(),
+                execution: existing.clone().into(),
+                job_name: existing
+                    .content_json
+                    .as_ref()
+                    .and_then(|content| content.get("job_name"))
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned),
+                created: false,
+            }));
+        }
     }
     let execution_id = format!("gopsobs_{}", unique_suffix());
     let execution = state.store.create_artifact(CreateArtifact {
@@ -28666,6 +28718,29 @@ mod tests {
     }
 
     #[test]
+    fn refreshes_only_retryable_gitops_observations() {
+        assert!(super::gitops_observation_refreshable(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "open",
+            "merged": false,
+        }))));
+        assert!(super::gitops_observation_refreshable(Some(&json!({
+            "status": "failed",
+        }))));
+        assert!(!super::gitops_observation_refreshable(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "closed",
+            "merged": false,
+        }))));
+        assert!(!super::gitops_observation_refreshable(Some(&json!({
+            "status": "observed",
+            "pull_request_state": "closed",
+            "merged": true,
+        }))));
+        assert!(!super::gitops_observation_refreshable(None));
+    }
+
+    #[test]
     fn failed_capability_verification_can_retry_but_static_unavailability_cannot() {
         let static_unavailable = super::CapabilityStatusResponse {
             capability: "gitops_writer".to_string(),
@@ -40573,6 +40648,11 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(
             gitops_change_set_reconcile_action(Some(&approved), Some(&flow), None),
             WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge
+        );
+        assert!(WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge.is_applyable());
+        assert_eq!(
+            super::action_effect(WorkItemReconcileAction::AwaitingGitOpsPullRequestMerge),
+            "refresh the read-only GitOps pull-request observation to capture manual merge provenance"
         );
         flow.latest_observation = Some(reconcile_artifact(
             "gitops_delivery_pr_observation",
