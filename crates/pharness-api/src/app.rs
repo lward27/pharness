@@ -135,6 +135,9 @@ mod environment;
 mod runs;
 
 #[cfg(test)]
+mod decomposition_test_support;
+
+#[cfg(test)]
 use runs::*;
 
 const DEFAULT_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 60_000;
@@ -28751,6 +28754,125 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::sync::Arc;
+
+    #[test]
+    fn v3_characterization_fixture_matches_frozen_constants() {
+        use super::decomposition_test_support as baseline;
+
+        let fixture = baseline::v3_characterization_fixture();
+        assert_eq!(fixture["release_commit"], baseline::V3_RELEASE_COMMIT);
+        assert_eq!(fixture["source_revision"], baseline::V3_SOURCE_REVISION);
+        assert_eq!(fixture["runtime_digest"], baseline::V3_RUNTIME_DIGEST);
+        assert_eq!(fixture["ui_digest"], baseline::V3_UI_DIGEST);
+        assert_eq!(fixture["runner_digest"], baseline::V3_RUNNER_DIGEST);
+        assert_eq!(fixture["work_item_id"], baseline::V3_WORK_ITEM_ID);
+        assert_eq!(fixture["run_id"], baseline::V3_RUN_ID);
+        assert_eq!(fixture["release_id"], baseline::V3_RELEASE_ID);
+        assert_eq!(
+            fixture["rollback_intent_id"],
+            baseline::V3_ROLLBACK_INTENT_ID
+        );
+        assert_eq!(
+            fixture["running_yfinance_digest"],
+            baseline::V3_RUNNING_YFINANCE_DIGEST
+        );
+        assert_eq!(
+            fixture["rollback_baseline_digest"],
+            baseline::V3_ROLLBACK_BASELINE_DIGEST
+        );
+    }
+
+    fn materialize_inventory_path(path: &str) -> String {
+        path.split('/')
+            .map(|segment| {
+                if segment.starts_with(':') {
+                    "fixture"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
+    #[tokio::test]
+    async fn route_inventory_matches_mounted_routes_and_auth_classes() {
+        use super::decomposition_test_support::{
+            route_inventory, routes_mounted_in_source, RouteAuthClass,
+        };
+        use tower::ServiceExt;
+
+        let mut inventory = route_inventory();
+        inventory.sort();
+        assert_eq!(
+            inventory.len(),
+            166,
+            "update the checked-in inventory only after reviewing an intentional route change"
+        );
+        assert_eq!(
+            routes_mounted_in_source(),
+            inventory,
+            "checked-in route inventory differs from the source registrations"
+        );
+        assert!(inventory
+            .iter()
+            .any(|entry| entry.path == "/health" && !entry.path.contains(':')));
+        assert!(inventory.iter().any(|entry| entry.path.contains(':')));
+        assert!(inventory
+            .iter()
+            .any(|entry| entry.auth_class == RouteAuthClass::Operator));
+        assert!(inventory
+            .iter()
+            .any(|entry| entry.auth_class == RouteAuthClass::Worker));
+
+        let app = router(
+            Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
+            RunDispatcher::Disabled,
+            ReadOnlyClusterTools::default(),
+            SafetyPolicy::default(),
+            Some("worker-secret".to_string()),
+            vec![("lucas".to_string(), "operator-secret".to_string())],
+            WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+        );
+
+        for entry in inventory {
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method(axum::http::Method::from_bytes(entry.method.as_bytes()).unwrap())
+                        .uri(materialize_inventory_path(&entry.path))
+                        .body(axum::body::Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let expected = match entry.auth_class {
+                RouteAuthClass::Open => StatusCode::OK,
+                RouteAuthClass::Operator | RouteAuthClass::Worker => StatusCode::UNAUTHORIZED,
+            };
+            assert_eq!(
+                response.status(),
+                expected,
+                "{} {} did not mount with {:?} authentication",
+                entry.method,
+                entry.path,
+                entry.auth_class
+            );
+        }
+
+        let not_found = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/decomposition-route-that-does-not-exist")
+                    .header("authorization", "Bearer operator-secret")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
+    }
 
     #[test]
     fn gitops_artifact_revision_keeps_legacy_revision_one_but_not_retry_evidence() {
