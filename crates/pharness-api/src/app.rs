@@ -2724,6 +2724,10 @@ async fn get_work_item(
     Ok(Json(work_item.into()))
 }
 
+fn approval_gate_uses_dedicated_lifecycle_action(gate_kind: &str) -> bool {
+    gate_kind == "production_rollback"
+}
+
 async fn work_item_flow(
     State(state): State<AppState>,
     Path(work_item_id): Path<String>,
@@ -3292,10 +3296,9 @@ async fn work_item_flow(
             ..ApprovalGateListFilter::default()
         })
         .await?;
-    for gate in lifecycle_gates
-        .iter()
-        .filter(|gate| gate.status == "pending")
-    {
+    for gate in lifecycle_gates.iter().filter(|gate| {
+        gate.status == "pending" && !approval_gate_uses_dedicated_lifecycle_action(&gate.gate_kind)
+    }) {
         let (eligible, boundary_summary) = approval_gate_lifecycle_readiness(&state, gate).await?;
         action_rail.push(WorkItemActionResponse {
             id: format!("satisfy_approval_gate:{}", gate.id),
@@ -5526,6 +5529,9 @@ async fn execute_work_item_action(
                 "action preview is stale; reload the WorkItem flow before executing",
             ));
         }
+        let expires_at = item
+            .production_impacting
+            .then(|| (current_millis() + 30 * 60 * 1_000).to_string());
         let response = match action_id.as_str() {
             "approve_rollback" | "approve_rollback_argo_sync" => {
                 approve_rollback_intent(
@@ -5535,7 +5541,7 @@ async fn execute_work_item_action(
                     Json(RollbackIntentRequest {
                         actor: request.actor,
                         reason: request.reason,
-                        expires_at: None,
+                        expires_at,
                     }),
                 )
                 .await?
@@ -6215,8 +6221,10 @@ async fn approve_rollback_intent(
         .store
         .get_approval_gate(gate_id)
         .await?
-        .filter(|gate| gate.status == "pending")
-        .ok_or_else(|| ApiError::conflict("RollbackIntent approval gate is not pending"))?;
+        .filter(|gate| matches!(gate.status.as_str(), "pending" | "satisfied"))
+        .ok_or_else(|| {
+            ApiError::conflict("RollbackIntent approval gate is neither pending nor satisfied")
+        })?;
     let baseline_digest_from_intent = current
         .pointer("/content/baseline/image_digest")
         .and_then(Value::as_str)
@@ -6247,10 +6255,12 @@ async fn approve_rollback_intent(
     let actor = identity
         .map(|Extension(OperatorIdentity(name))| name)
         .or_else(|| clean_optional_text(request.actor));
-    state
-        .store
-        .decide_approval_gate(gate_id, "satisfied", actor.clone(), Some(reason.clone()))
-        .await?;
+    if gate.status == "pending" {
+        state
+            .store
+            .decide_approval_gate(gate_id, "satisfied", actor.clone(), Some(reason.clone()))
+            .await?;
+    }
     let content = current
         .get("content")
         .cloned()
@@ -26777,6 +26787,13 @@ async fn approval_gate_lifecycle_readiness(
     state: &AppState,
     gate: &StoredApprovalGate,
 ) -> Result<(bool, String), ApiError> {
+    if approval_gate_uses_dedicated_lifecycle_action(&gate.gate_kind) {
+        return Ok((
+            false,
+            "Use the digest-bound RollbackIntent approval action so gate satisfaction and the expiring writer grant are committed together."
+                .to_string(),
+        ));
+    }
     let Some(work_item_id) = gate.work_item_id.as_deref() else {
         return Ok((
             true,
@@ -42332,6 +42349,16 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
         assert_eq!(summary.environment_discovery_turns, 1);
     }
 
+    #[test]
+    fn production_rollback_gate_uses_its_bound_lifecycle_action() {
+        assert!(super::approval_gate_uses_dedicated_lifecycle_action(
+            "production_rollback"
+        ));
+        assert!(!super::approval_gate_uses_dedicated_lifecycle_action(
+            "cluster_mutation"
+        ));
+    }
+
     #[tokio::test]
     async fn rollback_writer_and_observer_stay_bound_to_the_captured_digest_and_manual_merge() {
         let state = test_state_with_git_observer(
@@ -42602,14 +42629,44 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
                 .unwrap()
                 .is_some()
         );
-        let Json(writer_approved) = super::approve_rollback_intent(
+        let rollback_gate = state
+            .store
+            .get_approval_gate("agate_rollback_contract")
+            .await
+            .unwrap()
+            .unwrap();
+        let (generic_actionable, generic_blocker) =
+            super::approval_gate_lifecycle_readiness(&state, &rollback_gate)
+                .await
+                .unwrap();
+        assert!(!generic_actionable);
+        assert!(generic_blocker.contains("RollbackIntent approval action"));
+        state
+            .store
+            .decide_approval_gate(
+                "agate_rollback_contract",
+                "satisfied",
+                Some("lucas".to_string()),
+                Some("satisfied through the generic gate before approval".to_string()),
+            )
+            .await
+            .unwrap();
+        let prepared =
+            super::latest_rollback_intent(&state, &completed_attempt_item, Some(rollback_id))
+                .await
+                .unwrap()
+                .unwrap();
+        let Json(writer_approved) = super::execute_work_item_action(
             State(state.clone()),
             None,
-            Path(rollback_id.to_string()),
-            Json(super::RollbackIntentRequest {
+            Path((
+                "witem_rollback_contract".to_string(),
+                "approve_rollback".to_string(),
+            )),
+            Json(ExecuteWorkItemActionRequest {
                 actor: Some("lucas".to_string()),
                 reason: "approve exact rollback writer".to_string(),
-                expires_at: Some((super::current_millis() + 60_000).to_string()),
+                state_hash: format!("{:x}", Sha256::digest(prepared.to_string().as_bytes())),
             }),
         )
         .await
@@ -42622,6 +42679,10 @@ printf '%s\n' '{"apiVersion":"v1","kind":"List","items":[]}'
             writer_approved.pointer("/content/rollback_base_commit"),
             Some(&json!(deployment_gitops_merge))
         );
+        assert!(writer_approved
+            .pointer("/content/authorization_expires_at")
+            .and_then(Value::as_str)
+            .is_some());
         let wrong_action = super::execute_work_item_action(
             State(state.clone()),
             None,
