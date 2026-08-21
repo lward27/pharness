@@ -488,6 +488,149 @@ async fn readiness_preserves_matching_and_mismatched_revision_semantics() {
     assert!(!mismatched_response.platform_versions_match);
 }
 
+#[tokio::test]
+async fn operator_evidence_json_snapshots_preserve_empty_filtered_and_paginated_shapes() {
+    fn normalize_observed_at(mut value: Value) -> Value {
+        if let Some(observations) = value.get_mut("observations").and_then(Value::as_array_mut) {
+            for observation in observations {
+                observation["observed_at"] = json!("<timestamp>");
+            }
+        }
+        value
+    }
+
+    let state = test_state().await;
+    let Json(empty) = list_observations(
+        State(state.clone()),
+        Query(ListObservationsQuery {
+            limit: Some(3),
+            offset: Some(0),
+            ..ListObservationsQuery::default()
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(empty).unwrap(),
+        json!({"observations": [], "count": 0, "limit": 3, "offset": 0})
+    );
+
+    for ordinal in 1..=3 {
+        let source = if ordinal == 2 { "loki" } else { "prometheus" };
+        let _ = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                id: Some(format!("obs_snapshot_{ordinal}")),
+                session_id: None,
+                run_id: None,
+                source: source.to_string(),
+                kind: "inventory".to_string(),
+                subject: "apps-prod/yfinance-wrapper".to_string(),
+                summary: format!("snapshot {ordinal}"),
+                resource_namespace: Some("apps-prod".to_string()),
+                resource_kind: Some("Deployment".to_string()),
+                resource_name: Some("yfinance-wrapper".to_string()),
+                resource_ref: Some(json!({
+                    "kind": "Deployment",
+                    "name": "yfinance-wrapper"
+                })),
+                artifact_id: None,
+                data_json: Some(json!({"ordinal": ordinal})),
+                actor: Some("snapshot-fixture".to_string()),
+                reason: Some("D3 response characterization".to_string()),
+            }),
+        )
+        .await
+        .unwrap();
+    }
+
+    let Json(filtered) = list_observations(
+        State(state.clone()),
+        Query(ListObservationsQuery {
+            source: Some("prometheus".to_string()),
+            limit: Some(2),
+            offset: Some(0),
+            ..ListObservationsQuery::default()
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        normalize_observed_at(serde_json::to_value(filtered).unwrap()),
+        json!({
+            "observations": [
+                {
+                    "id": "obs_snapshot_3",
+                    "run_id": null,
+                    "source": "prometheus",
+                    "kind": "inventory",
+                    "subject": "apps-prod/yfinance-wrapper",
+                    "summary": "snapshot 3",
+                    "resource_namespace": "apps-prod",
+                    "resource_kind": "Deployment",
+                    "resource_name": "yfinance-wrapper",
+                    "resource_ref": {"kind": "Deployment", "name": "yfinance-wrapper"},
+                    "artifact_id": null,
+                    "data_json": {"ordinal": 3},
+                    "observed_at": "<timestamp>"
+                },
+                {
+                    "id": "obs_snapshot_1",
+                    "run_id": null,
+                    "source": "prometheus",
+                    "kind": "inventory",
+                    "subject": "apps-prod/yfinance-wrapper",
+                    "summary": "snapshot 1",
+                    "resource_namespace": "apps-prod",
+                    "resource_kind": "Deployment",
+                    "resource_name": "yfinance-wrapper",
+                    "resource_ref": {"kind": "Deployment", "name": "yfinance-wrapper"},
+                    "artifact_id": null,
+                    "data_json": {"ordinal": 1},
+                    "observed_at": "<timestamp>"
+                }
+            ],
+            "count": 2,
+            "limit": 2,
+            "offset": 0
+        })
+    );
+
+    let Json(paginated) = list_observations(
+        State(state),
+        Query(ListObservationsQuery {
+            limit: Some(1),
+            offset: Some(1),
+            ..ListObservationsQuery::default()
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        normalize_observed_at(serde_json::to_value(paginated).unwrap()),
+        json!({
+            "observations": [{
+                "id": "obs_snapshot_2",
+                "run_id": null,
+                "source": "loki",
+                "kind": "inventory",
+                "subject": "apps-prod/yfinance-wrapper",
+                "summary": "snapshot 2",
+                "resource_namespace": "apps-prod",
+                "resource_kind": "Deployment",
+                "resource_name": "yfinance-wrapper",
+                "resource_ref": {"kind": "Deployment", "name": "yfinance-wrapper"},
+                "artifact_id": null,
+                "data_json": {"ordinal": 2},
+                "observed_at": "<timestamp>"
+            }],
+            "count": 1,
+            "limit": 1,
+            "offset": 1
+        })
+    );
+}
+
 #[test]
 fn failed_capability_summary_names_only_the_known_check_scope() {
     let outcome = crate::dispatch::CapabilityVerificationOutcome {
