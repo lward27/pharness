@@ -1,14 +1,14 @@
 use super::super::audit::append_gitops_change_set_audit_event;
 use super::super::clock::unique_suffix;
 use super::super::json_values::string_at;
-use super::super::pipeline::intents::pipeline_intent_is_deployment_eligible;
+use super::super::pipeline::state::pipeline_intent_is_deployment_eligible;
 use super::super::validation::{clean_optional_text, required_text};
 use super::super::work_items::preflight::work_item_target_supported;
-use super::super::work_items::reconcile::gitops_observation_closed_unmerged;
 use super::super::{ApiError, AppState};
-use super::delivery::{
+use super::delivery_flow::{
     gitops_delivery_artifact_matches_plan, gitops_delivery_plan_matches_change_set,
 };
+use super::observation::gitops_observation_closed_unmerged;
 use crate::dto::{
     CreateGitOpsChangeSetRequest, CreateGitOpsChangeSetResponse, GitOpsChangeSetResponse,
     GitOpsChangeSetsResponse, TransitionGitOpsChangeSetRequest, TransitionGitOpsChangeSetResponse,

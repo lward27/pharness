@@ -8,18 +8,21 @@ use super::super::delivery_actions::GITOPS_DELIVERY_ACTIONS;
 use super::super::execution_checks::execution_check;
 use super::super::identifiers::{is_git_sha, is_github_pr_url};
 use super::super::principals::DEFAULT_GITOPS_WRITER_SUBJECT;
-use super::super::sdlc::risk_rank;
+use super::super::risk::risk_rank;
 use super::super::system::immutable_image_digest;
 use super::super::text::compact_delivery_subject;
 use super::super::validation::{clean_optional_text, required_json_string, required_text};
 use super::super::work_items::lifecycle::work_item_gate_scope_matches;
-use super::super::work_items::preflight::{
-    bounded_production_grant_expiry, work_item_target_supported,
-};
-use super::super::work_items::reconcile::gitops_observation_refreshable;
+use super::super::work_items::preflight::bounded_production_grant_expiry;
 use super::super::work_items::rollback_state::latest_rollback_intent;
 use super::super::{ApiError, AppState};
 use super::change_sets::safe_relative_gitops_path;
+use super::delivery_flow::{
+    gitops_artifact_change_set_revision, gitops_base_revision_matches_change_set,
+    gitops_delivery_artifact_matches_plan, gitops_delivery_plan_matches_change_set,
+};
+use super::deployment_evidence::ensure_gitops_delivery_target;
+use super::observation::gitops_observation_refreshable;
 use crate::dispatch::{
     GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
     GitOpsRevisionResolutionRequest,
@@ -28,12 +31,11 @@ use crate::dto::{
     ArtifactResponse, CreateGitOpsDeliveryAuthorizationRequest, CreatePermissionGrantRequest,
     ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse, GitOpsBaseRevisionContextResponse,
     GitOpsBaseRevisionOutcomeRequest, GitOpsDeliveryAuthorizationResponse,
-    GitOpsDeliveryContextResponse, GitOpsDeliveryFlowResponse,
-    GitOpsDeliveryObservationContextResponse, GitOpsDeliveryObservationOutcomeRequest,
-    GitOpsDeliveryOutcomeRequest, GitOpsDeliveryPlanResponse, GitOpsDeliveryPreflightRequest,
-    GitOpsDeliveryPreflightResponse, ObserveGitOpsDeliveryRequest, ObserveGitOpsDeliveryResponse,
-    PrepareGitOpsDeliveryRequest, ResolveGitOpsBaseRevisionRequest,
-    ResolveGitOpsBaseRevisionResponse,
+    GitOpsDeliveryContextResponse, GitOpsDeliveryObservationContextResponse,
+    GitOpsDeliveryObservationOutcomeRequest, GitOpsDeliveryOutcomeRequest,
+    GitOpsDeliveryPlanResponse, GitOpsDeliveryPreflightRequest, GitOpsDeliveryPreflightResponse,
+    ObserveGitOpsDeliveryRequest, ObserveGitOpsDeliveryResponse, PrepareGitOpsDeliveryRequest,
+    ResolveGitOpsBaseRevisionRequest, ResolveGitOpsBaseRevisionResponse,
 };
 use axum::extract::{Path, Query, State};
 use axum::{Extension, Json};
@@ -42,62 +44,9 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateListFilter, CreateArtifact, SqliteStore, StoredArtifact, StoredGitOpsChangeSet,
-    StoredPermissionGrant, StoredPipelineIntent, StoredWorkItem,
+    StoredPermissionGrant, StoredWorkItem,
 };
 use serde_json::{json, Value};
-
-/// Return immutable GitOps merge evidence when the WorkItem declares a GitOps
-/// source of truth. A missing target intentionally stays compatible with the
-/// existing non-GitOps dev delivery path; a partially declared or unmerged
-/// target blocks Argo execution.
-pub(in crate::app) async fn observed_gitops_merge_for_deployment(
-    store: &SqliteStore,
-    work_item: &StoredWorkItem,
-    pipeline_intent: &StoredPipelineIntent,
-) -> Result<Option<ArtifactResponse>, ApiError> {
-    let (gitops_repo, gitops_ref) = match (&work_item.gitops_repo, &work_item.gitops_ref) {
-        (None, None) => return Ok(None),
-        (Some(repository), Some(reference)) => (repository, reference),
-        _ => {
-            return Err(ApiError::conflict(
-                "WorkItem must declare both gitops_repo and gitops_ref before Argo execution",
-            ))
-        }
-    };
-    let change_set = store
-        .get_gitops_change_set_by_pipeline_intent(&pipeline_intent.id)
-        .await?
-        .ok_or_else(|| {
-            ApiError::conflict(
-                "Deployment requires a GitOps ChangeSet for the completed PipelineIntent",
-            )
-        })?;
-    if change_set.status != "approved"
-        || change_set.gitops_repo != *gitops_repo
-        || change_set.gitops_ref != *gitops_ref
-    {
-        return Err(ApiError::conflict(
-            "GitOps ChangeSet is not the current approved target declared by the WorkItem",
-        ));
-    }
-    ensure_gitops_delivery_target(work_item, &change_set)?;
-    let flow = gitops_delivery_flow(store, Some(&change_set)).await?;
-    let merge = flow.and_then(|flow| flow.latest_merge).ok_or_else(|| {
-        ApiError::conflict("Deployment requires an observed immutable GitOps pull-request merge")
-    })?;
-    if !merge
-        .content_json
-        .as_ref()
-        .and_then(|content| content.get("merge_commit_sha"))
-        .and_then(Value::as_str)
-        .is_some_and(is_git_sha)
-    {
-        return Err(ApiError::conflict(
-            "GitOps merge evidence has no valid immutable merge commit SHA",
-        ));
-    }
-    Ok(Some(merge))
-}
 
 pub(in crate::app) async fn resolve_gitops_base_revision(
     State(state): State<AppState>,
@@ -429,59 +378,6 @@ pub(in crate::app) fn current_gitops_base_revision(
             ApiError::conflict(
                 "GitOps delivery planning requires a current resolved immutable base revision",
             )
-        })
-}
-
-pub(in crate::app) fn gitops_base_revision_matches_change_set(
-    artifact: &StoredArtifact,
-    change_set: &StoredGitOpsChangeSet,
-) -> bool {
-    artifact.kind == "gitops_base_revision"
-        && artifact.content_json.as_ref().is_some_and(|content| {
-            content.get("status").and_then(Value::as_str) == Some("resolved")
-                && content.get("gitops_change_set_id").and_then(Value::as_str)
-                    == Some(change_set.id.as_str())
-                && content.get("material_hash").and_then(Value::as_str)
-                    == Some(change_set.material_hash.as_str())
-                && gitops_artifact_change_set_revision(content) == change_set.revision
-                && content.get("repository").and_then(Value::as_str)
-                    == Some(change_set.gitops_repo.as_str())
-                && content.get("base_ref").and_then(Value::as_str)
-                    == Some(change_set.gitops_ref.as_str())
-                && content
-                    .get("base_commit")
-                    .and_then(Value::as_str)
-                    .is_some_and(is_git_sha)
-        })
-}
-
-pub(in crate::app) fn gitops_artifact_change_set_revision(content: &Value) -> i64 {
-    content
-        .get("gitops_change_set_revision")
-        .and_then(Value::as_i64)
-        .unwrap_or(1)
-}
-
-pub(in crate::app) fn gitops_delivery_plan_matches_change_set(
-    artifact: &StoredArtifact,
-    change_set: &StoredGitOpsChangeSet,
-) -> bool {
-    artifact.kind == "gitops_delivery_plan"
-        && artifact.content_json.as_ref().is_some_and(|plan| {
-            plan.get("gitops_change_set")
-                .and_then(|value| value.get("id"))
-                .and_then(Value::as_str)
-                == Some(change_set.id.as_str())
-                && plan
-                    .get("gitops_change_set")
-                    .and_then(|value| value.get("revision"))
-                    .and_then(Value::as_i64)
-                    == Some(change_set.revision)
-                && plan
-                    .get("gitops_change_set")
-                    .and_then(|value| value.get("material_hash"))
-                    .and_then(Value::as_str)
-                    == Some(change_set.material_hash.as_str())
         })
 }
 
@@ -1253,120 +1149,6 @@ pub(in crate::app) async fn observe_gitops_change_set_delivery(
     }
 }
 
-pub(in crate::app) fn ensure_gitops_delivery_target(
-    work_item: &StoredWorkItem,
-    change_set: &StoredGitOpsChangeSet,
-) -> Result<(), ApiError> {
-    if !work_item_target_supported(work_item) {
-        return Err(ApiError::conflict(
-            "GitOps delivery is limited to dev or the exact protected production target",
-        ));
-    }
-    if work_item.gitops_repo.as_deref() != Some(change_set.gitops_repo.as_str())
-        || work_item.gitops_ref.as_deref() != Some(change_set.gitops_ref.as_str())
-        || !safe_relative_gitops_path(&change_set.kustomization_path)
-        || !change_set.image_ref.contains("@sha256:")
-    {
-        return Err(ApiError::conflict(
-            "GitOps ChangeSet no longer matches its declared WorkItem target or safety constraints",
-        ));
-    }
-    Ok(())
-}
-
-pub(in crate::app) async fn gitops_delivery_flow(
-    store: &SqliteStore,
-    change_set: Option<&StoredGitOpsChangeSet>,
-) -> Result<Option<GitOpsDeliveryFlowResponse>, ApiError> {
-    let Some(change_set) = change_set else {
-        return Ok(None);
-    };
-    let artifacts = store.list_artifacts(&change_set.run_id).await?;
-    let Some(plan) = artifacts
-        .iter()
-        .find(|artifact| gitops_delivery_plan_matches_change_set(artifact, change_set))
-    else {
-        return Ok(None);
-    };
-    let base_revision_id = plan
-        .content_json
-        .as_ref()
-        .and_then(|content| content.pointer("/source/base_revision_artifact_id"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ApiError::conflict("GitOps delivery plan has no base revision provenance")
-        })?;
-    let base_revision = artifacts
-        .iter()
-        .find(|artifact| {
-            artifact.id == base_revision_id
-                && gitops_base_revision_matches_change_set(artifact, change_set)
-        })
-        .cloned()
-        .ok_or_else(|| {
-            ApiError::conflict("GitOps delivery plan base revision is no longer current")
-        })?;
-    let latest_preflight = artifacts
-        .iter()
-        .filter(|artifact| {
-            artifact.kind == "gitops_delivery_preflight"
-                && artifact.content_json.as_ref().is_some_and(|content| {
-                    content
-                        .get("gitops_delivery_plan_artifact_id")
-                        .and_then(Value::as_str)
-                        == Some(plan.id.as_str())
-                })
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_execution = artifacts
-        .iter()
-        .filter(|artifact| {
-            gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_execution", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_result = artifacts
-        .iter()
-        .filter(|artifact| {
-            gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_result", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_observation = artifacts
-        .iter()
-        .filter(|artifact| {
-            gitops_delivery_artifact_matches_plan(
-                artifact,
-                "gitops_delivery_pr_observation",
-                &plan.id,
-            )
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    let latest_merge = artifacts
-        .iter()
-        .filter(|artifact| {
-            gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_merge", &plan.id)
-        })
-        .max_by_key(|artifact| (&artifact.created_at, &artifact.id))
-        .cloned()
-        .map(Into::into);
-    Ok(Some(GitOpsDeliveryFlowResponse {
-        plan: plan.clone().into(),
-        base_revision: base_revision.into(),
-        latest_preflight,
-        latest_execution,
-        latest_result,
-        latest_observation,
-        latest_merge,
-    }))
-}
-
 #[derive(Debug, serde::Deserialize)]
 pub(in crate::app) struct InternalGitOpsBaseRevisionQuery {
     execution_id: String,
@@ -1907,20 +1689,6 @@ pub(in crate::app) fn gitops_delivery_plan_source(
         ));
     }
     Ok(result)
-}
-
-pub(in crate::app) fn gitops_delivery_artifact_matches_plan(
-    artifact: &StoredArtifact,
-    kind: &str,
-    plan_id: &str,
-) -> bool {
-    artifact.kind == kind
-        && artifact.content_json.as_ref().is_some_and(|content| {
-            content
-                .get("gitops_delivery_plan_artifact_id")
-                .and_then(Value::as_str)
-                == Some(plan_id)
-        })
 }
 
 pub(in crate::app) async fn persist_gitops_delivery_result(

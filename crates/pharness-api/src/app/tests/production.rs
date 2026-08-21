@@ -31,10 +31,11 @@ use super::{
 
 use super::characterization::{test_state, test_state_with_git_observer};
 use super::delivery_reconcile::{
-    reconcile_artifact, reconcile_deployment_delivery, reconcile_deployment_intent,
-    reconcile_deployment_preflight, reconcile_git_delivery_flow, reconcile_gitops_change_set,
-    reconcile_gitops_delivery_flow, reconcile_pipeline_intent, reconcile_release,
+    reconcile_artifact, reconcile_deployment_delivery, reconcile_deployment_preflight,
+    reconcile_git_delivery_flow, reconcile_gitops_change_set, reconcile_gitops_delivery_flow,
+    reconcile_pipeline_intent, reconcile_release,
 };
+use super::support::reconcile_deployment_intent;
 
 #[test]
 fn pipeline_intent_reconcile_action_follows_approval_execution_and_build_output() {

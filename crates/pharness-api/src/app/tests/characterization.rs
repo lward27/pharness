@@ -16,7 +16,7 @@ use super::{
     VerifyReleaseRequest, WorkerKubernetesConfig, WorkspaceProvisioner,
 };
 
-use super::delivery_reconcile::reconcile_deployment_intent;
+use super::support::reconcile_deployment_intent;
 
 #[test]
 fn v3_characterization_fixture_matches_frozen_constants() {

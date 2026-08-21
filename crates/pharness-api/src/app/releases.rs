@@ -1,3 +1,4 @@
+use super::approval_policy::approval_gate_kind;
 use super::approvals::{append_approval_gate_audit_event, ensure_approved_for_trusted_envelope};
 use super::audit::{
     append_incident_audit_event, append_registry_evidence_audit_event, append_release_audit_event,
@@ -10,16 +11,16 @@ use super::deployment::contracts::{
     deployment_contract_spec, validate_deployment_contract_spec,
     validate_protected_production_deployment_contract, VerificationRequirement,
 };
-use super::deployment::execution::{
+use super::deployment::target::{
     deployment_target, ensure_supported_deployment_target, DeploymentTarget,
 };
 use super::execution_checks::execution_check;
 use super::identifiers::{is_git_sha, is_sha256_digest, safe_id_fragment};
 use super::json_values::string_at;
+use super::pipeline::evidence::release_observability_evidence_status;
 use super::pipeline::execution::safe_oci_image_component;
 use super::pipeline::intents::{
-    current_pipeline_build_output, release_observability_evidence_status,
-    valid_digest_pinned_image_reference, VerifiedPipelineBuildOutput,
+    current_pipeline_build_output, valid_digest_pinned_image_reference, VerifiedPipelineBuildOutput,
 };
 use super::system::{PROTECTED_ENVIRONMENT, PROTECTED_NAMESPACE};
 use super::validation::{clean_optional_text, ensure_json_object};
@@ -1476,16 +1477,6 @@ pub(in crate::app) fn approval_gates_from_remediation_plan(
             })
         })
         .collect()
-}
-
-pub(in crate::app) fn approval_gate_kind(gate_json: &Value) -> Option<String> {
-    gate_json
-        .get("kind")
-        .and_then(Value::as_str)
-        .or_else(|| gate_json.as_str())
-        .map(str::trim)
-        .filter(|kind| !kind.is_empty())
-        .map(str::to_string)
 }
 
 pub(in crate::app) fn incident_resource_label(incident: &StoredIncident) -> String {

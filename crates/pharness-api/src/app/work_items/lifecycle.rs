@@ -1,9 +1,9 @@
+use super::super::approval_policy::approval_gate_kind;
 use super::super::delivery_actions::{
     CLUSTER_DELIVERY_ACTIONS, GITOPS_DELIVERY_ACTIONS, GIT_DELIVERY_ACTIONS,
     PIPELINE_DELIVERY_ACTIONS, PRODUCTION_DELIVERY_ACTIONS,
 };
 use super::super::identifiers::safe_id_fragment;
-use super::super::releases::approval_gate_kind;
 use super::super::ApiError;
 use pharness_store::{CreateApprovalGate, StoredApprovalGate, StoredWorkItem, StoredWorkPlan};
 use serde_json::{json, Value};

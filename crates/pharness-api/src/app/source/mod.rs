@@ -3,6 +3,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 pub(super) mod change_sets;
+pub(super) mod delivery_flow;
 pub(super) mod git_delivery;
 pub(super) mod work_plans;
 

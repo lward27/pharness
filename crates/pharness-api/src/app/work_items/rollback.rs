@@ -9,7 +9,7 @@ use super::super::deployment::contracts::{
 use super::super::execution_checks::{
     argo_executor_poll_seconds, execution_check, normalized_executor_error_code,
 };
-use super::super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
 use super::super::identifiers::{is_git_sha, is_github_pr_url, safe_id_fragment};
 use super::super::principals::{DEFAULT_ARGO_RUNNER_SUBJECT, DEFAULT_GITOPS_WRITER_SUBJECT};
 use super::super::releases::verify_required_prometheus_inventory;

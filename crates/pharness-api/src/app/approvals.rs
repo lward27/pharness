@@ -1,11 +1,11 @@
+use super::approval_policy::approval_gate_uses_dedicated_lifecycle_action;
 use super::clock::{current_millis, unique_suffix};
-use super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
 use super::operator::{
     all_approval_gates_for_operator_groups, all_approvals_for_operator_groups,
     group_operator_records, operator_resource_label,
 };
 use super::validation::clean_optional_text;
-use super::work_items::flow::approval_gate_uses_dedicated_lifecycle_action;
 use super::{ApiError, AppState};
 use crate::dto::{
     ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,

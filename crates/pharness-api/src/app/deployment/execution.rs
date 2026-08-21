@@ -5,21 +5,21 @@ use super::super::clock::{current_millis, unique_suffix};
 use super::super::execution_checks::{
     argo_executor_poll_seconds, execution_check, normalized_executor_error_code,
 };
-use super::super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
 use super::super::identifiers::{is_git_sha, is_sha256_digest};
-use super::super::pipeline::intents::ensure_pipeline_evidence_ready_for_deployment;
+use super::super::pipeline::readiness::ensure_pipeline_evidence_ready_for_deployment;
 use super::super::principals::DEFAULT_ARGO_RUNNER_SUBJECT;
-use super::super::sdlc::risk_rank;
+use super::super::risk::risk_rank;
 use super::super::system::{immutable_image_digest, PROTECTED_ENVIRONMENT};
 use super::super::validation::clean_optional_text;
 use super::super::work_items::lifecycle::work_item_gate_scope_matches;
-use super::super::work_items::preflight::work_item_target_supported;
 use super::super::work_items::rollback_state::latest_rollback_intent;
 use super::super::{ApiError, AppState};
 use super::contracts::{
     deployment_contract_spec, validate_deployment_contract_spec,
     validate_protected_production_deployment_contract,
 };
+use super::target::{deployment_target, ensure_supported_deployment_target, DeploymentTarget};
 use crate::dispatch::ArgoSyncExecutionRequest;
 use crate::dto::{
     ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse,
@@ -91,13 +91,6 @@ pub(in crate::app) async fn deployment_intent_delivery_flow(
     }))
 }
 
-#[derive(Debug, Clone)]
-pub(in crate::app) struct DeploymentTarget {
-    pub(in crate::app) environment: String,
-    pub(in crate::app) namespace: String,
-    pub(in crate::app) application: String,
-}
-
 pub(in crate::app) struct DeploymentIntentExecutionPreflight {
     pub(in crate::app) ready: bool,
     pub(in crate::app) intent: StoredDeploymentIntent,
@@ -105,42 +98,6 @@ pub(in crate::app) struct DeploymentIntentExecutionPreflight {
     pub(in crate::app) grant: Option<StoredPermissionGrant>,
     pub(in crate::app) gitops_merge: Option<ArtifactResponse>,
     pub(in crate::app) checks: Vec<Value>,
-}
-
-pub(in crate::app) fn deployment_target(
-    intent: &StoredDeploymentIntent,
-) -> Result<DeploymentTarget, ApiError> {
-    Ok(DeploymentTarget {
-        environment: intent.target_environment.clone().ok_or_else(|| {
-            ApiError::conflict("DeploymentIntent target_environment is required for Argo preflight")
-        })?,
-        namespace: intent.target_namespace.clone().ok_or_else(|| {
-            ApiError::conflict("DeploymentIntent target_namespace is required for Argo preflight")
-        })?,
-        application: intent.argo_application.clone().ok_or_else(|| {
-            ApiError::conflict("DeploymentIntent argo_application is required for Argo preflight")
-        })?,
-    })
-}
-
-pub(in crate::app) fn ensure_supported_deployment_target(
-    work_item: &StoredWorkItem,
-    target: &DeploymentTarget,
-) -> Result<(), ApiError> {
-    if !work_item_target_supported(work_item) {
-        return Err(ApiError::conflict(
-            "Argo trusted envelopes require either a non-production dev WorkItem or the exact protected production target",
-        ));
-    }
-    if target.environment != work_item.target_environment
-        || work_item.target_namespace.as_deref() != Some(target.namespace.as_str())
-        || work_item.argo_application.as_deref() != Some(target.application.as_str())
-    {
-        return Err(ApiError::conflict(
-            "DeploymentIntent target must exactly match its WorkItem target",
-        ));
-    }
-    Ok(())
 }
 
 pub(in crate::app) async fn deployment_intent_execution_preflight(

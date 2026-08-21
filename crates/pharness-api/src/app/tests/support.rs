@@ -1,4 +1,6 @@
-use serde_json::Value;
+use pharness_core::SessionId;
+use pharness_store::StoredDeploymentIntent;
+use serde_json::{json, Value};
 use std::collections::BTreeSet;
 
 pub(super) const V3_RELEASE_COMMIT: &str = "1aedc319e30c04f6fabfbb1ac6bde0f2f6cc3ec9";
@@ -22,6 +24,36 @@ pub(super) const V3_CHARACTERIZATION_FIXTURE: &str =
     include_str!("../../../tests/fixtures/v3-characterization.json");
 pub(super) const APP_ROUTE_INVENTORY: &str =
     include_str!("../../../tests/fixtures/app-route-inventory.tsv");
+
+pub(super) fn reconcile_deployment_intent() -> StoredDeploymentIntent {
+    StoredDeploymentIntent {
+        id: "dint_reconcile".to_string(),
+        pipeline_intent_id: "pint_reconcile".to_string(),
+        change_set_id: "cset_reconcile".to_string(),
+        work_plan_id: "wplan_reconcile".to_string(),
+        remediation_plan_id: None,
+        incident_id: None,
+        session_id: SessionId::new("ses_reconcile"),
+        run_id: None,
+        status: "proposed".to_string(),
+        title: "Reconcile deployment intent".to_string(),
+        summary: "Declare exact deployment target".to_string(),
+        risk_level: "high".to_string(),
+        intent_kind: "argo_sync_deploy".to_string(),
+        target_environment: Some("dev".to_string()),
+        target_namespace: Some("apps-dev".to_string()),
+        argo_application: Some("finance-api".to_string()),
+        resource_namespace: Some("apps-dev".to_string()),
+        resource_kind: Some("Application".to_string()),
+        resource_name: Some("finance-api".to_string()),
+        intent_json: json!({}),
+        created_at: "1".to_string(),
+        updated_at: None,
+        status_changed_at: None,
+        status_changed_by: None,
+        status_reason: None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum RouteAuthClass {

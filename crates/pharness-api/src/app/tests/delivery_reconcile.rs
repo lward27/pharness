@@ -12,11 +12,12 @@ use super::{
     DeploymentIntentPreflightRequest, ExecuteWorkItemActionRequest, GitDeliveryFlowResponse,
     GitDeliveryPreflightRequest, GitOpsBaseRevisionReconcileState, GitOpsDeliveryFlowResponse,
     GitOpsDeliveryOutcomeRequest, Json, Path, PermissionsExt, ReconcileWorkItemRequest,
-    ReleaseResponse, RunId, SessionId, State, StatusCode, StoredDeploymentIntent,
-    StoredGitOpsChangeSet, StoredPipelineIntent, StoredRelease, Value,
+    ReleaseResponse, RunId, SessionId, State, StatusCode, StoredGitOpsChangeSet,
+    StoredPipelineIntent, StoredRelease, Value,
 };
 
 use super::characterization::test_state_with_git_observer;
+use super::support::reconcile_deployment_intent;
 
 async fn seed_git_delivery_fixture(
     state: &AppState,
@@ -2123,36 +2124,6 @@ pub(super) fn reconcile_pipeline_intent(
         resource_kind: Some("Pipeline".to_string()),
         resource_name: Some("finance-ci".to_string()),
         intent_json: Value::Object(intent_json),
-        created_at: "1".to_string(),
-        updated_at: None,
-        status_changed_at: None,
-        status_changed_by: None,
-        status_reason: None,
-    }
-}
-
-pub(super) fn reconcile_deployment_intent() -> StoredDeploymentIntent {
-    StoredDeploymentIntent {
-        id: "dint_reconcile".to_string(),
-        pipeline_intent_id: "pint_reconcile".to_string(),
-        change_set_id: "cset_reconcile".to_string(),
-        work_plan_id: "wplan_reconcile".to_string(),
-        remediation_plan_id: None,
-        incident_id: None,
-        session_id: SessionId::new("ses_reconcile"),
-        run_id: None,
-        status: "proposed".to_string(),
-        title: "Reconcile deployment intent".to_string(),
-        summary: "Declare exact deployment target".to_string(),
-        risk_level: "high".to_string(),
-        intent_kind: "argo_sync_deploy".to_string(),
-        target_environment: Some("dev".to_string()),
-        target_namespace: Some("apps-dev".to_string()),
-        argo_application: Some("finance-api".to_string()),
-        resource_namespace: Some("apps-dev".to_string()),
-        resource_kind: Some("Application".to_string()),
-        resource_name: Some("finance-api".to_string()),
-        intent_json: json!({}),
         created_at: "1".to_string(),
         updated_at: None,
         status_changed_at: None,

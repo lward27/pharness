@@ -1,19 +1,19 @@
 use super::approvals::grant_is_unexpired;
 use super::clock::current_millis;
-use super::pipeline::intents::{
+use super::delivery_segments::sdlc_flow_delivery_segments;
+use super::pipeline::evidence::{
     deployment_intent_attached_evidence_status, pipeline_execution_evidence_status,
-    pipeline_intent_attached_evidence_status, pipeline_intent_is_deployment_eligible,
-    release_observability_evidence_status,
+    pipeline_intent_attached_evidence_status, release_observability_evidence_status,
 };
+use super::pipeline::state::pipeline_intent_is_deployment_eligible;
 use super::releases::release_observability_incident_id_for_ids;
-use super::source::git_delivery::git_delivery_flow;
-use super::work_items::flow::sdlc_flow_delivery_segments;
-use super::{gitops::delivery::gitops_delivery_flow, ApiError};
+use super::source::delivery_flow::git_delivery_flow;
+use super::{gitops::delivery_flow::gitops_delivery_flow, ApiError};
 use crate::dto::{
     SdlcFlowResponse, SdlcReadinessFinding, SdlcReadinessGateSummary, SdlcReadinessGrantSummary,
     SdlcReadinessResponse,
 };
-use pharness_core::{PermissionGrantScope, RiskLevel};
+use pharness_core::PermissionGrantScope;
 use pharness_store::{
     ApprovalGateListFilter, RemediationPlanListFilter, SqliteStore, StoredApprovalGate,
     StoredAuditEvent, StoredChangeSet, StoredDeploymentIntent, StoredGitOpsChangeSet,
@@ -1033,13 +1033,4 @@ pub(in crate::app) fn readiness_summary(
     }
 
     format!("blocked by {blocker_count} blocker(s) and {warning_count} warning(s)")
-}
-
-pub(in crate::app) fn risk_rank(risk: RiskLevel) -> u8 {
-    match risk {
-        RiskLevel::Low => 1,
-        RiskLevel::Medium => 2,
-        RiskLevel::High => 3,
-        RiskLevel::Critical => 4,
-    }
 }

@@ -12,8 +12,10 @@ pub(super) mod flow;
 pub(super) mod lifecycle;
 pub(super) mod preflight;
 pub(super) mod reconcile;
+pub(super) mod reconcile_model;
 pub(super) mod rollback;
 pub(super) mod rollback_state;
+pub(super) mod wait_state;
 pub(super) mod waits;
 
 use actions::{advance_work_item, execute_work_item_action};

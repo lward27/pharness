@@ -1,5 +1,6 @@
 mod support;
 
+use super::approval_policy::approval_gate_uses_dedicated_lifecycle_action;
 use super::approvals::{
     approval_gate_lifecycle_readiness, approval_gate_summary, approval_summary,
     batch_decide_approval_gates, create_permission_grant, deny_approval, get_approval,
@@ -31,14 +32,19 @@ use super::evidence::{
     ListObservationsQuery, ListRemediationPlansQuery,
 };
 use super::gitops::delivery::{
-    authorize_gitops_change_set_delivery, gitops_artifact_change_set_revision,
-    gitops_delivery_flow, observed_gitops_merge_for_deployment,
-    preflight_gitops_change_set_delivery, prepare_gitops_change_set_delivery,
+    authorize_gitops_change_set_delivery, preflight_gitops_change_set_delivery,
+    prepare_gitops_change_set_delivery,
+};
+use super::gitops::delivery_flow::{gitops_artifact_change_set_revision, gitops_delivery_flow};
+use super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
+use super::gitops::observation::{
+    gitops_observation_closed_unmerged, gitops_observation_refreshable,
 };
 use super::internal::{
     internal_argo_sync_outcome, internal_gitops_delivery_observation_outcome,
     internal_gitops_delivery_outcome,
 };
+use super::pipeline::evidence::set_pipeline_intent_evidence;
 use super::pipeline::execution::{
     build_pipeline_run_manifest, execution_matches_pipeline_contract,
     merge_pipeline_execution_state, persist_pipeline_build_output,
@@ -46,15 +52,18 @@ use super::pipeline::execution::{
     pipeline_build_output_from_analysis, pipeline_intent_execution_preflight,
     tekton_execution_spec, validate_terminal_pipeline_run_analysis,
 };
-use super::pipeline::intents::{
-    attach_pipeline_intent_evidence, create_declared_deployment_handoff,
-    create_pipeline_intent_from_change_set, create_work_item_pipeline_intent,
-    current_pipeline_build_output, ensure_pipeline_evidence_ready_for_deployment,
-    get_pipeline_intent, list_pipeline_intents, set_pipeline_intent_evidence,
-    transition_pipeline_intent, validate_pipeline_deployment_handoff,
-    work_item_pipeline_intent_context, ListPipelineIntentsQuery, PipelineDeploymentHandoffSpec,
-    WorkItemPipelineContextQuery,
+use super::pipeline::handoff::{
+    create_declared_deployment_handoff, validate_pipeline_deployment_handoff,
+    PipelineDeploymentHandoffSpec,
 };
+use super::pipeline::intents::{
+    attach_pipeline_intent_evidence, create_pipeline_intent_from_change_set,
+    create_work_item_pipeline_intent, current_pipeline_build_output, get_pipeline_intent,
+    list_pipeline_intents, transition_pipeline_intent, work_item_pipeline_intent_context,
+    ListPipelineIntentsQuery, WorkItemPipelineContextQuery,
+};
+use super::pipeline::readiness::ensure_pipeline_evidence_ready_for_deployment;
+use super::pipeline::state::pipeline_intent_is_gitops_update_eligible;
 use super::policy::{policy_json, run_policy};
 use super::releases::{
     attach_release_evidence, create_registry_evidence_from_registry_inspection,
@@ -98,10 +107,7 @@ use super::work_items::actions::{advance_work_item, execute_work_item_action};
 use super::work_items::attempts::{
     cancel_work_item, list_workspaces, replan_work_item, transition_work_item, ListWorkspacesQuery,
 };
-use super::work_items::flow::{
-    approval_gate_uses_dedicated_lifecycle_action, list_work_items, work_item_flow,
-    ListWorkItemsQuery,
-};
+use super::work_items::flow::{list_work_items, work_item_flow, ListWorkItemsQuery};
 use super::work_items::lifecycle::approval_gates_from_work_item;
 use super::work_items::preflight::{
     bounded_production_grant_expiry, create_work_item, request_matches_protected_target,
@@ -110,11 +116,10 @@ use super::work_items::reconcile::{
     action_effect, block_work_item_from_delivery_failure, complete_work_item_from_verified_release,
     deployment_intent_reconcile_action, deployment_intent_requires_execution_preflight,
     git_delivery_reconcile_action, gitops_base_revision_reconcile_state,
-    gitops_change_set_reconcile_action, gitops_observation_closed_unmerged,
-    gitops_observation_refreshable, pipeline_intent_is_gitops_update_eligible,
-    pipeline_intent_reconcile_action, reconcile_work_item, release_reconcile_action,
-    GitOpsBaseRevisionReconcileState, WorkItemReconcileAction,
+    gitops_change_set_reconcile_action, pipeline_intent_reconcile_action, reconcile_work_item,
+    release_reconcile_action, GitOpsBaseRevisionReconcileState,
 };
+use super::work_items::reconcile_model::WorkItemReconcileAction;
 use super::work_items::rollback::{
     approve_rollback_intent, internal_rollback_argo_sync_outcome,
     internal_rollback_delivery_context, internal_rollback_delivery_observation_outcome,
@@ -122,10 +127,12 @@ use super::work_items::rollback::{
     required_baseline_capability_result, RollbackIntentRequest,
 };
 use super::work_items::rollback_state::latest_rollback_intent;
+use super::work_items::wait_state::{
+    schedule_controller_wait, supersede_active_controller_wait_if_present,
+};
 use super::work_items::waits::{
     list_work_item_controller_waits, list_work_item_events, observe_due_controller_wait,
-    reconcile_due_controller_waits, schedule_controller_wait,
-    supersede_active_controller_wait_if_present, ListControllerWaitsQuery,
+    reconcile_due_controller_waits, ListControllerWaitsQuery,
 };
 use super::{router, AppState, CONTROLLER_WAIT_MAX_CHECKS};
 use crate::dispatch::{KubernetesJobDispatcher, RunDispatcher};
@@ -169,8 +176,8 @@ use pharness_store::{
     CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
     CreatePipelineContract, CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun,
     CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace, ObservationListFilter,
-    SqliteStore, StoredDeploymentContract, StoredDeploymentIntent, StoredGitOpsChangeSet,
-    StoredPipelineContract, StoredPipelineIntent, StoredRelease,
+    SqliteStore, StoredDeploymentContract, StoredGitOpsChangeSet, StoredPipelineContract,
+    StoredPipelineIntent, StoredRelease,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
