@@ -2,6 +2,21 @@ use super::*;
 use axum::routing::{get, post};
 use axum::Router;
 
+pub(super) mod contracts;
+pub(super) mod execution;
+pub(super) mod intents;
+
+use contracts::{
+    create_deployment_contract, get_deployment_contract, list_deployment_contracts,
+    transition_deployment_contract,
+};
+use execution::{execute_deployment_intent, preflight_deployment_intent};
+use intents::{
+    attach_deployment_intent_evidence, create_deployment_intent_from_pipeline_intent,
+    create_deployment_intent_trusted_envelope, get_deployment_intent, list_deployment_intents,
+    transition_deployment_intent,
+};
+
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(

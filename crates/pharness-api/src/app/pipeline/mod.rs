@@ -2,6 +2,21 @@ use super::*;
 use axum::routing::{get, post};
 use axum::Router;
 
+pub(super) mod contracts;
+pub(super) mod execution;
+pub(super) mod intents;
+
+use contracts::{
+    create_pipeline_contract, get_pipeline_contract, list_pipeline_contracts,
+    replace_pipeline_contract, transition_pipeline_contract,
+};
+use execution::execute_pipeline_intent;
+use intents::{
+    attach_pipeline_intent_evidence, create_gitops_update_plan,
+    create_pipeline_intent_from_change_set, create_pipeline_intent_trusted_envelope,
+    get_pipeline_intent, list_pipeline_intents, transition_pipeline_intent,
+};
+
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/api/pipeline-intents", get(list_pipeline_intents))
