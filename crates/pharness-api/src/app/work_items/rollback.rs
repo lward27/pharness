@@ -1,4 +1,49 @@
-use super::super::*;
+use super::super::approvals::{create_permission_grant_record, grant_is_unexpired};
+use super::super::auth::OperatorIdentity;
+use super::super::capabilities::execute_direct_capability;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::delivery_actions::{ARGO_SYNC_ACTIONS, GITOPS_DELIVERY_ACTIONS};
+use super::super::deployment::contracts::{
+    deployment_contract_spec, validate_protected_production_deployment_contract,
+};
+use super::super::execution_checks::{
+    argo_executor_poll_seconds, execution_check, normalized_executor_error_code,
+};
+use super::super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::super::identifiers::{is_git_sha, is_github_pr_url, safe_id_fragment};
+use super::super::principals::{DEFAULT_ARGO_RUNNER_SUBJECT, DEFAULT_GITOPS_WRITER_SUBJECT};
+use super::super::releases::verify_required_prometheus_inventory;
+use super::super::system::{
+    capability_statuses, immutable_image_digest, protected_target_json, PROTECTED_ARGO_APPLICATION,
+    PROTECTED_ENVIRONMENT, PROTECTED_GITOPS_REPO, PROTECTED_IMAGE_NAME,
+    PROTECTED_KUSTOMIZATION_PATH, PROTECTED_NAMESPACE, PROTECTED_ROLLBACK_OWNER,
+    PROTECTED_WORKLOAD_NAME,
+};
+use super::super::validation::{clean_optional_text, required_json_string, required_text};
+use super::super::{ApiError, AppState};
+use super::preflight::{
+    bounded_production_grant_expiry, stored_work_item_matches_protected_target,
+};
+use super::rollback_state::{
+    latest_rollback_intent, rollback_intent_response, work_item_provenance_run_id,
+};
+use crate::dispatch::{
+    ArgoSyncExecutionRequest, GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
+};
+use crate::dto::{
+    ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse,
+    CreatePermissionGrantRequest, ExecuteCapabilityResponse, GitOpsDeliveryContextResponse,
+    GitOpsDeliveryObservationContextResponse, GitOpsDeliveryObservationOutcomeRequest,
+    GitOpsDeliveryOutcomeRequest,
+};
+use axum::extract::{Path, State};
+use axum::{Extension, Json};
+use pharness_core::{ActionId, AgentAction, CapabilityKind, PermissionGrantScope, ToolResult};
+use pharness_store::{
+    CreateApprovalGate, CreateArtifact, StoredArtifact, StoredPermissionGrant, StoredWorkItem,
+    WorkItemListFilter,
+};
+use serde_json::{json, Value};
 
 #[derive(Debug, serde::Deserialize)]
 pub(in crate::app) struct RollbackIntentRequest {
@@ -1628,68 +1673,6 @@ pub(in crate::app) async fn rollback_intent_context(
     Err(ApiError::not_found("rollback_intent", rollback_intent_id))
 }
 
-pub(in crate::app) async fn latest_rollback_intent(
-    state: &AppState,
-    item: &StoredWorkItem,
-    rollback_intent_id: Option<&str>,
-) -> Result<Option<Value>, ApiError> {
-    let Some(run_id) = work_item_provenance_run_id(state, item).await? else {
-        return Ok(None);
-    };
-    let artifact = state
-        .store
-        .list_artifacts(&run_id)
-        .await?
-        .into_iter()
-        .filter(|artifact| artifact.kind == "rollback_intent")
-        .filter(|artifact| {
-            artifact
-                .content_json
-                .as_ref()
-                .and_then(|content| content.get("work_item_id"))
-                .and_then(Value::as_str)
-                == Some(item.id.as_str())
-        })
-        .filter(|artifact| {
-            rollback_intent_id.map_or(true, |id| {
-                artifact
-                    .content_json
-                    .as_ref()
-                    .and_then(|content| content.get("rollback_intent_id"))
-                    .and_then(Value::as_str)
-                    == Some(id)
-            })
-        })
-        .max_by_key(|artifact| (artifact.created_at.clone(), artifact.id.clone()));
-    Ok(artifact.as_ref().map(rollback_intent_response))
-}
-
-/// Resolve the durable run that owns delivery and rollback evidence after a
-/// coding attempt has finished. `current_run_id` is intentionally cleared at
-/// attempt termination, so completed WorkItems must fall back to the captured
-/// ChangeSet or WorkPlan provenance instead of losing their evidence graph.
-pub(in crate::app) async fn work_item_provenance_run_id(
-    state: &AppState,
-    item: &StoredWorkItem,
-) -> Result<Option<RunId>, ApiError> {
-    if let Some(run_id) = item.current_run_id.clone() {
-        return Ok(Some(run_id));
-    }
-    let Some(work_plan) = state.store.get_work_plan_by_work_item(&item.id).await? else {
-        return Ok(None);
-    };
-    if let Some(change_set) = state
-        .store
-        .get_change_set_by_work_plan(&work_plan.id)
-        .await?
-    {
-        if change_set.run_id.is_some() {
-            return Ok(change_set.run_id);
-        }
-    }
-    Ok(work_plan.run_id)
-}
-
 pub(in crate::app) async fn append_rollback_intent_artifact(
     state: &AppState,
     run: &pharness_store::StoredRun,
@@ -1715,14 +1698,6 @@ pub(in crate::app) async fn append_rollback_intent_artifact(
             content_json: Some(content.clone()),
         })
         .await?)
-}
-
-pub(in crate::app) fn rollback_intent_response(artifact: &StoredArtifact) -> Value {
-    json!({
-        "artifact_id": artifact.id,
-        "created_at": artifact.created_at,
-        "content": artifact.content_json,
-    })
 }
 
 pub(in crate::app) async fn current_rollback_argo_sync_execution(
@@ -1821,7 +1796,17 @@ pub(in crate::app) async fn internal_rollback_argo_sync_context(
         target_namespace: PROTECTED_NAMESPACE.to_string(),
         argo_application: PROTECTED_ARGO_APPLICATION.to_string(),
         revision: Some(revision.to_string()),
-        poll_seconds: argo_executor_poll_seconds(state),
+        poll_seconds: argo_executor_poll_seconds(&state.worker.config_json()),
+    }))
+}
+
+pub(in crate::app) async fn internal_rollback_argo_sync_control(
+    state: &AppState,
+    rollback_intent_id: &str,
+) -> Result<Json<ArgoSyncControlResponse>, ApiError> {
+    let (item, _current, _run) = rollback_intent_context(state, rollback_intent_id).await?;
+    Ok(Json(ArgoSyncControlResponse {
+        cancelled: item.status == "cancelled",
     }))
 }
 

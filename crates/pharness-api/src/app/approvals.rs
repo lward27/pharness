@@ -1,4 +1,94 @@
-use super::*;
+use super::clock::{current_millis, unique_suffix};
+use super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::operator::{
+    all_approval_gates_for_operator_groups, all_approvals_for_operator_groups,
+    group_operator_records, operator_resource_label,
+};
+use super::validation::clean_optional_text;
+use super::work_items::flow::approval_gate_uses_dedicated_lifecycle_action;
+use super::{ApiError, AppState};
+use crate::dto::{
+    ApprovalDecision, ApprovalGateResponse, ApprovalGateSummaryResponse, ApprovalGatesResponse,
+    ApprovalResponse, ApprovalSummaryResponse, ApprovalsResponse, BatchDecideApprovalGatesRequest,
+    BatchDecideApprovalGatesResponse, CreatePermissionGrantRequest, CreateTrustedEnvelopeRequest,
+    DecideApprovalGateRequest, DecideApprovalGateResponse, DecideApprovalResponse,
+    PermissionGrantResponse, PermissionGrantsResponse, ReviewApprovalRequest,
+    RevokePermissionGrantRequest,
+};
+use axum::extract::{Path, Query, State};
+use axum::Json;
+use pharness_core::{
+    AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
+    RunId,
+};
+use pharness_store::{
+    ApprovalGateListFilter, ApprovalGateSummaryFilter, ApprovalListFilter, ApprovalSummaryFilter,
+    CreateAuditEvent, CreatePermissionGrant, SqliteStore, StoreError, StoredApprovalGate,
+    StoredPermissionGrant,
+};
+use serde_json::{json, Map, Value};
+use std::collections::BTreeSet;
+
+const DEFAULT_POLICY_SUBJECT: &str = "agent:local-worker";
+const DEFAULT_TRUSTED_ENVELOPE_ENVIRONMENT: &str = "local";
+
+pub(in crate::app) fn ensure_approved_for_trusted_envelope(
+    resource_kind: &str,
+    resource_id: &str,
+    status: &str,
+) -> Result<(), ApiError> {
+    if status == "approved" {
+        return Ok(());
+    }
+
+    Err(ApiError::conflict(format!(
+        "{resource_kind} {resource_id} must be approved before creating a trusted envelope"
+    )))
+}
+
+pub(in crate::app) fn trusted_envelope_grant_request(
+    work_plan_id: &str,
+    change_set_id: Option<&str>,
+    request: &CreateTrustedEnvelopeRequest,
+) -> Result<CreatePermissionGrantRequest, ApiError> {
+    let reason = clean_optional_text(Some(request.reason.clone()))
+        .ok_or_else(|| ApiError::bad_request("trusted envelope reason is required"))?;
+    let subject = clean_optional_text(request.subject.clone())
+        .unwrap_or_else(|| DEFAULT_POLICY_SUBJECT.to_string());
+    let environment = clean_optional_text(request.environment.clone())
+        .unwrap_or_else(|| DEFAULT_TRUSTED_ENVELOPE_ENVIRONMENT.to_string());
+    let mut scope = Map::new();
+    scope.insert("environment".to_string(), json!(environment));
+    scope.insert("capability_kinds".to_string(), json!(["filesystem"]));
+    scope.insert("actions".to_string(), json!(["write_file", "patch_file"]));
+    scope.insert("max_risk".to_string(), json!("medium"));
+    scope.insert("work_plan_ids".to_string(), json!([work_plan_id]));
+    if let Some(change_set_id) = change_set_id {
+        scope.insert("change_set_ids".to_string(), json!([change_set_id]));
+    }
+    insert_optional_scope_array(&mut scope, "namespaces", request.namespace.clone());
+    insert_optional_scope_array(&mut scope, "repos", request.repo.clone());
+    insert_optional_scope_array(&mut scope, "branches", request.branch.clone());
+    scope.insert(
+        "production_impacting".to_string(),
+        json!(request.production_impacting.unwrap_or(false)),
+    );
+
+    Ok(CreatePermissionGrantRequest {
+        subject,
+        created_by: clean_optional_text(request.created_by.clone()),
+        reason,
+        scope: Value::Object(scope),
+        policy: json!({ "policy_mode": "trusted_writes" }),
+        expires_at: request.expires_at.clone(),
+    })
+}
+
+fn insert_optional_scope_array(scope: &mut Map<String, Value>, key: &str, value: Option<String>) {
+    if let Some(value) = clean_optional_text(value) {
+        scope.insert(key.to_string(), json!([value]));
+    }
+}
 use axum::routing::{get, post};
 use axum::Router;
 

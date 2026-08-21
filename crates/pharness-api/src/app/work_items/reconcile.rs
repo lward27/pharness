@@ -1,5 +1,64 @@
-use super::super::*;
+use super::super::approvals::append_approval_gate_audit_event;
+use super::super::audit::{
+    append_incident_audit_event, append_observation_audit_event,
+    append_remediation_plan_audit_event, append_work_item_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::unique_suffix;
+use super::super::deployment::execution::{
+    deployment_intent_delivery_flow, deployment_intent_execution_preflight, deployment_target,
+    execute_deployment_intent, DeploymentIntentExecutionPreflight,
+};
+use super::super::gitops::delivery::{
+    execute_gitops_change_set_delivery, gitops_artifact_change_set_revision,
+    gitops_base_revision_matches_change_set, gitops_delivery_flow,
+    observe_gitops_change_set_delivery, observed_gitops_merge_for_deployment,
+    prepare_gitops_change_set_delivery, resolve_gitops_base_revision,
+};
+use super::super::pipeline::execution::{
+    execute_pipeline_intent, pipeline_execution_preflight_response,
+    pipeline_intent_execution_preflight, PipelineIntentExecutionPreflight,
+};
+use super::super::pipeline::intents::{
+    pipeline_intent_attached_evidence_status, pipeline_intent_is_deployment_eligible,
+    MAX_PIPELINE_EXECUTION_ATTEMPTS,
+};
+use super::super::releases::{
+    approval_gates_from_remediation_plan, create_release_from_deployment_intent,
+    incident_resource_label, verify_release,
+};
+use super::super::sessions::root_session_for_request;
+use super::super::source::git_delivery::{
+    execute_change_set_git_delivery, git_delivery_flow, observe_change_set_git_delivery,
+    preflight_change_set_git_delivery, prepare_change_set_git_delivery,
+};
+use super::super::source::work_plans::create_work_plan_from_work_item;
+use super::super::validation::clean_optional_text;
+use super::super::{ApiError, AppState};
 use super::attempts::{capture_work_item_change_set, execute_work_item};
+use super::preflight::work_item_target_supported;
+use super::rollback::{prepare_work_item_rollback_intent, RollbackIntentRequest};
+use super::rollback_state::latest_rollback_intent;
+use super::waits::{schedule_controller_wait, supersede_active_controller_wait_if_present};
+use crate::dto::{
+    CaptureWorkItemChangeSetRequest, CreateReleaseFromDeploymentIntentRequest,
+    DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightResponse,
+    ExecuteDeploymentIntentRequest, ExecuteGitDeliveryRequest, ExecuteGitOpsDeliveryRequest,
+    ExecutePipelineIntentRequest, ExecuteWorkItemRequest, GitDeliveryFlowResponse,
+    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, GitOpsDeliveryFlowResponse,
+    GitOpsDeliveryPreflightResponse, ObserveGitDeliveryRequest, ObserveGitOpsDeliveryRequest,
+    PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest, ReconcileAuthorizationCheckResponse,
+    ReconcileBlockerResponse, ReconcileWorkItemRequest, ReconcileWorkItemResponse, ReleaseResponse,
+    ResolveGitOpsBaseRevisionRequest, VerifyReleaseRequest,
+};
+use axum::extract::{Path, State};
+use axum::{Extension, Json};
+use pharness_store::{
+    CreateIncident, CreateObservation, CreateRemediationPlan, SqliteStore, StoredChangeSet,
+    StoredDeploymentIntent, StoredGitOpsChangeSet, StoredIncident, StoredPipelineIntent,
+    StoredRelease, StoredRemediationPlan, StoredWorkItem, StoredWorkPlan, WorkspaceListFilter,
+};
+use serde_json::{json, Value};
 
 pub(in crate::app) async fn reconcile_work_item(
     State(state): State<AppState>,

@@ -1,4 +1,38 @@
-use super::super::*;
+use super::super::approvals::{active_permission_grants, create_permission_grant_record};
+use super::super::audit::{
+    append_change_set_audit_event, append_work_item_audit_event, append_workspace_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::environment::select_profile;
+use super::super::event_evidence::shell_test_evidence;
+use super::super::hashing::material_hash;
+use super::super::policy::run_policy;
+use super::super::validation::{clean_optional_text, required_text};
+use super::super::{ApiError, AppState};
+use super::lifecycle::WorkItemStatus;
+use super::preflight::work_item_target_supported;
+use crate::dto::{
+    CaptureWorkItemChangeSetRequest, CreateChangeSetResponse, CreatePermissionGrantRequest,
+    ExecuteWorkItemRequest, ExecuteWorkItemResponse, ReplanWorkItemRequest, ReplanWorkItemResponse,
+    TransitionWorkItemRequest, WorkItemResponse, WorkspaceResponse, WorkspacesResponse,
+};
+use crate::workspace::collect_git_evidence;
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    AgentEvent, EventId, EventKind, ProjectContract, RunBudgetConsumption, RunId, RunScope,
+    SessionId,
+};
+use pharness_runhost::WorkspaceSourceSpec;
+use pharness_store::{
+    CreateArtifact, CreateChangeSet, CreateEnvironmentPreparation, CreateRun, CreateSession,
+    CreateWorkspace, SqliteStore, StoredRun, StoredWorkItem, StoredWorkspace,
+    UpdateEnvironmentPreparation, UpdateWorkspaceExecution, WorkspaceListFilter,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::path::Path as FsPath;
 
 pub(in crate::app) async fn transition_work_item(
     State(state): State<AppState>,
@@ -167,7 +201,7 @@ pub(in crate::app) async fn execute_work_item(
     }
     let environment_profile = match work_item.environment_profile_id.as_deref() {
         Some(profile_id) => Some(
-            environment::select_profile(
+            select_profile(
                 &state.environment_profiles,
                 profile_id,
                 &work_item.source_repo,
@@ -279,7 +313,7 @@ pub(in crate::app) async fn execute_work_item(
             )
         } else {
             let branch = format!("pharness/{}/attempt-{attempt}", work_item.id);
-            let source = pharness_runhost::WorkspaceSourceSpec {
+            let source = WorkspaceSourceSpec {
                 workspace_id: workspace.id.clone(),
                 source_repo: work_item.source_repo.clone(),
                 source_ref: work_item.source_ref.clone(),
@@ -591,7 +625,7 @@ pub(in crate::app) async fn capture_work_item_change_set(
             .ensure_managed(FsPath::new(&run.cwd))
             .await
             .map_err(|error| ApiError::conflict(error.to_string()))?;
-        let evidence = crate::workspace::collect_git_evidence(FsPath::new(&run.cwd), base_commit)
+        let evidence = collect_git_evidence(FsPath::new(&run.cwd), base_commit)
             .await
             .map_err(|error| ApiError::conflict(error.to_string()))?;
         let artifact = state
@@ -725,33 +759,10 @@ pub(in crate::app) fn coding_task_prompt(work_item: &StoredWorkItem) -> String {
     )
 }
 
-pub(crate) fn shell_test_evidence(events: &[AgentEvent]) -> Vec<Value> {
-    let mut active_action = None;
-    let mut evidence = Vec::new();
-    for event in events {
-        if event.kind == EventKind::ToolStarted {
-            active_action = event
-                .payload
-                .get("action")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            continue;
-        }
-        if event.kind == EventKind::ToolFinished && active_action.as_deref() == Some("run_shell") {
-            evidence.push(json!({
-                "event_id": event.event_id,
-                "status": event.payload.get("status"),
-                "summary": event.payload.get("summary"),
-            }));
-        }
-    }
-    evidence
-}
-
 pub(in crate::app) async fn worker_workspace_evidence(
     store: &SqliteStore,
-    run: &pharness_store::StoredRun,
-    workspace: &pharness_store::StoredWorkspace,
+    run: &StoredRun,
+    workspace: &StoredWorkspace,
 ) -> Result<(crate::workspace::GitEvidence, String, String, Vec<Value>), ApiError> {
     let artifacts = store.list_artifacts(&run.id).await?;
     let diff_artifact = artifacts

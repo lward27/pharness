@@ -1,4 +1,38 @@
-use super::super::*;
+use super::super::approvals::grant_is_unexpired;
+use super::super::audit::append_pipeline_intent_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::execution_checks::execution_check;
+use super::super::identifiers::{is_git_sha, is_sha256_digest};
+use super::super::sdlc::risk_rank;
+use super::super::text::truncate_audit_text;
+use super::super::validation::{
+    clean_optional_text, required_json_string, validate_kubernetes_name,
+};
+use super::super::work_items::lifecycle::work_item_gate_scope_matches;
+use super::super::work_items::reconcile::pipeline_execution_attempt;
+use super::super::{ApiError, AppState};
+use super::contracts::{pipeline_contract_spec, validate_pipeline_contract_spec};
+use super::intents::{create_declared_deployment_handoff, set_pipeline_intent_evidence};
+use crate::dispatch::TektonExecutionRequest;
+use crate::dto::{
+    ArtifactResponse, ExecutePipelineIntentRequest, ExecutePipelineIntentResponse,
+    PipelineIntentExecutionOutcomeRequest, PipelineIntentExecutionPreflightResponse,
+    PipelineIntentResponse,
+};
+use axum::extract::{Path, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    CapabilityKind, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, RiskLevel,
+    SafetyPolicy,
+};
+use pharness_store::{
+    ApprovalGateListFilter, CreateArtifact, CreateObservation, PipelineContractListFilter,
+    SqliteStore, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
+    StoredPipelineIntent, UpdatePipelineIntentExecution,
+};
+use serde_json::{json, Map, Value};
+use std::collections::BTreeMap;
 
 pub(in crate::app) async fn execute_pipeline_intent(
     State(state): State<AppState>,
@@ -404,36 +438,6 @@ pub(in crate::app) struct TektonVolumeClaimTemplate {
     storage: String,
     #[serde(default = "default_access_modes")]
     access_modes: Vec<String>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::app) struct PipelineContractSpec {
-    #[serde(default)]
-    params: Vec<PipelineParameterContract>,
-    #[serde(default)]
-    workspaces: Vec<PipelineWorkspaceContract>,
-    #[serde(default)]
-    pub(in crate::app) source_revision_param: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::app) struct PipelineParameterContract {
-    name: String,
-    #[serde(rename = "type")]
-    value_type: String,
-    #[serde(default)]
-    required: bool,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::app) struct PipelineWorkspaceContract {
-    name: String,
-    binding: String,
-    #[serde(default)]
-    required: bool,
 }
 
 pub(in crate::app) fn default_access_modes() -> Vec<String> {
@@ -868,78 +872,6 @@ pub(in crate::app) fn tekton_execution_spec(
     Ok(execution)
 }
 
-pub(in crate::app) fn pipeline_contract_spec(
-    value: &Value,
-) -> Result<PipelineContractSpec, ApiError> {
-    if !value.is_object() {
-        return Err(ApiError::bad_request(
-            "pipeline contract contract_json must be a JSON object",
-        ));
-    }
-    serde_json::from_value::<PipelineContractSpec>(value.clone()).map_err(|error| {
-        ApiError::bad_request(format!(
-            "pipeline contract contract_json is invalid: {error}"
-        ))
-    })
-}
-
-pub(in crate::app) fn validate_pipeline_contract_spec(
-    contract: &PipelineContractSpec,
-) -> Result<(), ApiError> {
-    let mut names = BTreeSet::new();
-    for parameter in &contract.params {
-        validate_kubernetes_name("pipeline contract params.name", &parameter.name)?;
-        if !matches!(parameter.value_type.as_str(), "scalar" | "array") {
-            return Err(ApiError::bad_request(
-                "pipeline contract params.type must be scalar or array",
-            ));
-        }
-        if !names.insert(parameter.name.as_str()) {
-            return Err(ApiError::bad_request(
-                "pipeline contract params must not repeat a name",
-            ));
-        }
-    }
-    let mut workspace_names = BTreeSet::new();
-    for workspace in &contract.workspaces {
-        validate_kubernetes_name("pipeline contract workspaces.name", &workspace.name)?;
-        if !matches!(
-            workspace.binding.as_str(),
-            "persistent_volume_claim" | "volume_claim_template"
-        ) {
-            return Err(ApiError::bad_request(
-                "pipeline contract workspaces.binding must be persistent_volume_claim or volume_claim_template",
-            ));
-        }
-        if !workspace_names.insert(workspace.name.as_str()) {
-            return Err(ApiError::bad_request(
-                "pipeline contract workspaces must not repeat a name",
-            ));
-        }
-    }
-    if let Some(source_revision_param) = &contract.source_revision_param {
-        validate_kubernetes_name(
-            "pipeline contract source_revision_param",
-            source_revision_param,
-        )?;
-        let parameter = contract
-            .params
-            .iter()
-            .find(|parameter| parameter.name == *source_revision_param)
-            .ok_or_else(|| {
-                ApiError::bad_request(
-                    "pipeline contract source_revision_param must name a declared parameter",
-                )
-            })?;
-        if !parameter.required || parameter.value_type != "scalar" {
-            return Err(ApiError::bad_request(
-                "pipeline contract source_revision_param must name a required scalar parameter",
-            ));
-        }
-    }
-    Ok(())
-}
-
 pub(in crate::app) fn execution_matches_pipeline_contract(
     execution: &TektonExecutionSpec,
     stored: &StoredPipelineContract,
@@ -1090,23 +1022,6 @@ pub(in crate::app) fn validate_tekton_execution_spec(
         }
     }
     Ok(())
-}
-
-pub(in crate::app) fn validate_kubernetes_name(field: &str, value: &str) -> Result<(), ApiError> {
-    let valid = !value.is_empty()
-        && value.len() <= 63
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-        && !value.starts_with('-')
-        && !value.ends_with('-');
-    if valid {
-        Ok(())
-    } else {
-        Err(ApiError::bad_request(format!(
-            "{field} must be a DNS label"
-        )))
-    }
 }
 
 pub(in crate::app) fn build_pipeline_run_manifest(
@@ -1456,14 +1371,6 @@ pub(in crate::app) fn safe_oci_image_component(value: &str) -> bool {
         && value.len() <= 512
         && !value.contains(['\0', '\r', '\n', ' ', '\t'])
         && !value.contains("://")
-}
-
-pub(in crate::app) fn is_sha256_digest(value: &str) -> bool {
-    value.len() == "sha256:".len() + 64
-        && value.starts_with("sha256:")
-        && value["sha256:".len()..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
 }
 
 pub(in crate::app) async fn persist_pipeline_run_analysis(

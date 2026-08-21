@@ -1,4 +1,63 @@
-use super::super::*;
+use super::super::audit::append_work_item_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::deployment::contracts::{
+    deployment_contract_spec, validate_deployment_contract_spec,
+    validate_protected_production_deployment_contract,
+};
+use super::super::environment::{inspect_remote_project_contract, select_profile};
+use super::super::pipeline::contracts::{pipeline_contract_spec, validate_pipeline_contract_spec};
+use super::super::system::{
+    capability_statuses, immutable_git_object_id, PROTECTED_ARGO_APPLICATION,
+    PROTECTED_ENVIRONMENT, PROTECTED_GITOPS_REPO, PROTECTED_IMAGE_NAME,
+    PROTECTED_KUSTOMIZATION_PATH, PROTECTED_NAMESPACE, PROTECTED_PIPELINE_NAMESPACE,
+    PROTECTED_PIPELINE_REF, PROTECTED_ROLLBACK_OWNER, PROTECTED_SOURCE_REPO,
+    PROTECTED_WORKLOAD_KIND, PROTECTED_WORKLOAD_NAME,
+};
+use super::super::validation::{clean_optional_text, required_text, validate_kubernetes_name};
+use super::super::{ApiError, AppState};
+use crate::dto::{CreateWorkItemRequest, WorkItemPreflightResponse, WorkItemResponse};
+use axum::extract::State;
+use axum::{Extension, Json};
+use pharness_core::RunBudget;
+use pharness_store::{CreateWorkItem, StoredWorkItem};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
+
+fn run_budget_from_request(request: &CreateWorkItemRequest) -> Result<RunBudget, ApiError> {
+    let defaults = RunBudget::default();
+    let budget = RunBudget {
+        initial_turns: request
+            .initial_turn_budget
+            .unwrap_or(defaults.initial_turns),
+        hard_turns: request.hard_turn_budget.unwrap_or(defaults.hard_turns),
+        initial_tokens: request
+            .initial_token_budget
+            .unwrap_or(defaults.initial_tokens),
+        hard_tokens: request.hard_token_budget.unwrap_or(defaults.hard_tokens),
+        active_execution_seconds: request
+            .active_execution_seconds
+            .or(request.max_elapsed_seconds)
+            .unwrap_or(defaults.active_execution_seconds),
+        recoverable_tool_errors: request
+            .recoverable_tool_error_limit
+            .unwrap_or(defaults.recoverable_tool_errors),
+        identical_failures: request
+            .identical_failure_limit
+            .unwrap_or(defaults.identical_failures),
+        verification_reserve_turns: defaults.verification_reserve_turns,
+    };
+    budget
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    if !(60..=86_400).contains(&budget.active_execution_seconds) {
+        return Err(ApiError::bad_request(
+            "active execution budget must be between 60 and 86400 seconds",
+        ));
+    }
+    Ok(budget)
+}
 
 pub(in crate::app) async fn preflight_work_item(
     State(state): State<AppState>,
@@ -90,8 +149,7 @@ pub(in crate::app) async fn build_work_item_preflight(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let selected_profile = match profile_id {
-        Some(id) => match environment::select_profile(&state.environment_profiles, id, source_repo)
-        {
+        Some(id) => match select_profile(&state.environment_profiles, id, source_repo) {
             Ok(profile) => Some(profile),
             Err(error) => {
                 blockers.push(error);
@@ -144,7 +202,7 @@ pub(in crate::app) async fn build_work_item_preflight(
                 .map(str::trim)
                 .filter(|value| immutable_git_object_id(value)),
         ) {
-            match environment::inspect_remote_project_contract(source_repo, commit).await {
+            match inspect_remote_project_contract(source_repo, commit).await {
                 Ok((contract, hash)) => {
                     if contract.environment_profile != profile.id {
                         blockers.push(format!(

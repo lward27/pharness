@@ -1,4 +1,32 @@
-use super::super::*;
+use super::super::audit::append_gitops_change_set_audit_event;
+use super::super::clock::unique_suffix;
+use super::super::json_values::string_at;
+use super::super::pipeline::intents::pipeline_intent_is_deployment_eligible;
+use super::super::validation::{clean_optional_text, required_text};
+use super::super::work_items::preflight::work_item_target_supported;
+use super::super::work_items::reconcile::gitops_observation_closed_unmerged;
+use super::super::{ApiError, AppState};
+use super::delivery::{
+    gitops_delivery_artifact_matches_plan, gitops_delivery_plan_matches_change_set,
+};
+use crate::dto::{
+    CreateGitOpsChangeSetRequest, CreateGitOpsChangeSetResponse, GitOpsChangeSetResponse,
+    GitOpsChangeSetsResponse, TransitionGitOpsChangeSetRequest, TransitionGitOpsChangeSetResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::Json;
+use pharness_store::{CreateGitOpsChangeSet, GitOpsChangeSetListFilter};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+
+pub(in crate::app) fn safe_relative_gitops_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && !path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        && path.len() <= 512
+}
 
 #[derive(Debug, Default, serde::Deserialize)]
 pub(in crate::app) struct ListGitOpsChangeSetsQuery {

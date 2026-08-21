@@ -1,4 +1,54 @@
-use super::super::*;
+use super::super::approvals::{
+    append_permission_grant_audit_event, create_permission_grant_record,
+    ensure_approved_for_trusted_envelope,
+};
+use super::super::audit::{
+    append_deployment_intent_audit_event, append_pipeline_intent_audit_event,
+    append_work_item_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::deployment::intents::deployment_intent_json;
+use super::super::gitops::change_sets::safe_relative_gitops_path;
+use super::super::identifiers::{is_git_sha, is_sha256_digest, safe_id_fragment};
+use super::super::source::git_delivery::{
+    git_delivery_artifact_matches_plan, git_delivery_plan_matches_change_set,
+};
+use super::super::validation::{
+    clean_optional_text, required_json_string, required_text, validate_kubernetes_name,
+};
+use super::super::work_items::preflight::{
+    bounded_production_grant_expiry, work_item_target_supported,
+};
+use super::super::work_items::reconcile::{
+    pipeline_execution_attempt, pipeline_intent_execution_state,
+    pipeline_intent_is_gitops_update_eligible,
+};
+use super::super::{ApiError, AppState};
+use super::execution::{
+    execution_matches_pipeline_contract, immutable_pipeline_source_revision,
+    safe_oci_image_component, tekton_execution_spec,
+};
+use crate::dto::{
+    AttachPipelineIntentEvidenceRequest, AttachPipelineIntentEvidenceResponse,
+    CreateGitOpsUpdatePlanRequest, CreatePermissionGrantRequest,
+    CreatePipelineIntentFromChangeSetRequest, CreatePipelineIntentResponse,
+    CreatePipelineIntentTrustedEnvelopeRequest, CreateWorkItemPipelineIntentRequest,
+    GitOpsUpdatePlanResponse, PipelineIntentResponse, PipelineIntentsResponse,
+    TransitionPipelineIntentRequest, TransitionPipelineIntentResponse, TrustedEnvelopeResponse,
+    WorkItemPipelineContextResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::RunId;
+use pharness_store::{
+    CreateArtifact, CreateDeploymentIntent, CreatePipelineIntent, PipelineContractListFilter,
+    PipelineIntentListFilter, SqliteStore, StoredArtifact, StoredChangeSet, StoredDeploymentIntent,
+    StoredObservation, StoredPipelineIntent, StoredRelease, UpdatePipelineIntentDraft,
+    UpdatePipelineIntentEvidence,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(in crate::app) async fn create_work_item_pipeline_intent(
     State(state): State<AppState>,
@@ -1138,15 +1188,6 @@ pub(in crate::app) async fn create_gitops_update_plan(
         artifact: artifact.into(),
         created: true,
     }))
-}
-
-pub(in crate::app) fn safe_relative_gitops_path(path: &str) -> bool {
-    !path.is_empty()
-        && !path.starts_with('/')
-        && !path
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
-        && path.len() <= 512
 }
 
 #[derive(Debug, Clone)]

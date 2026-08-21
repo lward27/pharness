@@ -464,7 +464,8 @@ async fn persist_workspace_evidence(
     {
         anyhow::bail!("workspace evidence does not match the pinned workspace state");
     }
-    let test_events = crate::app::shell_test_evidence(&store.list_events(&run.id).await?);
+    let test_events =
+        crate::app::event_evidence::shell_test_evidence(&store.list_events(&run.id).await?);
     let diff_artifact = store
         .create_artifact(CreateArtifact {
             id: format!("art_{}_workspace_diff", unique_suffix()),

@@ -1,4 +1,20 @@
-use super::*;
+use super::audit::append_observation_audit_event;
+use super::clock::unique_suffix;
+use super::sessions::root_session_for_request;
+use super::text::truncate_audit_text;
+use super::{
+    ApiError, AppState, DEFAULT_DIRECT_CAPABILITY_TIMEOUT_MS, MAX_DIRECT_CAPABILITY_TIMEOUT_MS,
+};
+use crate::dto::{ExecuteCapabilityRequest, ExecuteCapabilityResponse};
+use axum::extract::State;
+use axum::Json;
+use pharness_core::{AgentAction, PolicyDecision, ToolExecutor, ToolResult};
+use pharness_store::{
+    CreateArtifact, CreateAuditEvent, CreateObservation, SqliteStore, StoreError,
+};
+use serde_json::{json, Map, Value};
+use std::time::Duration;
+use tokio::time::timeout;
 
 pub(in crate::app) async fn execute_capability(
     State(state): State<AppState>,
@@ -597,17 +613,4 @@ pub(in crate::app) fn insert_object_if_not_empty(
     if !value.is_empty() {
         target.insert(key.to_string(), Value::Object(value));
     }
-}
-
-pub(in crate::app) fn truncate_audit_text(value: &str, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value.to_string();
-    }
-
-    let mut end = max_bytes;
-    while !value.is_char_boundary(end) {
-        end -= 1;
-    }
-
-    format!("{}...[truncated]", &value[..end])
 }

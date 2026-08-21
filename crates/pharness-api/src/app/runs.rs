@@ -1,9 +1,39 @@
 use super::approvals::{
     active_permission_grants, decide_current_run_approval, ApprovalDecisionInput,
 };
+use super::audit::append_workspace_audit_event;
+use super::auth::OperatorIdentity;
+use super::clock::{current_millis, unique_suffix};
+use super::environment::select_profile;
 use super::operator::{all_runs_for_operator_groups, group_operator_records, run_group_resource};
-use super::*;
+use super::policy::run_policy;
+use super::validation::{clean_optional_text, required_text};
+use super::{ApiError, AppState};
+use crate::dto::{
+    ApproveBudgetExtensionRequest, ArtifactsResponse, BudgetExtensionResponse, CreateRunRequest,
+    DecideApprovalRequest, DecideApprovalResponse, EnvironmentPreparationResponse, EventsResponse,
+    FileChangeResponse, ObservationResponse, ObservationsResponse, RunDiffResponse,
+    RunOperatorSummaryResponse, RunResponse, RunSummaryResponse, RunsResponse, WorkspaceResponse,
+};
+use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
+use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
+use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::routing::{get, post};
+use axum::{Extension, Json, Router};
+use futures::stream::{self, Stream};
 use hmac::{Hmac, Mac};
+use pharness_core::{AgentEvent, EventId, EventKind, ProjectContract, RunId, RunScope, SessionId};
+use pharness_runhost::AttemptOutcome;
+use pharness_store::{
+    ApprovalListFilter, CreateRun, CreateSession, RunListFilter, RunSummaryFilter, SqliteStore,
+    StoreError, UpdateEnvironmentPreparation, UpdateWorkspaceExecution,
+};
+use serde_json::{json, Value};
+use sha2::Sha256;
+use std::convert::Infallible;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub(super) fn internal_router() -> Router<AppState> {
     Router::new()
@@ -190,7 +220,7 @@ pub(super) async fn internal_environment_preparation(
             "environment snapshot signature is invalid",
         ));
     }
-    let profile = environment::select_profile(
+    let profile = select_profile(
         &state.environment_profiles,
         &preparation.environment_profile_id,
         &work_item.source_repo,

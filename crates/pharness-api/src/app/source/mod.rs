@@ -1,4 +1,4 @@
-use super::*;
+use super::AppState;
 use axum::routing::{get, post};
 use axum::Router;
 

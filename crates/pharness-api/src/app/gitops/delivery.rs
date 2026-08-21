@@ -1,4 +1,103 @@
-use super::super::*;
+use super::super::approvals::{
+    create_permission_grant_record, ensure_approved_for_trusted_envelope, grant_is_unexpired,
+};
+use super::super::audit::append_gitops_change_set_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::delivery_actions::GITOPS_DELIVERY_ACTIONS;
+use super::super::execution_checks::execution_check;
+use super::super::identifiers::{is_git_sha, is_github_pr_url};
+use super::super::principals::DEFAULT_GITOPS_WRITER_SUBJECT;
+use super::super::sdlc::risk_rank;
+use super::super::system::immutable_image_digest;
+use super::super::text::compact_delivery_subject;
+use super::super::validation::{clean_optional_text, required_json_string, required_text};
+use super::super::work_items::lifecycle::work_item_gate_scope_matches;
+use super::super::work_items::preflight::{
+    bounded_production_grant_expiry, work_item_target_supported,
+};
+use super::super::work_items::reconcile::gitops_observation_refreshable;
+use super::super::work_items::rollback_state::latest_rollback_intent;
+use super::super::{ApiError, AppState};
+use super::change_sets::safe_relative_gitops_path;
+use crate::dispatch::{
+    GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
+    GitOpsRevisionResolutionRequest,
+};
+use crate::dto::{
+    ArtifactResponse, CreateGitOpsDeliveryAuthorizationRequest, CreatePermissionGrantRequest,
+    ExecuteGitOpsDeliveryRequest, ExecuteGitOpsDeliveryResponse, GitOpsBaseRevisionContextResponse,
+    GitOpsBaseRevisionOutcomeRequest, GitOpsDeliveryAuthorizationResponse,
+    GitOpsDeliveryContextResponse, GitOpsDeliveryFlowResponse,
+    GitOpsDeliveryObservationContextResponse, GitOpsDeliveryObservationOutcomeRequest,
+    GitOpsDeliveryOutcomeRequest, GitOpsDeliveryPlanResponse, GitOpsDeliveryPreflightRequest,
+    GitOpsDeliveryPreflightResponse, ObserveGitOpsDeliveryRequest, ObserveGitOpsDeliveryResponse,
+    PrepareGitOpsDeliveryRequest, ResolveGitOpsBaseRevisionRequest,
+    ResolveGitOpsBaseRevisionResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    CapabilityKind, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, RiskLevel,
+};
+use pharness_store::{
+    ApprovalGateListFilter, CreateArtifact, SqliteStore, StoredArtifact, StoredGitOpsChangeSet,
+    StoredPermissionGrant, StoredPipelineIntent, StoredWorkItem,
+};
+use serde_json::{json, Value};
+
+/// Return immutable GitOps merge evidence when the WorkItem declares a GitOps
+/// source of truth. A missing target intentionally stays compatible with the
+/// existing non-GitOps dev delivery path; a partially declared or unmerged
+/// target blocks Argo execution.
+pub(in crate::app) async fn observed_gitops_merge_for_deployment(
+    store: &SqliteStore,
+    work_item: &StoredWorkItem,
+    pipeline_intent: &StoredPipelineIntent,
+) -> Result<Option<ArtifactResponse>, ApiError> {
+    let (gitops_repo, gitops_ref) = match (&work_item.gitops_repo, &work_item.gitops_ref) {
+        (None, None) => return Ok(None),
+        (Some(repository), Some(reference)) => (repository, reference),
+        _ => {
+            return Err(ApiError::conflict(
+                "WorkItem must declare both gitops_repo and gitops_ref before Argo execution",
+            ))
+        }
+    };
+    let change_set = store
+        .get_gitops_change_set_by_pipeline_intent(&pipeline_intent.id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict(
+                "Deployment requires a GitOps ChangeSet for the completed PipelineIntent",
+            )
+        })?;
+    if change_set.status != "approved"
+        || change_set.gitops_repo != *gitops_repo
+        || change_set.gitops_ref != *gitops_ref
+    {
+        return Err(ApiError::conflict(
+            "GitOps ChangeSet is not the current approved target declared by the WorkItem",
+        ));
+    }
+    ensure_gitops_delivery_target(work_item, &change_set)?;
+    let flow = gitops_delivery_flow(store, Some(&change_set)).await?;
+    let merge = flow.and_then(|flow| flow.latest_merge).ok_or_else(|| {
+        ApiError::conflict("Deployment requires an observed immutable GitOps pull-request merge")
+    })?;
+    if !merge
+        .content_json
+        .as_ref()
+        .and_then(|content| content.get("merge_commit_sha"))
+        .and_then(Value::as_str)
+        .is_some_and(is_git_sha)
+    {
+        return Err(ApiError::conflict(
+            "GitOps merge evidence has no valid immutable merge commit SHA",
+        ));
+    }
+    Ok(Some(merge))
+}
 
 pub(in crate::app) async fn resolve_gitops_base_revision(
     State(state): State<AppState>,
@@ -1425,7 +1524,7 @@ pub(in crate::app) async fn current_gitops_base_revision_execution(
 
 #[derive(Debug, serde::Deserialize)]
 pub(in crate::app) struct InternalGitOpsDeliveryQuery {
-    execution_id: String,
+    pub(in crate::app) execution_id: String,
 }
 
 pub(in crate::app) async fn internal_gitops_delivery_context(
@@ -1433,14 +1532,6 @@ pub(in crate::app) async fn internal_gitops_delivery_context(
     Path(gitops_change_set_id): Path<String>,
     Query(query): Query<InternalGitOpsDeliveryQuery>,
 ) -> Result<Json<GitOpsDeliveryContextResponse>, ApiError> {
-    if gitops_change_set_id.starts_with("rollback_") {
-        return internal_rollback_delivery_context(
-            &state,
-            &gitops_change_set_id,
-            &query.execution_id,
-        )
-        .await;
-    }
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
@@ -1487,9 +1578,6 @@ pub(in crate::app) async fn internal_gitops_delivery_outcome(
     Path(gitops_change_set_id): Path<String>,
     Json(request): Json<GitOpsDeliveryOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
-    if gitops_change_set_id.starts_with("rollback_") {
-        return internal_rollback_delivery_outcome(&state, &gitops_change_set_id, request).await;
-    }
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &request.execution_id)
             .await?;
@@ -1587,14 +1675,6 @@ pub(in crate::app) async fn internal_gitops_delivery_observation_context(
     Path(gitops_change_set_id): Path<String>,
     Query(query): Query<InternalGitOpsDeliveryQuery>,
 ) -> Result<Json<GitOpsDeliveryObservationContextResponse>, ApiError> {
-    if gitops_change_set_id.starts_with("rollback_") {
-        return internal_rollback_delivery_observation_context(
-            &state,
-            &gitops_change_set_id,
-            &query.execution_id,
-        )
-        .await;
-    }
     let (change_set, _plan, execution) =
         current_gitops_delivery_observation(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
@@ -1651,14 +1731,6 @@ pub(in crate::app) async fn internal_gitops_delivery_observation_outcome(
     Path(gitops_change_set_id): Path<String>,
     Json(request): Json<GitOpsDeliveryObservationOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
-    if gitops_change_set_id.starts_with("rollback_") {
-        return internal_rollback_delivery_observation_outcome(
-            &state,
-            &gitops_change_set_id,
-            request,
-        )
-        .await;
-    }
     let (change_set, plan, execution) =
         current_gitops_delivery_observation(&state, &gitops_change_set_id, &request.execution_id)
             .await?;

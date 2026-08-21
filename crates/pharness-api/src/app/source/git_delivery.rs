@@ -1,4 +1,44 @@
-use super::super::*;
+use super::super::approvals::{
+    create_permission_grant_record, ensure_approved_for_trusted_envelope, grant_is_unexpired,
+};
+use super::super::audit::append_change_set_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::delivery_actions::GIT_DELIVERY_ACTIONS;
+use super::super::execution_checks::execution_check;
+use super::super::identifiers::{is_git_sha, is_github_pr_url};
+use super::super::principals::DEFAULT_GIT_WRITER_SUBJECT;
+use super::super::sdlc::risk_rank;
+use super::super::text::compact_delivery_subject;
+use super::super::validation::{clean_optional_text, required_json_string};
+use super::super::work_items::lifecycle::work_item_gate_scope_matches;
+use super::super::work_items::preflight::{
+    bounded_production_grant_expiry, work_item_target_supported,
+};
+use super::super::{ApiError, AppState};
+use super::change_sets::coding_run_scope_matches_source;
+use crate::dispatch::{GitDeliveryExecutionRequest, GitDeliveryObservationRequest};
+use crate::dto::{
+    ArtifactResponse, CreateGitDeliveryAuthorizationRequest, CreatePermissionGrantRequest,
+    ExecuteGitDeliveryRequest, ExecuteGitDeliveryResponse, GitDeliveryAuthorizationResponse,
+    GitDeliveryContextResponse, GitDeliveryFlowResponse, GitDeliveryObservationContextResponse,
+    GitDeliveryObservationOutcomeRequest, GitDeliveryOutcomeRequest, GitDeliveryPlanResponse,
+    GitDeliveryPreflightRequest, GitDeliveryPreflightResponse, ObserveGitDeliveryRequest,
+    ObserveGitDeliveryResponse, PrepareGitDeliveryRequest,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    CapabilityKind, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, RiskLevel, RunId,
+    RunScope,
+};
+use pharness_runhost::WorkspaceSourceSpec;
+use pharness_store::{
+    ApprovalGateListFilter, CreateArtifact, SqliteStore, StoredArtifact, StoredChangeSet,
+    StoredPermissionGrant, StoredWorkItem,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(in crate::app) async fn git_delivery_flow(
     store: &SqliteStore,

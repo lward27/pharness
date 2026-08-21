@@ -1,4 +1,43 @@
-use super::super::*;
+use super::super::approvals::grant_is_unexpired;
+use super::super::audit::append_deployment_intent_audit_event;
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::execution_checks::{
+    argo_executor_poll_seconds, execution_check, normalized_executor_error_code,
+};
+use super::super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::super::identifiers::{is_git_sha, is_sha256_digest};
+use super::super::pipeline::intents::ensure_pipeline_evidence_ready_for_deployment;
+use super::super::principals::DEFAULT_ARGO_RUNNER_SUBJECT;
+use super::super::sdlc::risk_rank;
+use super::super::system::{immutable_image_digest, PROTECTED_ENVIRONMENT};
+use super::super::validation::clean_optional_text;
+use super::super::work_items::lifecycle::work_item_gate_scope_matches;
+use super::super::work_items::preflight::work_item_target_supported;
+use super::super::work_items::rollback_state::latest_rollback_intent;
+use super::super::{ApiError, AppState};
+use super::contracts::{
+    deployment_contract_spec, validate_deployment_contract_spec,
+    validate_protected_production_deployment_contract,
+};
+use crate::dispatch::ArgoSyncExecutionRequest;
+use crate::dto::{
+    ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse,
+    DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
+    DeploymentIntentPreflightResponse, ExecuteDeploymentIntentRequest,
+    ExecuteDeploymentIntentResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::{Extension, Json};
+use pharness_core::{
+    CapabilityKind, PermissionGrantPolicy, PermissionGrantScope, PolicyMode, RiskLevel, RunId,
+};
+use pharness_store::{
+    ApprovalGateListFilter, CreateArtifact, DeploymentContractListFilter, SqliteStore,
+    StoredArtifact, StoredDeploymentContract, StoredDeploymentIntent, StoredPermissionGrant,
+    StoredWorkItem, StoredWorkPlan,
+};
+use serde_json::{json, Value};
 
 pub(in crate::app) async fn deployment_intent_delivery_flow(
     store: &SqliteStore,
@@ -102,14 +141,6 @@ pub(in crate::app) fn ensure_supported_deployment_target(
         ));
     }
     Ok(())
-}
-
-pub(in crate::app) fn execution_check(
-    code: impl Into<String>,
-    passed: bool,
-    summary: impl Into<String>,
-) -> Value {
-    json!({ "code": code.into(), "passed": passed, "summary": summary.into() })
 }
 
 pub(in crate::app) async fn deployment_intent_execution_preflight(
@@ -422,55 +453,6 @@ pub(in crate::app) async fn deployment_intent_execution_preflight(
 /// source of truth. A missing target intentionally stays compatible with the
 /// existing non-GitOps dev delivery path; a partially declared or unmerged
 /// target blocks Argo execution.
-pub(in crate::app) async fn observed_gitops_merge_for_deployment(
-    store: &SqliteStore,
-    work_item: &StoredWorkItem,
-    pipeline_intent: &StoredPipelineIntent,
-) -> Result<Option<ArtifactResponse>, ApiError> {
-    let (gitops_repo, gitops_ref) = match (&work_item.gitops_repo, &work_item.gitops_ref) {
-        (None, None) => return Ok(None),
-        (Some(repository), Some(reference)) => (repository, reference),
-        _ => {
-            return Err(ApiError::conflict(
-                "WorkItem must declare both gitops_repo and gitops_ref before Argo execution",
-            ))
-        }
-    };
-    let change_set = store
-        .get_gitops_change_set_by_pipeline_intent(&pipeline_intent.id)
-        .await?
-        .ok_or_else(|| {
-            ApiError::conflict(
-                "Deployment requires a GitOps ChangeSet for the completed PipelineIntent",
-            )
-        })?;
-    if change_set.status != "approved"
-        || change_set.gitops_repo != *gitops_repo
-        || change_set.gitops_ref != *gitops_ref
-    {
-        return Err(ApiError::conflict(
-            "GitOps ChangeSet is not the current approved target declared by the WorkItem",
-        ));
-    }
-    ensure_gitops_delivery_target(work_item, &change_set)?;
-    let flow = gitops_delivery_flow(store, Some(&change_set)).await?;
-    let merge = flow.and_then(|flow| flow.latest_merge).ok_or_else(|| {
-        ApiError::conflict("Deployment requires an observed immutable GitOps pull-request merge")
-    })?;
-    if !merge
-        .content_json
-        .as_ref()
-        .and_then(|content| content.get("merge_commit_sha"))
-        .and_then(Value::as_str)
-        .is_some_and(is_git_sha)
-    {
-        return Err(ApiError::conflict(
-            "GitOps merge evidence has no valid immutable merge commit SHA",
-        ));
-    }
-    Ok(Some(merge))
-}
-
 pub(in crate::app) async fn matching_deployment_execution_grant(
     store: &SqliteStore,
     intent: &StoredDeploymentIntent,
@@ -871,7 +853,7 @@ pub(in crate::app) async fn execute_deployment_intent(
 
 #[derive(Debug, serde::Deserialize)]
 pub(in crate::app) struct InternalArgoSyncQuery {
-    execution_id: String,
+    pub(in crate::app) execution_id: String,
 }
 
 pub(in crate::app) async fn internal_argo_sync_context(
@@ -879,14 +861,6 @@ pub(in crate::app) async fn internal_argo_sync_context(
     Path(deployment_intent_id): Path<String>,
     Query(query): Query<InternalArgoSyncQuery>,
 ) -> Result<Json<ArgoSyncContextResponse>, ApiError> {
-    if deployment_intent_id.starts_with("rollback_") {
-        return internal_rollback_argo_sync_context(
-            &state,
-            &deployment_intent_id,
-            &query.execution_id,
-        )
-        .await;
-    }
     let (intent, _run_id, execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &query.execution_id).await?;
     let preflight = deployment_intent_execution_preflight(&state, &intent.id).await?;
@@ -944,7 +918,7 @@ pub(in crate::app) async fn internal_argo_sync_context(
                 .filter(|revision| is_git_sha(revision))
                 .map(str::to_string)
         }),
-        poll_seconds: argo_executor_poll_seconds(&state),
+        poll_seconds: argo_executor_poll_seconds(&state.worker.config_json()),
     }))
 }
 
@@ -953,12 +927,6 @@ pub(in crate::app) async fn internal_argo_sync_control(
     Path(deployment_intent_id): Path<String>,
     Query(query): Query<InternalArgoSyncQuery>,
 ) -> Result<Json<ArgoSyncControlResponse>, ApiError> {
-    if deployment_intent_id.starts_with("rollback_") {
-        let (item, _current, _run) = rollback_intent_context(&state, &deployment_intent_id).await?;
-        return Ok(Json(ArgoSyncControlResponse {
-            cancelled: item.status == "cancelled",
-        }));
-    }
     let (intent, _run_id, _execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &query.execution_id).await?;
     let work_plan = state
@@ -982,9 +950,6 @@ pub(in crate::app) async fn internal_argo_sync_outcome(
     Path(deployment_intent_id): Path<String>,
     Json(request): Json<ArgoSyncOutcomeRequest>,
 ) -> Result<Json<ArtifactResponse>, ApiError> {
-    if deployment_intent_id.starts_with("rollback_") {
-        return internal_rollback_argo_sync_outcome(&state, &deployment_intent_id, request).await;
-    }
     let (intent, run_id, execution) =
         current_argo_sync_execution(&state, &deployment_intent_id, &request.execution_id).await?;
     let execution_content = execution
@@ -1076,16 +1041,6 @@ pub(in crate::app) async fn internal_argo_sync_outcome(
     )
     .await?;
     Ok(Json(result))
-}
-
-pub(in crate::app) fn argo_executor_poll_seconds(state: &AppState) -> u64 {
-    state
-        .worker
-        .config_json()
-        .pointer("/argo_executor/poll_seconds")
-        .and_then(Value::as_u64)
-        .filter(|seconds| *seconds > 0)
-        .unwrap_or(5)
 }
 
 pub(in crate::app) async fn current_argo_sync_execution(
@@ -1197,22 +1152,4 @@ pub(in crate::app) async fn persist_argo_sync_result(
         })
         .await?
         .into())
-}
-
-pub(in crate::app) fn normalized_executor_error_code(
-    value: Option<String>,
-    fallback: &str,
-) -> String {
-    let Some(value) = clean_optional_text(value) else {
-        return fallback.to_string();
-    };
-    if value.len() <= 96
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-    {
-        value
-    } else {
-        fallback.to_string()
-    }
 }

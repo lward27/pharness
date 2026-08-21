@@ -1,4 +1,33 @@
-use super::super::*;
+use super::super::audit::{
+    append_controller_wait_audit_event, append_deployment_intent_audit_event,
+    append_observation_audit_event, append_pipeline_intent_audit_event,
+    append_work_item_audit_event,
+};
+use super::super::auth::OperatorIdentity;
+use super::super::clock::{current_millis, unique_suffix};
+use super::super::deployment::execution::{deployment_target, internal_argo_sync_outcome};
+use super::super::pipeline::execution::internal_pipeline_intent_execution_outcome;
+use super::super::sessions::root_session_for_request;
+use super::super::validation::{
+    clean_optional_text, required_json_string, validate_kubernetes_name,
+};
+use super::super::{ApiError, AppState, CONTROLLER_WAIT_INTERVAL_MS, CONTROLLER_WAIT_MAX_CHECKS};
+use super::reconcile::{reconcile_work_item, WorkItemReconcileAction};
+use crate::dto::{
+    ArgoSyncOutcomeRequest, AuditEventsResponse, ControllerWaitTickResult, ControllerWaitsResponse,
+    PipelineIntentExecutionOutcomeRequest, ReconcileDueControllerWaitsRequest,
+    ReconcileDueControllerWaitsResponse, ReconcileWorkItemRequest,
+};
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::{Extension, Json};
+use pharness_core::{ActionId, AgentAction, PolicyDecision, ToolExecutor};
+use pharness_store::{
+    ControllerWaitListFilter, CreateControllerWait, CreateObservation, StoredControllerWait,
+    StoredDeploymentIntent, StoredPipelineIntent, StoredWorkItem,
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(in crate::app) async fn list_work_item_events(
     State(state): State<AppState>,

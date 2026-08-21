@@ -1,4 +1,33 @@
-use super::super::*;
+use super::super::approvals::create_permission_grant_record;
+use super::super::approvals::ensure_approved_for_trusted_envelope;
+use super::super::audit::append_deployment_intent_audit_event;
+use super::super::clock::unique_suffix;
+use super::super::delivery_actions::ARGO_SYNC_ACTIONS;
+use super::super::gitops::delivery::observed_gitops_merge_for_deployment;
+use super::super::identifiers::{is_git_sha, is_sha256_digest};
+use super::super::pipeline::intents::{
+    ensure_pipeline_evidence_ready_for_deployment, ensure_pipeline_intent_ready_for_deployment,
+};
+use super::super::principals::DEFAULT_ARGO_RUNNER_SUBJECT;
+use super::super::validation::clean_optional_text;
+use super::super::work_items::preflight::bounded_production_grant_expiry;
+use super::super::{ApiError, AppState};
+use super::execution::{deployment_target, ensure_supported_deployment_target};
+use crate::dto::{
+    AttachDeploymentIntentEvidenceRequest, AttachDeploymentIntentEvidenceResponse,
+    CreateDeploymentIntentFromPipelineIntentRequest, CreateDeploymentIntentResponse,
+    CreateDeploymentIntentTrustedEnvelopeRequest, CreatePermissionGrantRequest,
+    DeploymentIntentResponse, DeploymentIntentsResponse, TransitionDeploymentIntentRequest,
+    TransitionDeploymentIntentResponse, TrustedEnvelopeResponse,
+};
+use axum::extract::{Path, Query, State};
+use axum::Json;
+use pharness_core::RunId;
+use pharness_store::{
+    CreateDeploymentIntent, DeploymentIntentListFilter, StoredDeploymentIntent, StoredObservation,
+    StoredPipelineIntent, UpdateDeploymentIntentDraft, UpdateDeploymentIntentEvidence,
+};
+use serde_json::{json, Value};
 
 #[derive(Debug, Default, serde::Deserialize)]
 pub(in crate::app) struct ListDeploymentIntentsQuery {
