@@ -5,6 +5,7 @@ use axum::Router;
 pub(super) mod actions;
 pub(super) mod attempts;
 pub(super) mod flow;
+pub(super) mod lifecycle;
 pub(super) mod preflight;
 pub(super) mod reconcile;
 pub(super) mod rollback;
