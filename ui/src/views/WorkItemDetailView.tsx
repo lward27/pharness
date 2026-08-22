@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle, Clock, Lifebuoy, RocketLaunch, Warning } from "@phosphor-icons/react";
-import { DeliveryChain } from "../components/DeliveryChain";
+import { DeliveryWorkspace } from "../components/DeliveryWorkspace";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
 import { findCorrectiveAction, type LifecycleAction } from "../lib/lifecycleReview";
@@ -215,7 +215,6 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
     legacy_reconcile: true,
   } : undefined);
   const blockers = completed ? [] : (preview?.blockers ?? []);
-  const delivery = state.flow?.delivery_configuration ?? {};
   const safeAdvance = !completed && preview?.can_apply && ["declare_work_plan", "capture_change_set", "prepare_git_delivery", "complete_work_item"].includes(preview?.action);
   const incompleteDeliveryEvidence = completed && (state.flow?.delivery_segments ?? []).some((segment: any) => segment.status !== "complete");
   const attemptActive = defaultWorkItemSection(item) === "attempt";
@@ -285,9 +284,8 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
     {activeSection === "attempt" ? <section className="cockpit-section attempt-cockpit-section" id="work-item-attempt"><div className="cockpit-section-heading"><span className="eyebrow">Attempt</span><h2>Agent workspace</h2><p>Environment, execution budget, live tool activity, changes, and acceptance evidence for the current isolated run.</p></div>{item.current_run_id ? <RunDetailView runId={String(item.current_run_id)} refreshDashboard={refreshDashboard} onOpenQueue={() => {}} operatorName={actor} embedded /> : <EmptyState title="No active attempt" body="The live model and tool console appears here while an approved coding attempt is active." />}<AttemptHistory events={state.flow?.audit_events ?? []} /></section> : null}
 
     {activeSection === "delivery" ? <section className="cockpit-section" id="work-item-delivery">
-      <div className="cockpit-section-heading"><span className="eyebrow">Delivery</span><h2>Contracts, target, and rollout</h2></div>
-      <section className="delivery-configuration"><div className="delivery-config-grid"><ReviewItem label="PipelineContract" value={delivery.pipeline_contract_id ?? item.pipeline_contract_id ?? "Not selected"} /><ReviewItem label="DeploymentContract" value={delivery.deployment_contract_id ?? item.deployment_contract_id ?? "Not selected"} /><ReviewItem label="GitOps target" value={delivery.gitops?.repository ? `${repositoryLabel(delivery.gitops.repository)} · ${delivery.gitops.kustomization_path}` : "Not configured"} /><ReviewItem label="Argo Application" value={delivery.target?.argo_application ?? "Not configured"} /><ReviewItem label="Argo health" value={delivery.argo?.sync_status || delivery.argo?.health_status ? `${delivery.argo?.sync_status ?? "Unknown"} · ${delivery.argo?.health_status ?? "Unknown"}` : "Not observed"} /><ReviewItem label="Current digest" value={delivery.current_digest ?? "Not observed"} /><ReviewItem label="Desired digest" value={delivery.desired_digest ?? "Not built"} /><ReviewItem label="GitOps revision" value={delivery.gitops?.desired_revision ?? "Not merged"} /><ReviewItem label="Rollback owner" value={delivery.rollback_owner ?? "Not assigned"} /><ReviewItem label="Production window" value={delivery.production_window_expires_at ?? "Not opened"} /><ReviewItem label="Baseline digest" value={delivery.baseline_digest ?? "Not captured"} /><ReviewItem label="RollbackIntent" value={delivery.rollback_status ?? state.rollbackIntent?.status ?? "Unavailable"} /></div></section>
-      <DeliveryChain segments={state.flow?.delivery_segments} onOpenResource={setSelectedArtifact} />
+      <div className="cockpit-section-heading"><span className="eyebrow">Delivery</span><h2>External delivery and release evidence</h2><p>Manual merges, Tekton output, GitOps provenance, Argo state, and verification stay in the stage that owns them.</p></div>
+      <DeliveryWorkspace flow={state.flow} item={item} onOpenResource={setSelectedArtifact} />
     </section> : null}
 
     {activeSection === "evidence" ? <section className="cockpit-section" id="work-item-evidence"><div className="cockpit-section-heading"><span className="eyebrow">Evidence</span><h2>Durable controller record</h2></div><section className="evidence-summary"><ReviewItem label="Immutable source" value={item.source_commit ?? "Legacy mutable source"} tone={item.source_commit ? "healthy" : "risk"} /><ReviewItem label="Audit events" value={state.flow?.audit_events?.length ?? 0} /><ReviewItem label="Persisted workspaces" value={state.flow?.workspaces?.length ?? 0} /><ReviewItem label="Controller waits" value={state.flow?.controller_waits?.length ?? 0} /></section></section> : null}
