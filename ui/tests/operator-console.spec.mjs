@@ -104,7 +104,7 @@ test("opening a blocked WorkItem only performs a read-only reconcile preview", a
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await expect(page.getByRole("heading", { name: workItem.title })).toBeVisible();
-  await expect(page.locator(".reconcile-panel button.primary-action")).toBeDisabled();
+  await expect(page.getByLabel("Current lifecycle boundary").locator("button.primary-action")).toBeDisabled();
   await expect(page.getByText("Git writer authorization is missing.")).toBeVisible();
   expect(reconcileCalls.length).toBeGreaterThan(0);
   expect(reconcileCalls.every((request) => request.apply === false)).toBe(true);
@@ -485,11 +485,55 @@ test("rollback rail exposes exact approvals and digest-bound delivery evidence",
     [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { rollback_intent_id: rollbackAction.resource, status: "ready_for_argo_sync", baseline: { image_digest: `sha256:${"b".repeat(64)}` } } },
   });
   await page.goto(`/#/work-items/${workItem.id}`);
-  await expect(page.getByText("Approvals: Production Rollback Deployment · Cluster Mutation · Production Impact")).toBeVisible();
+  await expect(page.getByLabel("Recovery options").getByText("Approvals: Production Rollback Deployment · Cluster Mutation · Production Impact")).toBeVisible();
   await expect(page.getByText(`sha256:${"b".repeat(64)}`, { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Review exact action" }).click();
   await expect(page.locator(".reconcile-confirmation").getByText("Open a fresh production rollback window")).toBeVisible();
   await page.getByLabel("Reason").fill("reviewed rollback merge, baseline digest, and exact Argo target");
+  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
+});
+
+test("completed WorkItem keeps rollback in recovery instead of forward progress", async ({ page }) => {
+  const workItem = {
+    ...workItemFixture("witem_completed_1234567890"),
+    status: "completed",
+    status_reason: "Release verification passed every DeploymentContract check.",
+    source_commit: "f".repeat(40),
+    environment_profile_id: "python-3.11",
+    target_environment: "production",
+    target_namespace: "apps-prod",
+    production_impacting: true,
+  };
+  const terminalAction = { id: "terminal", lifecycle_stage: "source", resource: workItem.id, status: "blocked", effect_class: "internal", blockers: [{ code: "terminal", summary: "preview only" }], approval_requirements: [], external_effect_summary: "preview only", state_hash: "state-terminal-complete" };
+  const rollbackAction = { id: "execute_rollback_gitops_pr", lifecycle_stage: "rollback", resource: "rollback_completed_123", status: "ready", effect_class: "external_effect", blockers: [], approval_requirements: [], external_effect_summary: "Create the exact digest-only rollback pull request; merge remains manual.", state_hash: "state-completed-rollback" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: {
+      work_item: workItem,
+      workspaces: [], controller_waits: [], audit_events: [],
+      action_rail: [terminalAction, rollbackAction],
+      delivery_segments: [{ key: "source", label: "Source", status: "active", summary: "Historical source evidence is incomplete.", resources: [] }],
+      delivery_configuration: { rollback_status: "approved", rollback_owner: "lucas" },
+    },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "terminal", boundary: "terminal", effect_summary: "preview only", blockers: [{ code: "terminal", summary: "preview only" }], authorization_checks: [] },
+    [`/api/work-items/${workItem.id}/actions/${rollbackAction.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { status: "writer_dispatched" }; },
+    [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { status: "approved" } },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByRole("heading", { name: "WorkItem complete" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Rollback is prepared, not recommended" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Execute Rollback Gitops Pr" })).toHaveCount(0);
+  await expect(page.getByText("Delivery evidence needs reconciliation")).toBeVisible();
+  await expect(page.locator(".reconcile-blockers")).toHaveCount(0);
+  await expect(page).toHaveScreenshot("work-item-completed-recovery.png", { fullPage: true });
+
+  await page.getByRole("button", { name: "Review exact action" }).click();
+  await expect(page.getByText("Confirm recovery action")).toBeVisible();
+  await page.getByLabel("Reason").fill("reviewed completed release baseline and exact rollback target");
   await page.getByRole("button", { name: "Confirm and apply" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
