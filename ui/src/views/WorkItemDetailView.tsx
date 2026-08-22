@@ -3,8 +3,10 @@ import { ArrowLeft, CheckCircle, Clock, Lifebuoy, RocketLaunch, Warning } from "
 import { DeliveryChain } from "../components/DeliveryChain";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
+import { findCorrectiveAction, type LifecycleAction } from "../lib/lifecycleReview";
 import { selectPrimaryWorkItemAction, selectRecoveryActions } from "../lib/workItemActions";
 import { advanceWorkItem, applyWorkItemReconcile, executeWorkItemAction, getOperatorName, loadRollbackIntent, loadWorkItem, loadWorkItemFlow, previewWorkItemReconcile } from "../pharnessApi";
+import { LifecycleReviewDrawer } from "./LifecycleReviewDrawer";
 import { RunDetailView } from "./RunDetailView";
 
 type WorkItemDetailViewProps = {
@@ -110,8 +112,8 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
   const [state, setState] = useState<any>({ status: "loading", item: null, flow: null, preview: null, error: null });
   const [actor, setActor] = useState(getOperatorName());
   const [reason, setReason] = useState("");
-  const [confirming, setConfirming] = useState<false | "action" | "advance">(false);
-  const [selectedRailAction, setSelectedRailAction] = useState<any>(null);
+  const [reviewMode, setReviewMode] = useState<false | "action" | "advance">(false);
+  const [selectedRailAction, setSelectedRailAction] = useState<LifecycleAction | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<any>(null);
 
   useEffect(() => {
@@ -150,9 +152,9 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
     setState((current: any) => ({ ...current, status: "applying", error: null }));
     try {
       const selectedAction = selectedRailAction ?? selectPrimaryWorkItemAction(state.flow?.action_rail, state.preview, state.item?.status);
-      if (selectedAction) await executeWorkItemAction(workItemId, selectedAction.id, { actor: actor.trim(), reason: reason.trim(), stateHash: selectedAction.state_hash });
+      if (selectedAction && !selectedAction.legacy_reconcile) await executeWorkItemAction(workItemId, selectedAction.id, { actor: actor.trim(), reason: reason.trim(), stateHash: selectedAction.state_hash });
       else await applyWorkItemReconcile(workItemId, { actor: actor.trim(), reason: reason.trim() });
-      setConfirming(false);
+      setReviewMode(false);
       setSelectedRailAction(null);
       setReason("");
       await refresh();
@@ -167,7 +169,7 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
     setState((current: any) => ({ ...current, status: "applying", error: null }));
     try {
       await advanceWorkItem(workItemId, { actor: actor.trim(), reason: reason.trim() });
-      setConfirming(false);
+      setReviewMode(false);
       setSelectedRailAction(null);
       setReason("");
       await refresh();
@@ -190,18 +192,37 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
   const recoveryActions = selectRecoveryActions(actions);
   const canApply = railAction ? railAction.status === "ready" : (!completed && (preview?.can_apply ?? false));
   const action = railAction?.id ?? preview?.action ?? "reconcile";
+  const primaryReviewAction: LifecycleAction | undefined = railAction ?? (!completed ? {
+    id: preview?.action ?? "reconcile",
+    lifecycle_stage: preview?.boundary ?? "source",
+    resource: item.id,
+    status: preview?.can_apply ? "ready" : "blocked",
+    effect_class: "internal",
+    blockers: preview?.blockers ?? [],
+    approval_requirements: [],
+    external_effect_summary: preview?.effect_summary ?? preview?.message,
+    legacy_reconcile: true,
+  } : undefined);
   const blockers = completed ? [] : (preview?.blockers ?? []);
-  const authorizationChecks = completed ? [] : (preview?.authorization_checks ?? []);
   const delivery = state.flow?.delivery_configuration ?? {};
   const safeAdvance = !completed && preview?.can_apply && ["declare_work_plan", "capture_change_set", "prepare_git_delivery", "complete_work_item"].includes(preview?.action);
   const incompleteDeliveryEvidence = completed && (state.flow?.delivery_segments ?? []).some((segment: any) => segment.status !== "complete");
-  const confirmationAction = selectedRailAction ?? railAction;
-  const confirmationIsRecovery = confirmationAction?.lifecycle_stage === "rollback";
 
-  const reviewAction = (entry: any) => {
+  const reviewAction = (entry: LifecycleAction, mode: "action" | "advance" = "action") => {
     setSelectedRailAction(entry);
-    setConfirming("action");
+    setReviewMode(mode);
   };
+
+  const reviewSafeAdvance = () => reviewAction({
+    id: "advance_safe_steps",
+    lifecycle_stage: preview?.boundary ?? "source",
+    resource: item.id,
+    status: "ready",
+    effect_class: "internal",
+    blockers: [],
+    approval_requirements: [],
+    external_effect_summary: "The server may execute at most ten idempotent internal steps and will stop before every model, approval, Git, Tekton, Argo, wait, or error boundary.",
+  }, "advance");
 
   return <section className="work-item-detail">
     <header className="work-item-cockpit-header" id="work-item-overview">
@@ -228,21 +249,13 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
       <div className="action-center-icon">{wait ? <Clock size={24} /> : canApply ? <RocketLaunch size={24} /> : <Warning size={24} />}</div>
       <div className="action-center-copy"><span className="eyebrow">Next required step · {statusText(railAction?.lifecycle_stage ?? preview?.boundary, "Controller boundary")}</span><h2>{statusText(action)}</h2><p>{railAction?.external_effect_summary ?? preview?.effect_summary ?? preview?.message ?? "The controller has not supplied a preview yet."}</p></div>
       {wait ? <WaitSummary wait={wait} /> : null}
-      <div className="reconcile-actions"><button className="primary-action" type="button" disabled={!canApply || state.status === "applying"} title={!canApply ? (railAction?.blockers?.[0]?.summary ?? preview?.blockers?.[0]?.summary ?? preview?.message ?? "The controller cannot apply this action yet.") : undefined} onClick={() => reviewAction(railAction)}><RocketLaunch size={17} /> {statusText(action)}</button>{safeAdvance ? <button type="button" onClick={() => setConfirming("advance")}>Advance safe steps</button> : null}<button type="button" onClick={refresh}>Refresh preview</button></div>
+      <div className="reconcile-actions"><button className="primary-action" type="button" disabled={!canApply || state.status === "applying" || !primaryReviewAction} title={!canApply ? (railAction?.blockers?.[0]?.summary ?? preview?.blockers?.[0]?.summary ?? preview?.message ?? "The controller cannot apply this action yet.") : undefined} onClick={() => primaryReviewAction && reviewAction(primaryReviewAction)}><RocketLaunch size={17} /> {statusText(action)}</button>{safeAdvance ? <button type="button" onClick={reviewSafeAdvance}>Advance safe steps</button> : null}<button type="button" onClick={refresh}>Refresh preview</button></div>
     </section>}
 
-    {confirming ? <section className={`reconcile-confirmation ${confirmationIsRecovery ? "is-recovery" : ""}`} aria-label="Action confirmation">
-      <div><span className="eyebrow">{confirmationIsRecovery ? "Recovery option" : "Exact controller action"}</span><strong>{confirming === "advance" ? "Confirm safe internal advance" : confirmationIsRecovery ? "Confirm recovery action" : "Confirm controller action"}</strong></div>
-      <p>{confirming === "advance" ? "The server may execute at most ten idempotent internal steps and will stop before every model, approval, Git, Tekton, Argo, wait, or error boundary." : (confirmationAction?.external_effect_summary ?? preview?.effect_summary ?? preview?.message)}</p>
-      {confirmationAction?.approval_requirements?.length ? <p className="confirmation-requirements"><strong>Required approvals</strong>{confirmationAction.approval_requirements.map(statusText).join(" · ")}</p> : null}
-      {confirmationAction?.state_hash ? <small>Bound to controller state {compactId(confirmationAction.state_hash)}</small> : null}
-      <label>Operator<input value={actor} onChange={(event) => setActor(event.target.value)} /></label>
-      <label>Reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} /></label>
-      <div><button className="primary-action" type="button" disabled={!actor.trim() || !reason.trim() || state.status === "applying"} onClick={confirming === "advance" ? advanceSafe : apply}>Confirm and apply</button><button type="button" onClick={() => { setConfirming(false); setSelectedRailAction(null); }}>Cancel</button></div>
-    </section> : null}
-
-    {blockers.length ? <section className="reconcile-blockers" aria-label="Controller blockers"><span className="eyebrow">Why this cannot advance</span>{blockers.map((blocker: any) => <p key={`${blocker.code}-${blocker.summary}`}><strong>{statusText(blocker.code)}</strong><span>{blocker.summary}</span></p>)}</section> : null}
-    {authorizationChecks.length ? <section className="authorization-checks" aria-label="Authorization checks"><span className="eyebrow">Authorization checks for this boundary</span><div>{authorizationChecks.map((check: any) => <ReviewItem key={`${check.kind}-${check.resource_id ?? "none"}`} label={statusText(check.kind)} value={statusText(check.status)} tone={check.status === "missing" || check.status === "blocked" || check.status === "unavailable" ? "risk" : check.status === "ready" ? "healthy" : undefined} />)}</div></section> : null}
+    {blockers.length ? <section className="reconcile-blockers" aria-label="Controller blockers"><span className="eyebrow">Why this cannot advance</span>{blockers.map((blocker: any) => {
+      const correctiveAction = findCorrectiveAction(blocker, actions);
+      return <p key={`${blocker.code}-${blocker.summary}`}><strong>{statusText(blocker.code)}</strong><span>{blocker.summary}</span>{correctiveAction ? <button type="button" onClick={() => reviewAction(correctiveAction)}>Review {statusText(correctiveAction.id)}</button> : null}</p>;
+    })}</section> : null}
 
     {recoveryActions.length ? <section className="recovery-options" aria-label="Recovery options">
       <Lifebuoy size={25} />
@@ -269,6 +282,7 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
 
     <section className="cockpit-section" id="work-item-evidence"><div className="cockpit-section-heading"><span className="eyebrow">Evidence</span><h2>Durable controller record</h2></div><section className="evidence-summary"><ReviewItem label="Immutable source" value={item.source_commit ?? "Legacy mutable source"} tone={item.source_commit ? "healthy" : "risk"} /><ReviewItem label="Audit events" value={state.flow?.audit_events?.length ?? 0} /><ReviewItem label="Persisted workspaces" value={state.flow?.workspaces?.length ?? 0} /><ReviewItem label="Controller waits" value={state.flow?.controller_waits?.length ?? 0} /></section></section>
 
+    {reviewMode && selectedRailAction ? <LifecycleReviewDrawer action={selectedRailAction} actions={actions} item={item} flow={state.flow} preview={preview} rollbackIntent={state.rollbackIntent} actor={actor} reason={reason} applying={state.status === "applying"} error={state.error} onActorChange={setActor} onReasonChange={setReason} onActionChange={setSelectedRailAction} onConfirm={reviewMode === "advance" ? advanceSafe : apply} onClose={() => { setReviewMode(false); setSelectedRailAction(null); setReason(""); }} /> : null}
     {selectedArtifact ? <DurableArtifactPanel artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} /> : null}
     {state.error ? <div className="api-banner">{state.error}</div> : null}
   </section>;

@@ -128,9 +128,10 @@ test("an apply-ready WorkItem requires confirmation and dispatches one controlle
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await page.getByRole("button", { name: "Execute Coding Attempt" }).click();
-  await expect(page.getByText("Confirm controller action")).toBeVisible();
-  await page.getByLabel("Reason").fill("reviewed bounded coding attempt");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("dialog", { name: "Lifecycle review" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review controller action" })).toBeVisible();
+  await page.getByLabel("Decision reason").fill("reviewed bounded coding attempt");
+  await page.getByRole("button", { name: "Confirm Execute Coding Attempt" }).click();
   await expect.poll(() => applyCalls.length).toBe(1);
   expect(applyCalls[0]).toMatchObject({ apply: true, actor: "lucas", reason: "reviewed bounded coding attempt" });
 });
@@ -414,10 +415,10 @@ test("production action confirmation is bound to the exact server action and sta
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await page.getByRole("button", { name: "Dispatch Argo Sync" }).click();
-  await expect(page.locator(".reconcile-confirmation").getByText("Sync exact Argo Application yfinance-wrapper in apps-prod.")).toBeVisible();
-  await expect(page).toHaveScreenshot("production-action-confirmation.png", { fullPage: true });
-  await page.getByLabel("Reason").fill("reviewed exact production target and digest");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByLabel("Effect and authorization").getByText("Sync exact Argo Application yfinance-wrapper in apps-prod.")).toBeVisible();
+  await expect(page).toHaveScreenshot("production-action-confirmation.png");
+  await page.getByLabel("Decision reason").fill("reviewed exact production target and digest");
+  await page.getByRole("button", { name: "Confirm Dispatch Argo Sync" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ reason: "reviewed exact production target and digest", state_hash: action.state_hash });
 });
@@ -446,11 +447,11 @@ test("PipelineIntent execution authorization is actionable without starting Tekt
   });
 
   await page.goto(`/#/work-items/${workItem.id}`);
-  await expect(page.getByRole("button", { name: "Authorize Pipeline Execution" })).toBeEnabled();
-  await page.getByRole("button", { name: "Authorize Pipeline Execution" }).click();
-  await expect(page.locator(".reconcile-confirmation").getByText("This action does not start Tekton.")).toBeVisible();
-  await page.getByLabel("Reason").fill("authorize only supervised PipelineIntent attempt 2");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("button", { name: "Authorize Pipeline Execution", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Authorize Pipeline Execution", exact: true }).click();
+  await expect(page.getByLabel("Effect and authorization").getByText("This action does not start Tekton.")).toBeVisible();
+  await page.getByLabel("Decision reason").fill("authorize only supervised PipelineIntent attempt 2");
+  await page.getByRole("button", { name: "Confirm Authorize Pipeline Execution" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ reason: "authorize only supervised PipelineIntent attempt 2", state_hash: action.state_hash });
 });
@@ -488,9 +489,10 @@ test("rollback rail exposes exact approvals and digest-bound delivery evidence",
   await expect(page.getByLabel("Recovery options").getByText("Approvals: Production Rollback Deployment · Cluster Mutation · Production Impact")).toBeVisible();
   await expect(page.getByText(`sha256:${"b".repeat(64)}`, { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Review exact action" }).click();
-  await expect(page.locator(".reconcile-confirmation").getByText("Open a fresh production rollback window")).toBeVisible();
-  await page.getByLabel("Reason").fill("reviewed rollback merge, baseline digest, and exact Argo target");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("heading", { name: "Review recovery action" })).toBeVisible();
+  await expect(page.getByLabel("Effect and authorization").getByText("Open a fresh production rollback window")).toBeVisible();
+  await page.getByLabel("Decision reason").fill("reviewed rollback merge, baseline digest, and exact Argo target");
+  await page.getByRole("button", { name: "Confirm Approve Rollback Argo Sync" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
 });
@@ -532,9 +534,9 @@ test("completed WorkItem keeps rollback in recovery instead of forward progress"
   await expect(page).toHaveScreenshot("work-item-completed-recovery.png", { fullPage: true });
 
   await page.getByRole("button", { name: "Review exact action" }).click();
-  await expect(page.getByText("Confirm recovery action")).toBeVisible();
-  await page.getByLabel("Reason").fill("reviewed completed release baseline and exact rollback target");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("heading", { name: "Review recovery action" })).toBeVisible();
+  await page.getByLabel("Decision reason").fill("reviewed completed release baseline and exact rollback target");
+  await page.getByRole("button", { name: "Confirm Execute Rollback Gitops Pr" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ state_hash: rollbackAction.state_hash });
 });
@@ -542,19 +544,59 @@ test("completed WorkItem keeps rollback in recovery instead of forward progress"
 test("WorkPlan review is directly actionable from the WorkItem boundary", async ({ page }) => {
   const workItem = { ...workItemFixture("witem_review_1234567890"), status: "awaiting_approval", source_commit: "a".repeat(40), environment_profile_id: "python-3.11" };
   const action = { id: "approve_work_plan", lifecycle_stage: "planning", resource: "wplan_review_1234567890", status: "ready", effect_class: "approval_boundary", blockers: [], approval_required: true, approval_requirements: ["work_plan_review"], external_effect_summary: "Approve the proposed WorkPlan before authorizing one attempt workspace.", state_hash: "state-workplan-review" };
+  const rejectAction = { ...action, id: "reject_work_plan", external_effect_summary: "Reject the proposed WorkPlan and return it for revision.", state_hash: "state-workplan-reject" };
+  const workPlan = { id: action.resource, status: "proposed", title: "WorkPlan: Repair finance price cache", summary: workItem.intent, risk_level: "high", revision: 2, work_plan_json: { source_repository: { repo: workItem.source_repo, ref: "main" }, target: { environment: "dev", namespace: "finance-dev" }, acceptance_criteria: ["tests pass"], approval_gates: [{ kind: "source_mutation", required_before: "creating a source pull request" }] } };
   const calls = [];
   await mockApi(page, {
     [`/api/work-items/${workItem.id}`]: workItem,
-    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_review", source_repo: workItem.source_repo, source_ref: "main", status: "declared" }], controller_waits: [], delivery_segments: [], action_rail: [action] },
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_review", source_repo: workItem.source_repo, source_ref: "main", status: "declared" }], controller_waits: [], delivery_segments: [], action_rail: [action, rejectAction], sdlc_flow: { work_plan: workPlan } },
     [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "awaiting_work_plan_approval", boundary: "planning", effect_summary: action.external_effect_summary, blockers: [] },
     [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { work_plan: { id: action.resource, status: "approved" } }; },
+    [`/api/work-items/${workItem.id}/actions/${rejectAction.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { work_plan: { id: action.resource, status: "rejected" } }; },
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await expect(page.getByRole("button", { name: "Approve Work Plan" })).toBeEnabled();
   await expect(page).toHaveScreenshot("work-item-review-required.png", { fullPage: true });
   await page.getByRole("button", { name: "Approve Work Plan" }).click();
-  await page.getByLabel("Reason").fill("reviewed bounded WorkPlan and acceptance commands");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("heading", { name: "Review WorkPlan" })).toBeVisible();
+  await expect(page.getByLabel("Decision evidence").getByText("Acceptance: tests pass")).toBeVisible();
+  await expect(page.getByLabel("Effect and authorization").getByText(action.state_hash, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Reject Work Plan" }).click();
+  await page.getByLabel("Decision reason").fill("acceptance evidence needs revision");
+  await page.getByRole("button", { name: "Confirm Reject Work Plan" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toMatchObject({ state_hash: rejectAction.state_hash });
+});
+
+test("attempt workspace review shows the exact write grant before model execution", async ({ page }) => {
+  const workItem = {
+    ...workItemFixture("witem_workspace_review_1234567890"),
+    status: "awaiting_approval",
+    source_commit: "b".repeat(40),
+    environment_profile_id: "python-3.11",
+    environment_preparation_status: "succeeded",
+    max_attempts: 2,
+    repository_contract: { writable_paths: ["src/**", "tests/**", "readme.md"], agent_network: "denied" },
+    acceptance_criteria: ["python -m unittest discover -s tests -v"],
+  };
+  const action = { id: "authorize_workspace_and_start", lifecycle_stage: "attempt", resource: "wplan_workspace_review", status: "ready", effect_class: "model_execution", blockers: [], approval_required: true, approval_requirements: ["attempt_workspace_write"], external_effect_summary: "Authorize one coding attempt for the exact repository and declared writable paths, then start model execution.", state_hash: "state-workspace-review" };
+  const calls = [];
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_workspace_review", source_repo: workItem.source_repo, resolved_commit: workItem.source_commit, branch: "pharness/attempt-2", status: "declared" }], controller_waits: [], delivery_segments: [], action_rail: [action], sdlc_flow: { work_plan: { id: action.resource, status: "approved" } } },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "start_coding_attempt", boundary: "attempt", effect_summary: action.external_effect_summary, blockers: [], authorization_checks: [{ kind: "permission_grant", status: "missing", summary: "Attempt workspace grant requires explicit review." }] },
+    [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { status: "dispatched" }; },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await page.getByRole("button", { name: "Authorize Workspace And Start" }).click();
+  await expect(page.getByRole("heading", { name: "Review attempt workspace" })).toBeVisible();
+  await expect(page.getByLabel("Decision evidence").getByText("Writable: src/**")).toBeVisible();
+  await expect(page.getByLabel("Decision evidence").getByText(`lward27/yfinance_wrapper @ ${workItem.source_commit}`)).toBeVisible();
+  await expect(page.getByLabel("Effect and authorization").getByText("Attempt Workspace Write")).toBeVisible();
+  await expect(page).toHaveScreenshot("work-item-workspace-review.png");
+  await page.getByLabel("Decision reason").fill("authorize only the pinned workspace and declared paths");
+  await page.getByRole("button", { name: "Confirm Authorize Workspace And Start" }).click();
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ state_hash: action.state_hash });
 });
@@ -566,16 +608,18 @@ test("replan boundary creates a fresh explicit review action", async ({ page }) 
   await mockApi(page, {
     [`/api/work-items/${workItem.id}`]: workItem,
     [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_old", source_repo: workItem.source_repo, status: "retained" }], controller_waits: [], delivery_segments: [], action_rail: [action] },
-    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "requires_replan", boundary: "planning", effect_summary: action.external_effect_summary, blockers: [] },
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "requires_replan", boundary: "planning", effect_summary: action.external_effect_summary, blockers: [{ code: "requires_replan", summary: "A fresh WorkPlan and workspace are required." }] },
     [`/api/work-items/${workItem.id}/actions/${action.id}/execute`]: async (route) => { calls.push(route.request().postDataJSON()); return { work_item: { ...workItem, status: "planning" } }; },
   });
   await page.goto(`/#/work-items/${workItem.id}`);
-  await expect(page.getByRole("button", { name: "Replan Work Item" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Replan Work Item", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Controller blockers").getByRole("button", { name: "Review Replan Work Item" })).toBeVisible();
   await expect(page.getByText("Create a fresh isolated workspace and proposed WorkPlan; no model starts automatically.").first()).toBeVisible();
   await expect(page).toHaveScreenshot("work-item-replan-ready.png", { fullPage: true });
-  await page.getByRole("button", { name: "Replan Work Item" }).click();
-  await page.getByLabel("Reason").fill("revise the bounded plan after hard-limit review");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await page.getByLabel("Controller blockers").getByRole("button", { name: "Review Replan Work Item" }).click();
+  await expect(page.getByRole("heading", { name: "Review WorkItem replan" })).toBeVisible();
+  await page.getByLabel("Decision reason").fill("revise the bounded plan after hard-limit review");
+  await page.getByRole("button", { name: "Confirm Replan Work Item" }).click();
   await expect.poll(() => calls.length).toBe(1);
 });
 
@@ -599,8 +643,9 @@ test("budget extension resumes the existing workspace from an exact server actio
   await expect(page.getByText("48 used · 0 remaining")).toBeVisible();
   await expect(page).toHaveScreenshot("work-item-budget-extension.png", { fullPage: true });
   await page.getByRole("button", { name: "Approve Budget Extension" }).first().click();
-  await page.getByLabel("Reason").fill("preserve the active workspace and finish verification");
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("heading", { name: "Review run budget" })).toBeVisible();
+  await page.getByLabel("Decision reason").fill("preserve the active workspace and finish verification");
+  await page.getByRole("button", { name: "Confirm Approve Budget Extension" }).click();
   await expect.poll(() => calls.length).toBe(1);
 });
 
