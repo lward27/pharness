@@ -75,7 +75,7 @@ function deliveryFlowFixture(workItem, { verified = false } = {}) {
       production_window_expires_at: "1786033800000",
       gitops: { repository: "https://github.com/lward27/lucas_engineering.git", kustomization_path: "charts/yfinance-wrapper/kustomization.yaml", desired_revision: verified ? gitopsMerge : null },
       target: { environment: "production", namespace: "apps-prod", workload_name: "yfinance-wrapper", argo_application: "yfinance-wrapper" },
-      argo: verified ? { sync_status: "Synced", health_status: "Healthy" } : {},
+      argo: {},
     },
     sdlc_flow: {
       change_set: { id: "cset_delivery", status: "approved", title: "Yfinance source changes", summary: "Reviewed source diff and acceptance evidence." },
@@ -105,7 +105,7 @@ function deliveryFlowFixture(workItem, { verified = false } = {}) {
     },
   };
   if (verified) {
-    flow.audit_events = [{ id: "aud_argo", kind: "deployment_intent.execution_observed", created_at: "1786032100000", payload: { extra: { sync_status: "Synced", health_status: "Healthy", operation_phase: "Succeeded", result_artifact_id: "art_argo_sync" } } }];
+    flow.audit_events = [];
     flow.sdlc_flow.release = {
       id: "rel_delivery", status: "completed", title: "Verified yfinance release", image_digest: desiredDigest,
       release_json: { post_sync_verification: {

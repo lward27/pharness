@@ -101,7 +101,7 @@ describe("buildDeliveryWorkspace", () => {
     flow.delivery_segments = flow.delivery_segments.map((stage) => ({ ...stage, status: "unreached" }));
     flow.sdlc_flow.gitops_delivery.latest_observation = artifact("art_gitops_observe", "gitops_delivery_pr_observation", { merged: true, pull_request_number: 26, merge_commit_sha: gitopsMergeSha });
     (flow.sdlc_flow.gitops_delivery as any).latest_merge = artifact("art_gitops_merge", "gitops_delivery_merge", { pull_request_number: 26, merge_commit_sha: gitopsMergeSha });
-    (flow as any).audit_events = [{ kind: "deployment_intent.execution_observed", created_at: "4000", payload: { extra: { sync_status: "Synced", operation_phase: "Succeeded" } } }];
+    (flow as any).audit_events = [];
     (flow.sdlc_flow as any).release = {
       id: "rel_delivery",
       status: "completed",
@@ -111,6 +111,7 @@ describe("buildDeliveryWorkspace", () => {
           status: "verified",
           deployment_contract_id: "dcontract-yfinance",
           checks: [
+            { code: "completed_argo_sync", passed: true, summary: "Completed sync result artifact is current" },
             { code: "running_image_digest", passed: true, summary: "Running digest equals desired digest" },
             { code: "service_healthz", passed: true, summary: "Health check passed" },
           ],
@@ -121,7 +122,8 @@ describe("buildDeliveryWorkspace", () => {
     const model = buildDeliveryWorkspace(flow, item(), 3_000);
 
     expect(model.stages.map((stage) => stage.status)).toEqual(["complete", "complete", "complete", "complete", "complete"]);
-    expect(model.stages[4].checkpoint).toBe("2/2 required checks passed");
+    expect(model.stages[3].checkpoint).toBe("Argo Synced · Succeeded");
+    expect(model.stages[4].checkpoint).toBe("3/3 required checks passed");
     expect(model.guardrails.digestEqualityStatus).toBe("verified");
     expect(model.consistencyIssues).toHaveLength(5);
   });

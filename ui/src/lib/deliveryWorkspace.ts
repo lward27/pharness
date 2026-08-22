@@ -145,11 +145,13 @@ export function buildDeliveryWorkspace(flow: any, item: any, now = Date.now()): 
   const releaseJson = release?.release_json ?? {};
   const verification = releaseJson.post_sync_verification ?? {};
   const verificationChecks = Array.isArray(verification.checks) ? verification.checks : [];
+  const completedArgoSync = verificationChecks.some((check: any) => check.code === "completed_argo_sync" && check.passed === true);
+  const healthyArgoApplication = verificationChecks.some((check: any) => check.code === "argo_application_synced_healthy" && check.passed === true);
   const argoEvent = latestEvent(flow?.audit_events, ["deployment_intent.execution_observed", "deployment_intent.argo_sync_completed"]);
   const argoEvidence = argoEvent?.payload?.extra ?? argoEvent?.payload_json?.extra ?? {};
-  const argoSync = configuration.argo?.sync_status ?? argoEvidence.sync_status;
-  const argoHealth = configuration.argo?.health_status ?? argoEvidence.health_status;
-  const argoOperation = argoEvidence.operation_phase;
+  const argoSync = configuration.argo?.sync_status ?? argoEvidence.sync_status ?? (completedArgoSync ? "Synced" : undefined);
+  const argoHealth = configuration.argo?.health_status ?? argoEvidence.health_status ?? (healthyArgoApplication ? "Healthy" : undefined);
+  const argoOperation = argoEvidence.operation_phase ?? (completedArgoSync ? "Succeeded" : undefined);
 
   const sourceStatus: DeliveryEvidenceStatus = sourceMerge.merged
     ? "complete"
@@ -181,7 +183,7 @@ export function buildDeliveryWorkspace(flow: any, item: any, now = Date.now()): 
           : buildSucceeded
             ? "waiting"
             : "unreached";
-  const argoSucceeded = argoSync === "Synced" && (argoOperation === "Succeeded" || verificationChecks.some((check: any) => check.code === "completed_argo_sync" && check.passed));
+  const argoSucceeded = completedArgoSync || (argoSync === "Synced" && argoOperation === "Succeeded");
   const deployStatus: DeliveryEvidenceStatus = argoSucceeded
     ? "complete"
     : [argoSync, argoHealth, argoOperation].some((value) => isFailure(String(value ?? "").toLowerCase()))
