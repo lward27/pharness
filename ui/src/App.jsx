@@ -36,18 +36,32 @@ import { FlowView as FlowPanel } from "./views/FlowView.tsx";
 import { StatusView as StatusPanel } from "./views/StatusView.tsx";
 import { loadDashboardData, loadTriage, loadTriageSummary } from "./pharnessApi";
 
-const navItems = [
-  { id: "Triage", view: "Triage", icon: Rows },
-  { id: "WorkItems", view: "WorkItems", icon: ClipboardText },
-  { id: "Runs", view: "Queue", icon: Pulse },
-  { id: "Approvals", view: "Approvals", icon: ShieldWarning },
-  { id: "Approval Gates", view: "Approval Gates", icon: ShieldCheck },
-  { id: "Observations", view: "Observations", icon: ChartLineUp },
-  { id: "Incidents", view: "Incidents", icon: Siren },
-  { id: "Remediation Plans", view: "Remediation Plans", icon: ClipboardText },
-  { id: "Audit", view: "Audit", icon: ClockCounterClockwise },
-  { id: "Status", view: "Status", icon: CircleHalf },
+const navGroups = [
+  { id: "operate", label: "Operate", items: [
+    { id: "Triage", label: "Triage", view: "Triage", icon: Rows },
+    { id: "WorkItems", label: "WorkItems", view: "WorkItems", icon: ClipboardText },
+    { id: "Runs", label: "Runs", view: "Queue", activeViews: ["Queue", "Run Detail"], icon: Pulse },
+  ] },
+  { id: "govern", label: "Govern", items: [
+    { id: "Approvals", label: "Tool approvals", view: "Approvals", icon: ShieldWarning },
+    { id: "Approval Gates", label: "Lifecycle gates", view: "Approval Gates", icon: ShieldCheck },
+  ] },
+  { id: "investigate", label: "Investigate", items: [
+    { id: "Observations", label: "Observations", view: "Observations", icon: ChartLineUp },
+    { id: "Incidents", label: "Incidents", view: "Incidents", icon: Siren },
+    { id: "Remediation Plans", label: "Remediation", view: "Remediation Plans", icon: ClipboardText },
+    { id: "Audit", label: "Audit", view: "Audit", icon: ClockCounterClockwise },
+  ] },
+  { id: "platform", label: "Platform", items: [
+    { id: "Status", label: "Status", view: "Status", icon: CircleHalf },
+  ] },
 ];
+
+const navItems = navGroups.flatMap((group) => group.items);
+
+function navItemActive(item, activeView) {
+  return item.view === activeView || item.activeViews?.includes(activeView);
+}
 
 
 // Hash routing: #/<segment>[/<id>] with Flow roots as #/flow/<kind>/<id>.
@@ -233,24 +247,25 @@ function AppShell({
           </div>
         </div>
         <nav className="nav-list" aria-label="Primary">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = item.view === activeView;
-            const badge = badgeForNav(item.id, dashboardData) ?? item.badge;
-            return (
-              <button
+          {navGroups.map((group) => <div className="nav-group" role="group" aria-label={group.label} key={group.id}>
+            <span className="nav-group-label">{group.label}</span>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const active = navItemActive(item, activeView);
+              const badge = badgeForNav(item.id, dashboardData) ?? item.badge;
+              return <button
                 className={`nav-item ${active ? "is-active" : ""}`}
                 key={item.id}
                 type="button"
                 onClick={() => navigate(item.view)}
-                title={item.id}
+                title={`${group.label}: ${item.label}`}
               >
                 <Icon size={20} />
-                <span>{item.id}</span>
+                <span>{item.label}</span>
                 {badge ? <b>{badge}</b> : null}
-              </button>
-            );
-          })}
+              </button>;
+            })}
+          </div>)}
         </nav>
         <div className="health-card">
           <div className="health-row">
@@ -285,6 +300,7 @@ function AppShell({
       <main className="workspace">
         <TopBar theme={theme} setTheme={setTheme} dashboard={dashboard} route={route} scope={scope} setScope={setScope} />
         <div className="mode-bar">
+          <MobileNavigation activeView={activeView} dashboardData={dashboardData} />
           <div className="view-context">
             <span>{activeView === "Triage" ? "Operator inbox" : statusText(activeView)}</span>
           </div>
@@ -353,6 +369,17 @@ function AppShell({
       </main>
     </div>
   );
+}
+
+function MobileNavigation({ activeView, dashboardData }) {
+  const activeItem = navItems.find((item) => navItemActive(item, activeView));
+  return <label className="mobile-navigation"><Rows size={18} /><span>Navigate</span><select aria-label="Primary navigation" value={activeItem?.view ?? ""} onChange={(event) => navigate(event.target.value)}>
+    {!activeItem ? <option value="">Current workspace</option> : null}
+    {navGroups.map((group) => <optgroup label={group.label} key={group.id}>{group.items.map((item) => {
+      const badge = badgeForNav(item.id, dashboardData);
+      return <option value={item.view} key={item.id}>{item.label}{badge ? ` (${badge})` : ""}</option>;
+    })}</optgroup>)}
+  </select></label>;
 }
 
 

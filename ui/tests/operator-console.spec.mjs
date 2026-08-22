@@ -135,6 +135,49 @@ test("empty triage is honest and free of inventory placeholders", async ({ page 
   await expect(page).toHaveScreenshot("triage-empty.png", { fullPage: true });
 });
 
+test("primary navigation is grouped without introducing another sidebar", async ({ page }, testInfo) => {
+  await mockApi(page);
+  await page.goto("/#/triage");
+
+  if (testInfo.project.name === "desktop") {
+    await expect(page.getByRole("group", { name: "Operate" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Govern" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Investigate" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Platform" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tool approvals" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Lifecycle gates" })).toBeVisible();
+  } else {
+    const navigation = page.getByLabel("Primary navigation");
+    await expect(navigation).toBeVisible();
+    await navigation.selectOption("WorkItems");
+    await expect(page).toHaveURL(/#\/work-items$/);
+  }
+});
+
+test("WorkItem-specific triage signals collapse into one cockpit route", async ({ page }) => {
+  const workItem = workItemFixture("witem_triage_1234567890");
+  const triageItems = [
+    { id: "gate_source", kind: "approval_gate", title: "Approve source mutation", summary: "Source boundary", status: "pending", risk_level: "high", origin: "operator", resource_kind: "approval_gate", resource_id: "gate_source", work_item_id: workItem.id, created_at: "1760000000000" },
+    { id: "gate_pipeline", kind: "approval_gate", title: "Approve pipeline mutation", summary: "Pipeline boundary", status: "pending", risk_level: "high", origin: "operator", resource_kind: "approval_gate", resource_id: "gate_pipeline", work_item_id: workItem.id, created_at: "1760000001000" },
+    { id: workItem.id, kind: "blocked_work_item", title: workItem.title, summary: workItem.status_reason, status: "blocked", risk_level: "high", origin: "operator", resource_kind: "work_item", resource_id: workItem.id, work_item_id: workItem.id, created_at: "1760000002000" },
+  ];
+  await mockApi(page, {
+    "/api/triage": { items: triageItems, summary: { total: 3, blocked_work_items: 1, pending_approval_gates: 2, pending_tool_approvals: 0 } },
+    "/api/triage/summary": { total: 3, blocked_work_items: 1, pending_approval_gates: 2, pending_tool_approvals: 0 },
+    "/api/work-items": { work_items: [workItem], operator_state: {} },
+    "/api/scopes/options": { environments: ["dev"], namespaces: [], repositories: [workItem.source_repo], branches: ["main"], actors: ["lucas"], origins: ["operator"] },
+  });
+  await page.goto("/#/triage");
+
+  await expect(page.locator(".triage-row")).toHaveCount(1);
+  await expect(page.getByText("Blocked WorkItem", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 lifecycle gates", { exact: true })).toBeVisible();
+  await expect(page.getByText("Open WorkItem cockpit", { exact: false })).toBeVisible();
+  await expect(page).toHaveScreenshot("triage-exceptions.png", { fullPage: true });
+  await page.locator(".triage-row").click();
+  await expect(page).toHaveURL(new RegExp(`#\\/work-items\\/${workItem.id}$`));
+});
+
 test("blocked WorkItems retain a visible boundary and origin", async ({ page }) => {
   const workItem = workItemFixture("witem_blocked_1234567890");
   await mockApi(page, {
