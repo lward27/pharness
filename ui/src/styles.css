@@ -511,6 +511,39 @@ button:disabled {
   backdrop-filter: blur(18px);
 }
 
+.topbar.is-contextual {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.focused-resource-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--cyan);
+}
+
+.focused-resource-context div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.focused-resource-context span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.focused-resource-context strong {
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .theme-light .topbar {
   background: rgba(255, 255, 255, 0.84);
 }
@@ -781,7 +814,7 @@ button:disabled {
 
 .content-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   flex: 1;
@@ -1027,6 +1060,321 @@ button:disabled {
   gap: 18px;
 }
 
+.work-item-cockpit-header {
+  display: grid;
+  gap: 14px;
+  scroll-margin-top: 58px;
+}
+
+.work-item-title-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.work-item-title-row h1,
+.work-item-title-row p,
+.action-center h2,
+.action-center p,
+.recovery-options h2,
+.recovery-options p,
+.cockpit-section-heading h2,
+.work-item-run-envelope h2 {
+  margin: 0;
+}
+
+.work-item-title-row h1 {
+  margin-top: 5px;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+}
+
+.work-item-title-row p {
+  max-width: 76ch;
+  margin-top: 7px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.cockpit-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cockpit-trust-grid .review-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-section-nav {
+  position: sticky;
+  top: -1px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.cockpit-section-nav button {
+  min-width: 88px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cockpit-section-nav button:first-child,
+.cockpit-section-nav button:hover {
+  background: rgba(50, 215, 223, 0.1);
+  color: var(--text);
+}
+
+.action-center {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(50, 215, 223, 0.045);
+}
+
+.action-center.is-ready {
+  border-color: rgba(50, 215, 223, 0.42);
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.action-center.is-blocked {
+  border-color: rgba(242, 188, 46, 0.36);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.action-center.is-complete {
+  border-color: rgba(54, 216, 107, 0.38);
+  background: linear-gradient(110deg, rgba(54, 216, 107, 0.11), rgba(54, 216, 107, 0.025));
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.action-center.is-complete > svg {
+  color: var(--green);
+}
+
+.action-center.is-complete > button {
+  align-self: start;
+}
+
+.action-center > button,
+.recovery-options article button,
+.action-inventory-list article button,
+.action-center .reconcile-actions button {
+  justify-self: start;
+  padding: 7px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--soft);
+}
+
+.action-center > button:hover,
+.action-inventory-list article button:hover,
+.action-center .reconcile-actions button:hover {
+  border-color: rgba(50, 215, 223, 0.42);
+  color: var(--text);
+}
+
+.recovery-options article button {
+  border-color: rgba(169, 133, 255, 0.42);
+  background: rgba(169, 133, 255, 0.1);
+  color: var(--text);
+}
+
+.action-center-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.action-center-copy p,
+.action-center.is-complete p {
+  max-width: 88ch;
+  color: var(--soft);
+  line-height: 1.5;
+}
+
+.action-center-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--cyan);
+  background: var(--panel-2);
+}
+
+.action-center .wait-summary,
+.action-center .reconcile-actions {
+  grid-column: 2 / -1;
+}
+
+.recovery-options {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.8fr) minmax(260px, 1.2fr);
+  align-items: start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(169, 133, 255, 0.34);
+  border-radius: 10px;
+  background: rgba(169, 133, 255, 0.05);
+}
+
+.recovery-options > svg {
+  color: var(--purple);
+}
+
+.recovery-options > div:first-of-type p,
+.recovery-options article p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.recovery-options > div:last-child {
+  display: grid;
+  gap: 8px;
+}
+
+.recovery-options article {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.recovery-options article > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recovery-options article small {
+  display: block;
+  margin: 7px 0;
+  color: var(--soft);
+  line-height: 1.4;
+}
+
+.evidence-consistency-warning {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(242, 188, 46, 0.36);
+  border-radius: 8px;
+  color: var(--amber);
+  background: rgba(242, 188, 46, 0.055);
+}
+
+.evidence-consistency-warning p {
+  margin: 4px 0 0;
+  color: var(--soft);
+  line-height: 1.45;
+}
+
+.action-inventory {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.action-inventory summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.action-inventory summary::-webkit-details-marker { display: none; }
+.action-inventory summary span { display: grid; gap: 2px; }
+.action-inventory summary small { color: var(--muted); font-weight: 400; }
+.action-inventory summary b { display: grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; background: var(--panel-3); color: var(--soft); font-size: 11px; }
+
+.action-inventory-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 13px 13px;
+}
+
+.action-inventory-list article {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+}
+
+.action-inventory-list article p,
+.action-inventory-list article small,
+.action-inventory-list article button {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.action-inventory-list article p,
+.action-inventory-list article small { color: var(--muted); }
+.action-inventory-list .action-blocker { color: var(--danger); }
+
+.work-item-run-envelope,
+.cockpit-section {
+  display: grid;
+  gap: 12px;
+  scroll-margin-top: 58px;
+}
+
+.work-item-run-envelope {
+  padding-top: 4px;
+}
+
+.cockpit-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.cockpit-section-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.confirmation-requirements {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--soft);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.reconcile-confirmation.is-recovery {
+  border-color: rgba(169, 133, 255, 0.46);
+  background: rgba(169, 133, 255, 0.07);
+}
+
 .reconcile-blockers,
 .authorization-checks {
   display: grid;
@@ -1049,7 +1397,11 @@ button:disabled {
 .authorization-checks > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
 
 .back-link {
-  margin: 0 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2913,11 +3265,36 @@ dd {
   .downstream-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .cockpit-trust-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recovery-options {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .recovery-options > div:last-child {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 860px) {
   .app {
     grid-template-columns: 1fr;
+  }
+
+  .workspace {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .content-shell {
+    min-height: auto;
+  }
+
+  .primary-panel {
+    overflow: visible;
   }
 
   .sidebar {
@@ -2981,6 +3358,59 @@ dd {
   .work-item-facts,
   .wait-summary {
     grid-template-columns: 1fr;
+  }
+
+  .topbar.is-contextual {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .focused-resource-context strong {
+    display: none;
+  }
+
+  .work-item-title-row,
+  .action-center {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .work-item-title-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cockpit-trust-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-section-nav {
+    overflow-x: auto;
+  }
+
+  .cockpit-section-nav button {
+    min-width: 78px;
+  }
+
+  .action-center > svg,
+  .action-center-icon {
+    display: none;
+  }
+
+  .action-center .wait-summary,
+  .action-center .reconcile-actions {
+    grid-column: 1;
+  }
+
+  .recovery-options {
+    grid-template-columns: 1fr;
+  }
+
+  .recovery-options > svg {
+    display: none;
+  }
+
+  .recovery-options > div:last-child {
+    grid-column: 1;
   }
 
   .batch-gate-panel {
@@ -3089,6 +3519,12 @@ button.link-text:hover {
 .batch-gate-panel > div { display: grid; gap: 4px; }
 .batch-gate-panel label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
 .batch-gate-panel input, .batch-gate-panel select { min-width: 0; }
+
+@media (max-width: 860px) {
+  .batch-gate-panel {
+    grid-template-columns: 1fr;
+  }
+}
 
 .sr-only {
   position: absolute;

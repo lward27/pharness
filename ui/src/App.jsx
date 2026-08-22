@@ -379,9 +379,16 @@ function TopBar({ theme, setTheme, dashboard, route, scope, setScope }) {
     navigate("Audit", search.trim() || undefined);
   };
 
+  const focusedWorkItem = route.view === "WorkItems" && typeof route.param === "string" && route.param !== "new";
+  const focusedRun = route.view === "Run Detail" && typeof route.param === "string";
+  const focusedResource = focusedWorkItem || focusedRun || route.view === "Flow";
+
   return (
-    <header className="topbar">
-      <div className="scope-group">
+    <header className={`topbar ${route.view === "Audit" ? "has-search" : "is-contextual"}`}>
+      {focusedResource ? <div className="focused-resource-context">
+        {focusedWorkItem ? <ClipboardText size={20} /> : focusedRun ? <Pulse size={20} /> : <GitBranch size={20} />}
+        <div><span>{focusedWorkItem ? "WorkItem cockpit" : focusedRun ? "Run workspace" : "Delivery evidence"}</span><strong>{focusedWorkItem ? "One supervised lifecycle boundary at a time" : "Durable controller state"}</strong></div>
+      </div> : <div className="scope-group">
         <ScopeSelect icon={Stack} label="Environment" value={scope.environment} options={environmentOptions} onChange={(value) => updateScope("environment", value)} />
         <ScopeSelect icon={Cube} label="Namespace" value={scope.namespace} options={namespaceOptions} onChange={(value) => updateScope("namespace", value)} />
         <ScopeSelect icon={Cube} label="Repository" value={scope.repo} options={repoOptions} onChange={(value) => updateScope("repo", value)} />
@@ -396,12 +403,12 @@ function TopBar({ theme, setTheme, dashboard, route, scope, setScope }) {
           ]}
           onChange={(value) => updateScope("productionImpacting", value)}
         />
-      </div>
-      <form className="search" onSubmit={submitSearch}>
+      </div>}
+      {route.view === "Audit" ? <form className="search" onSubmit={submitSearch}>
         <MagnifyingGlass size={18} />
         <input aria-label="Search audit events" placeholder="Search audit events..." value={search} onChange={(event) => setSearch(event.target.value)} />
         <button type="submit" aria-label="Run audit search" title="Run audit search"><MagnifyingGlass size={16} /></button>
-      </form>
+      </form> : null}
       <div className="theme-toggle" aria-label="Theme">
         <IconButton label="Light theme" onClick={() => setTheme("light")} active={theme === "light"}>
           <CircleHalf size={18} />
