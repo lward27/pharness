@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle, Clock, Lifebuoy, RocketLaunch, Warning } from "@phosphor-icons/react";
 import { DeliveryChain } from "../components/DeliveryChain";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
 import { findCorrectiveAction, type LifecycleAction } from "../lib/lifecycleReview";
+import { defaultWorkItemSection, type WorkItemSection } from "../lib/runWorkspace";
 import { selectPrimaryWorkItemAction, selectRecoveryActions } from "../lib/workItemActions";
 import { advanceWorkItem, applyWorkItemReconcile, executeWorkItemAction, getOperatorName, loadRollbackIntent, loadWorkItem, loadWorkItemFlow, previewWorkItemReconcile } from "../pharnessApi";
 import { LifecycleReviewDrawer } from "./LifecycleReviewDrawer";
@@ -98,13 +99,15 @@ function ActionInventory({ actions, completed, primaryAction, onReview }: { acti
   </details>;
 }
 
-function SectionNavigation() {
-  const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+function SectionNavigation({ active, attemptActive, onSelect }: { active: WorkItemSection; attemptActive: boolean; onSelect: (section: WorkItemSection) => void }) {
+  const sections: { id: WorkItemSection; label: string }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "attempt", label: "Attempt" },
+    { id: "delivery", label: "Delivery" },
+    { id: "evidence", label: "Evidence" },
+  ];
   return <nav className="cockpit-section-nav" aria-label="WorkItem sections">
-    <button type="button" onClick={() => goTo("work-item-overview")}>Overview</button>
-    <button type="button" onClick={() => goTo("work-item-attempt")}>Attempt</button>
-    <button type="button" onClick={() => goTo("work-item-delivery")}>Delivery</button>
-    <button type="button" onClick={() => goTo("work-item-evidence")}>Evidence</button>
+    {sections.map((section) => <button key={section.id} type="button" aria-current={active === section.id ? "page" : undefined} onClick={() => onSelect(section.id)}>{section.label}{section.id === "attempt" && attemptActive ? <span>Live</span> : null}</button>)}
   </nav>;
 }
 
@@ -115,6 +118,8 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
   const [reviewMode, setReviewMode] = useState<false | "action" | "advance">(false);
   const [selectedRailAction, setSelectedRailAction] = useState<LifecycleAction | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<any>(null);
+  const [activeSection, setActiveSection] = useState<WorkItemSection>("overview");
+  const defaultedWorkItem = useRef<string | null>(null);
 
   useEffect(() => {
     if (operatorName) setActor((current) => current === "console-operator" ? operatorName : current);
@@ -146,6 +151,12 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workItemId, autoRefresh, state.item?.status, state.flow?.controller_waits?.length]);
+
+  useEffect(() => {
+    if (!state.item?.id || defaultedWorkItem.current === state.item.id) return;
+    defaultedWorkItem.current = state.item.id;
+    setActiveSection(defaultWorkItemSection(state.item));
+  }, [state.item]);
 
   const apply = async () => {
     if (!reason.trim() || !actor.trim()) return;
@@ -207,6 +218,7 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
   const delivery = state.flow?.delivery_configuration ?? {};
   const safeAdvance = !completed && preview?.can_apply && ["declare_work_plan", "capture_change_set", "prepare_git_delivery", "complete_work_item"].includes(preview?.action);
   const incompleteDeliveryEvidence = completed && (state.flow?.delivery_segments ?? []).some((segment: any) => segment.status !== "complete");
+  const attemptActive = defaultWorkItemSection(item) === "attempt";
 
   const reviewAction = (entry: LifecycleAction, mode: "action" | "advance" = "action") => {
     setSelectedRailAction(entry);
@@ -239,7 +251,7 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
       </div>
     </header>
 
-    <SectionNavigation />
+    <SectionNavigation active={activeSection} attemptActive={attemptActive} onSelect={setActiveSection} />
 
     {completed ? <section className="action-center is-complete" aria-label="WorkItem outcome">
       <CheckCircle size={28} weight="fill" />
@@ -265,22 +277,22 @@ export function WorkItemDetailView({ workItemId, refreshDashboard, autoRefresh, 
 
     {incompleteDeliveryEvidence ? <section className="evidence-consistency-warning" role="status"><Warning size={20} /><div><strong>Delivery evidence needs reconciliation</strong><p>The controller reports this WorkItem as completed, while the server-backed delivery stage model still contains incomplete stages. No missing stage state has been inferred; inspect the durable artifacts before reusing this record as release proof.</p></div></section> : null}
 
-    <ActionInventory actions={actions} completed={completed} primaryAction={railAction} onReview={reviewAction} />
-
-    <section className="work-item-run-envelope">
+    {activeSection === "overview" ? <section className="work-item-run-envelope" id="work-item-overview-panel">
       <div><span className="eyebrow">Execution envelope</span><h2>Attempt and trust boundaries</h2></div>
       <div className="work-item-facts"><ReviewItem label="Attempts" value={`${item.attempt_count} used / ${item.max_attempts} total`} /><ReviewItem label="Turns" value={`${item.run_budget?.initial_turns ?? 48} initial / ${item.run_budget?.hard_turns ?? 100} hard`} /><ReviewItem label="Tokens" value={`${item.run_budget?.initial_tokens ?? 400000} initial / ${item.run_budget?.hard_tokens ?? 1000000} hard`} /><ReviewItem label="Workspace" value={workspace ? `${repositoryLabel(workspace.source_repo)} · ${compactId(workspace.resolved_commit ?? workspace.source_ref)}` : "Not provisioned"} /><ReviewItem label="Attempt branch" value={workspace?.branch ?? "Not created"} /><ReviewItem label="Retention" value={workspace?.retention_status ?? "Not created"} /><ReviewItem label="Acceptance commands" value={item.acceptance_criteria?.join(" · ") || "No explicit criteria"} /><ReviewItem label="WorkItem" value={<CopyIdentifier value={item.id} label={item.title} />} /></div>
-    </section>
+    </section> : null}
 
-    <section className="cockpit-section" id="work-item-attempt"><div className="cockpit-section-heading"><span className="eyebrow">Attempt</span><h2>Agent workspace</h2></div>{item.current_run_id ? <RunDetailView runId={String(item.current_run_id)} refreshDashboard={refreshDashboard} onOpenQueue={() => {}} operatorName={actor} /> : <EmptyState title="No active attempt" body="The live model and tool console appears here while an approved coding attempt is active." />}<AttemptHistory events={state.flow?.audit_events ?? []} /></section>
+    {activeSection === "attempt" ? <section className="cockpit-section attempt-cockpit-section" id="work-item-attempt"><div className="cockpit-section-heading"><span className="eyebrow">Attempt</span><h2>Agent workspace</h2><p>Environment, execution budget, live tool activity, changes, and acceptance evidence for the current isolated run.</p></div>{item.current_run_id ? <RunDetailView runId={String(item.current_run_id)} refreshDashboard={refreshDashboard} onOpenQueue={() => {}} operatorName={actor} embedded /> : <EmptyState title="No active attempt" body="The live model and tool console appears here while an approved coding attempt is active." />}<AttemptHistory events={state.flow?.audit_events ?? []} /></section> : null}
 
-    <section className="cockpit-section" id="work-item-delivery">
+    {activeSection === "delivery" ? <section className="cockpit-section" id="work-item-delivery">
       <div className="cockpit-section-heading"><span className="eyebrow">Delivery</span><h2>Contracts, target, and rollout</h2></div>
       <section className="delivery-configuration"><div className="delivery-config-grid"><ReviewItem label="PipelineContract" value={delivery.pipeline_contract_id ?? item.pipeline_contract_id ?? "Not selected"} /><ReviewItem label="DeploymentContract" value={delivery.deployment_contract_id ?? item.deployment_contract_id ?? "Not selected"} /><ReviewItem label="GitOps target" value={delivery.gitops?.repository ? `${repositoryLabel(delivery.gitops.repository)} · ${delivery.gitops.kustomization_path}` : "Not configured"} /><ReviewItem label="Argo Application" value={delivery.target?.argo_application ?? "Not configured"} /><ReviewItem label="Argo health" value={delivery.argo?.sync_status || delivery.argo?.health_status ? `${delivery.argo?.sync_status ?? "Unknown"} · ${delivery.argo?.health_status ?? "Unknown"}` : "Not observed"} /><ReviewItem label="Current digest" value={delivery.current_digest ?? "Not observed"} /><ReviewItem label="Desired digest" value={delivery.desired_digest ?? "Not built"} /><ReviewItem label="GitOps revision" value={delivery.gitops?.desired_revision ?? "Not merged"} /><ReviewItem label="Rollback owner" value={delivery.rollback_owner ?? "Not assigned"} /><ReviewItem label="Production window" value={delivery.production_window_expires_at ?? "Not opened"} /><ReviewItem label="Baseline digest" value={delivery.baseline_digest ?? "Not captured"} /><ReviewItem label="RollbackIntent" value={delivery.rollback_status ?? state.rollbackIntent?.status ?? "Unavailable"} /></div></section>
       <DeliveryChain segments={state.flow?.delivery_segments} onOpenResource={setSelectedArtifact} />
-    </section>
+    </section> : null}
 
-    <section className="cockpit-section" id="work-item-evidence"><div className="cockpit-section-heading"><span className="eyebrow">Evidence</span><h2>Durable controller record</h2></div><section className="evidence-summary"><ReviewItem label="Immutable source" value={item.source_commit ?? "Legacy mutable source"} tone={item.source_commit ? "healthy" : "risk"} /><ReviewItem label="Audit events" value={state.flow?.audit_events?.length ?? 0} /><ReviewItem label="Persisted workspaces" value={state.flow?.workspaces?.length ?? 0} /><ReviewItem label="Controller waits" value={state.flow?.controller_waits?.length ?? 0} /></section></section>
+    {activeSection === "evidence" ? <section className="cockpit-section" id="work-item-evidence"><div className="cockpit-section-heading"><span className="eyebrow">Evidence</span><h2>Durable controller record</h2></div><section className="evidence-summary"><ReviewItem label="Immutable source" value={item.source_commit ?? "Legacy mutable source"} tone={item.source_commit ? "healthy" : "risk"} /><ReviewItem label="Audit events" value={state.flow?.audit_events?.length ?? 0} /><ReviewItem label="Persisted workspaces" value={state.flow?.workspaces?.length ?? 0} /><ReviewItem label="Controller waits" value={state.flow?.controller_waits?.length ?? 0} /></section></section> : null}
+
+    <ActionInventory actions={actions} completed={completed} primaryAction={railAction} onReview={reviewAction} />
 
     {reviewMode && selectedRailAction ? <LifecycleReviewDrawer action={selectedRailAction} actions={actions} item={item} flow={state.flow} preview={preview} rollbackIntent={state.rollbackIntent} actor={actor} reason={reason} applying={state.status === "applying"} error={state.error} onActorChange={setActor} onReasonChange={setReason} onActionChange={setSelectedRailAction} onConfirm={reviewMode === "advance" ? advanceSafe : apply} onClose={() => { setReviewMode(false); setSelectedRailAction(null); setReason(""); }} /> : null}
     {selectedArtifact ? <DurableArtifactPanel artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} /> : null}

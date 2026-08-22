@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowsClockwise, FileText, Rows, X } from "@phosphor-icons/react";
+import { ArrowsClockwise, CheckCircle, FileText, Rows, Warning, X } from "@phosphor-icons/react";
 import { CopyIdentifier, EmptyState, ReviewItem, StatusPill } from "../components/Operational";
 import { compactId, formatTimestamp, lifecycleTone, statusText, timestampTitle } from "../lib/formatters";
+import { acceptanceRows, budgetMetric, changedPaths, formatRunDuration, isActiveRun, workspaceEvents } from "../lib/runWorkspace";
 import { cancelRun, decideRunApproval, loadRunDetail, subscribeRunEvents } from "../api/runs";
 
 type RunDetailViewProps = {
@@ -9,6 +10,7 @@ type RunDetailViewProps = {
   refreshDashboard?: () => Promise<unknown> | void;
   onOpenQueue: () => void;
   operatorName?: string;
+  embedded?: boolean;
 };
 
 function canCancelRun(run: any) {
@@ -81,23 +83,99 @@ function streamDescription(streamState: any) {
 }
 
 function StreamStatusPanel({ streamState, eventCount, cursor, run }: any) {
-  const rows = [["Source", "API events/stream"], ["Replay cursor", cursor === null ? "terminal snapshot" : `after seq ${cursor}`], ["Durable events", String(eventCount)], ["Run state", statusText(run?.status, "loading")]];
-  return <section className={`stream-status-panel stream-panel-${streamState.status}`}><div><strong>{streamLabel(streamState)}</strong><span>{streamDescription(streamState)}</span></div><div className="stream-facts">{rows.map(([label, value]) => <span key={label}><small>{label}</small><b>{value}</b></span>)}</div></section>;
+  return <div className={`attempt-stream-status stream-panel-${streamState.status}`}>
+    <span className={`stream-chip stream-${streamState.status}`}><i className={`dot ${streamState.status === "error" ? "blocked" : streamState.status === "live" ? "running" : "future"}`} />{streamLabel(streamState)}</span>
+    <p>{streamDescription(streamState)}</p>
+    <small>{eventCount} durable events · {cursor === null ? "terminal snapshot" : `replay after ${cursor}`} · {statusText(run?.status, "loading")}</small>
+  </div>;
 }
 
-function RunEvents({ events }: { events: any[] }) {
-  return <section className="review-surface"><div className="table-heading"><div><h2>Events</h2><p>Durable event log for replaying the run.</p></div><strong className="counter-label">{events.length}</strong></div>{events.length ? <div className="event-list">{events.map((event) => <div className="event-list-row" key={event.event_id ?? `${event.seq}-${event.type}`}><span>{event.seq}</span><i className={`dot ${eventTone(event.type)}`} /><strong>{event.type}</strong><p>{eventPayloadSummary(event.payload)}</p></div>)}</div> : <EmptyState title="No events" body="No durable events have been recorded for this run yet." />}</section>;
+function BudgetPanel({ run, operatorSummary }: { run: any; operatorSummary: any }) {
+  const budget = run?.run_budget ?? {};
+  const consumed = run?.budget_consumption ?? {};
+  const turns = budgetMetric(consumed.turns_used ?? operatorSummary?.turns, consumed.allowed_turns ?? budget.initial_turns);
+  const tokens = budgetMetric(consumed.tokens_used ?? operatorSummary?.actual_total_tokens, consumed.allowed_tokens ?? budget.initial_tokens);
+  const activeTime = budgetMetric(consumed.active_execution_seconds_used, budget.active_execution_seconds);
+  const metrics = [
+    { label: "Turns", metric: turns, used: String(turns.used), remaining: String(turns.remaining), limit: `${turns.limit} allowed` },
+    { label: "Tokens", metric: tokens, used: turns.limit ? tokens.used.toLocaleString() : String(tokens.used), remaining: tokens.remaining.toLocaleString(), limit: `${tokens.limit.toLocaleString()} allowed` },
+    { label: "Active time", metric: activeTime, used: formatRunDuration(activeTime.used), remaining: formatRunDuration(activeTime.remaining), limit: `${formatRunDuration(activeTime.limit)} allowed` },
+  ];
+  return <section className="attempt-budget-panel" aria-label="Run budget">
+    <div className="attempt-panel-heading"><div><span className="eyebrow">Execution budget</span><h3>Capacity for this workspace</h3></div><small>{operatorSummary?.budget_extensions ?? consumed.extensions ?? 0} extensions</small></div>
+    <div className="attempt-budget-grid">{metrics.map(({ label, metric, used, remaining, limit }) => <article className={`budget-meter tone-${metric.tone}`} key={label}>
+      <div><strong>{label}</strong><small>{limit}</small></div>
+      <progress max={100} value={metric.percent} aria-label={`${label} budget used`} />
+      <p><b>{used} used · {remaining} remaining</b></p>
+    </article>)}</div>
+  </section>;
 }
 
-function RunDiff({ diff, changes }: { diff: any; changes: any[] }) {
-  return <section className="review-surface"><div className="table-heading"><div><h2>Diff</h2><p>File changes persisted for this run.</p></div><strong className="counter-label">{changes.length}</strong></div>{changes.length ? <div className="change-list">{changes.map((change) => <div className="change-card" key={change.id}><strong>{change.path}</strong><small title={timestampTitle(change.created_at)}>{formatTimestamp(change.created_at)}</small><pre>{change.diff}</pre></div>)}</div> : <div className="diff-box"><div><FileText size={18} /> No file changes</div><pre>{diff?.diff || "This run did not persist a file diff."}</pre></div>}</section>;
+function EnvironmentPanel({ preparation, active }: { preparation: any; active: boolean }) {
+  if (!preparation?.status) return <section className="attempt-environment-panel is-pending"><div className="attempt-panel-heading"><div><span className="eyebrow">Environment readiness</span><h3>Preparation evidence pending</h3></div><StatusPill tone="pending">Pending</StatusPill></div><p>The model will not start until the isolated runner, immutable source, executables, and dependency preparation have been recorded.</p></section>;
+  const snapshot = preparation.environment_snapshot ?? {};
+  const contract = preparation.project_contract ?? {};
+  const logs = Array.isArray(preparation.logs) ? preparation.logs : [];
+  return <details className="attempt-environment-panel" open={active}>
+    <summary><div><span className="eyebrow">Environment readiness</span><h3>{statusText(preparation.status, "Not prepared")}</h3><p>{preparation.environment_profile_id ?? "Runner unavailable"} · {snapshot.python_version ?? "Python pending"}</p></div><StatusPill tone={preparation.status === "succeeded" ? "healthy" : preparation.status === "failed" ? "risk" : "pending"}>{statusText(preparation.status)}</StatusPill></summary>
+    <div className="environment-fact-grid">
+      <ReviewItem label="Pinned source" value={preparation.source_commit ?? "Unavailable"} />
+      <ReviewItem label="Runner digest" value={snapshot.runner_image_digest ?? "Pending"} />
+      <ReviewItem label="Python" value={snapshot.python_path ? `${snapshot.python_version} · ${snapshot.python_path}` : "Pending"} />
+      <ReviewItem label="Writable paths" value={snapshot.writable_paths?.join(" · ") ?? contract.writable_paths?.join(" · ") ?? "Pending"} />
+      <ReviewItem label="Network policy" value={snapshot.agent_network_policy ?? contract.agent_network ?? "Undeclared"} />
+      <ReviewItem label="Unavailable tools" value={snapshot.unavailable_tools?.join(" · ") || "None declared"} />
+    </div>
+    {preparation.error ? <p className="api-banner">{preparation.error}</p> : null}
+    {logs.length ? <details className="preparation-log"><summary>Preparation log · {logs.length} steps</summary><ol>{logs.map((entry: any, index: number) => <li key={`${entry?.step ?? "step"}-${index}`}><strong>{statusText(entry?.step, `Step ${index + 1}`)}</strong><StatusPill tone={entry?.status === "succeeded" ? "healthy" : entry?.status === "failed" ? "risk" : undefined}>{statusText(entry?.status, "Recorded")}</StatusPill></li>)}</ol></details> : null}
+  </details>;
+}
+
+function ToolStream({ events }: { events: any[] }) {
+  const executionEvents = workspaceEvents(events);
+  return <section className="attempt-tool-stream" aria-label="Live tool and model stream">
+    <div className="attempt-panel-heading"><div><span className="eyebrow">Live execution</span><h3>Tool and model stream</h3></div><strong className="counter-label">{executionEvents.length}</strong></div>
+    {executionEvents.length ? <div className="attempt-event-list">{executionEvents.map((event) => <article key={event.event_id ?? `${event.seq}-${event.type}`}>
+      <span>{event.seq}</span><i className={`dot ${eventTone(event.type)}`} /><div><strong>{statusText(event.type)}</strong><p>{eventPayloadSummary(event.payload)}</p></div>
+    </article>)}</div> : <EmptyState title="Waiting for execution events" body="Preparation and model/tool actions will stream here from the durable event cursor." />}
+  </section>;
+}
+
+function AcceptancePanel({ operatorSummary }: { operatorSummary: any }) {
+  const rows = acceptanceRows(operatorSummary);
+  return <section className="attempt-acceptance-panel" aria-label="Acceptance evidence">
+    <div className="attempt-panel-heading"><div><span className="eyebrow">Verification reserve</span><h3>Declared acceptance</h3></div><strong className="counter-label">{rows.filter((row) => row.passed).length}/{rows.length}</strong></div>
+    {rows.length ? <div className="acceptance-result-list">{rows.map((row) => <article key={row.id}>{row.passed ? <CheckCircle size={18} weight="fill" /> : <Warning size={18} />}<div><strong>{row.command}</strong><p>{row.passed ? "Passed with durable tool evidence." : "Failed or did not complete successfully."}</p></div><StatusPill tone={row.passed ? "healthy" : "risk"}>{row.passed ? "Passed" : "Failed"}</StatusPill></article>)}</div> : <EmptyState title="Acceptance not executed yet" body="Only exact commands declared by the WorkItem are counted as acceptance evidence." />}
+  </section>;
+}
+
+function WorkspaceChanges({ diff, changes, operatorSummary }: { diff: any; changes: any[]; operatorSummary: any }) {
+  const paths = changedPaths(changes, operatorSummary);
+  return <section className="attempt-changes-panel" aria-label="Workspace changes">
+    <div className="attempt-panel-heading"><div><span className="eyebrow">Persisted workspace</span><h3>Changed paths and diff</h3></div><strong className="counter-label">{paths.length}</strong></div>
+    {paths.length ? <ul className="changed-path-list">{paths.map((path) => <li key={path}><FileText size={16} /><strong>{path}</strong></li>)}</ul> : <EmptyState title="No file changes" body="The run has not persisted a changed path or diff yet." />}
+    {(changes.length || diff?.diff) ? <details className="persisted-diff"><summary>Review full persisted diff</summary><div className="change-list">{changes.length ? changes.map((change) => <article className="change-card" key={change.id}><div><strong>{change.path}</strong><small title={timestampTitle(change.created_at)}>{formatTimestamp(change.created_at)}</small></div><pre>{change.diff}</pre></article>) : <pre>{diff.diff}</pre>}</div></details> : null}
+  </section>;
+}
+
+function ReliabilityPanel({ operatorSummary, run }: { operatorSummary: any; run: any }) {
+  if (!operatorSummary) return null;
+  return <section className="attempt-reliability-panel"><div className="attempt-panel-heading"><div><span className="eyebrow">Context and recovery</span><h3>Harness telemetry</h3></div></div><div className="reliability-facts">
+    <ReviewItem label="Context / actual" value={`${operatorSummary.estimated_context_tokens ?? 0} estimated · ${(operatorSummary.actual_total_tokens ?? 0).toLocaleString()} actual`} />
+    <ReviewItem label="Tools" value={`${operatorSummary.tools_completed ?? 0} completed · ${operatorSummary.tools_failed ?? 0} failed`} />
+    <ReviewItem label="Recoveries / retries" value={`${operatorSummary.recoverable_failures ?? 0} / ${operatorSummary.retries ?? 0}`} />
+    <ReviewItem label="Environment probes" value={operatorSummary.environment_discovery_turns ?? 0} tone={operatorSummary.environment_discovery_turns ? "risk" : "healthy"} />
+    <ReviewItem label="Approvals / wait" value={`${operatorSummary.approval_count ?? 0} · ${formatRunDuration((operatorSummary.approval_wait_ms ?? 0) / 1000)}`} />
+    <ReviewItem label="Stop reason" value={operatorSummary.stop_reason ?? run?.stop_reason ?? (isActiveRun(run) ? "Running" : "Not recorded")} />
+  </div></section>;
 }
 
 function RunArtifacts({ artifacts }: { artifacts: any[] }) {
-  return <section className="review-surface"><div className="table-heading"><div><h2>Artifacts</h2><p>Observation and tool artifacts recorded by the runtime.</p></div><strong className="counter-label">{artifacts.length}</strong></div>{artifacts.length ? <div className="artifact-grid">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><span>{artifact.kind}</span><strong>{artifact.label}</strong><small>{artifact.mime_type ?? artifact.path ?? compactId(artifact.id)}</small><p>{artifactSummary(artifact)}</p></div>)}</div> : <EmptyState title="No artifacts" body="Read-only file-listing runs often have no artifacts. Cluster, Tekton, Argo, Prometheus, and Loki reads should appear here." />}</section>;
+  if (!artifacts.length) return null;
+  return <details className="attempt-artifacts" open><summary>Additional durable artifacts <strong>{artifacts.length}</strong></summary><div className="artifact-grid">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><span>{artifact.kind}</span><strong>{artifact.label}</strong><small>{artifact.mime_type ?? artifact.path ?? compactId(artifact.id)}</small><p>{artifactSummary(artifact)}</p></div>)}</div></details>;
 }
 
-export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorName }: RunDetailViewProps) {
+export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorName, embedded = false }: RunDetailViewProps) {
   const [state, setState] = useState<any>({ status: runId ? "loading" : "empty", detail: null, error: null });
   const [reloadToken, setReloadToken] = useState(0);
   const [streamState, setStreamState] = useState<any>({ status: "idle", error: null });
@@ -156,11 +234,6 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
   const artifacts = detail?.artifacts ?? [];
   const operatorSummary = detail?.operatorSummary;
   const preparation = detail?.environmentPreparation;
-  const budget = run?.run_budget ?? {};
-  const consumed = run?.budget_consumption ?? {};
-  const hasDurableBudget = Boolean(run?.run_budget && run?.budget_consumption);
-  const turnsUsed = consumed.turns_used ?? result.turns ?? 0;
-  const tokensUsed = consumed.tokens_used ?? operatorSummary?.actual_total_tokens;
   const cancelAllowed = canCancelRun(run);
   const cancel = async () => {
     if (!runId || !cancelAllowed) return;
@@ -179,15 +252,31 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
   };
 
   if (!runId) return <EmptyState title="No run selected" body="Open a run from the Queue view to inspect events, diffs, artifacts, and final result JSON." />;
-  return <section className="run-detail-view">
-    <div className="section-heading"><div><h1>Run Detail</h1><p>{run?.task ?? `Loading ${compactId(runId)}...`}</p></div><div className="detail-actions"><span className={`stream-chip stream-${streamState.status}`}><i className={`dot ${streamState.status === "error" ? "blocked" : streamState.status === "live" ? "running" : "future"}`} />{streamLabel(streamState)}</span><button className="primary-action" type="button" onClick={onOpenQueue}><Rows size={17} /> Queue</button><button className="primary-action" type="button" onClick={() => setReloadToken((value) => value + 1)}><ArrowsClockwise size={17} /> Reload</button><button className="primary-action deny" type="button" disabled={!cancelAllowed} onClick={cancel}><X size={17} /> Cancel</button></div></div>
+  const pendingApprovals = operatorSummary?.pending_approvals ?? [];
+  const active = isActiveRun(run);
+  return <section className={`run-detail-view attempt-workspace ${embedded ? "is-embedded" : "is-standalone"}`}>
+    <header className="attempt-workspace-header">
+      <div><span className="eyebrow">{embedded ? "Current isolated run" : "Run Detail"}</span>{embedded ? <h3>{run?.task ?? `Loading ${compactId(runId)}...`}</h3> : <h1>Run Detail</h1>}<p>{embedded ? <CopyIdentifier value={runId} label={run?.task ?? "Run"} /> : (run?.task ?? `Loading ${compactId(runId)}...`)}</p></div>
+      <div className="attempt-header-state"><StatusPill tone={lifecycleTone(run?.status)}>{statusText(run?.status, state.status)}</StatusPill><StreamStatusPanel streamState={streamState} eventCount={events.length} cursor={streamCursor} run={run} /></div>
+      <div className="detail-actions">{!embedded ? <button className="primary-action" type="button" onClick={onOpenQueue}><Rows size={17} /> Queue</button> : null}<button type="button" onClick={() => setReloadToken((value) => value + 1)}><ArrowsClockwise size={17} /> Reload evidence</button><button className="deny" type="button" disabled={!cancelAllowed} onClick={cancel}><X size={17} /> Cancel run</button></div>
+    </header>
+
+    <div className="attempt-scope-strip"><ReviewItem label="Run" value={<CopyIdentifier value={runId} label={compactId(runId)} />} /><ReviewItem label="Pinned scope" value={runScopeLabel(run?.scope ?? result.run_scope)} /><ReviewItem label="Started" value={run?.started_at ? <time title={timestampTitle(run.started_at)}>{formatTimestamp(run.started_at)}</time> : "Unknown"} /><ReviewItem label="Finished" value={run?.finished_at ? <time title={timestampTitle(run.finished_at)}>{formatTimestamp(run.finished_at)}</time> : "Active"} /></div>
+
     {state.error ? <div className="api-banner">Run detail failed: {state.error}</div> : null}{streamState.status === "error" ? <div className="api-banner">Event stream: {streamState.error}</div> : null}{runNotice ? <span className="action-notice">{runNotice}</span> : null}
-    <div className="run-detail-grid"><ReviewItem label="Run" value={<CopyIdentifier value={runId} label={run?.task ?? "Run"} />} /><ReviewItem label="Status" value={statusText(run?.status, state.status)} tone={run?.status === "failed" ? "risk" : ["approval_required", "budget_extension_required", "preparing"].includes(run?.status) ? "pending" : undefined} /><ReviewItem label="Submitted" value={run?.started_at ? <time title={timestampTitle(run.started_at)}>{formatTimestamp(run.started_at)}</time> : "unknown"} /><ReviewItem label="Finished" value={run?.finished_at ? <time title={timestampTitle(run.finished_at)}>{formatTimestamp(run.finished_at)}</time> : "not finished"} /><ReviewItem label="Turns" value={hasDurableBudget ? `${turnsUsed} used · ${Math.max(0, (consumed.allowed_turns ?? budget.initial_turns) - turnsUsed)} remaining` : `${turnsUsed} used · legacy limit`} /><ReviewItem label="Tokens" value={hasDurableBudget ? `${tokensUsed ?? 0} used · ${Math.max(0, (consumed.allowed_tokens ?? budget.initial_tokens) - (tokensUsed ?? 0))} remaining` : tokensUsed == null ? "Not recorded" : `${tokensUsed} used · legacy limit`} /><ReviewItem label="Active time" value={hasDurableBudget ? `${consumed.active_execution_seconds_used ?? 0}s used · ${Math.max(0, budget.active_execution_seconds - (consumed.active_execution_seconds_used ?? 0))}s remaining` : "Not recorded"} /><ReviewItem label="Scope" value={runScopeLabel(run?.scope ?? result.run_scope)} /></div>
-    {preparation?.status ? <section className="environment-snapshot"><div><span className="eyebrow">Environment readiness</span><h2>{statusText(preparation.status, "Not prepared")}</h2></div><ReviewItem label="Runner profile" value={preparation.environment_profile_id ?? "Unavailable"} /><ReviewItem label="Source SHA" value={preparation.source_commit ?? "Unavailable"} /><ReviewItem label="Runner digest" value={preparation.environment_snapshot?.runner_image_digest ?? "Pending"} /><ReviewItem label="Python" value={preparation.environment_snapshot ? `${preparation.environment_snapshot.python_version} · ${preparation.environment_snapshot.python_path}` : "Pending"} /><ReviewItem label="Writable paths" value={preparation.environment_snapshot?.writable_paths?.join(" · ") ?? preparation.project_contract?.writable_paths?.join(" · ") ?? "Pending"} /><ReviewItem label="Unavailable tools" value={preparation.environment_snapshot?.unavailable_tools?.join(" · ") ?? "Pending"} />{preparation.error ? <p className="api-banner">{preparation.error}</p> : null}<pre>{JSON.stringify(preparation.logs ?? [], null, 2)}</pre></section> : null}
-    {operatorSummary ? <section className="operator-summary"><ReviewItem label="Context estimate" value={`${operatorSummary.estimated_context_tokens ?? 0} tokens`} /><ReviewItem label="Actual usage" value={`${operatorSummary.actual_total_tokens ?? 0} total`} /><ReviewItem label="Recoveries / retries" value={`${operatorSummary.recoverable_failures ?? 0} / ${operatorSummary.retries ?? 0}`} /><ReviewItem label="Tools" value={`${operatorSummary.tools_completed ?? 0} completed · ${operatorSummary.tools_failed ?? 0} failed`} /><ReviewItem label="Environment probes" value={operatorSummary.environment_discovery_turns ?? 0} /><ReviewItem label="Approvals / wait" value={`${operatorSummary.approval_count ?? 0} / ${operatorSummary.approval_wait_ms ?? 0}ms`} /><ReviewItem label="Preparation" value={operatorSummary.preparation_duration_ms == null ? "Not recorded" : `${operatorSummary.preparation_duration_ms}ms`} /><ReviewItem label="Budget extensions" value={operatorSummary.budget_extensions ?? 0} /><ReviewItem label="Stop reason" value={operatorSummary.stop_reason ?? run?.stop_reason ?? "Running"} /><ReviewItem label="Compactions" value={operatorSummary.compactions ?? 0} /><ReviewItem label="Truncated results" value={operatorSummary.truncated_tool_results ?? 0} /></section> : null}
-    {operatorSummary?.pending_approvals?.length ? <section className="inline-approval"><span className="eyebrow">Inline tool approval</span><h2>Model action is paused for review</h2><p>Pending approval {operatorSummary.pending_approvals.join(", ")}. The exact action remains durable and execution resumes only after this decision.</p><label>Decision reason<textarea rows={2} value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} /></label><div><button className="primary-action" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("approve")}>Approve and resume</button><button className="primary-action deny" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("deny")}>Deny</button></div></section> : null}
-    <StreamStatusPanel streamState={streamState} eventCount={events.length} cursor={streamCursor} run={run} />
-    <section className="review-surface"><div className="table-heading"><div><h2>Result</h2><p>Structured final result returned by the run.</p></div><StatusPill tone={lifecycleTone(result.status ?? run?.status)}>{statusText(result.status ?? run?.status, state.status)}</StatusPill></div><p>{result.summary ?? result.error ?? "No result summary has been recorded yet."}</p></section>
-    <section className="run-detail-layout"><RunEvents events={events} /><RunDiff diff={detail?.diff} changes={changes} /></section><RunArtifacts artifacts={artifacts} />
+
+    {run?.status === "budget_extension_required" ? <section className="attempt-boundary-banner is-budget"><Warning size={22} /><div><span className="eyebrow">Budget boundary</span><h3>Workspace retained for in-place extension</h3><p>The run transcript and workspace remain intact. Review the current WorkItem action to authorize only the server-derived extension.</p></div></section> : null}
+    {pendingApprovals.length ? <section className="attempt-boundary-banner attempt-inline-approval"><Warning size={22} /><div><span className="eyebrow">Inline tool approval</span><h3>Model action is paused for review</h3><p>Pending approval {pendingApprovals.join(", ")}. The exact action remains durable and execution resumes only after this decision.</p><label>Decision reason<textarea rows={2} value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} /></label><div className="inline-approval-actions"><button className="primary-action" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("approve")}>Approve and resume</button><button className="deny" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("deny")}>Deny</button></div></div></section> : null}
+
+    <BudgetPanel run={run} operatorSummary={operatorSummary} />
+    <EnvironmentPanel preparation={preparation} active={run?.status === "preparing" || preparation?.status === "failed"} />
+
+    <div className="attempt-workspace-grid">
+      <div className="attempt-workspace-primary"><ToolStream events={events} /><AcceptancePanel operatorSummary={operatorSummary} /></div>
+      <aside className="attempt-workspace-evidence"><WorkspaceChanges diff={detail?.diff} changes={changes} operatorSummary={operatorSummary} /><ReliabilityPanel operatorSummary={operatorSummary} run={run} /></aside>
+    </div>
+
+    {(result.summary || result.error || !active) ? <section className="attempt-result-panel"><div className="attempt-panel-heading"><div><span className="eyebrow">Run outcome</span><h3>{result.summary ?? result.error ?? "No final result has been recorded."}</h3></div><StatusPill tone={lifecycleTone(result.status ?? run?.status)}>{statusText(result.status ?? run?.status, state.status)}</StatusPill></div></section> : null}
+    <RunArtifacts artifacts={artifacts} />
   </section>;
 }

@@ -149,6 +149,7 @@ test("WorkItem detail exposes active wait timing and advisory attempt history", 
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await expect(page.getByText("Next observation")).toBeVisible();
+  await page.getByLabel("WorkItem sections").getByRole("button", { name: /^Attempt/ }).click();
   await expect(page.getByText("Policy Denied")).toBeVisible();
   await expect(page.getByText(/Recommended action: Revise Plan Or Authorization/)).toBeVisible();
   await expect(page.getByText(/advisory evidence/)).toBeVisible();
@@ -487,6 +488,7 @@ test("rollback rail exposes exact approvals and digest-bound delivery evidence",
   });
   await page.goto(`/#/work-items/${workItem.id}`);
   await expect(page.getByLabel("Recovery options").getByText("Approvals: Production Rollback Deployment · Cluster Mutation · Production Impact")).toBeVisible();
+  await page.getByLabel("WorkItem sections").getByRole("button", { name: "Delivery" }).click();
   await expect(page.getByText(`sha256:${"b".repeat(64)}`, { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Review exact action" }).click();
   await expect(page.getByRole("heading", { name: "Review recovery action" })).toBeVisible();
@@ -639,6 +641,8 @@ test("budget extension resumes the existing workspace from an exact server actio
     [`/api/runs/${workItem.current_run_id}/operator-summary`]: { run_id: workItem.current_run_id, actual_total_tokens: 365000, budget_extensions: 0, stop_reason: "soft_turn_budget_exhausted", pending_approvals: [] },
   });
   await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByLabel("WorkItem sections").getByRole("button", { name: /^Attempt/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Workspace retained for in-place extension" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve Budget Extension" }).first()).toBeEnabled();
   await expect(page.getByText("48 used · 0 remaining")).toBeVisible();
   await expect(page).toHaveScreenshot("work-item-budget-extension.png", { fullPage: true });
@@ -659,17 +663,56 @@ test("active coding displays the verified environment snapshot and live budget",
   });
   await mockApi(page, {
     [`/api/runs/${runId}`]: { id: runId, status: "running", task: "Add pure yfinance validation", started_at: "1786032000000", scope: { namespace: "apps-prod", repo: "lward27/yfinance_wrapper", branch: "pharness/attempt-1" }, run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000, active_execution_seconds: 3600 }, budget_consumption: { allowed_turns: 48, allowed_tokens: 400000, turns_used: 7, tokens_used: 52000, active_execution_seconds_used: 240 }, result: {} },
-    [`/api/runs/${runId}/events`]: { events: [{ event_id: "evt_active", seq: 1, type: "tool.finished", payload: { summary: "Patched src/yfinance_wrapper/validation.py", status: "ok" } }] },
+    [`/api/runs/${runId}/events`]: { events: [{ event_id: "evt_model", seq: 1, type: "model.request_started", payload: { summary: "Turn 7 started" } }, { event_id: "evt_active", seq: 2, type: "tool.finished", payload: { summary: "Patched src/yfinance_wrapper/validation.py", status: "ok" } }] },
     [`/api/runs/${runId}/diff`]: { run_id: runId, changes: [{ id: "chg_active", path: "src/yfinance_wrapper/validation.py", diff: "+def normalize_ticker(value):", created_at: "1786032010000" }], diff: "+def normalize_ticker(value):" },
     [`/api/runs/${runId}/artifacts`]: { artifacts: [] },
-    [`/api/runs/${runId}/operator-summary`]: { run_id: runId, actual_total_tokens: 52000, tools_completed: 4, tools_failed: 0, environment_discovery_turns: 0, approval_count: 0, approval_wait_ms: 0, preparation_duration_ms: 84000, budget_extensions: 0, pending_approvals: [] },
-    [`/api/runs/${runId}/environment-preparation`]: { id: "envprep_active", status: "succeeded", environment_profile_id: "python-3.11", source_commit: "d".repeat(40), environment_snapshot: { runner_image_digest: `registry.lucas.engineering/pharness-python-runner@sha256:${"e".repeat(64)}`, python_version: "Python 3.11.13", python_path: "/workspace/.pharness-runtime/venv/bin/python", writable_paths: ["src/**", "tests/**", "readme.md"], unavailable_tools: ["docker", "podman", "apt", "apk"] }, logs: [{ step: "dependencies", status: "succeeded" }] },
+    [`/api/runs/${runId}/operator-summary`]: { run_id: runId, turns: 7, actual_total_tokens: 52000, tools_completed: 4, tools_failed: 0, changed_paths: ["src/yfinance_wrapper/validation.py"], test_results: [{ command: "python -m unittest discover -s tests -v", passed: true, result: { status: "ok" } }], acceptance_evidence: [{ command: "python -m unittest discover -s tests -v", passed: true }], environment_discovery_turns: 0, approval_count: 0, approval_wait_ms: 0, preparation_duration_ms: 84000, budget_extensions: 0, pending_approvals: [] },
+    [`/api/runs/${runId}/environment-preparation`]: { id: "envprep_active", status: "succeeded", environment_profile_id: "python-3.11", source_commit: "d".repeat(40), environment_snapshot: { runner_image_digest: `registry.lucas.engineering/pharness-python-runner@sha256:${"e".repeat(64)}`, python_version: "Python 3.11.13", python_path: "/workspace/.pharness-runtime/venv/bin/python", writable_paths: ["src/**", "tests/**", "readme.md"], unavailable_tools: ["docker", "podman", "apt", "apk"], agent_network_policy: "denied" }, logs: [{ step: "dependencies", status: "succeeded" }] },
   });
   await page.goto(`/#/runs/${runId}`);
+  await expect(page.getByText("python-3.11 · Python 3.11.13")).toBeVisible();
+  await page.getByText("python-3.11 · Python 3.11.13").click();
   await expect(page.getByText("Python 3.11.13 · /workspace/.pharness-runtime/venv/bin/python")).toBeVisible();
+  await page.getByText("python-3.11 · Python 3.11.13").click();
+  await expect(page.getByRole("heading", { name: "Tool and model stream" })).toBeVisible();
+  await expect(page.getByLabel("Acceptance evidence").getByText("python -m unittest discover -s tests -v")).toBeVisible();
+  await expect(page.getByLabel("Workspace changes").getByRole("listitem").getByText("src/yfinance_wrapper/validation.py")).toBeVisible();
   await expect(page.getByText("Environment probes")).toBeVisible();
   await expect(page.getByText("7 used · 41 remaining")).toBeVisible();
   await expect(page).toHaveScreenshot("run-active-coding.png", { fullPage: true });
+});
+
+test("active WorkItem opens directly into the consolidated attempt workspace", async ({ page }) => {
+  const runId = "run_active_workitem_1234567890";
+  const workItem = { ...workItemFixture("witem_active_attempt_1234567890"), status: "executing", source_commit: "a".repeat(40), environment_profile_id: "python-3.11", current_run_id: runId, target_environment: "production", target_namespace: "apps-prod", run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000 } };
+  await page.addInitScript(() => {
+    window.EventSource = class {
+      addEventListener() {}
+      close() {}
+    };
+  });
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "coding_attempt_running", boundary: "attempt", effect_summary: "Observe the active isolated coding attempt.", blockers: [] },
+    [`/api/work-items/${workItem.id}/flow`]: { work_item: workItem, workspaces: [{ id: "ws_active", run_id: runId, source_repo: workItem.source_repo, resolved_commit: workItem.source_commit, branch: "pharness/attempt-1", status: "active" }], controller_waits: [], delivery_segments: [], action_rail: [] },
+    [`/api/runs/${runId}`]: { id: runId, status: "running", task: "Repair finance price cache", started_at: "1786032000000", scope: { namespace: "apps-prod", repo: "lward27/yfinance_wrapper", branch: "pharness/attempt-1" }, run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000, active_execution_seconds: 3600 }, budget_consumption: { allowed_turns: 48, allowed_tokens: 400000, turns_used: 12, tokens_used: 98000, active_execution_seconds_used: 420 }, result: {} },
+    [`/api/runs/${runId}/events`]: { events: [{ event_id: "evt_tool_started", seq: 1, type: "tool.started", payload: { summary: "Run declared unit tests" } }, { event_id: "evt_tool_finished", seq: 2, type: "tool.finished", payload: { summary: "Patched tests/test_cache.py", status: "ok" } }] },
+    [`/api/runs/${runId}/diff`]: { run_id: runId, changes: [{ id: "chg_cache", path: "tests/test_cache.py", diff: "+class CacheTests", created_at: "1786032010000" }], diff: "+class CacheTests" },
+    [`/api/runs/${runId}/artifacts`]: { artifacts: [] },
+    [`/api/runs/${runId}/operator-summary`]: { run_id: runId, turns: 12, actual_total_tokens: 98000, tools_completed: 6, tools_failed: 0, changed_paths: ["tests/test_cache.py"], test_results: [{ command: "tests pass", passed: true, result: { status: "ok" } }], environment_discovery_turns: 0, approval_count: 0, approval_wait_ms: 0, preparation_duration_ms: 72000, budget_extensions: 0, pending_approvals: [] },
+    [`/api/runs/${runId}/environment-preparation`]: { id: "envprep_workitem", status: "succeeded", environment_profile_id: "python-3.11", source_commit: workItem.source_commit, environment_snapshot: { runner_image_digest: `registry.lucas.engineering/pharness-python-runner@sha256:${"b".repeat(64)}`, python_version: "Python 3.11.13", python_path: "/workspace/.pharness-runtime/venv/bin/python", writable_paths: ["src/**", "tests/**"], unavailable_tools: ["docker", "apt"], agent_network_policy: "denied" }, logs: [{ step: "checkout", status: "succeeded" }, { step: "dependencies", status: "succeeded" }] },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await expect(page.getByLabel("WorkItem sections").getByRole("button", { name: /^Attempt/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Agent workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tool and model stream" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contracts, target, and rollout" })).toHaveCount(0);
+  await expect(page.getByText("12 used · 36 remaining")).toBeVisible();
+  await page.getByRole("button", { name: "Delivery" }).click();
+  await expect(page.getByRole("heading", { name: "Contracts, target, and rollout" })).toBeVisible();
+  await page.getByLabel("WorkItem sections").getByRole("button", { name: /^Attempt/ }).click();
+  await expect(page).toHaveScreenshot("work-item-active-attempt.png", { fullPage: true });
 });
 
 test("wizard preserves a blocked preparation preflight without creating durable work", async ({ page }) => {
