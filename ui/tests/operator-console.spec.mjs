@@ -48,6 +48,83 @@ function workItemFixture(id = "witem_preview_1234567890") {
   };
 }
 
+function deliveryFlowFixture(workItem, { verified = false } = {}) {
+  const sourceMerge = "b".repeat(40);
+  const gitopsMerge = "c".repeat(40);
+  const desiredDigest = `sha256:${"d".repeat(64)}`;
+  const baselineDigest = `sha256:${"e".repeat(64)}`;
+  const artifact = (id, kind, content_json) => ({ id, kind, label: id.replaceAll("_", " "), content_json });
+  const flow = {
+    work_item: workItem,
+    workspaces: [], controller_waits: [], action_rail: [], audit_events: [],
+    delivery_segments: [
+      { key: "source", label: "Source", status: verified ? "active" : "complete", summary: "Source delivery evidence." },
+      { key: "build", label: "Build", status: verified ? "unreached" : "complete", summary: "Build evidence." },
+      { key: "gitops", label: "GitOps", status: verified ? "unreached" : "active", summary: "GitOps evidence." },
+      { key: "deploy", label: "Deploy", status: "unreached", summary: "Deployment evidence." },
+      { key: "verify", label: "Verify", status: "unreached", summary: "Verification evidence." },
+    ],
+    delivery_configuration: {
+      pipeline_contract_id: "pcontract-yfinance",
+      deployment_contract_id: "dcontract-yfinance",
+      desired_digest: desiredDigest,
+      current_digest: baselineDigest,
+      baseline_digest: baselineDigest,
+      rollback_owner: "lucas",
+      rollback_status: "prepared",
+      production_window_expires_at: "1786033800000",
+      gitops: { repository: "https://github.com/lward27/lucas_engineering.git", kustomization_path: "charts/yfinance-wrapper/kustomization.yaml", desired_revision: verified ? gitopsMerge : null },
+      target: { environment: "production", namespace: "apps-prod", workload_name: "yfinance-wrapper", argo_application: "yfinance-wrapper" },
+      argo: verified ? { sync_status: "Synced", health_status: "Healthy" } : {},
+    },
+    sdlc_flow: {
+      change_set: { id: "cset_delivery", status: "approved", title: "Yfinance source changes", summary: "Reviewed source diff and acceptance evidence." },
+      git_delivery: {
+        latest_result: artifact("art_source_pr", "git_delivery_result", { details: { pull_request_number: 2, pull_request_url: "https://github.com/lward27/yfinance_wrapper/pull/2" } }),
+        latest_observation: artifact("art_source_observe", "git_delivery_pr_observation", { merged: true, pull_request_number: 2, merge_commit_sha: sourceMerge }),
+        latest_merge: artifact("art_source_merge", "git_delivery_merge", { pull_request_number: 2, merge_commit_sha: sourceMerge }),
+      },
+      pipeline_intent: {
+        id: "pint_delivery", status: "approved", title: "Build immutable yfinance image",
+        execution_state: { state: "pipeline_run_succeeded", pipeline_run_namespace: "tekton-pipelines", pipeline_run_name: "pharness-yfinance-build-2" },
+        execution_evidence: { status: "succeeded" },
+        intent_json: {
+          execution: { pipeline_ref: "pharness-yfinance-build" },
+          evidence: { summary: { pipeline_run_reason: "Succeeded" } },
+          build_output: { status: "verified", source_commit: sourceMerge, image_digest: desiredDigest, artifact_id: "art_build", image_ref: `registry.lucas.engineering/yfinance_wrapper@${desiredDigest}` },
+          execution_history: [{ status: "failed" }],
+        },
+      },
+      gitops_change_set: { id: "gcset_delivery", status: "approved", title: "Pin yfinance digest", gitops_repo: "https://github.com/lward27/lucas_engineering.git", kustomization_path: "charts/yfinance-wrapper/kustomization.yaml" },
+      gitops_delivery: {
+        latest_result: artifact("art_gitops_pr", "gitops_delivery_result", { details: { pull_request_number: 26, pull_request_url: "https://github.com/lward27/lucas_engineering/pull/26" } }),
+        latest_observation: artifact("art_gitops_observe", "gitops_delivery_pr_observation", verified ? { merged: true, pull_request_number: 26, merge_commit_sha: gitopsMerge } : { merged: false, pull_request_number: 26, pull_request_state: "open" }),
+        ...(verified ? { latest_merge: artifact("art_gitops_merge", "gitops_delivery_merge", { pull_request_number: 26, merge_commit_sha: gitopsMerge }) } : {}),
+      },
+      deployment_intent: { id: "dint_delivery", status: "approved", title: "Sync exact yfinance release", argo_application: "yfinance-wrapper" },
+    },
+  };
+  if (verified) {
+    flow.audit_events = [{ id: "aud_argo", kind: "deployment_intent.execution_observed", created_at: "1786032100000", payload: { extra: { sync_status: "Synced", health_status: "Healthy", operation_phase: "Succeeded", result_artifact_id: "art_argo_sync" } } }];
+    flow.sdlc_flow.release = {
+      id: "rel_delivery", status: "completed", title: "Verified yfinance release", image_digest: desiredDigest,
+      release_json: { post_sync_verification: {
+        status: "verified", deployment_contract_id: "dcontract-yfinance", argo_observation_id: "obs_argo", workload_observation_id: "obs_workload",
+        observability: { prometheus_inventory: { observation_id: "obs_prometheus", status: "observed" } },
+        checks: [
+          { code: "completed_argo_sync", passed: true, summary: "The approved Argo sync completed." },
+          { code: "argo_application_synced_healthy", passed: true, summary: "The exact Argo Application is Synced and Healthy." },
+          { code: "declared_deployment_rollout_healthy", passed: true, summary: "The declared Deployment is ready." },
+          { code: "running_image_digest", passed: true, summary: "The running image digest equals the approved build output." },
+          { code: "service_healthz", passed: true, summary: "The bounded /healthz check passed." },
+          { code: "prometheus_inventory", passed: true, summary: "Prometheus inventory was recorded." },
+        ],
+      } },
+    };
+  }
+  return flow;
+}
+
 test("empty triage is honest and free of inventory placeholders", async ({ page }) => {
   await mockApi(page);
   await page.goto("/#/triage");
@@ -457,6 +534,78 @@ test("PipelineIntent execution authorization is actionable without starting Tekt
   expect(calls[0]).toMatchObject({ reason: "authorize only supervised PipelineIntent attempt 2", state_hash: action.state_hash });
 });
 
+test("delivery workspace keeps manual merges and external evidence in their owning stages", async ({ page }) => {
+  const workItem = {
+    ...workItemFixture("witem_delivery_wait_1234567890"),
+    status: "executing",
+    title: "Deliver yfinance validation",
+    source_commit: "a".repeat(40),
+    target_environment: "production",
+    target_namespace: "apps-prod",
+    workload_name: "yfinance-wrapper",
+    argo_application: "yfinance-wrapper",
+    rollback_owner: "lucas",
+    production_impacting: true,
+  };
+  const flow = deliveryFlowFixture(workItem);
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: flow,
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "awaiting_gitops_merge", boundary: "gitops", effect_summary: "The GitOps pull request must be merged manually.", blockers: [{ code: "awaiting_external_merge", summary: "Merge GitOps PR #26 in GitHub, then refresh evidence." }] },
+    [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { status: "prepared", baseline: { image_digest: `sha256:${"e".repeat(64)}` } } },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await page.getByLabel("WorkItem sections").getByRole("button", { name: "Delivery" }).click();
+  const workspace = page.getByLabel("Delivery and release workspace");
+  await expect(workspace.getByText("2/5 stages evidenced")).toBeVisible();
+  await expect(page.getByLabel("Production release guardrails").getByText(/Open until/)).toBeVisible();
+  await expect(workspace.locator(".release-stage").nth(0).getByText("PR #2 merged manually", { exact: true }).first()).toBeVisible();
+  await expect(workspace.locator(".release-stage").nth(1).getByText("succeeded · 1 earlier failure")).toBeVisible();
+  await expect(workspace.locator(".release-stage").nth(2).getByText("PR #26 awaits manual merge", { exact: true }).first()).toBeVisible();
+  await expect(workspace.locator(".release-stage").nth(2).getByText("Human boundary")).toBeVisible();
+  await expect(page.getByLabel("Production release guardrails")).toHaveScreenshot("work-item-delivery-manual-merge-guardrails.png");
+  await workspace.locator(".release-stage").nth(2).scrollIntoViewIfNeeded();
+  await expect(page).toHaveScreenshot("work-item-delivery-manual-merge.png");
+});
+
+test("verified delivery workspace shows Argo, digest equality, and contract checks", async ({ page }) => {
+  const workItem = {
+    ...workItemFixture("witem_delivery_verified_1234567890"),
+    status: "completed",
+    status_reason: "Release verification passed every DeploymentContract check.",
+    title: "Verified yfinance release",
+    source_commit: "a".repeat(40),
+    target_environment: "production",
+    target_namespace: "apps-prod",
+    workload_name: "yfinance-wrapper",
+    argo_application: "yfinance-wrapper",
+    rollback_owner: "lucas",
+    production_impacting: true,
+  };
+  const flow = deliveryFlowFixture(workItem, { verified: true });
+  await mockApi(page, {
+    [`/api/work-items/${workItem.id}`]: workItem,
+    [`/api/work-items/${workItem.id}/flow`]: flow,
+    [`/api/work-items/${workItem.id}/reconcile`]: { can_apply: false, action: "terminal", boundary: "terminal", effect_summary: "No forward action remains.", blockers: [] },
+    [`/api/work-items/${workItem.id}/rollback-intents`]: { content: { status: "prepared", baseline: { image_digest: `sha256:${"e".repeat(64)}` } } },
+  });
+
+  await page.goto(`/#/work-items/${workItem.id}`);
+  await page.getByLabel("WorkItem sections").getByRole("button", { name: "Delivery" }).click();
+  const workspace = page.getByLabel("Delivery and release workspace");
+  await expect(workspace.getByText("5/5 stages evidenced")).toBeVisible();
+  await expect(page.getByLabel("Production release guardrails").getByText("Running digest verified equal")).toBeVisible();
+  await expect(workspace.getByText("Argo Synced · Succeeded")).toBeVisible();
+  await expect(workspace.getByText("6/6 required checks passed")).toBeVisible();
+  await expect(workspace.getByText("Running Image Digest", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("Service Healthz", { exact: true })).toBeVisible();
+  await expect(workspace.locator(".release-stage").first().getByText("Controller: Active")).toBeVisible();
+  await expect(page.getByLabel("Production release guardrails")).toHaveScreenshot("work-item-delivery-verified-guardrails.png");
+  await workspace.locator(".release-stage").nth(4).scrollIntoViewIfNeeded();
+  await expect(page).toHaveScreenshot("work-item-delivery-verified.png");
+});
+
 test("rollback rail exposes exact approvals and digest-bound delivery evidence", async ({ page }) => {
   const workItem = { ...workItemFixture("witem_rollback_1234567890"), status: "failed", target_environment: "production", target_namespace: "apps-prod", production_impacting: true };
   const controllerAction = { id: "review_failure", lifecycle_stage: "release", resource: workItem.id, status: "blocked", effect_class: "internal", blockers: [], approval_requirements: [], external_effect_summary: "Review failed production verification.", state_hash: "state-controller-rollback" };
@@ -710,7 +859,7 @@ test("active WorkItem opens directly into the consolidated attempt workspace", a
   await expect(page.getByRole("heading", { name: "Contracts, target, and rollout" })).toHaveCount(0);
   await expect(page.getByText("12 used · 36 remaining")).toBeVisible();
   await page.getByRole("button", { name: "Delivery" }).click();
-  await expect(page.getByRole("heading", { name: "Contracts, target, and rollout" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "External delivery and release evidence" })).toBeVisible();
   await page.getByLabel("WorkItem sections").getByRole("button", { name: /^Attempt/ }).click();
   await expect(page).toHaveScreenshot("work-item-active-attempt.png", { fullPage: true });
 });
