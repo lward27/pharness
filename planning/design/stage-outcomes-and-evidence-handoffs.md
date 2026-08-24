@@ -41,6 +41,30 @@ Product, Repository, AgentRun, approval, and Release views may provide
 cross-WorkItem lenses, but they must retain the WorkItem correlation and must
 not mix unrelated records into one apparent execution.
 
+## WorkItem and stage-execution identity
+
+A WorkItem represents one bounded engineering intent. A replan remains within
+the same WorkItem when the desired outcome, mutable Repository, and required
+acceptance boundary remain materially the same. A materially changed outcome,
+Repository, delivery target, or acceptance boundary creates a new linked
+WorkItem rather than rewriting the original intent.
+
+Execution identity is equally explicit:
+
+- Provider transport retries and recoverable tool retries remain within the
+  same StageExecution.
+- Resuming after an approval wait or budget extension remains within the same
+  StageExecution.
+- A full replan or deliberate repeat of a lifecycle stage creates a new
+  StageExecution.
+- Terminal outcomes are immutable. The controller may select a later outcome
+  as effective without altering or hiding the earlier one.
+- Prior executions and outcomes appear under History with their exact stop
+  reasons and relationships.
+
+Typed WorkItem relationships such as `supersedes`, `follows_up`, and
+`discovered_from` retain continuity when an intent change requires new work.
+
 ## StageOutcome contract direction
 
 A StageOutcome is an immutable, controller-sealed conclusion for one stage
@@ -151,18 +175,14 @@ current AgentRuns beside each other without status and ownership context.
 
 ## Open decisions before implementation planning
 
-1. Define intent revision semantics: when a replan stays within one WorkItem
-   and when a materially changed objective requires a new WorkItem.
-2. Define stage-execution identity across resume, retry, budget extension, and
-   full replan.
-3. Define StageOutcome status and supersession semantics, including failed,
+1. Define StageOutcome status and supersession semantics, including failed,
    blocked, cancelled, inapplicable, and stale outcomes.
-4. Define the first typed evidence validators and what remains an agent claim.
-5. Define context-pack selection, token budgeting, compaction, and retrieval
+2. Define the first typed evidence validators and what remains an agent claim.
+3. Define context-pack selection, token budgeting, compaction, and retrieval
    audit records.
-6. Define how an operator correction or annotation affects a sealed outcome
+4. Define how an operator correction or annotation affects a sealed outcome
    without rewriting history.
-7. Map the proposed concepts to existing PHarness events and resources before
+5. Map the proposed concepts to existing PHarness events and resources before
    adding a new database entity.
 
 Do not implement a generic multi-agent message bus. StageOutcome and evidence

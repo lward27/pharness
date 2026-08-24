@@ -82,8 +82,17 @@ The discovery proposal may be stored centrally as onboarding state, but the
 merged repository contract is the portable system of record for execution.
 PHarness must not treat an unmerged draft as an active coding contract.
 
-The canonical filename, compatibility with the existing
-`.pharness/project.yaml`, and the amendment flow remain open decisions.
+The canonical committed contract is `.pharness/repository.yaml`. Existing
+`.pharness/project.yaml` files remain readable through a deprecated
+compatibility alias during migration, but new onboarding pull requests create
+or migrate to the canonical filename. A Repository cannot activate both files
+with conflicting contents.
+
+Product and Service mappings remain in the central PHarness product model
+initially. The Repository contract contains portable execution facts, not a
+second authoritative copy of the Product hierarchy. Amendments to executable
+contract fields occur through a normal reviewed pull request and become active
+only when PHarness observes and validates the merged revision.
 
 ## Central-mode minimum safety baseline
 
@@ -137,17 +146,15 @@ partial-failure, and recovery contracts are designed.
 
 ## Open decisions before implementation planning
 
-1. Select the canonical committed contract filename and migration policy for
-   `.pharness/project.yaml`.
-2. Decide whether discovery itself is deterministic, agent-assisted, or a
+1. Decide whether discovery itself is deterministic, agent-assisted, or a
    deterministic scan followed by an AgentRun proposal.
-3. Define who may approve an onboarding contract and what changes require a new
-   onboarding pull request.
+2. Define who may approve an onboarding contract and the exact review flow for
+   future amendments.
+3. Decide whether central annotations may supplement non-executable metadata
+   without modifying the committed contract.
 4. Define readiness when a repository has no lockfile or reliable acceptance
    command.
-5. Decide how shared Repositories map to multiple Products or Services without
-   duplicating their execution contract.
-6. Define pull-request check observation and what happens when checks change
+5. Define pull-request check observation and what happens when checks change
    after PHarness reports readiness.
 
 Do not create a Repo Mode implementation milestone until these decisions and
