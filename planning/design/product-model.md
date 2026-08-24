@@ -87,6 +87,17 @@ An operator explicitly creates or selects the Product before registering a
 Repository. PHarness does not silently create Product identity from a
 repository name or agent inference.
 
+The initial Product registration contains:
+
+- A PHarness-generated stable opaque identifier.
+- An Organization-unique display name.
+- A human-readable description.
+- An accountable owner.
+
+Repo Mode requires at least one registered Repository before work can begin.
+It does not require a Service or Environment. This keeps repository-only value
+possible without manufacturing a runtime model that PHarness cannot observe.
+
 Deterministic Repository discovery records source facts. An AgentRun may then
 propose Services and RepositoryBindings for operator review. Approved mappings
 become central Product-model state and retain the discovery and approval
@@ -95,6 +106,23 @@ portable execution configuration.
 
 The detailed onboarding boundary is recorded in
 [`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md).
+
+## Service and RepositoryBinding identity
+
+A Service has a PHarness-generated stable opaque identifier and initially
+belongs to exactly one Product. Services are optional in Repo Mode; discovery
+may propose them when the Repository contains a meaningful component boundary.
+A shared Repository does not create a shared Service implicitly.
+
+RepositoryBindings are versioned, reviewed relationships. A binding records
+the exact Product, Repository, optional Services, and any repository-relative
+scope needed to explain the relationship. Shared Repositories receive explicit
+bindings in every Product that uses them.
+
+Changing a Service or RepositoryBinding creates a new Product-model version.
+Already-pinned WorkItems retain their original snapshot. A binding describes
+product structure and context eligibility; it does not grant reader, writer,
+or mutation authorization.
 
 ## WorkItem identity and revision boundary
 
@@ -208,15 +236,13 @@ informal list. Its future contract needs dependency validation,
 partial-completion semantics, compatibility evidence, operator overrides, and
 recovery ownership.
 
-## Open decisions before implementation planning
+## Deferred design and implementation mapping
 
-1. Define the minimum Product registration fields and stable Product identity.
-2. Define stable Service identity, ownership, and lifecycle.
-3. Define versioning and review semantics for RepositoryBindings.
-4. Define Environment topology and promotion relationships.
-5. Map these semantic entities onto the existing PHarness resources and
-   migrations.
-6. Define the future DeliveryPlan schema and cross-Product access rules.
+Environment topology, promotion relationships, DeliveryPlan, and
+cross-Product access are later-mode design work and do not block initial Repo
+Mode. The first implementation milestone must map the settled Repo Mode
+entities onto existing PHarness resources and migrations before adding new
+persistence.
 
 Do not infer database tables directly from this document. First characterize
 the current resource model and preserve its working behavior.

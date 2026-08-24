@@ -142,22 +142,74 @@ The controller owns:
 An agent may propose a summary, but it cannot seal its own success or advance
 the lifecycle directly.
 
+## Initial typed evidence validators
+
+Repo Mode begins with controller-owned validators for:
+
+- Pinned source revision and resolved checkout identity.
+- Repository contract path, API version, content hash, and validation result.
+- EnvironmentSnapshot identity and preparation result.
+- Changed-path inventory and full diff content hash.
+- Exact declared acceptance command, execution identity, exit result, and
+  captured output reference.
+- Source pull-request identity and exact head SHA.
+- Required provider-check set, result, freshness, and bound head SHA.
+- Observed merge identity, merge SHA, source head, and provider provenance.
+
+A validator may establish only the claim covered by its typed input and scope.
+An AgentRun's interpretation of design quality, maintainability, completeness,
+or business intent remains an agent claim unless a later validator explicitly
+defines and verifies it.
+
+Missing, contradictory, or stale evidence is recorded honestly. The controller
+does not convert the absence of a failing record into success.
+
 ## Context for the next AgentRun
 
-The next AgentRun should receive a bounded context pack rather than every prior
-transcript. The pack should include:
+The next AgentRun receives a bounded context pack rather than every prior
+transcript. The initial deterministic selection includes:
 
 - Current WorkItem intent, scope, and acceptance criteria.
-- Relevant Product, Service, Repository, and Environment snapshot.
+- Pinned Product, Service, RepositoryBinding, Repository contract, and
+  applicable Environment snapshot.
 - Effective upstream StageOutcomes.
 - Remaining budgets, policies, grants, and unavailable capabilities.
-- Exact evidence references needed for the next objective.
+- Exact evidence and artifact references needed for the next objective.
 - Explicit contradictions, unresolved risks, and operator decisions.
-- Typed tools for retrieving deeper evidence on demand.
+- Applicable operator annotations.
 
 The context pack records which outcome and evidence versions it used. Context
 selection must be deterministic enough to reproduce and audit, while remaining
 bounded enough to avoid exhausting model context with raw history.
+
+Raw transcripts and undifferentiated event streams are excluded by default.
+An AgentRun retrieves deeper evidence through typed tools on demand. Every
+retrieval records the requester, scope, evidence version, and returned content
+hash so later analysis can reproduce what the agent saw.
+
+Token allocation prioritizes current intent and acceptance, applicable policy,
+effective upstream outcomes, contradictions, unresolved risks, and the exact
+evidence needed for the stage. Compaction may shorten presentation but cannot
+silently remove a contradiction, failed acceptance result, operator decision,
+or provenance binding.
+
+## Operator correction and annotation
+
+An operator correction is an append-only, attributed Annotation bound to an
+exact WorkItem, StageExecution, StageOutcome, or evidence record. It contains
+the actor, reason, timestamp, statement, and referenced evidence.
+
+An Annotation never rewrites a sealed StageOutcome or external observation.
+The controller may decide that it:
+
+- Adds context without changing effective state.
+- Makes evidence stale or contradictory for a future action.
+- Requires a new StageExecution or WorkItem replan.
+- Supplies input for a newly sealed outcome that supersedes the effective
+  pointer.
+
+The original outcome, annotation, controller decision, and any later outcome
+remain linked and inspectable.
 
 ## Initial control model
 
@@ -203,15 +255,12 @@ Portfolio and Product views aggregate WorkItem rollups. They must not merge
 events from several WorkItems into a synthetic execution or place old and
 current AgentRuns beside each other without status and ownership context.
 
-## Open decisions before implementation planning
+## Implementation planning requirements
 
-1. Define the first typed evidence validators and what remains an agent claim.
-2. Define context-pack selection, token budgeting, compaction, and retrieval
-   audit records.
-3. Define how an operator correction or annotation affects a sealed outcome
-   without rewriting history.
-4. Map the proposed concepts to existing PHarness events and resources before
+1. Map the proposed concepts to existing PHarness events and resources before
    adding a new database entity.
+2. Define serialized validator and context-pack schemas during the first
+   implementation milestone.
 
 Do not implement a generic multi-agent message bus. StageOutcome and evidence
 retrieval are the first handoff contracts; orchestration builds on them later.

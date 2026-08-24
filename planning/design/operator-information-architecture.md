@@ -293,7 +293,7 @@ must survive smaller screens:
 - Never use color alone to distinguish unavailable, waiting, failed, and
   complete.
 
-## Open decisions before implementation planning
+## Remaining operator-design decisions
 
 1. Define the visual contract for StageOutcomes, facts, claims,
    contradictions, and evidence freshness.
@@ -302,6 +302,11 @@ must survive smaller screens:
 3. Define the first AgentProfile and AgentRun management surfaces.
 4. Identify accessibility and workflow needs of secondary personas after the
    engineering/platform lead experience is coherent.
+
+Only the first Repo Mode StageOutcome and WorkItem screen contract must be
+resolved before its initial operator milestone. Product graph, broad
+AgentProfile management, and secondary-persona specialization may follow
+without blocking repository onboarding and one-intent execution.
 
 Do not treat the supplied screenshots as authorization to invent aggregate
 metrics, agent swarms, connected capabilities, or Product health claims.
