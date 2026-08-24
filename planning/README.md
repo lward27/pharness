@@ -1,6 +1,6 @@
 # PHarness documentation map
 
-Last organized: 2026-08-23
+Last organized: 2026-08-24
 
 PHarness documentation is organized by purpose and lifecycle so an agent can
 distinguish current work from shipped behavior and historical context before it
@@ -26,10 +26,12 @@ The current stable release baseline is the annotated tag
 
 ## Current work
 
-The only active implementation milestone is the
-[`app.rs` behavior-preserving decomposition](active/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md).
-It must preserve the tagged operator-cockpit release behavior and the durable
-yfinance characterization fixture.
+No implementation milestone is currently active. The most recent maintenance
+milestone, the
+[`app.rs` behavior-preserving decomposition](implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md), completed at
+`v3-decomposed-stable`; the later operator-cockpit release remains the current
+stable product baseline. Add the next approved milestone under
+[`active/`](active/README.md) before implementation begins.
 
 ## Source-of-truth order
 
