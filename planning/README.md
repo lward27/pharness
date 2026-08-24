@@ -33,6 +33,11 @@ milestone, the
 stable product baseline. Add the next approved milestone under
 [`active/`](active/README.md) before implementation begins.
 
+Product-definition work is active in the
+[`PHarness product vision and decision boundaries`](design/product-vision-and-boundaries.md).
+It is design authority, not an implementation milestone; resolve its required
+open decisions before plan mode creates the next active milestone.
+
 ## Source-of-truth order
 
 When documents disagree, use this order:
