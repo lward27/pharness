@@ -714,7 +714,7 @@ verification, and prepared-but-never-automatic rollback. External effects and
 PR merges remain explicitly supervised.
 
 The stable operator-console baseline is the annotated tag
-`v3-operator-cockpit`. The current active work is the behavior-preserving
-`app.rs` decomposition; see the
-[`planning/` documentation map](planning/README.md) rather than the archived
-roadmaps for current sequencing.
+`v3-operator-cockpit`. The behavior-preserving `app.rs` decomposition is
+complete and tagged `v3-decomposed-stable`; no implementation milestone is
+currently active. See the [`planning/` documentation map](planning/README.md)
+before starting the next milestone.

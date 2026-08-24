@@ -8,6 +8,7 @@ provenance remain authoritative.
 
 - [`autonomous-sdlc-alpha.md`](milestones/autonomous-sdlc-alpha.md)
 - [`environment-ready-sdlc-milestone-2026-08-15.md`](milestones/environment-ready-sdlc-milestone-2026-08-15.md)
+- [`app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md`](milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md)
 - [`ui-v3-operator-console.md`](milestones/ui-v3-operator-console.md)
 - [`ui-operator-cockpit-redesign-milestone-2026-08-22.md`](milestones/ui-operator-cockpit-redesign-milestone-2026-08-22.md)
 

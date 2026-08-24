@@ -5,14 +5,12 @@ An agent should not infer additional active work from the roadmap or archive.
 
 ## Current milestone
 
-| Plan | State | Next boundary |
-| --- | --- | --- |
-| [`app.rs` behavior-preserving decomposition](app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md) | Ready to execute | Rebaseline D0 measurements against `v3-operator-cockpit`, then land one extraction PR at a time |
+None. Do not infer an implementation backlog from archived plans, completed
+milestones, presentations, or evidence records.
 
-The decomposition is a maintainability change. It must not alter public routes,
-serialized contracts, lifecycle actions, state hashes, policy decisions,
-durable events, executor behavior, or external effects.
+Before implementation begins, add one approved milestone here with its exact
+baseline, scope, behavioral invariants, acceptance gates, rollout boundary, and
+completion evidence requirements.
 
-Before starting a slice, verify the current tagged baseline, recompute the
-target module measurements, and run the plan's characterization gates. Stop if
-behavioral evidence changes unexpectedly.
+The most recently closed maintenance milestone is the
+[`app.rs` behavior-preserving decomposition](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md).

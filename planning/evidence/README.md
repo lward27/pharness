@@ -18,5 +18,7 @@ behavior.
 - [`tekton-live-smoke-2026-08-02.md`](smoke-results/tekton-live-smoke-2026-08-02.md)
 
 The durable yfinance release characterization identifiers are also frozen in
-the active decomposition plan and backend characterization fixture. Revalidate
-their readability; do not advance or rewrite them.
+the
+[completed decomposition milestone](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md) and backend
+characterization fixture. Revalidate their readability; do not advance or
+rewrite them.

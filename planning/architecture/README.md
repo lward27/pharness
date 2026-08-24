@@ -11,9 +11,9 @@ they are used as an implementation gate.
   direction.
 - [`../../docs/adr/0001-local-first-cluster-native.md`](../../docs/adr/0001-local-first-cluster-native.md)
   records the accepted local-first, cluster-native architecture decision.
-- [`../active/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md`](../active/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md)
-  defines the target module ownership and non-negotiable behavior invariants
-  for the active decomposition.
+- [`../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md`](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md)
+  records the completed extraction sequence, module ownership, and preserved
+  behavior invariants.
 
 For runtime truth, inspect the crate graph, Axum router composition, migrations,
 Helm chart, and current immutable release values directly.
