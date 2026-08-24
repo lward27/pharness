@@ -14,7 +14,9 @@
 
 # Trusted Envelope Smoke Playbook
 
-Run every command from the repository root. The API should already be running with `PHARNESS_API_URL=http://127.0.0.1:4777`, as in `planning/pharness-smoke-playbook.md`.
+Run every command from the repository root. The API should already be running
+with `PHARNESS_API_URL=http://127.0.0.1:4777`, as in
+`planning/archive/runbooks/pharness-smoke-playbook.md`.
 
 ## Common Environment
 
@@ -40,7 +42,8 @@ test -n "$PLAN_ID"
 Expected signal:
 
 - `PLAN_ID` is non-empty.
-- If this fails, run the Tekton/incident/remediation section of `planning/pharness-smoke-playbook.md` first.
+- If this fails, run the Tekton/incident/remediation section of
+  `planning/archive/runbooks/pharness-smoke-playbook.md` first.
 
 ## Create Or Fetch A WorkPlan
 

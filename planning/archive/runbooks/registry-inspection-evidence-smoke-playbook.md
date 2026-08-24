@@ -29,7 +29,8 @@ cd "$(git rev-parse --show-toplevel)"
 
 ## Prepare An Approved Release
 
-Run `planning/release-smoke-playbook.md` through the first approved Release, then set:
+Run `planning/archive/runbooks/release-smoke-playbook.md` through the first
+approved Release, then set:
 
 ```bash
 RELEASE_ID="$(jq -r '.release.id' target/pharness-release-approved.json)"

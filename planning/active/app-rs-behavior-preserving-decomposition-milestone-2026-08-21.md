@@ -2,7 +2,7 @@
 
 Date: 2026-08-21
 
-Execution baseline: `v3-environment-ready`
+Execution baseline: `v3-operator-cockpit`
 
 ## Outcome
 
@@ -16,9 +16,25 @@ request has one extraction boundary, preserves behavior, and leaves `main`
 deployable. GPT-5.6 Terra should execute one pull request at a time and stop if
 characterization evidence changes unexpectedly.
 
-## Frozen V3 characterization baseline
+## Current execution baseline
 
-The baseline is the annotated tag `v3-environment-ready` at release commit
+The active baseline is the annotated tag `v3-operator-cockpit` at release
+commit `597edaf0bb32baf84a23142d61e4c28ac2788191`. The compiled source revision
+is `8c3e2a7985d142cd32b19d6ea6d89fee76d43abc`.
+
+Immutable PHarness artifacts:
+
+- Runtime: `sha256:c773a2e4c9dd3af0501c7281224108be01416010a24c083e3fc40b8e87324ebd`
+- UI: `sha256:c2f3bacf73e7ae2bdace69cbdf0f467640bd1aef0efdf873000a9aeb7fad2f9a`
+- Python runner: `sha256:cec8adb329639b251aab0ce42cf39983062046bb1f91a733fc5e9903449e036c`
+
+The line counts, route inventory, and dependency measurements below remain the
+2026-08-21 planning snapshot. D0 must recompute them against the current source
+revision before an extraction begins.
+
+### Prior release baseline retained for historical comparison
+
+The prior baseline was the annotated tag `v3-environment-ready` at release commit
 `1aedc319e30c04f6fabfbb1ac6bde0f2f6cc3ec9`. The compiled source revision is
 `97d2935933b872b76f7a2d8aa98e82d72f1f4e17`.
 
@@ -27,6 +43,8 @@ Immutable PHarness artifacts:
 - Runtime: `sha256:0b8a64e847b1558ee976364a1b615576cb9acf8b8c32a3c675ef59c810c7341b`
 - UI: `sha256:e886457a846a19317fcdef8b291be634f85ac80dbb7b14b20de01991610ed3e4`
 - Python runner: `sha256:abde65aab67c3f0b72da5bca0b211af66f9946dc5e291a2b63818e38f90f214b`
+
+### Live characterization records
 
 Live characterization records that must remain readable and unchanged:
 

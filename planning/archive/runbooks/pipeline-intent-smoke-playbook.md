@@ -1,7 +1,8 @@
 # Decisions
 
 - Add this as the update smoke for the durable PipelineIntent slice.
-- Reuse the approved WorkPlan and ChangeSet produced by `planning/trusted-envelope-smoke-playbook.md`.
+- Reuse the approved WorkPlan and ChangeSet produced by
+  `planning/archive/runbooks/trusted-envelope-smoke-playbook.md`.
 - Keep the smoke non-mutating. It creates and approves control-plane intent records only; it does not create Tekton PipelineRuns.
 - Treat a non-approved PipelineIntent as a ChangeSet readiness warning in V1.
 - A material ChangeSet revision should mark the current PipelineIntent stale. Re-running create-from-ChangeSet should re-propose that same intent row with the current material hash.
@@ -36,7 +37,9 @@ Expected signal:
 
 - `WORK_PLAN_ID` is non-empty.
 - `CHANGE_SET_ID` is non-empty.
-- If either check fails, run `planning/trusted-envelope-smoke-playbook.md` through the ChangeSet approval step first.
+- If either check fails, run
+  `planning/archive/runbooks/trusted-envelope-smoke-playbook.md` through the
+  ChangeSet approval step first.
 
 ## Create Or Fetch The PipelineIntent
 

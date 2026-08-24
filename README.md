@@ -6,6 +6,11 @@ V1 runs locally from a project root. It focuses on the agent loop, explicit tool
 
 MCP is a future adapter option for obvious external workflow integrations such as Jira or Slack, but it is not a V1 dependency and should not become a plugin marketplace by accident.
 
+For current architecture, design, implementation history, active work, and
+operational evidence, start with the
+[`planning/` documentation map](planning/README.md). Archived plans are retained
+there but are explicitly separated from current direction.
+
 ## V1 Scope
 
 - Rust core runtime and state machine.
@@ -517,7 +522,7 @@ diff evidence. The API validates it against the issued workspace/repository/
 branch contract and stores `workspace_git_diff` and `workspace_git_status`
 artifacts. ChangeSet capture uses those artifacts, so it never depends on a
 Job workspace surviving after the Job exits. See
-[`planning/kubernetes-coding-alpha-smoke-playbook.md`](planning/kubernetes-coding-alpha-smoke-playbook.md)
+[`planning/archive/runbooks/kubernetes-coding-alpha-smoke-playbook.md`](planning/archive/runbooks/kubernetes-coding-alpha-smoke-playbook.md)
 for the reviewed activation path.
 
 `POST /api/work-items/:id/reconcile` is the machine-facing controller step for
@@ -564,7 +569,8 @@ and opens one GitHub pull request. The API records separate immutable
 `git_delivery_execution` and `git_delivery_result` artifacts; opening a PR
 does not mark a ChangeSet applied or bypass later merge/build/deployment gates.
 The feature is disabled by default and supports GitHub HTTPS repositories
-only. See [`planning/git-writer-pr-executor-smoke.md`](planning/git-writer-pr-executor-smoke.md).
+only. The historical direct smoke is retained at
+[`planning/archive/runbooks/git-writer-pr-executor-smoke.md`](planning/archive/runbooks/git-writer-pr-executor-smoke.md).
 
 ### Tekton PipelineIntents
 
@@ -666,7 +672,7 @@ scripts/pharness-cluster-runtime-smoke.sh
 ```
 
 Validates the deployed control plane end to end; see
-[planning/v2-cluster-smoke-playbook.md](planning/v2-cluster-smoke-playbook.md).
+[planning/archive/v2/v2-cluster-smoke-playbook.md](planning/archive/v2/v2-cluster-smoke-playbook.md).
 
 ### Controlled Tekton Execution Smoke
 
@@ -684,7 +690,7 @@ scripts/pharness-tekton-execution-smoke.sh --apply
 
 The equivalent operator-console walkthrough, including the distinct preflight
 and dispatch actions, is in
-[planning/tekton-executor-smoke-playbook.md](planning/tekton-executor-smoke-playbook.md).
+[planning/operations/runbooks/tekton-executor-smoke-playbook.md](planning/operations/runbooks/tekton-executor-smoke-playbook.md).
 
 The same script can prove the digest-pinned build-output handoff after the
 GitOps-managed synthetic fixture is synced:
@@ -700,6 +706,15 @@ it does not build, push, pull, inspect, or verify an image.
 
 ## Current Status
 
-Pharness is a deployed V2 control plane: authenticated API/UI, isolated Fireworks worker Jobs, cancellation, approvals, durable events/artifacts, typed read-only Kubernetes/Argo/Tekton/Prometheus/Loki/registry capabilities, typed Tekton execution, and declared deployment handoff are implemented. The autonomous-SDLC alpha also persists `WorkItem` intent, bounded execution/replan budgets, WorkItem-backed `WorkPlan` records, ephemeral `Workspace` declarations, pinned source revisions, and real Git-backed ChangeSets with test evidence.
+Pharness is a deployed supervised V3 SDLC control plane. It supports immutable
+source preparation, isolated Fireworks coding Jobs, resumable budgets,
+attempt-scoped workspace grants, source PR delivery, immutable Tekton builds,
+digest-only GitOps PRs, explicitly approved Argo synchronization, deployment
+verification, and prepared-but-never-automatic rollback. External effects and
+PR merges remain explicitly supervised.
 
-It does not yet push a branch or PR, mutate GitOps, or deploy an application. Those actions remain the next gated development-only cut line. See [planning/autonomous-sdlc-roadmap.md](planning/autonomous-sdlc-roadmap.md) for the active plan and [planning/current-build-review.md](planning/current-build-review.md) for earlier validation evidence.
+The stable operator-console baseline is the annotated tag
+`v3-operator-cockpit`. The current active work is the behavior-preserving
+`app.rs` decomposition; see the
+[`planning/` documentation map](planning/README.md) rather than the archived
+roadmaps for current sequencing.

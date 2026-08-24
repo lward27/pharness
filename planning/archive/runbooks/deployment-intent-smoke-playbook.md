@@ -1,7 +1,8 @@
 # Decisions
 
 - Add this as the update smoke for the durable DeploymentIntent slice.
-- Reuse the current PipelineIntent produced by `planning/pipeline-intent-smoke-playbook.md`.
+- Reuse the current PipelineIntent produced by
+  `planning/archive/runbooks/pipeline-intent-smoke-playbook.md`.
 - Approve the current PipelineIntent before creating a DeploymentIntent because deployment intent review starts only after build/test/package intent approval.
 - Keep the smoke non-mutating. It creates and approves control-plane intent records only; it does not sync Argo CD.
 - Treat a missing, stale, or non-approved DeploymentIntent as a ChangeSet readiness warning in V1.
@@ -36,7 +37,9 @@ test -n "$PIPELINE_INTENT_ID"
 Expected signal:
 
 - `PIPELINE_INTENT_ID` is non-empty.
-- If this check fails, run `planning/pipeline-intent-smoke-playbook.md` through PipelineIntent creation first.
+- If this check fails, run
+  `planning/archive/runbooks/pipeline-intent-smoke-playbook.md` through
+  PipelineIntent creation first.
 
 ## Approve The Current PipelineIntent
 

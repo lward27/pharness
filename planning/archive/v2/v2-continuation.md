@@ -2,7 +2,8 @@
 
 ## Decisions
 
-- Accept `planning/v2-handoff.md` as the current baseline after verifying the
+- Accept `planning/archive/v2/v2-handoff.md` as the current baseline after
+  verifying the
   monorepo layout, worker/API split, Kubernetes dispatcher, Helm packaging,
   auth middleware, and recent Git history in the repository.
 - Complete the first console P2 slice before cluster mutation. It uses existing

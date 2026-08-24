@@ -21,7 +21,9 @@
 - Add approval summary smoke beside approval list smoke so queues can be reviewed without fetching full approval payloads.
 - Add remediation plan inspection beside incident inspection. Failed or degraded Tekton analysis should create conservative draft plans with approval gates, but zero plans is acceptable when the observed run is healthy.
 - Add approval gate inspection beside remediation plan inspection. Draft plans should expose gate records without making them executable.
-- Add `planning/trusted-envelope-smoke-playbook.md` as the focused update smoke for WorkPlan/ChangeSet trusted envelopes and scoped no-approval writes.
+- Add `planning/archive/runbooks/trusted-envelope-smoke-playbook.md` as the
+  focused update smoke for WorkPlan/ChangeSet trusted envelopes and scoped
+  no-approval writes.
 
 # Backlog
 
