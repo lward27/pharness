@@ -37,8 +37,15 @@ or inferred from source merge. `Release` continues to mean promotion into an
 Environment, not pull-request creation.
 
 If provider checks are configured and declared as acceptance evidence,
-PHarness observes them before describing the pull request as ready. Local
-declared acceptance remains required even when provider checks are absent.
+PHarness binds them to the exact pull-request head SHA and observes the full
+required set before describing the pull request as ready. A head, check-set, or
+result change invalidates readiness. Local declared acceptance remains required
+even when provider checks are absent.
+
+A manual merge ends the external wait. If it occurs without current passing
+required checks, PHarness still records immutable merge provenance and closes
+the WorkItem, but seals source delivery as failed rather than claiming a
+successful delivery.
 
 ## Product and Repository scope
 
@@ -157,16 +164,16 @@ This direction is settled, but its schema and validation rules are not. Repo
 Mode must not implement multi-Repository writes before the DeliveryPlan,
 partial-failure, and recovery contracts are designed.
 
-## Open decisions before implementation planning
+## Implementation planning requirements
 
-1. Define the first deterministic discovery inventory and its versioned output
-   contract.
-2. Define the exact Repository contract schema evolution and
-   compatibility-alias removal policy.
-3. Define pull-request check observation and what happens when checks change
-   after PHarness reports readiness.
-4. Map the settled onboarding states onto existing resources before adding a
-   new persistence model.
+The initial Repo Mode product boundary is settled. Its implementation milestone
+must:
 
-Do not create a Repo Mode implementation milestone until these decisions and
-the stage-outcome questions are resolved.
+1. Characterize existing Repository contract, environment preparation,
+   provider, source-delivery, and WorkItem behavior.
+2. Define serialized schemas for the settled discovery inventory and evidence
+   contracts.
+3. Map onboarding, readiness, provider checks, StageOutcomes, and context packs
+   onto existing resources before adding new persistence.
+4. Preserve the current proven coding loop and external-effect boundaries while
+   introducing the new product model.

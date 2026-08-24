@@ -58,34 +58,48 @@ and validating the contract at the WorkItem's pinned source revision.
 
 ## Deterministic discovery and agent proposal
 
-Deterministic discovery gathers facts without a model interpretation step,
-including:
+Deterministic discovery emits a versioned, content-hashed inventory. The
+inventory gathers facts without a model interpretation step, including:
 
 - Repository identity, default branch, and resolved commit.
-- Existing PHarness contract or compatibility alias.
-- Language and build-system indicators.
-- Dependency manifests and lock candidates.
-- Test, lint, build, and documentation conventions discoverable from source.
+- Repository file inventory and relevant symbolic-link or submodule facts.
+- Existing PHarness contract, API version, or compatibility alias.
+- Language and build-system indicators with their source paths.
+- Dependency manifests, lock candidates, and their content hashes.
+- Test, lint, build, and documentation commands found in CI, scripts, and
+  documentation, with their source locations.
 - Candidate source, test, and documentation roots.
-- Existing automation and provider checks visible through configured
+- Existing automation and configured provider checks visible through
   read-only capabilities.
+- Conflicting indicators, missing required inputs, and unsupported formats.
 
 The discovery record is durable evidence. The AgentRun may use it to propose a
 clean contract, describe conflicts, and suggest Product or Service mappings.
 Agent proposals remain claims until the operator reviews them and deterministic
 validation confirms the committed result.
 
+The inventory does not select a Service, command, dependency input, writable
+root, or EnvironmentProfile. Those are semantic recommendations and belong to
+the AgentRun proposal or explicit operator choice.
+
 Discovery has no writer credential and cannot modify the Repository. It uses
 the exact registered revision and records every source it inspected.
 
 ## Canonical committed contract
 
-The canonical contract is `.pharness/repository.yaml`.
+The canonical contract is `.pharness/repository.yaml`, initially using API
+version `pharness.dev/v1alpha1`.
 
 `.pharness/project.yaml` remains readable as a deprecated compatibility alias
-during migration. New onboarding pull requests create the canonical file, and
-an onboarding pull request for a Repository using the alias migrates it. Two
-conflicting active contracts are invalid.
+during migration, but PHarness never creates or amends the alias. New
+onboarding pull requests create the canonical file, and an onboarding pull
+request for a Repository using the alias migrates it. Conflicting files block
+readiness rather than relying on precedence.
+
+The compatibility alias may be removed only after every registered Repository
+has migrated and a documented deprecation release has shipped. Schema
+evolution uses explicit API versions and reviewed migration; PHarness does not
+silently reinterpret a committed contract under a new schema.
 
 The committed contract is the portable system of record for executable facts,
 including:
@@ -168,6 +182,23 @@ EnvironmentProfile, relevant capability verification, or validation policy
 changes. The UI shows the exact invalidating condition and last verified
 revision rather than replacing readiness with a generic failure badge.
 
+## Provider-check observation
+
+When provider checks are configured as required delivery evidence, PHarness
+evaluates them against the exact pull-request head SHA. Pull-request readiness
+binds the required check set, each observed result, and observation freshness
+to that SHA.
+
+Any change to the pull-request head, required check set, or required result
+invalidates readiness until PHarness observes the complete set passing again.
+An old green result never transfers to a new head.
+
+Manual merge remains an external action. If a Repository owner merges despite
+a required check being failed, missing, or stale, PHarness still records the
+merge and closes the WorkItem because the external wait ended. It seals source
+delivery as `failed` with the immutable merge and check provenance; it never
+reports the merged change as a successful PHarness delivery.
+
 ## Amendments
 
 Executable contract changes follow the same source-control boundary:
@@ -200,16 +231,14 @@ The Repository view should expose:
 - Source reader, writer, and observer capability state, separately from trust
   policy and authorization.
 
-## Open decisions before implementation planning
+## Implementation planning requirements
 
-1. Define the first deterministic discovery inventory and its versioned output
-   contract.
-2. Define the exact contract schema evolution and compatibility-alias removal
-   policy.
-3. Define provider-check observation, freshness, and invalidation when checks
-   change after PHarness reports a pull request ready.
-4. Map readiness onto existing environment preparation and capability
+1. Define the serialized deterministic-discovery schema and compatibility
+   tests for its first version.
+2. Map readiness onto existing environment preparation and capability
    preflight records without creating duplicate sources of truth.
+3. Map provider-check requirements and observations onto existing provider and
+   delivery resources.
 
 Do not implement onboarding as an AgentRun with writer access. Deterministic
 discovery, proposal, operator review, PR authorization, merge observation, and

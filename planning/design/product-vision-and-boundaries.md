@@ -244,13 +244,40 @@ properties or relationships. The detailed contracts are recorded in
 and
 [`operator-information-architecture.md`](operator-information-architecture.md).
 
+### Decision round 5: Identity, checks, and evidence - resolved 2026-08-24
+
+Product, Service, and RepositoryBinding use stable central identity. Repo Mode
+requires a Product and Repository but does not manufacture a Service or
+Environment. Bindings are reviewed and versioned, and existing WorkItems retain
+their pinned Product-model snapshot.
+
+Deterministic Repository discovery emits a versioned, content-hashed fact
+inventory. The canonical contract begins at `pharness.dev/v1alpha1`; the
+deprecated filename is read-only, conflicts block readiness, and removal waits
+for complete migration plus a documented deprecation release.
+
+Required provider checks bind to the exact pull-request head SHA. Head, check
+set, or result changes invalidate readiness. A manual merge ends the external
+wait, but source delivery seals as failed when required checks were not current
+and passing.
+
+Initial typed validators cover source, contract, environment preparation,
+diff, acceptance, pull-request head, provider checks, and merge provenance.
+Next-stage context uses effective outcomes and typed evidence retrieval rather
+than raw transcript replay. Operator corrections are append-only annotations
+that may trigger new controller decisions but never rewrite sealed history.
+
 ### Implementation planning boundary
 
-Only after the preceding decisions are recorded should plan mode create the
-first active Repo Mode milestone. That milestone must identify behavior that
-already exists, behavior that needs adaptation, and genuinely new capability;
-it must not rewrite the proven reference stack merely to introduce provider
-abstractions.
+The foundational Repo Mode decisions in rounds 2 through 5 are recorded. Before
+plan mode creates the first active milestone, resolve the initial WorkItem and
+StageOutcome screen contract and record the resulting Repo Mode V1 product
+contract. Connected Mode topology, Product graph, advanced AgentProfile
+management, and multi-Repository DeliveryPlan do not block that milestone.
+
+The milestone must identify behavior that already exists, behavior that needs
+adaptation, and genuinely new capability. It must not rewrite the proven
+reference stack merely to introduce provider abstractions.
 
 ## Plan-mode reading order
 
