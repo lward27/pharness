@@ -3,6 +3,22 @@
 This directory is for durable design intent that continues to constrain new
 work. It is not a backlog and does not prove implementation.
 
+## Approved Plan Mode entry points
+
+Create these plans one at a time and keep their ownership separate:
+
+1. [`repo-mode-v1-product-contract.md`](repo-mode-v1-product-contract.md) — plan
+   first; owns Product and control-plane semantics, resources, APIs, onboarding,
+   evidence handoff, and source delivery.
+2. [`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md) — plan
+   second; consumes the Product Plan and owns navigation, presentation,
+   interactions, responsive behavior, and UI acceptance.
+
+The entry points are approved design authority, not active implementation
+milestones. Put a reviewed plan under [`../active/`](../active/README.md) before
+implementation begins. Do not merge the two planning tasks or let the Screen
+Plan redefine backend semantics.
+
 ## Current principles
 
 - [`product-vision-and-boundaries.md`](product-vision-and-boundaries.md) is the
@@ -24,6 +40,9 @@ work. It is not a backlog and does not prove implementation.
 - [`operator-information-architecture.md`](operator-information-architecture.md)
   defines the primary persona, view ownership, current/history separation,
   approval routing, and the safe initial purpose of Ask PHarness.
+- [`repo-mode-v1-product-contract.md`](repo-mode-v1-product-contract.md) and
+  [`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md) are the
+  approved, separately sequenced V1 planning contracts.
 - [`trusted-autonomy.md`](trusted-autonomy.md) defines the trust-envelope and
   supervised-autonomy principles.
 - [`../../ui/AGENTS.md`](../../ui/AGENTS.md) defines current operator-console
@@ -43,6 +62,7 @@ current visual direction.
 
 For product-level work, read the product vision, product model, Repo Mode
 operating model, repository onboarding and readiness, stage-outcome design,
-operator information architecture, trusted autonomy, current architecture,
-and finally the active-milestone index. If a required decision is open, stop
-planning and return to product discovery.
+operator information architecture, and trusted autonomy. Then use exactly one
+approved V1 entry point, inspect current architecture and implementation, and
+finally check the active-milestone index. The Product Plan precedes the Screen
+Plan.
