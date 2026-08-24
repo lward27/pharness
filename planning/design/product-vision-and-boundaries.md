@@ -29,10 +29,16 @@ Use this hierarchy in product models, APIs, navigation, and future planning:
 ```text
 Organization
   -> Product
-    -> Service
-      -> Repository
-    -> Environment
+    -> Services
+    -> Environments
+    -> RepositoryBindings -> Repositories
+    -> WorkItems
+    -> Releases
 ```
+
+This is an ownership and navigation hierarchy, not a strict containment tree.
+Service and Repository relationships are many-to-many through explicit
+bindings.
 
 | Term | Meaning |
 | --- | --- |
@@ -40,8 +46,11 @@ Organization
 | Product | The durable software system PHarness reasons about and improves |
 | Service | A deployable or operationally meaningful component of a Product |
 | Repository | A source-control system of record associated with one or more Services |
+| RepositoryBinding | Explicit relationship among a Product, Repository, and optional Services |
 | Environment | A named runtime or delivery target such as development, staging, or production |
-| WorkItem | A bounded engineering outcome owned by a Product and targeting explicit Services, Repositories, and Environments |
+| WorkItem | One bounded engineering intent owned by a Product and targeting explicit Services, Repositories, and Environments |
+| StageExecution | One execution identity for an applicable WorkItem lifecycle stage |
+| StageOutcome | Immutable controller-sealed conclusion for one StageExecution |
 | Release | An immutable promoted outcome for a Product and Environment |
 | AgentProfile | A versioned role definition including model, prompt, skills, and capability policy |
 | AgentRun | One execution of an AgentProfile for a bounded objective |
@@ -176,6 +185,9 @@ graph that surfaces merge and release order to the operator. The complete
 boundary and remaining onboarding questions are recorded in
 [`repo-mode-operating-model.md`](repo-mode-operating-model.md).
 
+The relational ownership model, WorkItem identity boundary, and execution
+identity rules are recorded in [`product-model.md`](product-model.md).
+
 ## Central Repo Mode safety decision
 
 Central-first Repo Mode retains immutable provenance, disposable isolated
@@ -194,15 +206,19 @@ The decisions are summarized above and specified in the two supporting design
 documents. Their explicitly open contract questions remain prerequisites for
 implementation planning.
 
-### Decision round 3: Operator experience
+### Decision round 3: Product identity and operator entry - resolved 2026-08-24
 
-1. Select the first primary user persona and organization roles.
-2. Define the Organization, Product, Repository, WorkItem, AgentRun, and Release
-   navigation model.
-3. Define the safe purpose of **Ask PHarness**.
-4. Define honest portfolio and Product health measures.
-5. Reconcile WorkItem lifecycle, Release state, approvals, and agent activity
-   so each has one canonical source of truth.
+The engineering/platform lead is the first primary persona. Product ownership
+supplies the main navigation hierarchy while explicit many-to-many bindings
+preserve real Service and Repository relationships. One WorkItem owns one
+engineering intent, with new StageExecutions for full replans and new linked
+WorkItems for materially changed outcomes.
+
+Organization and Product dashboards remain read-oriented. **Ask PHarness** may
+answer read-only questions, explain state, and draft a WorkItem for review; it
+never mutates a target directly. The detailed view hierarchy and its remaining
+metric and interaction questions are recorded in
+[`operator-information-architecture.md`](operator-information-architecture.md).
 
 ### Implementation planning boundary
 
@@ -219,14 +235,18 @@ For product-level planning, read in this order:
 1. [`../README.md`](../README.md) for documentation lifecycle and authority.
 2. This document for the product hierarchy, locked decisions, and open
    boundaries.
-3. [`repo-mode-operating-model.md`](repo-mode-operating-model.md) for the first
+3. [`product-model.md`](product-model.md) for ownership, relationships,
+   WorkItem identity, and execution identity.
+4. [`repo-mode-operating-model.md`](repo-mode-operating-model.md) for the first
    product mode and source-delivery boundary.
-4. [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
+5. [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
    for evidence rollups, context, and future agent coordination.
-5. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
-6. [`../architecture/README.md`](../architecture/README.md) for current system
+6. [`operator-information-architecture.md`](operator-information-architecture.md)
+   for view ownership, current/history separation, and operator interaction.
+7. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
+8. [`../architecture/README.md`](../architecture/README.md) for current system
    structure and accepted ADRs.
-7. [`../active/README.md`](../active/README.md) to determine whether an approved
+9. [`../active/README.md`](../active/README.md) to determine whether an approved
    implementation milestone exists.
 
 Do not convert an open decision in this document into an implementation
