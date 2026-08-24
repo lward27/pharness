@@ -133,7 +133,7 @@ The point is to avoid painting V1 into a corner.
 
 # What The Operator Sees
 
-![PHarness prototype flow](../../pharness-ui/pharness-prototype-flow.png)
+![PHarness prototype flow](../../ui/pharness-prototype-flow.png)
 
 The UI prototype treats runs, evidence, policy, approvals, and audit as first-class surfaces.
 
@@ -493,20 +493,20 @@ Primary project artifacts:
 
 - `README.md`
 - `docs/adr/0001-local-first-cluster-native.md`
-- `planning/agent-harness-implementation-plan.md`
-- `planning/current-build-review.md`
-- `planning/trusted-autonomy.md`
-- `planning/dogfood.md`
-- `planning/tekton.md`
-- `planning/lgtm.md`
-- `planning/approval-gates.md`
-- `planning/work-plans.md`
-- `planning/change-sets.md`
-- `planning/permission-grants.md`
+- `planning/archive/foundations/agent-harness-implementation-plan.md`
+- `planning/archive/reviews/current-build-review.md`
+- `planning/design/trusted-autonomy.md`
+- `planning/implemented/capabilities/dogfood.md`
+- `planning/implemented/capabilities/tekton.md`
+- `planning/implemented/capabilities/lgtm.md`
+- `planning/implemented/capabilities/approval-gates.md`
+- `planning/implemented/capabilities/work-plans.md`
+- `planning/implemented/capabilities/change-sets.md`
+- `planning/implemented/capabilities/permission-grants.md`
 - selected Rust core, policy, runtime, DTO, and capability files
 
 UI artifacts:
 
 - `../../pharness-ui/src/App.jsx`
-- `../../pharness-ui/design-qa.md`
-- `../../pharness-ui/pharness-prototype-flow.png`
+- `../../ui/design-qa.md`
+- `../../ui/pharness-prototype-flow.png`

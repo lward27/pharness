@@ -148,7 +148,8 @@ a controlled disposable-repository smoke is reviewed and run.
 - WorkItem approval gates will be a first-class scoped authorization record,
   not a null-incident variant of remediation gates. The required ownership,
   invalidation, and preflight rules are recorded in
-  `planning/work-item-approval-gates.md` before that shared safety surface is
+  `planning/implemented/capabilities/work-item-approval-gates.md` before that
+  shared safety surface is
   migrated.
 
 ## Phase Status

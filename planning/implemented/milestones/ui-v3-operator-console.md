@@ -31,15 +31,17 @@ inspection in the in-app browser at 1280px, and `git diff --check` all pass.
 ## Context
 
 This plan reviews the deployed console (v0.12.0) against the current backend
-position in [autonomous-sdlc-roadmap.md](autonomous-sdlc-roadmap.md) and
-[autonomous-sdlc-alpha.md](autonomous-sdlc-alpha.md). It supersedes the open
-items in [ui-v2-improvements.md](ui-v2-improvements.md); the honest-empty-state
-and no-decorative-controls rules from
-[ui-minimal-design.md](ui-minimal-design.md) still govern.
+position in
+[autonomous-sdlc-roadmap.md](../../archive/roadmaps/autonomous-sdlc-roadmap.md)
+and [autonomous-sdlc-alpha.md](autonomous-sdlc-alpha.md). It supersedes the
+open items in
+[ui-v2-improvements.md](../../archive/ui/ui-v2-improvements.md); the
+honest-empty-state and no-decorative-controls rules from
+[ui-minimal-design.md](../../archive/ui/ui-minimal-design.md) still govern.
 
 Evidence used: four live screenshots of Flow, WorkPlans, Runs, and Approval
-Gates against real smoke data, plus [App.jsx](../ui/src/App.jsx) (2,836 lines)
-and [pharnessApi.js](../ui/src/pharnessApi.js).
+Gates against real smoke data, plus [App.jsx](../../../ui/src/App.jsx) (2,836
+lines) and [pharnessApi.js](../../../ui/src/pharnessApi.js).
 
 The V2 plan's stated goals were met: surfaces are API-backed, deep links work,
 Incidents/RemediationPlans/Observations shipped, gates group under plans, audit
@@ -93,8 +95,9 @@ are spread across four surfaces with no aggregation.
 Contributing causes:
 
 - Nav badges are page lengths, not workload. `badgeForNav`
-  ([App.jsx:389](../ui/src/App.jsx:389)) returns `data.auditEvents.length`
-  (50 — the request limit, [pharnessApi.js:150](../ui/src/pharnessApi.js:150)),
+  ([App.jsx:389](../../../ui/src/App.jsx#L389)) returns `data.auditEvents.length`
+  (50 — the request limit,
+  [pharnessApi.js:150](../../../ui/src/pharnessApi.js#L150)),
   `observations.length` (49), `incidents.length` (21). "Audit 50" is a
   pagination artifact rendered as an alert count. Only Approvals and Approval
   Gates badge something actionable.
@@ -109,16 +112,16 @@ Contributing causes:
 The no-decorative-controls rule is being violated by three specific elements:
 
 - The Auto-refresh toggle is an icon with no handler
-  ([App.jsx:593](../ui/src/App.jsx:593)). Refresh is an unconditional 15s
-  `setInterval` ([App.jsx:130](../ui/src/App.jsx:130)). It renders as an
+  ([App.jsx:593](../../../ui/src/App.jsx#L593)). Refresh is an unconditional 15s
+  `setInterval` ([App.jsx:130](../../../ui/src/App.jsx#L130)). It renders as an
   enabled switch in the on position and does nothing.
 - The Inspector's close button has no `onClick`
-  ([App.jsx:2500](../ui/src/App.jsx:2500)); `IconButton` accepts one
-  ([App.jsx:472](../ui/src/App.jsx:472)). The X in all four screenshots is
+  ([App.jsx:2500](../../../ui/src/App.jsx#L2500)); `IconButton` accepts one
+  ([App.jsx:472](../../../ui/src/App.jsx#L472)). The X in all four screenshots is
   inert.
 - The Inspector itself is pinned to Flow. It resolves from `topologyNodes` and
   falls back to `topologyNodes[0]`
-  ([App.jsx:2470](../ui/src/App.jsx:2470)), so `PipelineRunAnalysis` detail
+  ([App.jsx:2470](../../../ui/src/App.jsx#L2470)), so `PipelineRunAnalysis` detail
   renders identically in Runs, WorkPlans, and Approval Gates — a fifth of the
   viewport showing a resource unrelated to the current view. In screenshot 4
   it reports `Approval Gates (this flow) 0 pending` roughly 300px from a list
@@ -155,7 +158,7 @@ Two further honesty problems:
   truncated everywhere it renders.
 - Move `Delivery Test` out of primary nav into that same status/dev surface.
 - Collapse the duplicate navigation. The sidebar and the mode-bar tab strip
-  ([App.jsx:566](../ui/src/App.jsx:566)) overlap, disagree on labels
+  ([App.jsx:566](../../../ui/src/App.jsx#L566)) overlap, disagree on labels
   (sidebar `Runs`, tab `Queue`), and the tab strip omits Observations,
   Incidents, and Remediation Plans, so navigating between those three is
   inconsistent with navigating the other five. Keep the sidebar; use the
@@ -255,7 +258,7 @@ client-side.
   (`Approval gates 11`), duplicating the nav badge in a view that cannot act
   on it.
 - **Make scope selectors server-derived.** Options come from loaded rows
-  (`scopeOptions`, [App.jsx:698](../ui/src/App.jsx:698)), so a namespace with
+  (`scopeOptions`, [App.jsx:698](../../../ui/src/App.jsx#L698)), so a namespace with
   no rows in the current page is unselectable. Add distinct-value endpoints or
   derive from config.
 

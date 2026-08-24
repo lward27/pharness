@@ -84,7 +84,7 @@ Keep `workspaceAllowedRemoteRepos` as it is. Do not add broader source or GitHub
 **4. Render and publish the chart change**
 
 ```sh
-cd /Users/wardl/Personal/apps/pharness
+cd /path/to/pharness
 
 helm template pharness deploy/helm/pharness \
   --namespace pharness > /tmp/pharness-rendered.yaml
@@ -114,7 +114,10 @@ kubectl -n pharness exec deploy/pharness-api -- sh -c \
 
 Expected: both enabled flags are `true`, and both allowlists contain only `yfinance_wrapper`.
 
-Then use the existing source smoke path in [git-writer-pr-executor-smoke.md](/Users/wardl/Personal/apps/pharness/planning/git-writer-pr-executor-smoke.md:1). It will create one bounded branch and PR, then stop for review/merge provenance. It will not auto-merge.
+Then use the retained source smoke path in
+[git-writer-pr-executor-smoke.md](../runbooks/git-writer-pr-executor-smoke.md).
+It will create one bounded branch and PR, then stop for review/merge
+provenance. It will not auto-merge.
 
 **What to enable later**
 

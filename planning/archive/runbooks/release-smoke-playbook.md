@@ -1,7 +1,8 @@
 # Decisions
 
 - Add this as the update smoke for the durable Release slice.
-- Reuse the current DeploymentIntent produced by `planning/deployment-intent-smoke-playbook.md`.
+- Reuse the current DeploymentIntent produced by
+  `planning/archive/runbooks/deployment-intent-smoke-playbook.md`.
 - Approve the current DeploymentIntent before creating a Release because release review starts only after deployment intent approval.
 - Keep the smoke non-mutating. It creates and approves control-plane release records only; it does not sync Argo CD or promote images.
 - Treat a missing, stale, or non-approved Release as a ChangeSet readiness warning in V1.
@@ -36,7 +37,9 @@ test -n "$DEPLOYMENT_INTENT_ID"
 Expected signal:
 
 - `DEPLOYMENT_INTENT_ID` is non-empty.
-- If this check fails, run `planning/deployment-intent-smoke-playbook.md` through DeploymentIntent approval first.
+- If this check fails, run
+  `planning/archive/runbooks/deployment-intent-smoke-playbook.md` through
+  DeploymentIntent approval first.
 
 ## Approve The Current DeploymentIntent
 

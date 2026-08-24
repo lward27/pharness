@@ -1,12 +1,16 @@
 # Decisions
 
-- Create a Marp-compatible Markdown deck at `planning/pharness-meetup-slides.md` so it can be presented directly or adapted into another slide tool.
+- Create a Marp-compatible Markdown deck at
+  `planning/presentations/pharness-meetup-slides.md` so it can be presented
+  directly or adapted into another slide tool.
 - Keep the meetup story casual but technical: pharness is framed as an agent SDLC control plane, not a chat UI or plugin marketplace.
 - Use the actual current artifact state as the source of truth: local-first Rust runtime, Fireworks native tool calling, durable events, approvals, typed read-only cluster capabilities, observations, incidents, remediation plans, work plans, change sets, approval gates, permission grants, and the PHarness UI prototype.
 - Include the UI screenshot as a product/operator slide because the prototype already communicates the intended control-plane surface better than a fresh abstract diagram.
 - Use Mermaid diagrams for the SDLC resource model and runtime flow.
 - Explicitly call out current limitations and risks so the presentation does not overstate V1 as production-autonomous.
-- Generate an editable PowerPoint deck at `planning/pharness-meetup.pptx` while preserving the Markdown deck at `planning/pharness-meetup-slides.md`.
+- Generate an editable PowerPoint deck at
+  `planning/presentations/pharness-meetup.pptx` while preserving the Markdown
+  deck at `planning/presentations/pharness-meetup-slides.md`.
 - Use a dark PHarness-style visual system and native editable slide elements for the PowerPoint version, with the UI prototype screenshot embedded as product proof.
 
 # Backlog

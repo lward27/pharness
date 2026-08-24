@@ -5,7 +5,7 @@ Date: 2026-05-03
 Working name: `pharness`
 
 > Historical design plan. Its early phase-status narrative is superseded by
-> [autonomous-sdlc-roadmap.md](autonomous-sdlc-roadmap.md), which records the
+> [autonomous-sdlc-roadmap.md](../roadmaps/autonomous-sdlc-roadmap.md), which records the
 > deployed V2 control plane, the durable WorkItem/Workspace alpha, and the
 > next real-source-change cut line.
 

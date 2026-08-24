@@ -2,7 +2,7 @@
 
 > Historical V2 delivery plan. The API/UI and isolated worker Job runtime are
 > now deployed. Current autonomous-SDLC status and follow-on work live in
-> [autonomous-sdlc-roadmap.md](autonomous-sdlc-roadmap.md).
+> [autonomous-sdlc-roadmap.md](../roadmaps/autonomous-sdlc-roadmap.md).
 
 ## Why This Is The Next Phase
 
@@ -87,7 +87,8 @@
 ## Verification
 
 - Add a cluster-runtime mode to the smoke tooling (extend `scripts/pharness-e2e-smoke.sh` or add `scripts/pharness-cluster-runtime-smoke.sh`) covering the acceptance list above: deterministic control-plane checks against the deployed API, one model-backed run in a worker Job, approval pause and resume across two Jobs, cancellation, artifact persistence, and denied unauthenticated access.
-- Record results in `planning/v2-cluster-smoke-playbook.md` following the existing playbook convention.
+- Record results in `planning/archive/v2/v2-cluster-smoke-playbook.md`
+  following the existing playbook convention.
 - Keep `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace` green throughout.
 
 ## Explicit Non-Goals For This Phase

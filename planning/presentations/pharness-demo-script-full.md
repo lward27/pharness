@@ -2,7 +2,9 @@
 
 Audience goal: show the full local-to-cluster control-plane path with Fireworks model interaction, live read-only Kubernetes evidence, Prometheus/Loki port-forwards, Argo evidence, Release observability, registry evidence, policy denial, audit, readiness, and approval invalidation.
 
-This is the higher-risk version of the demo. Run it once before presenting. If anything is flaky, fall back to `planning/pharness-demo-script.md`.
+This is the higher-risk version of the demo. Run it once before presenting. If
+anything is flaky, fall back to
+`planning/presentations/pharness-demo-script.md`.
 
 Core message:
 

@@ -287,7 +287,8 @@ Live smoke:
 - Remediation plans are durable drafts only. They are not executable and do not imply approval.
 - No Tekton mutation yet. PipelineRun and TaskRun visibility are read-only.
 - PipelineRun analysis now includes build outputs, deployment target, Deployment rollout correlation, registry-aware image alignment, and Argo sync/health. Bounded logs, test report parsing, and Prometheus correlation are not included yet.
-- Smoke-test playbook now lives at `planning/pharness-smoke-playbook.md`.
+- The retained smoke-test playbook now lives at
+  `planning/archive/runbooks/pharness-smoke-playbook.md`.
 
 ## Cluster Dogfood
 

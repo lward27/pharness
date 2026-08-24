@@ -67,7 +67,7 @@ passes. Deeper detail lives in the linked planning docs.
   surface, the Flow root picker, live Incidents / Remediation Plans /
   Observations views, gates grouped by remediation plan, and clickable
   resource ids across audit, timeline, and evidence. Plan and verification:
-  [ui-v2-improvements.md](ui-v2-improvements.md). P2 (scope filters, audit
+  [ui-v2-improvements.md](../ui/ui-v2-improvements.md). P2 (scope filters, audit
   search) and P3 (App.jsx split) remain.
 
 ## Incidents Hit and Resolved
@@ -101,7 +101,7 @@ passes. Deeper detail lives in the linked planning docs.
   builds (TriggerTemplates already live; manual builds work today).
 - Registry GC for the two mistagged repositories; node 1 disk headroom.
 - Finish the remaining console P2 cluster-mode affordances and P3 module split
-  per [ui-v2-improvements.md](ui-v2-improvements.md); deploy the completed P2
+  per [ui-v2-improvements.md](../ui/ui-v2-improvements.md); deploy the completed P2
   scope/search slice.
 - Next phase: first typed mutation slice (`tekton_trigger_pipeline` for
   approved PipelineIntents behind gates and envelopes), per the follow-on in

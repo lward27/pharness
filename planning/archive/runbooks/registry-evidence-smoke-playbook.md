@@ -9,7 +9,9 @@
 
 ## Backlog
 
-- Use `planning/registry-inspection-evidence-smoke-playbook.md` for the one-step read-only registry inspection path.
+- Use
+  `planning/archive/runbooks/registry-inspection-evidence-smoke-playbook.md`
+  for the one-step read-only registry inspection path.
 - Add production policy smoke coverage once registry evidence becomes a blocker for production Release execution.
 
 # RegistryEvidence Smoke Playbook
@@ -32,7 +34,8 @@ cd "$(git rev-parse --show-toplevel)"
 
 ## Prepare An Approved Release
 
-Run `planning/release-smoke-playbook.md` through the first approved Release, then set:
+Run `planning/archive/runbooks/release-smoke-playbook.md` through the first
+approved Release, then set:
 
 ```bash
 RELEASE_ID="$(jq -r '.release.id' target/pharness-release-approved.json)"
