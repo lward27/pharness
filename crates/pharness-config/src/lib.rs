@@ -26,6 +26,7 @@ const DEFAULT_GIT_WRITER_SERVICE_ACCOUNT: &str = "pharness-git-writer";
 const DEFAULT_GITOPS_WRITER_SERVICE_ACCOUNT: &str = "pharness-gitops-writer";
 const DEFAULT_GIT_OBSERVER_SERVICE_ACCOUNT: &str = "pharness-git-observer";
 const DEFAULT_GITOPS_OBSERVER_SERVICE_ACCOUNT: &str = "pharness-gitops-observer";
+const DEFAULT_SOURCE_READER_SERVICE_ACCOUNT: &str = "pharness-source-reader";
 const DEFAULT_GITHUB_API_URL: &str = "https://api.github.com";
 const DEFAULT_GIT_WRITER_AUTHOR_NAME: &str = "Pharness";
 const DEFAULT_GIT_WRITER_AUTHOR_EMAIL: &str = "pharness@localhost";
@@ -146,6 +147,14 @@ pub struct WorkerKubernetesConfig {
     pub gitops_observer_github_api_url: String,
     pub gitops_observer_active_deadline_seconds: u64,
     pub gitops_observer_ttl_seconds_after_finished: u64,
+    /// An isolated clone/discovery identity. Public repositories may omit a
+    /// token; private repositories mount only this reader-scoped Secret.
+    pub source_reader_enabled: bool,
+    pub source_reader_service_account: String,
+    pub source_reader_token_secret_name: Option<String>,
+    pub source_reader_allowed_repos: Vec<String>,
+    pub source_reader_active_deadline_seconds: u64,
+    pub source_reader_ttl_seconds_after_finished: u64,
     pub api_url: String,
     pub workspace_dir: String,
     /// Per-run source workspace quota, independent of the API's SQLite PVC.
@@ -254,6 +263,7 @@ impl ApiRuntimeConfig {
         reject_invalid_gitops_writer(&config.worker.kubernetes)?;
         reject_invalid_git_observer(&config.worker.kubernetes)?;
         reject_invalid_gitops_observer(&config.worker.kubernetes)?;
+        reject_invalid_source_reader(&config.worker.kubernetes)?;
         if config.worker.mode == WorkerMode::KubernetesJob {
             reject_mutable_worker_image(&config.worker.kubernetes.image)?;
         }
@@ -347,6 +357,13 @@ impl ApiRuntimeConfig {
                     gitops_observer_active_deadline_seconds:
                         DEFAULT_GIT_WRITER_ACTIVE_DEADLINE_SECONDS,
                     gitops_observer_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
+                    source_reader_enabled: false,
+                    source_reader_service_account: DEFAULT_SOURCE_READER_SERVICE_ACCOUNT
+                        .to_string(),
+                    source_reader_token_secret_name: None,
+                    source_reader_allowed_repos: Vec::new(),
+                    source_reader_active_deadline_seconds: 600,
+                    source_reader_ttl_seconds_after_finished: DEFAULT_GIT_WRITER_TTL_SECONDS,
                     api_url: DEFAULT_WORKER_K8S_API_URL.to_string(),
                     workspace_dir: DEFAULT_WORKER_K8S_WORKSPACE_DIR.to_string(),
                     workspace_size_limit: DEFAULT_WORKER_K8S_WORKSPACE_SIZE_LIMIT.to_string(),
@@ -590,6 +607,26 @@ impl ApiRuntimeConfig {
                     self.worker
                         .kubernetes
                         .gitops_observer_ttl_seconds_after_finished = value;
+                }
+                if let Some(value) = kubernetes.source_reader_enabled {
+                    self.worker.kubernetes.source_reader_enabled = value;
+                }
+                if let Some(value) = kubernetes.source_reader_service_account {
+                    self.worker.kubernetes.source_reader_service_account = value;
+                }
+                if let Some(value) = kubernetes.source_reader_token_secret_name {
+                    self.worker.kubernetes.source_reader_token_secret_name = blank_to_none(value);
+                }
+                if let Some(value) = kubernetes.source_reader_allowed_repos {
+                    self.worker.kubernetes.source_reader_allowed_repos = value;
+                }
+                if let Some(value) = kubernetes.source_reader_active_deadline_seconds {
+                    self.worker.kubernetes.source_reader_active_deadline_seconds = value;
+                }
+                if let Some(value) = kubernetes.source_reader_ttl_seconds_after_finished {
+                    self.worker
+                        .kubernetes
+                        .source_reader_ttl_seconds_after_finished = value;
                 }
                 if let Some(value) = kubernetes.api_url {
                     self.worker.kubernetes.api_url = value;
@@ -921,6 +958,29 @@ impl ApiRuntimeConfig {
                 .gitops_observer_ttl_seconds_after_finished =
                 parse_u64(value, "PHARNESS_GITOPS_OBSERVER_TTL_SECONDS")?;
         }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_ENABLED") {
+            self.worker.kubernetes.source_reader_enabled =
+                parse_bool(value, "PHARNESS_SOURCE_READER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_SERVICE_ACCOUNT") {
+            self.worker.kubernetes.source_reader_service_account = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_TOKEN_SECRET") {
+            self.worker.kubernetes.source_reader_token_secret_name = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_ALLOWED_REPOS") {
+            self.worker.kubernetes.source_reader_allowed_repos = split_registry_aliases(value);
+        }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_ACTIVE_DEADLINE_SECONDS") {
+            self.worker.kubernetes.source_reader_active_deadline_seconds =
+                parse_u64(value, "PHARNESS_SOURCE_READER_ACTIVE_DEADLINE_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_SOURCE_READER_TTL_SECONDS") {
+            self.worker
+                .kubernetes
+                .source_reader_ttl_seconds_after_finished =
+                parse_u64(value, "PHARNESS_SOURCE_READER_TTL_SECONDS")?;
+        }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_API_URL") {
             self.worker.kubernetes.api_url = value.clone();
         }
@@ -1087,6 +1147,12 @@ struct FileWorkerKubernetesConfig {
     gitops_observer_github_api_url: Option<String>,
     gitops_observer_active_deadline_seconds: Option<u64>,
     gitops_observer_ttl_seconds_after_finished: Option<u64>,
+    source_reader_enabled: Option<bool>,
+    source_reader_service_account: Option<String>,
+    source_reader_token_secret_name: Option<String>,
+    source_reader_allowed_repos: Option<Vec<String>>,
+    source_reader_active_deadline_seconds: Option<u64>,
+    source_reader_ttl_seconds_after_finished: Option<u64>,
     api_url: Option<String>,
     workspace_dir: Option<String>,
     workspace_size_limit: Option<String>,
@@ -1469,6 +1535,35 @@ fn reject_invalid_gitops_observer(config: &WorkerKubernetesConfig) -> anyhow::Re
     }
     if config.gitops_observer_ttl_seconds_after_finished == 0 {
         bail!("worker.kubernetes.gitops_observer_ttl_seconds_after_finished must be at least one");
+    }
+    Ok(())
+}
+
+fn reject_invalid_source_reader(config: &WorkerKubernetesConfig) -> anyhow::Result<()> {
+    if !config.source_reader_enabled {
+        return Ok(());
+    }
+    if config.source_reader_allowed_repos.is_empty() {
+        bail!("enabled source reader requires at least one allowed repository");
+    }
+    if config.source_reader_service_account.trim().is_empty()
+        || config.source_reader_service_account.contains(['\n', '\r'])
+    {
+        bail!("worker.kubernetes.source_reader_service_account must be non-blank and single-line");
+    }
+    if config.source_reader_active_deadline_seconds == 0 {
+        bail!("worker.kubernetes.source_reader_active_deadline_seconds must be at least one");
+    }
+    if config.source_reader_ttl_seconds_after_finished == 0 {
+        bail!("worker.kubernetes.source_reader_ttl_seconds_after_finished must be at least one");
+    }
+    for repository in &config.source_reader_allowed_repos {
+        if !repository.starts_with("https://github.com/")
+            || !repository.ends_with(".git")
+            || repository.contains(['\n', '\r', '@', '?', '#'])
+        {
+            bail!("worker.kubernetes.source_reader_allowed_repos must contain safe GitHub HTTPS clone URLs");
+        }
     }
     Ok(())
 }

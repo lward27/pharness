@@ -17,6 +17,7 @@ pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-runhost = { path = "../pharness-runhost" }
 pharness-store = { path = "../pharness-store" }
+reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -26,6 +27,8 @@ toml.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

@@ -23,6 +23,7 @@ use super::{
     WorkItemReconcileAction, WorkspaceProvisioner, CONTROLLER_WAIT_MAX_CHECKS,
     GIT_DELIVERY_ACTIONS,
 };
+use crate::app::RepoModeConfiguration;
 
 use super::characterization::{
     fake_completed_argo_wait_kubectl_script, fake_succeeded_tekton_kubectl_script,
@@ -1430,6 +1431,7 @@ async fn worker_can_only_pin_the_exact_issued_remote_workspace() {
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
+        repo_mode: RepoModeConfiguration::test_enabled(),
     };
     let work_item = state
         .store

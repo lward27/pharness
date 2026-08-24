@@ -29,6 +29,7 @@ const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
 const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
 const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
 const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-preparation";
+const REPOSITORY_DISCOVERY_JOB_NAME_VALUE: &str = "pharness-repository-discovery";
 // K3s's selector-backed NetworkPolicy rules converge asynchronously after a
 // Pod receives its IP. Short-lived Jobs otherwise race the policy controller
 // and fail their first API or proxy connection before the rule includes them.
@@ -148,6 +149,16 @@ pub struct EnvironmentPreparationReceipt {
     pub job_name: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct RepositoryDiscoveryRequest {
+    pub discovery_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryDiscoveryReceipt {
+    pub job_name: String,
+}
+
 #[derive(Clone)]
 pub enum RunDispatcher {
     Disabled,
@@ -247,6 +258,13 @@ impl RunDispatcher {
                     "allowed_repos": dispatcher.config.gitops_observer_allowed_repos,
                     "github_api_url": dispatcher.config.gitops_observer_github_api_url,
                 },
+                "source_reader": {
+                    "enabled": dispatcher.config.source_reader_enabled,
+                    "available": dispatcher.source_reader_available(),
+                    "service_account": dispatcher.config.source_reader_service_account,
+                    "allowed_repos": dispatcher.config.source_reader_allowed_repos,
+                    "private_credential_configured": dispatcher.config.source_reader_token_secret_name.is_some(),
+                },
                 "argo_executor": {
                     "enabled": dispatcher.config.argo_executor_enabled,
                     "available": dispatcher.argo_executor_available(),
@@ -318,6 +336,34 @@ impl RunDispatcher {
             }
             Self::Local(_) => {
                 anyhow::bail!("immutable environment profiles are unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub fn source_reader_available(&self) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher) if dispatcher.source_reader_available())
+    }
+
+    pub fn source_reader_allows_repository(&self, repository: &str) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher)
+            if dispatcher.source_reader_available()
+                && dispatcher.config.source_reader_allowed_repos.iter()
+                    .any(|allowed| allowed == repository))
+    }
+
+    pub async fn dispatch_repository_discovery(
+        &self,
+        request: RepositoryDiscoveryRequest,
+    ) -> anyhow::Result<RepositoryDiscoveryReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_repository_discovery_job(&request).await
+            }
+            Self::Disabled => {
+                anyhow::bail!("repository discovery requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("isolated repository discovery is unavailable in local worker mode")
             }
         }
     }
@@ -590,6 +636,10 @@ impl KubernetesJobDispatcher {
         self.config.gitops_observer_enabled
             && self.config.gitops_observer_token_secret_name.is_some()
             && !self.config.gitops_observer_allowed_repos.is_empty()
+    }
+
+    fn source_reader_available(&self) -> bool {
+        self.config.source_reader_enabled && !self.config.source_reader_allowed_repos.is_empty()
     }
 
     async fn verify_capability(
@@ -1009,6 +1059,20 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         let job_name = environment_preparation_job_name(run.id.as_str());
         tracing::info!(run_id = %run.id, job = %job_name, profile = %profile.id, "created isolated environment preparation job");
         Ok(EnvironmentPreparationReceipt { job_name })
+    }
+
+    async fn create_repository_discovery_job(
+        &self,
+        request: &RepositoryDiscoveryRequest,
+    ) -> anyhow::Result<RepositoryDiscoveryReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader capability is unavailable");
+        }
+        let manifest = self.repository_discovery_job_manifest(request);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let job_name = repository_discovery_job_name(&request.discovery_id);
+        tracing::info!(discovery_id = %request.discovery_id, job = %job_name, "created isolated repository discovery job");
+        Ok(RepositoryDiscoveryReceipt { job_name })
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
@@ -2051,6 +2115,89 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         })
     }
 
+    fn repository_discovery_job_manifest(
+        &self,
+        request: &RepositoryDiscoveryRequest,
+    ) -> serde_json::Value {
+        let mut env = vec![
+            serde_json::json!({ "name": "PHARNESS_EXECUTION_KIND", "value": "repository_discovery" }),
+            serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
+            serde_json::json!({ "name": "PHARNESS_REPOSITORY_DISCOVERY_ID", "value": request.discovery_id }),
+            serde_json::json!({ "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+            }}),
+            serde_json::json!({ "name": "HOME", "value": "/work" }),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(
+                serde_json::json!({ "name": "PHARNESS_SOURCE_READER_TOKEN", "valueFrom": {
+                    "secretKeyRef": { "name": secret, "key": "token" }
+                }}),
+            );
+        }
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": repository_discovery_job_name(&request.discovery_id),
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: REPOSITORY_DISCOVERY_JOB_NAME_VALUE,
+                    "pharness.lucas.engineering/discovery-id": job_label_value(&request.discovery_id),
+                },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.source_reader_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished": self.config.source_reader_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        "app": "pharness-source-reader",
+                        "agentic.lucas.engineering/phase": "discovery",
+                        JOB_NAME_LABEL: REPOSITORY_DISCOVERY_JOB_NAME_VALUE,
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.source_reader_service_account,
+                        "restartPolicy": "Never",
+                        "automountServiceAccountToken": false,
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "fsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
+                        "containers": [{
+                            "name": "discover",
+                            "image": self.config.image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": ["pharness-worker"],
+                            "env": env,
+                            "volumeMounts": [
+                                { "name": "work", "mountPath": "/work" },
+                                { "name": "tmp", "mountPath": "/tmp" },
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "100m", "memory": "256Mi", "ephemeral-storage": "512Mi" },
+                                "limits": { "cpu": "1", "memory": "1Gi", "ephemeral-storage": "2Gi" },
+                            },
+                        }],
+                        "volumes": [
+                            { "name": "work", "emptyDir": { "sizeLimit": "2Gi" } },
+                            { "name": "tmp", "emptyDir": { "sizeLimit": "128Mi" } },
+                        ],
+                    },
+                },
+            },
+        })
+    }
+
     /// Reconcile worker and executor jobs that stopped without reporting a
     /// durable outcome. The API remains the only SQLite writer.
     fn spawn_reaper(self: Arc<Self>) {
@@ -2495,6 +2642,16 @@ fn environment_preparation_job_name(run_id: &str) -> String {
     format!("pharness-{}-prepare", job_label_value(run_id))
 }
 
+fn repository_discovery_job_name(discovery_id: &str) -> String {
+    let digest = Sha256::digest(discovery_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-discovery-{suffix}")
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -2600,7 +2757,7 @@ mod tests {
         run_label_to_run_id, workspace_claim_name, ArgoSyncExecutionRequest,
         ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
         GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
-        NETWORK_POLICY_STABILIZATION_SECONDS,
+        RepositoryDiscoveryRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -2774,6 +2931,37 @@ mod tests {
                 "sleep {NETWORK_POLICY_STABILIZATION_SECONDS}"
             )))
         );
+    }
+
+    #[tokio::test]
+    async fn discovery_manifest_uses_the_isolated_reader_without_model_or_writer_credentials() {
+        let dispatcher = test_dispatcher(None).await;
+        let manifest = dispatcher.repository_discovery_job_manifest(&RepositoryDiscoveryRequest {
+            discovery_id: "rdisc_test".to_string(),
+        });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("2Gi"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
     }
 
     #[tokio::test]
@@ -3076,6 +3264,12 @@ mod tests {
                 gitops_observer_github_api_url: "https://api.github.com".to_string(),
                 gitops_observer_active_deadline_seconds: 300,
                 gitops_observer_ttl_seconds_after_finished: 3600,
+                source_reader_enabled: true,
+                source_reader_service_account: "pharness-source-reader".to_string(),
+                source_reader_token_secret_name: None,
+                source_reader_allowed_repos: vec!["https://github.com/example/test.git".to_string()],
+                source_reader_active_deadline_seconds: 600,
+                source_reader_ttl_seconds_after_finished: 3600,
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),

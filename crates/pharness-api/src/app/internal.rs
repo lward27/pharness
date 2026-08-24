@@ -13,6 +13,9 @@ use super::gitops::delivery::{
     InternalGitOpsDeliveryQuery,
 };
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
+use super::products::{
+    internal_repository_discovery_context, internal_repository_discovery_outcome,
+};
 use super::runs;
 use super::source::git_delivery::{
     internal_git_delivery_context, internal_git_delivery_observation_context,
@@ -188,6 +191,14 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-observation-outcome",
             post(internal_gitops_delivery_observation_outcome),
+        )
+        .route(
+            "/api/internal/repository-discoveries/:discovery_id/context",
+            get(internal_repository_discovery_context),
+        )
+        .route(
+            "/api/internal/repository-discoveries/:discovery_id/outcome",
+            post(internal_repository_discovery_outcome),
         )
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

@@ -31,6 +31,9 @@ use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
 
+mod onboarding;
+mod product;
+
 #[derive(Debug, Clone)]
 pub struct SqliteStore {
     pool: SqlitePool,

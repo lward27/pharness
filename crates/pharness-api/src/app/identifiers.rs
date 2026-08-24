@@ -11,6 +11,10 @@ pub(in crate::app) fn safe_id_fragment(value: &str) -> String {
         .collect()
 }
 
+pub(in crate::app) fn new_prefixed_id(prefix: &str) -> String {
+    format!("{prefix}_{}", uuid::Uuid::now_v7().simple())
+}
+
 pub(in crate::app) fn is_git_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

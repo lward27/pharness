@@ -15,6 +15,7 @@ use super::{
     SafetyPolicy, SessionId, SqliteStore, State, StatusCode, StoredDeploymentContract, Value,
     VerifyReleaseRequest, WorkerKubernetesConfig, WorkspaceProvisioner,
 };
+use crate::app::RepoModeConfiguration;
 
 use super::support::reconcile_deployment_intent;
 
@@ -305,6 +306,7 @@ pub(super) async fn test_state() -> AppState {
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
+        repo_mode: RepoModeConfiguration::test_enabled(),
     }
 }
 
@@ -559,6 +561,7 @@ pub(super) async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyCluster
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
+        repo_mode: RepoModeConfiguration::test_enabled(),
     }
 }
 
@@ -619,6 +622,14 @@ pub(super) async fn test_state_with_git_observer(
             gitops_observer_github_api_url: "https://api.github.com".to_string(),
             gitops_observer_active_deadline_seconds: 300,
             gitops_observer_ttl_seconds_after_finished: 3600,
+            source_reader_enabled: true,
+            source_reader_service_account: "pharness-source-reader".to_string(),
+            source_reader_token_secret_name: None,
+            source_reader_allowed_repos: vec![
+                "https://github.com/example/finance-app.git".to_string()
+            ],
+            source_reader_active_deadline_seconds: 600,
+            source_reader_ttl_seconds_after_finished: 3600,
             api_url: "http://pharness-api:4777".to_string(),
             workspace_dir: "/workspace".to_string(),
             workspace_size_limit: "4Gi".to_string(),
@@ -647,6 +658,7 @@ pub(super) async fn test_state_with_git_observer(
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
+        repo_mode: RepoModeConfiguration::test_enabled(),
     }
 }
 

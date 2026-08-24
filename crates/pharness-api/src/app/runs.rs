@@ -23,7 +23,9 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use hmac::{Hmac, Mac};
-use pharness_core::{AgentEvent, EventId, EventKind, ProjectContract, RunId, RunScope, SessionId};
+use pharness_core::{
+    AgentEvent, EventId, EventKind, RepositoryContract, RunId, RunScope, SessionId,
+};
 use pharness_runhost::AttemptOutcome;
 use pharness_store::{
     ApprovalListFilter, CreateRun, CreateSession, RunListFilter, RunSummaryFilter, SqliteStore,
@@ -191,10 +193,11 @@ pub(super) async fn internal_environment_preparation(
         .project_contract
         .clone()
         .ok_or_else(|| ApiError::conflict("successful preparation has no project contract"))?;
-    let contract = serde_json::from_value::<pharness_core::ProjectContract>(contract_json.clone())
-        .map_err(|error| {
-            ApiError::conflict(format!("prepared project contract is invalid: {error}"))
-        })?;
+    let contract =
+        serde_json::from_value::<pharness_core::RepositoryContract>(contract_json.clone())
+            .map_err(|error| {
+                ApiError::conflict(format!("prepared project contract is invalid: {error}"))
+            })?;
     let contract_hash = request
         .project_contract_hash
         .clone()
@@ -811,7 +814,7 @@ pub(super) async fn get_run_operator_summary(
         .execution_target_json
         .get("repository_contract")
         .cloned()
-        .and_then(|value| serde_json::from_value::<ProjectContract>(value).ok());
+        .and_then(|value| serde_json::from_value::<RepositoryContract>(value).ok());
     let pending_approvals = state
         .store
         .pending_approval_for_run(&run_id)

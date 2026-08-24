@@ -7,6 +7,7 @@ pub mod ids;
 pub mod model;
 pub mod policy;
 pub mod project;
+pub mod repository;
 pub mod resources;
 pub mod tools;
 
@@ -29,8 +30,18 @@ pub use policy::{
 };
 pub use project::{
     AcceptanceCommand, DependencyLock, EnvironmentProfile, EnvironmentProfileLimits,
-    EnvironmentSnapshot, PackageInstallationPolicy, PreparationStrategy, ProjectContract,
-    ProjectContractError, ProjectRoots, RunBudget, RunBudgetConsumption,
+    EnvironmentSnapshot, LoadedRepositoryContract, PackageInstallationPolicy, PreparationStrategy,
+    ProjectRoots, RepositoryContract, RepositoryContractError, RepositoryContractSource, RunBudget,
+    RunBudgetConsumption, LEGACY_PROJECT_CONTRACT_PATH, MAX_REPOSITORY_CONTRACT_BYTES,
+    REPOSITORY_CONTRACT_PATH,
+};
+#[allow(deprecated)]
+pub use project::{ProjectContract, ProjectContractError};
+pub use repository::{
+    discover_repository, DiscoveredCandidate, DiscoveredCommandCandidate, DiscoveredContractState,
+    DiscoveredRepositoryEntry, DiscoveredSubmodule, DiscoveredSymlink, DiscoveryFinding,
+    RepositoryDiscovery, RepositoryDiscoveryError, RepositoryDiscoveryIdentity,
+    RepositoryDiscoveryLimits, REPOSITORY_DISCOVERY_SCHEMA,
 };
 pub use resources::{ArtifactRef, ResourceRef};
 pub use tools::{

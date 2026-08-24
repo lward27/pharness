@@ -5,7 +5,7 @@ use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
     AgentAction, AgentEvent, AgentRuntime, CancellationFlag, CompositeToolExecutor,
     EnvironmentSnapshot, EventKind, InMemoryEventSink, LocalReadOnlyFsTools, LocalShellTools,
-    ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProjectContract, ProviderError,
+    ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProviderError, RepositoryContract,
     RunConfig, SafetyPolicy, TaskContract, TaskKind,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
@@ -141,7 +141,7 @@ const FIXTURES: [Fixture; 8] = [
     },
     Fixture {
         id: "python-environment-ready",
-        task: "Use the injected EnvironmentSnapshot and ProjectContract as authoritative. Do not probe Python, Docker, package managers, the operating system, or network access. Fix normalize_ticker in src/validation.py so it strips surrounding whitespace and returns uppercase text, then run the declared `unit` acceptance command through run_acceptance_command.",
+        task: "Use the injected EnvironmentSnapshot and RepositoryContract as authoritative. Do not probe Python, Docker, package managers, the operating system, or network access. Fix normalize_ticker in src/validation.py so it strips surrounding whitespace and returns uppercase text, then run the declared `unit` acceptance command through run_acceptance_command.",
         protected: "protected.txt",
         allowed_paths: &["src/validation.py"],
         required_recoverable_failures: 0,
@@ -695,7 +695,7 @@ fn execution_target_for_fixture(root: &Path, fixture: &Fixture) -> Result<serde_
     if fixture.id != "python-environment-ready" {
         return Ok(serde_json::json!({}));
     }
-    let (contract, manifest_sha256) = ProjectContract::load(root)?;
+    let (contract, manifest_sha256) = RepositoryContract::load(root)?;
     let source_sha = git_lines(root, &["rev-parse", "HEAD"])?
         .into_iter()
         .next()

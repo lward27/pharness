@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 mod models;
+mod onboarding;
+mod product;
 mod sqlite;
 
 pub use models::{
@@ -28,6 +30,15 @@ pub use models::{
     UpdatePipelineIntentDraft, UpdatePipelineIntentEvidence, UpdatePipelineIntentExecution,
     UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
     UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
+};
+pub use onboarding::{
+    CreateRepositoryOnboarding, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
+};
+pub use product::{
+    BootstrapOrganization, CreateProductAggregate, RegisterRepositoryAggregate,
+    RegisteredRepositoryAggregate, StoredOrganization, StoredProduct, StoredProductModelSnapshot,
+    StoredRepository, StoredRepositoryBinding, StoredRepositoryBindingRevision,
+    StoredRepositoryDraft, StoredService, UpdateProductAggregate,
 };
 pub use sqlite::{SqliteStore, StoreError};
 

@@ -17,7 +17,7 @@ pub use prompt::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
 use pharness_core::{
     AgentEvent, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag,
     CompositeToolExecutor, ContextBudget, EnvironmentSnapshot, EventSink, LocalReadOnlyFsTools,
-    LocalShellTools, ModelMessage, ProjectContract, ReadOnlyClusterTools, RecoveryPolicy,
+    LocalShellTools, ModelMessage, ReadOnlyClusterTools, RecoveryPolicy, RepositoryContract,
     RepositoryInstruction, RunBudget, RunBudgetConsumption, RunConfig, RunOutcome, RunScope,
     RunStatus, SafetyPolicy, TaskContract, ToolError, ToolExecutor, ToolProtocolMode, ToolResult,
 };
@@ -552,11 +552,11 @@ fn environment_instructions(run: &RunSpec) -> anyhow::Result<String> {
         .execution_target_json
         .get("repository_contract")
         .cloned()
-        .map(serde_json::from_value::<pharness_core::ProjectContract>)
+        .map(serde_json::from_value::<pharness_core::RepositoryContract>)
         .transpose()?
         .ok_or_else(|| anyhow::anyhow!("prepared run has no repository contract"))?;
     Ok(format!(
-        "Environment readiness snapshot and repository contract were verified before turn zero. Treat these as authoritative; do not rediscover Python, Docker, package-manager, operating-system, or network facts and do not request runtime package installation. Agent shell network is denied. Use only declared acceptance commands through the typed acceptance tool.\nEnvironmentSnapshot:\n{}\nProjectContract:\n{}",
+        "Environment readiness snapshot and RepositoryContract were verified before turn zero. Treat these as authoritative; do not rediscover Python, Docker, package-manager, operating-system, or network facts and do not request runtime package installation. Agent shell network is denied. Use only declared acceptance commands through the typed acceptance tool.\nEnvironmentSnapshot:\n{}\nRepositoryContract:\n{}",
         serde_json::to_string_pretty(&snapshot)?,
         serde_json::to_string_pretty(&contract)?,
     ))
@@ -654,7 +654,7 @@ fn secret_shaped_path(path: &str) -> bool {
 struct ProjectTools {
     workspace: PathBuf,
     canonical_workspace: PathBuf,
-    contract: Option<ProjectContract>,
+    contract: Option<RepositoryContract>,
     snapshot: Option<EnvironmentSnapshot>,
     selected_acceptance_commands: Vec<String>,
 }

@@ -16,7 +16,7 @@ For available policy-gated actions, call the concrete tool. The runtime will pau
 Use patch_file for small existing-file text edits when an exact find/replace patch is safer than rewriting the whole file.
 When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
 For coding work, inspect the final Git status or diff after your last edit before calling finish.
-When an EnvironmentSnapshot and ProjectContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
+When an EnvironmentSnapshot and RepositoryContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
 - kubernetes_get fields: resource, namespace, name, all_namespaces, label_selector.
 - argo_get_app fields: app.
@@ -49,7 +49,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "environment_info",
-            "Return the durable pre-model EnvironmentSnapshot and repository ProjectContract without probing the shell.",
+            "Return the durable pre-model EnvironmentSnapshot and RepositoryContract without probing the shell.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -178,7 +178,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "run_acceptance_command",
-            "Run one exact offline acceptance command selected by name from the immutable ProjectContract.",
+            "Run one exact offline acceptance command selected by name from the immutable RepositoryContract.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,

@@ -33,6 +33,7 @@ mod operator;
 mod pipeline;
 mod policy;
 mod principals;
+mod products;
 mod releases;
 mod risk;
 mod runs;
@@ -46,6 +47,45 @@ mod work_items;
 
 use auth::require_operator_token;
 use system::{BuildMetadata, ProtectedTargetConfiguration};
+
+#[derive(Debug, Clone)]
+struct RepoModeConfiguration {
+    enabled: bool,
+    organization: pharness_store::BootstrapOrganization,
+}
+
+impl RepoModeConfiguration {
+    fn from_env() -> Self {
+        let enabled = std::env::var("PHARNESS_REPO_MODE_V1_ENABLED")
+            .ok()
+            .is_some_and(|value| {
+                matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+            });
+        Self {
+            enabled,
+            organization: pharness_store::BootstrapOrganization {
+                id: std::env::var("PHARNESS_ORGANIZATION_ID")
+                    .unwrap_or_else(|_| "org_default".into()),
+                organization_key: std::env::var("PHARNESS_ORGANIZATION_KEY")
+                    .unwrap_or_else(|_| "default".into()),
+                display_name: std::env::var("PHARNESS_ORGANIZATION_NAME")
+                    .unwrap_or_else(|_| "PHarness".into()),
+            },
+        }
+    }
+
+    #[cfg(test)]
+    fn test_enabled() -> Self {
+        Self {
+            enabled: true,
+            organization: pharness_store::BootstrapOrganization {
+                id: "org_test".into(),
+                organization_key: "test".into(),
+                display_name: "PHarness Test".into(),
+            },
+        }
+    }
+}
 
 const DEFAULT_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 60_000;
 const MAX_DIRECT_CAPABILITY_TIMEOUT_MS: u64 = 300_000;
@@ -64,6 +104,7 @@ pub struct AppState {
     build: BuildMetadata,
     protected_target: ProtectedTargetConfiguration,
     environment_profiles: Arc<Vec<pharness_core::EnvironmentProfile>>,
+    repo_mode: RepoModeConfiguration,
 }
 
 pub fn router(
@@ -86,6 +127,7 @@ pub fn router(
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(environment::load_environment_profiles()),
+        repo_mode: RepoModeConfiguration::from_env(),
     };
 
     Router::new()
@@ -94,6 +136,7 @@ pub fn router(
         .merge(evidence::router())
         .merge(work_items::router())
         .merge(operator::router())
+        .merge(products::router())
         .merge(source::router())
         .merge(gitops::router())
         .merge(pipeline::router())
@@ -151,6 +194,13 @@ impl ApiError {
     fn internal(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: message.into(),
+        }
+    }
+
+    fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::SERVICE_UNAVAILABLE,
             message: message.into(),
         }
     }

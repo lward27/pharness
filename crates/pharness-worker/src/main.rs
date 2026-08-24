@@ -11,8 +11,9 @@ use anyhow::Context;
 use hmac::{Hmac, Mac};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot, ProjectContract,
-    ReadOnlyClusterTools, ToolExecutor,
+    discover_repository, AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot,
+    ReadOnlyClusterTools, RepositoryContract, RepositoryDiscoveryIdentity,
+    RepositoryDiscoveryLimits, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -242,6 +243,10 @@ async fn main() -> anyhow::Result<()> {
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("environment_prepare") {
         return execute_environment_preparation().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("repository_discovery") {
+        return execute_repository_discovery().await;
     }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
@@ -535,6 +540,265 @@ async fn execute_environment_preparation() -> anyhow::Result<()> {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct RepositoryDiscoveryContext {
+    discovery_id: String,
+    onboarding_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    limits: RepositoryDiscoveryLimits,
+}
+
+async fn execute_repository_discovery() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let discovery_id = required_env("PHARNESS_REPOSITORY_DISCOVERY_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build repository discovery client")?;
+    let context_url =
+        format!("{api_url}/api/internal/repository-discoveries/{discovery_id}/context");
+    let context = fetch_internal_context_with_retry::<RepositoryDiscoveryContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch repository discovery context")?;
+    if context.discovery_id != discovery_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+    {
+        anyhow::bail!("invalid_repository_discovery_context");
+    }
+    let outcome = match discover_repository_checkout(&context).await {
+        Ok(discovery) => serde_json::json!({
+            "status": "succeeded",
+            "discovery": discovery,
+        }),
+        Err(error) => {
+            tracing::warn!(
+                discovery_id = %discovery_id,
+                error_code = %repository_discovery_error_code(&error),
+                "isolated repository discovery failed"
+            );
+            serde_json::json!({
+                "status": "failed",
+                "error_code": repository_discovery_error_code(&error),
+                "error_summary": "isolated exact-revision repository discovery failed",
+            })
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-discoveries/{discovery_id}/outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn discover_repository_checkout(
+    context: &RepositoryDiscoveryContext,
+) -> anyhow::Result<pharness_core::RepositoryDiscovery> {
+    parse_github_repository(&context.canonical_url)?;
+    let root = std::path::PathBuf::from("/work/repository");
+    tokio::fs::create_dir_all(&root).await?;
+    let askpass = std::path::PathBuf::from("/tmp/source-reader-askpass");
+    tokio::fs::write(
+        &askpass,
+        "#!/bin/sh\ncase \"$1\" in\n  *Username*) printf '%s\\n' x-access-token ;;\n  *) printf '%s\\n' \"${PHARNESS_SOURCE_READER_TOKEN:-}\" ;;\nesac\n",
+    )
+    .await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700)).await?;
+    }
+    repository_git_command(
+        &["init", root.to_str().context("invalid discovery path")?],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "remote",
+            "add",
+            "origin",
+            &context.canonical_url,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "fetch",
+            "--depth",
+            "1",
+            "--no-tags",
+            "--filter=blob:none",
+            "--no-recurse-submodules",
+            "origin",
+            &context.source_commit,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "checkout",
+            "--detach",
+            "FETCH_HEAD",
+        ],
+        &askpass,
+    )
+    .await?;
+    let resolved = repository_git_stdout(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "rev-parse",
+            "HEAD",
+        ],
+        &askpass,
+    )
+    .await?;
+    if !resolved.eq_ignore_ascii_case(&context.source_commit) {
+        anyhow::bail!("resolved_commit_mismatch");
+    }
+    let discovery = discover_repository(
+        &root,
+        RepositoryDiscoveryIdentity {
+            provider: context.provider.clone(),
+            canonical_url: context.canonical_url.clone(),
+            default_branch: context.default_branch.clone(),
+            registered_commit: context.source_commit.to_ascii_lowercase(),
+            resolved_commit: resolved.to_ascii_lowercase(),
+        },
+        context.limits.clone(),
+    )?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    let _ = (&context.onboarding_id, &context.repository_id);
+    Ok(discovery)
+}
+
+async fn repository_git_command(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<()> {
+    let output = repository_git_output(args, askpass).await?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!(repository_git_error_code(args))
+    }
+}
+
+async fn repository_git_stdout(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<String> {
+    let output = repository_git_output(args, askpass).await?;
+    if !output.status.success() {
+        anyhow::bail!(repository_git_error_code(args));
+    }
+    String::from_utf8(output.stdout)
+        .map(|value| value.trim().to_string())
+        .context("repository Git output was not UTF-8")
+}
+
+async fn repository_git_output(
+    args: &[&str],
+    askpass: &std::path::Path,
+) -> anyhow::Result<std::process::Output> {
+    Command::new("git")
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", askpass)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .await
+        .context("failed to spawn repository Git command")
+}
+
+fn repository_git_error_code(args: &[&str]) -> &'static str {
+    if args.contains(&"fetch") {
+        "git_fetch_failed"
+    } else if args.contains(&"checkout") {
+        "git_checkout_failed"
+    } else if args.contains(&"rev-parse") {
+        "git_revision_failed"
+    } else {
+        "git_setup_failed"
+    }
+}
+
+fn repository_discovery_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("entry limit") {
+        "repository_entry_limit_exceeded"
+    } else if text.contains("inspected-text limit") {
+        "repository_text_limit_exceeded"
+    } else {
+        "repository_discovery_failed"
+    }
+}
+
+async fn post_internal_json_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    payload: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let mut last_error = None;
+    for attempt in 1..=INGEST_ATTEMPTS {
+        match client
+            .post(url)
+            .bearer_auth(token)
+            .json(payload)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) if response.status().is_client_error() => {
+                anyhow::bail!(
+                    "internal outcome request was rejected with {}",
+                    response.status()
+                );
+            }
+            Ok(response) => {
+                last_error = Some(anyhow::anyhow!(
+                    "internal outcome request returned {}",
+                    response.status()
+                ));
+            }
+            Err(error) => last_error = Some(error.into()),
+        }
+        if attempt < INGEST_ATTEMPTS {
+            tokio::time::sleep(INGEST_RETRY_DELAY).await;
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("internal outcome request failed")))
+}
+
 async fn prepare_project_environment(
     spec: &AttemptSpec,
     worker_token: &str,
@@ -560,7 +824,7 @@ async fn prepare_project_environment(
     {
         anyhow::bail!("runner profile does not match the server-selected run profile");
     }
-    let (contract, contract_hash) = ProjectContract::load(&cwd)?;
+    let (contract, contract_hash) = RepositoryContract::load(&cwd)?;
     if contract.environment_profile != profile_id {
         anyhow::bail!(
             "repository contract selects {} rather than runner profile {profile_id}",
@@ -2128,7 +2392,7 @@ fn parse_github_repository(repository: &str) -> anyhow::Result<(String, String)>
 fn is_github_name(value: &str) -> bool {
     value
         .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 fn is_git_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
