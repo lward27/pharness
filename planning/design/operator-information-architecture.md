@@ -69,6 +69,29 @@ The ownership hierarchy answers where an action belongs. Cross-cutting lenses
 support discovery and comparison, but always link back to the owning Product,
 WorkItem, stage, or Release.
 
+## Global navigation and Environment context
+
+The initial global navigation is:
+
+1. **Overview**
+2. **Products**
+3. **Repositories**
+4. **WorkItems**
+5. **Agents**
+6. **Releases**
+7. **Insights**
+8. **Settings**
+
+Pipelines, GitOps Applications, deployment providers, observability backends,
+and other implementation-specific capabilities are nested under the owning
+Product, WorkItem, Release, or capability configuration. A connected provider
+does not automatically earn a top-level product concept.
+
+Environments belong to Products. A global Environment selector is a read and
+filter context only: it narrows rollups and navigation but never supplies an
+implicit mutation target. Every effectful action continues to name its exact
+Product, Environment, repository, provider resource, and state boundary.
+
 ## Organization overview
 
 The Organization overview is primarily read-oriented. It should summarize:
@@ -86,8 +109,30 @@ approval or requested action navigates to the exact owning WorkItem or Release
 where scope, evidence, state hash, and effect can be reviewed.
 
 Do not show **Autonomous Success Rate**. A single autonomy score hides the
-denominator and encourages the wrong behavior. Product health should remain
-dimensioned until honest measures are defined.
+denominator and encourages the wrong behavior.
+
+## Product and portfolio health
+
+Health is initially presented as separate, evidence-backed dimensions rather
+than one numeric score:
+
+- **Work flow** — active, waiting, blocked, failed, and completed WorkItems by
+  current lifecycle boundary.
+- **Release and runtime** — immutable Release state and fresh connected
+  deployment or operational observations when available.
+- **Evidence freshness** — whether the claims shown by PHarness are backed by
+  current, controller-validated observations.
+- **Capability readiness** — configured, verified, stale, or unavailable
+  engineering capabilities for the selected scope.
+
+Repo Mode may show work-flow, evidence, and repository capability dimensions
+without inventing runtime health. Connected Mode may add runtime dimensions
+only when an Environment is actually observable.
+
+Portfolio rollups may show exact counts, rates with explicit denominators, and
+age distributions. They must preserve unavailable data, human intervention,
+safety rejection, verification failure, and rollback rather than compressing
+them into an aspirational score.
 
 ## Product view
 
@@ -200,14 +245,22 @@ events from different WorkItems into a synthetic timeline.
 
 ## Approval and notification routing
 
-Global approval and notification queues are navigation aids. Each item should
-show Product, WorkItem or Release, lifecycle stage, exact target, effect class,
-age, and blocker. Review takes place on the owning resource with its evidence
-and current state.
+Global approval and notification queues are navigation and prioritization
+aids. Each item should show Product, WorkItem or Release, lifecycle stage,
+exact target, effect class, age, expiring grant or production-window context,
+and blocker. Review takes place on the owning resource with its evidence and
+current state.
 
-PHarness must not encourage operators to batch-satisfy unrelated future gates.
-Capability availability, trust policy, and one-time authorization require
-different visual language.
+Queue ordering may consider wait age, authorization expiry, production effect,
+and whether the item blocks other work. The UI must explain urgency rather
+than converting it into authority.
+
+Acknowledging or dismissing a notification never authorizes an action.
+Approval requires the owning typed action, current state hash, exact effect
+summary, actor, and reason. Future gates may be visible for orientation but
+cannot be batch-satisfied before their lifecycle boundary. Capability
+availability, trust policy, and one-time authorization require different
+visual language.
 
 ## Ask PHarness
 
@@ -242,20 +295,12 @@ must survive smaller screens:
 
 ## Open decisions before implementation planning
 
-1. Confirm the exact global navigation and which provider-specific concepts,
-   such as Pipelines, remain nested instead of top-level.
-2. Define Environment selector semantics. The recommendation is a read/filter
-   context only; mutation targets remain explicit on the owning action.
-3. Define honest Product health dimensions and portfolio measures without a
-   synthetic autonomy score.
-4. Define approval-queue and notification behavior, including urgency and
-   acknowledgment semantics.
-5. Define the visual contract for StageOutcomes, facts, claims,
+1. Define the visual contract for StageOutcomes, facts, claims,
    contradictions, and evidence freshness.
-6. Define the useful first Product graph and whether any relationship may be
+2. Define the useful first Product graph and whether any relationship may be
    edited from that view.
-7. Define the first AgentProfile and AgentRun management surfaces.
-8. Identify accessibility and workflow needs of secondary personas after the
+3. Define the first AgentProfile and AgentRun management surfaces.
+4. Identify accessibility and workflow needs of secondary personas after the
    engineering/platform lead experience is coherent.
 
 Do not treat the supplied screenshots as authorization to invent aggregate

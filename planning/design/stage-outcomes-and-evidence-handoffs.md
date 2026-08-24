@@ -86,6 +86,36 @@ Sealed outcomes are never rewritten. A retry, resume, or replan creates new
 execution history and may produce a later effective outcome; the earlier
 outcome remains inspectable.
 
+## Terminal status and effective outcome
+
+StageOutcome uses a small terminal status set:
+
+| Status | Meaning |
+| --- | --- |
+| `succeeded` | The applicable stage completed and its required outputs and acceptance evidence were verified |
+| `failed` | The stage executed but reached a terminal, unsatisfied result |
+| `blocked` | The stage could not complete because a required input, capability, policy decision, authorization, or external condition remained unsatisfied |
+| `cancelled` | An authorized actor or controller rule deliberately terminated the execution before completion |
+| `inapplicable` | The WorkItem mode or scope does not include this lifecycle stage |
+
+An active wait, recoverable retry, approval pause, or budget-extension pause is
+not a terminal status. The StageExecution remains current until it resumes or
+the controller seals an appropriate terminal outcome.
+
+`stale` is an evidence-freshness property, not a terminal status. A previously
+succeeded outcome may become insufficient for a later action when its evidence
+is stale without rewriting what that StageExecution established at the time.
+
+`superseded` is a relationship, not a terminal status. A later StageOutcome may
+become the effective outcome for a stage after replan or deliberate repeat.
+The WorkItem stores the controller-selected effective pointer while preserving
+all outcomes and why the selection changed.
+
+An inapplicable stage may be sealed by the controller without dispatching an
+AgentRun. Unavailable capability does not mean inapplicable when the stage is
+required; it produces a wait or, if the execution terminates, a blocked
+outcome.
+
 ## Controller sealing flow
 
 ```mermaid
@@ -175,14 +205,12 @@ current AgentRuns beside each other without status and ownership context.
 
 ## Open decisions before implementation planning
 
-1. Define StageOutcome status and supersession semantics, including failed,
-   blocked, cancelled, inapplicable, and stale outcomes.
-2. Define the first typed evidence validators and what remains an agent claim.
-3. Define context-pack selection, token budgeting, compaction, and retrieval
+1. Define the first typed evidence validators and what remains an agent claim.
+2. Define context-pack selection, token budgeting, compaction, and retrieval
    audit records.
-4. Define how an operator correction or annotation affects a sealed outcome
+3. Define how an operator correction or annotation affects a sealed outcome
    without rewriting history.
-5. Map the proposed concepts to existing PHarness events and resources before
+4. Map the proposed concepts to existing PHarness events and resources before
    adding a new database entity.
 
 Do not implement a generic multi-agent message bus. StageOutcome and evidence

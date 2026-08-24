@@ -15,6 +15,9 @@ work. It is not a backlog and does not prove implementation.
 - [`repo-mode-operating-model.md`](repo-mode-operating-model.md) defines the
   first product mode, onboarding PR, source-delivery boundary, and future
   merge-order direction.
+- [`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md)
+  defines deterministic discovery, agent-assisted proposals, Git-owned
+  execution contracts, amendments, and derived readiness.
 - [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
   defines WorkItem-scoped evidence rollups, controller sealing, next-agent
   context, and the initial control model.
@@ -39,7 +42,7 @@ current visual direction.
 ## Plan-mode sequence
 
 For product-level work, read the product vision, product model, Repo Mode
-operating model, stage-outcome design, operator information architecture,
-trusted autonomy, current architecture, and finally the active-milestone
-index. If a required decision is open, stop planning and return to product
-discovery.
+operating model, repository onboarding and readiness, stage-outcome design,
+operator information architecture, trusted autonomy, current architecture,
+and finally the active-milestone index. If a required decision is open, stop
+planning and return to product discovery.

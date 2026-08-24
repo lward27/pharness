@@ -63,17 +63,17 @@ rollback into the first Repo Mode milestone.
 Repository onboarding should create value with low setup friction while still
 leaving a reviewable, durable contract in the customer's source of truth.
 
-The intended flow is:
+The settled flow is:
 
 1. An operator associates a Repository with a Product.
 2. PHarness checks out an immutable source revision in a read-only discovery
    workspace.
-3. Discovery proposes a Repository contract covering environment profile,
-   dependency inputs, acceptance commands, source/test/documentation roots,
-   writable paths, and bounded execution policies.
+3. Deterministic discovery produces durable facts. An AgentRun may then propose
+   a Repository contract and Product or Service mappings while labeling its
+   assumptions.
 4. The operator reviews the proposed contract and its assumptions.
 5. PHarness creates a dedicated onboarding pull request containing the reviewed
-   `.pharness` contract and bounded guidance.
+   `.pharness/repository.yaml` contract and bounded guidance.
 6. The customer merges the pull request manually.
 7. PHarness observes the merge, reloads the contract from the exact merge
    revision, validates it, and marks the Repository ready for coding WorkItems.
@@ -93,6 +93,19 @@ initially. The Repository contract contains portable execution facts, not a
 second authoritative copy of the Product hierarchy. Amendments to executable
 contract fields occur through a normal reviewed pull request and become active
 only when PHarness observes and validates the merged revision.
+
+Central annotations may supplement display-only metadata, but they cannot
+override commands, dependency inputs, EnvironmentProfile selection, writable
+paths, network policy, acceptance, or other executable contract fields.
+
+Autonomous coding readiness requires an immutable dependency input, at least
+one deterministic acceptance command, a valid EnvironmentProfile, and fresh
+preparation evidence. Missing writer capability can block source delivery
+without changing contract validity; capability availability and authorization
+remain separate.
+
+The complete state, authority, amendment, and readiness rules are recorded in
+[`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md).
 
 ## Central-mode minimum safety baseline
 
@@ -146,16 +159,14 @@ partial-failure, and recovery contracts are designed.
 
 ## Open decisions before implementation planning
 
-1. Decide whether discovery itself is deterministic, agent-assisted, or a
-   deterministic scan followed by an AgentRun proposal.
-2. Define who may approve an onboarding contract and the exact review flow for
-   future amendments.
-3. Decide whether central annotations may supplement non-executable metadata
-   without modifying the committed contract.
-4. Define readiness when a repository has no lockfile or reliable acceptance
-   command.
-5. Define pull-request check observation and what happens when checks change
+1. Define the first deterministic discovery inventory and its versioned output
+   contract.
+2. Define the exact Repository contract schema evolution and
+   compatibility-alias removal policy.
+3. Define pull-request check observation and what happens when checks change
    after PHarness reports readiness.
+4. Map the settled onboarding states onto existing resources before adding a
+   new persistence model.
 
 Do not create a Repo Mode implementation milestone until these decisions and
 the stage-outcome questions are resolved.

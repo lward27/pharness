@@ -81,6 +81,21 @@ Product structure used during execution must be snapshotted and bound to the
 WorkItem or StageExecution. Later edits to a Service or RepositoryBinding must
 not retroactively change the meaning of prior evidence.
 
+## Product and Repository registration
+
+An operator explicitly creates or selects the Product before registering a
+Repository. PHarness does not silently create Product identity from a
+repository name or agent inference.
+
+Deterministic Repository discovery records source facts. An AgentRun may then
+propose Services and RepositoryBindings for operator review. Approved mappings
+become central Product-model state and retain the discovery and approval
+evidence that produced them. The committed Repository contract separately owns
+portable execution configuration.
+
+The detailed onboarding boundary is recorded in
+[`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md).
+
 ## WorkItem identity and revision boundary
 
 A WorkItem is the correlation root for exactly one engineering intent. It
@@ -195,15 +210,13 @@ recovery ownership.
 
 ## Open decisions before implementation planning
 
-1. Define Product creation, discovery, and approval flow.
+1. Define the minimum Product registration fields and stable Product identity.
 2. Define stable Service identity, ownership, and lifecycle.
 3. Define versioning and review semantics for RepositoryBindings.
 4. Define Environment topology and promotion relationships.
-5. Define how a Repository discovery proposal becomes Product and Service
-   mappings without silently changing central state.
-6. Map these semantic entities onto the existing PHarness resources and
+5. Map these semantic entities onto the existing PHarness resources and
    migrations.
-7. Define the future DeliveryPlan schema and cross-Product access rules.
+6. Define the future DeliveryPlan schema and cross-Product access rules.
 
 Do not infer database tables directly from this document. First characterize
 the current resource model and preserve its working behavior.

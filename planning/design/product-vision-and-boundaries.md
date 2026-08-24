@@ -176,9 +176,9 @@ connected runtime.
 A Product may register multiple Repositories, but an initial Repo Mode WorkItem
 may mutate only one. Other registered, pinned Repositories may provide
 read-only context. Repository onboarding occurs through a dedicated PHarness
-pull request containing the reviewed `.pharness` contract; the Repository
-becomes ready only after PHarness observes its merge and validates the contract
-at that revision.
+pull request containing the reviewed `.pharness/repository.yaml` contract; the
+Repository becomes ready only after PHarness observes its merge and validates
+the contract at that revision.
 
 Future multi-Repository mutation requires an explicit delivery dependency
 graph that surfaces merge and release order to the operator. The complete
@@ -220,6 +220,30 @@ never mutates a target directly. The detailed view hierarchy and its remaining
 metric and interaction questions are recorded in
 [`operator-information-architecture.md`](operator-information-architecture.md).
 
+### Decision round 4: Onboarding, status, and navigation - resolved 2026-08-24
+
+Repository onboarding begins with deterministic discovery, followed by an
+agent-assisted proposal, operator review, one authorized onboarding pull
+request, manual merge, and exact-revision validation. Executable Repository
+configuration remains Git-owned; central annotations are display-only.
+Autonomous coding requires immutable dependency input, deterministic
+acceptance, a valid runner profile, and fresh preparation evidence.
+
+Global navigation uses Overview, Products, Repositories, WorkItems, Agents,
+Releases, Insights, and Settings. Provider-specific systems remain nested, and
+the Environment selector filters read state without becoming a mutation
+target. Product health remains dimensioned across work flow, release/runtime,
+evidence freshness, and capability readiness. Global approval queues navigate
+to exact owning actions; acknowledgment never grants authorization.
+
+StageOutcome uses `succeeded`, `failed`, `blocked`, `cancelled`, and
+`inapplicable` terminal statuses. Staleness and supersession remain explicit
+properties or relationships. The detailed contracts are recorded in
+[`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md),
+[`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md),
+and
+[`operator-information-architecture.md`](operator-information-architecture.md).
+
 ### Implementation planning boundary
 
 Only after the preceding decisions are recorded should plan mode create the
@@ -239,14 +263,16 @@ For product-level planning, read in this order:
    WorkItem identity, and execution identity.
 4. [`repo-mode-operating-model.md`](repo-mode-operating-model.md) for the first
    product mode and source-delivery boundary.
-5. [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
+5. [`repository-onboarding-and-readiness.md`](repository-onboarding-and-readiness.md)
+   for discovery, contract authority, onboarding, amendment, and readiness.
+6. [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
    for evidence rollups, context, and future agent coordination.
-6. [`operator-information-architecture.md`](operator-information-architecture.md)
+7. [`operator-information-architecture.md`](operator-information-architecture.md)
    for view ownership, current/history separation, and operator interaction.
-7. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
-8. [`../architecture/README.md`](../architecture/README.md) for current system
+8. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
+9. [`../architecture/README.md`](../architecture/README.md) for current system
    structure and accepted ADRs.
-9. [`../active/README.md`](../active/README.md) to determine whether an approved
+10. [`../active/README.md`](../active/README.md) to determine whether an approved
    implementation milestone exists.
 
 Do not convert an open decision in this document into an implementation
