@@ -196,7 +196,7 @@ mutation authorization, credential exclusion from model context, bounded
 network/provider access, durable audit, and manual pull-request merge. Future
 satellite, air-gap, and enterprise data-residency work is deferred.
 
-## Open decisions, in required order
+## Decision record and planning boundary
 
 Resolve these before writing a Repo Mode implementation milestone:
 
@@ -267,13 +267,36 @@ Next-stage context uses effective outcomes and typed evidence retrieval rather
 than raw transcript replay. Operator corrections are append-only annotations
 that may trigger new controller decisions but never rewrite sealed history.
 
+### Decision round 6: Repo Mode V1 screens and plan split - resolved 2026-08-24
+
+The first screen milestone covers Organization Overview, Product detail,
+Repository onboarding and readiness, WorkItem creation and detail, and active
+AgentRun drill-down. WorkItem Overview owns the current intent and action;
+Current Stage, StageOutcomes, Delivery, Evidence, and History remain distinct
+sections beneath it.
+
+StageOutcome cards distinguish verified facts, outputs, acceptance, agent
+claims, contradictions, risks, freshness, and provenance. The supplied visual
+concepts remain the dark, dense Product-oriented north star, but the UI uses
+progressive disclosure and only API-backed state.
+
+Planning is intentionally split into two independent entry points. The Product
+Plan is created first and owns control-plane semantics and API contracts. The
+Screen Plan is created second and owns operator presentation and interaction;
+it records missing API fields as dependencies rather than redefining backend
+behavior.
+
 ### Implementation planning boundary
 
-The foundational Repo Mode decisions in rounds 2 through 5 are recorded. Before
-plan mode creates the first active milestone, resolve the initial WorkItem and
-StageOutcome screen contract and record the resulting Repo Mode V1 product
-contract. Connected Mode topology, Product graph, advanced AgentProfile
-management, and multi-Repository DeliveryPlan do not block that milestone.
+The foundational Repo Mode and initial screen decisions are recorded. Plan Mode
+may now use the approved entry points in this exact order:
+
+1. [`repo-mode-v1-product-contract.md`](repo-mode-v1-product-contract.md)
+2. [`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md)
+
+Create the plans one at a time and keep them separate. Connected Mode topology,
+Product graph, advanced AgentProfile management, and multi-Repository
+DeliveryPlan do not block Repo Mode V1.
 
 The milestone must identify behavior that already exists, behavior that needs
 adaptation, and genuinely new capability. It must not rewrite the proven
@@ -296,11 +319,16 @@ For product-level planning, read in this order:
    for evidence rollups, context, and future agent coordination.
 7. [`operator-information-architecture.md`](operator-information-architecture.md)
    for view ownership, current/history separation, and operator interaction.
-8. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
-9. [`../architecture/README.md`](../architecture/README.md) for current system
+8. [`repo-mode-v1-product-contract.md`](repo-mode-v1-product-contract.md) for
+   the first, control-plane-focused Plan Mode task.
+9. [`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md) for the
+   separate, second operator-UI Plan Mode task.
+10. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
+11. [`../architecture/README.md`](../architecture/README.md) for current system
    structure and accepted ADRs.
-10. [`../active/README.md`](../active/README.md) to determine whether an approved
+12. [`../active/README.md`](../active/README.md) to determine whether an approved
    implementation milestone exists.
 
-Do not convert an open decision in this document into an implementation
-assumption. Return to product discovery instead.
+Do not combine the two Plan Mode entry points into one unbounded milestone.
+Neither entry point authorizes implementation until its resulting plan is
+reviewed and approved under [`../active/`](../active/README.md).

@@ -10,6 +10,9 @@ Upstream authorities:
 - [`product-model.md`](product-model.md)
 - [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
 
+Approved V1 screen entry point:
+[`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md)
+
 ## Purpose
 
 This document defines how operators should navigate and understand PHarness.
@@ -293,20 +296,26 @@ must survive smaller screens:
 - Never use color alone to distinguish unavailable, waiting, failed, and
   complete.
 
-## Remaining operator-design decisions
+## Repo Mode V1 screen decision
 
-1. Define the visual contract for StageOutcomes, facts, claims,
-   contradictions, and evidence freshness.
-2. Define the useful first Product graph and whether any relationship may be
-   edited from that view.
-3. Define the first AgentProfile and AgentRun management surfaces.
-4. Identify accessibility and workflow needs of secondary personas after the
-   engineering/platform lead experience is coherent.
+The V1 operator milestone covers Organization Overview, Product detail,
+Repository onboarding and readiness, WorkItem creation and detail, and active
+AgentRun drill-down. WorkItem Overview is the default operational screen.
+Current Stage, sealed StageOutcomes, Delivery, Evidence, and History remain
+separate, comprehensible sections under the same intent.
 
-Only the first Repo Mode StageOutcome and WorkItem screen contract must be
-resolved before its initial operator milestone. Product graph, broad
-AgentProfile management, and secondary-persona specialization may follow
-without blocking repository onboarding and one-intent execution.
+StageOutcome presentation distinguishes verified facts, outputs, acceptance,
+claims, contradictions, risks, freshness, and provenance. The supplied dark,
+dense Product-dashboard concepts remain a visual north star, but every visible
+state must be backed by the API and progressively disclosed.
+
+The exact screen scope, interaction behavior, responsive order, acceptance
+journey, and Plan Mode instructions are recorded in
+[`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md).
+
+Product Graph, broad AgentProfile management, multi-agent swarm visualization,
+and secondary-persona specialization are later operator-design work and do not
+block Repo Mode V1.
 
 Do not treat the supplied screenshots as authorization to invent aggregate
 metrics, agent swarms, connected capabilities, or Product health claims.

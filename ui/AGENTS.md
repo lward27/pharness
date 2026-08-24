@@ -1,5 +1,19 @@
 # Prototype Instructions
 
+## Repo Mode V1 design authority
+
+Before planning or implementing the next operator milestone, read these in
+order:
+
+1. [`../planning/design/repo-mode-v1-product-contract.md`](../planning/design/repo-mode-v1-product-contract.md)
+2. The approved Product Plan produced from that entry point.
+3. [`../planning/design/repo-mode-v1-screen-contract.md`](../planning/design/repo-mode-v1-screen-contract.md)
+
+The Product Plan owns backend semantics and API contracts. The separate Screen
+Plan owns navigation, presentation, interaction, responsive behavior, and UI
+acceptance. A missing API field is a dependency; never synthesize it or redefine
+product state in the client.
+
 Run the local server yourself and open the preview in the in-app browser. Do not give the user server-start instructions when you can run it.
 
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
@@ -8,7 +22,10 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## PHarness Prototype Direction
 
-- The default operator lens is Triage, followed by WorkItems. A WorkItem is the durable root; ChangeSet Flow is one delivery segment, not the console spine.
+- The V1 global order is Overview, Products, Repositories, WorkItems, Agents, Releases, Insights, and Settings. Existing Triage, Queue, Approval, and Flow lenses must be adapted under this hierarchy rather than preserved as a competing navigation system. A WorkItem remains the durable intent root; ChangeSet Flow is one delivery segment, not the console spine.
+- WorkItem Overview is the default operational surface. Current Stage, StageOutcomes, Delivery, Evidence, and History remain distinct sections under the same intent.
+- Keep current WorkItems and AgentRuns primary. Prior attempts, superseded outcomes, completed WorkItems, and historical Runs belong in explicit History surfaces.
+- StageOutcome presentation must distinguish verified facts, outputs, acceptance, agent claims, contradictions, risks, freshness, and provenance. Raw events are drill-down evidence, not the default state model.
 - Navigation and refresh must never dispatch controller work. WorkItem reconciliation is previewed first and applied only from an explicit confirmation carrying operator and reason.
 - A view may show only API-backed durable state. Empty, unreached, disabled, and unavailable states must be named plainly; do not synthesize inventory or failure treatment.
 - Origin is operational data: operator, controller, worker, smoke, system, and legacy records must be filterable without deleting their audit trail.

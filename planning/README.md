@@ -33,10 +33,15 @@ milestone, the
 stable product baseline. Add the next approved milestone under
 [`active/`](active/README.md) before implementation begins.
 
-Product-definition work is active in the
-[`PHarness product vision and decision boundaries`](design/product-vision-and-boundaries.md).
-It is design authority, not an implementation milestone; resolve its required
-open decisions before plan mode creates the next active milestone.
+Repo Mode V1 product discovery is complete enough for two separately sequenced
+Plan Mode tasks:
+
+1. [`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md)
+2. [`Repo Mode V1 screen contract`](design/repo-mode-v1-screen-contract.md)
+
+Create the Product Plan first and the Screen Plan second. These are design
+authorities, not active implementation milestones. No implementation begins
+until the resulting plan is reviewed and added under [`active/`](active/README.md).
 
 ## Source-of-truth order
 
