@@ -140,8 +140,7 @@ decisions are sealed, and how the next AgentRun receives a bounded, trustworthy
 context without replaying an entire transcript or accepting an earlier agent's
 interpretation as fact.
 
-A working hypothesis for the next decision round is a controller-sealed stage
-outcome containing:
+A controller-sealed stage outcome will contain:
 
 - Objective and stage identity.
 - Immutable input and product-model snapshot references.
@@ -152,27 +151,48 @@ outcome containing:
 - Recommended next action, clearly separated from verified fact.
 - A content hash binding the handoff to the exact WorkItem state.
 
-This is a hypothesis, not a locked contract. The deterministic controller must
-remain the authority for lifecycle transitions and policy enforcement even if
-a future control agent proposes assignments, replans, or coordination.
+The deterministic controller remains the authority for lifecycle transitions
+and policy enforcement even if a future control agent proposes assignments,
+replans, or coordination. The detailed direction and remaining questions are
+recorded in
+[`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md).
+
+## Repo Mode operating decisions
+
+Repo Mode ends with a verified source pull request and an external wait. The
+WorkItem closes only after PHarness observes the manual merge and records
+immutable merge provenance. Release and Observe remain unavailable without a
+connected runtime.
+
+A Product may register multiple Repositories, but an initial Repo Mode WorkItem
+may mutate only one. Other registered, pinned Repositories may provide
+read-only context. Repository onboarding occurs through a dedicated PHarness
+pull request containing the reviewed `.pharness` contract; the Repository
+becomes ready only after PHarness observes its merge and validates the contract
+at that revision.
+
+Future multi-Repository mutation requires an explicit delivery dependency
+graph that surfaces merge and release order to the operator. The complete
+boundary and remaining onboarding questions are recorded in
+[`repo-mode-operating-model.md`](repo-mode-operating-model.md).
+
+## Central Repo Mode safety decision
+
+Central-first Repo Mode retains immutable provenance, disposable isolated
+workspaces, reviewed writable roots, declared acceptance, explicit source
+mutation authorization, credential exclusion from model context, bounded
+network/provider access, durable audit, and manual pull-request merge. Future
+satellite, air-gap, and enterprise data-residency work is deferred.
 
 ## Open decisions, in required order
 
 Resolve these before writing a Repo Mode implementation milestone:
 
-### Decision round 2: Repo Mode and evidence flow
+### Decision round 2: Repo Mode and evidence flow - resolved 2026-08-24
 
-1. Define the Repo Mode completion boundary: local verification, pull-request
-   creation, pull-request merge observation, customer CI, or another outcome.
-2. Decide whether a Product may register multiple Repositories immediately and
-   whether one Repo Mode WorkItem may mutate more than one Repository.
-3. Define low-friction repository onboarding and the role of the committed
-   `.pharness` contract versus a centrally stored discovered contract.
-4. Define the authoritative stage-outcome and evidence-handoff contract.
-5. Define whether a control agent is persistent per Product, ephemeral per
-   WorkItem, or deferred behind deterministic orchestration.
-6. State the minimum central-mode security and data-handling baseline without
-   designing the future satellite prematurely.
+The decisions are summarized above and specified in the two supporting design
+documents. Their explicitly open contract questions remain prerequisites for
+implementation planning.
 
 ### Decision round 3: Operator experience
 
@@ -199,10 +219,14 @@ For product-level planning, read in this order:
 1. [`../README.md`](../README.md) for documentation lifecycle and authority.
 2. This document for the product hierarchy, locked decisions, and open
    boundaries.
-3. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
-4. [`../architecture/README.md`](../architecture/README.md) for current system
+3. [`repo-mode-operating-model.md`](repo-mode-operating-model.md) for the first
+   product mode and source-delivery boundary.
+4. [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
+   for evidence rollups, context, and future agent coordination.
+5. [`trusted-autonomy.md`](trusted-autonomy.md) for the existing trust model.
+6. [`../architecture/README.md`](../architecture/README.md) for current system
    structure and accepted ADRs.
-5. [`../active/README.md`](../active/README.md) to determine whether an approved
+7. [`../active/README.md`](../active/README.md) to determine whether an approved
    implementation milestone exists.
 
 Do not convert an open decision in this document into an implementation

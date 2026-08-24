@@ -9,6 +9,12 @@ work. It is not a backlog and does not prove implementation.
   upstream product-definition entry point. Read it before creating a new
   implementation milestone; its open decisions are not implementation
   authorization.
+- [`repo-mode-operating-model.md`](repo-mode-operating-model.md) defines the
+  first product mode, onboarding PR, source-delivery boundary, and future
+  merge-order direction.
+- [`stage-outcomes-and-evidence-handoffs.md`](stage-outcomes-and-evidence-handoffs.md)
+  defines WorkItem-scoped evidence rollups, controller sealing, next-agent
+  context, and the initial control model.
 - [`trusted-autonomy.md`](trusted-autonomy.md) defines the trust-envelope and
   supervised-autonomy principles.
 - [`../../ui/AGENTS.md`](../../ui/AGENTS.md) defines current operator-console
@@ -26,7 +32,7 @@ current visual direction.
 
 ## Plan-mode sequence
 
-For product-level work, read the product vision first, then trusted autonomy,
-current architecture, and finally the active-milestone index. If the product
-vision marks a required decision as open, stop planning and return to product
-discovery.
+For product-level work, read the product vision, Repo Mode operating model,
+stage-outcome design, trusted autonomy, current architecture, and finally the
+active-milestone index. If a required decision is open, stop planning and
+return to product discovery.
