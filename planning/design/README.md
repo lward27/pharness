@@ -5,6 +5,10 @@ work. It is not a backlog and does not prove implementation.
 
 ## Current principles
 
+- [`product-vision-and-boundaries.md`](product-vision-and-boundaries.md) is the
+  upstream product-definition entry point. Read it before creating a new
+  implementation milestone; its open decisions are not implementation
+  authorization.
 - [`trusted-autonomy.md`](trusted-autonomy.md) defines the trust-envelope and
   supervised-autonomy principles.
 - [`../../ui/AGENTS.md`](../../ui/AGENTS.md) defines current operator-console
@@ -19,3 +23,10 @@ The implemented control-plane and UI designs are indexed in
 [`../implemented/README.md`](../implemented/README.md). Superseded V1/V2 UI
 concepts are under [`../archive/ui/`](../archive/ui/) and must not be used as
 current visual direction.
+
+## Plan-mode sequence
+
+For product-level work, read the product vision first, then trusted autonomy,
+current architecture, and finally the active-milestone index. If the product
+vision marks a required decision as open, stop planning and return to product
+discovery.
