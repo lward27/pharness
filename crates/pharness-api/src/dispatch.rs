@@ -2694,8 +2694,103 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
 
     async fn reap_once(&self) -> anyhow::Result<()> {
         self.reap_run_jobs().await?;
+        self.reap_onboarding_jobs().await?;
         self.reap_run_workspace_claims().await?;
         self.reap_tekton_executor_jobs().await
+    }
+
+    async fn reap_onboarding_jobs(&self) -> anyhow::Result<()> {
+        let selector = format!(
+            "{JOB_NAME_LABEL} in ({ONBOARDING_PATCH_JOB_NAME_VALUE},{ONBOARDING_VALIDATION_JOB_NAME_VALUE})"
+        );
+        let output = tokio::process::Command::new(&self.kubectl_bin)
+            .args([
+                "get",
+                "jobs",
+                "-n",
+                &self.config.namespace,
+                "-l",
+                &selector,
+                "-o",
+                "json",
+            ])
+            .output()
+            .await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "kubectl get onboarding jobs failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let jobs: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        let items = jobs
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let onboardings = self
+            .store
+            .list_repository_onboardings_awaiting_isolated_job()
+            .await?;
+        for onboarding in onboardings {
+            let (execution_id, job_name) = match onboarding.status.as_str() {
+                "patch_queued" => {
+                    let Some(execution_id) = onboarding.patch_execution_id.as_deref() else {
+                        continue;
+                    };
+                    (execution_id, onboarding_patch_job_name(execution_id))
+                }
+                "validation_queued" => {
+                    let Some(execution_id) = onboarding.validation_execution_id.as_deref() else {
+                        continue;
+                    };
+                    (
+                        execution_id,
+                        onboarding_contract_validation_job_name(execution_id),
+                    )
+                }
+                _ => continue,
+            };
+            let terminal = items.iter().find(|job| {
+                job.pointer("/metadata/name")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(job_name.as_str())
+            });
+            let Some(job) = terminal else {
+                continue;
+            };
+            if executor_job_terminal_state(job) == ExecutorJobTerminalState::Active {
+                continue;
+            }
+            match onboarding.status.as_str() {
+                "patch_queued" => {
+                    self.store
+                        .fail_repository_onboarding_patch(
+                            &onboarding.id,
+                            execution_id,
+                            "onboarding_patch_job_terminated_without_outcome",
+                        )
+                        .await?;
+                }
+                "validation_queued" => {
+                    self.store
+                        .fail_repository_onboarding_contract_validation(
+                            &onboarding.id,
+                            execution_id,
+                            "onboarding contract validation Job terminated without a durable outcome",
+                        )
+                        .await?;
+                }
+                _ => {}
+            }
+            tracing::warn!(
+                onboarding_id = %onboarding.id,
+                execution_id,
+                job = %job_name,
+                "reconciled missing repository onboarding Job outcome"
+            );
+        }
+        Ok(())
     }
 
     async fn reap_run_workspace_claims(&self) -> anyhow::Result<()> {
