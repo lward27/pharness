@@ -1954,12 +1954,14 @@ impl SqliteStore {
                 risk_level = COALESCE(?4, risk_level),
                 requires_approval = COALESCE(?5, requires_approval),
                 work_plan_json = ?6,
+                session_id = COALESCE(?7, session_id),
+                run_id = COALESCE(?8, run_id),
                 status = 'draft',
-                updated_at = ?7,
+                updated_at = ?9,
                 revision = revision + 1,
-                status_changed_at = ?7,
-                status_changed_by = ?8,
-                status_reason = ?9
+                status_changed_at = ?9,
+                status_changed_by = ?10,
+                status_reason = ?11
             WHERE id = ?1
             "#,
         )
@@ -1973,6 +1975,8 @@ impl SqliteStore {
                 .map(|value| if value { 1 } else { 0 }),
         )
         .bind(work_plan_json)
+        .bind(revision.session_id.as_ref().map(SessionId::as_str))
+        .bind(revision.run_id.as_ref().map(RunId::as_str))
         .bind(now)
         .bind(revision.actor)
         .bind(revision.reason)
@@ -8560,6 +8564,114 @@ mod tests {
         assert_eq!(by_run[0].payload_json["grant_id"], "pgrant_1");
         assert_eq!(searched.len(), 1);
         assert_eq!(by_origin.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn work_plan_revision_can_rebind_planner_run_provenance() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let original_session = SessionId::new("ses_plan_original");
+        let replacement_session = SessionId::new("ses_plan_replacement");
+        let replacement_run = RunId::new("run_plan_replacement");
+        for session_id in [&original_session, &replacement_session] {
+            store
+                .create_session(CreateSession {
+                    id: session_id.clone(),
+                    title: "plan revision".into(),
+                    cwd: "/workspace".into(),
+                })
+                .await
+                .unwrap();
+        }
+        store
+            .create_run(CreateRun {
+                id: replacement_run.clone(),
+                session_id: replacement_session.clone(),
+                user_task: "replacement plan".into(),
+                cwd: "/workspace".into(),
+                max_turns: 16,
+                initial_status: "completed".into(),
+                execution_target_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let work_item = store
+            .create_work_item(crate::CreateWorkItem {
+                id: "witem_replan".into(),
+                status: "executing".into(),
+                title: "replan".into(),
+                intent: "replace the failed plan".into(),
+                acceptance_criteria: vec!["unit".into()],
+                source_repo: "example/repo".into(),
+                source_ref: "main".into(),
+                source_commit: Some("a".repeat(40)),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "repository".into(),
+                target_namespace: None,
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: pharness_core::RunBudget::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".into(),
+                created_by: Some("operator".into()),
+            })
+            .await
+            .unwrap();
+        let plan = store
+            .create_work_plan(crate::CreateWorkPlan {
+                id: "wplan_replan".into(),
+                work_item_id: Some(work_item.id),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: original_session,
+                run_id: None,
+                status: "superseded".into(),
+                title: "original".into(),
+                summary: "original plan".into(),
+                risk_level: "low".into(),
+                requires_approval: true,
+                resource_namespace: None,
+                resource_kind: Some("Repository".into()),
+                resource_name: Some("example/repo".into()),
+                work_plan_json: serde_json::json!({"revision":"original"}),
+            })
+            .await
+            .unwrap();
+
+        let revised = store
+            .revise_work_plan(
+                &plan.id,
+                crate::UpdateWorkPlanRevision {
+                    title: Some("replacement".into()),
+                    summary: Some("replacement plan".into()),
+                    risk_level: Some("medium".into()),
+                    requires_approval: Some(true),
+                    work_plan_json: serde_json::json!({"revision":"replacement"}),
+                    session_id: Some(replacement_session.clone()),
+                    run_id: Some(replacement_run.clone()),
+                    actor: Some("controller".into()),
+                    reason: Some("Planner submitted a replacement revision".into()),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(revised.id, plan.id);
+        assert_eq!(revised.revision, 2);
+        assert_eq!(revised.status, "draft");
+        assert_eq!(revised.session_id, replacement_session);
+        assert_eq!(revised.run_id, Some(replacement_run));
     }
 
     #[tokio::test]

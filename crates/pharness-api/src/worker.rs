@@ -1213,25 +1213,57 @@ async fn seal_repo_plan_stage(
         match submitted {
             Some(document) => match validate_repo_work_plan(&document) {
                 Ok((title, summary, risk_level)) => {
-                    let plan = store
-                        .create_work_plan(CreateWorkPlan {
-                            id: repo_resource_id("wplan"),
-                            work_item_id: Some(execution.work_item_id.clone()),
-                            remediation_plan_id: None,
-                            incident_id: None,
-                            session_id: run.session_id.clone(),
-                            run_id: Some(run.id.clone()),
-                            status: "proposed".into(),
-                            title,
-                            summary,
-                            risk_level,
-                            requires_approval: true,
-                            resource_namespace: None,
-                            resource_kind: Some("Repository".into()),
-                            resource_name: Some(work_item.source_repo.clone()),
-                            work_plan_json: document.clone(),
-                        })
-                        .await?;
+                    let plan = if let Some(existing) = store
+                        .get_work_plan_by_work_item(&execution.work_item_id)
+                        .await?
+                    {
+                        let revised = store
+                            .revise_work_plan(
+                                &existing.id,
+                                pharness_store::UpdateWorkPlanRevision {
+                                    title: Some(title),
+                                    summary: Some(summary),
+                                    risk_level: Some(risk_level),
+                                    requires_approval: Some(true),
+                                    work_plan_json: document.clone(),
+                                    session_id: Some(run.session_id.clone()),
+                                    run_id: Some(run.id.clone()),
+                                    actor: Some("controller".into()),
+                                    reason: Some(
+                                        "Planner submitted a replacement WorkPlan revision".into(),
+                                    ),
+                                },
+                            )
+                            .await?;
+                        store
+                            .update_work_plan_status(
+                                &revised.id,
+                                "proposed",
+                                Some("controller".into()),
+                                Some("Planner submission passed controller validation".into()),
+                            )
+                            .await?
+                    } else {
+                        store
+                            .create_work_plan(CreateWorkPlan {
+                                id: repo_resource_id("wplan"),
+                                work_item_id: Some(execution.work_item_id.clone()),
+                                remediation_plan_id: None,
+                                incident_id: None,
+                                session_id: run.session_id.clone(),
+                                run_id: Some(run.id.clone()),
+                                status: "proposed".into(),
+                                title,
+                                summary,
+                                risk_level,
+                                requires_approval: true,
+                                resource_namespace: None,
+                                resource_kind: Some("Repository".into()),
+                                resource_name: Some(work_item.source_repo.clone()),
+                                work_plan_json: document.clone(),
+                            })
+                            .await?
+                    };
                     (
                         "succeeded",
                         "Planner submitted a controller-validated proposed WorkPlan".to_string(),
