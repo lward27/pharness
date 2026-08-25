@@ -1,5 +1,15 @@
 nameOverride: pharness
 
+features:
+  repoModeV1:
+    # Repo Mode is enabled only in the post-verification release values.
+    enabled: false
+
+organization:
+  id: org_lucas_engineering
+  key: lucas-engineering
+  displayName: Lucas Engineering
+
 # Secrets are created out-of-band, never by this chart:
 #   kubectl create secret generic pharness-fireworks \
 #     --from-literal=api-key=<fireworks api key> -n pharness
@@ -47,6 +57,17 @@ api:
 
 worker:
   serviceAccount: pharness-worker
+  # Read-only source identity used by discovery, onboarding validation, and
+  # immutable readiness Jobs. Public repositories may leave tokenSecretName
+  # blank; private access uses a separately scoped out-of-band Secret.
+  sourceReader:
+    enabled: true
+    serviceAccount: pharness-source-reader
+    tokenSecretName: ""
+    allowedRepos:
+      - https://github.com/lward27/yfinance_wrapper.git
+    activeDeadlineSeconds: 600
+    ttlSecondsAfterFinished: 3600
   # A dedicated GitHub branch/PR writer. It stays disabled until an operator
   # creates the referenced Secret out-of-band and explicitly allows a repo.
   # The API does not mount this Secret; only the short-lived writer Job does.

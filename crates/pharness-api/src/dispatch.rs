@@ -2382,6 +2382,31 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         profile: &EnvironmentProfile,
     ) -> serde_json::Value {
         let job_name = environment_preparation_job_name(run.id.as_str());
+        let mut environment = vec![
+            serde_json::json!({ "name": "PHARNESS_EXECUTION_KIND", "value": "environment_prepare" }),
+            serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
+            serde_json::json!({ "name": "PHARNESS_RUN_ID", "value": run.id.as_str() }),
+            serde_json::json!({ "name": "PHARNESS_ENVIRONMENT_PROFILE_ID", "value": profile.id }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform }),
+            serde_json::json!({ "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) }),
+            serde_json::json!({ "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "HOME", "value": self.config.workspace_dir }),
+            serde_json::json!({ "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+            }}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            environment.push(
+                serde_json::json!({ "name": "PHARNESS_SOURCE_READER_TOKEN", "valueFrom": {
+                    "secretKeyRef": { "name": secret, "key": "token" }
+                }}),
+            );
+        }
         serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -2420,24 +2445,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             "image": profile.image,
                             "imagePullPolicy": "IfNotPresent",
                             "command": ["pharness-worker"],
-                            "env": [
-                                { "name": "PHARNESS_EXECUTION_KIND", "value": "environment_prepare" },
-                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
-                                { "name": "PHARNESS_RUN_ID", "value": run.id.as_str() },
-                                { "name": "PHARNESS_ENVIRONMENT_PROFILE_ID", "value": profile.id },
-                                { "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image },
-                                { "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision },
-                                { "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform },
-                                { "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) },
-                                { "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
-                                { "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
-                                { "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
-                                { "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
-                                { "name": "HOME", "value": self.config.workspace_dir },
-                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
-                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
-                                }},
-                            ],
+                            "env": environment,
                             "volumeMounts": [
                                 { "name": "workspace", "mountPath": self.config.workspace_dir },
                                 { "name": "tmp", "mountPath": "/tmp" },
@@ -3605,7 +3613,8 @@ mod tests {
 
     #[tokio::test]
     async fn preparation_manifest_uses_only_the_preparation_proxy() {
-        let dispatcher = test_dispatcher(None).await;
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
         let profile = EnvironmentProfile {
             id: "python-3.11".to_string(),
             active: true,
@@ -3639,6 +3648,12 @@ mod tests {
                 .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
         }));
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
         assert_eq!(
             manifest.pointer("/spec/template/spec/initContainers/0/image"),
             Some(&json!(profile.image))

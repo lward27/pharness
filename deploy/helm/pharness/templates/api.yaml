@@ -113,6 +113,26 @@ spec:
               value: {{ .Values.ui.image.revision | quote }}
             - name: PHARNESS_WORKER_K8S_SERVICE_ACCOUNT
               value: {{ .Values.worker.serviceAccount | quote }}
+            - name: PHARNESS_REPO_MODE_V1_ENABLED
+              value: {{ .Values.features.repoModeV1.enabled | quote }}
+            - name: PHARNESS_ORGANIZATION_ID
+              value: {{ .Values.organization.id | quote }}
+            - name: PHARNESS_ORGANIZATION_KEY
+              value: {{ .Values.organization.key | quote }}
+            - name: PHARNESS_ORGANIZATION_NAME
+              value: {{ .Values.organization.displayName | quote }}
+            - name: PHARNESS_SOURCE_READER_ENABLED
+              value: {{ .Values.worker.sourceReader.enabled | quote }}
+            - name: PHARNESS_SOURCE_READER_SERVICE_ACCOUNT
+              value: {{ .Values.worker.sourceReader.serviceAccount | quote }}
+            - name: PHARNESS_SOURCE_READER_TOKEN_SECRET
+              value: {{ .Values.worker.sourceReader.tokenSecretName | quote }}
+            - name: PHARNESS_SOURCE_READER_ALLOWED_REPOS
+              value: {{ join "," .Values.worker.sourceReader.allowedRepos | quote }}
+            - name: PHARNESS_SOURCE_READER_ACTIVE_DEADLINE_SECONDS
+              value: {{ .Values.worker.sourceReader.activeDeadlineSeconds | quote }}
+            - name: PHARNESS_SOURCE_READER_TTL_SECONDS
+              value: {{ .Values.worker.sourceReader.ttlSecondsAfterFinished | quote }}
             - name: PHARNESS_ENVIRONMENT_PROFILES_JSON
               value: {{ toJson .Values.environmentProfiles | quote }}
             - name: PHARNESS_TEKTON_EXECUTOR_SERVICE_ACCOUNT
