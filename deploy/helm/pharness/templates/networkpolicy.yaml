@@ -206,6 +206,12 @@ spec:
           podSelector:
             matchLabels:
               app: pharness-runner
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app: pharness-source-reader
       ports:
         - { protocol: TCP, port: 8080 }
   egress:
