@@ -5,7 +5,7 @@
 //! Job orchestration shells out to kubectl with the pod service account,
 //! matching how the typed read-only cluster capabilities already execute.
 
-use crate::worker::{fail_run_from_dispatch, LocalWorker};
+use crate::worker::{fail_run_from_dispatch, fail_run_from_job_creation, LocalWorker};
 use pharness_config::WorkerKubernetesConfig;
 use pharness_core::EnvironmentProfile;
 use pharness_store::{
@@ -741,7 +741,7 @@ impl KubernetesJobDispatcher {
             let run_id = run.id.clone();
             if let Err(error) = self.create_job(&run, approval.as_ref()).await {
                 tracing::error!(run_id = %run_id, %error, "failed to launch worker job");
-                let _ = fail_run_from_dispatch(
+                let _ = fail_run_from_job_creation(
                     &self.store,
                     &run_id,
                     format!("failed to launch worker job: {error}"),
