@@ -23,7 +23,11 @@ function emptyPayload(pathname) {
 }
 
 async function mockApi(page, overrides = {}) {
-  await page.clock.install({ time: new Date("2026-08-06T12:00:00Z") });
+  // Keep Date deterministic while allowing real timers and mocked polling to
+  // run. `clock.install({ time })` advances wall time during the test, which
+  // made otherwise identical snapshots alternate between 8:00:01 and
+  // 8:00:02 depending on worker load.
+  await page.clock.setFixedTime(new Date("2026-08-06T12:00:01Z"));
   await page.route("**/*", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) {
