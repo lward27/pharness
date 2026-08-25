@@ -2411,7 +2411,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                         "image":runner_image,
                         "imagePullPolicy":"IfNotPresent",
                         "command":["/bin/sh","-ec"],
-                        "args":["cp -a --no-preserve=ownership,timestamps /source-workspace/. /workspace/"],
+                        "args":["cp -a --no-preserve=ownership,mode,timestamps /source-workspace/. /workspace/"],
                         "volumeMounts":[
                             {"name":"source-workspace","mountPath":"/source-workspace","readOnly":true},
                             {"name":"workspace","mountPath":self.config.workspace_dir},
@@ -3886,7 +3886,7 @@ mod tests {
         assert_eq!(
             manifest.pointer("/spec/template/spec/initContainers/1/args/0"),
             Some(&json!(
-                "cp -a --no-preserve=ownership,timestamps /source-workspace/. /workspace/"
+                "cp -a --no-preserve=ownership,mode,timestamps /source-workspace/. /workspace/"
             ))
         );
 
