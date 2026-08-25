@@ -907,6 +907,8 @@ pub struct WorkItemFlowResponse {
     pub audit_events: Vec<AuditEventResponse>,
     pub action_rail: Vec<WorkItemActionResponse>,
     pub delivery_configuration: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_mode: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]

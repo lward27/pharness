@@ -213,19 +213,19 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::new(
             "submit_work_plan",
             "Submit one structured WorkPlan for controller validation and operator review.",
-            structured_submission_schema("work_plan"),
+            work_plan_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
             "submit_test_outcome",
             "Submit structured test findings bound to declared acceptance evidence.",
-            structured_submission_schema("outcome"),
+            test_outcome_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
             "submit_verification",
             "Submit structured verification findings with claims separated from evidence-backed facts.",
-            structured_submission_schema("verification"),
+            verification_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
@@ -415,6 +415,88 @@ fn structured_submission_schema(field: &str) -> serde_json::Value {
         "properties": {
             "reason": { "type": "string" },
             (field): { "type": "object" }
+        }
+    })
+}
+
+fn work_plan_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","work_plan"],
+        "properties":{
+            "reason":{"type":"string"},
+            "work_plan":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["title","summary","risk_level","steps"],
+                "properties":{
+                    "title":{"type":"string","minLength":1,"maxLength":200},
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "risk_level":{"type":"string","enum":["low","medium","high"]},
+                    "steps":{
+                        "type":"array","minItems":1,"maxItems":50,
+                        "items":{
+                            "type":"object",
+                            "additionalProperties":false,
+                            "required":["title","description"],
+                            "properties":{
+                                "title":{"type":"string","minLength":1,"maxLength":200},
+                                "description":{"type":"string","minLength":1,"maxLength":2000},
+                                "paths":{"type":"array","items":{"type":"string"},"maxItems":100},
+                                "acceptance_names":{"type":"array","items":{"type":"string"},"maxItems":50}
+                            }
+                        }
+                    },
+                    "assumptions":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
+fn test_outcome_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","outcome"],
+        "properties":{
+            "reason":{"type":"string"},
+            "outcome":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","acceptance_names","claims"],
+                "properties":{
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "acceptance_names":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50},
+                    "claims":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
+fn verification_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","verification"],
+        "properties":{
+            "reason":{"type":"string"},
+            "verification":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["decision","summary","evidence_refs","contradictions","risks"],
+                "properties":{
+                    "decision":{"type":"string","enum":["approved","rejected"]},
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "evidence_refs":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":100},
+                    "contradictions":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
         }
     })
 }

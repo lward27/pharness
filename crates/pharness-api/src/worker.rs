@@ -9,9 +9,9 @@ use pharness_runhost::{
 };
 use pharness_store::{
     CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateBudgetExtension,
-    CreateFileChange, CreateIncident, CreateObservation, CreateRemediationPlan, SqliteStore,
-    StoreError, StoredApproval, StoredIncident, StoredObservation, StoredRemediationPlan,
-    StoredRun,
+    CreateChangeSet, CreateFileChange, CreateIncident, CreateObservation, CreateRemediationPlan,
+    CreateWorkPlan, SealStageOutcome, SqliteStore, StoreError, StoredApproval, StoredIncident,
+    StoredObservation, StoredRemediationPlan, StoredRun,
 };
 use secrecy::SecretString;
 use serde::Serialize;
@@ -235,6 +235,14 @@ async fn task_contract_for_run(
     store: &SqliteStore,
     run: &StoredRun,
 ) -> anyhow::Result<TaskContract> {
+    if run
+        .execution_target_json
+        .pointer("/agent_profile/id")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|profile| profile != "repo-builder")
+    {
+        return Ok(TaskContract::default());
+    }
     let Some(work_item_id) = run
         .execution_target_json
         .get("work_item_id")
@@ -423,9 +431,973 @@ pub(crate) async fn finish_run_from_attempt(
         }
     }
 
+    sync_repo_stage_run(store, run, &outcome).await?;
     sync_work_item_attempt(store, run, &outcome).await?;
 
     Ok(())
+}
+
+pub(crate) async fn sync_repo_stage_run(
+    store: &SqliteStore,
+    run: &StoredRun,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let Some(stage_execution_id) = run
+        .execution_target_json
+        .pointer("/repo_mode/stage_execution_id")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(());
+    };
+    let stage = run
+        .execution_target_json
+        .pointer("/repo_mode/stage")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode run has no stage key"))?;
+    let execution = store
+        .get_stage_execution(stage_execution_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode StageExecution no longer exists"))?;
+    if execution.run_id.as_ref() != Some(&run.id) || execution.stage_key != stage {
+        anyhow::bail!("Repo Mode Run does not match its StageExecution");
+    }
+    if store
+        .get_stage_outcome_for_execution(stage_execution_id)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
+    if !matches!(
+        outcome.status.as_str(),
+        "completed" | "failed" | "cancelled"
+    ) {
+        return Ok(());
+    }
+
+    match stage {
+        "plan" => seal_repo_plan_stage(store, run, &execution, outcome).await,
+        "implement" => seal_repo_implement_stage(store, run, &execution, outcome).await,
+        "test" => seal_repo_test_stage(store, run, &execution, outcome).await,
+        "verify" => seal_repo_verify_stage(store, run, &execution, outcome).await,
+        _ => {
+            let status = if outcome.status == "completed" {
+                "blocked"
+            } else {
+                outcome.status.as_str()
+            };
+            seal_unimplemented_repo_stage(
+                store,
+                run,
+                &execution,
+                status,
+                "Repo Mode stage finalizer is not yet available",
+            )
+            .await
+        }
+    }
+}
+
+async fn seal_repo_test_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let work_item = store
+        .get_work_item(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem no longer exists"))?;
+    let contract: pharness_core::RepositoryContract = serde_json::from_value(
+        work_item
+            .repository_contract_json
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem has no RepositoryContract"))?,
+    )?;
+    let events = store.list_events(&run.id).await?;
+    let results = events
+        .iter()
+        .filter(|event| {
+            event.kind == EventKind::ToolFinished
+                && event
+                    .payload
+                    .pointer("/content/acceptance_command")
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true)
+        })
+        .map(|event| {
+            serde_json::json!({
+                "event_id":event.event_id,
+                "status":event.payload.get("status"),
+                "summary":event.payload.get("summary"),
+                "name":event.payload.pointer("/content/name"),
+                "command":event.payload.pointer("/content/command"),
+                "exit_code":event.payload.pointer("/content/exit_code"),
+                "duration_ms":event.payload.pointer("/content/duration_ms"),
+            })
+        })
+        .collect::<Vec<_>>();
+    let selected_names = run
+        .execution_target_json
+        .get("selected_acceptance_commands")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let selected_commands = selected_names
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<Vec<_>>();
+    let exact_results = selected_commands.iter().all(|command| {
+        results.iter().any(|result| {
+            result.get("command").and_then(serde_json::Value::as_str) == Some(*command)
+                && result.get("status").and_then(serde_json::Value::as_str) == Some("ok")
+                && result.get("exit_code").and_then(serde_json::Value::as_i64) == Some(0)
+        })
+    }) && results.len() == selected_commands.len();
+    let submission = structured_submission_from_events(&events, "test_outcome");
+    let submission_valid = submission.as_ref().is_some_and(|document| {
+        document
+            .as_object()
+            .is_some_and(|object| !object.is_empty())
+    });
+    let passed = outcome.status == "completed"
+        && !selected_commands.is_empty()
+        && exact_results
+        && submission_valid;
+    let status = if passed {
+        "succeeded"
+    } else if outcome.status == "cancelled" {
+        "cancelled"
+    } else {
+        "failed"
+    };
+    let stop_reason = if passed {
+        "Tester executed every selected acceptance command successfully".to_string()
+    } else {
+        outcome.error.clone().unwrap_or_else(|| {
+            "Tester acceptance evidence or typed submission is incomplete".into()
+        })
+    };
+    let facts = serde_json::json!({
+        "selected_commands":selected_commands,
+        "results":results,
+        "all_selected_commands_passed":exact_results,
+        "typed_submission_present":submission_valid,
+        "declared_contract_commands":contract.acceptance_commands,
+    });
+    let validation = serde_json::json!({
+        "subject":{"run_id":run.id,"stage_execution_id":execution.id},
+        "facts":facts,
+        "status":if passed {"valid"} else {"invalid"},
+    });
+    store
+        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+            id: repo_resource_id("evalid"),
+            work_item_id: execution.work_item_id.clone(),
+            stage_execution_id: Some(execution.id.clone()),
+            validator_key: "declared_acceptance".into(),
+            status: if passed { "valid" } else { "invalid" }.into(),
+            subject: serde_json::json!({"run_id":run.id}),
+            evidence_refs: serde_json::json!(events
+                .iter()
+                .filter(|event| event.kind == EventKind::ToolFinished)
+                .map(|event| event.event_id.to_string())
+                .collect::<Vec<_>>()),
+            facts: facts.clone(),
+            contradictions: if passed {
+                serde_json::json!([])
+            } else {
+                serde_json::json!([{"kind":"acceptance_incomplete_or_failed"}])
+            },
+            content_hash: pharness_core::canonical_json_sha256(&validation)?,
+        })
+        .await?;
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            if passed { "verifying" } else { "blocked" },
+            "controller",
+            &stop_reason,
+            false,
+        )
+        .await?;
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let document = pharness_core::StageOutcomeDocument {
+        schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+        work_item_id: execution.work_item_id.clone(),
+        stage_execution_id: execution.id.clone(),
+        stage: pharness_core::RepoStageKey::Test,
+        status: if passed {
+            pharness_core::StageTerminalStatus::Succeeded
+        } else if status == "cancelled" {
+            pharness_core::StageTerminalStatus::Cancelled
+        } else {
+            pharness_core::StageTerminalStatus::Failed
+        },
+        objective: serde_json::json!({"kind":"execute_declared_acceptance"}),
+        pinned_inputs: execution.input_snapshot.clone(),
+        verified_facts: vec![facts],
+        agent_claims: submission.into_iter().collect(),
+        outputs: Vec::new(),
+        acceptance: results,
+        decisions: vec![
+            serde_json::json!({"kind":"controller_acceptance_validation","status":status}),
+        ],
+        authorizations: execution
+            .input_snapshot
+            .get("chain_authorization_id")
+            .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
+            .unwrap_or_default(),
+        contradictions: if passed {
+            Vec::new()
+        } else {
+            vec![serde_json::json!({"kind":"acceptance_incomplete_or_failed"})]
+        },
+        risks: Vec::new(),
+        unavailable_capabilities: Vec::new(),
+        recommendations: if passed {
+            vec![serde_json::json!({"next":"dispatch_verifier"})]
+        } else {
+            vec![serde_json::json!({"next":"correct_or_replan"})]
+        },
+        stop_reason: stop_reason.clone(),
+        sealed_state_version: metadata.state_version,
+    };
+    let value = serde_json::to_value(document)?;
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            actor: "controller".into(),
+            reason: "validate exact declared acceptance evidence".into(),
+        })
+        .await?;
+    if !passed {
+        revoke_repo_chain_for_run(store, run, &stop_reason).await?;
+    }
+    Ok(())
+}
+
+async fn seal_repo_verify_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let events = store.list_events(&run.id).await?;
+    let submission = structured_submission_from_events(&events, "verification");
+    let decision = submission
+        .as_ref()
+        .and_then(|document| document.get("decision"))
+        .and_then(serde_json::Value::as_str);
+    let upstream = store
+        .list_effective_stage_outcomes(&execution.work_item_id)
+        .await?;
+    let upstream_succeeded = ["implement", "test"].into_iter().all(|stage| {
+        upstream
+            .iter()
+            .any(|item| item.stage_key == stage && item.status == "succeeded")
+    });
+    let passed =
+        outcome.status == "completed" && decision == Some("approved") && upstream_succeeded;
+    let status = if passed {
+        "succeeded"
+    } else if outcome.status == "cancelled" {
+        "cancelled"
+    } else {
+        "failed"
+    };
+    let stop_reason = if passed {
+        "Verifier approved the change against controller-sealed Implement and Test evidence"
+            .to_string()
+    } else {
+        outcome.error.clone().unwrap_or_else(|| {
+            "Verifier rejected the change or did not submit an approved typed decision".into()
+        })
+    };
+    let facts = serde_json::json!({
+        "upstream_outcomes":upstream.iter().map(|item| serde_json::json!({"id":item.id,"stage":item.stage_key,"status":item.status,"hash":item.content_hash})).collect::<Vec<_>>(),
+        "upstream_succeeded":upstream_succeeded,
+        "typed_decision":decision,
+    });
+    let validation = serde_json::json!({
+        "subject":{"run_id":run.id,"stage_execution_id":execution.id},
+        "facts":facts,
+        "status":if passed {"valid"} else {"invalid"},
+    });
+    store
+        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+            id: repo_resource_id("evalid"),
+            work_item_id: execution.work_item_id.clone(),
+            stage_execution_id: Some(execution.id.clone()),
+            validator_key: "verification_decision".into(),
+            status: if passed { "valid" } else { "invalid" }.into(),
+            subject: serde_json::json!({"run_id":run.id}),
+            evidence_refs: serde_json::json!(upstream
+                .iter()
+                .map(|item| &item.id)
+                .collect::<Vec<_>>()),
+            facts: facts.clone(),
+            contradictions: if passed {
+                serde_json::json!([])
+            } else {
+                serde_json::json!([{"kind":"verification_not_approved"}])
+            },
+            content_hash: pharness_core::canonical_json_sha256(&validation)?,
+        })
+        .await?;
+    let change_set = if passed {
+        Some(create_repo_change_set(store, run, execution, &upstream).await?)
+    } else {
+        None
+    };
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            if passed {
+                "awaiting_approval"
+            } else {
+                "blocked"
+            },
+            "controller",
+            &stop_reason,
+            false,
+        )
+        .await?;
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let document = pharness_core::StageOutcomeDocument {
+        schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+        work_item_id: execution.work_item_id.clone(),
+        stage_execution_id: execution.id.clone(),
+        stage: pharness_core::RepoStageKey::Verify,
+        status: if passed {
+            pharness_core::StageTerminalStatus::Succeeded
+        } else if status == "cancelled" {
+            pharness_core::StageTerminalStatus::Cancelled
+        } else {
+            pharness_core::StageTerminalStatus::Failed
+        },
+        objective: serde_json::json!({"kind":"verify_change_against_sealed_evidence"}),
+        pinned_inputs: execution.input_snapshot.clone(),
+        verified_facts: vec![facts],
+        agent_claims: submission.into_iter().collect(),
+        outputs: change_set
+            .as_ref()
+            .map(|change_set| vec![serde_json::json!({"kind":"change_set","id":change_set.id,"revision":change_set.revision,"material_hash":change_set.material_hash})])
+            .unwrap_or_default(),
+        acceptance: Vec::new(),
+        decisions: vec![serde_json::json!({"kind":"controller_verification_validation","status":status})],
+        authorizations: execution
+            .input_snapshot
+            .get("chain_authorization_id")
+            .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
+            .unwrap_or_default(),
+        contradictions: if passed { Vec::new() } else { vec![serde_json::json!({"kind":"verification_not_approved"})] },
+        risks: Vec::new(),
+        unavailable_capabilities: Vec::new(),
+        recommendations: if passed { vec![serde_json::json!({"next":"review_change_set"})] } else { vec![serde_json::json!({"next":"correct_or_replan"})] },
+        stop_reason: stop_reason.clone(),
+        sealed_state_version: metadata.state_version,
+    };
+    let value = serde_json::to_value(document)?;
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            actor: "controller".into(),
+            reason: "validate typed Verifier result against sealed evidence".into(),
+        })
+        .await?;
+    revoke_repo_chain_for_run(store, run, "Verifier reached a terminal outcome").await?;
+    Ok(())
+}
+
+async fn create_repo_change_set(
+    store: &SqliteStore,
+    run: &StoredRun,
+    verify_execution: &pharness_store::StoredStageExecution,
+    outcomes: &[pharness_store::StoredStageOutcome],
+) -> anyhow::Result<pharness_store::StoredChangeSet> {
+    let work_item = store
+        .get_work_item(&verify_execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem no longer exists"))?;
+    let plan = store
+        .get_work_plan_by_work_item(&verify_execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkPlan no longer exists"))?;
+    let implement = outcomes
+        .iter()
+        .find(|outcome| outcome.stage_key == "implement" && outcome.status == "succeeded")
+        .ok_or_else(|| anyhow::anyhow!("effective Implement outcome is unavailable"))?;
+    let implement_execution = store
+        .get_stage_execution(&implement.stage_execution_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Implement StageExecution is unavailable"))?;
+    let builder_run_id = implement_execution
+        .run_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Implement StageExecution has no Run"))?;
+    let artifacts = store.list_artifacts(&builder_run_id).await?;
+    let diff = artifacts
+        .iter()
+        .find(|artifact| artifact.kind == "workspace_git_diff")
+        .ok_or_else(|| anyhow::anyhow!("Builder diff artifact is unavailable"))?;
+    let status = artifacts
+        .iter()
+        .find(|artifact| artifact.kind == "workspace_git_status")
+        .ok_or_else(|| anyhow::anyhow!("Builder status artifact is unavailable"))?;
+    let diff_text = diff
+        .content_text
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("Builder diff artifact has no content"))?;
+    let diff_hash = format!("sha256:{:x}", Sha256::digest(diff_text.as_bytes()));
+    let material = serde_json::json!({
+        "schema_version":"pharness.dev/repo-change-set/v1alpha1",
+        "work_item_id":work_item.id,
+        "work_plan":{"id":plan.id,"revision":plan.revision},
+        "source_provenance":{
+            "source_commit":work_item.source_commit,
+            "workspace_id":implement_execution.workspace_id,
+            "run_id":builder_run_id,
+            "stage_execution_id":implement_execution.id,
+            "implement_outcome_id":implement.id,
+            "implement_outcome_hash":implement.content_hash,
+        },
+        "patch":{"artifact_id":diff.id,"hash":diff_hash},
+        "git_status":{"artifact_id":status.id,"content":status.content_json},
+        "effective_outcomes":outcomes.iter().map(|outcome| serde_json::json!({"id":outcome.id,"stage":outcome.stage_key,"hash":outcome.content_hash,"status":outcome.status})).collect::<Vec<_>>(),
+        "verification_run_id":run.id,
+        "verification_stage_execution_id":verify_execution.id,
+    });
+    let material_hash = pharness_core::canonical_json_sha256(&material)?;
+    Ok(store
+        .create_change_set(CreateChangeSet {
+            id: repo_resource_id("cset"),
+            work_item_id: Some(work_item.id),
+            work_plan_id: plan.id,
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: run.session_id.clone(),
+            run_id: Some(builder_run_id),
+            status: "proposed".into(),
+            title: "Repo Mode source change".into(),
+            summary: "Controller-derived source ChangeSet from the verified Builder workspace"
+                .into(),
+            risk_level: plan.risk_level,
+            material_hash,
+            resource_namespace: None,
+            resource_kind: Some("Repository".into()),
+            resource_name: Some(work_item.source_repo),
+            change_set_json: material,
+        })
+        .await?)
+}
+
+async fn revoke_repo_chain_for_run(
+    store: &SqliteStore,
+    run: &StoredRun,
+    reason: &str,
+) -> anyhow::Result<()> {
+    if let Some(chain_id) = run
+        .execution_target_json
+        .pointer("/repo_mode/chain_authorization_id")
+        .and_then(serde_json::Value::as_str)
+    {
+        if store
+            .get_stage_chain_authorization(chain_id)
+            .await?
+            .is_some_and(|authorization| authorization.status == "active")
+        {
+            store
+                .revoke_stage_chain_authorization(chain_id, reason)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn seal_repo_implement_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let work_item = store
+        .get_work_item(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem no longer exists"))?;
+    let contract: pharness_core::RepositoryContract = serde_json::from_value(
+        work_item
+            .repository_contract_json
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem has no RepositoryContract"))?,
+    )?;
+    let evidence = outcome.workspace_evidence.as_ref();
+    let evidence_valid = outcome.status == "completed"
+        && evidence.is_some_and(|evidence| {
+            !evidence.diff.trim().is_empty()
+                && !evidence.changed_paths.is_empty()
+                && evidence.changed_paths.iter().all(|path| {
+                    contract
+                        .writable_paths
+                        .iter()
+                        .any(|pattern| repo_path_matches(pattern, path))
+                })
+        });
+    let status = if evidence_valid {
+        "succeeded"
+    } else if outcome.status == "cancelled" {
+        "cancelled"
+    } else {
+        "failed"
+    };
+    let stop_reason = if evidence_valid {
+        "Builder completed with a nonempty diff inside the authorized writable paths".to_string()
+    } else {
+        outcome
+            .error
+            .clone()
+            .or_else(|| outcome.summary.clone())
+            .unwrap_or_else(|| {
+                "Builder did not produce controller-valid workspace evidence".to_string()
+            })
+    };
+    let artifacts = store.list_artifacts(&run.id).await?;
+    let evidence_refs = artifacts
+        .iter()
+        .filter(|artifact| {
+            matches!(
+                artifact.kind.as_str(),
+                "workspace_git_diff" | "workspace_git_status"
+            )
+        })
+        .map(|artifact| serde_json::json!({"kind":artifact.kind,"id":artifact.id}))
+        .collect::<Vec<_>>();
+    let facts = serde_json::json!({
+        "base_commit":evidence.map(|evidence| &evidence.base_commit),
+        "branch":evidence.map(|evidence| &evidence.branch),
+        "changed_paths":evidence.map(|evidence| evidence.changed_paths.clone()).unwrap_or_default(),
+        "diff_hash":evidence.map(|evidence| format!("sha256:{:x}", Sha256::digest(evidence.diff.as_bytes()))),
+        "authorized_writable_paths":contract.writable_paths,
+    });
+    let validation_material = serde_json::json!({
+        "subject":{"run_id":run.id,"stage_execution_id":execution.id},
+        "evidence_refs":evidence_refs,
+        "facts":facts,
+        "status":if evidence_valid {"valid"} else {"invalid"},
+    });
+    store
+        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+            id: repo_resource_id("evalid"),
+            work_item_id: execution.work_item_id.clone(),
+            stage_execution_id: Some(execution.id.clone()),
+            validator_key: "builder_diff_and_changed_paths".into(),
+            status: if evidence_valid { "valid" } else { "invalid" }.into(),
+            subject: serde_json::json!({"run_id":run.id,"workspace_id":execution.workspace_id}),
+            evidence_refs: serde_json::Value::Array(evidence_refs.clone()),
+            facts: facts.clone(),
+            contradictions: if evidence_valid {
+                serde_json::json!([])
+            } else {
+                serde_json::json!([{"kind":"invalid_builder_workspace_evidence"}])
+            },
+            content_hash: pharness_core::canonical_json_sha256(&validation_material)?,
+        })
+        .await?;
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            if evidence_valid {
+                "verifying"
+            } else {
+                "blocked"
+            },
+            "controller",
+            &stop_reason,
+            false,
+        )
+        .await?;
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let document = pharness_core::StageOutcomeDocument {
+        schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+        work_item_id: execution.work_item_id.clone(),
+        stage_execution_id: execution.id.clone(),
+        stage: pharness_core::RepoStageKey::Implement,
+        status: match status {
+            "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
+            "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
+            _ => pharness_core::StageTerminalStatus::Failed,
+        },
+        objective: serde_json::json!({"kind":"implement_approved_work_plan"}),
+        pinned_inputs: execution.input_snapshot.clone(),
+        verified_facts: vec![facts],
+        agent_claims: outcome
+            .summary
+            .as_ref()
+            .map(|summary| vec![serde_json::json!({"kind":"builder_summary","summary":summary})])
+            .unwrap_or_default(),
+        outputs: evidence_refs,
+        acceptance: Vec::new(),
+        decisions: vec![
+            serde_json::json!({"kind":"controller_workspace_validation","status":status}),
+        ],
+        authorizations: execution
+            .input_snapshot
+            .get("chain_authorization_id")
+            .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
+            .unwrap_or_default(),
+        contradictions: if evidence_valid {
+            Vec::new()
+        } else {
+            vec![serde_json::json!({"kind":"builder_evidence_invalid"})]
+        },
+        risks: Vec::new(),
+        unavailable_capabilities: Vec::new(),
+        recommendations: if evidence_valid {
+            vec![serde_json::json!({"next":"dispatch_tester"})]
+        } else {
+            vec![serde_json::json!({"next":"correct_or_replan"})]
+        },
+        stop_reason: stop_reason.clone(),
+        sealed_state_version: metadata.state_version,
+    };
+    let value = serde_json::to_value(document)?;
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            actor: "controller".into(),
+            reason: "validate Builder workspace evidence".into(),
+        })
+        .await?;
+    if !evidence_valid {
+        if let Some(chain_id) = run
+            .execution_target_json
+            .pointer("/repo_mode/chain_authorization_id")
+            .and_then(serde_json::Value::as_str)
+        {
+            store
+                .revoke_stage_chain_authorization(chain_id, &stop_reason)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+fn repo_path_matches(pattern: &str, path: &str) -> bool {
+    pattern
+        .strip_suffix("/**")
+        .map(|prefix| path == prefix || path.starts_with(&format!("{prefix}/")))
+        .unwrap_or(pattern == path)
+}
+
+async fn seal_repo_plan_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let work_item = store
+        .get_work_item(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem no longer exists"))?;
+    let events = store.list_events(&run.id).await?;
+    let submitted = structured_submission_from_events(&events, "work_plan");
+    let (status, stop_reason, plan, agent_claims) = if outcome.status == "completed" {
+        match submitted {
+            Some(document) => match validate_repo_work_plan(&document) {
+                Ok((title, summary, risk_level)) => {
+                    let plan = store
+                        .create_work_plan(CreateWorkPlan {
+                            id: repo_resource_id("wplan"),
+                            work_item_id: Some(execution.work_item_id.clone()),
+                            remediation_plan_id: None,
+                            incident_id: None,
+                            session_id: run.session_id.clone(),
+                            run_id: Some(run.id.clone()),
+                            status: "proposed".into(),
+                            title,
+                            summary,
+                            risk_level,
+                            requires_approval: true,
+                            resource_namespace: None,
+                            resource_kind: Some("Repository".into()),
+                            resource_name: Some(work_item.source_repo.clone()),
+                            work_plan_json: document.clone(),
+                        })
+                        .await?;
+                    (
+                        "succeeded",
+                        "Planner submitted a controller-validated proposed WorkPlan".to_string(),
+                        Some(plan),
+                        vec![serde_json::json!({"kind":"planner_submission","document":document})],
+                    )
+                }
+                Err(error) => (
+                    "failed",
+                    error,
+                    None,
+                    vec![
+                        serde_json::json!({"kind":"invalid_planner_submission","document":document}),
+                    ],
+                ),
+            },
+            None => (
+                "failed",
+                "Planner completed without a typed WorkPlan submission".to_string(),
+                None,
+                Vec::new(),
+            ),
+        }
+    } else {
+        (
+            if outcome.status == "cancelled" {
+                "cancelled"
+            } else {
+                "failed"
+            },
+            outcome
+                .error
+                .clone()
+                .or_else(|| outcome.summary.clone())
+                .unwrap_or_else(|| "Planner AgentRun failed".into()),
+            None,
+            Vec::new(),
+        )
+    };
+    let work_item_status = if status == "succeeded" {
+        "awaiting_approval"
+    } else {
+        "blocked"
+    };
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            work_item_status,
+            "controller",
+            stop_reason.as_ref(),
+            false,
+        )
+        .await?;
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let document = pharness_core::StageOutcomeDocument {
+        schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+        work_item_id: execution.work_item_id.clone(),
+        stage_execution_id: execution.id.clone(),
+        stage: pharness_core::RepoStageKey::Plan,
+        status: match status {
+            "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
+            "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
+            _ => pharness_core::StageTerminalStatus::Failed,
+        },
+        objective: serde_json::json!({"kind":"produce_bounded_work_plan"}),
+        pinned_inputs: execution.input_snapshot.clone(),
+        verified_facts: vec![serde_json::json!({
+            "kind":"typed_submission_validation",
+            "status":status,
+            "run_id":run.id,
+        })],
+        agent_claims,
+        outputs: plan
+            .as_ref()
+            .map(|plan| vec![serde_json::json!({"kind":"work_plan","id":plan.id,"revision":plan.revision,"status":plan.status})])
+            .unwrap_or_default(),
+        acceptance: Vec::new(),
+        decisions: vec![serde_json::json!({"kind":"controller_validation","status":status})],
+        authorizations: Vec::new(),
+        contradictions: Vec::new(),
+        risks: Vec::new(),
+        unavailable_capabilities: Vec::new(),
+        recommendations: if status == "succeeded" {
+            vec![serde_json::json!({"next":"review_work_plan"})]
+        } else {
+            vec![serde_json::json!({"next":"correct_or_replan"})]
+        },
+        stop_reason: stop_reason.to_string(),
+        sealed_state_version: metadata.state_version,
+    };
+    let value = serde_json::to_value(&document)?;
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            actor: "controller".into(),
+            reason: "validate typed Planner result".into(),
+        })
+        .await?;
+    Ok(())
+}
+
+fn structured_submission_from_events(
+    events: &[AgentEvent],
+    kind: &str,
+) -> Option<serde_json::Value> {
+    events.iter().rev().find_map(|event| {
+        if event.kind != EventKind::ToolFinished
+            || event
+                .payload
+                .pointer("/content/structured_submission")
+                .and_then(serde_json::Value::as_bool)
+                != Some(true)
+            || event
+                .payload
+                .pointer("/content/kind")
+                .and_then(serde_json::Value::as_str)
+                != Some(kind)
+        {
+            return None;
+        }
+        event.payload.pointer("/content/document").cloned()
+    })
+}
+
+fn validate_repo_work_plan(
+    document: &serde_json::Value,
+) -> Result<(String, String, String), String> {
+    let object = document
+        .as_object()
+        .ok_or_else(|| "WorkPlan submission must be a JSON object".to_string())?;
+    let summary = object
+        .get("summary")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= 4_000)
+        .ok_or_else(|| "WorkPlan submission requires a bounded summary".to_string())?;
+    let steps = object
+        .get("steps")
+        .and_then(serde_json::Value::as_array)
+        .filter(|steps| !steps.is_empty() && steps.len() <= 50)
+        .ok_or_else(|| "WorkPlan submission requires between one and fifty steps".to_string())?;
+    if steps.iter().any(|step| {
+        let Some(step) = step.as_object() else {
+            return true;
+        };
+        ["title", "description"].into_iter().any(|field| {
+            step.get(field)
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .is_none_or(str::is_empty)
+        })
+    }) {
+        return Err("every WorkPlan step requires a title and description".into());
+    }
+    let title = object
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= 200)
+        .unwrap_or("Repo Mode WorkPlan");
+    let risk = object
+        .get("risk_level")
+        .and_then(serde_json::Value::as_str)
+        .filter(|risk| matches!(*risk, "low" | "medium" | "high"))
+        .unwrap_or("medium");
+    Ok((title.into(), summary.into(), risk.into()))
+}
+
+async fn seal_unimplemented_repo_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    status: &str,
+    stop_reason: &str,
+) -> anyhow::Result<()> {
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            "blocked",
+            "controller",
+            stop_reason,
+            false,
+        )
+        .await?;
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let value = serde_json::json!({
+        "schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,
+        "work_item_id":execution.work_item_id,
+        "stage_execution_id":execution.id,
+        "stage":execution.stage_key,
+        "status":status,
+        "objective":{},
+        "pinned_inputs":execution.input_snapshot,
+        "verified_facts":[],
+        "agent_claims":[],
+        "outputs":[],
+        "acceptance":[],
+        "decisions":[],
+        "authorizations":[],
+        "contradictions":[],
+        "risks":[],
+        "unavailable_capabilities":[],
+        "recommendations":[{"next":"controller_review"}],
+        "stop_reason":stop_reason,
+        "sealed_state_version":metadata.state_version,
+        "run_id":run.id,
+    });
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            actor: "controller".into(),
+            reason: stop_reason.into(),
+        })
+        .await?;
+    Ok(())
+}
+
+fn repo_resource_id(prefix: &str) -> String {
+    format!("{prefix}_{}", uuid::Uuid::now_v7().simple())
 }
 
 async fn persist_workspace_evidence(
@@ -596,6 +1568,9 @@ async fn sync_work_item_attempt(
     run: &StoredRun,
     outcome: &AttemptOutcome,
 ) -> anyhow::Result<()> {
+    if run.execution_target_json.get("repo_mode").is_some() {
+        return Ok(());
+    }
     let scope = run_scope_for_run(run);
     let (Some(work_item_id), Some(workspace_id)) = (scope.work_item_id, scope.workspace_id) else {
         return Ok(());
@@ -1486,8 +2461,8 @@ mod tests {
         approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
         classify_work_item_attempt, file_change_from_event, finish_run_from_attempt,
         grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
-        remediation_plan_from_incident, result_json_for_attempt, validate_workspace_evidence,
-        workspace_source_for_run,
+        remediation_plan_from_incident, result_json_for_attempt, structured_submission_from_events,
+        validate_repo_work_plan, validate_workspace_evidence, workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
@@ -1495,6 +2470,47 @@ mod tests {
         CreateRun, CreateSession, CreateWorkItem, CreateWorkspace, SqliteStore, StoredIncident,
         StoredObservation, StoredRemediationPlan, StoredRun,
     };
+
+    #[test]
+    fn extracts_only_the_requested_typed_submission() {
+        let events = vec![AgentEvent {
+            event_id: EventId::new("evt_plan"),
+            session_id: SessionId::new("ses_plan"),
+            run_id: RunId::new("run_plan"),
+            seq: 1,
+            kind: EventKind::ToolFinished,
+            payload: serde_json::json!({
+                "status":"ok",
+                "content":{
+                    "structured_submission":true,
+                    "kind":"work_plan",
+                    "document":{"title":"Plan","summary":"Bounded plan","risk_level":"low","steps":[{"title":"Edit","description":"Change one module"}]}
+                }
+            }),
+        }];
+
+        assert!(structured_submission_from_events(&events, "test_outcome").is_none());
+        assert_eq!(
+            structured_submission_from_events(&events, "work_plan").unwrap()["title"],
+            "Plan"
+        );
+    }
+
+    #[test]
+    fn validates_bounded_work_plan_shape() {
+        let valid = serde_json::json!({
+            "title":"Validation change",
+            "summary":"Add a pure validator and tests",
+            "risk_level":"medium",
+            "steps":[{"title":"Implement","description":"Add the validator"}]
+        });
+        assert!(validate_repo_work_plan(&valid).is_ok());
+        let invalid = serde_json::json!({
+            "summary":"Missing actionable descriptions",
+            "steps":[{}]
+        });
+        assert!(validate_repo_work_plan(&invalid).is_err());
+    }
 
     #[test]
     fn result_json_uses_null_for_absent_run_scope() {

@@ -90,6 +90,47 @@ impl SqliteStore {
         row.map(row_to_repo_metadata).transpose()
     }
 
+    pub async fn update_repo_work_item_status(
+        &self,
+        work_item_id: &str,
+        status: &str,
+        actor: &str,
+        reason: &str,
+        close: bool,
+    ) -> Result<crate::StoredWorkItem, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE work_items
+            SET status = ?2, updated_at = ?3, status_changed_at = ?3,
+                status_changed_by = ?4, status_reason = ?5,
+                state_version = state_version + 1,
+                closed_at = CASE WHEN ?6 = 1 THEN ?3 ELSE closed_at END,
+                closure_reason = CASE WHEN ?6 = 1 THEN ?5 ELSE closure_reason END
+            WHERE id = ?1 AND mode = 'repo' AND closed_at IS NULL
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(status)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .bind(if close { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "Repo WorkItem is closed or no longer mutable".into(),
+            ));
+        }
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".into(),
+                id: work_item_id.into(),
+            })
+    }
+
     pub async fn create_stage_execution(
         &self,
         execution: CreateStageExecution,
@@ -267,6 +308,19 @@ impl SqliteStore {
             .fetch_optional(&self.pool)
             .await?;
         row.map(row_to_stage_outcome).transpose()
+    }
+
+    pub async fn list_effective_stage_outcomes(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Vec<StoredStageOutcome>, StoreError> {
+        let rows = sqlx::query(&stage_outcome_select(
+            "JOIN effective_stage_outcomes effective ON effective.outcome_id = stage_outcomes.id WHERE effective.work_item_id = ?1 ORDER BY stage_outcomes.sealed_at, stage_outcomes.id",
+        ))
+        .bind(work_item_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_stage_outcome).collect()
     }
 
     pub async fn create_evidence_validation(
@@ -619,8 +673,10 @@ fn stage_execution_select(where_clause: &str) -> String {
 
 fn stage_outcome_select(where_clause: &str) -> String {
     format!(
-        "SELECT id, stage_execution_id, work_item_id, stage_key, status, schema_version, \
-         outcome_json, content_hash, state_version, supersedes_outcome_id, sealed_by, sealed_at \
+        "SELECT stage_outcomes.id, stage_outcomes.stage_execution_id, stage_outcomes.work_item_id, \
+         stage_outcomes.stage_key, stage_outcomes.status, stage_outcomes.schema_version, \
+         stage_outcomes.outcome_json, stage_outcomes.content_hash, stage_outcomes.state_version, \
+         stage_outcomes.supersedes_outcome_id, stage_outcomes.sealed_by, stage_outcomes.sealed_at \
          FROM stage_outcomes {where_clause}"
     )
 }

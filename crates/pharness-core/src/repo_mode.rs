@@ -1,9 +1,36 @@
 use crate::RunBudget;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const STAGE_OUTCOME_SCHEMA: &str = "pharness.dev/stage-outcome/v1alpha1";
 pub const EVIDENCE_VALIDATION_SCHEMA: &str = "pharness.dev/evidence-validation/v1alpha1";
 pub const AGENT_CONTEXT_SCHEMA: &str = "pharness.dev/agent-context/v1alpha1";
+
+/// Versioned Repo Mode resources use one deterministic JSON representation
+/// before hashing. Object keys are sorted recursively while array order is
+/// preserved because it is semantically meaningful in plans and evidence.
+pub fn canonical_json_sha256(value: &serde_json::Value) -> Result<String, serde_json::Error> {
+    fn canonicalize(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(values) => {
+                let mut keys = values.keys().collect::<Vec<_>>();
+                keys.sort_unstable();
+                let mut canonical = serde_json::Map::new();
+                for key in keys {
+                    canonical.insert(key.clone(), canonicalize(&values[key]));
+                }
+                serde_json::Value::Object(canonical)
+            }
+            serde_json::Value::Array(values) => {
+                serde_json::Value::Array(values.iter().map(canonicalize).collect())
+            }
+            other => other.clone(),
+        }
+    }
+
+    let bytes = serde_json::to_vec(&canonicalize(value))?;
+    Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+}
 pub const ONBOARDING_PROPOSAL_SCHEMA: &str = "pharness.dev/repository-onboarding-proposal/v1alpha1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,5 +278,21 @@ mod tests {
         assert!(first
             .iter()
             .all(|profile| profile.profile_hash.starts_with("sha256:")));
+    }
+
+    #[test]
+    fn canonical_hash_ignores_object_insertion_order_but_preserves_arrays() {
+        let first = serde_json::json!({"b":2,"a":{"y":2,"x":1},"steps":["one","two"]});
+        let second = serde_json::json!({"steps":["one","two"],"a":{"x":1,"y":2},"b":2});
+        let reversed = serde_json::json!({"a":{"x":1,"y":2},"b":2,"steps":["two","one"]});
+
+        assert_eq!(
+            canonical_json_sha256(&first).unwrap(),
+            canonical_json_sha256(&second).unwrap()
+        );
+        assert_ne!(
+            canonical_json_sha256(&first).unwrap(),
+            canonical_json_sha256(&reversed).unwrap()
+        );
     }
 }

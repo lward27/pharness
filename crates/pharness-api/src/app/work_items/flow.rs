@@ -122,6 +122,11 @@ pub(in crate::app) async fn work_item_flow(
         .get_work_item(&work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
+    if super::super::repo_mode::is_repo_work_item(&state, &work_item_id).await? {
+        return Ok(Json(
+            super::super::repo_mode::repo_work_item_flow(&state, &work_item_id).await?,
+        ));
+    }
     let work_plan = state
         .store
         .get_work_plan_by_work_item(&work_item_id)
@@ -926,6 +931,7 @@ pub(in crate::app) async fn work_item_flow(
         audit_events,
         action_rail,
         delivery_configuration,
+        repo_mode: None,
     }))
 }
 

@@ -15,7 +15,9 @@ use crate::dto::{
     FileChangeResponse, ObservationResponse, ObservationsResponse, RunDiffResponse,
     RunOperatorSummaryResponse, RunResponse, RunSummaryResponse, RunsResponse, WorkspaceResponse,
 };
-use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
+use crate::worker::{
+    attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event, sync_repo_stage_run,
+};
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -173,15 +175,25 @@ pub(super) async fn internal_environment_preparation(
                 Some(error.clone()),
             )
             .await?;
-        state
-            .store
-            .update_work_item_status(
-                &work_item.id,
-                "blocked",
-                Some("agent:environment-preparer".to_string()),
-                Some(error),
+        if run.execution_target_json.get("repo_mode").is_some() {
+            sync_repo_stage_run(
+                &state.store,
+                &run,
+                &AttemptOutcome::failed(format!("environment preparation failed: {error}")),
             )
-            .await?;
+            .await
+            .map_err(|sync_error| ApiError::internal(sync_error.to_string()))?;
+        } else {
+            state
+                .store
+                .update_work_item_status(
+                    &work_item.id,
+                    "blocked",
+                    Some("agent:environment-preparer".to_string()),
+                    Some(error),
+                )
+                .await?;
+        }
         return Ok(Json(preparation.into()));
     }
     if request.status != "succeeded" {
@@ -523,6 +535,8 @@ pub(super) async fn internal_ingest_outcome(
         .get_run(&run_id)
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    super::repo_mode::continue_repo_stage_chain(&state, &run).await?;
 
     Ok(Json(run.into()))
 }

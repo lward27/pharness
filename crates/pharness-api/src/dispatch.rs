@@ -18,6 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
+const WORKSPACE_ID_LABEL: &str = "pharness.lucas.engineering/workspace-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
 const JOB_NAME_VALUE: &str = "pharness-run";
 const WORKSPACE_CLAIM_NAME_VALUE: &str = "pharness-run-workspace";
@@ -1076,7 +1077,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
-        let name = workspace_claim_name(run.id.as_str());
+        let name = workspace_claim_name_for_run(run);
         let output = tokio::process::Command::new(&self.kubectl_bin)
             .args([
                 "get",
@@ -1145,11 +1146,12 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     }
 
     fn workspace_claim_manifest(&self, run: &StoredRun) -> serde_json::Value {
+        let claim_name = workspace_claim_name_for_run(run);
         let mut manifest = serde_json::json!({
             "apiVersion": "v1",
             "kind": "PersistentVolumeClaim",
             "metadata": {
-                "name": workspace_claim_name(run.id.as_str()),
+                "name": claim_name,
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: WORKSPACE_CLAIM_NAME_VALUE,
@@ -1163,6 +1165,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 },
             },
         });
+        if let Some(workspace_id) = shared_repo_workspace_id(run) {
+            if let Some(labels) = manifest
+                .pointer_mut("/metadata/labels")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                labels.remove(RUN_ID_LABEL);
+                labels.insert(
+                    WORKSPACE_ID_LABEL.into(),
+                    serde_json::Value::String(job_label_value(workspace_id)),
+                );
+            }
+        }
         if let Some(storage_class) = self.config.workspace_storage_class.as_deref() {
             manifest["spec"]["storageClassName"] = serde_json::json!(storage_class);
         }
@@ -2002,7 +2016,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             {
                                 "name": "workspace",
                                 "persistentVolumeClaim": {
-                                    "claimName": workspace_claim_name(run.id.as_str()),
+                                    "claimName": workspace_claim_name_for_run(run),
                                 },
                             },
                             { "name": "tmp", "emptyDir": {} },
@@ -2011,6 +2025,49 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 },
             },
         });
+        match run
+            .execution_target_json
+            .pointer("/repo_mode/workspace_access")
+            .and_then(serde_json::Value::as_str)
+        {
+            Some("ephemeral_copy") => {
+                manifest["spec"]["template"]["spec"]["initContainers"] = serde_json::json!([
+                    network_policy_stabilization_container(runner_image),
+                    {
+                        "name":"copy-authorized-workspace",
+                        "image":runner_image,
+                        "imagePullPolicy":"IfNotPresent",
+                        "command":["/bin/sh","-ec"],
+                        "args":["cp -a /source-workspace/. /workspace/"],
+                        "volumeMounts":[
+                            {"name":"source-workspace","mountPath":"/source-workspace","readOnly":true},
+                            {"name":"workspace","mountPath":self.config.workspace_dir},
+                        ],
+                        "securityContext":{
+                            "allowPrivilegeEscalation":false,
+                            "readOnlyRootFilesystem":true,
+                            "capabilities":{"drop":["ALL"]},
+                        },
+                        "resources":{
+                            "requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"256Mi"},
+                            "limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":ephemeral_limit},
+                        },
+                    }
+                ]);
+                manifest["spec"]["template"]["spec"]["volumes"] = serde_json::json!([
+                    {"name":"workspace","emptyDir":{"sizeLimit":self.config.workspace_size_limit}},
+                    {"name":"source-workspace","persistentVolumeClaim":{"claimName":workspace_claim_name_for_run(run),"readOnly":true}},
+                    {"name":"tmp","emptyDir":{}},
+                ]);
+            }
+            Some("read_only") => {
+                manifest["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0]
+                    ["readOnly"] = serde_json::json!(true);
+                manifest["spec"]["template"]["spec"]["volumes"][0]["persistentVolumeClaim"]
+                    ["readOnly"] = serde_json::json!(true);
+            }
+            _ => {}
+        }
         if let Some(hostname) = self.config.workspace_node_hostname.as_deref() {
             manifest["spec"]["template"]["spec"]["affinity"] = serde_json::json!({
                 "nodeAffinity": {
@@ -2106,7 +2163,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             },
                         }],
                         "volumes": [
-                            { "name": "workspace", "persistentVolumeClaim": { "claimName": workspace_claim_name(run.id.as_str()) } },
+                            { "name": "workspace", "persistentVolumeClaim": { "claimName": workspace_claim_name_for_run(run) } },
                             { "name": "tmp", "emptyDir": {} },
                         ],
                     },
@@ -2638,6 +2695,20 @@ fn workspace_claim_name(run_id: &str) -> String {
     format!("pharness-{}-ws", job_label_value(run_id))
 }
 
+fn shared_repo_workspace_id(run: &StoredRun) -> Option<&str> {
+    run.execution_target_json
+        .pointer("/repo_mode/chain_authorization_id")?;
+    run.execution_target_json
+        .pointer("/workspace_source/workspace_id")
+        .and_then(serde_json::Value::as_str)
+}
+
+fn workspace_claim_name_for_run(run: &StoredRun) -> String {
+    shared_repo_workspace_id(run)
+        .map(workspace_claim_name)
+        .unwrap_or_else(|| workspace_claim_name(run.id.as_str()))
+}
+
 fn environment_preparation_job_name(run_id: &str) -> String {
     format!("pharness-{}-prepare", job_label_value(run_id))
 }
@@ -2754,10 +2825,11 @@ mod tests {
         active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
         executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
         gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
-        run_label_to_run_id, workspace_claim_name, ArgoSyncExecutionRequest,
-        ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
-        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
-        RepositoryDiscoveryRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
+        run_label_to_run_id, workspace_claim_name, workspace_claim_name_for_run,
+        ArgoSyncExecutionRequest, ExecutorJobTerminalState, GitDeliveryExecutionRequest,
+        GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
+        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher, RepositoryDiscoveryRequest,
+        NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -2882,6 +2954,66 @@ mod tests {
             Some(&json!(format!(
                 "sleep {NETWORK_POLICY_STABILIZATION_SECONDS}"
             )))
+        );
+    }
+
+    #[tokio::test]
+    async fn repo_stage_manifests_reuse_workspace_and_isolate_test_writes() {
+        let dispatcher = test_dispatcher(None).await;
+        let mut tester = test_run();
+        tester.execution_target_json = json!({
+            "repo_mode": {
+                "chain_authorization_id": "chain_test",
+                "workspace_access": "ephemeral_copy"
+            },
+            "workspace_source": {
+                "workspace_id": "ws_shared",
+                "source_repo": "https://github.com/example/repo.git",
+                "source_ref": "main",
+                "source_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "branch": "pharness/test",
+                "resolved_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let shared_claim = workspace_claim_name("ws_shared");
+        assert_eq!(workspace_claim_name_for_run(&tester), shared_claim);
+        let claim = dispatcher.workspace_claim_manifest(&tester);
+        assert_eq!(
+            claim.pointer("/metadata/labels/pharness.lucas.engineering~1workspace-id"),
+            Some(&json!(job_label_value("ws_shared")))
+        );
+        assert!(claim
+            .pointer("/metadata/labels/pharness.lucas.engineering~1run-id")
+            .is_none());
+
+        let manifest = dispatcher.job_manifest(&tester, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("4Gi"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/1/persistentVolumeClaim/claimName"),
+            Some(&json!(shared_claim))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/1/persistentVolumeClaim/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/name"),
+            Some(&json!("copy-authorized-workspace"))
+        );
+
+        let mut verifier = tester;
+        verifier.execution_target_json["repo_mode"]["workspace_access"] = json!("read_only");
+        let manifest = dispatcher.job_manifest(&verifier, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/volumeMounts/0/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/readOnly"),
+            Some(&json!(true))
         );
     }
 

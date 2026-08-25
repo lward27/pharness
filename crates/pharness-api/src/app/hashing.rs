@@ -13,23 +13,6 @@ pub(in crate::app) fn material_hash(value: &serde_json::Value) -> Result<String,
 pub(in crate::app) fn canonical_material_hash(
     value: &serde_json::Value,
 ) -> Result<String, ApiError> {
-    fn canonicalize(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Object(values) => {
-                let mut keys = values.keys().collect::<Vec<_>>();
-                keys.sort_unstable();
-                let mut canonical = serde_json::Map::new();
-                for key in keys {
-                    canonical.insert(key.clone(), canonicalize(&values[key]));
-                }
-                serde_json::Value::Object(canonical)
-            }
-            serde_json::Value::Array(values) => {
-                serde_json::Value::Array(values.iter().map(canonicalize).collect())
-            }
-            other => other.clone(),
-        }
-    }
-
-    material_hash(&canonicalize(value))
+    pharness_core::canonical_json_sha256(value)
+        .map_err(|error| ApiError::internal(format!("failed to encode canonical hash: {error}")))
 }
