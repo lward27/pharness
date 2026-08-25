@@ -183,7 +183,8 @@ pub(in crate::app) async fn repo_work_item_flow(
         .map(Into::into)
         .collect();
     let first_action = action_rail.first();
-    let work_item_response: crate::dto::WorkItemResponse = work_item.clone().into();
+    let work_item_response: crate::dto::WorkItemResponse =
+        crate::dto::WorkItemResponse::from(work_item.clone()).with_repo_metadata(&metadata);
     let reconcile_preview = ReconcileWorkItemResponse {
         action: first_action
             .map(|action| action.id.clone())

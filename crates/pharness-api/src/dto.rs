@@ -7,8 +7,8 @@ use pharness_store::{
     StoredArtifact, StoredAuditEvent, StoredChangeSet, StoredControllerWait,
     StoredDeploymentContract, StoredDeploymentIntent, StoredFileChange, StoredGitOpsChangeSet,
     StoredIncident, StoredObservation, StoredPermissionGrant, StoredPipelineContract,
-    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan, StoredRun,
-    StoredWorkItem, StoredWorkPlan, StoredWorkspace,
+    StoredPipelineIntent, StoredRegistryEvidence, StoredRelease, StoredRemediationPlan,
+    StoredRepoWorkItemMetadata, StoredRun, StoredWorkItem, StoredWorkPlan, StoredWorkspace,
 };
 use serde::{Deserialize, Serialize};
 
@@ -524,6 +524,19 @@ pub struct WorkItemResponse {
     pub repository_contract_hash: Option<String>,
     pub environment_preparation_status: String,
     pub current_environment_snapshot_id: Option<String>,
+    pub mode: Option<String>,
+    pub product_id: Option<String>,
+    pub repository_id: Option<String>,
+    pub product_model_snapshot_id: Option<String>,
+    pub product_model_snapshot_hash: Option<String>,
+    pub repository_contract_version_id: Option<String>,
+    pub contract_version: Option<String>,
+    pub acceptance_command_names: Vec<String>,
+    pub context_repositories: Vec<serde_json::Value>,
+    pub current_stage_execution_id: Option<String>,
+    pub state_version: Option<u64>,
+    pub closed_at: Option<String>,
+    pub closure_reason: Option<String>,
 }
 
 impl From<StoredWorkItem> for WorkItemResponse {
@@ -567,7 +580,43 @@ impl From<StoredWorkItem> for WorkItemResponse {
             repository_contract_hash: item.repository_contract_hash,
             environment_preparation_status: item.environment_preparation_status,
             current_environment_snapshot_id: item.current_environment_snapshot_id,
+            mode: None,
+            product_id: None,
+            repository_id: None,
+            product_model_snapshot_id: None,
+            product_model_snapshot_hash: None,
+            repository_contract_version_id: None,
+            contract_version: None,
+            acceptance_command_names: Vec::new(),
+            context_repositories: Vec::new(),
+            current_stage_execution_id: None,
+            state_version: None,
+            closed_at: None,
+            closure_reason: None,
         }
+    }
+}
+
+impl WorkItemResponse {
+    pub fn with_repo_metadata(mut self, metadata: &StoredRepoWorkItemMetadata) -> Self {
+        self.mode = Some(metadata.mode.clone());
+        self.product_id = Some(metadata.product_id.clone());
+        self.repository_id = Some(metadata.repository_id.clone());
+        self.product_model_snapshot_id = Some(metadata.product_model_snapshot_id.clone());
+        self.product_model_snapshot_hash = Some(metadata.product_model_snapshot_hash.clone());
+        self.repository_contract_version_id = Some(metadata.repository_contract_version_id.clone());
+        self.contract_version = Some(metadata.contract_version.clone());
+        self.acceptance_command_names = metadata.acceptance_command_names.clone();
+        self.context_repositories = metadata
+            .context_repositories
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        self.current_stage_execution_id = metadata.current_stage_execution_id.clone();
+        self.state_version = Some(metadata.state_version);
+        self.closed_at = metadata.closed_at.clone();
+        self.closure_reason = metadata.closure_reason.clone();
+        self
     }
 }
 

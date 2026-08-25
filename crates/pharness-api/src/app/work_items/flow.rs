@@ -88,10 +88,14 @@ pub(in crate::app) async fn list_work_items(
             );
         }
     }
-    let work_items = stored_work_items
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>();
+    let mut work_items = Vec::with_capacity(stored_work_items.len());
+    for item in stored_work_items {
+        let mut response: WorkItemResponse = item.clone().into();
+        if let Some(metadata) = state.store.get_repo_work_item_metadata(&item.id).await? {
+            response = response.with_repo_metadata(&metadata);
+        }
+        work_items.push(response);
+    }
     Ok(Json(WorkItemsResponse {
         work_items,
         count,
@@ -110,7 +114,15 @@ pub(in crate::app) async fn get_work_item(
         .get_work_item(&work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", &work_item_id))?;
-    Ok(Json(work_item.into()))
+    let mut response: WorkItemResponse = work_item.into();
+    if let Some(metadata) = state
+        .store
+        .get_repo_work_item_metadata(&work_item_id)
+        .await?
+    {
+        response = response.with_repo_metadata(&metadata);
+    }
+    Ok(Json(response))
 }
 
 pub(in crate::app) async fn work_item_flow(

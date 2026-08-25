@@ -417,6 +417,45 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         .unwrap()
         .unwrap();
     assert!(metadata.closed_at.is_some());
+    let Json(flow) = super::work_item_flow(
+        State(fixture.state.clone()),
+        Path(fixture.work_item_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(flow.work_item.mode.as_deref(), Some("repo"));
+    assert_eq!(
+        flow.work_item.product_model_snapshot_id.as_deref(),
+        Some(metadata.product_model_snapshot_id.as_str())
+    );
+    assert_eq!(
+        flow.work_item.repository_contract_version_id.as_deref(),
+        Some(metadata.repository_contract_version_id.as_str())
+    );
+    assert_eq!(flow.work_item.state_version, Some(metadata.state_version));
+    assert_eq!(flow.work_item.closed_at, metadata.closed_at);
+    assert_eq!(flow.work_item.closure_reason, metadata.closure_reason);
+    let Json(single) = super::get_work_item(
+        State(fixture.state.clone()),
+        Path(fixture.work_item_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(single.closed_at, metadata.closed_at);
+    assert_eq!(single.state_version, Some(metadata.state_version));
+    let Json(list) = super::list_work_items(
+        State(fixture.state.clone()),
+        axum::extract::Query(super::ListWorkItemsQuery::default()),
+    )
+    .await
+    .unwrap();
+    let listed = list
+        .work_items
+        .iter()
+        .find(|item| item.id == fixture.work_item_id)
+        .unwrap();
+    assert_eq!(listed.closed_at, metadata.closed_at);
+    assert_eq!(listed.state_version, Some(metadata.state_version));
     let outcomes = fixture
         .state
         .store
