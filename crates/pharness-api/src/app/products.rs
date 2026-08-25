@@ -2880,12 +2880,15 @@ fn onboarding_patch_paths(patch: &str) -> Result<Vec<String>, ApiError> {
         let (left, right) = header
             .split_once(" b/")
             .ok_or_else(|| ApiError::bad_request("onboarding patch has an invalid diff header"))?;
-        if left != right || !allowed.contains(&left) {
+        if !allowed.contains(&left) || !allowed.contains(&right) {
             return Err(ApiError::conflict(
                 "onboarding patch modifies a path outside the onboarding contract",
             ));
         }
         paths.push(left.to_string());
+        if right != left {
+            paths.push(right.to_string());
+        }
     }
     paths.sort();
     paths.dedup();
@@ -3954,6 +3957,14 @@ mod tests {
         let escaped = "diff --git a/src/main.rs b/src/main.rs\n";
         assert!(onboarding_patch_paths(escaped).is_err());
         let rename = "diff --git a/.pharness/project.yaml b/.pharness/repository.yaml\n";
-        assert!(onboarding_patch_paths(rename).is_err());
+        assert_eq!(
+            onboarding_patch_paths(rename).unwrap(),
+            vec![
+                ".pharness/project.yaml".to_string(),
+                ".pharness/repository.yaml".to_string()
+            ]
+        );
+        let escaped_rename = "diff --git a/.pharness/project.yaml b/src/repository.yaml\n";
+        assert!(onboarding_patch_paths(escaped_rename).is_err());
     }
 }
