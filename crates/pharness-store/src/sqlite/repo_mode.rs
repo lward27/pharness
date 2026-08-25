@@ -1,8 +1,10 @@
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
-    CreateAgentContextPack, CreateEvidenceValidation, CreateOperatorAnnotation, CreateRepoWorkItem,
-    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredRepoWorkItemMetadata, StoredStageExecution, StoredStageOutcome,
+    CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
+    CreateOperatorAnnotation, CreateProviderCheckSetObservation, CreateRepoWorkItem,
+    CreateStageChainAuthorization, CreateStageExecution, SealStageOutcome, StoredAgentContextPack,
+    StoredOperatorAnnotation, StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata,
+    StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
 };
 use pharness_core::RunId;
 use sqlx::Row;
@@ -398,6 +400,212 @@ impl SqliteStore {
         .await?;
         rows.into_iter().map(row_to_annotation).collect()
     }
+
+    pub async fn create_stage_chain_authorization(
+        &self,
+        authorization: CreateStageChainAuthorization,
+    ) -> Result<StoredStageChainAuthorization, StoreError> {
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
+        let active: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM stage_chain_authorizations WHERE work_item_id = ?1 AND status = 'active' AND revoked_at IS NULL",
+        )
+        .bind(&authorization.work_item_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if active != 0 {
+            return Err(StoreError::Conflict(
+                "WorkItem already has an active stage-chain authorization".into(),
+            ));
+        }
+        sqlx::query(
+            r#"
+            INSERT INTO stage_chain_authorizations (
+              id, work_item_id, work_plan_id, work_plan_revision,
+              product_model_snapshot_id, product_model_snapshot_hash, repository_id,
+              source_commit, workspace_id, writable_paths_json, profile_chain_json,
+              budget_chain_json, state_hash, status, created_by, creation_reason,
+              created_at, expires_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                      ?13, 'active', ?14, ?15, ?16, ?17)
+            "#,
+        )
+        .bind(&authorization.id)
+        .bind(&authorization.work_item_id)
+        .bind(&authorization.work_plan_id)
+        .bind(authorization.work_plan_revision)
+        .bind(&authorization.product_model_snapshot_id)
+        .bind(&authorization.product_model_snapshot_hash)
+        .bind(&authorization.repository_id)
+        .bind(&authorization.source_commit)
+        .bind(&authorization.workspace_id)
+        .bind(serde_json::to_string(&authorization.writable_paths)?)
+        .bind(serde_json::to_string(&authorization.profile_chain)?)
+        .bind(serde_json::to_string(&authorization.budget_chain)?)
+        .bind(&authorization.state_hash)
+        .bind(&authorization.created_by)
+        .bind(&authorization.creation_reason)
+        .bind(&now)
+        .bind(&authorization.expires_at)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "UPDATE work_items SET state_version = state_version + 1, updated_at = ?2 WHERE id = ?1 AND mode = 'repo'",
+        )
+        .bind(&authorization.work_item_id)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.get_stage_chain_authorization(&authorization.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "stage_chain_authorization".into(),
+                id: authorization.id,
+            })
+    }
+
+    pub async fn get_stage_chain_authorization(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredStageChainAuthorization>, StoreError> {
+        let row = sqlx::query(&stage_chain_authorization_select("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_stage_chain_authorization).transpose()
+    }
+
+    pub async fn active_stage_chain_authorization(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Option<StoredStageChainAuthorization>, StoreError> {
+        let row = sqlx::query(&stage_chain_authorization_select(
+            "WHERE work_item_id = ?1 AND status = 'active' AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+        ))
+        .bind(work_item_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_stage_chain_authorization).transpose()
+    }
+
+    pub async fn revoke_stage_chain_authorization(
+        &self,
+        id: &str,
+        reason: &str,
+    ) -> Result<StoredStageChainAuthorization, StoreError> {
+        sqlx::query(
+            "UPDATE stage_chain_authorizations SET status = 'revoked', revoked_at = ?2, revocation_reason = ?3 WHERE id = ?1 AND status = 'active'",
+        )
+        .bind(id)
+        .bind(now_string())
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_stage_chain_authorization(id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "stage_chain_authorization".into(),
+                id: id.into(),
+            })
+    }
+
+    pub async fn create_evidence_retrieval(
+        &self,
+        retrieval: CreateEvidenceRetrieval,
+    ) -> Result<(), StoreError> {
+        sqlx::query(
+            r#"
+            INSERT INTO evidence_retrievals (
+              id, work_item_id, stage_execution_id, run_id, actor, evidence_kind,
+              evidence_id, evidence_version, returned_hash, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "#,
+        )
+        .bind(retrieval.id)
+        .bind(retrieval.work_item_id)
+        .bind(retrieval.stage_execution_id)
+        .bind(retrieval.run_id.as_str())
+        .bind(retrieval.actor)
+        .bind(retrieval.evidence_kind)
+        .bind(retrieval.evidence_id)
+        .bind(retrieval.evidence_version)
+        .bind(retrieval.returned_hash)
+        .bind(now_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn create_provider_check_set_observation(
+        &self,
+        observation: CreateProviderCheckSetObservation,
+    ) -> Result<StoredProviderCheckSetObservation, StoreError> {
+        sqlx::query(
+            r#"
+            INSERT INTO provider_check_set_observations (
+              id, source_delivery_intent_id, phase, repository_id, pull_request_number,
+              head_sha, required_set_hash, authoritative_rules_succeeded, status,
+              required_checks_json, check_runs_json, commit_statuses_json, content_hash,
+              observed_at, expires_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                      ?13, ?14, ?15)
+            "#,
+        )
+        .bind(&observation.id)
+        .bind(&observation.source_delivery_intent_id)
+        .bind(&observation.phase)
+        .bind(&observation.repository_id)
+        .bind(observation.pull_request_number as i64)
+        .bind(&observation.head_sha)
+        .bind(&observation.required_set_hash)
+        .bind(if observation.authoritative_rules_succeeded {
+            1
+        } else {
+            0
+        })
+        .bind(&observation.status)
+        .bind(serde_json::to_string(&observation.required_checks)?)
+        .bind(serde_json::to_string(&observation.check_runs)?)
+        .bind(serde_json::to_string(&observation.commit_statuses)?)
+        .bind(&observation.content_hash)
+        .bind(now_string())
+        .bind(&observation.expires_at)
+        .execute(&self.pool)
+        .await?;
+        self.get_provider_check_set_observation(&observation.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "provider_check_set_observation".into(),
+                id: observation.id,
+            })
+    }
+
+    pub async fn get_provider_check_set_observation(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredProviderCheckSetObservation>, StoreError> {
+        let row = sqlx::query(&provider_check_set_observation_select("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_provider_check_set_observation).transpose()
+    }
+
+    pub async fn latest_provider_check_set_observation(
+        &self,
+        source_delivery_intent_id: &str,
+        phase: &str,
+    ) -> Result<Option<StoredProviderCheckSetObservation>, StoreError> {
+        let row = sqlx::query(&provider_check_set_observation_select(
+            "WHERE source_delivery_intent_id = ?1 AND phase = ?2 ORDER BY observed_at DESC, id DESC LIMIT 1",
+        ))
+        .bind(source_delivery_intent_id)
+        .bind(phase)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_provider_check_set_observation).transpose()
+    }
 }
 
 fn stage_execution_select(where_clause: &str) -> String {
@@ -414,6 +622,25 @@ fn stage_outcome_select(where_clause: &str) -> String {
         "SELECT id, stage_execution_id, work_item_id, stage_key, status, schema_version, \
          outcome_json, content_hash, state_version, supersedes_outcome_id, sealed_by, sealed_at \
          FROM stage_outcomes {where_clause}"
+    )
+}
+
+fn stage_chain_authorization_select(where_clause: &str) -> String {
+    format!(
+        "SELECT id, work_item_id, work_plan_id, work_plan_revision, product_model_snapshot_id, \
+         product_model_snapshot_hash, repository_id, source_commit, workspace_id, \
+         writable_paths_json, profile_chain_json, budget_chain_json, state_hash, status, \
+         created_by, creation_reason, created_at, expires_at, revoked_at, revocation_reason \
+         FROM stage_chain_authorizations {where_clause}"
+    )
+}
+
+fn provider_check_set_observation_select(where_clause: &str) -> String {
+    format!(
+        "SELECT id, source_delivery_intent_id, phase, repository_id, pull_request_number, \
+         head_sha, required_set_hash, authoritative_rules_succeeded, status, required_checks_json, \
+         check_runs_json, commit_statuses_json, content_hash, observed_at, expires_at \
+         FROM provider_check_set_observations {where_clause}"
     )
 }
 
@@ -512,6 +739,55 @@ fn row_to_annotation(row: sqlx::sqlite::SqliteRow) -> Result<StoredOperatorAnnot
     })
 }
 
+fn row_to_stage_chain_authorization(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredStageChainAuthorization, StoreError> {
+    Ok(StoredStageChainAuthorization {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        work_plan_id: row.try_get("work_plan_id")?,
+        work_plan_revision: row.try_get("work_plan_revision")?,
+        product_model_snapshot_id: row.try_get("product_model_snapshot_id")?,
+        product_model_snapshot_hash: row.try_get("product_model_snapshot_hash")?,
+        repository_id: row.try_get("repository_id")?,
+        source_commit: row.try_get("source_commit")?,
+        workspace_id: row.try_get("workspace_id")?,
+        writable_paths: serde_json::from_str(&row.try_get::<String, _>("writable_paths_json")?)?,
+        profile_chain: serde_json::from_str(&row.try_get::<String, _>("profile_chain_json")?)?,
+        budget_chain: serde_json::from_str(&row.try_get::<String, _>("budget_chain_json")?)?,
+        state_hash: row.try_get("state_hash")?,
+        status: row.try_get("status")?,
+        created_by: row.try_get("created_by")?,
+        creation_reason: row.try_get("creation_reason")?,
+        created_at: row.try_get("created_at")?,
+        expires_at: row.try_get("expires_at")?,
+        revoked_at: row.try_get("revoked_at")?,
+        revocation_reason: row.try_get("revocation_reason")?,
+    })
+}
+
+fn row_to_provider_check_set_observation(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredProviderCheckSetObservation, StoreError> {
+    Ok(StoredProviderCheckSetObservation {
+        id: row.try_get("id")?,
+        source_delivery_intent_id: row.try_get("source_delivery_intent_id")?,
+        phase: row.try_get("phase")?,
+        repository_id: row.try_get("repository_id")?,
+        pull_request_number: row.try_get::<i64, _>("pull_request_number")? as u64,
+        head_sha: row.try_get("head_sha")?,
+        required_set_hash: row.try_get("required_set_hash")?,
+        authoritative_rules_succeeded: row.try_get::<i64, _>("authoritative_rules_succeeded")? != 0,
+        status: row.try_get("status")?,
+        required_checks: serde_json::from_str(&row.try_get::<String, _>("required_checks_json")?)?,
+        check_runs: serde_json::from_str(&row.try_get::<String, _>("check_runs_json")?)?,
+        commit_statuses: serde_json::from_str(&row.try_get::<String, _>("commit_statuses_json")?)?,
+        content_hash: row.try_get("content_hash")?,
+        observed_at: row.try_get("observed_at")?,
+        expires_at: row.try_get("expires_at")?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,6 +812,64 @@ mod tests {
         .await
         .unwrap();
         store
+    }
+
+    async fn insert_stage_chain_scope(store: &SqliteStore) {
+        let now = now_string();
+        sqlx::query(
+            "INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_test', 'test', 'Test', ?1, ?1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, created_at, updated_at) VALUES ('prod_test', 'org_test', 'test', 'Test', '', 'operator', ?1, ?1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO product_model_snapshots (id, product_id, version, model_json, content_hash, created_by, creation_reason, created_at) VALUES ('pmodel_test', 'prod_test', 1, '{}', 'sha256:model', 'operator', 'test', ?1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_test', 'github', 'example/repo', 'https://github.com/example/repo.git', 'main', ?1, ?2, ?2)",
+        )
+        .bind("a".repeat(40))
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE work_items SET product_id = 'prod_test', mutable_repository_id = 'repo_test', product_model_snapshot_id = 'pmodel_test', product_model_snapshot_hash = 'sha256:model' WHERE id = 'witem_repo'")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO sessions (id, title, cwd, created_at, updated_at) VALUES ('ses_plan', 'Plan', '/workspace', ?1, ?1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO work_plans (id, work_item_id, session_id, status, title, summary, risk_level, requires_approval, work_plan_json, created_at, revision) VALUES ('wplan_test', 'witem_repo', 'ses_plan', 'approved', 'Plan', 'Plan', 'medium', 1, '{}', ?1, 1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO workspaces (id, work_item_id, status, source_repo, source_ref, retention_status, created_at, updated_at, status_changed_at) VALUES ('ws_test', 'witem_repo', 'declared', 'https://github.com/example/repo.git', 'main', 'retained', ?1, ?1, ?1)",
+        )
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -593,5 +927,52 @@ mod tests {
             .execute(&store.pool)
             .await;
         assert!(delete.is_err());
+    }
+
+    #[tokio::test]
+    async fn stage_chain_authorization_is_unique_active_and_revocable() {
+        let store = store_with_repo_work_item().await;
+        insert_stage_chain_scope(&store).await;
+        let create = CreateStageChainAuthorization {
+            id: "chain_test".into(),
+            work_item_id: "witem_repo".into(),
+            work_plan_id: "wplan_test".into(),
+            work_plan_revision: 1,
+            product_model_snapshot_id: "pmodel_test".into(),
+            product_model_snapshot_hash: "sha256:model".into(),
+            repository_id: "repo_test".into(),
+            source_commit: "a".repeat(40),
+            workspace_id: "ws_test".into(),
+            writable_paths: json!(["src/**"]),
+            profile_chain: json!(["repo-builder", "repo-tester", "repo-verifier"]),
+            budget_chain: json!({"repo-builder":{"initial_turns":48}}),
+            state_hash: "sha256:state".into(),
+            created_by: "operator".into(),
+            creation_reason: "approve bounded chain".into(),
+            expires_at: "9999999999999".into(),
+        };
+        let chain = store
+            .create_stage_chain_authorization(create.clone())
+            .await
+            .unwrap();
+        assert_eq!(chain.status, "active");
+        assert!(store
+            .create_stage_chain_authorization(CreateStageChainAuthorization {
+                id: "chain_duplicate".into(),
+                ..create
+            })
+            .await
+            .is_err());
+
+        let revoked = store
+            .revoke_stage_chain_authorization(&chain.id, "terminal stage")
+            .await
+            .unwrap();
+        assert_eq!(revoked.status, "revoked");
+        assert!(store
+            .active_stage_chain_authorization("witem_repo")
+            .await
+            .unwrap()
+            .is_none());
     }
 }

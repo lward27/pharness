@@ -177,3 +177,97 @@ pub struct StoredOperatorAnnotation {
     pub state_hash: String,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateStageChainAuthorization {
+    pub id: String,
+    pub work_item_id: String,
+    pub work_plan_id: String,
+    pub work_plan_revision: i64,
+    pub product_model_snapshot_id: String,
+    pub product_model_snapshot_hash: String,
+    pub repository_id: String,
+    pub source_commit: String,
+    pub workspace_id: String,
+    pub writable_paths: serde_json::Value,
+    pub profile_chain: serde_json::Value,
+    pub budget_chain: serde_json::Value,
+    pub state_hash: String,
+    pub created_by: String,
+    pub creation_reason: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredStageChainAuthorization {
+    pub id: String,
+    pub work_item_id: String,
+    pub work_plan_id: String,
+    pub work_plan_revision: i64,
+    pub product_model_snapshot_id: String,
+    pub product_model_snapshot_hash: String,
+    pub repository_id: String,
+    pub source_commit: String,
+    pub workspace_id: String,
+    pub writable_paths: serde_json::Value,
+    pub profile_chain: serde_json::Value,
+    pub budget_chain: serde_json::Value,
+    pub state_hash: String,
+    pub status: String,
+    pub created_by: String,
+    pub creation_reason: String,
+    pub created_at: String,
+    pub expires_at: String,
+    pub revoked_at: Option<String>,
+    pub revocation_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateEvidenceRetrieval {
+    pub id: String,
+    pub work_item_id: String,
+    pub stage_execution_id: String,
+    pub run_id: RunId,
+    pub actor: String,
+    pub evidence_kind: String,
+    pub evidence_id: String,
+    pub evidence_version: String,
+    pub returned_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateProviderCheckSetObservation {
+    pub id: String,
+    pub source_delivery_intent_id: String,
+    pub phase: String,
+    pub repository_id: String,
+    pub pull_request_number: u64,
+    pub head_sha: String,
+    pub required_set_hash: String,
+    pub authoritative_rules_succeeded: bool,
+    pub status: String,
+    pub required_checks: serde_json::Value,
+    pub check_runs: serde_json::Value,
+    pub commit_statuses: serde_json::Value,
+    pub content_hash: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredProviderCheckSetObservation {
+    pub id: String,
+    pub source_delivery_intent_id: String,
+    pub phase: String,
+    pub repository_id: String,
+    pub pull_request_number: u64,
+    pub head_sha: String,
+    pub required_set_hash: String,
+    pub authoritative_rules_succeeded: bool,
+    pub status: String,
+    pub required_checks: serde_json::Value,
+    pub check_runs: serde_json::Value,
+    pub commit_statuses: serde_json::Value,
+    pub content_hash: String,
+    pub observed_at: String,
+    pub expires_at: String,
+}

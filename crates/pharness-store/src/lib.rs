@@ -45,9 +45,11 @@ pub use product::{
     StoredRepositoryDraft, StoredService, UpdateProductAggregate,
 };
 pub use repo_mode::{
-    CreateAgentContextPack, CreateEvidenceValidation, CreateOperatorAnnotation, CreateRepoWorkItem,
-    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredRepoWorkItemMetadata, StoredStageExecution, StoredStageOutcome,
+    CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
+    CreateOperatorAnnotation, CreateProviderCheckSetObservation, CreateRepoWorkItem,
+    CreateStageChainAuthorization, CreateStageExecution, SealStageOutcome, StoredAgentContextPack,
+    StoredOperatorAnnotation, StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata,
+    StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
 };
 pub use sqlite::{SqliteStore, StoreError};
 
