@@ -2481,6 +2481,10 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             serde_json::json!({ "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
                 "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
             }}),
+            serde_json::json!({ "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
             serde_json::json!({ "name": "HOME", "value": "/work" }),
         ];
         if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
@@ -2560,6 +2564,10 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             serde_json::json!({"name":"PHARNESS_REPOSITORY_ONBOARDING_ID","value":request.onboarding_id}),
             serde_json::json!({"name":"PHARNESS_ONBOARDING_PATCH_EXECUTION_ID","value":request.execution_id}),
             serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
             serde_json::json!({"name":"HOME","value":"/work"}),
         ];
         if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
@@ -2596,6 +2604,10 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             serde_json::json!({"name":"PHARNESS_REPOSITORY_ONBOARDING_ID","value":request.onboarding_id}),
             serde_json::json!({"name":"PHARNESS_ONBOARDING_VALIDATION_EXECUTION_ID","value":request.execution_id}),
             serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
             serde_json::json!({"name":"HOME","value":"/work"}),
         ];
         if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
@@ -3695,6 +3707,12 @@ mod tests {
         assert!(env
             .iter()
             .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-preparation-egress-proxy"))
+        }));
     }
 
     #[tokio::test]
@@ -3728,6 +3746,12 @@ mod tests {
         assert!(env
             .iter()
             .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-preparation-egress-proxy"))
+        }));
         assert_eq!(
             manifest.pointer("/spec/template/spec/containers/0/env/0/value"),
             Some(&json!("onboarding_patch"))
@@ -3759,6 +3783,12 @@ mod tests {
         assert!(env
             .iter()
             .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-preparation-egress-proxy"))
+        }));
         assert!(env.iter().any(|entry| {
             entry["name"] == "PHARNESS_EXECUTION_KIND"
                 && entry["value"] == "onboarding_contract_validate"
