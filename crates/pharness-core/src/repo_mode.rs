@@ -80,9 +80,9 @@ pub struct RepositoryOnboardingProposal {
     pub candidate_contract: serde_json::Value,
     pub instructions: String,
     #[serde(default)]
-    pub service_proposals: Vec<serde_json::Value>,
+    pub service_proposals: Vec<RepositoryServiceProposal>,
     #[serde(default)]
-    pub binding_proposals: Vec<serde_json::Value>,
+    pub binding_proposals: Vec<RepositoryBindingProposal>,
     #[serde(default)]
     pub assumptions: Vec<String>,
     #[serde(default)]
@@ -90,6 +90,22 @@ pub struct RepositoryOnboardingProposal {
     #[serde(default)]
     pub blockers: Vec<String>,
     pub readiness_forecast: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepositoryServiceProposal {
+    pub service_key: String,
+    pub display_name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepositoryBindingProposal {
+    #[serde(default)]
+    pub service_keys: Vec<String>,
+    pub scopes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

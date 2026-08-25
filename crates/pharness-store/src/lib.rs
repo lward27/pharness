@@ -34,7 +34,8 @@ pub use models::{
     UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 pub use onboarding::{
-    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
+    ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,
     StoredRepositoryContractVersion, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
     StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,

@@ -94,6 +94,41 @@ pub struct StoredRepositoryOnboardingProposal {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovedOnboardingService {
+    pub id: String,
+    pub service_key: String,
+    pub display_name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovedOnboardingProductModelChange {
+    pub product_id: String,
+    pub expected_product_state_version: u64,
+    pub services: Vec<ApprovedOnboardingService>,
+    pub binding_id: String,
+    pub binding_revision_id: Option<String>,
+    pub binding_service_ids: Vec<String>,
+    pub binding_scopes: Vec<String>,
+    pub binding_evidence: serde_json::Value,
+    pub binding_content_hash: Option<String>,
+    pub snapshot_id: String,
+    pub snapshot: serde_json::Value,
+    pub snapshot_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApproveRepositoryOnboardingProposal {
+    pub onboarding_id: String,
+    pub proposal_id: String,
+    pub proposal_hash: String,
+    pub expected_state_version: u64,
+    pub actor: String,
+    pub reason: String,
+    pub model_change: Option<ApprovedOnboardingProductModelChange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateRepositoryContractVersion {
     pub id: String,
     pub repository_id: String,

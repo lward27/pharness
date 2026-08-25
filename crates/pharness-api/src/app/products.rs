@@ -13,13 +13,15 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    CompleteSubjectEnvironmentPreparation, CreateArtifact, CreateProductAggregate,
-    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
+    ApprovedOnboardingService, CompleteSubjectEnvironmentPreparation, CreateArtifact,
+    CreateProductAggregate, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
     CreateSession, CreateSubjectEnvironmentPreparation, CreateSubjectWorkspace,
     RegisterRepositoryAggregate, RegisteredRepositoryAggregate, StoredProduct,
     StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding, StoredRepositoryDraft,
-    StoredRepositoryOnboarding, StoredService, UpdateProductAggregate,
+    StoredRepositoryOnboarding, StoredRepositoryOnboardingProposal, StoredService,
+    UpdateProductAggregate,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1276,6 +1278,7 @@ async fn put_repository_onboarding_proposal(
             "candidate contract selects an unavailable EnvironmentProfile",
         ));
     }
+    validate_onboarding_product_proposals(&state, &onboarding, &request.proposal).await?;
     let proposal_value = serde_json::to_value(&request.proposal)
         .map_err(|error| ApiError::internal(error.to_string()))?;
     let content_hash = canonical_material_hash(&proposal_value)?;
@@ -1386,16 +1389,23 @@ async fn execute_repository_onboarding_action(
                 .get_current_repository_onboarding_proposal(&onboarding.id)
                 .await?
                 .ok_or_else(|| ApiError::conflict("onboarding has no proposed revision"))?;
+            let typed: pharness_core::RepositoryOnboardingProposal =
+                serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
+                    ApiError::internal(format!("stored onboarding proposal is invalid: {error}"))
+                })?;
+            let model_change =
+                approved_onboarding_model_change(&state, &onboarding, &proposal, &typed).await?;
             state
                 .store
-                .approve_repository_onboarding_proposal(
-                    &onboarding.id,
-                    &proposal.id,
-                    &proposal.content_hash,
-                    onboarding.state_version,
-                    request.actor.trim(),
-                    request.reason.trim(),
-                )
+                .approve_repository_onboarding_proposal(ApproveRepositoryOnboardingProposal {
+                    onboarding_id: onboarding.id.clone(),
+                    proposal_id: proposal.id.clone(),
+                    proposal_hash: proposal.content_hash.clone(),
+                    expected_state_version: onboarding.state_version,
+                    actor: request.actor.trim().into(),
+                    reason: request.reason.trim().into(),
+                    model_change,
+                })
                 .await?;
         }
         "start_proposer" | "retry_proposer" => {
@@ -1512,6 +1522,230 @@ async fn execute_repository_onboarding_action(
     }
     let updated = find_onboarding(&state, &onboarding_id).await?;
     Ok(Json(onboarding_response(updated)?))
+}
+
+async fn validate_onboarding_product_proposals(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+    proposal: &pharness_core::RepositoryOnboardingProposal,
+) -> Result<(), ApiError> {
+    if proposal.service_proposals.len() > 32 {
+        return Err(ApiError::bad_request(
+            "an onboarding proposal may define at most 32 Services",
+        ));
+    }
+    if proposal.binding_proposals.len() > 1 {
+        return Err(ApiError::bad_request(
+            "Repo Mode V1 permits at most one binding proposal for the onboarding Repository",
+        ));
+    }
+    let existing = state
+        .store
+        .list_product_services(&onboarding.product_id)
+        .await?;
+    let mut service_keys = existing
+        .iter()
+        .map(|service| service.service_key.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let existing_keys = service_keys.clone();
+    for service in &proposal.service_proposals {
+        let key = normalize_key(&service.service_key)?;
+        if key != service.service_key {
+            return Err(ApiError::bad_request(format!(
+                "Service key {} is not canonical; use {key}",
+                service.service_key
+            )));
+        }
+        validate_required(&service.display_name, "service display_name", 120)?;
+        if service.description.len() > 4_000 {
+            return Err(ApiError::bad_request(
+                "Service description exceeds 4,000 characters",
+            ));
+        }
+        if existing_keys.contains(&key) {
+            return Err(ApiError::conflict(format!(
+                "Service {key} already exists in the Product"
+            )));
+        }
+        if !service_keys.insert(key.clone()) {
+            return Err(ApiError::bad_request(format!(
+                "onboarding proposal repeats Service {key}"
+            )));
+        }
+    }
+    if let Some(binding) = proposal.binding_proposals.first() {
+        if binding.scopes.is_empty() || binding.scopes.len() > 64 {
+            return Err(ApiError::bad_request(
+                "binding scopes must contain between one and 64 repository-relative globs",
+            ));
+        }
+        let mut seen_services = std::collections::BTreeSet::new();
+        for key in &binding.service_keys {
+            if !seen_services.insert(key) {
+                return Err(ApiError::bad_request(format!(
+                    "binding proposal repeats Service key {key}"
+                )));
+            }
+            if !service_keys.contains(key) {
+                return Err(ApiError::bad_request(format!(
+                    "binding proposal references unknown Service {key}"
+                )));
+            }
+        }
+        let mut seen_scopes = std::collections::BTreeSet::new();
+        for scope in &binding.scopes {
+            validate_binding_scope(scope)?;
+            if !seen_scopes.insert(scope) {
+                return Err(ApiError::bad_request(format!(
+                    "binding proposal repeats scope {scope}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_binding_scope(scope: &str) -> Result<(), ApiError> {
+    if scope.is_empty()
+        || scope.len() > 256
+        || scope.starts_with(['/', '~'])
+        || scope.contains(['\\', '\n', '\r', '\0'])
+        || scope
+            .split('/')
+            .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+    {
+        return Err(ApiError::bad_request(format!(
+            "binding scope {scope:?} is not a normalized repository-relative glob"
+        )));
+    }
+    Ok(())
+}
+
+async fn approved_onboarding_model_change(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+    stored_proposal: &StoredRepositoryOnboardingProposal,
+    proposal: &pharness_core::RepositoryOnboardingProposal,
+) -> Result<Option<ApprovedOnboardingProductModelChange>, ApiError> {
+    validate_onboarding_product_proposals(state, onboarding, proposal).await?;
+    if proposal.service_proposals.is_empty() && proposal.binding_proposals.is_empty() {
+        return Ok(None);
+    }
+    let product = find_product(state, &onboarding.product_id).await?;
+    let mut services = state.store.list_product_services(&product.id).await?;
+    let mut service_ids = services
+        .iter()
+        .map(|service| (service.service_key.clone(), service.id.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let approved_services = proposal
+        .service_proposals
+        .iter()
+        .map(|service| ApprovedOnboardingService {
+            id: new_prefixed_id("svc"),
+            service_key: service.service_key.clone(),
+            display_name: service.display_name.trim().into(),
+            description: service.description.trim().into(),
+        })
+        .collect::<Vec<_>>();
+    for service in &approved_services {
+        service_ids.insert(service.service_key.clone(), service.id.clone());
+        services.push(StoredService {
+            id: service.id.clone(),
+            product_id: product.id.clone(),
+            service_key: service.service_key.clone(),
+            display_name: service.display_name.clone(),
+            description: service.description.clone(),
+            status: "active".into(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        });
+    }
+    services.sort_by(|left, right| {
+        left.service_key
+            .cmp(&right.service_key)
+            .then(left.id.cmp(&right.id))
+    });
+    let repositories = state.store.list_product_repositories(&product.id).await?;
+    let mut bindings = state
+        .store
+        .list_product_repository_bindings(&product.id)
+        .await?;
+    let binding = bindings
+        .iter_mut()
+        .find(|binding| binding.id == onboarding.binding_id)
+        .ok_or_else(|| ApiError::conflict("onboarding Repository binding is unavailable"))?;
+    let binding_revision_id = proposal
+        .binding_proposals
+        .first()
+        .map(|_| new_prefixed_id("rbrev"));
+    if let Some(revision_id) = &binding_revision_id {
+        binding.current_revision_id = revision_id.clone();
+    }
+    let snapshot_id = new_prefixed_id("pmodel");
+    let snapshot = product_model_json(
+        &product.id,
+        &product.organization_id,
+        &product.product_key,
+        &product.display_name,
+        &product.description,
+        &product.owner_principal,
+        &services,
+        &repositories,
+        &bindings,
+    );
+    let snapshot_hash = canonical_material_hash(&snapshot)?;
+    let (binding_service_ids, binding_scopes, binding_evidence, binding_content_hash) =
+        if let Some(binding) = proposal.binding_proposals.first() {
+            let mut ids = binding
+                .service_keys
+                .iter()
+                .map(|key| {
+                    service_ids.get(key).cloned().ok_or_else(|| {
+                        ApiError::internal(format!("validated Service {key} has no ID"))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            ids.sort();
+            let mut scopes = binding.scopes.clone();
+            scopes.sort();
+            let evidence = json!({
+                "schema_version":"pharness.dev/repository-binding-evidence/v1alpha1",
+                "onboarding_id":onboarding.id,
+                "proposal_id":stored_proposal.id,
+                "proposal_hash":stored_proposal.content_hash,
+                "discovery_id":stored_proposal.discovery_id,
+                "discovery_hash":stored_proposal.discovery_hash,
+            });
+            let material = json!({
+                "schema_version":"pharness.dev/repository-binding/v1alpha1",
+                "binding_id":onboarding.binding_id,
+                "service_ids":ids,
+                "scopes":scopes,
+                "evidence":evidence,
+            });
+            (
+                ids,
+                scopes,
+                evidence,
+                Some(canonical_material_hash(&material)?),
+            )
+        } else {
+            (Vec::new(), Vec::new(), json!({}), None)
+        };
+    Ok(Some(ApprovedOnboardingProductModelChange {
+        product_id: product.id,
+        expected_product_state_version: product.state_version,
+        services: approved_services,
+        binding_id: onboarding.binding_id.clone(),
+        binding_revision_id,
+        binding_service_ids,
+        binding_scopes,
+        binding_evidence,
+        binding_content_hash,
+        snapshot_id,
+        snapshot,
+        snapshot_hash,
+    }))
 }
 
 async fn authorize_and_dispatch_onboarding_source_delivery(
@@ -3642,7 +3876,10 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_key, onboarding_patch_paths, parse_github_repository_url};
+    use super::{
+        normalize_key, onboarding_patch_paths, parse_github_repository_url, validate_binding_scope,
+    };
+    use serde_json::json;
 
     #[test]
     fn product_keys_are_stable_and_bounded() {
@@ -3650,6 +3887,44 @@ mod tests {
         assert_eq!(normalize_key("API / Core").unwrap(), "api-core");
         assert!(normalize_key("---").is_err());
         assert!(normalize_key(&"a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn onboarding_binding_scopes_are_repository_relative_and_normalized() {
+        assert!(validate_binding_scope("**").is_ok());
+        assert!(validate_binding_scope("src/**").is_ok());
+        for invalid in ["", "/src/**", "../src/**", "src/../tests/**", "src\\**"] {
+            assert!(
+                validate_binding_scope(invalid).is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn onboarding_product_proposals_reject_unknown_fields() {
+        let proposal = json!({
+            "schema_version":pharness_core::ONBOARDING_PROPOSAL_SCHEMA,
+            "discovery_id":"rdisc_test",
+            "discovery_hash":"sha256:discovery",
+            "candidate_contract":{},
+            "instructions":"",
+            "service_proposals":[{
+                "service_key":"api",
+                "display_name":"API",
+                "description":"API service",
+                "unreviewed":true
+            }],
+            "binding_proposals":[],
+            "assumptions":[],
+            "conflicts":[],
+            "blockers":[],
+            "readiness_forecast":{}
+        });
+        assert!(
+            serde_json::from_value::<pharness_core::RepositoryOnboardingProposal>(proposal)
+                .is_err()
+        );
     }
 
     #[test]

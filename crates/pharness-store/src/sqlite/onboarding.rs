@@ -1,9 +1,10 @@
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
-    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
-    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,
-    StoredRepositoryContractVersion, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
-    StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,
+    ApproveRepositoryOnboardingProposal, CreateRepositoryContractVersion,
+    CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
+    CreateRepositoryReadinessAssessment, StoredRepositoryContractVersion,
+    StoredRepositoryDiscovery, StoredRepositoryOnboarding, StoredRepositoryOnboardingProposal,
+    StoredRepositoryReadinessAssessment,
 };
 use sqlx::{Row, Sqlite, Transaction};
 
@@ -854,32 +855,153 @@ impl SqliteStore {
 
     pub async fn approve_repository_onboarding_proposal(
         &self,
-        onboarding_id: &str,
-        proposal_id: &str,
-        proposal_hash: &str,
-        expected_state_version: u64,
-        actor: &str,
-        reason: &str,
+        approval: ApproveRepositoryOnboardingProposal,
     ) -> Result<StoredRepositoryOnboarding, StoreError> {
         let now = now_string();
         let mut tx = self.pool.begin().await?;
         let proposal = sqlx::query(
             "SELECT onboarding_id, status, content_hash FROM repository_onboarding_proposals WHERE id = ?1",
         )
-        .bind(proposal_id)
+        .bind(&approval.proposal_id)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| StoreError::NotFound {
             entity: "repository_onboarding_proposal".into(),
-            id: proposal_id.into(),
+            id: approval.proposal_id.clone(),
         })?;
-        if proposal.try_get::<String, _>("onboarding_id")? != onboarding_id
+        if proposal.try_get::<String, _>("onboarding_id")? != approval.onboarding_id
             || proposal.try_get::<String, _>("status")? != "proposed"
-            || proposal.try_get::<String, _>("content_hash")? != proposal_hash
+            || proposal.try_get::<String, _>("content_hash")? != approval.proposal_hash
         {
             return Err(StoreError::Conflict(
                 "onboarding proposal approval does not match the proposed revision".into(),
             ));
+        }
+        if let Some(change) = approval.model_change {
+            let onboarding = sqlx::query(
+                "SELECT product_id, binding_id FROM repository_onboardings WHERE id = ?1",
+            )
+            .bind(&approval.onboarding_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if onboarding.try_get::<String, _>("product_id")? != change.product_id
+                || onboarding.try_get::<String, _>("binding_id")? != change.binding_id
+            {
+                return Err(StoreError::Conflict(
+                    "onboarding product-model change is outside the approved subject".into(),
+                ));
+            }
+            for service in &change.services {
+                sqlx::query(
+                    r#"
+                    INSERT INTO services (
+                      id, product_id, service_key, display_name, description, status,
+                      created_at, updated_at
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, 'active', ?6, ?6)
+                    "#,
+                )
+                .bind(&service.id)
+                .bind(&change.product_id)
+                .bind(&service.service_key)
+                .bind(&service.display_name)
+                .bind(&service.description)
+                .bind(&now)
+                .execute(&mut *tx)
+                .await?;
+            }
+            if let Some(revision_id) = &change.binding_revision_id {
+                let content_hash = change.binding_content_hash.as_deref().ok_or_else(|| {
+                    StoreError::InvalidData(
+                        "binding revision change has no canonical content hash".into(),
+                    )
+                })?;
+                let next_revision = sqlx::query(
+                    "SELECT COALESCE(MAX(revision), 0) + 1 AS revision FROM repository_binding_revisions WHERE binding_id = ?1",
+                )
+                .bind(&change.binding_id)
+                .fetch_one(&mut *tx)
+                .await?
+                .try_get::<i64, _>("revision")?;
+                sqlx::query(
+                    r#"
+                    INSERT INTO repository_binding_revisions (
+                      id, binding_id, revision, service_ids_json, scopes_json, status,
+                      evidence_json, content_hash, reviewed_by, review_reason, created_at
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, 'reviewed', ?6, ?7, ?8, ?9, ?10)
+                    "#,
+                )
+                .bind(revision_id)
+                .bind(&change.binding_id)
+                .bind(next_revision)
+                .bind(serde_json::to_string(&change.binding_service_ids)?)
+                .bind(serde_json::to_string(&change.binding_scopes)?)
+                .bind(serde_json::to_string(&change.binding_evidence)?)
+                .bind(content_hash)
+                .bind(&approval.actor)
+                .bind(&approval.reason)
+                .bind(&now)
+                .execute(&mut *tx)
+                .await?;
+                let updated = sqlx::query(
+                    "UPDATE repository_bindings SET current_revision_id = ?2, updated_at = ?3 WHERE id = ?1 AND product_id = ?4",
+                )
+                .bind(&change.binding_id)
+                .bind(revision_id)
+                .bind(&now)
+                .bind(&change.product_id)
+                .execute(&mut *tx)
+                .await?;
+                if updated.rows_affected() != 1 {
+                    return Err(StoreError::Conflict(
+                        "onboarding repository binding changed outside its Product".into(),
+                    ));
+                }
+            } else if change.binding_content_hash.is_some()
+                || !change.binding_service_ids.is_empty()
+                || !change.binding_scopes.is_empty()
+            {
+                return Err(StoreError::InvalidData(
+                    "binding revision material was supplied without a revision ID".into(),
+                ));
+            }
+            sqlx::query(
+                r#"
+                INSERT INTO product_model_snapshots (
+                  id, product_id, version, model_json, content_hash,
+                  created_by, creation_reason, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "#,
+            )
+            .bind(&change.snapshot_id)
+            .bind(&change.product_id)
+            .bind((change.expected_product_state_version + 1) as i64)
+            .bind(serde_json::to_string(&change.snapshot)?)
+            .bind(&change.snapshot_hash)
+            .bind(&approval.actor)
+            .bind(&approval.reason)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+            let updated = sqlx::query(
+                r#"
+                UPDATE products
+                SET state_version = state_version + 1,
+                    current_model_snapshot_id = ?3,
+                    updated_at = ?4
+                WHERE id = ?1 AND state_version = ?2
+                "#,
+            )
+            .bind(&change.product_id)
+            .bind(change.expected_product_state_version as i64)
+            .bind(&change.snapshot_id)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+            if updated.rows_affected() != 1 {
+                return Err(StoreError::Conflict(
+                    "Product changed after onboarding proposal preview".into(),
+                ));
+            }
         }
         let updated = sqlx::query(
             r#"
@@ -890,12 +1012,12 @@ impl SqliteStore {
             WHERE id = ?1 AND state_version = ?6 AND status = 'proposal_ready'
             "#,
         )
-        .bind(onboarding_id)
-        .bind(proposal_hash)
+        .bind(&approval.onboarding_id)
+        .bind(&approval.proposal_hash)
         .bind(&now)
-        .bind(actor)
-        .bind(reason)
-        .bind(expected_state_version as i64)
+        .bind(&approval.actor)
+        .bind(&approval.reason)
+        .bind(approval.expected_state_version as i64)
         .execute(&mut *tx)
         .await?;
         if updated.rows_affected() != 1 {
@@ -904,15 +1026,15 @@ impl SqliteStore {
             ));
         }
         sqlx::query("UPDATE repository_onboarding_proposals SET status = 'approved' WHERE id = ?1")
-            .bind(proposal_id)
+            .bind(&approval.proposal_id)
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
-        self.get_repository_onboarding(onboarding_id)
+        self.get_repository_onboarding(&approval.onboarding_id)
             .await?
             .ok_or_else(|| StoreError::NotFound {
                 entity: "repository_onboarding".into(),
-                id: onboarding_id.into(),
+                id: approval.onboarding_id,
             })
     }
 
@@ -1286,10 +1408,106 @@ fn row_to_readiness(
 mod tests {
     use super::SqliteStore;
     use crate::{
-        CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+        ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
+        ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
         CreateRepositoryReadinessAssessment,
     };
     use serde_json::json;
+
+    #[tokio::test]
+    async fn onboarding_approval_atomically_applies_reviewed_product_model_changes() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let now = "2026-08-24T00:00:00Z";
+        sqlx::query("INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_model', 'model', 'Model', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, state_version, created_at, updated_at) VALUES ('prod_model', 'org_model', 'product', 'Product', '', 'operator', 1, ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_model', 'github', '2', 'https://github.com/example/model.git', 'main', ?1, ?2, ?2)")
+            .bind("a".repeat(40)).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_bindings (id, product_id, repository_id, status, created_at, updated_at) VALUES ('rbind_model', 'prod_model', 'repo_model', 'active', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        let onboarding = store
+            .create_repository_onboarding(CreateRepositoryOnboarding {
+                id: "ronb_model".into(),
+                product_id: "prod_model".into(),
+                repository_id: "repo_model".into(),
+                binding_id: "rbind_model".into(),
+                onboarding_kind: "initial".into(),
+                registered_commit: "a".repeat(40),
+                actor: "operator".into(),
+                reason: "register".into(),
+            })
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO repository_discoveries (id, onboarding_id, source_commit, resolved_commit, status, schema_version, inventory_json, content_hash, created_at, updated_at) VALUES ('rdisc_model', ?1, ?2, ?2, 'succeeded', 'pharness.dev/repository-discovery/v1alpha1', '{}', 'sha256:discovery', ?3, ?3)")
+            .bind(&onboarding.id).bind("a".repeat(40)).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_onboarding_proposals (id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, discovery_hash, created_by, origin, created_at) VALUES ('rprop_model', ?1, 1, 'proposed', '{}', 'sha256:proposal', 'rdisc_model', 'sha256:discovery', 'operator', 'operator', ?2)")
+            .bind(&onboarding.id).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("UPDATE repository_onboardings SET status = 'proposal_ready', current_discovery_id = 'rdisc_model', current_proposal_revision = 1 WHERE id = ?1")
+            .bind(&onboarding.id).execute(&store.pool).await.unwrap();
+
+        let approved = store
+            .approve_repository_onboarding_proposal(ApproveRepositoryOnboardingProposal {
+                onboarding_id: onboarding.id.clone(),
+                proposal_id: "rprop_model".into(),
+                proposal_hash: "sha256:proposal".into(),
+                expected_state_version: onboarding.state_version,
+                actor: "operator".into(),
+                reason: "approve model".into(),
+                model_change: Some(ApprovedOnboardingProductModelChange {
+                    product_id: "prod_model".into(),
+                    expected_product_state_version: 1,
+                    services: vec![ApprovedOnboardingService {
+                        id: "svc_model".into(),
+                        service_key: "api".into(),
+                        display_name: "API".into(),
+                        description: "API service".into(),
+                    }],
+                    binding_id: "rbind_model".into(),
+                    binding_revision_id: Some("rbrev_model".into()),
+                    binding_service_ids: vec!["svc_model".into()],
+                    binding_scopes: vec!["src/**".into()],
+                    binding_evidence: json!({"proposal_id":"rprop_model"}),
+                    binding_content_hash: Some("sha256:binding".into()),
+                    snapshot_id: "pmodel_model".into(),
+                    snapshot: json!({"schema_version":"pharness.dev/product-model/v1alpha1"}),
+                    snapshot_hash: "sha256:snapshot".into(),
+                }),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(approved.status, "proposal_approved");
+        assert_eq!(
+            store
+                .list_product_services("prod_model")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            store
+                .get_repository_binding("prod_model", "repo_model")
+                .await
+                .unwrap()
+                .unwrap()
+                .current_revision_id,
+            "rbrev_model"
+        );
+        let product = store.get_product("prod_model").await.unwrap().unwrap();
+        assert_eq!(product.state_version, 2);
+        assert_eq!(product.current_model_snapshot_id, "pmodel_model");
+        assert_eq!(
+            store
+                .get_repository_onboarding_proposal("rprop_model")
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "approved"
+        );
+    }
 
     #[tokio::test]
     async fn onboarding_source_delivery_binds_once_and_tracks_external_wait() {
