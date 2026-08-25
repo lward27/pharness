@@ -4806,6 +4806,26 @@ impl SqliteStore {
         rows.into_iter().map(row_to_budget_extension).collect()
     }
 
+    pub async fn latest_approved_budget_extension_for_run(
+        &self,
+        run_id: &RunId,
+    ) -> Result<Option<StoredBudgetExtension>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, work_item_id, run_id, status, turn_increment, token_increment,
+                   state_hash, requested_at, approved_at, approved_by, approval_reason
+            FROM budget_extensions
+            WHERE run_id = ?1 AND status = 'approved'
+            ORDER BY requested_at DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(run_id.as_str())
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_budget_extension).transpose()
+    }
+
     pub async fn approve_budget_extension(
         &self,
         id: &str,
@@ -4902,6 +4922,72 @@ impl SqliteStore {
                 entity: "budget_extension".into(),
                 id: id.to_string(),
             })?;
+        let run = self
+            .get_run(&run.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run.id.to_string(),
+            })?;
+        Ok((extension, run))
+    }
+
+    pub async fn retry_approved_budget_extension_dispatch(
+        &self,
+        id: &str,
+        state_hash: &str,
+    ) -> Result<(StoredBudgetExtension, StoredRun), StoreError> {
+        let extension =
+            self.get_budget_extension(id)
+                .await?
+                .ok_or_else(|| StoreError::NotFound {
+                    entity: "budget_extension".into(),
+                    id: id.to_string(),
+                })?;
+        if extension.status != "approved" || extension.state_hash != state_hash {
+            return Err(StoreError::Conflict(
+                "approved budget extension dispatch retry is stale".into(),
+            ));
+        }
+        let run = self
+            .get_run(&extension.run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: extension.run_id.to_string(),
+            })?;
+        let dispatch_error = run
+            .error
+            .as_deref()
+            .is_some_and(|error| error.starts_with("failed to launch worker job:"));
+        if run.status != "failed" || !dispatch_error {
+            return Err(StoreError::Conflict(
+                "run is not recoverable from a failed budget-extension dispatch".into(),
+            ));
+        }
+        let queued_result = serde_json::json!({
+            "status":"queued",
+            "resume":"approved_budget_extension_dispatch_retry",
+            "budget_extension_id":extension.id,
+        });
+        let update = sqlx::query(
+            r#"
+            UPDATE runs
+            SET status = 'queued', finished_at = NULL, result_json = ?2,
+                error = NULL, stop_reason = NULL
+            WHERE id = ?1 AND status = 'failed'
+              AND error LIKE 'failed to launch worker job:%'
+            "#,
+        )
+        .bind(run.id.as_str())
+        .bind(serde_json::to_string(&queued_result)?)
+        .execute(&self.pool)
+        .await?;
+        if update.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "run left the failed budget-extension dispatch boundary".into(),
+            ));
+        }
         let run = self
             .get_run(&run.id)
             .await?
@@ -6836,6 +6922,45 @@ mod tests {
         assert_eq!(resumed.status, "queued");
         assert_eq!(resumed.budget_consumption.allowed_turns, 68);
         assert_eq!(resumed.budget_consumption.allowed_tokens, 600_000);
+
+        store
+            .complete_run(
+                &run_id,
+                "failed",
+                serde_json::json!({
+                    "status":"failed",
+                    "error":"failed to launch worker job: job already exists",
+                }),
+                Some("failed to launch worker job: job already exists".to_string()),
+            )
+            .await
+            .unwrap();
+        let latest = store
+            .latest_approved_budget_extension_for_run(&run_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(latest.id, first.id);
+        let stale_retry = store
+            .retry_approved_budget_extension_dispatch(&first.id, "wrong-state")
+            .await
+            .unwrap_err();
+        assert!(matches!(stale_retry, StoreError::Conflict(_)));
+        let (_, dispatch_retry) = store
+            .retry_approved_budget_extension_dispatch(&first.id, &first.state_hash)
+            .await
+            .unwrap();
+        assert_eq!(dispatch_retry.status, "queued");
+        assert!(dispatch_retry.finished_at.is_none());
+        assert!(dispatch_retry.error.is_none());
+        assert_eq!(
+            dispatch_retry
+                .result_json
+                .as_ref()
+                .and_then(|result| result.get("resume"))
+                .and_then(serde_json::Value::as_str),
+            Some("approved_budget_extension_dispatch_retry")
+        );
 
         let second = store
             .create_budget_extension(CreateBudgetExtension {
