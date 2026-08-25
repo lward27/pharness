@@ -12,6 +12,7 @@ use pharness_store::{
     CreateChangeSet, CreateEvidenceRetrieval, CreateFileChange, CreateIncident, CreateObservation,
     CreateRemediationPlan, CreateWorkPlan, SealStageOutcome, SqliteStore, StoreError,
     StoredApproval, StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun,
+    UpdateChangeSetRevision,
 };
 use secrecy::SecretString;
 use serde::Serialize;
@@ -966,6 +967,36 @@ async fn create_repo_change_set(
         "verification_stage_execution_id":verify_execution.id,
     });
     let material_hash = pharness_core::canonical_json_sha256(&material)?;
+    let existing = store.get_change_set_by_work_plan(&plan.id).await?;
+    if let Some(existing) = existing {
+        if !change_set_can_be_revised_for_work_plan(&existing, &plan) {
+            anyhow::bail!(
+                "an existing Repo Mode ChangeSet is not eligible for a newer reviewed revision"
+            );
+        }
+        let revised = store
+            .revise_change_set(
+                &existing.id,
+                UpdateChangeSetRevision {
+                    title: Some("Repo Mode source change".into()),
+                    summary: Some(
+                        "Controller-derived source ChangeSet from the corrected verified Builder workspace"
+                            .into(),
+                    ),
+                    risk_level: Some(plan.risk_level.clone()),
+                    material_hash,
+                    change_set_json: material,
+                    status: Some("proposed".into()),
+                    actor: Some("controller".into()),
+                    reason: Some(
+                        "replace a rejected ChangeSet with the newer verified WorkPlan revision"
+                            .into(),
+                    ),
+                },
+            )
+            .await?;
+        return Ok(revised);
+    }
     Ok(store
         .create_change_set(CreateChangeSet {
             id: repo_resource_id("cset"),
@@ -987,6 +1018,23 @@ async fn create_repo_change_set(
             change_set_json: material,
         })
         .await?)
+}
+
+fn change_set_can_be_revised_for_work_plan(
+    change_set: &pharness_store::StoredChangeSet,
+    work_plan: &pharness_store::StoredWorkPlan,
+) -> bool {
+    change_set.status == "rejected"
+        && change_set
+            .change_set_json
+            .pointer("/work_plan/id")
+            .and_then(serde_json::Value::as_str)
+            == Some(work_plan.id.as_str())
+        && change_set
+            .change_set_json
+            .pointer("/work_plan/revision")
+            .and_then(serde_json::Value::as_i64)
+            .is_some_and(|revision| revision < work_plan.revision)
 }
 
 async fn revoke_repo_chain_for_run(
@@ -2628,18 +2676,78 @@ async fn fail_run_from_worker_boundary(
 mod tests {
     use super::{
         approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
-        attempt_spec_for_run, classify_work_item_attempt, file_change_from_event,
-        finish_run_from_attempt, grant_used_audit_event_from_event, incident_from_observation,
-        observation_from_event, persist_workspace_evidence, remediation_plan_from_incident,
-        result_json_for_attempt, structured_submission_from_events, validate_repo_work_plan,
-        validate_workspace_evidence, workspace_source_for_run,
+        attempt_spec_for_run, change_set_can_be_revised_for_work_plan, classify_work_item_attempt,
+        file_change_from_event, finish_run_from_attempt, grant_used_audit_event_from_event,
+        incident_from_observation, observation_from_event, persist_workspace_evidence,
+        remediation_plan_from_incident, result_json_for_attempt, structured_submission_from_events,
+        validate_repo_work_plan, validate_workspace_evidence, workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
     use pharness_store::{
-        CreateRun, CreateSession, CreateWorkItem, CreateWorkspace, SqliteStore, StoredIncident,
-        StoredObservation, StoredRemediationPlan, StoredRun,
+        CreateRun, CreateSession, CreateWorkItem, CreateWorkspace, SqliteStore, StoredChangeSet,
+        StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun, StoredWorkPlan,
     };
+
+    #[test]
+    fn rejected_change_set_can_only_advance_to_a_newer_work_plan_revision() {
+        let plan = StoredWorkPlan {
+            id: "wplan_repo".into(),
+            work_item_id: Some("witem_repo".into()),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_repo"),
+            run_id: Some(RunId::new("run_plan")),
+            status: "approved".into(),
+            title: "Corrected plan".into(),
+            summary: "Address review evidence".into(),
+            risk_level: "medium".into(),
+            requires_approval: true,
+            resource_namespace: None,
+            resource_kind: Some("Repository".into()),
+            resource_name: Some("https://github.com/example/repo.git".into()),
+            work_plan_json: serde_json::json!({}),
+            created_at: "1".into(),
+            updated_at: Some("3".into()),
+            revision: 2,
+            status_changed_at: Some("3".into()),
+            status_changed_by: Some("operator".into()),
+            status_reason: Some("reviewed correction".into()),
+            created_by: Some("operator".into()),
+            origin: "operator".into(),
+        };
+        let mut change_set = StoredChangeSet {
+            id: "cset_repo".into(),
+            work_item_id: Some("witem_repo".into()),
+            work_plan_id: plan.id.clone(),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_repo"),
+            run_id: Some(RunId::new("run_builder")),
+            status: "rejected".into(),
+            title: "Source change".into(),
+            summary: "Rejected revision".into(),
+            risk_level: "medium".into(),
+            material_hash: format!("sha256:{}", "a".repeat(64)),
+            revision: 1,
+            resource_namespace: None,
+            resource_kind: Some("Repository".into()),
+            resource_name: Some("https://github.com/example/repo.git".into()),
+            change_set_json: serde_json::json!({"work_plan":{"id":"wplan_repo","revision":1}}),
+            created_at: "1".into(),
+            updated_at: Some("2".into()),
+            status_changed_at: Some("2".into()),
+            status_changed_by: Some("operator".into()),
+            status_reason: Some("review rejected".into()),
+        };
+
+        assert!(change_set_can_be_revised_for_work_plan(&change_set, &plan));
+        change_set.status = "approved".into();
+        assert!(!change_set_can_be_revised_for_work_plan(&change_set, &plan));
+        change_set.status = "rejected".into();
+        change_set.change_set_json["work_plan"]["revision"] = serde_json::json!(2);
+        assert!(!change_set_can_be_revised_for_work_plan(&change_set, &plan));
+    }
 
     #[test]
     fn extracts_only_the_requested_typed_submission() {

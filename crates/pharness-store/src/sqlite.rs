@@ -2215,12 +2215,12 @@ impl SqliteStore {
                 risk_level = COALESCE(?4, risk_level),
                 material_hash = ?5,
                 change_set_json = ?6,
-                status = 'draft',
-                updated_at = ?7,
+                status = COALESCE(?7, 'draft'),
+                updated_at = ?8,
                 revision = revision + 1,
-                status_changed_at = ?7,
-                status_changed_by = ?8,
-                status_reason = ?9
+                status_changed_at = ?8,
+                status_changed_by = ?9,
+                status_reason = ?10
             WHERE id = ?1
             "#,
         )
@@ -2230,6 +2230,7 @@ impl SqliteStore {
         .bind(revision.risk_level)
         .bind(revision.material_hash)
         .bind(change_set_json)
+        .bind(revision.status)
         .bind(now)
         .bind(revision.actor)
         .bind(revision.reason)
