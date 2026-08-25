@@ -275,6 +275,11 @@ async fn main() -> anyhow::Result<()> {
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("git_delivery_observe") {
         return execute_git_delivery_observation().await;
     }
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref()
+        == Some("source_observer_capability_preflight")
+    {
+        return execute_source_observer_capability_preflight().await;
+    }
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("gitops_base_revision") {
         return execute_gitops_base_revision_resolution().await;
     }
@@ -2713,6 +2718,79 @@ struct GitHubRequiredCheckObservation {
     status: String,
 }
 
+/// Exercise every read used by Repo Mode source delivery under the isolated
+/// observer identity. Repository reachability alone is insufficient: an
+/// observer that cannot authoritatively read branch rules, check runs, and
+/// commit statuses must remain unavailable before a WorkItem reaches merge.
+async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
+    let repository = required_env("REPOSITORY")?;
+    let api = required_env("GITHUB_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let token = required_env("GITHUB_TOKEN")?;
+    if api != "https://api.github.com" {
+        anyhow::bail!("invalid_github_api_url");
+    }
+    let (owner, repo) = parse_github_repository(&repository)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?;
+    let metadata = github_observer_json(
+        &client,
+        &format!("{api}/repos/{owner}/{repo}"),
+        &token,
+        false,
+        "github_repository_metadata_query_unavailable",
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_repository_metadata_unavailable"))?;
+    if metadata
+        .pointer("/permissions/pull")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        anyhow::bail!("github_repository_pull_permission_unavailable");
+    }
+    let base_ref = metadata
+        .get("default_branch")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("github_default_branch_unavailable"))?
+        .to_string();
+    let branch = percent_encode_path_segment(&base_ref);
+    let commit = github_observer_json(
+        &client,
+        &format!("{api}/repos/{owner}/{repo}/commits/{branch}"),
+        &token,
+        false,
+        "github_default_branch_commit_query_unavailable",
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_default_branch_commit_unavailable"))?;
+    let source_commit_sha = commit
+        .get("sha")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| is_git_sha(value))
+        .ok_or_else(|| anyhow::anyhow!("github_default_branch_commit_invalid"))?
+        .to_string();
+    let context = GitDeliveryObservationContext {
+        execution_id: "source-observer-capability-preflight".to_string(),
+        repository,
+        base_ref: Some(base_ref.clone()),
+        head_branch: base_ref,
+        source_commit_sha,
+        pull_request_url: format!("https://github.com/{owner}/{repo}/pull/1"),
+        pull_request_number: 1,
+        github_api_url: api,
+    };
+    observe_github_required_checks(&client, &context, &token).await?;
+    tracing::info!(
+        repository = %context.repository,
+        "source observer verified repository, rules, checks, and statuses"
+    );
+    Ok(())
+}
+
 async fn observe_github_required_checks(
     client: &reqwest::Client,
     context: &GitDeliveryObservationContext,
@@ -2732,6 +2810,7 @@ async fn observe_github_required_checks(
         &format!("{api}/repos/{owner}/{repo}/rules/branches/{branch}?per_page=100"),
         token,
         false,
+        "github_active_branch_rules_query_unavailable",
     )
     .await?
     .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_unavailable"))?;
@@ -2740,6 +2819,7 @@ async fn observe_github_required_checks(
         &format!("{api}/repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks"),
         token,
         true,
+        "github_classic_required_checks_query_unavailable",
     )
     .await?;
     let check_runs = github_observer_json(
@@ -2750,6 +2830,7 @@ async fn observe_github_required_checks(
         ),
         token,
         false,
+        "github_check_runs_query_unavailable",
     )
     .await?
     .ok_or_else(|| anyhow::anyhow!("github_check_runs_unavailable"))?;
@@ -2761,6 +2842,7 @@ async fn observe_github_required_checks(
         ),
         token,
         false,
+        "github_commit_statuses_query_unavailable",
     )
     .await?
     .ok_or_else(|| anyhow::anyhow!("github_commit_statuses_unavailable"))?;
@@ -2772,6 +2854,7 @@ async fn github_observer_json(
     url: &str,
     token: &str,
     not_found_is_empty: bool,
+    unavailable_error: &'static str,
 ) -> anyhow::Result<Option<serde_json::Value>> {
     let response = client
         .get(url)
@@ -2786,7 +2869,7 @@ async fn github_observer_json(
         return Ok(None);
     }
     if !response.status().is_success() {
-        anyhow::bail!("github_provider_check_query_unavailable");
+        anyhow::bail!(unavailable_error);
     }
     if response
         .headers()
@@ -3748,6 +3831,24 @@ fn git_observer_error_code(error: &anyhow::Error) -> &'static str {
         "github_pull_request_observation_failed" => "github_pull_request_observation_failed",
         "github_pull_request_provenance_mismatch" => "github_pull_request_provenance_mismatch",
         "github_merge_commit_missing" => "github_merge_commit_missing",
+        "github_active_branch_rules_query_unavailable" => {
+            "github_active_branch_rules_query_unavailable"
+        }
+        "github_classic_required_checks_query_unavailable" => {
+            "github_classic_required_checks_query_unavailable"
+        }
+        "github_check_runs_query_unavailable" => "github_check_runs_query_unavailable",
+        "github_commit_statuses_query_unavailable" => "github_commit_statuses_query_unavailable",
+        "github_provider_check_query_exceeded_bound" => {
+            "github_provider_check_query_exceeded_bound"
+        }
+        "github_active_branch_rules_unavailable" => "github_active_branch_rules_unavailable",
+        "github_check_runs_unavailable" => "github_check_runs_unavailable",
+        "github_commit_statuses_unavailable" => "github_commit_statuses_unavailable",
+        "github_active_branch_rules_invalid" => "github_active_branch_rules_invalid",
+        "github_classic_branch_protection_invalid" => "github_classic_branch_protection_invalid",
+        "github_check_runs_invalid" => "github_check_runs_invalid",
+        "github_commit_statuses_invalid" => "github_commit_statuses_invalid",
         "invalid_gitops_base_revision_context" => "invalid_gitops_base_revision_context",
         "github_base_revision_resolution_failed" => "github_base_revision_resolution_failed",
         _ => "git_observer_failed",
@@ -4354,9 +4455,9 @@ mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
         evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
-        git_delivery_command_error_code_for_stderr, git_patch_for_apply,
-        parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
-        update_kustomization_image, validate_git_delivery_context,
+        git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
+        github_observer_json, parse_github_pull_request_observation, parse_github_repository,
+        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
         GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
     };
@@ -4406,6 +4507,41 @@ mod tests {
         .unwrap();
 
         assert_eq!(context["execution_id"], "gexec_retry");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn provider_check_queries_preserve_a_sanitized_endpoint_error_code() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await.unwrap();
+            stream
+                .write_all(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+        let client = reqwest::Client::builder().build().unwrap();
+
+        let error = github_observer_json(
+            &client,
+            &format!("http://{address}/rules"),
+            "redacted-test-token",
+            false,
+            "github_active_branch_rules_query_unavailable",
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(
+            git_observer_error_code(&error),
+            "github_active_branch_rules_query_unavailable"
+        );
+        assert!(!error.to_string().contains("redacted-test-token"));
         server.await.unwrap();
     }
 
