@@ -3,7 +3,7 @@ use super::{
     internal_source_delivery_observation_outcome, json, ApproveRepositoryOnboardingProposal,
     CreateChangeSet, CreateProductAggregate, CreateRepoWorkItem, CreateRepositoryContractVersion,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateSession,
-    CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan,
+    CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan, CreateWorkspace,
     GitDeliveryObservationOutcomeRequest, Json, Path, RegisterRepositoryAggregate, RunBudget,
     RunId, SessionId, State, StoredRepositoryDraft, Value,
 };
@@ -209,7 +209,23 @@ async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
             environment_profile_id: "python-3.11".into(),
             run_budget: RunBudget::default(),
             max_attempts: 2,
-            repository_contract_json: json!({"api_version":"pharness.dev/v1alpha1"}),
+            repository_contract_json: json!({
+                "api_version":"pharness.dev/v1alpha1",
+                "environment_profile":"python-3.11",
+                "dependency_lock":{
+                    "kind":"python_requirements",
+                    "path":"requirements.lock",
+                    "sha256":format!("sha256:{}", "d".repeat(64)),
+                },
+                "writable_paths":["src/**"],
+                "acceptance_commands":[{
+                    "name":"unit",
+                    "command":"python -m unittest discover -s tests -v",
+                }],
+                "roots":{"source":["src"],"tests":["tests"],"documentation":[]},
+                "agent_network":"denied",
+                "package_installation":"preparation_only",
+            }),
             repository_contract_hash: contract_hash,
             actor: "operator".into(),
         })
@@ -540,6 +556,148 @@ async fn worker_boundary_failure_seals_repo_stage_and_blocks_for_correction() {
             .status,
         "blocked"
     );
+}
+
+#[tokio::test]
+async fn zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence() {
+    let fixture = repo_delivery_fixture("startup_recovery").await;
+    let run_id = RunId::new("run_startup_recovery");
+    let stage_execution_id = "stageexec_startup_recovery";
+    let workspace_id = "ws_startup_recovery";
+    fixture
+        .state
+        .store
+        .create_workspace(CreateWorkspace {
+            id: workspace_id.into(),
+            work_item_id: fixture.work_item_id.clone(),
+            run_id: None,
+            status: "preparing".into(),
+            source_repo: "https://github.com/example/repo-startup_recovery.git".into(),
+            source_ref: "main".into(),
+            resolved_commit: Some(SOURCE_SHA.into()),
+            branch: Some("pharness/startup-recovery/attempt-2".into()),
+            retention_status: "retained".into(),
+            actor: Some("operator".into()),
+            reason: Some("exercise exact startup recovery".into()),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_session(CreateSession {
+            id: SessionId::new("ses_startup_recovery"),
+            title: "Repo Mode startup recovery".into(),
+            cwd: "/workspace".into(),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_run(super::CreateRun {
+            id: run_id.clone(),
+            session_id: SessionId::new("ses_startup_recovery"),
+            user_task: "start the bounded Builder".into(),
+            cwd: "/workspace".into(),
+            max_turns: 48,
+            initial_status: "preparing".into(),
+            execution_target_json: json!({
+                "kind":"kubernetes_workspace",
+                "repo_mode":{
+                    "stage":"implement",
+                    "stage_execution_id":stage_execution_id,
+                },
+                "run_scope":{
+                    "work_item_id":fixture.work_item_id,
+                    "workspace_id":workspace_id,
+                },
+            }),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_stage_execution(CreateStageExecution {
+            id: stage_execution_id.into(),
+            work_item_id: fixture.work_item_id.clone(),
+            stage_key: "implement".into(),
+            sequence: 2,
+            status: "preparing".into(),
+            agent_profile_id: Some("repo-builder".into()),
+            agent_profile_version: Some("v1".into()),
+            agent_profile_hash: Some("sha256:builder".into()),
+            context_pack_id: None,
+            run_id: Some(run_id.clone()),
+            workspace_id: Some(workspace_id.into()),
+            input_snapshot: json!({"source_commit":SOURCE_SHA}),
+            input_hash: "sha256:startup-recovery-input".into(),
+        })
+        .await
+        .unwrap();
+    let started = fixture
+        .state
+        .store
+        .start_work_item_attempt(
+            &fixture.work_item_id,
+            &run_id,
+            Some("operator".into()),
+            Some("start exact correction".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(started.attempt_count, 1);
+
+    let flow = crate::app::repo_mode::repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    let action = flow
+        .action_rail
+        .iter()
+        .find(|action| action.id == "recover_stage_startup")
+        .unwrap();
+    let result = crate::app::repo_mode::execute_repo_work_item_action(
+        &fixture.state,
+        &fixture.work_item_id,
+        &action.id,
+        "operator".into(),
+        "recover startup that failed before preparation".into(),
+        action.state_hash.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["attempt_budget_restored"], true);
+    let work_item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(work_item.attempt_count, 0);
+    assert_eq!(work_item.status, "blocked");
+    let run = fixture.state.store.get_run(&run_id).await.unwrap().unwrap();
+    assert_eq!(run.status, "failed");
+    assert_eq!(
+        run.stop_reason.as_deref(),
+        Some("controller_stage_startup_failed_before_model")
+    );
+    let execution = fixture
+        .state
+        .store
+        .get_stage_execution(stage_execution_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.status, "failed");
+    assert!(fixture
+        .state
+        .store
+        .get_stage_outcome_for_execution(stage_execution_id)
+        .await
+        .unwrap()
+        .is_some());
 }
 
 #[test]

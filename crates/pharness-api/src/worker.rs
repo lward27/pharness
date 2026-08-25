@@ -1629,7 +1629,7 @@ async fn expire_attempt_workspace_grants(
     store: &SqliteStore,
     run: &StoredRun,
     actor: &str,
-) -> anyhow::Result<()> {
+) -> Result<(), StoreError> {
     for grant in store.list_permission_grants(Some("active"), 200).await? {
         let scope: PermissionGrantScope = serde_json::from_value(grant.scope_json.clone())?;
         if !scope.run_ids.iter().any(|run_id| run_id == run.id.as_str()) {
@@ -2618,6 +2618,7 @@ async fn fail_run_from_worker_boundary(
             // secondary stage-finalization write is temporarily unavailable.
             tracing::error!(run_id = %run.id, %error, "failed to seal Repo Mode stage after worker-boundary failure");
         }
+        expire_attempt_workspace_grants(store, &run, "controller:worker-boundary").await?;
     }
 
     Ok(())

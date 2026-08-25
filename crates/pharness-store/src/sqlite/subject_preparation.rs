@@ -290,6 +290,7 @@ mod tests {
         CreateSubjectWorkspace,
     };
     use serde_json::json;
+    use sqlx::Row;
 
     #[tokio::test]
     async fn repository_readiness_uses_subject_scoped_workspace_and_preparation() {
@@ -350,6 +351,51 @@ mod tests {
                 .status,
             "prepared"
         );
+        let refreshed = store
+            .create_subject_environment_preparation(CreateSubjectEnvironmentPreparation {
+                id: "sprep_ready_refresh".into(),
+                subject_kind: workspace.subject_kind.clone(),
+                subject_id: workspace.subject_id.clone(),
+                workspace_id: workspace.id.clone(),
+                run_id: None,
+                status: "queued".into(),
+                environment_profile_id: "python-3.11".into(),
+                source_commit: workspace.source_commit.clone(),
+                input_hash: "sha256:refreshed-input".into(),
+                input: json!({"repository_id":"repo_test","reason":"runner_refresh"}),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .latest_subject_environment_preparation(
+                    &workspace.subject_kind,
+                    &workspace.subject_id,
+                )
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            refreshed.id
+        );
+        for table in [
+            "environment_preparations",
+            "subject_environment_preparations",
+        ] {
+            let rows = sqlx::query(&format!("PRAGMA index_list('{table}')"))
+                .fetch_all(&store.pool)
+                .await
+                .unwrap();
+            let index = rows
+                .iter()
+                .find(|row| {
+                    row.try_get::<String, _>("name")
+                        .unwrap()
+                        .ends_with("environment_preparations_workspace")
+                })
+                .unwrap();
+            assert_eq!(index.try_get::<i64, _>("unique").unwrap(), 0);
+        }
         assert!(store
             .complete_subject_environment_preparation(CompleteSubjectEnvironmentPreparation {
                 id: completed.id,

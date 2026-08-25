@@ -344,6 +344,32 @@ fn derive_repo_actions(
             }),
         )?]);
     }
+    if let Some((run, execution)) =
+        recoverable_repo_stage_startup(metadata, current_run, executions, chain)
+    {
+        return Ok(vec![repo_action(
+            RepoActionSpec {
+                id: "recover_stage_startup",
+                lifecycle_stage: "implement",
+                resource: &execution.id,
+                status: "ready",
+                effect_class: "controller_internal",
+                approval_required: true,
+                summary: "Seal the zero-turn Builder startup failure, restore the unused WorkItem attempt, and preserve the existing workspace for an explicit correction.",
+            },
+            &state_hash,
+            json!({
+                "run_id":run.id,
+                "run_status":run.status,
+                "run_stop_reason":run.stop_reason,
+                "budget_consumption":run.budget_consumption,
+                "stage_execution_id":execution.id,
+                "stage_execution_status":execution.status,
+                "attempt_count":attempt_count,
+                "max_attempts":max_attempts,
+            }),
+        )?]);
+    }
     let plan_execution = executions
         .iter()
         .rev()
@@ -627,6 +653,44 @@ fn derive_repo_actions(
         }
     }
     Ok(actions)
+}
+
+fn recoverable_repo_stage_startup<'a>(
+    metadata: &StoredRepoWorkItemMetadata,
+    current_run: Option<&'a StoredRun>,
+    executions: &'a [pharness_store::StoredStageExecution],
+    chain: Option<&pharness_store::StoredStageChainAuthorization>,
+) -> Option<(&'a StoredRun, &'a pharness_store::StoredStageExecution)> {
+    let run = current_run?;
+    if chain.is_some()
+        || run.status != "preparing"
+        || run.stop_reason.is_some()
+        || run.budget_consumption.turns_used != 0
+        || run.budget_consumption.tokens_used != 0
+    {
+        return None;
+    }
+    let execution = executions.iter().rev().find(|execution| {
+        execution.stage_key == pharness_core::RepoStageKey::Implement.as_str()
+            && execution.status == "preparing"
+            && execution.run_id.as_ref() == Some(&run.id)
+            && execution.workspace_id.is_some()
+    })?;
+    if metadata.current_stage_execution_id.as_deref() != Some(execution.id.as_str())
+        || run
+            .execution_target_json
+            .pointer("/repo_mode/stage_execution_id")
+            .and_then(Value::as_str)
+            != Some(execution.id.as_str())
+        || run
+            .execution_target_json
+            .pointer("/repo_mode/stage")
+            .and_then(Value::as_str)
+            != Some(pharness_core::RepoStageKey::Implement.as_str())
+    {
+        return None;
+    }
+    Some((run, execution))
 }
 
 struct RepoActionSpec<'a> {
@@ -992,6 +1056,81 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         return Err(ApiError::conflict("Repo Mode action is blocked"));
     }
     match action_id {
+        "recover_stage_startup" => {
+            let (run, execution) = recoverable_repo_stage_startup(
+                &metadata,
+                current_run.as_ref(),
+                &executions,
+                chain.as_ref(),
+            )
+            .ok_or_else(|| {
+                ApiError::conflict("Repo Mode stage startup is no longer recoverable")
+            })?;
+            if state
+                .store
+                .get_environment_preparation_by_run(&run.id)
+                .await?
+                .is_some()
+            {
+                return Err(ApiError::conflict(
+                    "Repo Mode stage startup already has durable preparation state",
+                ));
+            }
+            let run_id = run.id.clone();
+            let execution_id = execution.id.clone();
+            state
+                .store
+                .refund_unstarted_work_item_attempt(
+                    work_item_id,
+                    &run_id,
+                    Some(actor.clone()),
+                    Some(reason.clone()),
+                )
+                .await?;
+            crate::worker::fail_run_from_dispatch(
+                &state.store,
+                &run_id,
+                "controller sealed a zero-turn Builder startup failure before preparation was created"
+                    .into(),
+            )
+            .await?;
+            append_repo_audit(
+                state,
+                work_item_id,
+                "repo.stage_startup.recovered",
+                &actor,
+                &reason,
+                json!({
+                    "run_id":run_id,
+                    "stage_execution_id":execution_id,
+                    "attempt_budget_restored":true,
+                    "model_turns_consumed":0,
+                    "workspace_preserved":true,
+                }),
+            )
+            .await?;
+            let run = state
+                .store
+                .get_run(&run_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+            let execution = state
+                .store
+                .get_stage_execution(&execution_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("stage_execution", &execution_id))?;
+            let work_item = state
+                .store
+                .get_work_item(work_item_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+            Ok(json!({
+                "work_item":work_item,
+                "run":run,
+                "stage_execution":execution,
+                "attempt_budget_restored":true,
+            }))
+        }
         "apply_annotation_effect" => {
             let annotation = pending_annotation_effects
                 .first()
@@ -2998,32 +3137,8 @@ async fn start_repo_builder(
     .map_err(ApiError::conflict)?
     .clone();
     let reused_environment_snapshot = if reuse_prepared_workspace {
-        let prior_run_id = workspace
-            .run_id
-            .as_ref()
-            .ok_or_else(|| ApiError::conflict("correction workspace has no prior prepared Run"))?;
-        let prior_run = state
-            .store
-            .get_run(prior_run_id)
+        latest_correction_environment_snapshot(state, work_item, workspace, &environment_profile)
             .await?
-            .ok_or_else(|| ApiError::not_found("run", prior_run_id.as_str()))?;
-        let snapshot = prior_run
-            .execution_target_json
-            .get("environment_snapshot")
-            .filter(|snapshot| !snapshot.is_null())
-            .cloned()
-            .ok_or_else(|| {
-                ApiError::conflict("correction workspace has no reusable EnvironmentSnapshot")
-            })?;
-        reusable_correction_environment_snapshot(
-            snapshot,
-            work_item.source_commit.as_deref().unwrap_or_default(),
-            work_item
-                .repository_contract_hash
-                .as_deref()
-                .unwrap_or_default(),
-            &environment_profile,
-        )?
     } else {
         None
     };
@@ -3381,6 +3496,46 @@ fn reusable_correction_environment_snapshot(
         return Ok(None);
     }
     Ok(Some(snapshot))
+}
+
+async fn latest_correction_environment_snapshot(
+    state: &AppState,
+    work_item: &pharness_store::StoredWorkItem,
+    workspace: &pharness_store::StoredWorkspace,
+    environment_profile: &pharness_core::EnvironmentProfile,
+) -> Result<Option<Value>, ApiError> {
+    let executions = state.store.list_stage_executions(&work_item.id).await?;
+    for execution in executions.iter().rev().filter(|execution| {
+        execution.stage_key == pharness_core::RepoStageKey::Implement.as_str()
+            && execution.workspace_id.as_deref() == Some(workspace.id.as_str())
+    }) {
+        let Some(run_id) = execution.run_id.as_ref() else {
+            continue;
+        };
+        let Some(run) = state.store.get_run(run_id).await? else {
+            continue;
+        };
+        let Some(snapshot) = run
+            .execution_target_json
+            .get("environment_snapshot")
+            .filter(|snapshot| !snapshot.is_null())
+            .cloned()
+        else {
+            continue;
+        };
+        return reusable_correction_environment_snapshot(
+            snapshot,
+            work_item.source_commit.as_deref().unwrap_or_default(),
+            work_item
+                .repository_contract_hash
+                .as_deref()
+                .unwrap_or_default(),
+            environment_profile,
+        );
+    }
+    Err(ApiError::conflict(
+        "correction workspace has no sealed prior EnvironmentSnapshot",
+    ))
 }
 
 fn agent_profile_from_chain(
@@ -4942,6 +5097,87 @@ mod tests {
         )
         .unwrap();
         assert!(exhausted.iter().all(|action| action.status == "blocked"));
+    }
+
+    #[test]
+    fn zero_turn_builder_startup_failure_preempts_attempt_exhaustion_for_recovery() {
+        let run_id = RunId::new("run_startup_recovery");
+        let mut execution =
+            stage_execution("stageexec_startup_recovery", "implement", "preparing", "3");
+        execution.run_id = Some(run_id.clone());
+        let mut metadata = metadata();
+        metadata.current_stage_execution_id = Some(execution.id.clone());
+        let run = StoredRun {
+            id: run_id,
+            session_id: SessionId::new("ses_startup_recovery"),
+            cwd: "/workspace".into(),
+            status: "preparing".into(),
+            user_task: "start the bounded Builder".into(),
+            max_turns: 48,
+            started_at: "3".into(),
+            finished_at: None,
+            cancel_requested_at: None,
+            error: None,
+            result_json: None,
+            execution_target_json: json!({
+                "kind":"kubernetes_workspace",
+                "repo_mode":{
+                    "stage":"implement",
+                    "stage_execution_id":execution.id,
+                },
+            }),
+            origin: "controller".into(),
+            created_by: Some("operator".into()),
+            run_budget: pharness_core::RunBudget::default(),
+            budget_consumption: RunBudgetConsumption {
+                allowed_turns: 48,
+                allowed_tokens: 400_000,
+                ..RunBudgetConsumption::default()
+            },
+            stop_reason: None,
+        };
+        let actions = derive_repo_actions(
+            &metadata,
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &[execution.clone()],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: Some(&run),
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "recover_stage_startup");
+        assert_eq!(actions[0].status, "ready");
+        assert_eq!(actions[0].effect_class, "controller_internal");
+
+        let mut consumed = run;
+        consumed.budget_consumption.turns_used = 1;
+        let actions = derive_repo_actions(
+            &metadata,
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &[execution],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: Some(&consumed),
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert!(actions
+            .iter()
+            .all(|action| action.id != "recover_stage_startup"));
     }
 
     #[test]

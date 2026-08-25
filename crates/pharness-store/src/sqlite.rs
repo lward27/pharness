@@ -1782,6 +1782,60 @@ impl SqliteStore {
             })
     }
 
+    pub async fn refund_unstarted_work_item_attempt(
+        &self,
+        work_item_id: &str,
+        run_id: &RunId,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        let mut transaction = self.pool.begin().await?;
+        let marked = sqlx::query(
+            r#"
+            UPDATE runs
+            SET stop_reason = 'controller_stage_startup_failed_before_model'
+            WHERE id = ?1 AND status = 'preparing' AND stop_reason IS NULL
+              AND CAST(json_extract(budget_consumption_json, '$.turns_used') AS INTEGER) = 0
+            "#,
+        )
+        .bind(run_id.as_str())
+        .execute(&mut *transaction)
+        .await?;
+        if marked.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "only one zero-turn preparing Run can restore an unstarted attempt budget".into(),
+            ));
+        }
+        let refunded = sqlx::query(
+            r#"
+            UPDATE work_items
+            SET attempt_count = attempt_count - 1, updated_at = ?3,
+                status_changed_at = ?3, status_changed_by = ?4, status_reason = ?5
+            WHERE id = ?1 AND current_run_id = ?2 AND attempt_count > 0
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(run_id.as_str())
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&mut *transaction)
+        .await?;
+        if refunded.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "WorkItem no longer owns the unstarted Run attempt".into(),
+            ));
+        }
+        transaction.commit().await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
+    }
+
     pub async fn finish_work_item_attempt(
         &self,
         work_item_id: &str,
@@ -6802,7 +6856,7 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 47);
+        assert_eq!(latest, 48);
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
@@ -6853,6 +6907,110 @@ mod tests {
         assert_eq!(run.status, "queued");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::RunStarted);
+    }
+
+    #[tokio::test]
+    async fn refunds_only_one_zero_turn_preparing_work_item_attempt() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let work_item_id = "witem_zero_turn_refund";
+        let session_id = SessionId::new("ses_zero_turn_refund");
+        let run_id = RunId::new("run_zero_turn_refund");
+        store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.into(),
+                status: "awaiting_approval".into(),
+                title: "Recover a startup boundary".into(),
+                intent: "Restore only an attempt that never reached the model".into(),
+                acceptance_criteria: vec!["cargo test --workspace".into()],
+                source_repo: "https://github.com/example/project.git".into(),
+                source_ref: "main".into(),
+                source_commit: Some("a".repeat(40)),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "development".into(),
+                target_namespace: None,
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 3_600,
+                created_by: Some("operator".into()),
+                environment_profile_id: None,
+                run_budget: RunBudget::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "pending".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "zero-turn refund".into(),
+                cwd: "/workspace".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "start Builder".into(),
+                cwd: "/workspace".into(),
+                max_turns: 48,
+                initial_status: "preparing".into(),
+                execution_target_json: serde_json::json!({"kind":"kubernetes_workspace"}),
+            })
+            .await
+            .unwrap();
+        let started = store
+            .start_work_item_attempt(
+                work_item_id,
+                &run_id,
+                Some("operator".into()),
+                Some("start exact attempt".into()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(started.attempt_count, 1);
+        let restored = store
+            .refund_unstarted_work_item_attempt(
+                work_item_id,
+                &run_id,
+                Some("operator".into()),
+                Some("startup failed before preparation".into()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(restored.attempt_count, 0);
+        assert_eq!(restored.current_run_id.as_ref(), Some(&run_id));
+        assert_eq!(
+            store
+                .get_run(&run_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .stop_reason
+                .as_deref(),
+            Some("controller_stage_startup_failed_before_model")
+        );
+        assert!(matches!(
+            store
+                .refund_unstarted_work_item_attempt(
+                    work_item_id,
+                    &run_id,
+                    Some("operator".into()),
+                    Some("must be one-shot".into()),
+                )
+                .await,
+            Err(StoreError::Conflict(_))
+        ));
     }
 
     #[tokio::test]
