@@ -4461,6 +4461,28 @@ impl SqliteStore {
         row.map(row_to_capability_verification).transpose()
     }
 
+    pub async fn latest_capability_verification_for_repository(
+        &self,
+        capability: &str,
+        repository: &str,
+    ) -> Result<Option<StoredCapabilityVerification>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, capability, status, summary, principal, repository, permission,
+                   verified_at, expires_at
+            FROM capability_verifications
+            WHERE capability = ?1 AND repository = ?2
+            ORDER BY verified_at DESC, id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(capability)
+        .bind(repository)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_capability_verification).transpose()
+    }
+
     pub async fn create_environment_preparation(
         &self,
         preparation: CreateEnvironmentPreparation,

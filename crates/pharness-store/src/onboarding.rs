@@ -15,6 +15,7 @@ pub struct StoredRepositoryOnboarding {
     pub approved_proposal_hash: Option<String>,
     pub source_delivery_intent_id: Option<String>,
     pub contract_version_id: Option<String>,
+    pub readiness_assessment_id: Option<String>,
     pub proposer_run_id: Option<String>,
     pub proposer_profile_hash: Option<String>,
     pub proposer_stop_reason: Option<String>,

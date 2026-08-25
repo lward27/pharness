@@ -393,6 +393,7 @@ struct RepositoryOnboardingResponse {
     approved_proposal_hash: Option<String>,
     source_delivery_intent_id: Option<String>,
     contract_version_id: Option<String>,
+    readiness_assessment_id: Option<String>,
     proposer_run_id: Option<String>,
     proposer_profile_hash: Option<String>,
     proposer_stop_reason: Option<String>,
@@ -927,7 +928,10 @@ async fn create_repository_readiness_assessment(
         .as_millis();
     let source_reader_verification = state
         .store
-        .latest_capability_verification("source_reader")
+        .latest_capability_verification_for_repository(
+            "source_reader",
+            &repository.canonical_url,
+        )
         .await?
         .filter(|verification| {
             verification.status == "available"
@@ -1185,6 +1189,24 @@ async fn get_repository_onboarding_flow(
         Some(intent_id) => state.store.get_source_delivery_intent(intent_id).await?,
         None => None,
     };
+    let readiness = match onboarding.readiness_assessment_id.as_deref() {
+        Some(assessment_id) => {
+            state
+                .store
+                .get_repository_readiness_assessment(assessment_id)
+                .await?
+        }
+        None => {
+            let source_commit = onboarding
+                .resolved_commit
+                .as_deref()
+                .unwrap_or(onboarding.registered_commit.as_str());
+            state
+                .store
+                .latest_repository_readiness_assessment(&onboarding.repository_id, source_commit)
+                .await?
+        }
+    };
     let response = onboarding_response(onboarding)?;
     Ok(Json(json!({
         "onboarding": response,
@@ -1192,7 +1214,7 @@ async fn get_repository_onboarding_flow(
         "proposal": proposal,
         "proposer_run": proposer_run,
         "source_delivery_intent": source_delivery_intent,
-        "readiness": null,
+        "readiness": readiness,
     })))
 }
 
@@ -2108,6 +2130,7 @@ fn onboarding_response(
         "approved_proposal_hash": onboarding.approved_proposal_hash,
         "source_delivery_intent_id": onboarding.source_delivery_intent_id,
         "contract_version_id": onboarding.contract_version_id,
+        "readiness_assessment_id": onboarding.readiness_assessment_id,
         "proposer_run_id": onboarding.proposer_run_id,
         "proposer_profile_hash": onboarding.proposer_profile_hash,
         "proposer_stop_reason": onboarding.proposer_stop_reason,
@@ -2185,6 +2208,7 @@ fn onboarding_response(
         approved_proposal_hash: onboarding.approved_proposal_hash,
         source_delivery_intent_id: onboarding.source_delivery_intent_id,
         contract_version_id: onboarding.contract_version_id,
+        readiness_assessment_id: onboarding.readiness_assessment_id,
         proposer_run_id: onboarding.proposer_run_id,
         proposer_profile_hash: onboarding.proposer_profile_hash,
         proposer_stop_reason: onboarding.proposer_stop_reason,
@@ -2965,7 +2989,7 @@ pub(in crate::app) async fn internal_repository_readiness_context(
         .ok_or_else(|| ApiError::conflict("readiness input has no source-reader evidence"))?;
     state
         .store
-        .latest_capability_verification("source_reader")
+        .latest_capability_verification_for_repository("source_reader", &repository.canonical_url)
         .await?
         .filter(|verification| {
             verification.id == source_reader_evidence
@@ -3231,6 +3255,18 @@ pub(in crate::app) async fn internal_repository_readiness_outcome(
     let evidence_refs = json!([
         {"kind":"repository_contract_version","id":version.id,"hash":version.content_hash},
         {"kind":"subject_environment_preparation","id":completed.id,"input_hash":completed.input_hash},
+        {
+            "kind":"capability_verification",
+            "capability":"source_reader",
+            "id":preparation.input.pointer("/capability_evidence/source_reader/id"),
+            "expires_at":preparation.input.pointer("/capability_evidence/source_reader/expires_at"),
+        },
+        {
+            "kind":"capability_verification",
+            "capability":format!("environment_profile:{}", profile.id),
+            "id":preparation.input.pointer("/capability_evidence/environment_profile/id"),
+            "expires_at":preparation.input.pointer("/capability_evidence/environment_profile/expires_at"),
+        },
     ]);
     let material = json!({
         "schema_version":"pharness.dev/repository-readiness/v1alpha1",

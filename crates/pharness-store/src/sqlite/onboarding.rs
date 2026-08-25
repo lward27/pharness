@@ -995,6 +995,8 @@ impl SqliteStore {
         &self,
         assessment: CreateRepositoryReadinessAssessment,
     ) -> Result<StoredRepositoryReadinessAssessment, StoreError> {
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
         sqlx::query(
             r#"
             INSERT INTO repository_readiness_assessments (
@@ -1025,10 +1027,35 @@ impl SqliteStore {
         .bind(serde_json::to_string(&assessment.evidence_refs)?)
         .bind(&assessment.input_hash)
         .bind(&assessment.content_hash)
-        .bind(now_string())
+        .bind(&now)
         .bind(&assessment.expires_at)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        if assessment.contract_status == "ready" && assessment.coding_status == "ready" {
+            sqlx::query(
+                r#"
+                UPDATE repository_onboardings
+                SET status = 'ready', readiness_assessment_id = ?1,
+                    state_version = state_version + 1, updated_at = ?2,
+                    status_changed_at = ?2, status_changed_by = 'controller',
+                    status_reason = 'exact repository contract and coding readiness validated'
+                WHERE id = (
+                  SELECT id FROM repository_onboardings
+                  WHERE repository_id = ?3 AND resolved_commit = ?4
+                    AND contract_version_id = ?5 AND status = 'contract_ready'
+                  ORDER BY created_at DESC, id DESC LIMIT 1
+                )
+                "#,
+            )
+            .bind(&assessment.id)
+            .bind(&now)
+            .bind(&assessment.repository_id)
+            .bind(&assessment.source_commit)
+            .bind(&assessment.contract_version_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         self.get_repository_readiness_assessment(&assessment.id)
             .await?
             .ok_or_else(|| StoreError::NotFound {
@@ -1096,7 +1123,7 @@ fn onboarding_select_sql(where_clause: &str) -> String {
     format!(
         "SELECT id, product_id, repository_id, binding_id, onboarding_kind, status, \
          registered_commit, resolved_commit, current_discovery_id, current_proposal_revision, \
-         approved_proposal_hash, source_delivery_intent_id, contract_version_id, proposer_run_id, \
+         approved_proposal_hash, source_delivery_intent_id, contract_version_id, readiness_assessment_id, proposer_run_id, \
          proposer_profile_hash, proposer_stop_reason, patch_execution_id, patch_artifact_id, \
          patch_hash, validation_execution_id, validation_stop_reason, state_version, \
          blockers_json, created_by, creation_reason, created_at, updated_at, status_changed_at, \
@@ -1147,6 +1174,7 @@ fn row_to_onboarding(
         approved_proposal_hash: row.try_get("approved_proposal_hash")?,
         source_delivery_intent_id: row.try_get("source_delivery_intent_id")?,
         contract_version_id: row.try_get("contract_version_id")?,
+        readiness_assessment_id: row.try_get("readiness_assessment_id")?,
         proposer_run_id: row.try_get("proposer_run_id")?,
         proposer_profile_hash: row.try_get("proposer_profile_hash")?,
         proposer_stop_reason: row.try_get("proposer_stop_reason")?,
@@ -1257,7 +1285,10 @@ fn row_to_readiness(
 #[cfg(test)]
 mod tests {
     use super::SqliteStore;
-    use crate::{CreateRepositoryContractVersion, CreateRepositoryOnboarding};
+    use crate::{
+        CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+        CreateRepositoryReadinessAssessment,
+    };
     use serde_json::json;
 
     #[tokio::test]
@@ -1390,6 +1421,41 @@ mod tests {
                 .unwrap()
                 .registered_commit,
             "b".repeat(40)
+        );
+        let assessment = store
+            .create_repository_readiness_assessment(CreateRepositoryReadinessAssessment {
+                id: "rready_test".into(),
+                repository_id: "repo_test".into(),
+                source_commit: "b".repeat(40),
+                contract_version_id: Some("rcontract_test".into()),
+                contract_hash: Some(format!("sha256:{}", "c".repeat(64))),
+                dependency_lock_hash: Some(format!("sha256:{}", "d".repeat(64))),
+                environment_profile_id: Some("python-3.11".into()),
+                environment_profile_revision: Some("e".repeat(40)),
+                runner_image_digest: Some(format!("sha256:{}", "f".repeat(64))),
+                validation_policy_version: "repo-mode-v1".into(),
+                contract_status: "ready".into(),
+                coding_status: "ready".into(),
+                checks: json!([]),
+                blockers: json!([]),
+                warnings: json!([]),
+                evidence_refs: json!([]),
+                input_hash: format!("sha256:{}", "1".repeat(64)),
+                content_hash: format!("sha256:{}", "2".repeat(64)),
+                expires_at: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(assessment.coding_status, "ready");
+        let ready = store
+            .get_repository_onboarding(&onboarding.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ready.status, "ready");
+        assert_eq!(
+            ready.readiness_assessment_id.as_deref(),
+            Some("rready_test")
         );
     }
 }
