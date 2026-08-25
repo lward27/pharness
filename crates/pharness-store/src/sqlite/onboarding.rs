@@ -758,7 +758,7 @@ impl SqliteStore {
         let now = now_string();
         let mut tx = self.pool.begin().await?;
         let onboarding = sqlx::query(
-            "SELECT state_version, current_discovery_id, current_proposal_revision, status FROM repository_onboardings WHERE id = ?1",
+            "SELECT state_version, current_discovery_id, current_proposal_revision, status, source_delivery_intent_id FROM repository_onboardings WHERE id = ?1",
         )
         .bind(&proposal.onboarding_id)
         .fetch_optional(&mut *tx)
@@ -770,11 +770,19 @@ impl SqliteStore {
         let state_version = onboarding.try_get::<i64, _>("state_version")? as u64;
         let discovery_id: Option<String> = onboarding.try_get("current_discovery_id")?;
         let status: String = onboarding.try_get("status")?;
+        let source_delivery_intent_id: Option<String> =
+            onboarding.try_get("source_delivery_intent_id")?;
         if state_version != proposal.expected_state_version
             || discovery_id.as_deref() != Some(proposal.discovery_id.as_str())
+            || source_delivery_intent_id.is_some()
             || !matches!(
                 status.as_str(),
-                "discovered" | "proposal_running" | "proposal_ready"
+                "discovered"
+                    | "proposal_running"
+                    | "proposal_ready"
+                    | "proposal_approved"
+                    | "patch_failed"
+                    | "delivery_ready"
             )
         {
             return Err(StoreError::Conflict(
@@ -796,6 +804,41 @@ impl SqliteStore {
             ));
         }
         let revision = onboarding.try_get::<i64, _>("current_proposal_revision")? + 1;
+        let correcting_approved = matches!(
+            status.as_str(),
+            "proposal_approved" | "patch_failed" | "delivery_ready"
+        );
+        if correcting_approved {
+            let approved = sqlx::query(
+                "SELECT status, proposal_json FROM repository_onboarding_proposals WHERE onboarding_id = ?1 ORDER BY revision DESC LIMIT 1",
+            )
+            .bind(&proposal.onboarding_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            let approved_status: String = approved.try_get("status")?;
+            let approved_document: serde_json::Value =
+                serde_json::from_str(&approved.try_get::<String, _>("proposal_json")?)?;
+            let proposed_product_changes = ["service_proposals", "binding_proposals"]
+                .into_iter()
+                .any(|field| {
+                    approved_document
+                        .get(field)
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|entries| !entries.is_empty())
+                });
+            if approved_status != "approved" || proposed_product_changes {
+                return Err(StoreError::Conflict(
+                    "approved onboarding proposal cannot be revised after Product model changes"
+                        .into(),
+                ));
+            }
+            sqlx::query(
+                "UPDATE repository_onboarding_proposals SET status = 'superseded' WHERE onboarding_id = ?1 AND status = 'approved'",
+            )
+            .bind(&proposal.onboarding_id)
+            .execute(&mut *tx)
+            .await?;
+        }
         sqlx::query(
             r#"
             INSERT INTO repository_onboarding_proposals (
@@ -820,10 +863,12 @@ impl SqliteStore {
             r#"
             UPDATE repository_onboardings
             SET status = 'proposal_ready', current_proposal_revision = ?2,
+                approved_proposal_hash = NULL, patch_execution_id = NULL,
+                patch_artifact_id = NULL, patch_hash = NULL, blockers_json = '[]',
                 state_version = state_version + 1, updated_at = ?3,
                 status_changed_at = ?3, status_changed_by = ?4,
                 status_reason = 'onboarding proposal revision created'
-            WHERE id = ?1 AND state_version = ?5
+            WHERE id = ?1 AND state_version = ?5 AND source_delivery_intent_id IS NULL
             "#,
         )
         .bind(&proposal.onboarding_id)
@@ -1423,7 +1468,8 @@ mod tests {
     use crate::{
         ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
         ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
-        CreateRepositoryReadinessAssessment, CreateRun, CreateSession,
+        CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
+        CreateSession,
     };
     use pharness_core::{RunId, SessionId};
     use serde_json::json;
@@ -1570,7 +1616,7 @@ mod tests {
             .unwrap();
         sqlx::query("INSERT INTO repository_discoveries (id, onboarding_id, source_commit, resolved_commit, status, schema_version, inventory_json, content_hash, created_at, updated_at) VALUES ('rdisc_model', ?1, ?2, ?2, 'succeeded', 'pharness.dev/repository-discovery/v1alpha1', '{}', 'sha256:discovery', ?3, ?3)")
             .bind(&onboarding.id).bind("a".repeat(40)).bind(now).execute(&store.pool).await.unwrap();
-        sqlx::query("INSERT INTO repository_onboarding_proposals (id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, discovery_hash, created_by, origin, created_at) VALUES ('rprop_model', ?1, 1, 'proposed', '{}', 'sha256:proposal', 'rdisc_model', 'sha256:discovery', 'operator', 'operator', ?2)")
+        sqlx::query("INSERT INTO repository_onboarding_proposals (id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, discovery_hash, created_by, origin, created_at) VALUES ('rprop_model', ?1, 1, 'proposed', '{\"service_proposals\":[{\"service_key\":\"api\"}],\"binding_proposals\":[]}', 'sha256:proposal', 'rdisc_model', 'sha256:discovery', 'operator', 'operator', ?2)")
             .bind(&onboarding.id).bind(now).execute(&store.pool).await.unwrap();
         sqlx::query("UPDATE repository_onboardings SET status = 'proposal_ready', current_discovery_id = 'rdisc_model', current_proposal_revision = 1 WHERE id = ?1")
             .bind(&onboarding.id).execute(&store.pool).await.unwrap();
@@ -1636,6 +1682,62 @@ mod tests {
                 .status,
             "approved"
         );
+
+        sqlx::query("UPDATE repository_onboardings SET status = 'delivery_ready', patch_execution_id = 'onbpatch_model', patch_artifact_id = 'art_model', patch_hash = 'sha256:patch' WHERE id = ?1")
+            .bind(&onboarding.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let delivery_ready = store
+            .get_repository_onboarding(&onboarding.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let corrected_request = CreateRepositoryOnboardingProposal {
+            id: "rprop_model_corrected".into(),
+            onboarding_id: onboarding.id.clone(),
+            expected_state_version: delivery_ready.state_version,
+            proposal: json!({}),
+            content_hash: "sha256:proposal-corrected".into(),
+            discovery_id: "rdisc_model".into(),
+            discovery_hash: "sha256:discovery".into(),
+            actor: "operator".into(),
+            origin: "operator".into(),
+        };
+        assert!(store
+            .create_repository_onboarding_proposal(corrected_request.clone())
+            .await
+            .is_err());
+        sqlx::query("UPDATE repository_onboarding_proposals SET proposal_json = '{\"service_proposals\":[],\"binding_proposals\":[]}' WHERE id = 'rprop_model'")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let corrected = store
+            .create_repository_onboarding_proposal(corrected_request)
+            .await
+            .unwrap();
+        assert_eq!(corrected.revision, 2);
+        assert_eq!(corrected.status, "proposed");
+        assert_eq!(
+            store
+                .get_repository_onboarding_proposal("rprop_model")
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "superseded"
+        );
+        let reopened = store
+            .get_repository_onboarding(&onboarding.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reopened.status, "proposal_ready");
+        assert_eq!(reopened.current_proposal_revision, 2);
+        assert!(reopened.approved_proposal_hash.is_none());
+        assert!(reopened.patch_execution_id.is_none());
+        assert!(reopened.patch_artifact_id.is_none());
+        assert!(reopened.patch_hash.is_none());
     }
 
     #[tokio::test]
