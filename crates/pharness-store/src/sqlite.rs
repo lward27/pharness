@@ -1841,10 +1841,12 @@ impl SqliteStore {
         &self,
         work_item_id: &str,
     ) -> Result<Option<StoredWorkPlan>, StoreError> {
-        let row = sqlx::query(work_plan_select_sql("WHERE wp.work_item_id = ?1"))
-            .bind(work_item_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(work_plan_select_sql(
+            "WHERE wp.work_item_id = ?1 ORDER BY wp.created_at DESC, wp.id DESC LIMIT 1",
+        ))
+        .bind(work_item_id)
+        .fetch_optional(&self.pool)
+        .await?;
 
         row.map(row_to_work_plan).transpose()
     }
@@ -5646,6 +5648,20 @@ fn work_plan_select_sql(where_clause: &str) -> &'static str {
             FROM work_plans wp
             LEFT JOIN work_items wi ON wi.id = wp.work_item_id
             WHERE wp.work_item_id = ?1
+            "#
+        }
+        "WHERE wp.work_item_id = ?1 ORDER BY wp.created_at DESC, wp.id DESC LIMIT 1" => {
+            r#"
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE wp.work_item_id = ?1
+            ORDER BY wp.created_at DESC, wp.id DESC
+            LIMIT 1
             "#
         }
         _ => unreachable!("work plan select SQL only supports known static clauses"),

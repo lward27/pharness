@@ -692,13 +692,14 @@ impl SqliteStore {
     ) -> Result<(), StoreError> {
         sqlx::query(
             r#"
-            INSERT INTO evidence_retrievals (
-              id, work_item_id, stage_execution_id, run_id, actor, evidence_kind,
+            INSERT OR IGNORE INTO evidence_retrievals (
+              id, event_id, work_item_id, stage_execution_id, run_id, actor, evidence_kind,
               evidence_id, evidence_version, returned_hash, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             "#,
         )
         .bind(retrieval.id)
+        .bind(retrieval.event_id)
         .bind(retrieval.work_item_id)
         .bind(retrieval.stage_execution_id)
         .bind(retrieval.run_id.as_str())
@@ -1020,6 +1021,8 @@ fn row_to_provider_check_set_observation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{CreateRun, CreateSession};
+    use pharness_core::{RunId, SessionId};
     use serde_json::json;
 
     async fn store_with_repo_work_item() -> SqliteStore {
@@ -1156,6 +1159,75 @@ mod tests {
             .execute(&store.pool)
             .await;
         assert!(delete.is_err());
+    }
+
+    #[tokio::test]
+    async fn evidence_retrieval_is_idempotent_per_tool_event() {
+        let store = store_with_repo_work_item().await;
+        let session_id = SessionId::new("ses_evidence");
+        let run_id = RunId::new("run_evidence");
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Evidence".into(),
+                cwd: "/workspace".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "inspect evidence".into(),
+                cwd: "/workspace".into(),
+                max_turns: 8,
+                initial_status: "running".into(),
+                execution_target_json: json!({}),
+            })
+            .await
+            .unwrap();
+        let execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: "stageexec_evidence".into(),
+                work_item_id: "witem_repo".into(),
+                stage_key: "verify".into(),
+                sequence: 1,
+                status: "running".into(),
+                agent_profile_id: Some("repo-verifier".into()),
+                agent_profile_version: Some("v1".into()),
+                agent_profile_hash: Some("sha256:profile".into()),
+                context_pack_id: None,
+                run_id: Some(run_id.clone()),
+                workspace_id: None,
+                input_snapshot: json!({}),
+                input_hash: "sha256:input".into(),
+            })
+            .await
+            .unwrap();
+        for id in ["eretr_one", "eretr_retry"] {
+            store
+                .create_evidence_retrieval(CreateEvidenceRetrieval {
+                    id: id.into(),
+                    event_id: "evt_same".into(),
+                    work_item_id: "witem_repo".into(),
+                    stage_execution_id: execution.id.clone(),
+                    run_id: run_id.clone(),
+                    actor: "repo-verifier".into(),
+                    evidence_kind: "stage_outcome".into(),
+                    evidence_id: "stageout_test".into(),
+                    evidence_version: "pharness.dev/stage-outcome/v1alpha1".into(),
+                    returned_hash: "sha256:evidence".into(),
+                })
+                .await
+                .unwrap();
+        }
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM evidence_retrievals WHERE event_id = 'evt_same'",
+        )
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]

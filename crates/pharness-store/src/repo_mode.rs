@@ -271,6 +271,7 @@ pub struct StoredSourceDeliveryIntent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateEvidenceRetrieval {
     pub id: String,
+    pub event_id: String,
     pub work_item_id: String,
     pub stage_execution_id: String,
     pub run_id: RunId,

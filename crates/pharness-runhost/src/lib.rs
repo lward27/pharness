@@ -296,8 +296,23 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         .get("stage")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow::anyhow!("agent_profile has no stage"))?;
+    let context = run
+        .execution_target_json
+        .get("agent_context")
+        .ok_or_else(|| anyhow::anyhow!("agent_profile run has no AgentContext pack"))?;
+    if context
+        .get("schema_version")
+        .and_then(serde_json::Value::as_str)
+        != Some(pharness_core::AGENT_CONTEXT_SCHEMA)
+    {
+        anyhow::bail!("agent_profile run has an invalid AgentContext schema");
+    }
+    let serialized_context = serde_json::to_string_pretty(context)?;
+    if serialized_context.len() / 4 > 16_000 {
+        anyhow::bail!("agent_profile AgentContext exceeds the 16,000-token limit");
+    }
     Ok(Some(format!(
-        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success."
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success.\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
     )))
 }
 
@@ -768,6 +783,7 @@ struct ProjectTools {
     snapshot: Option<EnvironmentSnapshot>,
     selected_acceptance_commands: Vec<String>,
     evidence_catalog: Vec<serde_json::Value>,
+    evidence_payloads: Vec<serde_json::Value>,
 }
 
 impl ProjectTools {
@@ -800,6 +816,13 @@ impl ProjectTools {
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
+        let evidence_payloads = run
+            .execution_target_json
+            .get("agent_evidence_payloads")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             workspace: workspace.to_path_buf(),
             canonical_workspace: workspace.canonicalize()?,
@@ -807,6 +830,7 @@ impl ProjectTools {
             snapshot,
             selected_acceptance_commands,
             evidence_catalog,
+            evidence_payloads,
         })
     }
 
@@ -952,7 +976,7 @@ impl ToolExecutor for ProjectTools {
                 self.run_acceptance(name).await
             }
             pharness_core::AgentAction::GetEvidence { evidence_id, .. } => {
-                let evidence = self
+                let catalog_entry = self
                     .evidence_catalog
                     .iter()
                     .find(|entry| {
@@ -962,11 +986,51 @@ impl ToolExecutor for ProjectTools {
                     .ok_or_else(|| ToolError::InvalidArguments {
                         message: "evidence_id is outside the context-pack allowlist".into(),
                     })?;
+                let evidence = self
+                    .evidence_payloads
+                    .iter()
+                    .find(|entry| {
+                        entry.get("id").and_then(serde_json::Value::as_str)
+                            == Some(evidence_id.as_str())
+                    })
+                    .ok_or_else(|| ToolError::InvalidArguments {
+                        message: "allowlisted evidence payload is unavailable".into(),
+                    })?;
+                let payload =
+                    evidence
+                        .get("payload")
+                        .ok_or_else(|| ToolError::InvalidArguments {
+                            message: "allowlisted evidence payload is malformed".into(),
+                        })?;
+                let returned_hash =
+                    pharness_core::canonical_json_sha256(payload).map_err(|error| {
+                        ToolError::InvalidArguments {
+                            message: format!(
+                                "allowlisted evidence payload cannot be hashed: {error}"
+                            ),
+                        }
+                    })?;
+                if catalog_entry
+                    .get("hash")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(returned_hash.as_str())
+                    || evidence.get("hash").and_then(serde_json::Value::as_str)
+                        != Some(returned_hash.as_str())
+                {
+                    return Err(ToolError::InvalidArguments {
+                        message:
+                            "allowlisted evidence payload hash does not match the context pack"
+                                .into(),
+                    });
+                }
                 Ok(ToolResult::ok(
                     format!("returned allowlisted evidence {evidence_id}"),
                     serde_json::json!({
                         "evidence_id": evidence_id,
-                        "evidence": evidence,
+                        "evidence_kind":catalog_entry.get("kind"),
+                        "evidence_version":catalog_entry.get("version"),
+                        "returned_hash":returned_hash,
+                        "evidence": payload,
                     }),
                 ))
             }
@@ -1072,8 +1136,8 @@ impl EventSink for ChannelEventSink {
 #[cfg(test)]
 mod workspace_source_tests {
     use super::{
-        collect_workspace_git_evidence, git_evidence_args, profile_tool_names,
-        repository_instructions, tool_specs_for_run, ProfileRestrictedTools, RunSpec,
+        collect_workspace_git_evidence, git_evidence_args, profile_instruction, profile_tool_names,
+        repository_instructions, tool_specs_for_run, ProfileRestrictedTools, ProjectTools, RunSpec,
         WorkspaceSourceSpec,
     };
     use pharness_core::{
@@ -1160,6 +1224,70 @@ mod workspace_source_tests {
         assert!(matches!(
             restricted.execute(&denied).await,
             Err(ToolError::UnsupportedAction { action }) if action == "environment_info"
+        ));
+    }
+
+    #[tokio::test]
+    async fn profile_context_is_injected_and_evidence_retrieval_is_hash_bound() {
+        let payload = serde_json::json!({
+            "schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,
+            "stage":"discover",
+            "status":"succeeded",
+            "verified_facts":[{"source_commit":"a".repeat(40)}],
+        });
+        let hash = pharness_core::canonical_json_sha256(&payload).unwrap();
+        let mut run = profile_run(&["get_evidence", "finish"]);
+        run.cwd = std::env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        run.execution_target_json["agent_context"] = serde_json::json!({
+            "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
+            "current_intent":{"title":"bounded change"},
+            "evidence_catalog":[{
+                "id":"stageout_discover",
+                "kind":"stage_outcome",
+                "version":pharness_core::STAGE_OUTCOME_SCHEMA,
+                "hash":hash,
+            }],
+        });
+        run.execution_target_json["agent_evidence_payloads"] = serde_json::json!([{
+            "id":"stageout_discover",
+            "kind":"stage_outcome",
+            "version":pharness_core::STAGE_OUTCOME_SCHEMA,
+            "hash":hash,
+            "payload":payload,
+        }]);
+
+        let instruction = profile_instruction(&run).unwrap().unwrap();
+        assert!(instruction.contains("AgentContext (controller-sealed, compact handoff)"));
+        assert!(instruction.contains("stageout_discover"));
+
+        let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
+        let result = tools
+            .execute(&AgentAction::GetEvidence {
+                id: ActionId::new("act_get_evidence"),
+                reason: "inspect sealed discovery facts".into(),
+                evidence_id: "stageout_discover".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(result.content["returned_hash"], hash);
+        assert_eq!(result.content["evidence"]["stage"], "discover");
+
+        let mut tampered = run;
+        tampered.execution_target_json["agent_evidence_payloads"][0]["payload"]["status"] =
+            serde_json::json!("failed");
+        let tools = ProjectTools::for_run(std::path::Path::new(&tampered.cwd), &tampered).unwrap();
+        assert!(matches!(
+            tools
+                .execute(&AgentAction::GetEvidence {
+                    id: ActionId::new("act_tampered"),
+                    reason: "inspect sealed discovery facts".into(),
+                    evidence_id: "stageout_discover".into(),
+                })
+                .await,
+            Err(ToolError::InvalidArguments { .. })
         ));
     }
 

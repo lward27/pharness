@@ -109,6 +109,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         .await?;
     let action_rail = derive_repo_actions(
         &metadata,
+        (work_item.attempt_count, work_item.max_attempts),
         work_plan.as_ref(),
         change_set.as_ref(),
         source_delivery_intent.as_ref(),
@@ -207,12 +208,14 @@ pub(in crate::app) async fn repo_work_item_flow(
 
 fn derive_repo_actions(
     metadata: &StoredRepoWorkItemMetadata,
+    attempts: (u32, u32),
     work_plan: Option<&pharness_store::StoredWorkPlan>,
     change_set: Option<&StoredChangeSet>,
     source_delivery_intent: Option<&StoredSourceDeliveryIntent>,
     executions: &[pharness_store::StoredStageExecution],
     chain: Option<&pharness_store::StoredStageChainAuthorization>,
 ) -> Result<Vec<WorkItemActionResponse>, ApiError> {
+    let (attempt_count, max_attempts) = attempts;
     if metadata.closed_at.is_some() {
         return Ok(Vec::new());
     }
@@ -260,7 +263,7 @@ fn derive_repo_actions(
                     &state_hash,
                     json!({"change_set_id":change_set.id,"revision":change_set.revision,"material_hash":change_set.material_hash}),
                 )?),
-                Some(intent) if matches!(intent.status.as_str(), "pull_request_open" | "waiting_checks" | "waiting_merge") => actions.push(repo_action(
+                Some(intent) if matches!(intent.status.as_str(), "pull_request_open" | "waiting_checks" | "waiting_merge" | "head_drift") => actions.push(repo_action(
                     RepoActionSpec {
                         id: "observe_source_delivery",
                         lifecycle_stage: "source_delivery",
@@ -273,9 +276,49 @@ fn derive_repo_actions(
                     &state_hash,
                     json!({"source_delivery_intent_id":intent.id,"intent_state_version":intent.state_version,"status":intent.status}),
                 )?),
+                Some(intent) if intent.status == "pull_request_closed" => actions.push(repo_action(
+                    RepoActionSpec {
+                        id: "replan_work_item",
+                        lifecycle_stage: "plan",
+                        resource: &intent.id,
+                        status: if attempt_count < max_attempts { "ready" } else { "blocked" },
+                        effect_class: "model_execution",
+                        approval_required: true,
+                        summary: if attempt_count < max_attempts {
+                            "The prior pull request is confirmed closed. Start a new Planner execution; any later source delivery will use a new ChangeSet and SourceDeliveryIntent."
+                        } else {
+                            "The prior pull request is closed, but the WorkItem attempt limit is exhausted; create a linked WorkItem."
+                        },
+                    },
+                    &state_hash,
+                    json!({"source_delivery_intent_id":intent.id,"status":intent.status,"attempt_count":attempt_count,"max_attempts":max_attempts}),
+                )?),
                 _ => {}
             }
             return Ok(actions);
+        }
+        if change_set.status == "rejected" && source_delivery_intent.is_none() {
+            actions.push(repo_action(
+                RepoActionSpec {
+                    id: "replan_work_item",
+                    lifecycle_stage: "plan",
+                    resource: &metadata.work_item_id,
+                    status: if attempt_count < max_attempts {
+                        "ready"
+                    } else {
+                        "blocked"
+                    },
+                    effect_class: "model_execution",
+                    approval_required: true,
+                    summary: if attempt_count < max_attempts {
+                        "Start a new Planner execution. A later approved plan creates a fresh workspace and stage-chain authorization."
+                    } else {
+                        "The WorkItem attempt limit is exhausted; create a linked WorkItem for any changed intent or acceptance contract."
+                    },
+                },
+                &state_hash,
+                json!({"change_set_id":change_set.id,"status":change_set.status,"attempt_count":attempt_count,"max_attempts":max_attempts}),
+            )?);
         }
         return Ok(actions);
     }
@@ -301,6 +344,59 @@ fn derive_repo_actions(
     }) {
         return Ok(actions);
     }
+    let failed_chain_execution = executions
+        .iter()
+        .rev()
+        .find(|execution| {
+            matches!(
+                execution.stage_key.as_str(),
+                "implement" | "test" | "verify"
+            ) && matches!(
+                execution.status.as_str(),
+                "failed" | "blocked" | "cancelled"
+            )
+        })
+        .filter(|failed| {
+            plan_execution
+                .map(|plan| plan.created_at <= failed.created_at)
+                .unwrap_or(true)
+        });
+    if let Some(execution) = failed_chain_execution {
+        let available = attempt_count < max_attempts;
+        for (id, summary) in [
+            (
+                "correct_stage_chain",
+                "Authorize a fresh Builder-Tester-Verifier chain on the preserved workspace using the same approved WorkPlan.",
+            ),
+            (
+                "replan_work_item",
+                "Start a new Planner execution. A later approved plan creates a fresh workspace and stage-chain authorization.",
+            ),
+        ] {
+            actions.push(repo_action(
+                RepoActionSpec {
+                    id,
+                    lifecycle_stage: if id == "correct_stage_chain" {
+                        "implement"
+                    } else {
+                        "plan"
+                    },
+                    resource: &execution.id,
+                    status: if available { "ready" } else { "blocked" },
+                    effect_class: "model_execution",
+                    approval_required: true,
+                    summary: if available {
+                        summary
+                    } else {
+                        "The WorkItem attempt limit is exhausted; create a linked WorkItem before further model execution."
+                    },
+                },
+                &state_hash,
+                json!({"failed_stage_execution_id":execution.id,"failed_stage":execution.stage_key,"attempt_count":attempt_count,"max_attempts":max_attempts}),
+            )?);
+        }
+        return Ok(actions);
+    }
     if let Some(plan) = work_plan.filter(|plan| plan.status == "proposed") {
         for approve in [true, false] {
             actions.push(repo_action(
@@ -321,6 +417,29 @@ fn derive_repo_actions(
                 json!({"work_plan_id":plan.id,"revision":plan.revision,"status":plan.status}),
             )?);
         }
+        return Ok(actions);
+    }
+    if work_plan.is_some_and(|plan| plan.status == "rejected")
+        || plan_execution.is_some_and(|execution| {
+            matches!(
+                execution.status.as_str(),
+                "failed" | "blocked" | "cancelled"
+            )
+        })
+    {
+        actions.push(repo_action(
+            RepoActionSpec {
+                id: "replan_work_item",
+                lifecycle_stage: "plan",
+                resource: &metadata.work_item_id,
+                status: "ready",
+                effect_class: "model_execution",
+                approval_required: true,
+                summary: "Start a fresh Planner execution from sealed evidence and operator annotations.",
+            },
+            &state_hash,
+            json!({"prior_plan_execution_id":plan_execution.map(|execution| &execution.id)}),
+        )?);
         return Ok(actions);
     }
     if let Some(plan) = work_plan.filter(|plan| plan.status == "approved") {
@@ -443,6 +562,57 @@ fn repo_delivery_segments(
     .collect()
 }
 
+fn agent_evidence_payloads(outcomes: &[StoredStageOutcome]) -> Vec<Value> {
+    outcomes
+        .iter()
+        .map(|outcome| {
+            json!({
+                "id":outcome.id,
+                "kind":"stage_outcome",
+                "version":outcome.schema_version,
+                "hash":outcome.content_hash,
+                "payload":outcome.outcome,
+            })
+        })
+        .collect()
+}
+
+fn annotation_context(annotations: &[pharness_store::StoredOperatorAnnotation]) -> Vec<Value> {
+    annotations
+        .iter()
+        .map(|annotation| {
+            json!({
+                "kind":"operator_annotation",
+                "id":annotation.id,
+                "target":{"kind":annotation.target_kind,"id":annotation.target_id},
+                "statement":annotation.statement,
+                "evidence_refs":annotation.evidence_refs,
+                "requested_effect":annotation.requested_effect,
+                "actor":annotation.actor,
+                "reason":annotation.reason,
+            })
+        })
+        .collect()
+}
+
+fn annotation_contradictions(
+    annotations: &[pharness_store::StoredOperatorAnnotation],
+) -> Vec<Value> {
+    annotations
+        .iter()
+        .filter(|annotation| annotation.requested_effect == "mark_evidence_stale")
+        .map(|annotation| {
+            json!({
+                "kind":"operator_marked_evidence_stale",
+                "annotation_id":annotation.id,
+                "target_kind":annotation.target_kind,
+                "target_id":annotation.target_id,
+                "statement":annotation.statement,
+            })
+        })
+        .collect()
+}
+
 pub(in crate::app) async fn execute_repo_work_item_action(
     state: &AppState,
     work_item_id: &str,
@@ -453,6 +623,11 @@ pub(in crate::app) async fn execute_repo_work_item_action(
 ) -> Result<Value, ApiError> {
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
     let work_plan = state.store.get_work_plan_by_work_item(work_item_id).await?;
     let change_set = match work_plan.as_ref() {
         Some(plan) => state.store.get_change_set_by_work_plan(&plan.id).await?,
@@ -474,6 +649,7 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         .await?;
     let action = derive_repo_actions(
         &metadata,
+        (work_item.attempt_count, work_item.max_attempts),
         work_plan.as_ref(),
         change_set.as_ref(),
         source_delivery_intent.as_ref(),
@@ -530,7 +706,47 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             Ok(json!({"work_plan":plan,"work_item":item}))
         }
         "authorize_stage_chain" => {
-            authorize_repo_stage_chain(state, work_item_id, &actor, &reason).await
+            authorize_repo_stage_chain(state, work_item_id, &actor, &reason, None).await
+        }
+        "correct_stage_chain" => {
+            let workspace = state
+                .store
+                .list_workspaces(WorkspaceListFilter {
+                    work_item_id: Some(work_item_id.into()),
+                    limit: 100,
+                    ..WorkspaceListFilter::default()
+                })
+                .await?
+                .into_iter()
+                .rev()
+                .find(|workspace| workspace.resolved_commit == work_item.source_commit)
+                .ok_or_else(|| {
+                    ApiError::conflict("preserved correction workspace is unavailable")
+                })?;
+            authorize_repo_stage_chain(state, work_item_id, &actor, &reason, Some(workspace)).await
+        }
+        "replan_work_item" => {
+            if let Some(chain) = chain {
+                state
+                    .store
+                    .revoke_stage_chain_authorization(
+                        &chain.id,
+                        "operator requested full Repo Mode replan",
+                    )
+                    .await?;
+            }
+            if let Some(plan) = work_plan {
+                state
+                    .store
+                    .update_work_plan_status(
+                        &plan.id,
+                        "superseded",
+                        Some(actor.clone()),
+                        Some(reason.clone()),
+                    )
+                    .await?;
+            }
+            start_repo_planner(state, work_item_id, &actor, &reason).await
         }
         "approve_change_set" | "reject_change_set" => {
             let change_set =
@@ -819,7 +1035,7 @@ async fn dispatch_source_delivery_observation(
         .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent is unavailable"))?;
     if !matches!(
         intent.status.as_str(),
-        "pull_request_open" | "waiting_checks" | "waiting_merge"
+        "pull_request_open" | "waiting_checks" | "waiting_merge" | "head_drift"
     ) {
         return Err(ApiError::conflict(
             "SourceDeliveryIntent is not ready for observation",
@@ -1334,6 +1550,57 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
     let checks_summary = json!({"observation_id":provider_observation.id,"required_set_hash":required_set_hash,"status":provider_status,"expires_at":provider_observation.expires_at});
 
     if head_sha != expected_head {
+        if !merged && pull_request_state == "closed" {
+            let intent = state
+                .store
+                .update_source_delivery_intent(
+                    &intent.id,
+                    intent.state_version,
+                    "pull_request_closed",
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(&checks_summary),
+                    "controller:repo-mode",
+                    "drifted pull request was closed without merge",
+                )
+                .await?;
+            let subject_response = match &subject {
+                SourceDeliverySubject::WorkItem(work_item_id) => {
+                    let item = state
+                        .store
+                        .update_repo_work_item_status(
+                            work_item_id,
+                            "blocked",
+                            "controller:repo-mode",
+                            "drifted source pull request is closed; explicit replan is available",
+                            false,
+                        )
+                        .await?;
+                    json!({"work_item":item})
+                }
+                SourceDeliverySubject::Onboarding(onboarding_id) => {
+                    let onboarding = state
+                        .store
+                        .update_repository_onboarding_source_delivery(
+                            onboarding_id,
+                            &intent.id,
+                            "blocked",
+                            None,
+                            "controller:repo-mode",
+                            "drifted onboarding pull request was closed; start a new onboarding",
+                        )
+                        .await?;
+                    json!({"onboarding":onboarding})
+                }
+            };
+            return Ok(Json(json!({
+                "source_delivery_intent":intent,
+                "subject":subject_response,
+                "provider_checks":provider_observation,
+            })));
+        }
         let terminal = merged;
         if terminal {
             if let SourceDeliverySubject::WorkItem(work_item_id) = &subject {
@@ -1703,6 +1970,7 @@ async fn seal_source_delivery_closure(
         .iter()
         .any(|outcome| outcome.stage_key == "source_delivery")
     {
+        seal_repo_inapplicable_tail(&state.store, work_item_id).await?;
         return Ok(());
     }
     let input = json!({
@@ -1842,6 +2110,97 @@ async fn append_repo_audit(
             payload_json: json!({"reason":reason,"details":payload}),
         })
         .await?;
+    seal_repo_inapplicable_tail(&state.store, work_item_id).await?;
+    Ok(())
+}
+
+async fn seal_repo_inapplicable_tail(
+    store: &pharness_store::SqliteStore,
+    work_item_id: &str,
+) -> Result<(), ApiError> {
+    let existing = store.list_effective_stage_outcomes(work_item_id).await?;
+    for stage in [
+        pharness_core::RepoStageKey::Release,
+        pharness_core::RepoStageKey::Observe,
+    ] {
+        if existing
+            .iter()
+            .any(|outcome| outcome.stage_key == stage.as_str())
+        {
+            continue;
+        }
+        let input = json!({
+            "mode":"repo",
+            "source_only":true,
+            "upstream_stage":"source_delivery",
+        });
+        let execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: new_prefixed_id("stageexec"),
+                work_item_id: work_item_id.into(),
+                stage_key: stage.as_str().into(),
+                sequence: 1,
+                status: "inapplicable".into(),
+                agent_profile_id: None,
+                agent_profile_version: None,
+                agent_profile_hash: None,
+                context_pack_id: None,
+                run_id: None,
+                workspace_id: None,
+                input_hash: canonical_material_hash(&input)?,
+                input_snapshot: input.clone(),
+            })
+            .await?;
+        let metadata = store
+            .get_repo_work_item_metadata(work_item_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("repo_work_item", work_item_id))?;
+        let document = pharness_core::StageOutcomeDocument {
+            schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+            work_item_id: work_item_id.into(),
+            stage_execution_id: execution.id.clone(),
+            stage,
+            status: pharness_core::StageTerminalStatus::Inapplicable,
+            objective: json!({"kind":"repo_mode_source_only_boundary"}),
+            pinned_inputs: input,
+            verified_facts: vec![json!({
+                "kind":"mode_contract",
+                "mode":"repo",
+                "source_delivery_only":true,
+            })],
+            agent_claims: Vec::new(),
+            outputs: Vec::new(),
+            acceptance: Vec::new(),
+            decisions: vec![json!({
+                "kind":"controller_applicability",
+                "status":"inapplicable",
+            })],
+            authorizations: Vec::new(),
+            contradictions: Vec::new(),
+            risks: Vec::new(),
+            unavailable_capabilities: Vec::new(),
+            recommendations: Vec::new(),
+            stop_reason: "Repo Mode V1 closes after observed source merge; deployment and post-deploy observation are out of scope".into(),
+            sealed_state_version: metadata.state_version,
+        };
+        let value = serde_json::to_value(document)
+            .map_err(|error| ApiError::internal(error.to_string()))?;
+        store
+            .seal_stage_outcome(SealStageOutcome {
+                id: new_prefixed_id("stageout"),
+                stage_execution_id: execution.id,
+                work_item_id: work_item_id.into(),
+                stage_key: stage.as_str().into(),
+                status: "inapplicable".into(),
+                content_hash: canonical_material_hash(&value)?,
+                outcome: value,
+                state_version: metadata.state_version,
+                supersedes_outcome_id: None,
+                actor: "controller:repo-mode".into(),
+                reason: "Repo Mode V1 source-only lifecycle boundary".into(),
+            })
+            .await?;
+    }
     Ok(())
 }
 
@@ -1866,6 +2225,7 @@ async fn start_repo_planner(
         .store
         .list_effective_stage_outcomes(work_item_id)
         .await?;
+    let annotations = state.store.list_operator_annotations(work_item_id).await?;
     let model = state
         .worker
         .config_json()
@@ -1882,6 +2242,14 @@ async fn start_repo_planner(
     let context_pack_id = new_prefixed_id("context");
     let run_id = RunId::new(new_prefixed_id("run"));
     let session_id = SessionId::new(new_prefixed_id("ses"));
+    let plan_sequence = state
+        .store
+        .list_stage_executions(work_item_id)
+        .await?
+        .iter()
+        .filter(|execution| execution.stage_key == pharness_core::RepoStageKey::Plan.as_str())
+        .count() as u64
+        + 1;
     let context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance":metadata.acceptance_command_names},
@@ -1891,9 +2259,9 @@ async fn start_repo_planner(
         "remaining_budgets":profile.budget,
         "policies":{"source_only":true,"manual_merge":true,"pipeline":false,"deployment":false},
         "grants":[],
-        "contradictions":[],
+        "contradictions":annotation_contradictions(&annotations),
         "risks":[],
-        "operator_decisions":[],
+        "operator_decisions":annotation_context(&annotations),
         "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
@@ -1935,6 +2303,7 @@ async fn start_repo_planner(
                 "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id},
                 "agent_profile":profile,
                 "agent_context":context,
+                "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
                 "run_scope":scope.to_optional_json(),
                 "run_budget":profile.budget,
             }),
@@ -1971,7 +2340,7 @@ async fn start_repo_planner(
             id: stage_execution_id.clone(),
             work_item_id: work_item_id.into(),
             stage_key: pharness_core::RepoStageKey::Plan.as_str().into(),
-            sequence: 1,
+            sequence: plan_sequence,
             status: "queued".into(),
             agent_profile_id: Some(profile.id.clone()),
             agent_profile_version: Some(profile.version.clone()),
@@ -2024,6 +2393,7 @@ async fn authorize_repo_stage_chain(
     work_item_id: &str,
     actor: &str,
     reason: &str,
+    reuse_workspace: Option<pharness_store::StoredWorkspace>,
 ) -> Result<Value, ApiError> {
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -2031,6 +2401,11 @@ async fn authorize_repo_stage_chain(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if work_item.attempt_count >= work_item.max_attempts {
+        return Err(ApiError::conflict(
+            "Repo Mode WorkItem attempt limit is exhausted",
+        ));
+    }
     let plan = state
         .store
         .get_work_plan_by_work_item(work_item_id)
@@ -2045,22 +2420,40 @@ async fn authorize_repo_stage_chain(
         serde_json::from_value(contract).map_err(|error| {
             ApiError::internal(format!("stored RepositoryContract is invalid: {error}"))
         })?;
-    let workspace = state
-        .store
-        .create_workspace(CreateWorkspace {
-            id: new_prefixed_id("ws"),
-            work_item_id: work_item_id.into(),
-            run_id: None,
-            status: "declared".into(),
-            source_repo: work_item.source_repo.clone(),
-            source_ref: work_item.source_ref.clone(),
-            resolved_commit: work_item.source_commit.clone(),
-            branch: Some(format!("pharness/{work_item_id}/attempt-1")),
-            retention_status: "retained".into(),
-            actor: Some(actor.into()),
-            reason: Some(reason.into()),
-        })
-        .await?;
+    let reusing_prepared_workspace = reuse_workspace.is_some();
+    let workspace = if let Some(workspace) = reuse_workspace {
+        if workspace.work_item_id != work_item_id
+            || workspace.source_repo != work_item.source_repo
+            || workspace.source_ref != work_item.source_ref
+            || workspace.resolved_commit != work_item.source_commit
+            || workspace.branch.is_none()
+        {
+            return Err(ApiError::conflict(
+                "correction workspace no longer matches the pinned WorkItem source",
+            ));
+        }
+        workspace
+    } else {
+        state
+            .store
+            .create_workspace(CreateWorkspace {
+                id: new_prefixed_id("ws"),
+                work_item_id: work_item_id.into(),
+                run_id: None,
+                status: "declared".into(),
+                source_repo: work_item.source_repo.clone(),
+                source_ref: work_item.source_ref.clone(),
+                resolved_commit: work_item.source_commit.clone(),
+                branch: Some(format!(
+                    "pharness/{work_item_id}/attempt-{}",
+                    work_item.attempt_count + 1
+                )),
+                retention_status: "retained".into(),
+                actor: Some(actor.into()),
+                reason: Some(reason.into()),
+            })
+            .await?
+    };
     let model = state
         .worker
         .config_json()
@@ -2123,6 +2516,7 @@ async fn authorize_repo_stage_chain(
         &contract,
         actor,
         reason,
+        reusing_prepared_workspace,
     )
     .await
     {
@@ -2155,6 +2549,7 @@ async fn start_repo_builder(
     contract: &pharness_core::RepositoryContract,
     actor: &str,
     reason: &str,
+    reuse_prepared_workspace: bool,
 ) -> Result<Value, ApiError> {
     if !state.worker.enabled() {
         return Err(ApiError::unavailable(
@@ -2176,6 +2571,47 @@ async fn start_repo_builder(
     )
     .map_err(ApiError::conflict)?
     .clone();
+    let reused_environment_snapshot = if reuse_prepared_workspace {
+        let prior_run_id = workspace
+            .run_id
+            .as_ref()
+            .ok_or_else(|| ApiError::conflict("correction workspace has no prior prepared Run"))?;
+        let prior_run = state
+            .store
+            .get_run(prior_run_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("run", prior_run_id.as_str()))?;
+        let snapshot = prior_run
+            .execution_target_json
+            .get("environment_snapshot")
+            .filter(|snapshot| !snapshot.is_null())
+            .cloned()
+            .ok_or_else(|| {
+                ApiError::conflict("correction workspace has no reusable EnvironmentSnapshot")
+            })?;
+        let typed: pharness_core::EnvironmentSnapshot = serde_json::from_value(snapshot.clone())
+            .map_err(|error| {
+                ApiError::conflict(format!(
+                    "correction EnvironmentSnapshot is invalid: {error}"
+                ))
+            })?;
+        if typed.source_sha != work_item.source_commit.clone().unwrap_or_default()
+            || typed.runner_image_digest != environment_profile.image
+            || typed.runner_revision != environment_profile.revision
+            || typed.manifest_sha256
+                != work_item
+                    .repository_contract_hash
+                    .clone()
+                    .unwrap_or_default()
+        {
+            return Err(ApiError::conflict(
+                "correction EnvironmentSnapshot no longer matches the pinned source, contract, or runner",
+            ));
+        }
+        Some(snapshot)
+    } else {
+        None
+    };
     if !state.worker.supports_remote_workspace() {
         return Err(ApiError::conflict(
             "Repo Mode V1 immutable runner preparation requires kubernetes_job worker mode",
@@ -2199,7 +2635,7 @@ async fn start_repo_builder(
         source_ref: work_item.source_ref.clone(),
         source_commit: Some(source_commit.clone()),
         branch: branch.clone(),
-        resolved_commit: None,
+        resolved_commit: reuse_prepared_workspace.then(|| source_commit.clone()),
     };
     state
         .workspace
@@ -2209,6 +2645,7 @@ async fn start_repo_builder(
         .store
         .list_effective_stage_outcomes(&work_item.id)
         .await?;
+    let annotations = state.store.list_operator_annotations(&work_item.id).await?;
     let plan_snapshot = json!({
         "id":plan.id,
         "revision":plan.revision,
@@ -2219,6 +2656,9 @@ async fn start_repo_builder(
         "work_plan":plan.work_plan_json,
     });
     let plan_hash = canonical_material_hash(&plan_snapshot)?;
+    let mut operator_decisions =
+        vec![json!({"kind":"work_plan_approval","actor":actor,"reason":reason})];
+    operator_decisions.extend(annotation_context(&annotations));
     let context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance_names":metadata.acceptance_command_names,"acceptance_commands":work_item.acceptance_criteria},
@@ -2229,9 +2669,9 @@ async fn start_repo_builder(
         "remaining_budgets":work_item.run_budget,
         "policies":{"source_only":true,"manual_merge":true,"agent_network":"denied","package_installation":"preparation_only"},
         "grants":[{"kind":"stage_chain","id":authorization.id,"expires_at":authorization.expires_at,"workspace_id":workspace.id,"writable_paths":contract.writable_paths}],
-        "contradictions":[],
+        "contradictions":annotation_contradictions(&annotations),
         "risks":[],
-        "operator_decisions":[{"kind":"work_plan_approval","actor":actor,"reason":reason}],
+        "operator_decisions":operator_decisions,
         "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
@@ -2289,6 +2729,25 @@ async fn start_repo_builder(
     .await?;
     let mut policy = super::policy::run_policy(&state.policy, None);
     policy.permission_grants = super::approvals::active_permission_grants(&state.store).await?;
+    let mut execution_target = json!({
+        "kind":"kubernetes_workspace",
+        "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"implement","context_pack_id":context_pack_id,"chain_authorization_id":authorization.id},
+        "agent_profile":profile,
+        "agent_context":context,
+        "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
+        "policy":policy,
+        "run_scope":scope.to_optional_json(),
+        "workspace":{"base_commit":source_commit,"branch":branch},
+        "workspace_source":source,
+        "run_budget":work_item.run_budget,
+        "environment_profile_id":work_item.environment_profile_id,
+        "repository_contract":work_item.repository_contract_json,
+        "selected_acceptance_commands":work_item.acceptance_criteria,
+        "runner_profile":environment_profile,
+    });
+    if let Some(snapshot) = reused_environment_snapshot.clone() {
+        execution_target["environment_snapshot"] = snapshot;
+    }
     let run = state
         .store
         .create_run(CreateRun {
@@ -2300,22 +2759,12 @@ async fn start_repo_builder(
             ),
             cwd: cwd.clone(),
             max_turns: work_item.run_budget.initial_turns,
-            initial_status: "preparing".into(),
-            execution_target_json: json!({
-                "kind":"kubernetes_workspace",
-                "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"implement","context_pack_id":context_pack_id,"chain_authorization_id":authorization.id},
-                "agent_profile":profile,
-                "agent_context":context,
-                "policy":policy,
-                "run_scope":scope.to_optional_json(),
-                "workspace":{"base_commit":source_commit,"branch":branch},
-                "workspace_source":source,
-                "run_budget":work_item.run_budget,
-                "environment_profile_id":work_item.environment_profile_id,
-                "repository_contract":work_item.repository_contract_json,
-                "selected_acceptance_commands":work_item.acceptance_criteria,
-                "runner_profile":environment_profile,
-            }),
+            initial_status: if reuse_prepared_workspace {
+                "queued".into()
+            } else {
+                "preparing".into()
+            },
+            execution_target_json: execution_target,
         })
         .await?;
     let run = state
@@ -2349,14 +2798,26 @@ async fn start_repo_builder(
         "source_commit":source_commit,
         "workspace_id":workspace.id,
     });
+    let implement_sequence = state
+        .store
+        .list_stage_executions(&work_item.id)
+        .await?
+        .iter()
+        .filter(|execution| execution.stage_key == pharness_core::RepoStageKey::Implement.as_str())
+        .count() as u64
+        + 1;
     let execution = state
         .store
         .create_stage_execution(CreateStageExecution {
             id: stage_execution_id,
             work_item_id: work_item.id.clone(),
             stage_key: pharness_core::RepoStageKey::Implement.as_str().into(),
-            sequence: 1,
-            status: "preparing".into(),
+            sequence: implement_sequence,
+            status: if reuse_prepared_workspace {
+                "queued".into()
+            } else {
+                "preparing".into()
+            },
             agent_profile_id: Some(profile.id.clone()),
             agent_profile_version: Some(profile.version.clone()),
             agent_profile_hash: Some(profile.profile_hash.clone()),
@@ -2399,7 +2860,11 @@ async fn start_repo_builder(
             &workspace.id,
             UpdateWorkspaceExecution {
                 run_id: Some(run.id.clone()),
-                status: "preparing".into(),
+                status: if reuse_prepared_workspace {
+                    "running".into()
+                } else {
+                    "preparing".into()
+                },
                 resolved_commit: Some(source_commit.clone()),
                 branch: Some(branch),
                 actor: Some(actor.into()),
@@ -2416,6 +2881,18 @@ async fn start_repo_builder(
             Some(reason.into()),
         )
         .await?;
+    if reuse_prepared_workspace {
+        state.worker.spawn_run(run.clone(), cwd);
+        return Ok(json!({
+            "run":run,
+            "stage_execution":execution,
+            "context_pack":pack,
+            "workspace":workspace,
+            "permission_grant":grant,
+            "environment_preparation":null,
+            "reused_environment_snapshot":true,
+        }));
+    }
     let preparation = state
         .store
         .create_environment_preparation(CreateEnvironmentPreparation {
@@ -2627,6 +3104,25 @@ async fn start_repo_followup_stage(
         .store
         .list_effective_stage_outcomes(work_item_id)
         .await?;
+    let annotations = state.store.list_operator_annotations(work_item_id).await?;
+    let mut contradictions = outcomes
+        .iter()
+        .flat_map(|outcome| {
+            outcome
+                .outcome
+                .get("contradictions")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    contradictions.extend(annotation_contradictions(&annotations));
+    let mut operator_decisions = vec![json!({
+        "kind":"work_plan_approval",
+        "work_plan_id":plan.id,
+        "revision":plan.revision,
+    })];
+    operator_decisions.extend(annotation_context(&annotations));
     let context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance_names":metadata.acceptance_command_names,"acceptance_commands":work_item.acceptance_criteria},
@@ -2636,9 +3132,9 @@ async fn start_repo_followup_stage(
         "remaining_budgets":profile.budget,
         "policies":{"source_only":true,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
         "grants":[{"kind":"stage_chain","id":authorization.id,"expires_at":authorization.expires_at}],
-        "contradictions":outcomes.iter().flat_map(|outcome| outcome.outcome.get("contradictions").and_then(Value::as_array).cloned().unwrap_or_default()).collect::<Vec<_>>(),
+        "contradictions":contradictions,
         "risks":outcomes.iter().flat_map(|outcome| outcome.outcome.get("risks").and_then(Value::as_array).cloned().unwrap_or_default()).collect::<Vec<_>>(),
-        "operator_decisions":[{"kind":"work_plan_approval","work_plan_id":plan.id,"revision":plan.revision}],
+        "operator_decisions":operator_decisions,
         "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
@@ -2700,6 +3196,7 @@ async fn start_repo_followup_stage(
                 "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
                 "agent_profile":profile,
                 "agent_context":context,
+                "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
                 "run_scope":scope.to_optional_json(),
                 "workspace":{"base_commit":authorization.source_commit,"branch":workspace.branch},
                 "workspace_source":source,
@@ -3671,11 +4168,76 @@ mod tests {
         }
     }
 
+    fn stage_execution(
+        id: &str,
+        stage_key: &str,
+        status: &str,
+        created_at: &str,
+    ) -> pharness_store::StoredStageExecution {
+        pharness_store::StoredStageExecution {
+            id: id.into(),
+            work_item_id: "witem_repo".into(),
+            stage_key: stage_key.into(),
+            sequence: 1,
+            status: status.into(),
+            agent_profile_id: None,
+            agent_profile_version: None,
+            agent_profile_hash: None,
+            context_pack_id: None,
+            run_id: None,
+            workspace_id: Some("workspace_repo".into()),
+            input_snapshot: json!({}),
+            input_hash: format!("sha256:{}", "b".repeat(64)),
+            stop_reason: None,
+            created_at: created_at.into(),
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
+    fn source_delivery_intent(status: &str) -> StoredSourceDeliveryIntent {
+        StoredSourceDeliveryIntent {
+            id: "srcintent_repo".into(),
+            subject_kind: "work_item_change_set".into(),
+            subject_id: "cset_repo".into(),
+            repository_id: "repo_repo".into(),
+            source_repo: "https://github.com/example/repo.git".into(),
+            base_ref: "main".into(),
+            base_commit: "a".repeat(40),
+            head_branch: "pharness/witem_repo".into(),
+            patch_artifact_id: Some("artifact_repo".into()),
+            patch_hash: format!("sha256:{}", "c".repeat(64)),
+            status: status.into(),
+            state_version: 4,
+            authorization: json!({}),
+            writer_execution_id: Some("writer_repo".into()),
+            observer_execution_id: None,
+            pull_request: Some(json!({"number":7,"head_sha":"d".repeat(40)})),
+            merge_provenance: None,
+            provider_checks: None,
+            created_by: "operator".into(),
+            creation_reason: "test".into(),
+            created_at: "1".into(),
+            updated_at: "1".into(),
+            status_changed_at: "1".into(),
+            status_changed_by: None,
+            status_reason: None,
+        }
+    }
+
     #[test]
     fn proposed_change_set_replaces_stage_chain_reauthorization_actions() {
         let change_set = proposed_change_set();
-        let actions =
-            derive_repo_actions(&metadata(), None, Some(&change_set), None, &[], None).unwrap();
+        let actions = derive_repo_actions(
+            &metadata(),
+            (0, 2),
+            None,
+            Some(&change_set),
+            None,
+            &[],
+            None,
+        )
+        .unwrap();
         assert_eq!(
             actions
                 .iter()
@@ -3704,5 +4266,63 @@ mod tests {
             .unwrap(),
             "failed"
         );
+    }
+
+    #[test]
+    fn terminal_stage_failure_offers_bounded_same_workspace_correction_and_replan() {
+        let executions = vec![
+            stage_execution("stageexec_plan", "plan", "succeeded", "1"),
+            stage_execution("stageexec_implement", "implement", "failed", "2"),
+        ];
+        let actions =
+            derive_repo_actions(&metadata(), (1, 2), None, None, None, &executions, None).unwrap();
+        assert_eq!(
+            actions
+                .iter()
+                .map(|action| (action.id.as_str(), action.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("correct_stage_chain", "ready"),
+                ("replan_work_item", "ready")
+            ]
+        );
+
+        let exhausted =
+            derive_repo_actions(&metadata(), (2, 2), None, None, None, &executions, None).unwrap();
+        assert!(exhausted.iter().all(|action| action.status == "blocked"));
+    }
+
+    #[test]
+    fn source_head_drift_remains_observable_until_closed_then_offers_replan() {
+        let mut change_set = proposed_change_set();
+        change_set.status = "approved".into();
+        let drifting = source_delivery_intent("head_drift");
+        let actions = derive_repo_actions(
+            &metadata(),
+            (1, 2),
+            None,
+            Some(&change_set),
+            Some(&drifting),
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "observe_source_delivery");
+
+        let closed = source_delivery_intent("pull_request_closed");
+        let actions = derive_repo_actions(
+            &metadata(),
+            (1, 2),
+            None,
+            Some(&change_set),
+            Some(&closed),
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "replan_work_item");
+        assert_eq!(actions[0].status, "ready");
     }
 }

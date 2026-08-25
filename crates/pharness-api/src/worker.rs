@@ -9,9 +9,9 @@ use pharness_runhost::{
 };
 use pharness_store::{
     CreateApproval, CreateApprovalGate, CreateArtifact, CreateAuditEvent, CreateBudgetExtension,
-    CreateChangeSet, CreateFileChange, CreateIncident, CreateObservation, CreateRemediationPlan,
-    CreateWorkPlan, SealStageOutcome, SqliteStore, StoreError, StoredApproval, StoredIncident,
-    StoredObservation, StoredRemediationPlan, StoredRun,
+    CreateChangeSet, CreateEvidenceRetrieval, CreateFileChange, CreateIncident, CreateObservation,
+    CreateRemediationPlan, CreateWorkPlan, SealStageOutcome, SqliteStore, StoreError,
+    StoredApproval, StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun,
 };
 use secrecy::SecretString;
 use serde::Serialize;
@@ -474,6 +474,7 @@ pub(crate) async fn sync_repo_stage_run(
     ) {
         return Ok(());
     }
+    persist_repo_evidence_retrievals(store, run, &execution).await?;
 
     match stage {
         "plan" => seal_repo_plan_stage(store, run, &execution, outcome).await,
@@ -496,6 +497,75 @@ pub(crate) async fn sync_repo_stage_run(
             .await
         }
     }
+}
+
+async fn persist_repo_evidence_retrievals(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+) -> anyhow::Result<()> {
+    let catalog = run
+        .execution_target_json
+        .pointer("/agent_context/evidence_catalog")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let actor = run
+        .execution_target_json
+        .pointer("/agent_profile/id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown-agent-profile");
+    for event in store.list_events(&run.id).await? {
+        if event.kind != EventKind::ToolFinished {
+            continue;
+        }
+        let Some(evidence_id) = event
+            .payload
+            .pointer("/content/evidence_id")
+            .and_then(serde_json::Value::as_str)
+        else {
+            continue;
+        };
+        let returned_hash = event
+            .payload
+            .pointer("/content/returned_hash")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("get_evidence event has no returned hash"))?;
+        let catalog_entry = catalog
+            .iter()
+            .find(|entry| entry.get("id").and_then(serde_json::Value::as_str) == Some(evidence_id))
+            .ok_or_else(|| anyhow::anyhow!("get_evidence returned an unallowlisted item"))?;
+        if catalog_entry
+            .get("hash")
+            .and_then(serde_json::Value::as_str)
+            != Some(returned_hash)
+        {
+            anyhow::bail!("get_evidence returned hash does not match the context catalog");
+        }
+        let evidence_kind = catalog_entry
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("evidence catalog item has no kind"))?;
+        let evidence_version = catalog_entry
+            .get("version")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("evidence catalog item has no version"))?;
+        store
+            .create_evidence_retrieval(CreateEvidenceRetrieval {
+                id: repo_resource_id("eretr"),
+                event_id: event.event_id.to_string(),
+                work_item_id: execution.work_item_id.clone(),
+                stage_execution_id: execution.id.clone(),
+                run_id: run.id.clone(),
+                actor: actor.into(),
+                evidence_kind: evidence_kind.into(),
+                evidence_id: evidence_id.into(),
+                evidence_version: evidence_version.into(),
+                returned_hash: returned_hash.into(),
+            })
+            .await?;
+    }
+    Ok(())
 }
 
 async fn seal_repo_test_stage(
