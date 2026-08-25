@@ -303,6 +303,35 @@ fn rejected_change_set_precedes_work_plan(
             .is_some_and(|revision| revision < work_plan.revision)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ChangeSetProvenanceRepair<'a> {
+    material_builder_run_id: &'a str,
+    verification_run_id: &'a str,
+}
+
+fn change_set_provenance_repair(
+    change_set: &StoredChangeSet,
+) -> Option<ChangeSetProvenanceRepair<'_>> {
+    if change_set.status != "approved" {
+        return None;
+    }
+    let material_builder_run_id = change_set
+        .change_set_json
+        .pointer("/source_provenance/run_id")
+        .and_then(Value::as_str)?;
+    let verification_run_id = change_set
+        .change_set_json
+        .pointer("/verification_run_id")
+        .and_then(Value::as_str)?;
+    if change_set.run_id.as_ref().map(RunId::as_str) == Some(material_builder_run_id) {
+        return None;
+    }
+    Some(ChangeSetProvenanceRepair {
+        material_builder_run_id,
+        verification_run_id,
+    })
+}
+
 fn derive_repo_actions(
     metadata: &StoredRepoWorkItemMetadata,
     inputs: RepoActionInputs<'_>,
@@ -466,6 +495,31 @@ fn derive_repo_actions(
             return Ok(actions);
         }
         if change_set.status == "approved" {
+            if source_delivery_intent.is_none() {
+                if let Some(repair) = change_set_provenance_repair(change_set) {
+                    actions.push(repo_action(
+                        RepoActionSpec {
+                            id: "repair_change_set_provenance",
+                            lifecycle_stage: "verify",
+                            resource: &change_set.id,
+                            status: "ready",
+                            effect_class: "controller_internal",
+                            approval_required: true,
+                            summary: "Revalidate the approved immutable patch and effective stage outcomes, then rebind only the stored ChangeSet session and Builder Run provenance. This does not change material, revision, approval, or external state.",
+                        },
+                        &state_hash,
+                        json!({
+                            "change_set_id":change_set.id,
+                            "revision":change_set.revision,
+                            "material_hash":change_set.material_hash,
+                            "stored_run_id":change_set.run_id,
+                            "material_builder_run_id":repair.material_builder_run_id,
+                            "verification_run_id":repair.verification_run_id,
+                        }),
+                    )?);
+                    return Ok(actions);
+                }
+            }
             match source_delivery_intent {
                 None => actions.push(repo_action(
                     RepoActionSpec {
@@ -1309,6 +1363,9 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 .await?;
             Ok(json!({"change_set":change_set,"work_item":item}))
         }
+        "repair_change_set_provenance" => {
+            repair_approved_change_set_provenance(state, work_item_id, &actor, &reason).await
+        }
         "authorize_source_delivery" => {
             authorize_and_dispatch_source_delivery(state, work_item_id, &actor, &reason).await
         }
@@ -1317,6 +1374,269 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         }
         _ => Err(ApiError::conflict("unsupported Repo Mode action")),
     }
+}
+
+async fn repair_approved_change_set_provenance(
+    state: &AppState,
+    work_item_id: &str,
+    actor: &str,
+    reason: &str,
+) -> Result<Value, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let plan = state
+        .store
+        .get_work_plan_by_work_item(work_item_id)
+        .await?
+        .filter(|plan| plan.status == "approved")
+        .ok_or_else(|| ApiError::conflict("approved WorkPlan is required"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&plan.id)
+        .await?
+        .filter(|change_set| change_set.status == "approved")
+        .ok_or_else(|| ApiError::conflict("approved ChangeSet is required"))?;
+    if state
+        .store
+        .get_source_delivery_intent_by_subject("work_item_change_set", &change_set.id)
+        .await?
+        .is_some()
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet provenance cannot be repaired after source delivery begins",
+        ));
+    }
+    let repair = change_set_provenance_repair(&change_set).ok_or_else(|| {
+        ApiError::conflict("ChangeSet provenance is already current or cannot be repaired")
+    })?;
+    let material_builder_run_id = RunId::new(repair.material_builder_run_id.to_string());
+    let verification_run_id = RunId::new(repair.verification_run_id.to_string());
+    let builder_run = state
+        .store
+        .get_run(&material_builder_run_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet material Builder Run provenance is unavailable")
+        })?;
+    let verification_run = state
+        .store
+        .get_run(&verification_run_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet material Verifier Run provenance is unavailable")
+        })?;
+
+    if canonical_material_hash(&change_set.change_set_json)? != change_set.material_hash {
+        return Err(ApiError::conflict(
+            "ChangeSet material does not match its immutable hash",
+        ));
+    }
+    if change_set.work_item_id.as_deref() != Some(work_item_id)
+        || change_set
+            .change_set_json
+            .get("work_item_id")
+            .and_then(Value::as_str)
+            != Some(work_item_id)
+        || change_set
+            .change_set_json
+            .pointer("/work_plan/id")
+            .and_then(Value::as_str)
+            != Some(plan.id.as_str())
+        || change_set
+            .change_set_json
+            .pointer("/work_plan/revision")
+            .and_then(Value::as_i64)
+            != Some(plan.revision)
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet WorkItem or WorkPlan provenance is stale",
+        ));
+    }
+    let source_commit = work_item
+        .source_commit
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("immutable WorkItem source commit is unavailable"))?;
+    if change_set
+        .change_set_json
+        .pointer("/source_provenance/source_commit")
+        .and_then(Value::as_str)
+        != Some(source_commit)
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet source provenance does not match the WorkItem",
+        ));
+    }
+
+    let implement_stage_execution_id = change_set
+        .change_set_json
+        .pointer("/source_provenance/stage_execution_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet Implement execution is unavailable"))?;
+    let implement_outcome_id = change_set
+        .change_set_json
+        .pointer("/source_provenance/implement_outcome_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet Implement outcome is unavailable"))?;
+    let implement_outcome_hash = change_set
+        .change_set_json
+        .pointer("/source_provenance/implement_outcome_hash")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet Implement outcome hash is unavailable"))?;
+    let verification_stage_execution_id = change_set
+        .change_set_json
+        .get("verification_stage_execution_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet Verify execution is unavailable"))?;
+    let effective_outcomes = state
+        .store
+        .list_effective_stage_outcomes(work_item_id)
+        .await?;
+    let implement_outcome = effective_outcomes
+        .iter()
+        .find(|outcome| {
+            outcome.stage_key == "implement"
+                && outcome.status == "succeeded"
+                && outcome.id == implement_outcome_id
+                && outcome.content_hash == implement_outcome_hash
+                && outcome.stage_execution_id == implement_stage_execution_id
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet does not match the effective Implement outcome")
+        })?;
+    let verify_outcome = effective_outcomes
+        .iter()
+        .find(|outcome| {
+            outcome.stage_key == "verify"
+                && outcome.status == "succeeded"
+                && outcome.stage_execution_id == verification_stage_execution_id
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet does not match the effective Verify outcome")
+        })?;
+    let material_effective_outcomes = change_set
+        .change_set_json
+        .get("effective_outcomes")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ApiError::conflict("ChangeSet effective outcomes are unavailable"))?;
+    for outcome in [implement_outcome, verify_outcome] {
+        if !material_effective_outcomes.iter().any(|material| {
+            material.get("id").and_then(Value::as_str) == Some(outcome.id.as_str())
+                && material.get("stage").and_then(Value::as_str) == Some(outcome.stage_key.as_str())
+                && material.get("hash").and_then(Value::as_str)
+                    == Some(outcome.content_hash.as_str())
+                && material.get("status").and_then(Value::as_str) == Some(outcome.status.as_str())
+        }) {
+            return Err(ApiError::conflict(
+                "ChangeSet material does not bind the current effective stage outcomes",
+            ));
+        }
+    }
+    let implement_execution = state
+        .store
+        .get_stage_execution(implement_stage_execution_id)
+        .await?
+        .filter(|execution| {
+            execution.work_item_id == work_item_id
+                && execution.stage_key == "implement"
+                && execution.status == "succeeded"
+                && execution.run_id.as_ref() == Some(&material_builder_run_id)
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet Builder StageExecution provenance is unavailable")
+        })?;
+    let verification_execution = state
+        .store
+        .get_stage_execution(verification_stage_execution_id)
+        .await?
+        .filter(|execution| {
+            execution.work_item_id == work_item_id
+                && execution.stage_key == "verify"
+                && execution.status == "succeeded"
+                && execution.run_id.as_ref() == Some(&verification_run_id)
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("ChangeSet Verifier StageExecution provenance is unavailable")
+        })?;
+    if builder_run.id != material_builder_run_id
+        || verification_run.id != verification_run_id
+        || implement_execution.workspace_id.is_none()
+        || verification_execution.workspace_id != implement_execution.workspace_id
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet stage run or workspace provenance is inconsistent",
+        ));
+    }
+
+    let patch_artifact_id = change_set
+        .change_set_json
+        .pointer("/patch/artifact_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet patch artifact provenance is unavailable"))?;
+    let patch_hash = change_set
+        .change_set_json
+        .pointer("/patch/hash")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("ChangeSet patch hash provenance is unavailable"))?;
+    let patch = state
+        .store
+        .list_artifacts(&material_builder_run_id)
+        .await?
+        .into_iter()
+        .find(|artifact| artifact.id == patch_artifact_id && artifact.kind == "workspace_git_diff")
+        .ok_or_else(|| ApiError::conflict("ChangeSet patch artifact is unavailable"))?;
+    let diff = patch
+        .content_text
+        .as_deref()
+        .filter(|diff| !diff.is_empty())
+        .ok_or_else(|| ApiError::conflict("ChangeSet patch artifact is empty"))?;
+    if format!("sha256:{:x}", Sha256::digest(diff.as_bytes())) != patch_hash {
+        return Err(ApiError::conflict(
+            "ChangeSet patch artifact does not match its immutable hash",
+        ));
+    }
+
+    let prior_session_id = change_set.session_id.clone();
+    let prior_run_id = change_set.run_id.clone();
+    let repaired = state
+        .store
+        .rebind_approved_change_set_provenance(
+            &change_set.id,
+            change_set.revision,
+            &change_set.material_hash,
+            &verification_run.session_id,
+            &material_builder_run_id,
+        )
+        .await?;
+    append_repo_audit(
+        state,
+        work_item_id,
+        "repo.change_set.provenance_repaired",
+        actor,
+        reason,
+        json!({
+            "change_set_id":repaired.id,
+            "revision":repaired.revision,
+            "material_hash":repaired.material_hash,
+            "prior_session_id":prior_session_id,
+            "prior_run_id":prior_run_id,
+            "session_id":repaired.session_id,
+            "run_id":repaired.run_id,
+            "material_unchanged":true,
+            "revision_unchanged":true,
+            "approval_unchanged":true,
+            "external_effect":false,
+        }),
+    )
+    .await?;
+    Ok(json!({
+        "change_set":repaired,
+        "material_unchanged":true,
+        "revision_unchanged":true,
+        "external_effect":false,
+    }))
 }
 
 async fn apply_repo_stage_correction(
@@ -5076,6 +5396,61 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["approve_change_set", "reject_change_set"]
         );
+    }
+
+    #[test]
+    fn approved_change_set_repairs_stored_run_provenance_before_source_authorization() {
+        let mut change_set = proposed_change_set();
+        change_set.status = "approved".into();
+        change_set.run_id = Some(RunId::new("run_builder_stale"));
+        change_set.change_set_json = json!({
+            "source_provenance":{"run_id":"run_builder_current"},
+            "verification_run_id":"run_verifier_current",
+        });
+
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 3),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: None,
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "repair_change_set_provenance");
+        assert_eq!(actions[0].effect_class, "controller_internal");
+        assert!(actions[0].approval_required);
+        assert!(!actions[0]
+            .external_effect_summary
+            .contains("create a branch"));
+
+        change_set.run_id = Some(RunId::new("run_builder_current"));
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 3),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: None,
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "authorize_source_delivery");
     }
 
     #[test]
