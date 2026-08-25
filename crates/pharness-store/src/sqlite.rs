@@ -2215,12 +2215,14 @@ impl SqliteStore {
                 risk_level = COALESCE(?4, risk_level),
                 material_hash = ?5,
                 change_set_json = ?6,
-                status = COALESCE(?7, 'draft'),
-                updated_at = ?8,
+                session_id = COALESCE(?7, session_id),
+                run_id = COALESCE(?8, run_id),
+                status = COALESCE(?9, 'draft'),
+                updated_at = ?10,
                 revision = revision + 1,
-                status_changed_at = ?8,
-                status_changed_by = ?9,
-                status_reason = ?10
+                status_changed_at = ?10,
+                status_changed_by = ?11,
+                status_reason = ?12
             WHERE id = ?1
             "#,
         )
@@ -2230,6 +2232,8 @@ impl SqliteStore {
         .bind(revision.risk_level)
         .bind(revision.material_hash)
         .bind(change_set_json)
+        .bind(revision.session_id.as_ref().map(SessionId::as_str))
+        .bind(revision.run_id.as_ref().map(RunId::as_str))
         .bind(revision.status)
         .bind(now)
         .bind(revision.actor)
@@ -8155,6 +8159,52 @@ mod tests {
             })
             .await
             .unwrap();
+        let revised_session_id = SessionId::new("ses_change_set_revision");
+        let revised_run_id = RunId::new("run_change_set_revision");
+        store
+            .create_session(CreateSession {
+                id: revised_session_id.clone(),
+                title: "change set revision".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: revised_run_id.clone(),
+                session_id: revised_session_id.clone(),
+                user_task: "revise change set provenance".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "completed".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+        let revised_change_set = store
+            .revise_change_set(
+                &change_set.id,
+                crate::UpdateChangeSetRevision {
+                    title: None,
+                    summary: None,
+                    risk_level: None,
+                    material_hash: "hash_test_revision_2".to_string(),
+                    change_set_json: serde_json::json!({
+                        "changes": [{"path": "tekton/pipeline-v2.yaml"}]
+                    }),
+                    session_id: Some(revised_session_id.clone()),
+                    run_id: Some(revised_run_id.clone()),
+                    status: Some("proposed".to_string()),
+                    actor: Some("controller".to_string()),
+                    reason: Some("bind corrected material to its exact run".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(revised_change_set.revision, 2);
+        assert_eq!(revised_change_set.status, "proposed");
+        assert_eq!(revised_change_set.session_id, revised_session_id);
+        assert_eq!(revised_change_set.run_id.as_ref(), Some(&revised_run_id));
         let pipeline_intent = store
             .create_pipeline_intent(crate::CreatePipelineIntent {
                 id: "pint_test".to_string(),
