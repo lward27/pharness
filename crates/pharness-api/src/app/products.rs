@@ -1,5 +1,6 @@
 use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
+use super::repo_mode::current_readiness_mismatches;
 use super::{ApiError, AppState};
 use crate::dispatch::{
     OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
@@ -858,7 +859,43 @@ async fn get_repository_readiness(
             &query.source_commit.to_ascii_lowercase(),
         )
         .await?;
-    Ok(Json(readiness_response(&state, &repository, assessment)))
+    let source_commit = query.source_commit.to_ascii_lowercase();
+    let mismatches = match assessment.as_ref() {
+        Some(assessment) => {
+            let version = state
+                .store
+                .latest_repository_contract_version(&repository_id, &source_commit)
+                .await?;
+            match version {
+                Some(version) => {
+                    let contract: pharness_core::RepositoryContract =
+                        serde_json::from_value(version.contract.clone()).map_err(|error| {
+                            ApiError::internal(format!(
+                                "stored RepositoryContract is invalid: {error}"
+                            ))
+                        })?;
+                    current_readiness_mismatches(
+                        &state,
+                        &repository,
+                        &source_commit,
+                        &version,
+                        &contract,
+                        assessment,
+                    )
+                    .await?
+                }
+                None => vec!["canonical_contract_version_missing".into()],
+            }
+        }
+        None => vec!["assessment_missing".into()],
+    };
+    Ok(Json(readiness_response(
+        &state,
+        &repository,
+        &source_commit,
+        assessment,
+        mismatches,
+    )))
 }
 
 async fn create_repository_readiness_assessment(
@@ -993,7 +1030,9 @@ async fn create_repository_readiness_assessment(
         return Ok(Json(readiness_response(
             &state,
             &repository,
+            &source_commit,
             Some(existing),
+            Vec::new(),
         )));
     }
     let subject_id = format!("{repository_id}:{source_commit}");
@@ -1089,13 +1128,21 @@ async fn create_repository_readiness_assessment(
 fn readiness_response(
     state: &AppState,
     repository: &StoredRepository,
+    source_commit: &str,
     assessment: Option<pharness_store::StoredRepositoryReadinessAssessment>,
+    mismatches: Vec<String>,
 ) -> Value {
     let writer = state.worker.git_writer_settings();
     let observer = state.worker.git_observer_settings();
+    let (current, status, current_blockers) =
+        readiness_current_state(assessment.is_some(), &mismatches);
     json!({
         "repository_id": repository.id,
-        "source_commit": assessment.as_ref().map(|assessment| assessment.source_commit.as_str()),
+        "source_commit": source_commit,
+        "current": current,
+        "status": status,
+        "mismatches": mismatches,
+        "blockers": current_blockers,
         "assessment": assessment,
         "capabilities": {
             "source_reader": {
@@ -1115,6 +1162,64 @@ fn readiness_response(
             },
         },
     })
+}
+
+fn readiness_current_state(
+    assessment_present: bool,
+    mismatches: &[String],
+) -> (bool, &'static str, Vec<Value>) {
+    let current = assessment_present && mismatches.is_empty();
+    let status = if !assessment_present {
+        "missing"
+    } else if current {
+        "ready"
+    } else {
+        "stale"
+    };
+    let blockers = mismatches
+        .iter()
+        .map(|code| {
+            json!({
+                "code": code,
+                "summary": readiness_mismatch_summary(code),
+            })
+        })
+        .collect();
+    (current, status, blockers)
+}
+
+fn readiness_mismatch_summary(code: &str) -> &'static str {
+    match code {
+        "assessment_missing" => {
+            "no immutable readiness assessment exists for the exact source commit"
+        }
+        "canonical_contract_version_missing" => {
+            "the exact source commit no longer has a canonical RepositoryContract version"
+        }
+        "assessment_not_ready" => {
+            "the immutable assessment did not prove both contract and coding readiness"
+        }
+        "contract_or_policy_tuple_changed" => {
+            "the contract, dependency lock, or validation-policy tuple changed"
+        }
+        "environment_profile_unavailable" => {
+            "the contract-selected EnvironmentProfile is unavailable for this repository"
+        }
+        "environment_profile_tuple_changed" => {
+            "the EnvironmentProfile revision or immutable runner digest changed"
+        }
+        "assessment_expired" => "the immutable readiness assessment expired",
+        "source_reader_evidence_stale" => {
+            "the bound isolated source-reader verification is missing, expired, or superseded"
+        }
+        "runner_profile_evidence_stale" => {
+            "the bound isolated runner-profile verification is missing, expired, or superseded"
+        }
+        "readiness_input_hash_mismatch" => {
+            "the recomputed readiness input hash does not match the immutable assessment"
+        }
+        _ => "the immutable readiness assessment no longer matches current controller inputs",
+    }
 }
 
 async fn create_repository_onboarding(
@@ -3551,10 +3656,13 @@ pub(in crate::app) async fn internal_repository_readiness_outcome(
             expires_at: None,
         })
         .await?;
+    let assessment_source_commit = assessment.source_commit.clone();
     Ok(Json(readiness_response(
         &state,
         &repository,
+        &assessment_source_commit,
         Some(assessment),
+        Vec::new(),
     )))
 }
 
@@ -3880,7 +3988,8 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_key, onboarding_patch_paths, parse_github_repository_url, validate_binding_scope,
+        normalize_key, onboarding_patch_paths, parse_github_repository_url,
+        readiness_current_state, validate_binding_scope,
     };
     use serde_json::json;
 
@@ -3966,5 +4075,35 @@ mod tests {
         );
         let escaped_rename = "diff --git a/.pharness/project.yaml b/src/repository.yaml\n";
         assert!(onboarding_patch_paths(escaped_rename).is_err());
+    }
+
+    #[test]
+    fn repository_readiness_projects_missing_stale_and_current_without_client_inference() {
+        assert_eq!(
+            readiness_current_state(false, &["assessment_missing".into()]),
+            (
+                false,
+                "missing",
+                vec![json!({
+                    "code":"assessment_missing",
+                    "summary":"no immutable readiness assessment exists for the exact source commit",
+                })]
+            )
+        );
+        assert_eq!(
+            readiness_current_state(true, &["environment_profile_tuple_changed".into()]),
+            (
+                false,
+                "stale",
+                vec![json!({
+                    "code":"environment_profile_tuple_changed",
+                    "summary":"the EnvironmentProfile revision or immutable runner digest changed",
+                })]
+            )
+        );
+        assert_eq!(
+            readiness_current_state(true, &[]),
+            (true, "ready", Vec::new())
+        );
     }
 }
