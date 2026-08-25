@@ -73,12 +73,10 @@ spec:
       value: ${dockerfile}
     - name: context
       value: ./
-    - name: kaniko-extra-args
+    - name: build-args
       value:
-        - --skip-tls-verify
-        - --custom-platform=linux/amd64
-        - --build-arg=PHARNESS_BUILD_REVISION=${REVISION}
-        - --build-arg=TARGETARCH=amd64
+        - PHARNESS_BUILD_REVISION=${REVISION}
+        - TARGETARCH=amd64
     - name: deployment
       value: ""
 MANIFEST
