@@ -48,11 +48,12 @@ pub use product::{
 };
 pub use repo_mode::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
-    CreateOperatorAnnotation, CreateProviderCheckSetObservation, CreateRepoWorkItem,
-    CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
-    SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent,
-    StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
+    CreateOperatorAnnotation, CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation,
+    CreateRepoWorkItem, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
+    StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
+    StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageChainAuthorization,
+    StoredStageExecution, StoredStageOutcome,
 };
 pub use sqlite::{SqliteStore, StoreError};
 pub use subject_preparation::{

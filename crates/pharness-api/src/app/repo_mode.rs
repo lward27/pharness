@@ -20,11 +20,13 @@ use pharness_core::{
 };
 use pharness_store::{
     CreateAgentContextPack, CreateAuditEvent, CreateEnvironmentPreparation,
-    CreateEvidenceValidation, CreateOperatorAnnotation, CreateProviderCheckSetObservation,
-    CreateRepoWorkItem, CreateRun, CreateSession, CreateSourceDeliveryIntent,
-    CreateStageChainAuthorization, CreateStageExecution, CreateWorkspace, SealStageOutcome,
-    StoredChangeSet, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageOutcome,
-    UpdateEnvironmentPreparation, UpdateWorkspaceExecution, WorkspaceListFilter,
+    CreateEvidenceValidation, CreateOperatorAnnotation, CreateOperatorAnnotationDecision,
+    CreateProviderCheckSetObservation, CreateRepoWorkItem, CreateRun, CreateSession,
+    CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
+    CreateWorkspace, SealStageOutcome, StoredChangeSet, StoredOperatorAnnotation,
+    StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent,
+    StoredStageOutcome, UpdateEnvironmentPreparation, UpdateWorkspaceExecution,
+    WorkspaceListFilter,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -107,14 +109,24 @@ pub(in crate::app) async fn repo_work_item_flow(
         .store
         .active_stage_chain_authorization(work_item_id)
         .await?;
+    let annotations = state.store.list_operator_annotations(work_item_id).await?;
+    let annotation_decisions = state
+        .store
+        .list_operator_annotation_decisions(work_item_id)
+        .await?;
+    let pending_annotation_effects =
+        pending_annotation_effects(&annotations, &annotation_decisions);
     let action_rail = derive_repo_actions(
         &metadata,
-        (work_item.attempt_count, work_item.max_attempts),
-        work_plan.as_ref(),
-        change_set.as_ref(),
-        source_delivery_intent.as_ref(),
-        &executions,
-        chain.as_ref(),
+        RepoActionInputs {
+            attempts: (work_item.attempt_count, work_item.max_attempts),
+            work_plan: work_plan.as_ref(),
+            change_set: change_set.as_ref(),
+            source_delivery_intent: source_delivery_intent.as_ref(),
+            executions: &executions,
+            chain: chain.as_ref(),
+            pending_annotation_effects: &pending_annotation_effects,
+        },
     )?;
     let workspaces = state
         .store
@@ -195,6 +207,8 @@ pub(in crate::app) async fn repo_work_item_flow(
             "stage_executions":executions,
             "effective_stage_outcomes":outcomes,
             "stage_chain_authorization":chain,
+            "operator_annotations":annotations,
+            "operator_annotation_decisions":annotation_decisions,
             "product_model_snapshot":{
                 "id":metadata.product_model_snapshot_id,
                 "hash":metadata.product_model_snapshot_hash,
@@ -206,15 +220,44 @@ pub(in crate::app) async fn repo_work_item_flow(
     })
 }
 
+fn pending_annotation_effects<'a>(
+    annotations: &'a [StoredOperatorAnnotation],
+    decisions: &[StoredOperatorAnnotationDecision],
+) -> Vec<&'a StoredOperatorAnnotation> {
+    annotations
+        .iter()
+        .filter(|annotation| annotation.requested_effect != "add_context")
+        .filter(|annotation| {
+            !decisions
+                .iter()
+                .any(|decision| decision.annotation_id == annotation.id)
+        })
+        .collect()
+}
+
+struct RepoActionInputs<'a> {
+    attempts: (u32, u32),
+    work_plan: Option<&'a pharness_store::StoredWorkPlan>,
+    change_set: Option<&'a StoredChangeSet>,
+    source_delivery_intent: Option<&'a StoredSourceDeliveryIntent>,
+    executions: &'a [pharness_store::StoredStageExecution],
+    chain: Option<&'a pharness_store::StoredStageChainAuthorization>,
+    pending_annotation_effects: &'a [&'a StoredOperatorAnnotation],
+}
+
 fn derive_repo_actions(
     metadata: &StoredRepoWorkItemMetadata,
-    attempts: (u32, u32),
-    work_plan: Option<&pharness_store::StoredWorkPlan>,
-    change_set: Option<&StoredChangeSet>,
-    source_delivery_intent: Option<&StoredSourceDeliveryIntent>,
-    executions: &[pharness_store::StoredStageExecution],
-    chain: Option<&pharness_store::StoredStageChainAuthorization>,
+    inputs: RepoActionInputs<'_>,
 ) -> Result<Vec<WorkItemActionResponse>, ApiError> {
+    let RepoActionInputs {
+        attempts,
+        work_plan,
+        change_set,
+        source_delivery_intent,
+        executions,
+        chain,
+        pending_annotation_effects,
+    } = inputs;
     let (attempt_count, max_attempts) = attempts;
     if metadata.closed_at.is_some() {
         return Ok(Vec::new());
@@ -225,6 +268,49 @@ fn derive_repo_actions(
         .rev()
         .find(|execution| execution.stage_key == pharness_core::RepoStageKey::Plan.as_str());
     let mut actions = Vec::new();
+    if let Some(annotation) = pending_annotation_effects.first() {
+        let active_execution = executions
+            .iter()
+            .any(|execution| matches!(execution.status.as_str(), "queued" | "running" | "paused"));
+        let delivery_started = change_set.is_some() || source_delivery_intent.is_some();
+        let available = !active_execution && !delivery_started && attempt_count < max_attempts;
+        let repeats_stage = annotation.requested_effect == "repeat_stage";
+        actions.push(repo_action(
+            RepoActionSpec {
+                id: "apply_annotation_effect",
+                lifecycle_stage: if repeats_stage { "implement" } else { "plan" },
+                resource: &annotation.id,
+                status: if available { "ready" } else { "blocked" },
+                effect_class: "model_execution",
+                approval_required: true,
+                summary: if available {
+                    if repeats_stage {
+                        "Apply the operator annotation by authorizing a fresh Builder-Tester-Verifier chain on the preserved workspace."
+                    } else {
+                        "Apply the operator annotation by starting a fresh Planner execution; the sealed evidence remains immutable."
+                    }
+                } else if delivery_started {
+                    "Source delivery has begun; this WorkItem cannot repeat or replan. Create a linked WorkItem for the requested change."
+                } else if active_execution {
+                    "The current stage must reach a terminal boundary before this annotation effect can be applied."
+                } else {
+                    "The WorkItem attempt limit is exhausted; create a linked WorkItem for the requested change."
+                },
+            },
+            &state_hash,
+            json!({
+                "annotation_id":annotation.id,
+                "requested_effect":annotation.requested_effect,
+                "target_kind":annotation.target_kind,
+                "target_id":annotation.target_id,
+                "attempt_count":attempt_count,
+                "max_attempts":max_attempts,
+                "delivery_started":delivery_started,
+                "active_execution":active_execution,
+            }),
+        )?);
+        return Ok(actions);
+    }
     if let Some(change_set) = change_set {
         if change_set.status == "proposed" {
             for approve in [true, false] {
@@ -758,14 +844,24 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         .store
         .active_stage_chain_authorization(work_item_id)
         .await?;
+    let annotations = state.store.list_operator_annotations(work_item_id).await?;
+    let annotation_decisions = state
+        .store
+        .list_operator_annotation_decisions(work_item_id)
+        .await?;
+    let pending_annotation_effects =
+        pending_annotation_effects(&annotations, &annotation_decisions);
     let action = derive_repo_actions(
         &metadata,
-        (work_item.attempt_count, work_item.max_attempts),
-        work_plan.as_ref(),
-        change_set.as_ref(),
-        source_delivery_intent.as_ref(),
-        &executions,
-        chain.as_ref(),
+        RepoActionInputs {
+            attempts: (work_item.attempt_count, work_item.max_attempts),
+            work_plan: work_plan.as_ref(),
+            change_set: change_set.as_ref(),
+            source_delivery_intent: source_delivery_intent.as_ref(),
+            executions: &executions,
+            chain: chain.as_ref(),
+            pending_annotation_effects: &pending_annotation_effects,
+        },
     )?
     .into_iter()
     .find(|action| action.id == action_id)
@@ -779,6 +875,36 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         return Err(ApiError::conflict("Repo Mode action is blocked"));
     }
     match action_id {
+        "apply_annotation_effect" => {
+            let annotation = pending_annotation_effects
+                .first()
+                .copied()
+                .ok_or_else(|| ApiError::conflict("annotation effect is no longer pending"))?;
+            let repeats_stage = annotation.requested_effect == "repeat_stage";
+            let result = if repeats_stage {
+                apply_repo_stage_correction(state, work_item_id, &actor, &reason).await?
+            } else {
+                apply_repo_replan(state, work_item_id, &actor, &reason).await?
+            };
+            let decision = state
+                .store
+                .create_operator_annotation_decision(CreateOperatorAnnotationDecision {
+                    id: new_prefixed_id("annotdec"),
+                    annotation_id: annotation.id.clone(),
+                    work_item_id: work_item_id.into(),
+                    decision: if repeats_stage {
+                        "stage_repeat_started".into()
+                    } else {
+                        "replan_started".into()
+                    },
+                    action_id: action_id.into(),
+                    actor,
+                    reason,
+                    state_hash,
+                })
+                .await?;
+            Ok(json!({"annotation_decision":decision,"result":result}))
+        }
         "start_planner" => start_repo_planner(state, work_item_id, &actor, &reason).await,
         "approve_work_plan" | "reject_work_plan" => {
             let plan = work_plan.ok_or_else(|| ApiError::conflict("WorkPlan is unavailable"))?;
@@ -820,44 +946,9 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             authorize_repo_stage_chain(state, work_item_id, &actor, &reason, None).await
         }
         "correct_stage_chain" => {
-            let workspace = state
-                .store
-                .list_workspaces(WorkspaceListFilter {
-                    work_item_id: Some(work_item_id.into()),
-                    limit: 100,
-                    ..WorkspaceListFilter::default()
-                })
-                .await?
-                .into_iter()
-                .find(|workspace| workspace.resolved_commit == work_item.source_commit)
-                .ok_or_else(|| {
-                    ApiError::conflict("preserved correction workspace is unavailable")
-                })?;
-            authorize_repo_stage_chain(state, work_item_id, &actor, &reason, Some(workspace)).await
+            apply_repo_stage_correction(state, work_item_id, &actor, &reason).await
         }
-        "replan_work_item" => {
-            if let Some(chain) = chain {
-                state
-                    .store
-                    .revoke_stage_chain_authorization(
-                        &chain.id,
-                        "operator requested full Repo Mode replan",
-                    )
-                    .await?;
-            }
-            if let Some(plan) = work_plan {
-                state
-                    .store
-                    .update_work_plan_status(
-                        &plan.id,
-                        "superseded",
-                        Some(actor.clone()),
-                        Some(reason.clone()),
-                    )
-                    .await?;
-            }
-            start_repo_planner(state, work_item_id, &actor, &reason).await
-        }
+        "replan_work_item" => apply_repo_replan(state, work_item_id, &actor, &reason).await,
         "approve_change_set" | "reject_change_set" => {
             let change_set =
                 change_set.ok_or_else(|| ApiError::conflict("ChangeSet is unavailable"))?;
@@ -902,6 +993,61 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         }
         _ => Err(ApiError::conflict("unsupported Repo Mode action")),
     }
+}
+
+async fn apply_repo_stage_correction(
+    state: &AppState,
+    work_item_id: &str,
+    actor: &str,
+    reason: &str,
+) -> Result<Value, ApiError> {
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let workspace = state
+        .store
+        .list_workspaces(WorkspaceListFilter {
+            work_item_id: Some(work_item_id.into()),
+            limit: 100,
+            ..WorkspaceListFilter::default()
+        })
+        .await?
+        .into_iter()
+        .find(|workspace| workspace.resolved_commit == work_item.source_commit)
+        .ok_or_else(|| ApiError::conflict("preserved correction workspace is unavailable"))?;
+    authorize_repo_stage_chain(state, work_item_id, actor, reason, Some(workspace)).await
+}
+
+async fn apply_repo_replan(
+    state: &AppState,
+    work_item_id: &str,
+    actor: &str,
+    reason: &str,
+) -> Result<Value, ApiError> {
+    if let Some(chain) = state
+        .store
+        .active_stage_chain_authorization(work_item_id)
+        .await?
+    {
+        state
+            .store
+            .revoke_stage_chain_authorization(&chain.id, "operator requested full Repo Mode replan")
+            .await?;
+    }
+    if let Some(plan) = state.store.get_work_plan_by_work_item(work_item_id).await? {
+        state
+            .store
+            .update_work_plan_status(
+                &plan.id,
+                "superseded",
+                Some(actor.into()),
+                Some(reason.into()),
+            )
+            .await?;
+    }
+    start_repo_planner(state, work_item_id, actor, reason).await
 }
 
 async fn authorize_and_dispatch_source_delivery(
@@ -4136,9 +4282,14 @@ async fn list_annotations(
     ensure_repo_mode_enabled(&state)?;
     repo_metadata(&state, &work_item_id).await?;
     let annotations = state.store.list_operator_annotations(&work_item_id).await?;
+    let decisions = state
+        .store
+        .list_operator_annotation_decisions(&work_item_id)
+        .await?;
     Ok(Json(json!({
         "annotations": annotations,
         "count": annotations.len(),
+        "decisions":decisions,
     })))
 }
 
@@ -4174,11 +4325,21 @@ async fn create_annotation(
         return Err(ApiError::bad_request("evidence_refs must be an array"));
     }
     let metadata = repo_metadata(&state, &work_item_id).await?;
+    if metadata.closed_at.is_some()
+        && matches!(request.requested_effect.as_str(), "repeat_stage" | "replan")
+    {
+        return Err(ApiError::conflict(
+            "closed Repo Mode WorkItems retain annotations as evidence but cannot repeat or replan",
+        ));
+    }
     let expected_hash = repo_work_item_state_hash(&metadata)?;
     if request.state_hash != expected_hash {
         return Err(ApiError::conflict(
             "Repo WorkItem changed after annotation preview; refresh and retry",
         ));
+    }
+    if request.target_kind == "work_item" && request.target_id != work_item_id {
+        return Err(ApiError::not_found("work_item", &request.target_id));
     }
     if request.target_kind == "stage_execution" {
         let execution = state
@@ -4189,12 +4350,39 @@ async fn create_annotation(
         if execution.work_item_id != work_item_id {
             return Err(ApiError::not_found("stage_execution", &request.target_id));
         }
+        if request.requested_effect == "repeat_stage"
+            && (!matches!(
+                execution.stage_key.as_str(),
+                "implement" | "test" | "verify"
+            ) || !matches!(
+                execution.status.as_str(),
+                "succeeded" | "failed" | "blocked" | "cancelled"
+            ))
+        {
+            return Err(ApiError::conflict(
+                "repeat_stage requires a terminal Implement, Test, or Verify StageExecution",
+            ));
+        }
+    } else if request.requested_effect == "repeat_stage" {
+        return Err(ApiError::bad_request(
+            "repeat_stage requires target_kind stage_execution",
+        ));
+    }
+    if request.target_kind == "stage_outcome" {
+        let outcome = state
+            .store
+            .get_stage_outcome(&request.target_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("stage_outcome", &request.target_id))?;
+        if outcome.work_item_id != work_item_id {
+            return Err(ApiError::not_found("stage_outcome", &request.target_id));
+        }
     }
     let annotation = state
         .store
         .create_operator_annotation(CreateOperatorAnnotation {
             id: new_prefixed_id("annot"),
-            work_item_id,
+            work_item_id: work_item_id.clone(),
             target_kind: request.target_kind,
             target_id: request.target_id,
             statement,
@@ -4205,7 +4393,11 @@ async fn create_annotation(
             state_hash: expected_hash,
         })
         .await?;
-    Ok(Json(json!({"annotation": annotation})))
+    let updated_metadata = repo_metadata(&state, &work_item_id).await?;
+    Ok(Json(json!({
+        "annotation": annotation,
+        "work_item_state_hash":repo_work_item_state_hash(&updated_metadata)?,
+    })))
 }
 
 async fn repo_metadata(
@@ -4393,12 +4585,15 @@ mod tests {
         let change_set = proposed_change_set();
         let actions = derive_repo_actions(
             &metadata(),
-            (0, 2),
-            None,
-            Some(&change_set),
-            None,
-            &[],
-            None,
+            RepoActionInputs {
+                attempts: (0, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: None,
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+            },
         )
         .unwrap();
         assert_eq!(
@@ -4437,8 +4632,19 @@ mod tests {
             stage_execution("stageexec_plan", "plan", "succeeded", "1"),
             stage_execution("stageexec_implement", "implement", "failed", "2"),
         ];
-        let actions =
-            derive_repo_actions(&metadata(), (1, 2), None, None, None, &executions, None).unwrap();
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+            },
+        )
+        .unwrap();
         assert_eq!(
             actions
                 .iter()
@@ -4450,9 +4656,70 @@ mod tests {
             ]
         );
 
-        let exhausted =
-            derive_repo_actions(&metadata(), (2, 2), None, None, None, &executions, None).unwrap();
+        let exhausted = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+            },
+        )
+        .unwrap();
         assert!(exhausted.iter().all(|action| action.status == "blocked"));
+    }
+
+    #[test]
+    fn annotation_effect_is_state_hashed_and_cannot_cross_source_delivery() {
+        let annotation = StoredOperatorAnnotation {
+            id: "annot_replan".into(),
+            work_item_id: "witem_repo".into(),
+            target_kind: "work_item".into(),
+            target_id: "witem_repo".into(),
+            statement: "The evidence requires a new plan".into(),
+            evidence_refs: json!([]),
+            requested_effect: "replan".into(),
+            actor: "operator".into(),
+            reason: "reviewed contradiction".into(),
+            state_hash: "sha256:annotation-preview".into(),
+            created_at: "1".into(),
+        };
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[&annotation],
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "apply_annotation_effect");
+        assert_eq!(actions[0].status, "ready");
+
+        let change_set = proposed_change_set();
+        let blocked = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: None,
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[&annotation],
+            },
+        )
+        .unwrap();
+        assert_eq!(blocked[0].id, "apply_annotation_effect");
+        assert_eq!(blocked[0].status, "blocked");
     }
 
     #[test]
@@ -4462,12 +4729,15 @@ mod tests {
         let drifting = source_delivery_intent("head_drift");
         let actions = derive_repo_actions(
             &metadata(),
-            (1, 2),
-            None,
-            Some(&change_set),
-            Some(&drifting),
-            &[],
-            None,
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: Some(&drifting),
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+            },
         )
         .unwrap();
         assert_eq!(actions.len(), 1);
@@ -4476,12 +4746,15 @@ mod tests {
         let closed = source_delivery_intent("pull_request_closed");
         let actions = derive_repo_actions(
             &metadata(),
-            (1, 2),
-            None,
-            Some(&change_set),
-            Some(&closed),
-            &[],
-            None,
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: Some(&closed),
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+            },
         )
         .unwrap();
         assert_eq!(actions.len(), 1);

@@ -1,11 +1,12 @@
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
-    CreateOperatorAnnotation, CreateProviderCheckSetObservation, CreateRepoWorkItem,
-    CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
-    SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent,
-    StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
+    CreateOperatorAnnotation, CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation,
+    CreateRepoWorkItem, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
+    StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
+    StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageChainAuthorization,
+    StoredStageExecution, StoredStageOutcome,
 };
 use pharness_core::RunId;
 use sqlx::Row;
@@ -533,6 +534,7 @@ impl SqliteStore {
         annotation: CreateOperatorAnnotation,
     ) -> Result<StoredOperatorAnnotation, StoreError> {
         let now = now_string();
+        let mut tx = self.pool.begin().await?;
         sqlx::query(
             r#"
             INSERT INTO operator_annotations (
@@ -552,8 +554,28 @@ impl SqliteStore {
         .bind(&annotation.reason)
         .bind(&annotation.state_hash)
         .bind(&now)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        if annotation.requested_effect != "add_context" {
+            let updated = sqlx::query(
+                r#"
+                UPDATE work_items
+                SET state_version = state_version + 1,
+                    updated_at = ?2
+                WHERE id = ?1 AND mode = 'repo'
+                "#,
+            )
+            .bind(&annotation.work_item_id)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+            if updated.rows_affected() != 1 {
+                return Err(StoreError::Conflict(
+                    "operator annotation target is not a current Repo Mode WorkItem".into(),
+                ));
+            }
+        }
+        tx.commit().await?;
         self.list_operator_annotations(&annotation.work_item_id)
             .await?
             .into_iter()
@@ -575,6 +597,59 @@ impl SqliteStore {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(row_to_annotation).collect()
+    }
+
+    pub async fn create_operator_annotation_decision(
+        &self,
+        decision: CreateOperatorAnnotationDecision,
+    ) -> Result<StoredOperatorAnnotationDecision, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO operator_annotation_decisions (
+              id, annotation_id, work_item_id, decision, action_id, actor, reason,
+              state_hash, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&decision.id)
+        .bind(&decision.annotation_id)
+        .bind(&decision.work_item_id)
+        .bind(&decision.decision)
+        .bind(&decision.action_id)
+        .bind(&decision.actor)
+        .bind(&decision.reason)
+        .bind(&decision.state_hash)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        self.list_operator_annotation_decisions(&decision.work_item_id)
+            .await?
+            .into_iter()
+            .find(|stored| stored.id == decision.id)
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "operator_annotation_decision".into(),
+                id: decision.id,
+            })
+    }
+
+    pub async fn list_operator_annotation_decisions(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Vec<StoredOperatorAnnotationDecision>, StoreError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, annotation_id, work_item_id, decision, action_id, actor, reason,
+                   state_hash, created_at
+            FROM operator_annotation_decisions
+            WHERE work_item_id = ?1
+            ORDER BY created_at, id
+            "#,
+        )
+        .bind(work_item_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_annotation_decision).collect()
     }
 
     pub async fn create_stage_chain_authorization(
@@ -969,6 +1044,22 @@ fn row_to_annotation(row: sqlx::sqlite::SqliteRow) -> Result<StoredOperatorAnnot
     })
 }
 
+fn row_to_annotation_decision(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredOperatorAnnotationDecision, StoreError> {
+    Ok(StoredOperatorAnnotationDecision {
+        id: row.try_get("id")?,
+        annotation_id: row.try_get("annotation_id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        decision: row.try_get("decision")?,
+        action_id: row.try_get("action_id")?,
+        actor: row.try_get("actor")?,
+        reason: row.try_get("reason")?,
+        state_hash: row.try_get("state_hash")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
 fn row_to_stage_chain_authorization(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredStageChainAuthorization, StoreError> {
@@ -1228,6 +1319,104 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn annotation_effects_advance_state_and_have_one_immutable_decision() {
+        let store = store_with_repo_work_item().await;
+        let before = store
+            .get_repo_work_item_metadata("witem_repo")
+            .await
+            .unwrap()
+            .unwrap();
+        let annotation = store
+            .create_operator_annotation(CreateOperatorAnnotation {
+                id: "annot_repeat".into(),
+                work_item_id: "witem_repo".into(),
+                target_kind: "work_item".into(),
+                target_id: "witem_repo".into(),
+                statement: "Repeat from reviewed evidence".into(),
+                evidence_refs: json!([]),
+                requested_effect: "replan".into(),
+                actor: "operator".into(),
+                reason: "the objective needs a new plan".into(),
+                state_hash: "sha256:preview".into(),
+            })
+            .await
+            .unwrap();
+        let after = store
+            .get_repo_work_item_metadata("witem_repo")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.state_version, before.state_version + 1);
+
+        store
+            .create_operator_annotation(CreateOperatorAnnotation {
+                id: "annot_context".into(),
+                work_item_id: "witem_repo".into(),
+                target_kind: "work_item".into(),
+                target_id: "witem_repo".into(),
+                statement: "Carry this bounded context into the next stage".into(),
+                evidence_refs: json!([]),
+                requested_effect: "add_context".into(),
+                actor: "operator".into(),
+                reason: "clarify without changing lifecycle authorization".into(),
+                state_hash: "sha256:context-preview".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .get_repo_work_item_metadata("witem_repo")
+                .await
+                .unwrap()
+                .unwrap()
+                .state_version,
+            after.state_version
+        );
+
+        let decision = CreateOperatorAnnotationDecision {
+            id: "annotdec_repeat".into(),
+            annotation_id: annotation.id,
+            work_item_id: "witem_repo".into(),
+            decision: "replan_started".into(),
+            action_id: "apply_annotation_effect".into(),
+            actor: "operator".into(),
+            reason: "approve exact replan boundary".into(),
+            state_hash: "sha256:decision".into(),
+        };
+        store
+            .create_operator_annotation_decision(decision.clone())
+            .await
+            .unwrap();
+        assert!(store
+            .create_operator_annotation_decision(CreateOperatorAnnotationDecision {
+                id: "annotdec_duplicate".into(),
+                ..decision
+            })
+            .await
+            .is_err());
+        assert_eq!(
+            store
+                .list_operator_annotation_decisions("witem_repo")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(sqlx::query(
+            "UPDATE operator_annotations SET statement = 'rewritten' WHERE id = 'annot_repeat'",
+        )
+        .execute(&store.pool)
+        .await
+        .is_err());
+        assert!(sqlx::query(
+            "DELETE FROM operator_annotation_decisions WHERE id = 'annotdec_repeat'",
+        )
+        .execute(&store.pool)
+        .await
+        .is_err());
     }
 
     #[tokio::test]

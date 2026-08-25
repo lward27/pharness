@@ -179,6 +179,31 @@ pub struct StoredOperatorAnnotation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateOperatorAnnotationDecision {
+    pub id: String,
+    pub annotation_id: String,
+    pub work_item_id: String,
+    pub decision: String,
+    pub action_id: String,
+    pub actor: String,
+    pub reason: String,
+    pub state_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredOperatorAnnotationDecision {
+    pub id: String,
+    pub annotation_id: String,
+    pub work_item_id: String,
+    pub decision: String,
+    pub action_id: String,
+    pub actor: String,
+    pub reason: String,
+    pub state_hash: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateStageChainAuthorization {
     pub id: String,
     pub work_item_id: String,
