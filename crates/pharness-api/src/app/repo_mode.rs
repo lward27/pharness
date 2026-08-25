@@ -309,6 +309,84 @@ struct ChangeSetProvenanceRepair<'a> {
     verification_run_id: &'a str,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ChangeSetOutcomeBinding {
+    Current,
+    HistoricalVerifier { id: String, hash: String },
+}
+
+fn validate_change_set_outcome_binding(
+    material_outcomes: &[Value],
+    effective_outcomes: &[StoredStageOutcome],
+) -> Result<ChangeSetOutcomeBinding, ApiError> {
+    let material_matches = |outcome: &StoredStageOutcome| {
+        material_outcomes.iter().any(|material| {
+            material.get("id").and_then(Value::as_str) == Some(outcome.id.as_str())
+                && material.get("stage").and_then(Value::as_str) == Some(outcome.stage_key.as_str())
+                && material.get("hash").and_then(Value::as_str)
+                    == Some(outcome.content_hash.as_str())
+                && material.get("status").and_then(Value::as_str) == Some(outcome.status.as_str())
+        })
+    };
+    for outcome in effective_outcomes
+        .iter()
+        .filter(|outcome| outcome.stage_key != "verify")
+    {
+        if !material_matches(outcome) {
+            return Err(ApiError::conflict(
+                "ChangeSet material does not bind the current effective stage outcomes",
+            ));
+        }
+    }
+    let current_verify = effective_outcomes
+        .iter()
+        .find(|outcome| outcome.stage_key == "verify" && outcome.status == "succeeded")
+        .ok_or_else(|| ApiError::conflict("effective Verify outcome is unavailable"))?;
+    let unmatched_material = material_outcomes
+        .iter()
+        .filter(|material| {
+            !effective_outcomes.iter().any(|outcome| {
+                material.get("id").and_then(Value::as_str) == Some(outcome.id.as_str())
+                    && material.get("stage").and_then(Value::as_str)
+                        == Some(outcome.stage_key.as_str())
+                    && material.get("hash").and_then(Value::as_str)
+                        == Some(outcome.content_hash.as_str())
+                    && material.get("status").and_then(Value::as_str)
+                        == Some(outcome.status.as_str())
+            })
+        })
+        .collect::<Vec<_>>();
+    if material_matches(current_verify) {
+        if !unmatched_material.is_empty() {
+            return Err(ApiError::conflict(
+                "ChangeSet material contains stale outcomes outside the current effective set",
+            ));
+        }
+        return Ok(ChangeSetOutcomeBinding::Current);
+    }
+    if unmatched_material.len() != 1
+        || unmatched_material[0].get("stage").and_then(Value::as_str) != Some("verify")
+        || unmatched_material[0].get("status").and_then(Value::as_str) != Some("succeeded")
+    {
+        return Err(ApiError::conflict(
+            "ChangeSet material has ambiguous historical Verify outcome provenance",
+        ));
+    }
+    let historical = unmatched_material[0];
+    let id = historical
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("historical Verify outcome ID is unavailable"))?;
+    let hash = historical
+        .get("hash")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("historical Verify outcome hash is unavailable"))?;
+    Ok(ChangeSetOutcomeBinding::HistoricalVerifier {
+        id: id.to_string(),
+        hash: hash.to_string(),
+    })
+}
+
 fn change_set_provenance_repair(
     change_set: &StoredChangeSet,
 ) -> Option<ChangeSetProvenanceRepair<'_>> {
@@ -1494,46 +1572,55 @@ async fn repair_approved_change_set_provenance(
         .store
         .list_effective_stage_outcomes(work_item_id)
         .await?;
-    let implement_outcome = effective_outcomes
-        .iter()
-        .find(|outcome| {
-            outcome.stage_key == "implement"
-                && outcome.status == "succeeded"
-                && outcome.id == implement_outcome_id
-                && outcome.content_hash == implement_outcome_hash
-                && outcome.stage_execution_id == implement_stage_execution_id
-        })
-        .ok_or_else(|| {
-            ApiError::conflict("ChangeSet does not match the effective Implement outcome")
-        })?;
-    let verify_outcome = effective_outcomes
-        .iter()
-        .find(|outcome| {
-            outcome.stage_key == "verify"
-                && outcome.status == "succeeded"
-                && outcome.stage_execution_id == verification_stage_execution_id
-        })
-        .ok_or_else(|| {
-            ApiError::conflict("ChangeSet does not match the effective Verify outcome")
-        })?;
+    if !effective_outcomes.iter().any(|outcome| {
+        outcome.stage_key == "implement"
+            && outcome.status == "succeeded"
+            && outcome.id == implement_outcome_id
+            && outcome.content_hash == implement_outcome_hash
+            && outcome.stage_execution_id == implement_stage_execution_id
+    }) {
+        return Err(ApiError::conflict(
+            "ChangeSet does not match the effective Implement outcome",
+        ));
+    }
+    if !effective_outcomes.iter().any(|outcome| {
+        outcome.stage_key == "verify"
+            && outcome.status == "succeeded"
+            && outcome.stage_execution_id == verification_stage_execution_id
+    }) {
+        return Err(ApiError::conflict(
+            "ChangeSet does not match the effective Verify outcome",
+        ));
+    }
     let material_effective_outcomes = change_set
         .change_set_json
         .get("effective_outcomes")
         .and_then(Value::as_array)
         .ok_or_else(|| ApiError::conflict("ChangeSet effective outcomes are unavailable"))?;
-    for outcome in [implement_outcome, verify_outcome] {
-        if !material_effective_outcomes.iter().any(|material| {
-            material.get("id").and_then(Value::as_str) == Some(outcome.id.as_str())
-                && material.get("stage").and_then(Value::as_str) == Some(outcome.stage_key.as_str())
-                && material.get("hash").and_then(Value::as_str)
-                    == Some(outcome.content_hash.as_str())
-                && material.get("status").and_then(Value::as_str) == Some(outcome.status.as_str())
-        }) {
-            return Err(ApiError::conflict(
-                "ChangeSet material does not bind the current effective stage outcomes",
-            ));
+    let outcome_binding =
+        validate_change_set_outcome_binding(material_effective_outcomes, &effective_outcomes)?;
+    let historical_verifier_outcome_list_stale = match outcome_binding {
+        ChangeSetOutcomeBinding::Current => false,
+        ChangeSetOutcomeBinding::HistoricalVerifier { id, hash } => {
+            state
+                .store
+                .get_stage_outcome(&id)
+                .await?
+                .filter(|outcome| {
+                    outcome.work_item_id == work_item_id
+                        && outcome.stage_key == "verify"
+                        && outcome.status == "succeeded"
+                        && outcome.content_hash == hash
+                        && outcome.stage_execution_id != verification_stage_execution_id
+                })
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                        "ChangeSet historical Verify outcome provenance is not immutable evidence",
+                    )
+                })?;
+            true
         }
-    }
+    };
     let implement_execution = state
         .store
         .get_stage_execution(implement_stage_execution_id)
@@ -1628,6 +1715,7 @@ async fn repair_approved_change_set_provenance(
             "revision_unchanged":true,
             "approval_unchanged":true,
             "external_effect":false,
+            "historical_verifier_outcome_list_stale":historical_verifier_outcome_list_stale,
         }),
     )
     .await?;
@@ -1636,6 +1724,7 @@ async fn repair_approved_change_set_provenance(
         "material_unchanged":true,
         "revision_unchanged":true,
         "external_effect":false,
+        "historical_verifier_outcome_list_stale":historical_verifier_outcome_list_stale,
     }))
 }
 
@@ -5271,6 +5360,32 @@ mod tests {
         }
     }
 
+    fn stage_outcome(id: &str, stage_key: &str) -> StoredStageOutcome {
+        StoredStageOutcome {
+            id: id.into(),
+            stage_execution_id: format!("stageexec_{id}"),
+            work_item_id: "witem_repo".into(),
+            stage_key: stage_key.into(),
+            status: "succeeded".into(),
+            schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+            outcome: json!({}),
+            content_hash: format!("sha256:{id}"),
+            state_version: 1,
+            supersedes_outcome_id: None,
+            sealed_by: "controller".into(),
+            sealed_at: "1".into(),
+        }
+    }
+
+    fn outcome_reference(outcome: &StoredStageOutcome) -> Value {
+        json!({
+            "id":outcome.id,
+            "stage":outcome.stage_key,
+            "status":outcome.status,
+            "hash":outcome.content_hash,
+        })
+    }
+
     fn source_delivery_intent(status: &str) -> StoredSourceDeliveryIntent {
         StoredSourceDeliveryIntent {
             id: "srcintent_repo".into(),
@@ -5451,6 +5566,58 @@ mod tests {
         .unwrap();
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].id, "authorize_source_delivery");
+    }
+
+    #[test]
+    fn legacy_outcome_binding_allows_only_one_immutable_historical_verifier() {
+        let implement = stage_outcome("implement_current", "implement");
+        let test = stage_outcome("test_current", "test");
+        let verify = stage_outcome("verify_current", "verify");
+        let effective = vec![implement.clone(), test.clone(), verify.clone()];
+        let current_material = effective.iter().map(outcome_reference).collect::<Vec<_>>();
+        assert_eq!(
+            validate_change_set_outcome_binding(&current_material, &effective).unwrap(),
+            ChangeSetOutcomeBinding::Current
+        );
+
+        let historical_verify = stage_outcome("verify_historical", "verify");
+        let historical_material = vec![
+            outcome_reference(&implement),
+            outcome_reference(&test),
+            outcome_reference(&historical_verify),
+        ];
+        assert_eq!(
+            validate_change_set_outcome_binding(&historical_material, &effective).unwrap(),
+            ChangeSetOutcomeBinding::HistoricalVerifier {
+                id: historical_verify.id.clone(),
+                hash: historical_verify.content_hash.clone(),
+            }
+        );
+
+        assert!(validate_change_set_outcome_binding(
+            &[
+                outcome_reference(&implement),
+                outcome_reference(&historical_verify),
+            ],
+            &effective,
+        )
+        .is_err());
+        assert!(validate_change_set_outcome_binding(
+            &[
+                outcome_reference(&implement),
+                outcome_reference(&test),
+                outcome_reference(&historical_verify),
+                outcome_reference(&stage_outcome("verify_other", "verify")),
+            ],
+            &effective,
+        )
+        .is_err());
+        let mut extra_stale_non_verify = historical_material;
+        extra_stale_non_verify.push(outcome_reference(&stage_outcome(
+            "implement_historical",
+            "implement",
+        )));
+        assert!(validate_change_set_outcome_binding(&extra_stale_non_verify, &effective).is_err());
     }
 
     #[test]
