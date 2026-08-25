@@ -340,6 +340,8 @@ pub(in crate::app) async fn revise_work_plan(
                 risk_level: clean_optional_text(request.risk_level),
                 requires_approval: request.requires_approval,
                 work_plan_json: request.work_plan_json,
+                session_id: None,
+                run_id: None,
                 actor: actor.clone(),
                 reason: reason.clone(),
             },

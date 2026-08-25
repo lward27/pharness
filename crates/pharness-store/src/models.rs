@@ -693,6 +693,8 @@ pub struct UpdateWorkPlanRevision {
     pub risk_level: Option<String>,
     pub requires_approval: Option<bool>,
     pub work_plan_json: serde_json::Value,
+    pub session_id: Option<SessionId>,
+    pub run_id: Option<RunId>,
     pub actor: Option<String>,
     pub reason: Option<String>,
 }
