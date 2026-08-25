@@ -562,8 +562,30 @@ fn repo_delivery_segments(
     .collect()
 }
 
-fn agent_evidence_payloads(outcomes: &[StoredStageOutcome]) -> Vec<Value> {
-    outcomes
+struct AgentEvidenceBundle {
+    catalog: Vec<Value>,
+    payloads: Vec<Value>,
+}
+
+async fn agent_evidence_bundle(
+    state: &AppState,
+    metadata: &StoredRepoWorkItemMetadata,
+    outcomes: &[StoredStageOutcome],
+) -> Result<AgentEvidenceBundle, ApiError> {
+    let mut catalog = outcomes
+        .iter()
+        .map(|outcome| {
+            json!({
+                "id":outcome.id,
+                "kind":"stage_outcome",
+                "version":outcome.schema_version,
+                "hash":outcome.content_hash,
+                "stage":outcome.stage_key,
+                "status":outcome.status,
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut payloads = outcomes
         .iter()
         .map(|outcome| {
             json!({
@@ -574,7 +596,96 @@ fn agent_evidence_payloads(outcomes: &[StoredStageOutcome]) -> Vec<Value> {
                 "payload":outcome.outcome,
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+    for context in metadata
+        .context_repositories
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let discovery_id = context
+            .get("discovery_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::internal("context Repository has no discovery ID"))?;
+        let expected_hash = context
+            .get("discovery_hash")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::internal("context Repository has no discovery hash"))?;
+        let discovery = state
+            .store
+            .get_repository_discovery(discovery_id)
+            .await?
+            .filter(|discovery| {
+                discovery.status == "succeeded"
+                    && discovery.content_hash.as_deref() == Some(expected_hash)
+            })
+            .ok_or_else(|| {
+                ApiError::conflict(
+                    "context Repository discovery is missing or no longer matches its pin",
+                )
+            })?;
+        let projection = bounded_context_discovery_projection(context, &discovery);
+        let projection_hash = canonical_material_hash(&projection)?;
+        catalog.push(json!({
+            "id":discovery.id,
+            "kind":"context_repository_discovery",
+            "version":"pharness.dev/context-repository-evidence/v1alpha1",
+            "hash":projection_hash,
+            "repository_id":context.get("repository_id"),
+            "source_commit":context.get("source_commit"),
+            "source_discovery_hash":expected_hash,
+        }));
+        payloads.push(json!({
+            "id":discovery.id,
+            "kind":"context_repository_discovery",
+            "version":"pharness.dev/context-repository-evidence/v1alpha1",
+            "hash":projection_hash,
+            "payload":projection,
+        }));
+    }
+    Ok(AgentEvidenceBundle { catalog, payloads })
+}
+
+fn bounded_context_discovery_projection(
+    context: &Value,
+    discovery: &pharness_store::StoredRepositoryDiscovery,
+) -> Value {
+    let inventory = discovery.inventory_json.as_ref().and_then(Value::as_object);
+    let mut bounded = serde_json::Map::new();
+    for key in [
+        "identity",
+        "contract_files",
+        "language_indicators",
+        "build_indicators",
+        "dependency_candidates",
+        "lock_candidates",
+        "command_candidates",
+        "roots",
+        "automation_references",
+        "conflicts",
+        "limits",
+    ] {
+        let Some(value) = inventory.and_then(|inventory| inventory.get(key)) else {
+            continue;
+        };
+        let value = match value {
+            Value::Array(entries) if entries.len() > 100 => {
+                Value::Array(entries.iter().take(100).cloned().collect())
+            }
+            other => other.clone(),
+        };
+        bounded.insert(key.into(), value);
+    }
+    json!({
+        "schema_version":"pharness.dev/context-repository-evidence/v1alpha1",
+        "repository_id":context.get("repository_id"),
+        "canonical_url":context.get("canonical_url"),
+        "source_commit":context.get("source_commit"),
+        "discovery_id":discovery.id,
+        "discovery_hash":discovery.content_hash,
+        "bounded_inventory":bounded,
+        "limits":{"maximum_items_per_inventory_field":100,"raw_repository_content_included":false},
+    })
 }
 
 fn annotation_context(annotations: &[pharness_store::StoredOperatorAnnotation]) -> Vec<Value> {
@@ -2226,6 +2337,7 @@ async fn start_repo_planner(
         .list_effective_stage_outcomes(work_item_id)
         .await?;
     let annotations = state.store.list_operator_annotations(work_item_id).await?;
+    let evidence = agent_evidence_bundle(state, &metadata, &outcomes).await?;
     let model = state
         .worker
         .config_json()
@@ -2255,6 +2367,7 @@ async fn start_repo_planner(
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance":metadata.acceptance_command_names},
         "pinned_product":{"snapshot_id":metadata.product_model_snapshot_id,"snapshot_hash":metadata.product_model_snapshot_hash},
         "pinned_repository":{"repository_id":metadata.repository_id,"source_commit":work_item.source_commit,"contract_version_id":metadata.repository_contract_version_id},
+        "pinned_context_repositories":metadata.context_repositories,
         "upstream_outcomes":outcomes.iter().map(|outcome| json!({"id":outcome.id,"stage":outcome.stage_key,"status":outcome.status,"hash":outcome.content_hash})).collect::<Vec<_>>(),
         "remaining_budgets":profile.budget,
         "policies":{"source_only":true,"manual_merge":true,"pipeline":false,"deployment":false},
@@ -2262,7 +2375,7 @@ async fn start_repo_planner(
         "contradictions":annotation_contradictions(&annotations),
         "risks":[],
         "operator_decisions":annotation_context(&annotations),
-        "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
+        "evidence_catalog":evidence.catalog,
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
     if estimated_tokens > 16_000 {
@@ -2303,7 +2416,7 @@ async fn start_repo_planner(
                 "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id},
                 "agent_profile":profile,
                 "agent_context":context,
-                "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
+                "agent_evidence_payloads":evidence.payloads,
                 "run_scope":scope.to_optional_json(),
                 "run_budget":profile.budget,
             }),
@@ -2646,6 +2759,7 @@ async fn start_repo_builder(
         .list_effective_stage_outcomes(&work_item.id)
         .await?;
     let annotations = state.store.list_operator_annotations(&work_item.id).await?;
+    let evidence = agent_evidence_bundle(state, metadata, &outcomes).await?;
     let plan_snapshot = json!({
         "id":plan.id,
         "revision":plan.revision,
@@ -2664,6 +2778,7 @@ async fn start_repo_builder(
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance_names":metadata.acceptance_command_names,"acceptance_commands":work_item.acceptance_criteria},
         "pinned_product":{"snapshot_id":metadata.product_model_snapshot_id,"snapshot_hash":metadata.product_model_snapshot_hash},
         "pinned_repository":{"repository_id":metadata.repository_id,"source_commit":source_commit,"contract_version_id":metadata.repository_contract_version_id,"contract_hash":work_item.repository_contract_hash},
+        "pinned_context_repositories":metadata.context_repositories,
         "approved_work_plan":{"snapshot":plan_snapshot,"hash":plan_hash},
         "upstream_outcomes":outcomes.iter().map(|outcome| json!({"id":outcome.id,"stage":outcome.stage_key,"status":outcome.status,"hash":outcome.content_hash})).collect::<Vec<_>>(),
         "remaining_budgets":work_item.run_budget,
@@ -2672,7 +2787,7 @@ async fn start_repo_builder(
         "contradictions":annotation_contradictions(&annotations),
         "risks":[],
         "operator_decisions":operator_decisions,
-        "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
+        "evidence_catalog":evidence.catalog,
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
     if estimated_tokens > 16_000 {
@@ -2734,7 +2849,7 @@ async fn start_repo_builder(
         "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"implement","context_pack_id":context_pack_id,"chain_authorization_id":authorization.id},
         "agent_profile":profile,
         "agent_context":context,
-        "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
+        "agent_evidence_payloads":evidence.payloads,
         "policy":policy,
         "run_scope":scope.to_optional_json(),
         "workspace":{"base_commit":source_commit,"branch":branch},
@@ -3105,6 +3220,7 @@ async fn start_repo_followup_stage(
         .list_effective_stage_outcomes(work_item_id)
         .await?;
     let annotations = state.store.list_operator_annotations(work_item_id).await?;
+    let evidence = agent_evidence_bundle(state, &metadata, &outcomes).await?;
     let mut contradictions = outcomes
         .iter()
         .flat_map(|outcome| {
@@ -3128,6 +3244,7 @@ async fn start_repo_followup_stage(
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance_names":metadata.acceptance_command_names,"acceptance_commands":work_item.acceptance_criteria},
         "pinned_product":{"snapshot_id":metadata.product_model_snapshot_id,"snapshot_hash":metadata.product_model_snapshot_hash},
         "pinned_repository":{"repository_id":metadata.repository_id,"source_commit":authorization.source_commit,"contract_version_id":metadata.repository_contract_version_id},
+        "pinned_context_repositories":metadata.context_repositories,
         "effective_upstream_outcomes":outcomes.iter().map(|outcome| json!({"id":outcome.id,"stage":outcome.stage_key,"status":outcome.status,"hash":outcome.content_hash})).collect::<Vec<_>>(),
         "remaining_budgets":profile.budget,
         "policies":{"source_only":true,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
@@ -3135,7 +3252,7 @@ async fn start_repo_followup_stage(
         "contradictions":contradictions,
         "risks":outcomes.iter().flat_map(|outcome| outcome.outcome.get("risks").and_then(Value::as_array).cloned().unwrap_or_default()).collect::<Vec<_>>(),
         "operator_decisions":operator_decisions,
-        "evidence_catalog":outcomes.iter().map(|outcome| json!({"id":outcome.id,"kind":"stage_outcome","version":outcome.schema_version,"hash":outcome.content_hash,"stage":outcome.stage_key,"status":outcome.status})).collect::<Vec<_>>(),
+        "evidence_catalog":evidence.catalog,
     });
     let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
     if estimated_tokens > 16_000 {
@@ -3196,7 +3313,7 @@ async fn start_repo_followup_stage(
                 "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
                 "agent_profile":profile,
                 "agent_context":context,
-                "agent_evidence_payloads":agent_evidence_payloads(&outcomes),
+                "agent_evidence_payloads":evidence.payloads,
                 "run_scope":scope.to_optional_json(),
                 "workspace":{"base_commit":authorization.source_commit,"branch":workspace.branch},
                 "workspace_source":source,
@@ -4223,6 +4340,53 @@ mod tests {
             status_changed_by: None,
             status_reason: None,
         }
+    }
+
+    #[test]
+    fn context_repository_projection_is_bounded_and_contains_no_raw_source() {
+        let discovery = pharness_store::StoredRepositoryDiscovery {
+            id: "rdisc_context".into(),
+            onboarding_id: "ronb_context".into(),
+            source_commit: "a".repeat(40),
+            resolved_commit: Some("a".repeat(40)),
+            status: "succeeded".into(),
+            schema_version: "pharness.dev/repository-discovery/v1alpha1".into(),
+            inventory_json: Some(json!({
+                "command_candidates":(0..150).map(|index| json!({"name":format!("command-{index}")})).collect::<Vec<_>>(),
+                "raw_source":"must-not-be-exposed",
+                "limits":{"entries":20_000},
+            })),
+            content_hash: Some("sha256:discovery".into()),
+            error_code: None,
+            error_summary: None,
+            started_at: Some("1".into()),
+            finished_at: Some("2".into()),
+            created_at: "1".into(),
+            updated_at: "2".into(),
+        };
+        let projection = bounded_context_discovery_projection(
+            &json!({
+                "repository_id":"repo_context",
+                "canonical_url":"https://github.com/example/context.git",
+                "source_commit":"a".repeat(40),
+            }),
+            &discovery,
+        );
+        assert_eq!(
+            projection
+                .pointer("/bounded_inventory/command_candidates")
+                .and_then(Value::as_array)
+                .unwrap()
+                .len(),
+            100
+        );
+        assert!(projection
+            .pointer("/bounded_inventory/raw_source")
+            .is_none());
+        assert_eq!(
+            projection.pointer("/limits/raw_repository_content_included"),
+            Some(&json!(false))
+        );
     }
 
     #[test]
