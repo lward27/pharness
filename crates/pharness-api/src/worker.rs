@@ -2543,27 +2543,55 @@ mod tests {
 
     #[test]
     fn extracts_only_the_requested_typed_submission() {
-        let events = vec![AgentEvent {
-            event_id: EventId::new("evt_plan"),
-            session_id: SessionId::new("ses_plan"),
-            run_id: RunId::new("run_plan"),
-            seq: 1,
+        let events = [
+            (
+                "evt_plan",
+                "work_plan",
+                serde_json::json!({"title":"Plan","summary":"Bounded plan","risk_level":"low","steps":[{"title":"Edit","description":"Change one module"}]}),
+            ),
+            (
+                "evt_test",
+                "test_outcome",
+                serde_json::json!({"summary":"Declared acceptance completed","acceptance_names":["unit"],"claims":[],"risks":[]}),
+            ),
+            (
+                "evt_verify",
+                "verification",
+                serde_json::json!({"decision":"approved","summary":"Evidence agrees","evidence_refs":["stageout_test"],"contradictions":[],"risks":[]}),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, (event_id, kind, document))| AgentEvent {
+            event_id: EventId::new(event_id),
+            session_id: SessionId::new("ses_chain"),
+            run_id: RunId::new("run_chain"),
+            seq: u64::try_from(index + 1).unwrap(),
             kind: EventKind::ToolFinished,
             payload: serde_json::json!({
                 "status":"ok",
                 "content":{
                     "structured_submission":true,
-                    "kind":"work_plan",
-                    "document":{"title":"Plan","summary":"Bounded plan","risk_level":"low","steps":[{"title":"Edit","description":"Change one module"}]}
+                    "kind":kind,
+                    "document":document,
                 }
             }),
-        }];
+        })
+        .collect::<Vec<_>>();
 
-        assert!(structured_submission_from_events(&events, "test_outcome").is_none());
         assert_eq!(
             structured_submission_from_events(&events, "work_plan").unwrap()["title"],
             "Plan"
         );
+        assert_eq!(
+            structured_submission_from_events(&events, "test_outcome").unwrap()["acceptance_names"],
+            serde_json::json!(["unit"])
+        );
+        assert_eq!(
+            structured_submission_from_events(&events, "verification").unwrap()["decision"],
+            "approved"
+        );
+        assert!(structured_submission_from_events(&events, "onboarding_proposal").is_none());
     }
 
     #[test]

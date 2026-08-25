@@ -418,6 +418,46 @@ mod tests {
     }
 
     #[test]
+    fn builds_fixed_onboarding_test_and_verifier_submissions() {
+        let onboarding = AgentAction::from_tool_call(
+            "submit_onboarding_proposal",
+            "call_onboarding",
+            r#"{"reason":"Submit reviewed discovery synthesis","proposal":{"schema_version":"pharness.dev/repository-onboarding-proposal/v1alpha1","discovery":{"id":"rdisc_1","hash":"sha256:discovery"},"blockers":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            onboarding,
+            AgentAction::SubmitOnboardingProposal { proposal, .. }
+                if proposal["discovery"]["id"] == "rdisc_1"
+        ));
+
+        let tester = AgentAction::from_tool_call(
+            "submit_test_outcome",
+            "call_test",
+            r#"{"reason":"Report declared acceptance","outcome":{"summary":"Both declared commands completed","acceptance_names":["unit","compile"],"claims":[],"risks":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            tester,
+            AgentAction::SubmitTestOutcome { outcome, .. }
+                if outcome["acceptance_names"] == serde_json::json!(["unit", "compile"])
+        ));
+
+        let verifier = AgentAction::from_tool_call(
+            "submit_verification",
+            "call_verify",
+            r#"{"reason":"Bind the decision to sealed evidence","verification":{"decision":"approved","summary":"Diff and acceptance agree","evidence_refs":["stageout_test"],"contradictions":[],"risks":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            verifier,
+            AgentAction::SubmitVerification { verification, .. }
+                if verification["decision"] == "approved"
+                    && verification["evidence_refs"][0] == "stageout_test"
+        ));
+    }
+
+    #[test]
     fn old_serialized_navigation_actions_use_new_field_defaults() {
         let read: AgentAction = serde_json::from_value(serde_json::json!({
             "action": "read_file",
