@@ -2648,7 +2648,7 @@ async fn observe_github_source_delivery(
     token: &str,
 ) -> anyhow::Result<GitPullRequestObservation> {
     let mut observation = observe_github_pull_request(client, context, token).await?;
-    let provider = observe_github_required_checks(client, context, token).await?;
+    let provider = observe_github_required_checks(client, context, token, None).await?;
     observation.authoritative_rules_succeeded = true;
     observation.required_checks = provider.required_checks;
     observation.check_runs = provider.check_runs;
@@ -2738,7 +2738,7 @@ async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
     let metadata = github_observer_json(
         &client,
         &format!("{api}/repos/{owner}/{repo}"),
-        &token,
+        Some(&token),
         false,
         "github_repository_metadata_query_unavailable",
     )
@@ -2751,6 +2751,11 @@ async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
     {
         anyhow::bail!("github_repository_pull_permission_unavailable");
     }
+    let repository_is_public = metadata
+        .get("private")
+        .and_then(serde_json::Value::as_bool)
+        .map(|private| !private)
+        .ok_or_else(|| anyhow::anyhow!("github_repository_visibility_unavailable"))?;
     let base_ref = metadata
         .get("default_branch")
         .and_then(serde_json::Value::as_str)
@@ -2761,7 +2766,7 @@ async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
     let commit = github_observer_json(
         &client,
         &format!("{api}/repos/{owner}/{repo}/commits/{branch}"),
-        &token,
+        Some(&token),
         false,
         "github_default_branch_commit_query_unavailable",
     )
@@ -2783,7 +2788,7 @@ async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
         pull_request_number: 1,
         github_api_url: api,
     };
-    observe_github_required_checks(&client, &context, &token).await?;
+    observe_github_required_checks(&client, &context, &token, Some(repository_is_public)).await?;
     tracing::info!(
         repository = %context.repository,
         "source observer verified repository, rules, checks, and statuses"
@@ -2795,9 +2800,29 @@ async fn observe_github_required_checks(
     client: &reqwest::Client,
     context: &GitDeliveryObservationContext,
     token: &str,
+    repository_is_public: Option<bool>,
 ) -> anyhow::Result<GitHubRequiredCheckObservation> {
     let (owner, repo) = parse_github_repository(&context.repository)?;
     let api = context.github_api_url.trim_end_matches('/');
+    let repository_is_public = match repository_is_public {
+        Some(value) => value,
+        None => {
+            let metadata = github_observer_json(
+                client,
+                &format!("{api}/repos/{owner}/{repo}"),
+                Some(token),
+                false,
+                "github_repository_metadata_query_unavailable",
+            )
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("github_repository_metadata_unavailable"))?;
+            metadata
+                .get("private")
+                .and_then(serde_json::Value::as_bool)
+                .map(|private| !private)
+                .ok_or_else(|| anyhow::anyhow!("github_repository_visibility_unavailable"))?
+        }
+    };
     let branch = percent_encode_path_segment(
         context
             .base_ref
@@ -2808,7 +2833,7 @@ async fn observe_github_required_checks(
     let rules = github_observer_json(
         client,
         &format!("{api}/repos/{owner}/{repo}/rules/branches/{branch}?per_page=100"),
-        token,
+        Some(token),
         false,
         "github_active_branch_rules_query_unavailable",
     )
@@ -2817,19 +2842,19 @@ async fn observe_github_required_checks(
     let classic = github_observer_json(
         client,
         &format!("{api}/repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks"),
-        token,
+        Some(token),
         true,
         "github_classic_required_checks_query_unavailable",
     )
     .await?;
-    let check_runs = github_observer_json(
+    let check_runs = github_observer_json_with_public_fallback(
         client,
         &format!(
             "{api}/repos/{owner}/{repo}/commits/{}/check-runs?per_page=100",
             context.source_commit_sha
         ),
         token,
-        false,
+        repository_is_public,
         "github_check_runs_query_unavailable",
     )
     .await?
@@ -2840,7 +2865,7 @@ async fn observe_github_required_checks(
             "{api}/repos/{owner}/{repo}/commits/{}/status?per_page=100",
             context.source_commit_sha
         ),
-        token,
+        Some(token),
         false,
         "github_commit_statuses_query_unavailable",
     )
@@ -2852,16 +2877,19 @@ async fn observe_github_required_checks(
 async fn github_observer_json(
     client: &reqwest::Client,
     url: &str,
-    token: &str,
+    token: Option<&str>,
     not_found_is_empty: bool,
     unavailable_error: &'static str,
 ) -> anyhow::Result<Option<serde_json::Value>> {
-    let response = client
+    let mut request = client
         .get(url)
-        .bearer_auth(token)
         .header("accept", "application/vnd.github+json")
         .header("x-github-api-version", "2022-11-28")
-        .header("user-agent", "pharness-git-observer")
+        .header("user-agent", "pharness-git-observer");
+    if let Some(token) = token {
+        request = request.bearer_auth(token);
+    }
+    let response = request
         .send()
         .await
         .context("GitHub provider-check observation request failed")?;
@@ -2885,6 +2913,22 @@ async fn github_observer_json(
             .await
             .context("GitHub provider-check response was invalid")?,
     ))
+}
+
+async fn github_observer_json_with_public_fallback(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    repository_is_public: bool,
+    unavailable_error: &'static str,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    match github_observer_json(client, url, Some(token), false, unavailable_error).await {
+        Ok(value) => Ok(value),
+        Err(error) if repository_is_public && error.to_string().as_str() == unavailable_error => {
+            github_observer_json(client, url, None, false, unavailable_error).await
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn evaluate_github_required_checks(
@@ -3839,6 +3883,11 @@ fn git_observer_error_code(error: &anyhow::Error) -> &'static str {
         }
         "github_check_runs_query_unavailable" => "github_check_runs_query_unavailable",
         "github_commit_statuses_query_unavailable" => "github_commit_statuses_query_unavailable",
+        "github_repository_metadata_query_unavailable" => {
+            "github_repository_metadata_query_unavailable"
+        }
+        "github_repository_metadata_unavailable" => "github_repository_metadata_unavailable",
+        "github_repository_visibility_unavailable" => "github_repository_visibility_unavailable",
         "github_provider_check_query_exceeded_bound" => {
             "github_provider_check_query_exceeded_bound"
         }
@@ -4456,8 +4505,9 @@ mod tests {
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
         evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
-        github_observer_json, parse_github_pull_request_observation, parse_github_repository,
-        pipeline_run_terminal, update_kustomization_image, validate_git_delivery_context,
+        github_observer_json, github_observer_json_with_public_fallback,
+        parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
+        update_kustomization_image, validate_git_delivery_context,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
         GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
     };
@@ -4530,7 +4580,7 @@ mod tests {
         let error = github_observer_json(
             &client,
             &format!("http://{address}/rules"),
-            "redacted-test-token",
+            Some("redacted-test-token"),
             false,
             "github_active_branch_rules_query_unavailable",
         )
@@ -4542,6 +4592,90 @@ mod tests {
             "github_active_branch_rules_query_unavailable"
         );
         assert!(!error.to_string().contains("redacted-test-token"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn public_check_runs_retry_without_the_fine_grained_pat() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for (index, response) in [
+                "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .to_string(),
+                {
+                    let body = r#"{"check_runs":[]}"#;
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                },
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = [0_u8; 2048];
+                let count = stream.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..count]).to_ascii_lowercase();
+                if index == 0 {
+                    assert!(request.contains("authorization: bearer redacted-test-token"));
+                } else {
+                    assert!(!request.contains("authorization:"));
+                }
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+        let client = reqwest::Client::builder().build().unwrap();
+
+        let value = github_observer_json_with_public_fallback(
+            &client,
+            &format!("http://{address}/check-runs"),
+            "redacted-test-token",
+            true,
+            "github_check_runs_query_unavailable",
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(value, json!({"check_runs":[]}));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn private_check_runs_never_fall_back_to_anonymous_access() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 2048];
+            let count = stream.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..count]).to_ascii_lowercase();
+            assert!(request.contains("authorization: bearer redacted-test-token"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+        let client = reqwest::Client::builder().build().unwrap();
+
+        let error = github_observer_json_with_public_fallback(
+            &client,
+            &format!("http://{address}/check-runs"),
+            "redacted-test-token",
+            false,
+            "github_check_runs_query_unavailable",
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(
+            git_observer_error_code(&error),
+            "github_check_runs_query_unavailable"
+        );
         server.await.unwrap();
     }
 
