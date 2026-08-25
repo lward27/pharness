@@ -2988,13 +2988,7 @@ async fn start_repo_builder(
             "model execution worker is unavailable",
         ));
     }
-    let profile = authorization
-        .profile_chain
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find_map(|value| serde_json::from_value::<pharness_core::AgentProfile>(value.clone()).ok())
-        .filter(|profile| profile.id == "repo-builder")
+    let profile = agent_profile_from_chain(&authorization.profile_chain, "repo-builder")
         .ok_or_else(|| ApiError::conflict("chain authorization has no repo-builder profile"))?;
     let environment_profile = super::environment::select_profile(
         &state.environment_profiles,
@@ -3366,6 +3360,20 @@ async fn start_repo_builder(
     }))
 }
 
+fn agent_profile_from_chain(
+    profile_chain: &Value,
+    profile_id: &str,
+) -> Option<pharness_core::AgentProfile> {
+    profile_chain
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|value| {
+            serde_json::from_value::<pharness_core::AgentProfile>(value.clone()).ok()
+        })
+        .find(|profile| profile.id == profile_id)
+}
+
 pub(in crate::app) async fn continue_repo_stage_chain(
     state: &AppState,
     completed_run: &pharness_store::StoredRun,
@@ -3510,14 +3518,8 @@ async fn start_repo_followup_stage(
         "verify" => "repo-verifier",
         _ => return Err(ApiError::internal("unsupported Repo Mode follow-up stage")),
     };
-    let profile = authorization
-        .profile_chain
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find_map(|value| serde_json::from_value::<pharness_core::AgentProfile>(value.clone()).ok())
-        .filter(|profile| profile.id == profile_id)
-        .ok_or_else(|| {
+    let profile =
+        agent_profile_from_chain(&authorization.profile_chain, profile_id).ok_or_else(|| {
             ApiError::conflict(format!("chain authorization has no {profile_id} profile"))
         })?;
     let runner_profile = completed_run
@@ -4705,6 +4707,28 @@ mod tests {
             status_changed_by: None,
             status_reason: None,
         }
+    }
+
+    #[test]
+    fn stage_chain_profile_lookup_finds_every_compiled_profile() {
+        let profiles = pharness_core::compiled_agent_profiles("test-model", "test-prompt")
+            .into_iter()
+            .filter(|profile| {
+                matches!(
+                    profile.id.as_str(),
+                    "repo-builder" | "repo-tester" | "repo-verifier"
+                )
+            })
+            .collect::<Vec<_>>();
+        let profile_chain = serde_json::to_value(profiles).unwrap();
+
+        for profile_id in ["repo-builder", "repo-tester", "repo-verifier"] {
+            assert_eq!(
+                agent_profile_from_chain(&profile_chain, profile_id).map(|profile| profile.id),
+                Some(profile_id.to_string())
+            );
+        }
+        assert!(agent_profile_from_chain(&profile_chain, "repo-unknown").is_none());
     }
 
     #[test]
