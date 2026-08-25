@@ -108,7 +108,7 @@ use super::work_items::actions::{advance_work_item, execute_work_item_action};
 use super::work_items::attempts::{
     cancel_work_item, list_workspaces, replan_work_item, transition_work_item, ListWorkspacesQuery,
 };
-use super::work_items::flow::{list_work_items, work_item_flow, ListWorkItemsQuery};
+use super::work_items::flow::{get_work_item, list_work_items, work_item_flow, ListWorkItemsQuery};
 use super::work_items::lifecycle::approval_gates_from_work_item;
 use super::work_items::preflight::{
     bounded_production_grant_expiry, create_work_item, request_matches_protected_target,
