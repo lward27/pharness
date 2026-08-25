@@ -4874,7 +4874,7 @@ async fn build_repo_work_item_preflight(
     })
 }
 
-async fn current_readiness_mismatches(
+pub(in crate::app) async fn current_readiness_mismatches(
     state: &AppState,
     repository: &pharness_store::StoredRepository,
     source_commit: &str,
