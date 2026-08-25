@@ -223,6 +223,52 @@ pub struct StoredStageChainAuthorization {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateSourceDeliveryIntent {
+    pub id: String,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub repository_id: String,
+    pub source_repo: String,
+    pub base_ref: String,
+    pub base_commit: String,
+    pub head_branch: String,
+    pub patch_artifact_id: Option<String>,
+    pub patch_hash: String,
+    pub authorization: serde_json::Value,
+    pub created_by: String,
+    pub creation_reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredSourceDeliveryIntent {
+    pub id: String,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub repository_id: String,
+    pub source_repo: String,
+    pub base_ref: String,
+    pub base_commit: String,
+    pub head_branch: String,
+    pub patch_artifact_id: Option<String>,
+    pub patch_hash: String,
+    pub status: String,
+    pub state_version: u64,
+    pub authorization: serde_json::Value,
+    pub writer_execution_id: Option<String>,
+    pub observer_execution_id: Option<String>,
+    pub pull_request: Option<serde_json::Value>,
+    pub merge_provenance: Option<serde_json::Value>,
+    pub provider_checks: Option<serde_json::Value>,
+    pub created_by: String,
+    pub creation_reason: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status_changed_at: String,
+    pub status_changed_by: Option<String>,
+    pub status_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateEvidenceRetrieval {
     pub id: String,
     pub work_item_id: String,

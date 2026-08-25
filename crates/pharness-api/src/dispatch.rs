@@ -40,6 +40,7 @@ const NETWORK_POLICY_STABILIZATION_SECONDS: u64 = 15;
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
 const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
 const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
+const SOURCE_DELIVERY_INTENT_LABEL: &str = "pharness.lucas.engineering/source-delivery-intent";
 const GITOPS_CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/gitops-change-set";
 const PIPELINE_INTENT_ID_ANNOTATION: &str = "pharness.lucas.engineering/pipeline-intent-id";
 const EXECUTION_ID_ANNOTATION: &str = "pharness.lucas.engineering/execution-id";
@@ -88,6 +89,18 @@ pub struct GitDeliveryObservationRequest {
 #[derive(Debug, Clone)]
 pub struct GitDeliveryObservationReceipt {
     pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceDeliveryExecutionRequest {
+    pub source_delivery_intent_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceDeliveryObservationRequest {
+    pub source_delivery_intent_id: String,
+    pub execution_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -461,6 +474,19 @@ impl RunDispatcher {
         }
     }
 
+    pub async fn dispatch_source_delivery(
+        &self,
+        request: SourceDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_source_delivery_writer_job(&request).await
+            }
+            Self::Disabled => anyhow::bail!("source delivery requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("source delivery is unavailable in local worker mode"),
+        }
+    }
+
     /// Dispatch a separate GitOps writer Job. It is intentionally distinct
     /// from the application source writer and can only receive its own token.
     pub async fn dispatch_gitops_delivery(
@@ -521,6 +547,25 @@ impl RunDispatcher {
             Self::Kubernetes(dispatcher) => dispatcher.create_git_observer_job(&request).await,
             Self::Disabled => anyhow::bail!("Git observation requires kubernetes_job worker mode"),
             Self::Local(_) => anyhow::bail!("Git observation is unavailable in local worker mode"),
+        }
+    }
+
+    pub async fn dispatch_source_delivery_observation(
+        &self,
+        request: SourceDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .create_source_delivery_observer_job(&request)
+                    .await
+            }
+            Self::Disabled => {
+                anyhow::bail!("source delivery observation requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("source delivery observation is unavailable in local worker mode")
+            }
         }
     }
 
@@ -1279,6 +1324,34 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         Ok(GitDeliveryExecutionReceipt { job_name })
     }
 
+    async fn create_source_delivery_writer_job(
+        &self,
+        request: &SourceDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        if !self.git_writer_available() {
+            anyhow::bail!("Git writer executor is not configured");
+        }
+        let legacy = GitDeliveryExecutionRequest {
+            change_set_id: request.source_delivery_intent_id.clone(),
+            execution_id: request.execution_id.clone(),
+        };
+        let job_name = git_writer_job_name(&request.execution_id);
+        let mut manifest = self.git_writer_job_manifest(&legacy, &job_name);
+        bind_source_delivery_manifest(
+            &mut manifest,
+            &request.source_delivery_intent_id,
+            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
+        )?;
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            source_delivery_intent_id = %request.source_delivery_intent_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created source delivery writer job"
+        );
+        Ok(GitDeliveryExecutionReceipt { job_name })
+    }
+
     async fn create_argo_executor_job(
         &self,
         request: &ArgoSyncExecutionRequest,
@@ -1313,6 +1386,34 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             execution_id = %request.execution_id,
             job = %job_name,
             "created Git observer job"
+        );
+        Ok(GitDeliveryObservationReceipt { job_name })
+    }
+
+    async fn create_source_delivery_observer_job(
+        &self,
+        request: &SourceDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        if !self.git_observer_available() {
+            anyhow::bail!("Git observer executor is not configured");
+        }
+        let legacy = GitDeliveryObservationRequest {
+            change_set_id: request.source_delivery_intent_id.clone(),
+            execution_id: request.execution_id.clone(),
+        };
+        let job_name = git_observer_job_name(&request.execution_id);
+        let mut manifest = self.git_observer_job_manifest(&legacy, &job_name);
+        bind_source_delivery_manifest(
+            &mut manifest,
+            &request.source_delivery_intent_id,
+            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
+        )?;
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            source_delivery_intent_id = %request.source_delivery_intent_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created source delivery observer job"
         );
         Ok(GitDeliveryObservationReceipt { job_name })
     }
@@ -2667,6 +2768,33 @@ fn time_suffix() -> u128 {
 /// underscores. The mapping must stay reversible for the reaper.
 fn job_label_value(run_id: &str) -> String {
     run_id.replace('_', "-")
+}
+
+fn bind_source_delivery_manifest(
+    manifest: &mut serde_json::Value,
+    intent_id: &str,
+    env_name: &str,
+) -> anyhow::Result<()> {
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        let labels = manifest
+            .pointer_mut(pointer)
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| anyhow::anyhow!("source delivery Job has no labels at {pointer}"))?;
+        labels.remove(CHANGE_SET_LABEL);
+        labels.insert(
+            SOURCE_DELIVERY_INTENT_LABEL.into(),
+            serde_json::Value::String(job_label_value(intent_id)),
+        );
+    }
+    let env = manifest
+        .pointer_mut("/spec/template/spec/containers/0/env")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| anyhow::anyhow!("source delivery Job has no executor environment"))?;
+    env.retain(|entry| {
+        entry.get("name").and_then(serde_json::Value::as_str) != Some("PHARNESS_CHANGE_SET_ID")
+    });
+    env.push(serde_json::json!({"name":env_name,"value":intent_id}));
+    Ok(())
 }
 
 fn run_label_to_run_id(label: &str) -> String {

@@ -1352,6 +1352,7 @@ pub struct ObserveGitDeliveryResponse {
 pub struct GitDeliveryObservationContextResponse {
     pub execution_id: String,
     pub repository: String,
+    pub base_ref: String,
     pub head_branch: String,
     pub source_commit_sha: String,
     pub pull_request_url: String,
@@ -1375,6 +1376,16 @@ pub struct GitDeliveryObservationOutcomeRequest {
     pub head_commit_sha: Option<String>,
     #[serde(default)]
     pub error_code: Option<String>,
+    #[serde(default)]
+    pub authoritative_rules_succeeded: bool,
+    #[serde(default)]
+    pub required_checks: serde_json::Value,
+    #[serde(default)]
+    pub check_runs: serde_json::Value,
+    #[serde(default)]
+    pub commit_statuses: serde_json::Value,
+    #[serde(default)]
+    pub provider_check_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

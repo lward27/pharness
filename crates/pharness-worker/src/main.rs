@@ -1527,7 +1527,11 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
     let api_url = required_env("PHARNESS_API_URL")?
         .trim_end_matches('/')
         .to_string();
-    let change_set_id = required_env("PHARNESS_CHANGE_SET_ID")?;
+    let source_delivery_intent_id = std::env::var("PHARNESS_SOURCE_DELIVERY_INTENT_ID").ok();
+    let resource_id = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => intent_id.to_string(),
+        None => required_env("PHARNESS_CHANGE_SET_ID")?,
+    };
     let execution_id = required_env("PHARNESS_GIT_DELIVERY_EXECUTION_ID")?;
     let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
     let git_token = required_env("PHARNESS_GIT_WRITER_TOKEN")?;
@@ -1535,7 +1539,10 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(60))
         .build()
         .context("failed to build Git writer http client")?;
-    let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-context?execution_id={execution_id}");
+    let context_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/context?execution_id={execution_id}"),
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-context?execution_id={execution_id}"),
+    };
     let context = fetch_internal_context_with_retry::<GitDeliveryContext>(
         &client,
         &context_url,
@@ -1552,14 +1559,18 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
             "pull_request_number": completed.pull_request_number,
         }),
         Err(error) => {
-            tracing::warn!(change_set_id = %change_set_id, error = %error, "Git writer failed without exposing command output");
+            tracing::warn!(delivery_resource_id = %resource_id, error = %error, "Git writer failed without exposing command output");
             serde_json::json!({
                 "execution_id": execution_id, "status": "failed", "error_code": git_delivery_error_code(&error),
             })
         }
     };
-    let outcome_url =
-        format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-outcome");
+    let outcome_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => {
+            format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/writer-outcome")
+        }
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-outcome"),
+    };
     post_git_delivery_outcome(&client, &outcome_url, &worker_token, &outcome).await
 }
 
@@ -1570,7 +1581,11 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
     let api_url = required_env("PHARNESS_API_URL")?
         .trim_end_matches('/')
         .to_string();
-    let change_set_id = required_env("PHARNESS_CHANGE_SET_ID")?;
+    let source_delivery_intent_id = std::env::var("PHARNESS_SOURCE_DELIVERY_INTENT_ID").ok();
+    let resource_id = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => intent_id.to_string(),
+        None => required_env("PHARNESS_CHANGE_SET_ID")?,
+    };
     let execution_id = required_env("PHARNESS_GIT_DELIVERY_EXECUTION_ID")?;
     let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
     let git_token = required_env("PHARNESS_GIT_OBSERVER_TOKEN")?;
@@ -1578,7 +1593,10 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(30))
         .build()
         .context("failed to build Git observer http client")?;
-    let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-observation-context?execution_id={execution_id}");
+    let context_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/observation-context?execution_id={execution_id}"),
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-observation-context?execution_id={execution_id}"),
+    };
     let context = fetch_internal_context_with_retry::<GitDeliveryObservationContext>(
         &client,
         &context_url,
@@ -1586,7 +1604,12 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
     )
     .await
     .context("failed to fetch Git observer context")?;
-    let outcome = match observe_github_pull_request(&client, &context, &git_token).await {
+    let observed = if source_delivery_intent_id.is_some() {
+        observe_github_source_delivery(&client, &context, &git_token).await
+    } else {
+        observe_github_pull_request(&client, &context, &git_token).await
+    };
+    let outcome = match observed {
         Ok(observation) => serde_json::json!({
             "execution_id": execution_id,
             "status": "observed",
@@ -1595,9 +1618,14 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
             "merge_commit_sha": observation.merge_commit_sha,
             "head_branch": observation.head_branch,
             "head_commit_sha": observation.head_commit_sha,
+            "authoritative_rules_succeeded": observation.authoritative_rules_succeeded,
+            "required_checks": observation.required_checks,
+            "check_runs": observation.check_runs,
+            "commit_statuses": observation.commit_statuses,
+            "provider_check_status": observation.provider_check_status,
         }),
         Err(error) => {
-            tracing::warn!(change_set_id = %change_set_id, error = %error, "Git observer failed without exposing provider output");
+            tracing::warn!(delivery_resource_id = %resource_id, error = %error, "Git observer failed without exposing provider output");
             serde_json::json!({
                 "execution_id": execution_id,
                 "status": "failed",
@@ -1605,9 +1633,14 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
             })
         }
     };
-    let outcome_url = format!(
-        "{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-observation-outcome"
-    );
+    let outcome_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!(
+            "{api_url}/api/internal/source-delivery-intents/{intent_id}/observation-outcome"
+        ),
+        None => format!(
+            "{api_url}/api/internal/change-sets/{resource_id}/git-delivery-observation-outcome"
+        ),
+    };
     post_git_delivery_outcome(&client, &outcome_url, &worker_token, &outcome).await
 }
 
@@ -1727,6 +1760,7 @@ async fn execute_gitops_delivery_observation() -> anyhow::Result<()> {
     let source_context = GitDeliveryObservationContext {
         execution_id: context.execution_id,
         repository: context.repository,
+        base_ref: None,
         head_branch: context.head_branch,
         source_commit_sha: context.source_commit_sha,
         pull_request_url: context.pull_request_url,
@@ -1831,6 +1865,8 @@ async fn resolve_github_base_revision(
 struct GitDeliveryObservationContext {
     execution_id: String,
     repository: String,
+    #[serde(default)]
+    base_ref: Option<String>,
     head_branch: String,
     source_commit_sha: String,
     pull_request_url: String,
@@ -1844,6 +1880,11 @@ struct GitPullRequestObservation {
     merge_commit_sha: Option<String>,
     head_branch: String,
     head_commit_sha: String,
+    authoritative_rules_succeeded: bool,
+    required_checks: serde_json::Value,
+    check_runs: serde_json::Value,
+    commit_statuses: serde_json::Value,
+    provider_check_status: String,
 }
 
 async fn observe_github_pull_request(
@@ -1883,6 +1924,21 @@ async fn observe_github_pull_request(
         .await
         .context("GitHub pull request observation response was invalid")?;
     parse_github_pull_request_observation(&value, context)
+}
+
+async fn observe_github_source_delivery(
+    client: &reqwest::Client,
+    context: &GitDeliveryObservationContext,
+    token: &str,
+) -> anyhow::Result<GitPullRequestObservation> {
+    let mut observation = observe_github_pull_request(client, context, token).await?;
+    let provider = observe_github_required_checks(client, context, token).await?;
+    observation.authoritative_rules_succeeded = true;
+    observation.required_checks = provider.required_checks;
+    observation.check_runs = provider.check_runs;
+    observation.commit_statuses = provider.commit_statuses;
+    observation.provider_check_status = provider.status;
+    Ok(observation)
 }
 
 fn parse_github_pull_request_observation(
@@ -1931,7 +1987,322 @@ fn parse_github_pull_request_observation(
         merge_commit_sha,
         head_branch: head_branch.expect("validated branch").to_string(),
         head_commit_sha: head_commit_sha.expect("validated sha").to_string(),
+        authoritative_rules_succeeded: false,
+        required_checks: serde_json::json!([]),
+        check_runs: serde_json::json!([]),
+        commit_statuses: serde_json::json!([]),
+        provider_check_status: "unavailable".into(),
     })
+}
+
+struct GitHubRequiredCheckObservation {
+    required_checks: serde_json::Value,
+    check_runs: serde_json::Value,
+    commit_statuses: serde_json::Value,
+    status: String,
+}
+
+async fn observe_github_required_checks(
+    client: &reqwest::Client,
+    context: &GitDeliveryObservationContext,
+    token: &str,
+) -> anyhow::Result<GitHubRequiredCheckObservation> {
+    let (owner, repo) = parse_github_repository(&context.repository)?;
+    let api = context.github_api_url.trim_end_matches('/');
+    let branch = percent_encode_path_segment(
+        context
+            .base_ref
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("github_base_ref_unavailable"))?,
+    );
+    let rules = github_observer_json(
+        client,
+        &format!("{api}/repos/{owner}/{repo}/rules/branches/{branch}?per_page=100"),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_unavailable"))?;
+    let classic = github_observer_json(
+        client,
+        &format!("{api}/repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks"),
+        token,
+        true,
+    )
+    .await?;
+    let check_runs = github_observer_json(
+        client,
+        &format!(
+            "{api}/repos/{owner}/{repo}/commits/{}/check-runs?per_page=100",
+            context.source_commit_sha
+        ),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_check_runs_unavailable"))?;
+    let statuses = github_observer_json(
+        client,
+        &format!(
+            "{api}/repos/{owner}/{repo}/commits/{}/status?per_page=100",
+            context.source_commit_sha
+        ),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_commit_statuses_unavailable"))?;
+    evaluate_github_required_checks(&rules, classic.as_ref(), &check_runs, &statuses)
+}
+
+async fn github_observer_json(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    not_found_is_empty: bool,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    let response = client
+        .get(url)
+        .bearer_auth(token)
+        .header("accept", "application/vnd.github+json")
+        .header("x-github-api-version", "2022-11-28")
+        .header("user-agent", "pharness-git-observer")
+        .send()
+        .await
+        .context("GitHub provider-check observation request failed")?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND && not_found_is_empty {
+        return Ok(None);
+    }
+    if !response.status().is_success() {
+        anyhow::bail!("github_provider_check_query_unavailable");
+    }
+    if response
+        .headers()
+        .get(reqwest::header::LINK)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.contains("rel=\"next\""))
+    {
+        anyhow::bail!("github_provider_check_query_exceeded_bound");
+    }
+    Ok(Some(
+        response
+            .json()
+            .await
+            .context("GitHub provider-check response was invalid")?,
+    ))
+}
+
+fn evaluate_github_required_checks(
+    active_rules: &serde_json::Value,
+    classic: Option<&serde_json::Value>,
+    check_runs_response: &serde_json::Value,
+    statuses_response: &serde_json::Value,
+) -> anyhow::Result<GitHubRequiredCheckObservation> {
+    let mut required =
+        std::collections::BTreeMap::<(String, Option<i64>), serde_json::Value>::new();
+    let rules = active_rules
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_invalid"))?;
+    for rule in rules {
+        if rule.get("type").and_then(serde_json::Value::as_str) != Some("required_status_checks") {
+            continue;
+        }
+        let entries = rule
+            .pointer("/parameters/required_status_checks")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_invalid"))?;
+        for entry in entries {
+            add_required_check(&mut required, entry, "integration_id")?;
+        }
+    }
+    if let Some(classic) = classic {
+        for context in classic
+            .get("contexts")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let name = context
+                .as_str()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!("github_classic_branch_protection_invalid"))?;
+            required
+                .entry((name.to_string(), None))
+                .or_insert_with(|| serde_json::json!({"name":name,"app_id":null}));
+        }
+        for entry in classic
+            .get("checks")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            add_required_check(&mut required, entry, "app_id")?;
+        }
+    }
+    let check_runs = check_runs_response
+        .get("check_runs")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("github_check_runs_invalid"))?;
+    let statuses = statuses_response
+        .get("statuses")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("github_commit_statuses_invalid"))?;
+    if check_runs.len() > 100 || statuses.len() > 100 || required.len() > 100 {
+        anyhow::bail!("github_provider_check_query_exceeded_bound");
+    }
+
+    let bounded_runs = check_runs
+        .iter()
+        .filter_map(|run| {
+            Some(serde_json::json!({
+                "name":run.get("name")?.as_str()?,
+                "status":run.get("status").and_then(serde_json::Value::as_str),
+                "conclusion":run.get("conclusion").and_then(serde_json::Value::as_str),
+                "app_id":run.pointer("/app/id").and_then(serde_json::Value::as_i64),
+            }))
+        })
+        .collect::<Vec<_>>();
+    let mut bounded_statuses = Vec::new();
+    let mut seen_statuses = std::collections::BTreeSet::new();
+    for status in statuses {
+        let Some(name) = status.get("context").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if seen_statuses.insert(name.to_string()) {
+            bounded_statuses.push(serde_json::json!({
+                "name":name,
+                "state":status.get("state").and_then(serde_json::Value::as_str),
+            }));
+        }
+    }
+
+    let mut overall = "passing";
+    let mut required_output = Vec::new();
+    for ((name, app_id), _) in required {
+        let matching_runs = bounded_runs
+            .iter()
+            .filter(|run| {
+                run.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str())
+                    && app_id.is_none_or(|expected| {
+                        run.get("app_id").and_then(serde_json::Value::as_i64) == Some(expected)
+                    })
+            })
+            .collect::<Vec<_>>();
+        let matching_status = bounded_statuses.iter().find(|status| {
+            status.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str())
+        });
+        let run_state = if matching_runs.is_empty() {
+            "missing"
+        } else if matching_runs.iter().any(|run| {
+            run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+                && !matches!(
+                    run.get("conclusion").and_then(serde_json::Value::as_str),
+                    Some("success" | "skipped" | "neutral")
+                )
+        }) {
+            "failed"
+        } else if matching_runs.iter().all(|run| {
+            run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+                && matches!(
+                    run.get("conclusion").and_then(serde_json::Value::as_str),
+                    Some("success" | "skipped" | "neutral")
+                )
+        }) {
+            "passing"
+        } else {
+            "pending"
+        };
+        let status_state = matching_status
+            .and_then(|status| status.get("state"))
+            .and_then(serde_json::Value::as_str)
+            .map(|state| {
+                if state == "success" {
+                    "passing"
+                } else if matches!(state, "pending" | "expected") {
+                    "pending"
+                } else {
+                    "failed"
+                }
+            })
+            .unwrap_or("missing");
+        let effective = if app_id.is_some() {
+            // App-bound requirements can only be satisfied by the bound check-run identity.
+            // If a commit status of the same name also exists, both systems must pass.
+            combine_provider_states(run_state, matching_status.map(|_| status_state))
+        } else if matching_runs.is_empty() {
+            status_state
+        } else if matching_status.is_none() {
+            run_state
+        } else {
+            combine_provider_states(run_state, Some(status_state))
+        };
+        overall = combine_overall_status(overall, effective);
+        required_output.push(serde_json::json!({
+            "name":name,
+            "app_id":app_id,
+            "check_run_state":run_state,
+            "commit_status_state":status_state,
+            "status":effective,
+        }));
+    }
+    Ok(GitHubRequiredCheckObservation {
+        required_checks: serde_json::Value::Array(required_output),
+        check_runs: serde_json::Value::Array(bounded_runs),
+        commit_statuses: serde_json::Value::Array(bounded_statuses),
+        status: overall.into(),
+    })
+}
+
+fn add_required_check(
+    required: &mut std::collections::BTreeMap<(String, Option<i64>), serde_json::Value>,
+    entry: &serde_json::Value,
+    app_field: &str,
+) -> anyhow::Result<()> {
+    let name = entry
+        .get("context")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("github_required_check_invalid"))?;
+    let app_id = entry.get(app_field).and_then(serde_json::Value::as_i64);
+    required
+        .entry((name.to_string(), app_id))
+        .or_insert_with(|| serde_json::json!({"name":name,"app_id":app_id}));
+    Ok(())
+}
+
+fn combine_provider_states(first: &str, second: Option<&str>) -> &'static str {
+    let second = second.unwrap_or("passing");
+    if first == "failed" || second == "failed" {
+        "failed"
+    } else if first == "passing" && second == "passing" {
+        "passing"
+    } else {
+        "pending"
+    }
+}
+
+fn combine_overall_status(current: &str, next: &str) -> &'static str {
+    if current == "failed" || next == "failed" {
+        "failed"
+    } else if current == "pending" || next != "passing" {
+        "pending"
+    } else {
+        "passing"
+    }
+}
+
+fn percent_encode_path_segment(value: &str) -> String {
+    value
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -3271,7 +3642,7 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        fetch_internal_context, git_delivery_command_error_code,
+        evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_patch_for_apply,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
         update_kustomization_image, validate_git_delivery_context,
@@ -3566,6 +3937,7 @@ mod tests {
         let context = GitDeliveryObservationContext {
             execution_id: "gobserve_1".to_string(),
             repository: "https://github.com/example/gitops.git".to_string(),
+            base_ref: None,
             head_branch: "pharness/gitops/revision-2".to_string(),
             source_commit_sha: "a".repeat(40),
             pull_request_url: "https://github.com/example/gitops/pull/25".to_string(),
@@ -3591,6 +3963,48 @@ mod tests {
         assert_eq!(observation.merge_commit_sha, None);
         assert_eq!(observation.head_branch, "pharness/gitops/revision-2");
         assert_eq!(observation.head_commit_sha, "a".repeat(40));
+    }
+
+    #[test]
+    fn provider_checks_require_both_check_run_and_status_for_duplicate_names() {
+        let result = evaluate_github_required_checks(
+            &json!([{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci/test","integration_id":42}]}}]),
+            Some(&json!({"contexts":["legacy/lint"],"checks":[]})),
+            &json!({"check_runs":[
+                {"name":"ci/test","status":"completed","conclusion":"success","app":{"id":42}},
+            ]}),
+            &json!({"statuses":[
+                {"context":"ci/test","state":"pending"},
+                {"context":"legacy/lint","state":"success"},
+            ]}),
+        )
+        .unwrap();
+        assert_eq!(result.status, "pending");
+        assert_eq!(result.required_checks.as_array().unwrap().len(), 2);
+
+        let passing = evaluate_github_required_checks(
+            &json!([{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci/test","integration_id":42}]}}]),
+            None,
+            &json!({"check_runs":[
+                {"name":"ci/test","status":"completed","conclusion":"neutral","app":{"id":42}},
+            ]}),
+            &json!({"statuses":[]}),
+        )
+        .unwrap();
+        assert_eq!(passing.status, "passing");
+    }
+
+    #[test]
+    fn authoritative_empty_required_set_is_passing() {
+        let result = evaluate_github_required_checks(
+            &json!([]),
+            None,
+            &json!({"check_runs":[]}),
+            &json!({"statuses":[]}),
+        )
+        .unwrap();
+        assert_eq!(result.status, "passing");
+        assert_eq!(result.required_checks, json!([]));
     }
 
     #[test]

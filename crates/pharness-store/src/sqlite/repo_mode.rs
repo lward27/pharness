@@ -2,14 +2,136 @@ use super::{now_string, SqliteStore, StoreError};
 use crate::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
     CreateOperatorAnnotation, CreateProviderCheckSetObservation, CreateRepoWorkItem,
-    CreateStageChainAuthorization, CreateStageExecution, SealStageOutcome, StoredAgentContextPack,
-    StoredOperatorAnnotation, StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata,
+    CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
+    SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
+    StoredProviderCheckSetObservation, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent,
     StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
 };
 use pharness_core::RunId;
 use sqlx::Row;
 
 impl SqliteStore {
+    pub async fn create_source_delivery_intent(
+        &self,
+        intent: CreateSourceDeliveryIntent,
+    ) -> Result<StoredSourceDeliveryIntent, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO source_delivery_intents (
+              id, subject_kind, subject_id, repository_id, source_repo, base_ref,
+              base_commit, head_branch, patch_artifact_id, patch_hash, status,
+              authorization_json, created_by, creation_reason, created_at, updated_at,
+              status_changed_at, status_changed_by, status_reason
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'authorized',
+                      ?11, ?12, ?13, ?14, ?14, ?14, ?12, ?13)
+            "#,
+        )
+        .bind(&intent.id)
+        .bind(&intent.subject_kind)
+        .bind(&intent.subject_id)
+        .bind(&intent.repository_id)
+        .bind(&intent.source_repo)
+        .bind(&intent.base_ref)
+        .bind(&intent.base_commit)
+        .bind(&intent.head_branch)
+        .bind(&intent.patch_artifact_id)
+        .bind(&intent.patch_hash)
+        .bind(serde_json::to_string(&intent.authorization)?)
+        .bind(&intent.created_by)
+        .bind(&intent.creation_reason)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        self.get_source_delivery_intent(&intent.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "source_delivery_intent".into(),
+                id: intent.id,
+            })
+    }
+
+    pub async fn get_source_delivery_intent(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredSourceDeliveryIntent>, StoreError> {
+        let row = sqlx::query(&source_delivery_intent_select("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_source_delivery_intent).transpose()
+    }
+
+    pub async fn get_source_delivery_intent_by_subject(
+        &self,
+        subject_kind: &str,
+        subject_id: &str,
+    ) -> Result<Option<StoredSourceDeliveryIntent>, StoreError> {
+        let row = sqlx::query(&source_delivery_intent_select(
+            "WHERE subject_kind = ?1 AND subject_id = ?2",
+        ))
+        .bind(subject_kind)
+        .bind(subject_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_source_delivery_intent).transpose()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_source_delivery_intent(
+        &self,
+        id: &str,
+        expected_state_version: u64,
+        status: &str,
+        writer_execution_id: Option<&str>,
+        observer_execution_id: Option<&str>,
+        pull_request: Option<&serde_json::Value>,
+        merge_provenance: Option<&serde_json::Value>,
+        provider_checks: Option<&serde_json::Value>,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredSourceDeliveryIntent, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE source_delivery_intents
+            SET status = ?3, state_version = state_version + 1,
+                writer_execution_id = COALESCE(?4, writer_execution_id),
+                observer_execution_id = COALESCE(?5, observer_execution_id),
+                pull_request_json = COALESCE(?6, pull_request_json),
+                merge_provenance_json = COALESCE(?7, merge_provenance_json),
+                provider_checks_json = COALESCE(?8, provider_checks_json),
+                updated_at = ?9, status_changed_at = ?9,
+                status_changed_by = ?10, status_reason = ?11
+            WHERE id = ?1 AND state_version = ?2
+            "#,
+        )
+        .bind(id)
+        .bind(i64::try_from(expected_state_version).unwrap_or(i64::MAX))
+        .bind(status)
+        .bind(writer_execution_id)
+        .bind(observer_execution_id)
+        .bind(pull_request.map(serde_json::to_string).transpose()?)
+        .bind(merge_provenance.map(serde_json::to_string).transpose()?)
+        .bind(provider_checks.map(serde_json::to_string).transpose()?)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(format!(
+                "source delivery intent {id} state is stale"
+            )));
+        }
+        self.get_source_delivery_intent(id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "source_delivery_intent".into(),
+                id: id.into(),
+            })
+    }
+
     pub async fn create_repo_work_item(
         &self,
         item: CreateRepoWorkItem,
@@ -700,6 +822,17 @@ fn provider_check_set_observation_select(where_clause: &str) -> String {
     )
 }
 
+fn source_delivery_intent_select(where_clause: &str) -> String {
+    format!(
+        "SELECT id, subject_kind, subject_id, repository_id, source_repo, base_ref, \
+         base_commit, head_branch, patch_artifact_id, patch_hash, status, state_version, \
+         authorization_json, writer_execution_id, observer_execution_id, pull_request_json, \
+         merge_provenance_json, provider_checks_json, created_by, creation_reason, created_at, \
+         updated_at, status_changed_at, status_changed_by, status_reason \
+         FROM source_delivery_intents {where_clause}"
+    )
+}
+
 fn row_to_repo_metadata(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredRepoWorkItemMetadata, StoreError> {
@@ -722,6 +855,46 @@ fn row_to_repo_metadata(
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         closed_at: row.try_get("closed_at")?,
         closure_reason: row.try_get("closure_reason")?,
+    })
+}
+
+fn row_to_source_delivery_intent(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredSourceDeliveryIntent, StoreError> {
+    fn optional_json(
+        row: &sqlx::sqlite::SqliteRow,
+        column: &str,
+    ) -> Result<Option<serde_json::Value>, StoreError> {
+        row.try_get::<Option<String>, _>(column)?
+            .map(|value| serde_json::from_str(&value).map_err(StoreError::from))
+            .transpose()
+    }
+    Ok(StoredSourceDeliveryIntent {
+        id: row.try_get("id")?,
+        subject_kind: row.try_get("subject_kind")?,
+        subject_id: row.try_get("subject_id")?,
+        repository_id: row.try_get("repository_id")?,
+        source_repo: row.try_get("source_repo")?,
+        base_ref: row.try_get("base_ref")?,
+        base_commit: row.try_get("base_commit")?,
+        head_branch: row.try_get("head_branch")?,
+        patch_artifact_id: row.try_get("patch_artifact_id")?,
+        patch_hash: row.try_get("patch_hash")?,
+        status: row.try_get("status")?,
+        state_version: row.try_get::<i64, _>("state_version")? as u64,
+        authorization: serde_json::from_str(&row.try_get::<String, _>("authorization_json")?)?,
+        writer_execution_id: row.try_get("writer_execution_id")?,
+        observer_execution_id: row.try_get("observer_execution_id")?,
+        pull_request: optional_json(&row, "pull_request_json")?,
+        merge_provenance: optional_json(&row, "merge_provenance_json")?,
+        provider_checks: optional_json(&row, "provider_checks_json")?,
+        created_by: row.try_get("created_by")?,
+        creation_reason: row.try_get("creation_reason")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        status_changed_at: row.try_get("status_changed_at")?,
+        status_changed_by: row.try_get("status_changed_by")?,
+        status_reason: row.try_get("status_reason")?,
     })
 }
 
@@ -1030,5 +1203,72 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn source_delivery_intent_is_subject_unique_and_state_hashed() {
+        let store = store_with_repo_work_item().await;
+        insert_stage_chain_scope(&store).await;
+        let create = CreateSourceDeliveryIntent {
+            id: "srcintent_test".into(),
+            subject_kind: "work_item_change_set".into(),
+            subject_id: "cset_test".into(),
+            repository_id: "repo_test".into(),
+            source_repo: "https://github.com/example/repo.git".into(),
+            base_ref: "main".into(),
+            base_commit: "a".repeat(40),
+            head_branch: "pharness/witem_repo/source".into(),
+            patch_artifact_id: Some("art_diff".into()),
+            patch_hash: format!("sha256:{}", "b".repeat(64)),
+            authorization: json!({"actor":"operator","state_hash":"sha256:state"}),
+            created_by: "operator".into(),
+            creation_reason: "ship the reviewed change".into(),
+        };
+        let intent = store
+            .create_source_delivery_intent(create.clone())
+            .await
+            .unwrap();
+        assert_eq!(intent.status, "authorized");
+        assert!(store
+            .create_source_delivery_intent(CreateSourceDeliveryIntent {
+                id: "srcintent_duplicate".into(),
+                ..create
+            })
+            .await
+            .is_err());
+        let dispatched = store
+            .update_source_delivery_intent(
+                &intent.id,
+                intent.state_version,
+                "writer_dispatched",
+                Some("writer_one"),
+                None,
+                None,
+                None,
+                None,
+                "controller",
+                "isolated writer dispatched",
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            dispatched.writer_execution_id.as_deref(),
+            Some("writer_one")
+        );
+        assert!(store
+            .update_source_delivery_intent(
+                &intent.id,
+                intent.state_version,
+                "failed",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "controller",
+                "stale update",
+            )
+            .await
+            .is_err());
     }
 }
