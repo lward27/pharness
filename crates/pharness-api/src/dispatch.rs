@@ -1216,7 +1216,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
 
         tracing::info!(
             run_id = %run.id,
-            job = %job_name(run.id.as_str(), approval),
+            job = %job_name(run, approval),
             resume = approval.is_some(),
             "created worker job"
         );
@@ -2147,7 +2147,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         run: &StoredRun,
         approval: Option<&StoredApproval>,
     ) -> serde_json::Value {
-        let job_name = job_name(run.id.as_str(), approval);
+        let job_name = job_name(run, approval);
         let agent_profile_id = run
             .execution_target_json
             .pointer("/agent_profile/id")
@@ -3335,10 +3335,11 @@ fn run_label_to_run_id(label: &str) -> String {
     }
 }
 
-fn job_name(run_id: &str, approval: Option<&StoredApproval>) -> String {
-    let base = job_label_value(run_id);
+fn job_name(run: &StoredRun, approval: Option<&StoredApproval>) -> String {
+    let base = job_label_value(run.id.as_str());
     match approval {
-        None => format!("pharness-{base}-i"),
+        None if run.budget_consumption.extensions == 0 => format!("pharness-{base}-i"),
+        None => format!("pharness-{base}-b{:02}", run.budget_consumption.extensions),
         Some(approval) => {
             let digest = Sha256::digest(approval.id.as_bytes());
             format!(
@@ -3532,10 +3533,17 @@ mod tests {
 
     #[test]
     fn job_names_are_dns_safe_and_attempt_scoped() {
-        let initial = job_name("run_123", None);
+        let mut run = test_run();
+        run.id = RunId::new("run_123");
+        let initial = job_name(&run, None);
         assert_eq!(initial, "pharness-run-123-i");
         assert!(initial.len() <= 63);
         assert!(!initial.contains('_'));
+
+        run.budget_consumption.extensions = 1;
+        let budget_resume = job_name(&run, None);
+        assert_eq!(budget_resume, "pharness-run-123-b01");
+        assert_ne!(budget_resume, initial);
     }
 
     #[test]

@@ -25,7 +25,7 @@ use pharness_store::{
     CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
     CreateWorkspace, SealStageOutcome, StoredBudgetExtension, StoredChangeSet,
     StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata,
-    StoredSourceDeliveryIntent, StoredStageOutcome, UpdateEnvironmentPreparation,
+    StoredRun, StoredSourceDeliveryIntent, StoredStageOutcome, UpdateEnvironmentPreparation,
     UpdateWorkspaceExecution, WorkspaceListFilter,
 };
 use serde::Deserialize;
@@ -116,8 +116,32 @@ pub(in crate::app) async fn repo_work_item_flow(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
-    let pending_budget_extension = match work_item.current_run_id.as_ref() {
-        Some(run_id) => state.store.pending_budget_extension_for_run(run_id).await?,
+    let current_run = match work_item.current_run_id.as_ref() {
+        Some(run_id) => state.store.get_run(run_id).await?,
+        None => None,
+    };
+    let pending_budget_extension = match current_run.as_ref() {
+        Some(run) => {
+            state
+                .store
+                .pending_budget_extension_for_run(&run.id)
+                .await?
+        }
+        None => None,
+    };
+    let retryable_budget_extension = match current_run.as_ref().filter(|run| {
+        run.status == "failed"
+            && run
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("failed to launch worker job:"))
+    }) {
+        Some(run) => {
+            state
+                .store
+                .latest_approved_budget_extension_for_run(&run.id)
+                .await?
+        }
         None => None,
     };
     let action_rail = derive_repo_actions(
@@ -131,6 +155,8 @@ pub(in crate::app) async fn repo_work_item_flow(
             chain: chain.as_ref(),
             pending_annotation_effects: &pending_annotation_effects,
             pending_budget_extension: pending_budget_extension.as_ref(),
+            current_run: current_run.as_ref(),
+            retryable_budget_extension: retryable_budget_extension.as_ref(),
         },
     )?;
     let workspaces = state
@@ -249,6 +275,8 @@ struct RepoActionInputs<'a> {
     chain: Option<&'a pharness_store::StoredStageChainAuthorization>,
     pending_annotation_effects: &'a [&'a StoredOperatorAnnotation],
     pending_budget_extension: Option<&'a StoredBudgetExtension>,
+    current_run: Option<&'a StoredRun>,
+    retryable_budget_extension: Option<&'a StoredBudgetExtension>,
 }
 
 fn derive_repo_actions(
@@ -264,6 +292,8 @@ fn derive_repo_actions(
         chain,
         pending_annotation_effects,
         pending_budget_extension,
+        current_run,
+        retryable_budget_extension,
     } = inputs;
     let (attempt_count, max_attempts) = attempts;
     if metadata.closed_at.is_some() {
@@ -286,6 +316,28 @@ fn derive_repo_actions(
             ),
             state_hash: extension.state_hash.clone(),
         }]);
+    }
+    if let (Some(run), Some(extension)) = (current_run, retryable_budget_extension) {
+        return Ok(vec![repo_action(
+            RepoActionSpec {
+                id: "retry_budget_extension_dispatch",
+                lifecycle_stage: "implement",
+                resource: &extension.id,
+                status: "ready",
+                effect_class: "model_execution",
+                approval_required: true,
+                summary: "Retry the previously approved budget-extension dispatch on the same Run, transcript, and workspace. This grants no additional budget.",
+            },
+            &state_hash,
+            json!({
+                "run_id":run.id,
+                "run_status":run.status,
+                "run_error":run.error,
+                "budget_extension_id":extension.id,
+                "budget_extension_state_hash":extension.state_hash,
+                "budget_consumption":run.budget_consumption,
+            }),
+        )?]);
     }
     let plan_execution = executions
         .iter()
@@ -875,8 +927,32 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
-    let pending_budget_extension = match work_item.current_run_id.as_ref() {
-        Some(run_id) => state.store.pending_budget_extension_for_run(run_id).await?,
+    let current_run = match work_item.current_run_id.as_ref() {
+        Some(run_id) => state.store.get_run(run_id).await?,
+        None => None,
+    };
+    let pending_budget_extension = match current_run.as_ref() {
+        Some(run) => {
+            state
+                .store
+                .pending_budget_extension_for_run(&run.id)
+                .await?
+        }
+        None => None,
+    };
+    let retryable_budget_extension = match current_run.as_ref().filter(|run| {
+        run.status == "failed"
+            && run
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("failed to launch worker job:"))
+    }) {
+        Some(run) => {
+            state
+                .store
+                .latest_approved_budget_extension_for_run(&run.id)
+                .await?
+        }
         None => None,
     };
     let action = derive_repo_actions(
@@ -890,6 +966,8 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             chain: chain.as_ref(),
             pending_annotation_effects: &pending_annotation_effects,
             pending_budget_extension: pending_budget_extension.as_ref(),
+            current_run: current_run.as_ref(),
+            retryable_budget_extension: retryable_budget_extension.as_ref(),
         },
     )?
     .into_iter()
@@ -985,6 +1063,37 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             state.worker.spawn_run(run.clone(), run.cwd.clone());
             Ok(json!({
                 "budget_extension": crate::dto::BudgetExtensionResponse::from(extension),
+            }))
+        }
+        "retry_budget_extension_dispatch" => {
+            let extension = retryable_budget_extension.ok_or_else(|| {
+                ApiError::conflict("Repo Mode budget-extension dispatch is no longer retryable")
+            })?;
+            let (extension, run) = state
+                .store
+                .retry_approved_budget_extension_dispatch(&extension.id, &extension.state_hash)
+                .await?;
+            state
+                .store
+                .create_audit_event(CreateAuditEvent {
+                    id: new_prefixed_id("audit"),
+                    kind: "repo_mode.budget_extension_dispatch_retried".into(),
+                    actor: Some(actor.clone()),
+                    resource_kind: "work_item".into(),
+                    resource_id: work_item_id.into(),
+                    run_id: Some(run.id.clone()),
+                    payload_json: json!({
+                        "reason":reason,
+                        "budget_extension_id":extension.id,
+                        "run_id":run.id,
+                        "additional_budget_granted":false,
+                    }),
+                })
+                .await?;
+            state.worker.spawn_run(run.clone(), run.cwd.clone());
+            Ok(json!({
+                "budget_extension":crate::dto::BudgetExtensionResponse::from(extension),
+                "run":crate::dto::RunResponse::from(run),
             }))
         }
         "correct_stage_chain" => {
@@ -4649,6 +4758,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4699,6 +4810,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4724,6 +4837,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4762,6 +4877,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: Some(&extension),
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4774,6 +4891,81 @@ mod tests {
         assert!(actions[0]
             .external_effect_summary
             .contains("200000 additional tokens"));
+    }
+
+    #[test]
+    fn failed_approved_budget_extension_dispatch_offers_exact_same_run_retry() {
+        let executions = vec![
+            stage_execution("stageexec_prior", "implement", "failed", "1"),
+            stage_execution("stageexec_current", "implement", "queued", "2"),
+        ];
+        let run = StoredRun {
+            id: RunId::new("run_current"),
+            session_id: SessionId::new("session_current"),
+            cwd: "/workspace".into(),
+            status: "failed".into(),
+            user_task: "finish the approved builder stage".into(),
+            max_turns: 68,
+            started_at: "1".into(),
+            finished_at: Some("3".into()),
+            cancel_requested_at: None,
+            error: Some(
+                "failed to launch worker job: jobs.batch pharness-run-current-i already exists"
+                    .into(),
+            ),
+            result_json: Some(json!({"status":"failed"})),
+            execution_target_json: json!({"kind":"kubernetes_job"}),
+            origin: "controller".into(),
+            created_by: Some("operator".into()),
+            run_budget: pharness_core::RunBudget::default(),
+            budget_consumption: RunBudgetConsumption {
+                allowed_turns: 68,
+                allowed_tokens: 600_000,
+                turns_used: 22,
+                tokens_used: 420_894,
+                active_execution_seconds_used: 159,
+                extensions: 1,
+            },
+            stop_reason: None,
+        };
+        let extension = StoredBudgetExtension {
+            id: "budgetext_repo_approved".into(),
+            work_item_id: "witem_repo".into(),
+            run_id: run.id.clone(),
+            status: "approved".into(),
+            turn_increment: 20,
+            token_increment: 200_000,
+            state_hash: "sha256:approved-extension-state".into(),
+            requested_at: "2".into(),
+            approved_at: Some("3".into()),
+            approved_by: Some("operator".into()),
+            approval_reason: Some("finish evidence".into()),
+        };
+
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: Some(&run),
+                retryable_budget_extension: Some(&extension),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "retry_budget_extension_dispatch");
+        assert_eq!(actions[0].resource, extension.id);
+        assert_eq!(actions[0].status, "ready");
+        assert!(actions[0]
+            .external_effect_summary
+            .contains("grants no additional budget"));
     }
 
     #[test]
@@ -4802,6 +4994,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[&annotation],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4821,6 +5015,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[&annotation],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4844,6 +5040,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
@@ -4862,6 +5060,8 @@ mod tests {
                 chain: None,
                 pending_annotation_effects: &[],
                 pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
             },
         )
         .unwrap();
