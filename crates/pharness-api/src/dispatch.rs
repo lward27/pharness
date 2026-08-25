@@ -2794,14 +2794,32 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             let Some(run) = self.store.get_run(&run_id).await? else {
                 continue;
             };
+            let failure = "worker job failed before reporting a durable outcome";
             if matches!(run.status.as_str(), "queued" | "running") {
                 tracing::warn!(run_id = %run_id, "worker job failed without durable outcome");
-                fail_run_from_dispatch(
-                    &self.store,
-                    &run_id,
-                    "worker job failed before reporting a durable outcome".to_string(),
-                )
-                .await?;
+                fail_run_from_dispatch(&self.store, &run_id, failure.to_string()).await?;
+            }
+
+            // A proposer can fail in an init container before its worker can
+            // report an outcome through the internal API. Keep the parent
+            // onboarding recoverable even when the Run was already sealed by
+            // an earlier reaper pass (for example, across an API rollout).
+            if let Some(onboarding_id) = onboarding_proposer_id(&run) {
+                if let Some(onboarding) =
+                    self.store.get_repository_onboarding(onboarding_id).await?
+                {
+                    if onboarding.status == "proposal_running"
+                        && onboarding.proposer_run_id.as_deref() == Some(run.id.as_str())
+                    {
+                        self.store
+                            .fail_repository_onboarding_proposer(
+                                onboarding_id,
+                                run.id.as_str(),
+                                failure,
+                            )
+                            .await?;
+                    }
+                }
             }
         }
 
@@ -3000,6 +3018,12 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     }
 }
 
+fn onboarding_proposer_id(run: &StoredRun) -> Option<&str> {
+    run.execution_target_json
+        .pointer("/onboarding/onboarding_id")
+        .and_then(serde_json::Value::as_str)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExecutorJobTerminalState {
     Active,
@@ -3178,10 +3202,10 @@ esac
 EOF
 chmod 700 /tmp/askpass
 git init -q "$PHARNESS_WORKSPACE_DIR"
-git -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_ONBOARDING_REPOSITORY"
-GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
-git -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_ONBOARDING_BRANCH" FETCH_HEAD
-test "$(git -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_ONBOARDING_REPOSITORY"
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_ONBOARDING_BRANCH" FETCH_HEAD
+test "$(git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
 "#],
             "env":env,
             "volumeMounts":[
@@ -3378,9 +3402,9 @@ mod tests {
         active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
         executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
         gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
-        run_label_to_run_id, workspace_claim_name, workspace_claim_name_for_run,
-        ArgoSyncExecutionRequest, ExecutorJobTerminalState, GitDeliveryExecutionRequest,
-        GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
+        onboarding_proposer_id, run_label_to_run_id, workspace_claim_name,
+        workspace_claim_name_for_run, ArgoSyncExecutionRequest, ExecutorJobTerminalState,
+        GitDeliveryExecutionRequest, GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
         GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
         OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
         RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
@@ -3407,6 +3431,16 @@ mod tests {
         assert_eq!(initial, "pharness-run-123-i");
         assert!(initial.len() <= 63);
         assert!(!initial.contains('_'));
+    }
+
+    #[test]
+    fn recognizes_onboarding_proposer_runs_for_parent_recovery() {
+        let mut run = test_run();
+        assert_eq!(onboarding_proposer_id(&run), None);
+        run.execution_target_json = json!({
+            "onboarding": {"onboarding_id": "ronb_test"}
+        });
+        assert_eq!(onboarding_proposer_id(&run), Some("ronb_test"));
     }
 
     #[test]
@@ -3601,6 +3635,12 @@ mod tests {
             manifest.pointer("/spec/template/spec/initContainers/1/name"),
             Some(&json!("prepare-onboarding-source"))
         );
+        let init_script = manifest
+            .pointer("/spec/template/spec/initContainers/1/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert!(init_script.contains("git -c safe.directory=\"$PHARNESS_WORKSPACE_DIR\""));
+        assert!(!init_script.contains("git config --global"));
         let init_env = manifest
             .pointer("/spec/template/spec/initContainers/1/env")
             .and_then(serde_json::Value::as_array)

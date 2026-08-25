@@ -653,6 +653,7 @@ impl SqliteStore {
             UPDATE repository_onboardings
             SET resolved_commit = ?2,
                 status = 'discovered',
+                blockers_json = '[]',
                 state_version = state_version + 1,
                 updated_at = ?3,
                 status_changed_at = ?3,
@@ -1413,6 +1414,64 @@ mod tests {
         CreateRepositoryReadinessAssessment,
     };
     use serde_json::json;
+
+    #[tokio::test]
+    async fn successful_discovery_clears_prior_failure_blockers() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let now = "2026-08-24T00:00:00Z";
+        let source_commit = "a".repeat(40);
+        sqlx::query("INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_discovery', 'discovery', 'Discovery', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, state_version, created_at, updated_at) VALUES ('prod_discovery', 'org_discovery', 'product', 'Product', '', 'operator', 1, ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_discovery', 'github', '3', 'https://github.com/example/discovery.git', 'main', ?1, ?2, ?2)")
+            .bind(&source_commit).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_bindings (id, product_id, repository_id, status, created_at, updated_at) VALUES ('rbind_discovery', 'prod_discovery', 'repo_discovery', 'active', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        let onboarding = store
+            .create_repository_onboarding(CreateRepositoryOnboarding {
+                id: "ronb_discovery".into(),
+                product_id: "prod_discovery".into(),
+                repository_id: "repo_discovery".into(),
+                binding_id: "rbind_discovery".into(),
+                onboarding_kind: "initial".into(),
+                registered_commit: source_commit.clone(),
+                actor: "operator".into(),
+                reason: "register".into(),
+            })
+            .await
+            .unwrap();
+
+        store
+            .create_repository_discovery("rdisc_failed", &onboarding.id, &source_commit)
+            .await
+            .unwrap();
+        store
+            .fail_repository_discovery("rdisc_failed", "git_fetch_failed", "fetch failed")
+            .await
+            .unwrap();
+        store
+            .create_repository_discovery("rdisc_success", &onboarding.id, &source_commit)
+            .await
+            .unwrap();
+        store
+            .finish_repository_discovery(
+                "rdisc_success",
+                &source_commit,
+                &json!({"inventory": []}),
+                "sha256:discovery",
+            )
+            .await
+            .unwrap();
+
+        let onboarding = store
+            .get_repository_onboarding(&onboarding.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(onboarding.status, "discovered");
+        assert!(onboarding.blockers.is_empty());
+    }
 
     #[tokio::test]
     async fn onboarding_approval_atomically_applies_reviewed_product_model_changes() {
