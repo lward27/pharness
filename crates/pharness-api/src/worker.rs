@@ -157,7 +157,12 @@ pub(crate) async fn attempt_spec_for_run(
     let resume = approval.map(resume_spec_from_approval).transpose()?;
     let mut workspace_source = workspace_source_for_run(&run.execution_target_json)?;
     if let Some(source) = workspace_source.as_mut() {
-        if source.resolved_commit.is_none() {
+        // A fresh preparation Run owns an empty PVC. The workspace row already
+        // carries the immutable commit the controller intends to check out,
+        // but that is not evidence that the checkout exists on disk. Only
+        // hydrate a missing resolved commit for Runs that are resuming or are
+        // otherwise past the preparation boundary.
+        if source.resolved_commit.is_none() && run.status != "preparing" {
             let workspace = store
                 .get_workspace(&source.workspace_id)
                 .await?
@@ -2550,11 +2555,11 @@ pub(crate) async fn fail_run_from_dispatch(
 mod tests {
     use super::{
         approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
-        classify_work_item_attempt, file_change_from_event, finish_run_from_attempt,
-        grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
-        persist_workspace_evidence, remediation_plan_from_incident, result_json_for_attempt,
-        structured_submission_from_events, validate_repo_work_plan, validate_workspace_evidence,
-        workspace_source_for_run,
+        attempt_spec_for_run, classify_work_item_attempt, file_change_from_event,
+        finish_run_from_attempt, grant_used_audit_event_from_event, incident_from_observation,
+        observation_from_event, persist_workspace_evidence, remediation_plan_from_incident,
+        result_json_for_attempt, structured_submission_from_events, validate_repo_work_plan,
+        validate_workspace_evidence, workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
@@ -2718,6 +2723,109 @@ mod tests {
             }
         }))
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn fresh_preparation_keeps_workspace_source_unresolved_until_checkout() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let work_item_id = "witem_preparation_checkout";
+        let workspace_id = "ws_preparation_checkout";
+        let branch = "pharness/witem_preparation_checkout/attempt-1";
+        let source_commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let session_id = SessionId::new("ses_preparation_checkout");
+        let run_id = RunId::new("run_preparation_checkout");
+        store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.into(),
+                status: "executing".into(),
+                title: "prepare checkout".into(),
+                intent: "clone the exact source before model execution".into(),
+                acceptance_criteria: Vec::new(),
+                source_repo: "https://github.com/example/finance-app.git".into(),
+                source_ref: "main".into(),
+                source_commit: Some(source_commit.into()),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "repository".into(),
+                target_namespace: None,
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 3_600,
+                environment_profile_id: Some("python-3.11".into()),
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "preparing".into(),
+                created_by: Some("operator".into()),
+            })
+            .await
+            .unwrap();
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "prepare checkout".into(),
+                cwd: "/workspace".into(),
+            })
+            .await
+            .unwrap();
+        let run = store
+            .create_run(CreateRun {
+                id: run_id.clone(),
+                session_id,
+                user_task: "prepare checkout".into(),
+                cwd: "/workspace".into(),
+                max_turns: 48,
+                initial_status: "preparing".into(),
+                execution_target_json: serde_json::json!({
+                    "kind":"kubernetes_workspace",
+                    "workspace_source":{
+                        "workspace_id":workspace_id,
+                        "source_repo":"https://github.com/example/finance-app.git",
+                        "source_ref":"main",
+                        "source_commit":source_commit,
+                        "branch":branch,
+                        "resolved_commit":null,
+                    }
+                }),
+            })
+            .await
+            .unwrap();
+        store
+            .create_workspace(CreateWorkspace {
+                id: workspace_id.into(),
+                work_item_id: work_item_id.into(),
+                run_id: Some(run_id),
+                status: "preparing".into(),
+                source_repo: "https://github.com/example/finance-app.git".into(),
+                source_ref: "main".into(),
+                // This records the controller's immutable intent, not a
+                // checkout that already exists on the empty PVC.
+                resolved_commit: Some(source_commit.into()),
+                branch: Some(branch.into()),
+                retention_status: "retained".into(),
+                actor: Some("operator".into()),
+                reason: Some("prepare exact source".into()),
+            })
+            .await
+            .unwrap();
+
+        let spec = attempt_spec_for_run(&store, &run, std::path::Path::new("/workspace"), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            spec.run.workspace_source.unwrap().resolved_commit,
+            None,
+            "preparation must clone before it can claim a resolved checkout"
+        );
     }
 
     #[test]
