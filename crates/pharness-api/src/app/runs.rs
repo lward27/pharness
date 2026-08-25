@@ -296,7 +296,11 @@ pub(super) async fn internal_environment_preparation(
     Ok(Json(preparation.into()))
 }
 
-fn verify_environment_snapshot(token: &str, payload: &serde_json::Value, signature: &str) -> bool {
+pub(in crate::app) fn verify_environment_snapshot(
+    token: &str,
+    payload: &serde_json::Value,
+    signature: &str,
+) -> bool {
     let Some(signature) = signature.strip_prefix("hmac-sha256:") else {
         return false;
     };

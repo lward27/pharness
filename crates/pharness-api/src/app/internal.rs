@@ -17,7 +17,8 @@ use super::products::{
     internal_onboarding_contract_validation_context,
     internal_onboarding_contract_validation_outcome, internal_onboarding_patch_context,
     internal_onboarding_patch_outcome, internal_repository_discovery_context,
-    internal_repository_discovery_outcome,
+    internal_repository_discovery_outcome, internal_repository_readiness_context,
+    internal_repository_readiness_outcome,
 };
 use super::repo_mode::{
     internal_source_delivery_context, internal_source_delivery_observation_context,
@@ -238,6 +239,14 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/repository-onboardings/:onboarding_id/contract-validation-outcome",
             post(internal_onboarding_contract_validation_outcome),
+        )
+        .route(
+            "/api/internal/repository-readiness-preparations/:preparation_id/context",
+            get(internal_repository_readiness_context),
+        )
+        .route(
+            "/api/internal/repository-readiness-preparations/:preparation_id/outcome",
+            post(internal_repository_readiness_outcome),
         )
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

@@ -289,6 +289,11 @@ pub(super) async fn capability_statuses(
             "At least one workspace repository is allowlisted.",
         ),
         status(
+            "source_reader",
+            state.worker.source_reader_available(),
+            "The isolated source-reader identity and allowlist are configured but repository reachability is unverified.",
+        ),
+        status(
             "source_writer",
             configured("/git_writer/available"),
             "Source writer identity and allowlist are configured but repository reachability is unverified.",
@@ -391,6 +396,7 @@ pub(super) async fn system_readiness(
         capabilities,
         repository_allowlists: json!({
             "workspace": state.workspace.allowed_remote_repos(),
+            "source_reader": state.worker.source_reader_allowed_repos(),
             "source_writer": worker.pointer("/git_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
             "source_observer": worker.pointer("/git_observer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
             "gitops_writer": worker.pointer("/gitops_writer/allowed_repos").cloned().unwrap_or_else(|| json!([])),
@@ -437,9 +443,11 @@ async fn preflight_system_capability(
     if capability_preflight_is_statically_unavailable(&configured) {
         return Ok(Json(configured));
     }
-    let repository = (capability == "source_workspace")
-        .then(|| state.workspace.allowed_remote_repos().first().cloned())
-        .flatten();
+    let repository = match capability.as_str() {
+        "source_workspace" => state.workspace.allowed_remote_repos().first().cloned(),
+        "source_reader" => state.worker.source_reader_allowed_repos().first().cloned(),
+        _ => None,
+    };
     let outcome = match profile {
         Some(profile) => state.worker.verify_environment_profile(profile).await,
         None => {

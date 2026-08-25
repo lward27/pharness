@@ -1317,7 +1317,7 @@ fn validate_repo_work_plan(
             step.get(field)
                 .and_then(serde_json::Value::as_str)
                 .map(str::trim)
-                .is_none_or(str::is_empty)
+                .map_or(true, str::is_empty)
         })
     }) {
         return Err("every WorkPlan step requires a title and description".into());

@@ -5,6 +5,7 @@ mod onboarding;
 mod product;
 mod repo_mode;
 mod sqlite;
+mod subject_preparation;
 
 pub use models::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
@@ -53,5 +54,9 @@ pub use repo_mode::{
     StoredStageChainAuthorization, StoredStageExecution, StoredStageOutcome,
 };
 pub use sqlite::{SqliteStore, StoreError};
+pub use subject_preparation::{
+    CompleteSubjectEnvironmentPreparation, CreateSubjectEnvironmentPreparation,
+    CreateSubjectWorkspace, StoredSubjectEnvironmentPreparation, StoredSubjectWorkspace,
+};
 
 pub const INITIAL_MIGRATION_NAME: &str = "0001_initial";

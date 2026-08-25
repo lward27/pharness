@@ -226,16 +226,18 @@ fn derive_repo_actions(
         if change_set.status == "proposed" {
             for approve in [true, false] {
                 actions.push(repo_action(
-                    if approve { "approve_change_set" } else { "reject_change_set" },
-                    "verify",
-                    &change_set.id,
-                    "ready",
-                    "human_review",
-                    true,
-                    if approve {
-                        "Approve the exact controller-derived ChangeSet. This does not create a branch or pull request."
-                    } else {
-                        "Reject the exact controller-derived ChangeSet and stop before source mutation."
+                    RepoActionSpec {
+                        id: if approve { "approve_change_set" } else { "reject_change_set" },
+                        lifecycle_stage: "verify",
+                        resource: &change_set.id,
+                        status: "ready",
+                        effect_class: "human_review",
+                        approval_required: true,
+                        summary: if approve {
+                            "Approve the exact controller-derived ChangeSet. This does not create a branch or pull request."
+                        } else {
+                            "Reject the exact controller-derived ChangeSet and stop before source mutation."
+                        },
                     },
                     &state_hash,
                     json!({"change_set_id":change_set.id,"revision":change_set.revision,"material_hash":change_set.material_hash}),
@@ -246,24 +248,28 @@ fn derive_repo_actions(
         if change_set.status == "approved" {
             match source_delivery_intent {
                 None => actions.push(repo_action(
-                    "authorize_source_delivery",
-                    "source_delivery",
-                    &change_set.id,
-                    "ready",
-                    "external_source_mutation",
-                    true,
-                    "Authorize one exact GitHub branch, commit, and source pull request from the approved ChangeSet. Manual merge remains required.",
+                    RepoActionSpec {
+                        id: "authorize_source_delivery",
+                        lifecycle_stage: "source_delivery",
+                        resource: &change_set.id,
+                        status: "ready",
+                        effect_class: "external_source_mutation",
+                        approval_required: true,
+                        summary: "Authorize one exact GitHub branch, commit, and source pull request from the approved ChangeSet. Manual merge remains required.",
+                    },
                     &state_hash,
                     json!({"change_set_id":change_set.id,"revision":change_set.revision,"material_hash":change_set.material_hash}),
                 )?),
                 Some(intent) if matches!(intent.status.as_str(), "pull_request_open" | "waiting_checks" | "waiting_merge") => actions.push(repo_action(
-                    "observe_source_delivery",
-                    "source_delivery",
-                    &intent.id,
-                    "ready",
-                    "external_observation",
-                    true,
-                    "Observe the exact pull-request head, active required checks, and merge provenance with the isolated GitHub observer.",
+                    RepoActionSpec {
+                        id: "observe_source_delivery",
+                        lifecycle_stage: "source_delivery",
+                        resource: &intent.id,
+                        status: "ready",
+                        effect_class: "external_observation",
+                        approval_required: true,
+                        summary: "Observe the exact pull-request head, active required checks, and merge provenance with the isolated GitHub observer.",
+                    },
                     &state_hash,
                     json!({"source_delivery_intent_id":intent.id,"intent_state_version":intent.state_version,"status":intent.status}),
                 )?),
@@ -275,13 +281,16 @@ fn derive_repo_actions(
     }
     if plan_execution.is_none() {
         actions.push(repo_action(
-            "start_planner",
-            "plan",
-            &metadata.work_item_id,
-            "ready",
-            "model_execution",
-            true,
-            "Start one immutable repo-planner AgentRun from the sealed Discover evidence.",
+            RepoActionSpec {
+                id: "start_planner",
+                lifecycle_stage: "plan",
+                resource: &metadata.work_item_id,
+                status: "ready",
+                effect_class: "model_execution",
+                approval_required: true,
+                summary:
+                    "Start one immutable repo-planner AgentRun from the sealed Discover evidence.",
+            },
             &state_hash,
             json!({"stage":"plan"}),
         )?);
@@ -295,16 +304,18 @@ fn derive_repo_actions(
     if let Some(plan) = work_plan.filter(|plan| plan.status == "proposed") {
         for approve in [true, false] {
             actions.push(repo_action(
-                if approve { "approve_work_plan" } else { "reject_work_plan" },
-                "plan",
-                &plan.id,
-                "ready",
-                "human_review",
-                true,
-                if approve {
-                    "Approve the exact Planner-submitted WorkPlan revision. This does not start coding."
-                } else {
-                    "Reject the exact Planner-submitted WorkPlan revision and block the WorkItem for correction."
+                RepoActionSpec {
+                    id: if approve { "approve_work_plan" } else { "reject_work_plan" },
+                    lifecycle_stage: "plan",
+                    resource: &plan.id,
+                    status: "ready",
+                    effect_class: "human_review",
+                    approval_required: true,
+                    summary: if approve {
+                        "Approve the exact Planner-submitted WorkPlan revision. This does not start coding."
+                    } else {
+                        "Reject the exact Planner-submitted WorkPlan revision and block the WorkItem for correction."
+                    },
                 },
                 &state_hash,
                 json!({"work_plan_id":plan.id,"revision":plan.revision,"status":plan.status}),
@@ -315,13 +326,15 @@ fn derive_repo_actions(
     if let Some(plan) = work_plan.filter(|plan| plan.status == "approved") {
         if chain.is_none() {
             actions.push(repo_action(
-                "authorize_stage_chain",
-                "implement",
-                &plan.id,
-                "ready",
-                "model_execution",
-                true,
-                "Create one four-hour workspace grant and bind the Builder, Tester, and Verifier profiles to the approved WorkPlan. This does not authorize Git or provider mutation.",
+                RepoActionSpec {
+                    id: "authorize_stage_chain",
+                    lifecycle_stage: "implement",
+                    resource: &plan.id,
+                    status: "ready",
+                    effect_class: "model_execution",
+                    approval_required: true,
+                    summary: "Create one four-hour workspace grant and bind the Builder, Tester, and Verifier profiles to the approved WorkPlan. This does not authorize Git or provider mutation.",
+                },
                 &state_hash,
                 json!({"work_plan_id":plan.id,"revision":plan.revision}),
             )?);
@@ -330,17 +343,30 @@ fn derive_repo_actions(
     Ok(actions)
 }
 
-fn repo_action(
-    id: &str,
-    lifecycle_stage: &str,
-    resource: &str,
-    status: &str,
-    effect_class: &str,
+struct RepoActionSpec<'a> {
+    id: &'a str,
+    lifecycle_stage: &'a str,
+    resource: &'a str,
+    status: &'a str,
+    effect_class: &'a str,
     approval_required: bool,
-    summary: &str,
+    summary: &'a str,
+}
+
+fn repo_action(
+    spec: RepoActionSpec<'_>,
     work_item_state_hash: &str,
     bound_state: Value,
 ) -> Result<WorkItemActionResponse, ApiError> {
+    let RepoActionSpec {
+        id,
+        lifecycle_stage,
+        resource,
+        status,
+        effect_class,
+        approval_required,
+        summary,
+    } = spec;
     Ok(WorkItemActionResponse {
         id: id.into(),
         lifecycle_stage: lifecycle_stage.into(),
@@ -349,9 +375,11 @@ fn repo_action(
         effect_class: effect_class.into(),
         blockers: Vec::new(),
         approval_required,
-        approval_requirements: approval_required
-            .then(|| vec![id.into()])
-            .unwrap_or_default(),
+        approval_requirements: if approval_required {
+            vec![id.into()]
+        } else {
+            Vec::new()
+        },
         external_effect_summary: summary.into(),
         state_hash: canonical_material_hash(&json!({
             "action":id,
@@ -2544,7 +2572,7 @@ async fn start_repo_followup_stage(
         .expires_at
         .parse::<u128>()
         .ok()
-        .is_none_or(|expires_at| expires_at <= now)
+        .map_or(true, |expires_at| expires_at <= now)
     {
         return Err(ApiError::conflict(
             "stage-chain authorization expired before the next stage",

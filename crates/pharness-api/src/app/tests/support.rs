@@ -122,6 +122,8 @@ pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
         include_str!("../releases.rs"),
         include_str!("../approvals.rs"),
         include_str!("../internal.rs"),
+        include_str!("../products.rs"),
+        include_str!("../repo_mode.rs"),
     ] {
         let mut remaining = source;
         while let Some(route_offset) = remaining.find(".route") {
@@ -150,7 +152,12 @@ pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
             } else {
                 RouteAuthClass::Operator
             };
-            for (needle, method) in [("get(", "GET"), ("post(", "POST")] {
+            for (needle, method) in [
+                ("get(", "GET"),
+                ("post(", "POST"),
+                ("put(", "PUT"),
+                ("patch(", "PATCH"),
+            ] {
                 if method_router.contains(needle) {
                     entries.push(RouteInventoryEntry {
                         method: method.to_string(),

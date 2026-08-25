@@ -34,6 +34,7 @@ use thiserror::Error;
 mod onboarding;
 mod product;
 mod repo_mode;
+mod subject_preparation;
 
 #[derive(Debug, Clone)]
 pub struct SqliteStore {

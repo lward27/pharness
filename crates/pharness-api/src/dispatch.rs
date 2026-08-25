@@ -33,6 +33,7 @@ const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-prepa
 const REPOSITORY_DISCOVERY_JOB_NAME_VALUE: &str = "pharness-repository-discovery";
 const ONBOARDING_PATCH_JOB_NAME_VALUE: &str = "pharness-onboarding-patch";
 const ONBOARDING_VALIDATION_JOB_NAME_VALUE: &str = "pharness-onboarding-validation";
+const REPOSITORY_READINESS_JOB_NAME_VALUE: &str = "pharness-repository-readiness";
 // K3s's selector-backed NetworkPolicy rules converge asynchronously after a
 // Pod receives its IP. Short-lived Jobs otherwise race the policy controller
 // and fail their first API or proxy connection before the rule includes them.
@@ -194,6 +195,17 @@ pub struct OnboardingContractValidationRequest {
 
 #[derive(Debug, Clone)]
 pub struct OnboardingContractValidationReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryReadinessExecutionRequest {
+    pub preparation_id: String,
+    pub profile: EnvironmentProfile,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryReadinessExecutionReceipt {
     pub job_name: String,
 }
 
@@ -389,6 +401,15 @@ impl RunDispatcher {
                     .any(|allowed| allowed == repository))
     }
 
+    pub fn source_reader_allowed_repos(&self) -> Vec<String> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.source_reader_available() => {
+                dispatcher.config.source_reader_allowed_repos.clone()
+            }
+            _ => Vec::new(),
+        }
+    }
+
     pub async fn dispatch_repository_discovery(
         &self,
         request: RepositoryDiscoveryRequest,
@@ -436,6 +457,23 @@ impl RunDispatcher {
             }
             Self::Local(_) => {
                 anyhow::bail!("onboarding contract validation is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_repository_readiness(
+        &self,
+        request: RepositoryReadinessExecutionRequest,
+    ) -> anyhow::Result<RepositoryReadinessExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_repository_readiness_job(&request).await
+            }
+            Self::Disabled => {
+                anyhow::bail!("repository readiness requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("repository readiness is unavailable in local worker mode")
             }
         }
     }
@@ -965,7 +1003,7 @@ impl KubernetesJobDispatcher {
         let mut env = Vec::new();
         let proxy_phase = match capability {
             "model_provider" => Some("coding"),
-            "source_workspace" => Some("preparation"),
+            "source_workspace" | "source_reader" => Some("preparation"),
             _ => None,
         };
         if let Some(phase) = proxy_phase {
@@ -990,6 +1028,34 @@ impl KubernetesJobDispatcher {
                 let repo = requested_repository.ok_or_else(|| anyhow::anyhow!("source workspace repository is unavailable"))?;
                 env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
                 (self.config.service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account), "repository_read".to_string(), Some(repo.to_string()), "git ls-remote --exit-code \"$REPOSITORY\" HEAD >/dev/null".to_string())
+            }
+            "source_reader" => {
+                if !self.source_reader_available() {
+                    anyhow::bail!("source reader is not configured");
+                }
+                let repo = requested_repository.ok_or_else(|| anyhow::anyhow!("source reader repository is unavailable"))?;
+                if !self.config.source_reader_allowed_repos.iter().any(|allowed| allowed == repo) {
+                    anyhow::bail!("source reader repository is not allowlisted");
+                }
+                if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+                    env.push(serde_json::json!({"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+                }
+                env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
+                let script = r#"if [ -n "${GITHUB_TOKEN:-}" ]; then
+cat > /tmp/askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' x-access-token ;;
+  *) printf '%s\n' "$GITHUB_TOKEN" ;;
+esac
+EOF
+chmod 700 /tmp/askpass
+GIT_ASKPASS_VALUE=/tmp/askpass
+else
+GIT_ASKPASS_VALUE=/bin/false
+fi
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$GIT_ASKPASS_VALUE" GIT_CONFIG_NOSYSTEM=1 git ls-remote --exit-code "$REPOSITORY" HEAD >/dev/null"#.to_string();
+                (self.config.source_reader_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.source_reader_service_account), "repository_read".to_string(), Some(repo.to_string()), script)
             }
             "source_writer" | "source_observer" | "gitops_writer" | "gitops_observer" => {
                 let (enabled, service_account, secret, repos, required_permission) = match capability {
@@ -1205,6 +1271,24 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
         tracing::info!(onboarding_id=%request.onboarding_id, execution_id=%request.execution_id, job=%job_name, "created merged onboarding contract validation job");
         Ok(OnboardingContractValidationReceipt { job_name })
+    }
+
+    async fn create_repository_readiness_job(
+        &self,
+        request: &RepositoryReadinessExecutionRequest,
+    ) -> anyhow::Result<RepositoryReadinessExecutionReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader is not configured");
+        }
+        request
+            .profile
+            .validate()
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let manifest = self.repository_readiness_job_manifest(request);
+        let job_name = repository_readiness_job_name(&request.preparation_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(preparation_id=%request.preparation_id, job=%job_name, profile=%request.profile.id, "created repository coding-readiness job");
+        Ok(RepositoryReadinessExecutionReceipt { job_name })
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
@@ -2530,6 +2614,51 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         })
     }
 
+    fn repository_readiness_job_manifest(
+        &self,
+        request: &RepositoryReadinessExecutionRequest,
+    ) -> serde_json::Value {
+        let profile = &request.profile;
+        let mut env = vec![
+            serde_json::json!({"name":"PHARNESS_EXECUTION_KIND","value":"repository_readiness"}),
+            serde_json::json!({"name":"PHARNESS_API_URL","value":self.config.api_url}),
+            serde_json::json!({"name":"PHARNESS_REPOSITORY_PREPARATION_ID","value":request.preparation_id}),
+            serde_json::json!({"name":"PHARNESS_ENVIRONMENT_PROFILE_ID","value":profile.id}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_IMAGE","value":profile.image}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_REVISION","value":profile.revision}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_PLATFORM","value":profile.platform}),
+            serde_json::json!({"name":"PHARNESS_REQUIRED_EXECUTABLES_JSON","value":serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".into())}),
+            serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"HOME","value":"/work"}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+        }
+        serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":repository_readiness_job_name(&request.preparation_id),"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:REPOSITORY_READINESS_JOB_NAME_VALUE,"pharness.lucas.engineering/preparation-id":job_label_value(&request.preparation_id)}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":1800 + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.source_reader_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{"app":"pharness-runner","agentic.lucas.engineering/phase":"preparation",JOB_NAME_LABEL:REPOSITORY_READINESS_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":profile.service_account,"restartPolicy":"Never","automountServiceAccountToken":false,
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "initContainers":[network_policy_stabilization_container(&profile.image)],
+                        "containers":[{"name":"prepare","image":profile.image,"imagePullPolicy":"IfNotPresent","command":["pharness-worker"],"env":env,
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"100m","memory":"256Mi","ephemeral-storage":"512Mi"},"limits":{"cpu":profile.limits.cpu,"memory":profile.limits.memory,"ephemeral-storage":profile.limits.ephemeral_storage}}}],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"2Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+                    }
+                }
+            }
+        })
+    }
+
     /// Reconcile worker and executor jobs that stopped without reporting a
     /// durable outcome. The API remains the only SQLite writer.
     fn spawn_reaper(self: Arc<Self>) {
@@ -3119,6 +3248,14 @@ fn onboarding_contract_validation_job_name(execution_id: &str) -> String {
     )
 }
 
+fn repository_readiness_job_name(preparation_id: &str) -> String {
+    let digest = Sha256::digest(preparation_id.as_bytes());
+    format!(
+        "pharness-repository-ready-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -3226,7 +3363,7 @@ mod tests {
         GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
         GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
         OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
-        NETWORK_POLICY_STABILIZATION_SECONDS,
+        RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -3614,6 +3751,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn repository_readiness_uses_pinned_runner_without_model_or_writer_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
+        let profile = EnvironmentProfile {
+            id: "python-3.11".into(),
+            active: true,
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec!["pharness-worker".into(), "python".into()],
+            preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+            service_account: "pharness-python-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/test.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "1".into(),
+                memory: "1Gi".into(),
+                ephemeral_storage: "2Gi".into(),
+            },
+        };
+        let manifest =
+            dispatcher.repository_readiness_job_manifest(&RepositoryReadinessExecutionRequest {
+                preparation_id: "sprep_test".into(),
+                profile: profile.clone(),
+            });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/image"),
+            Some(&json!(profile.image))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!(profile.service_account))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("preparation-egress-proxy"))
+        }));
+    }
+
+    #[tokio::test]
     async fn proxy_capability_preflights_wait_for_network_policy_convergence() {
         let dispatcher = test_dispatcher(None).await;
         let (_, _, _, source_manifest) = dispatcher
@@ -3630,6 +3819,45 @@ mod tests {
             source_manifest.pointer("/spec/template/spec/initContainers/0/name"),
             Some(&json!("network-policy-stabilization"))
         );
+        let (principal, permission, repository, reader_manifest) = dispatcher
+            .capability_preflight_manifest(
+                "source_reader",
+                Some("https://github.com/example/test.git"),
+            )
+            .unwrap();
+        assert_eq!(
+            principal,
+            "system:serviceaccount:pharness:pharness-source-reader"
+        );
+        assert_eq!(permission, "repository_read");
+        assert_eq!(
+            repository.as_deref(),
+            Some("https://github.com/example/test.git")
+        );
+        assert_eq!(
+            reader_manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            reader_manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(75 + NETWORK_POLICY_STABILIZATION_SECONDS))
+        );
+        let reader_env = reader_manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(reader_env.iter().all(|entry| {
+            !matches!(
+                entry.get("name").and_then(serde_json::Value::as_str),
+                Some("FIREWORKS_API_KEY" | "GITHUB_TOKEN")
+            )
+        }));
+        let reader_script = reader_manifest
+            .pointer("/spec/template/spec/containers/0/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert!(reader_script.contains("git ls-remote"));
+        assert!(reader_script.contains("GIT_ASKPASS_VALUE=/bin/false"));
 
         let (_, _, _, writer_manifest) = dispatcher
             .capability_preflight_manifest(

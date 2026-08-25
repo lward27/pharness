@@ -259,6 +259,10 @@ async fn main() -> anyhow::Result<()> {
         return execute_onboarding_contract_validation().await;
     }
 
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("repository_readiness") {
+        return execute_repository_readiness().await;
+    }
+
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
         return execute_tekton_trigger().await;
     }
@@ -589,6 +593,256 @@ struct OnboardingContractValidationContext {
     proposal_id: String,
     proposal_hash: String,
     expected_contract: serde_json::Value,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RepositoryReadinessContext {
+    preparation_id: String,
+    workspace_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    contract_version_id: String,
+    contract_content_hash: String,
+    contract: serde_json::Value,
+    environment_profile_id: String,
+}
+
+async fn execute_repository_readiness() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let preparation_id = required_env("PHARNESS_REPOSITORY_PREPARATION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build repository readiness client")?;
+    let context = fetch_internal_context_with_retry::<RepositoryReadinessContext>(
+        &client,
+        &format!(
+            "{api_url}/api/internal/repository-readiness-preparations/{preparation_id}/context"
+        ),
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch repository readiness context")?;
+    if context.preparation_id != preparation_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+        || context.repository_id.trim().is_empty()
+        || context.default_branch.trim().is_empty()
+        || context.environment_profile_id != required_env("PHARNESS_ENVIRONMENT_PROFILE_ID")?
+    {
+        anyhow::bail!("invalid_repository_readiness_context");
+    }
+    let outcome = match prepare_repository_readiness(&context, &worker_token).await {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let code = repository_readiness_error_code(&error);
+            tracing::warn!(
+                preparation_id,
+                error_code = code,
+                "repository readiness preparation failed"
+            );
+            serde_json::json!({"status":"failed","error_code":code,"logs":[{"step":"readiness","status":"failed","summary":code}]})
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!(
+            "{api_url}/api/internal/repository-readiness-preparations/{preparation_id}/outcome"
+        ),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn prepare_repository_readiness(
+    context: &RepositoryReadinessContext,
+    worker_token: &str,
+) -> anyhow::Result<serde_json::Value> {
+    parse_github_repository(&context.canonical_url)?;
+    let expected: RepositoryContract =
+        serde_json::from_value(context.contract.clone()).context("invalid_expected_contract")?;
+    expected
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_expected_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let loaded = RepositoryContract::load_for_repo_mode(&root)
+        .map_err(|error| anyhow::anyhow!("repository_contract_invalid:{error}"))?;
+    let loaded_hash = format!("sha256:{}", loaded.content_sha256);
+    if loaded.contract != expected || loaded_hash != context.contract_content_hash {
+        anyhow::bail!("repository_contract_provenance_mismatch");
+    }
+    let profile_id = required_env("PHARNESS_ENVIRONMENT_PROFILE_ID")?;
+    if loaded.contract.environment_profile != profile_id {
+        anyhow::bail!("runner_profile_mismatch");
+    }
+    let required_executables =
+        serde_json::from_str::<Vec<String>>(&required_env("PHARNESS_REQUIRED_EXECUTABLES_JSON")?)
+            .context("required_executable_inventory_invalid")?;
+    let mut executable_paths = serde_json::Map::new();
+    for executable in &required_executables {
+        executable_paths.insert(
+            executable.clone(),
+            serde_json::Value::String(executable_path(executable).await?),
+        );
+    }
+    let python = required_executables
+        .iter()
+        .find(|name| matches!(name.as_str(), "python" | "python3"))
+        .context("python_executable_missing")?;
+    let python_path = executable_paths
+        .get(python)
+        .and_then(serde_json::Value::as_str)
+        .context("python_executable_missing")?;
+    let runtime_dir = root.join(".pharness-runtime");
+    let venv = runtime_dir.join("venv");
+    tokio::fs::create_dir_all(&runtime_dir).await?;
+    exclude_runtime_from_git(&root).await?;
+    run_checked(
+        &root,
+        python_path,
+        &["-m", "venv", venv.to_string_lossy().as_ref()],
+    )
+    .await?;
+    let venv_python = venv.join("bin/python");
+    run_checked(
+        &root,
+        venv_python.to_string_lossy().as_ref(),
+        &[
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--require-hashes",
+            "--only-binary=:all:",
+            "-r",
+            &loaded.contract.dependency_lock.path,
+        ],
+    )
+    .await?;
+    let python_version = run_output(
+        &root,
+        venv_python.to_string_lossy().as_ref(),
+        &["--version"],
+    )
+    .await?;
+    let effective_user = run_output(&root, "id", &["-u"]).await?;
+    let mut unavailable_tools = Vec::new();
+    for executable in ["docker", "podman", "apt", "apt-get", "apk"] {
+        if executable_path_optional(executable).await.is_none() {
+            unavailable_tools.push(executable.into());
+        }
+    }
+    let snapshot = EnvironmentSnapshot {
+        source_sha: context.source_commit.clone(),
+        manifest_sha256: loaded_hash.clone(),
+        dependency_lock_sha256: loaded.contract.dependency_lock.sha256.clone(),
+        runner_image_digest: required_env("PHARNESS_RUNNER_IMAGE")?,
+        runner_revision: required_env("PHARNESS_RUNNER_REVISION")?,
+        os: std::env::consts::OS.into(),
+        architecture: std::env::consts::ARCH.into(),
+        effective_user,
+        python_version,
+        python_path: venv_python.to_string_lossy().to_string(),
+        writable_paths: loaded.contract.writable_paths.clone(),
+        unavailable_tools,
+        agent_network: loaded.contract.agent_network,
+        package_installation: loaded.contract.package_installation,
+        acceptance_commands: loaded.contract.acceptance_commands.clone(),
+        preparation_evidence: serde_json::json!({
+            "required_executables":executable_paths,
+            "venv":venv,
+            "dependency_install":"pip --require-hashes --only-binary=:all:",
+            "platform":required_env("PHARNESS_RUNNER_PLATFORM")?,
+            "workspace_id":context.workspace_id,
+            "contract_version_id":context.contract_version_id,
+        }),
+    };
+    let venv_bin = venv.join("bin");
+    let inherited_path = std::env::var("PATH").unwrap_or_default();
+    let readiness_path = format!("{}:{inherited_path}", venv_bin.to_string_lossy());
+    let mut acceptance_results = Vec::new();
+    for command in &loaded.contract.acceptance_commands {
+        let output = Command::new("/bin/sh")
+            .args(["-lc", &command.command])
+            .current_dir(&root)
+            .env("PATH", &readiness_path)
+            .env("PYTHONPATH", root.join("src"))
+            .output()
+            .await
+            .context("acceptance_command_structurally_unexecutable")?;
+        acceptance_results.push(serde_json::json!({
+            "name":command.name,
+            "command":command.command,
+            "status":if output.status.success() {"passed"} else {"baseline_failed"},
+            "exit_code":output.status.code(),
+            "stdout":bounded_output(&output.stdout),
+            "stderr":bounded_output(&output.stderr),
+        }));
+    }
+    let snapshot_json = serde_json::to_value(&snapshot)?;
+    Ok(serde_json::json!({
+        "status":"succeeded",
+        "resolved_commit":context.source_commit,
+        "repository_contract":loaded.contract,
+        "repository_contract_hash":loaded_hash,
+        "environment_snapshot":snapshot_json,
+        "snapshot_signature":signed_payload(worker_token,&snapshot_json),
+        "acceptance_results":acceptance_results,
+        "logs":[
+            {"step":"checkout","status":"succeeded","source_sha":context.source_commit},
+            {"step":"contract","status":"succeeded","contract_version_id":context.contract_version_id},
+            {"step":"executables","status":"succeeded","inventory":required_executables},
+            {"step":"dependencies","status":"succeeded","lock_sha256":snapshot.dependency_lock_sha256},
+            {"step":"acceptance","status":"executed","commands":acceptance_results.len()},
+        ],
+    }))
+}
+
+fn bounded_output(bytes: &[u8]) -> String {
+    const LIMIT: usize = 16 * 1024;
+    let end = bytes.len().min(LIMIT);
+    String::from_utf8_lossy(&bytes[..end]).to_string()
+}
+
+fn repository_readiness_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_expected_contract",
+        "repository_contract_provenance_mismatch",
+        "runner_profile_mismatch",
+        "required_executable_inventory_invalid",
+        "python_executable_missing",
+        "acceptance_command_structurally_unexecutable",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("dependency lock SHA-256") {
+        "immutable_dependency_lock_mismatch"
+    } else if text.contains("dependency lock") {
+        "immutable_dependency_lock_invalid"
+    } else if text.contains("runner is missing required executable") {
+        "required_executable_missing"
+    } else if text.contains("repository_contract_invalid") {
+        "repository_contract_invalid"
+    } else {
+        "repository_readiness_failed"
+    }
 }
 
 async fn execute_onboarding_contract_validation() -> anyhow::Result<()> {
@@ -2641,7 +2895,7 @@ fn evaluate_github_required_checks(
             .iter()
             .filter(|run| {
                 run.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str())
-                    && app_id.is_none_or(|expected| {
+                    && app_id.map_or(true, |expected| {
                         run.get("app_id").and_then(serde_json::Value::as_i64) == Some(expected)
                     })
             })
