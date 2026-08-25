@@ -14,6 +14,7 @@ use super::gitops::delivery::{
 };
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
 use super::products::{
+    internal_onboarding_patch_context, internal_onboarding_patch_outcome,
     internal_repository_discovery_context, internal_repository_discovery_outcome,
 };
 use super::repo_mode::{
@@ -219,6 +220,14 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/repository-discoveries/:discovery_id/outcome",
             post(internal_repository_discovery_outcome),
+        )
+        .route(
+            "/api/internal/repository-onboardings/:onboarding_id/patch-context",
+            get(internal_onboarding_patch_context),
+        )
+        .route(
+            "/api/internal/repository-onboardings/:onboarding_id/patch-outcome",
+            post(internal_onboarding_patch_outcome),
         )
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

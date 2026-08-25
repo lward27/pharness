@@ -87,6 +87,121 @@ impl SqliteStore {
             })
     }
 
+    pub async fn start_repository_onboarding_patch(
+        &self,
+        onboarding_id: &str,
+        expected_state_version: u64,
+        execution_id: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'patch_queued', patch_execution_id = ?3,
+                patch_artifact_id = NULL, patch_hash = NULL,
+                state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = ?5, status_reason = ?6
+            WHERE id = ?1 AND state_version = ?2 AND status IN ('proposal_approved', 'patch_failed')
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(i64::try_from(expected_state_version).unwrap_or(i64::MAX))
+        .bind(execution_id)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding is no longer ready to materialize its patch".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn finish_repository_onboarding_patch(
+        &self,
+        onboarding_id: &str,
+        execution_id: &str,
+        artifact_id: &str,
+        patch_hash: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'delivery_ready', patch_artifact_id = ?3, patch_hash = ?4,
+                state_version = state_version + 1, blockers_json = '[]', updated_at = ?5,
+                status_changed_at = ?5, status_changed_by = 'controller',
+                status_reason = 'controller materialized the approved onboarding patch'
+            WHERE id = ?1 AND patch_execution_id = ?2 AND status = 'patch_queued'
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(execution_id)
+        .bind(artifact_id)
+        .bind(patch_hash)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding patch execution is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn fail_repository_onboarding_patch(
+        &self,
+        onboarding_id: &str,
+        execution_id: &str,
+        error_code: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'patch_failed', blockers_json = json_array(json_object(
+                  'code', ?3, 'summary', 'approved onboarding patch materialization failed'
+                )), state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = 'controller',
+                status_reason = 'approved onboarding patch materialization failed'
+            WHERE id = ?1 AND patch_execution_id = ?2 AND status = 'patch_queued'
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(execution_id)
+        .bind(error_code)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding patch execution is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
     pub async fn create_repository_onboarding(
         &self,
         onboarding: CreateRepositoryOnboarding,
@@ -710,7 +825,8 @@ fn onboarding_select_sql(where_clause: &str) -> String {
         "SELECT id, product_id, repository_id, binding_id, onboarding_kind, status, \
          registered_commit, resolved_commit, current_discovery_id, current_proposal_revision, \
          approved_proposal_hash, source_delivery_intent_id, contract_version_id, proposer_run_id, \
-         proposer_profile_hash, proposer_stop_reason, state_version, \
+         proposer_profile_hash, proposer_stop_reason, patch_execution_id, patch_artifact_id, \
+         patch_hash, state_version, \
          blockers_json, created_by, creation_reason, created_at, updated_at, status_changed_at, \
          status_changed_by, status_reason FROM repository_onboardings {where_clause}"
     )
@@ -762,6 +878,9 @@ fn row_to_onboarding(
         proposer_run_id: row.try_get("proposer_run_id")?,
         proposer_profile_hash: row.try_get("proposer_profile_hash")?,
         proposer_stop_reason: row.try_get("proposer_stop_reason")?,
+        patch_execution_id: row.try_get("patch_execution_id")?,
+        patch_artifact_id: row.try_get("patch_artifact_id")?,
+        patch_hash: row.try_get("patch_hash")?,
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         blockers: serde_json::from_str(&blockers)?,
         created_by: row.try_get("created_by")?,

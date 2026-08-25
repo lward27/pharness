@@ -1,7 +1,7 @@
 use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
 use super::{ApiError, AppState};
-use crate::dispatch::RepositoryDiscoveryRequest;
+use crate::dispatch::{OnboardingPatchRequest, RepositoryDiscoveryRequest};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -9,14 +9,15 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    CreateProductAggregate, CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
-    CreateRepositoryReadinessAssessment, CreateRun, CreateSession, RegisterRepositoryAggregate,
-    RegisteredRepositoryAggregate, StoredProduct, StoredProductModelSnapshot, StoredRepository,
-    StoredRepositoryBinding, StoredRepositoryDraft, StoredRepositoryOnboarding, StoredService,
-    UpdateProductAggregate,
+    CreateArtifact, CreateProductAggregate, CreateRepositoryOnboarding,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
+    CreateSession, RegisterRepositoryAggregate, RegisteredRepositoryAggregate, StoredProduct,
+    StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding, StoredRepositoryDraft,
+    StoredRepositoryOnboarding, StoredService, UpdateProductAggregate,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -182,6 +183,40 @@ pub(in crate::app) struct RepositoryDiscoveryOutcomeRequest {
     error_summary: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub(in crate::app) struct InternalOnboardingPatchQuery {
+    execution_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(in crate::app) struct OnboardingPatchContextResponse {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    candidate_contract: Value,
+    instructions: String,
+    remove_alias: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub(in crate::app) struct OnboardingPatchOutcomeRequest {
+    status: String,
+    #[serde(default)]
+    patch: Option<String>,
+    #[serde(default)]
+    patch_hash: Option<String>,
+    #[serde(default)]
+    changed_paths: Vec<String>,
+    #[serde(default)]
+    error_code: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct RepositoryRegistrationPreflightResponse {
     product_id: String,
@@ -285,6 +320,9 @@ struct RepositoryOnboardingResponse {
     proposer_run_id: Option<String>,
     proposer_profile_hash: Option<String>,
     proposer_stop_reason: Option<String>,
+    patch_execution_id: Option<String>,
+    patch_artifact_id: Option<String>,
+    patch_hash: Option<String>,
     state_version: u64,
     state_hash: String,
     blockers: Vec<Value>,
@@ -1186,6 +1224,47 @@ async fn execute_repository_onboarding_action(
             )
             .await?;
         }
+        "prepare_onboarding_patch" | "retry_onboarding_patch" => {
+            let execution_id = new_prefixed_id("onbpatch");
+            state
+                .store
+                .start_repository_onboarding_patch(
+                    &onboarding.id,
+                    onboarding.state_version,
+                    &execution_id,
+                    request.actor.trim(),
+                    request.reason.trim(),
+                )
+                .await?;
+            let dispatch = state
+                .worker
+                .dispatch_onboarding_patch(OnboardingPatchRequest {
+                    onboarding_id: onboarding.id.clone(),
+                    execution_id: execution_id.clone(),
+                })
+                .await;
+            match dispatch {
+                Ok(receipt) => tracing::info!(
+                    onboarding_id = %onboarding.id,
+                    execution_id,
+                    job = %receipt.job_name,
+                    "approved onboarding patch materializer dispatched"
+                ),
+                Err(error) => {
+                    let _ = state
+                        .store
+                        .fail_repository_onboarding_patch(
+                            &onboarding.id,
+                            &execution_id,
+                            "onboarding_patch_dispatch_failed",
+                        )
+                        .await;
+                    return Err(ApiError::unavailable(format!(
+                        "onboarding patch dispatch failed: {error}"
+                    )));
+                }
+            }
+        }
         _ => {
             return Err(ApiError::bad_request(
                 "unsupported repository onboarding action",
@@ -1546,6 +1625,9 @@ fn onboarding_response(
         "proposer_run_id": onboarding.proposer_run_id,
         "proposer_profile_hash": onboarding.proposer_profile_hash,
         "proposer_stop_reason": onboarding.proposer_stop_reason,
+        "patch_execution_id": onboarding.patch_execution_id,
+        "patch_artifact_id": onboarding.patch_artifact_id,
+        "patch_hash": onboarding.patch_hash,
     }))?;
     let action = match onboarding.status.as_str() {
         "registered" => Some(("start_discovery", Vec::new())),
@@ -1553,6 +1635,8 @@ fn onboarding_response(
         "discovered" => Some(("start_proposer", Vec::new())),
         "proposal_failed" => Some(("retry_proposer", Vec::new())),
         "proposal_ready" => Some(("approve_proposal", Vec::new())),
+        "proposal_approved" => Some(("prepare_onboarding_patch", Vec::new())),
+        "patch_failed" => Some(("retry_onboarding_patch", Vec::new())),
         _ => None,
     };
     let actions = action
@@ -1568,12 +1652,18 @@ fn onboarding_response(
                 "human_review".into()
             } else if matches!(id, "start_proposer" | "retry_proposer") {
                 "model_execution".into()
+            } else if matches!(id, "prepare_onboarding_patch" | "retry_onboarding_patch") {
+                "isolated_source_materialization".into()
             } else {
                 "isolated_read".into()
             },
             requires_confirmation: matches!(
                 id,
-                "approve_proposal" | "start_proposer" | "retry_proposer"
+                "approve_proposal"
+                    | "start_proposer"
+                    | "retry_proposer"
+                    | "prepare_onboarding_patch"
+                    | "retry_onboarding_patch"
             ),
             blockers,
             state_hash: state_hash.clone(),
@@ -1596,6 +1686,9 @@ fn onboarding_response(
         proposer_run_id: onboarding.proposer_run_id,
         proposer_profile_hash: onboarding.proposer_profile_hash,
         proposer_stop_reason: onboarding.proposer_stop_reason,
+        patch_execution_id: onboarding.patch_execution_id,
+        patch_artifact_id: onboarding.patch_artifact_id,
+        patch_hash: onboarding.patch_hash,
         state_version: onboarding.state_version,
         state_hash,
         blockers: onboarding.blockers,
@@ -1813,6 +1906,233 @@ pub(in crate::app) async fn internal_repository_discovery_outcome(
             "discovery outcome status must be succeeded or failed",
         )),
     }
+}
+
+pub(in crate::app) async fn internal_onboarding_patch_context(
+    State(state): State<AppState>,
+    Path(onboarding_id): Path<String>,
+    Query(query): Query<InternalOnboardingPatchQuery>,
+) -> Result<Json<OnboardingPatchContextResponse>, ApiError> {
+    let onboarding = find_onboarding(&state, &onboarding_id).await?;
+    if onboarding.status != "patch_queued"
+        || onboarding.patch_execution_id.as_deref() != Some(query.execution_id.as_str())
+    {
+        return Err(ApiError::conflict(
+            "onboarding patch execution is no longer current",
+        ));
+    }
+    let proposal = state
+        .store
+        .get_current_repository_onboarding_proposal(&onboarding.id)
+        .await?
+        .filter(|proposal| {
+            proposal.status == "approved"
+                && onboarding.approved_proposal_hash.as_deref()
+                    == Some(proposal.content_hash.as_str())
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("onboarding patch requires the exact approved proposal revision")
+        })?;
+    let typed: pharness_core::RepositoryOnboardingProposal =
+        serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
+            ApiError::conflict(format!("approved proposal is invalid: {error}"))
+        })?;
+    if typed.discovery_id != proposal.discovery_id
+        || typed.discovery_hash != proposal.discovery_hash
+    {
+        return Err(ApiError::conflict(
+            "approved proposal discovery provenance does not match",
+        ));
+    }
+    let discovery = state
+        .store
+        .get_repository_discovery(&proposal.discovery_id)
+        .await?
+        .filter(|discovery| {
+            discovery.status == "succeeded"
+                && discovery.content_hash.as_deref() == Some(proposal.discovery_hash.as_str())
+                && discovery.source_commit == onboarding.registered_commit
+        })
+        .ok_or_else(|| ApiError::conflict("approved proposal discovery is no longer current"))?;
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    if !state.worker.source_reader_available()
+        || !state
+            .worker
+            .source_reader_allows_repository(&repository.canonical_url)
+    {
+        return Err(ApiError::conflict(
+            "onboarding patch requires the isolated source-reader allowlist",
+        ));
+    }
+    let remove_alias = discovery
+        .inventory_json
+        .as_ref()
+        .and_then(|value| value.pointer("/contract/alias_present"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Ok(Json(OnboardingPatchContextResponse {
+        onboarding_id,
+        execution_id: query.execution_id,
+        repository_id: repository.id,
+        provider: repository.provider,
+        canonical_url: repository.canonical_url,
+        default_branch: repository.default_branch,
+        source_commit: onboarding.registered_commit,
+        proposal_id: proposal.id,
+        proposal_hash: proposal.content_hash,
+        candidate_contract: typed.candidate_contract,
+        instructions: typed.instructions,
+        remove_alias,
+    }))
+}
+
+pub(in crate::app) async fn internal_onboarding_patch_outcome(
+    State(state): State<AppState>,
+    Path(onboarding_id): Path<String>,
+    Json(request): Json<OnboardingPatchOutcomeRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let onboarding = find_onboarding(&state, &onboarding_id).await?;
+    let execution_id = onboarding
+        .patch_execution_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("onboarding has no current patch execution"))?;
+    if onboarding.status != "patch_queued" {
+        return Err(ApiError::conflict(
+            "onboarding patch execution is already terminal",
+        ));
+    }
+    match request.status.as_str() {
+        "succeeded" => {
+            let patch = request
+                .patch
+                .filter(|patch| !patch.is_empty() && patch.len() <= 512 * 1024)
+                .ok_or_else(|| {
+                    ApiError::bad_request(
+                        "successful onboarding patch must be nonempty and bounded",
+                    )
+                })?;
+            let patch_hash = request
+                .patch_hash
+                .ok_or_else(|| ApiError::bad_request("successful onboarding patch needs a hash"))?;
+            let actual_hash = format!("sha256:{:x}", Sha256::digest(patch.as_bytes()));
+            if patch_hash != actual_hash {
+                return Err(ApiError::conflict(
+                    "onboarding patch hash does not match its bytes",
+                ));
+            }
+            let changed_paths = onboarding_patch_paths(&patch)?;
+            let mut reported_paths = request.changed_paths;
+            reported_paths.sort();
+            reported_paths.dedup();
+            if reported_paths != changed_paths {
+                return Err(ApiError::conflict(
+                    "onboarding patch changed-path evidence does not match its patch",
+                ));
+            }
+            let run_id = RunId::new(onboarding.proposer_run_id.clone().ok_or_else(|| {
+                ApiError::conflict("onboarding patch has no proposer Run provenance")
+            })?);
+            let run = state
+                .store
+                .get_run(&run_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+            let proposal_hash = onboarding.approved_proposal_hash.clone().ok_or_else(|| {
+                ApiError::conflict("onboarding patch has no approved proposal provenance")
+            })?;
+            let artifact = state
+                .store
+                .create_artifact(CreateArtifact {
+                    id: new_prefixed_id("art"),
+                    session_id: run.session_id,
+                    run_id: Some(run.id),
+                    kind: "repository_onboarding_patch".into(),
+                    label: format!("Approved onboarding patch for {onboarding_id}"),
+                    mime_type: Some("text/x-diff".into()),
+                    path: None,
+                    content_text: Some(patch),
+                    content_json: Some(json!({
+                        "schema_version":"pharness.dev/repository-onboarding-patch/v1alpha1",
+                        "onboarding_id":onboarding_id,
+                        "execution_id":execution_id,
+                        "proposal_hash":proposal_hash,
+                        "source_commit":onboarding.registered_commit,
+                        "patch_hash":patch_hash,
+                        "changed_paths":changed_paths,
+                    })),
+                })
+                .await?;
+            let updated = state
+                .store
+                .finish_repository_onboarding_patch(
+                    &onboarding_id,
+                    &execution_id,
+                    &artifact.id,
+                    &patch_hash,
+                )
+                .await?;
+            Ok(Json(
+                json!({"onboarding":onboarding_response(updated)?,"artifact_id":artifact.id}),
+            ))
+        }
+        "failed" => {
+            let error_code = request
+                .error_code
+                .as_deref()
+                .unwrap_or("onboarding_patch_failed");
+            if error_code.is_empty()
+                || error_code.len() > 120
+                || !error_code
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+            {
+                return Err(ApiError::bad_request("invalid onboarding patch error code"));
+            }
+            let updated = state
+                .store
+                .fail_repository_onboarding_patch(&onboarding_id, &execution_id, error_code)
+                .await?;
+            Ok(Json(json!({"onboarding":onboarding_response(updated)?})))
+        }
+        _ => Err(ApiError::bad_request(
+            "onboarding patch outcome status must be succeeded or failed",
+        )),
+    }
+}
+
+fn onboarding_patch_paths(patch: &str) -> Result<Vec<String>, ApiError> {
+    let allowed = [
+        ".pharness/instructions.md",
+        ".pharness/project.yaml",
+        ".pharness/repository.yaml",
+    ];
+    let mut paths = Vec::new();
+    for line in patch.lines() {
+        let Some(header) = line.strip_prefix("diff --git a/") else {
+            continue;
+        };
+        let (left, right) = header
+            .split_once(" b/")
+            .ok_or_else(|| ApiError::bad_request("onboarding patch has an invalid diff header"))?;
+        if left != right || !allowed.contains(&left) {
+            return Err(ApiError::conflict(
+                "onboarding patch modifies a path outside the onboarding contract",
+            ));
+        }
+        paths.push(left.to_string());
+    }
+    paths.sort();
+    paths.dedup();
+    if paths.is_empty() || paths.len() > allowed.len() {
+        return Err(ApiError::bad_request(
+            "onboarding patch has no bounded contract changes",
+        ));
+    }
+    Ok(paths)
 }
 
 fn registered_repository_response(
@@ -2136,7 +2456,7 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_key, parse_github_repository_url};
+    use super::{normalize_key, onboarding_patch_paths, parse_github_repository_url};
 
     #[test]
     fn product_keys_are_stable_and_bounded() {
@@ -2158,5 +2478,21 @@ mod tests {
             parse_github_repository_url("https://github.com/Example/repo.git?ref=main").is_err()
         );
         assert!(parse_github_repository_url("https://github.com/Example/repo/extra").is_err());
+    }
+
+    #[test]
+    fn onboarding_patch_paths_are_controller_bounded() {
+        let patch = "diff --git a/.pharness/project.yaml b/.pharness/project.yaml\n--- a/.pharness/project.yaml\n+++ /dev/null\ndiff --git a/.pharness/repository.yaml b/.pharness/repository.yaml\n--- /dev/null\n+++ b/.pharness/repository.yaml\n";
+        assert_eq!(
+            onboarding_patch_paths(patch).unwrap(),
+            vec![
+                ".pharness/project.yaml".to_string(),
+                ".pharness/repository.yaml".to_string()
+            ]
+        );
+        let escaped = "diff --git a/src/main.rs b/src/main.rs\n";
+        assert!(onboarding_patch_paths(escaped).is_err());
+        let rename = "diff --git a/.pharness/project.yaml b/.pharness/repository.yaml\n";
+        assert!(onboarding_patch_paths(rename).is_err());
     }
 }

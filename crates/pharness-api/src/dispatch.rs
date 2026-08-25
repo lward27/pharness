@@ -31,6 +31,7 @@ const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-
 const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
 const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-preparation";
 const REPOSITORY_DISCOVERY_JOB_NAME_VALUE: &str = "pharness-repository-discovery";
+const ONBOARDING_PATCH_JOB_NAME_VALUE: &str = "pharness-onboarding-patch";
 // K3s's selector-backed NetworkPolicy rules converge asynchronously after a
 // Pod receives its IP. Short-lived Jobs otherwise race the policy controller
 // and fail their first API or proxy connection before the rule includes them.
@@ -170,6 +171,17 @@ pub struct RepositoryDiscoveryRequest {
 
 #[derive(Debug, Clone)]
 pub struct RepositoryDiscoveryReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingPatchRequest {
+    pub onboarding_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingPatchReceipt {
     pub job_name: String,
 }
 
@@ -378,6 +390,21 @@ impl RunDispatcher {
             }
             Self::Local(_) => {
                 anyhow::bail!("isolated repository discovery is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_onboarding_patch(
+        &self,
+        request: OnboardingPatchRequest,
+    ) -> anyhow::Result<OnboardingPatchReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_onboarding_patch_job(&request).await,
+            Self::Disabled => {
+                anyhow::bail!("onboarding patch requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("onboarding patch is unavailable in local worker mode")
             }
         }
     }
@@ -1119,6 +1146,20 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         let job_name = repository_discovery_job_name(&request.discovery_id);
         tracing::info!(discovery_id = %request.discovery_id, job = %job_name, "created isolated repository discovery job");
         Ok(RepositoryDiscoveryReceipt { job_name })
+    }
+
+    async fn create_onboarding_patch_job(
+        &self,
+        request: &OnboardingPatchRequest,
+    ) -> anyhow::Result<OnboardingPatchReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader is not configured");
+        }
+        let manifest = self.onboarding_patch_job_manifest(request);
+        let job_name = onboarding_patch_job_name(&request.execution_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(onboarding_id=%request.onboarding_id, execution_id=%request.execution_id, job=%job_name, "created onboarding patch materializer job");
+        Ok(OnboardingPatchReceipt { job_name })
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
@@ -2375,6 +2416,39 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         })
     }
 
+    fn onboarding_patch_job_manifest(&self, request: &OnboardingPatchRequest) -> serde_json::Value {
+        let mut env = vec![
+            serde_json::json!({"name":"PHARNESS_EXECUTION_KIND","value":"onboarding_patch"}),
+            serde_json::json!({"name":"PHARNESS_API_URL","value":self.config.api_url}),
+            serde_json::json!({"name":"PHARNESS_REPOSITORY_ONBOARDING_ID","value":request.onboarding_id}),
+            serde_json::json!({"name":"PHARNESS_ONBOARDING_PATCH_EXECUTION_ID","value":request.execution_id}),
+            serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HOME","value":"/work"}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+        }
+        serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":onboarding_patch_job_name(&request.execution_id),"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:ONBOARDING_PATCH_JOB_NAME_VALUE,"pharness.lucas.engineering/onboarding-id":job_label_value(&request.onboarding_id)}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.source_reader_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.source_reader_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{"app":"pharness-source-reader","agentic.lucas.engineering/phase":"discovery",JOB_NAME_LABEL:ONBOARDING_PATCH_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":self.config.source_reader_service_account,"restartPolicy":"Never","automountServiceAccountToken":false,
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "initContainers":[network_policy_stabilization_container(&self.config.image)],
+                        "containers":[{"name":"materialize","image":self.config.image,"imagePullPolicy":"IfNotPresent","command":["pharness-worker"],"env":env,
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"100m","memory":"256Mi","ephemeral-storage":"512Mi"},"limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}}],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"2Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+                    }
+                }
+            }
+        })
+    }
+
     /// Reconcile worker and executor jobs that stopped without reporting a
     /// durable outcome. The API remains the only SQLite writer.
     fn spawn_reaper(self: Arc<Self>) {
@@ -2948,6 +3022,14 @@ fn repository_discovery_job_name(discovery_id: &str) -> String {
     format!("pharness-discovery-{suffix}")
 }
 
+fn onboarding_patch_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    format!(
+        "pharness-onboarding-patch-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -3053,8 +3135,8 @@ mod tests {
         run_label_to_run_id, workspace_claim_name, workspace_claim_name_for_run,
         ArgoSyncExecutionRequest, ExecutorJobTerminalState, GitDeliveryExecutionRequest,
         GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
-        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher, RepositoryDiscoveryRequest,
-        NETWORK_POLICY_STABILIZATION_SECONDS,
+        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher, OnboardingPatchRequest,
+        RepositoryDiscoveryRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -3371,6 +3453,43 @@ mod tests {
         assert!(env
             .iter()
             .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+    }
+
+    #[tokio::test]
+    async fn onboarding_patch_manifest_has_reader_but_no_model_or_writer_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
+        let manifest = dispatcher.onboarding_patch_job_manifest(&OnboardingPatchRequest {
+            onboarding_id: "ronb_test".into(),
+            execution_id: "onbpatch_test".into(),
+        });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("2Gi"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/env/0/value"),
+            Some(&json!("onboarding_patch"))
+        );
     }
 
     #[tokio::test]

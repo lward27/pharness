@@ -21,7 +21,7 @@ use pharness_runhost::{
 };
 use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::Command;
@@ -247,6 +247,10 @@ async fn main() -> anyhow::Result<()> {
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("repository_discovery") {
         return execute_repository_discovery().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("onboarding_patch") {
+        return execute_onboarding_patch().await;
     }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
@@ -550,6 +554,326 @@ struct RepositoryDiscoveryContext {
     default_branch: String,
     source_commit: String,
     limits: RepositoryDiscoveryLimits,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OnboardingPatchContext {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    candidate_contract: serde_json::Value,
+    instructions: String,
+    remove_alias: bool,
+}
+
+async fn execute_onboarding_patch() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let onboarding_id = required_env("PHARNESS_REPOSITORY_ONBOARDING_ID")?;
+    let execution_id = required_env("PHARNESS_ONBOARDING_PATCH_EXECUTION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build onboarding patch client")?;
+    let context_url = format!(
+        "{api_url}/api/internal/repository-onboardings/{onboarding_id}/patch-context?execution_id={execution_id}"
+    );
+    let context = fetch_internal_context_with_retry::<OnboardingPatchContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch onboarding patch context")?;
+    if context.onboarding_id != onboarding_id
+        || context.execution_id != execution_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+        || context.instructions.len() > 32 * 1024
+    {
+        anyhow::bail!("invalid_onboarding_patch_context");
+    }
+    let outcome = match materialize_onboarding_patch(&context).await {
+        Ok((patch, patch_hash, changed_paths)) => serde_json::json!({
+            "status": "succeeded",
+            "patch": patch,
+            "patch_hash": patch_hash,
+            "changed_paths": changed_paths,
+        }),
+        Err(error) => {
+            let error_code = onboarding_patch_error_code(&error);
+            tracing::warn!(
+                onboarding_id,
+                execution_id,
+                error_code,
+                "onboarding patch materialization failed"
+            );
+            serde_json::json!({
+                "status": "failed",
+                "error_code": error_code,
+            })
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-onboardings/{onboarding_id}/patch-outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn materialize_onboarding_patch(
+    context: &OnboardingPatchContext,
+) -> anyhow::Result<(String, String, Vec<String>)> {
+    parse_github_repository(&context.canonical_url)?;
+    let contract: RepositoryContract = serde_json::from_value(context.candidate_contract.clone())
+        .context("invalid_candidate_contract")?;
+    contract
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_candidate_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let pharness_dir = root.join(".pharness");
+    ensure_onboarding_patch_path_safe(&root, &pharness_dir)?;
+    tokio::fs::create_dir_all(&pharness_dir)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    let canonical_path = pharness_dir.join("repository.yaml");
+    let instructions_path = pharness_dir.join("instructions.md");
+    let alias_path = pharness_dir.join("project.yaml");
+    ensure_onboarding_patch_path_safe(&root, &canonical_path)?;
+    ensure_onboarding_patch_path_safe(&root, &instructions_path)?;
+    ensure_onboarding_patch_path_safe(&root, &alias_path)?;
+    let mut contract_yaml =
+        serde_yaml::to_string(&contract).context("candidate_contract_serialization_failed")?;
+    if !contract_yaml.ends_with('\n') {
+        contract_yaml.push('\n');
+    }
+    tokio::fs::write(&canonical_path, contract_yaml)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    tokio::fs::write(&instructions_path, &context.instructions)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    if context.remove_alias && tokio::fs::try_exists(&alias_path).await? {
+        tokio::fs::remove_file(&alias_path)
+            .await
+            .context("onboarding_patch_alias_removal_failed")?;
+    }
+
+    let askpass = source_reader_askpass().await?;
+    let status = repository_git_stdout_preserve(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ],
+        &askpass,
+    )
+    .await?;
+    let changed_paths = parse_porcelain_paths(&status)?;
+    let allowed = [
+        ".pharness/repository.yaml",
+        ".pharness/instructions.md",
+        ".pharness/project.yaml",
+    ];
+    if changed_paths.is_empty()
+        || changed_paths.len() > allowed.len()
+        || changed_paths
+            .iter()
+            .any(|path| !allowed.contains(&path.as_str()))
+    {
+        anyhow::bail!("onboarding_patch_path_violation");
+    }
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "add",
+            "--intent-to-add",
+            "--",
+            ".pharness/repository.yaml",
+            ".pharness/instructions.md",
+        ],
+        &askpass,
+    )
+    .await?;
+    let patch = repository_git_stdout_preserve(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--",
+            ".pharness/repository.yaml",
+            ".pharness/instructions.md",
+            ".pharness/project.yaml",
+        ],
+        &askpass,
+    )
+    .await?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    if patch.is_empty() || patch.len() > 512 * 1024 {
+        anyhow::bail!("onboarding_patch_size_invalid");
+    }
+    let patch_hash = format!("sha256:{:x}", Sha256::digest(patch.as_bytes()));
+    let _ = (
+        &context.repository_id,
+        &context.default_branch,
+        &context.proposal_id,
+        &context.proposal_hash,
+    );
+    Ok((patch, patch_hash, changed_paths))
+}
+
+async fn checkout_exact_repository(
+    root: &std::path::Path,
+    canonical_url: &str,
+    source_commit: &str,
+) -> anyhow::Result<()> {
+    tokio::fs::create_dir_all(root).await?;
+    let askpass = source_reader_askpass().await?;
+    let root_text = root.to_str().context("invalid repository checkout path")?;
+    repository_git_command(&["init", root_text], &askpass).await?;
+    repository_git_command(
+        &["-C", root_text, "remote", "add", "origin", canonical_url],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root_text,
+            "fetch",
+            "--depth",
+            "1",
+            "--no-tags",
+            "--filter=blob:none",
+            "--no-recurse-submodules",
+            "origin",
+            source_commit,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &["-C", root_text, "checkout", "--detach", "FETCH_HEAD"],
+        &askpass,
+    )
+    .await?;
+    let resolved = repository_git_stdout(&["-C", root_text, "rev-parse", "HEAD"], &askpass).await?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    if !resolved.eq_ignore_ascii_case(source_commit) {
+        anyhow::bail!("resolved_commit_mismatch");
+    }
+    Ok(())
+}
+
+async fn source_reader_askpass() -> anyhow::Result<std::path::PathBuf> {
+    let askpass = std::path::PathBuf::from("/tmp/source-reader-askpass");
+    tokio::fs::write(
+        &askpass,
+        "#!/bin/sh\ncase \"$1\" in\n  *Username*) printf '%s\\n' x-access-token ;;\n  *) printf '%s\\n' \"${PHARNESS_SOURCE_READER_TOKEN:-}\" ;;\nesac\n",
+    )
+    .await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700)).await?;
+    }
+    Ok(askpass)
+}
+
+fn ensure_onboarding_patch_path_safe(
+    root: &std::path::Path,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    if !path.starts_with(root) {
+        anyhow::bail!("onboarding_patch_path_violation");
+    }
+    let mut current = root.to_path_buf();
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| anyhow::anyhow!("onboarding_patch_path_violation"))?;
+    for component in relative.components() {
+        current.push(component);
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                anyhow::bail!("onboarding_patch_symlink_rejected")
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(_) => anyhow::bail!("onboarding_patch_path_inspection_failed"),
+        }
+    }
+    Ok(())
+}
+
+fn parse_porcelain_paths(status: &str) -> anyhow::Result<Vec<String>> {
+    let mut paths = Vec::new();
+    for entry in status.split('\0').filter(|entry| !entry.is_empty()) {
+        if entry.len() < 4 || !entry.is_char_boundary(3) {
+            anyhow::bail!("onboarding_patch_status_invalid");
+        }
+        let path = &entry[3..];
+        if path.is_empty() || path.contains('\0') || path.starts_with('/') || path.contains("..") {
+            anyhow::bail!("onboarding_patch_path_violation");
+        }
+        paths.push(path.to_string());
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+async fn repository_git_stdout_preserve(
+    args: &[&str],
+    askpass: &std::path::Path,
+) -> anyhow::Result<String> {
+    let output = repository_git_output(args, askpass).await?;
+    if !output.status.success() {
+        anyhow::bail!(repository_git_error_code(args));
+    }
+    String::from_utf8(output.stdout).context("repository Git output was not UTF-8")
+}
+
+fn onboarding_patch_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_candidate_contract",
+        "candidate_contract_serialization_failed",
+        "onboarding_patch_path_violation",
+        "onboarding_patch_symlink_rejected",
+        "onboarding_patch_path_inspection_failed",
+        "onboarding_patch_write_failed",
+        "onboarding_patch_alias_removal_failed",
+        "onboarding_patch_status_invalid",
+        "onboarding_patch_size_invalid",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    "onboarding_patch_failed"
 }
 
 async fn execute_repository_discovery() -> anyhow::Result<()> {
