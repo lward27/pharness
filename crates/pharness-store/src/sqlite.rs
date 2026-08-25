@@ -6595,6 +6595,93 @@ mod tests {
     use pharness_core::{
         AgentEvent, EventId, EventKind, RunBudget, RunBudgetConsumption, RunId, SessionId,
     };
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use std::borrow::Cow;
+
+    #[tokio::test]
+    async fn migration_0039_database_upgrades_without_breaking_legacy_reads() {
+        let database_path = std::env::temp_dir().join(format!(
+            "pharness-migration-0039-{}-{}.db",
+            std::process::id(),
+            super::now_string()
+        ));
+        let options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let all = sqlx::migrate!("./migrations");
+        let through_0039 = sqlx::migrate::Migrator {
+            migrations: Cow::Owned(
+                all.iter()
+                    .filter(|migration| migration.version <= 39)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        through_0039.run(&pool).await.unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO work_items (
+              id, status, title, intent, acceptance_criteria_json,
+              source_repo, source_ref, target_environment, production_impacting,
+              max_attempts, max_elapsed_seconds, created_at, updated_at,
+              status_changed_at, status_changed_by, status_reason
+            ) VALUES (
+              'witem_legacy_0039', 'triage', 'Legacy item', 'Preserve this item', '[]',
+              'https://github.com/example/legacy.git', 'main', 'development', 0,
+              2, 3600, '1', '1', '1', 'operator', 'fixture'
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let store = SqliteStore::connect(&database_path).await.unwrap();
+        let item = store
+            .get_work_item("witem_legacy_0039")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(item.title, "Legacy item");
+        assert!(store
+            .get_repo_work_item_metadata("witem_legacy_0039")
+            .await
+            .unwrap()
+            .is_none());
+
+        // This is the exact additive read surface an old release used before
+        // Repo Mode. It must remain valid after the new migrations so a GitOps
+        // rollback can start the prior binary against a copied database.
+        let legacy_read: (String, String, String, String, String) = sqlx::query_as(
+            "SELECT id, status, title, source_repo, source_ref FROM work_items WHERE id = ?1",
+        )
+        .bind("witem_legacy_0039")
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(legacy_read.0, "witem_legacy_0039");
+        assert_eq!(legacy_read.1, "triage");
+        assert_eq!(legacy_read.4, "main");
+        let latest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+        assert_eq!(latest, 46);
+        store.pool.close().await;
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
+        }
+    }
 
     #[tokio::test]
     async fn persists_runs_and_events() {
