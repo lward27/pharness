@@ -829,7 +829,6 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 })
                 .await?
                 .into_iter()
-                .rev()
                 .find(|workspace| workspace.resolved_commit == work_item.source_commit)
                 .ok_or_else(|| {
                     ApiError::conflict("preserved correction workspace is unavailable")

@@ -74,6 +74,7 @@ use super::releases::{
     transition_registry_evidence, transition_release, verify_release, ListRegistryEvidenceQuery,
     ListReleasesQuery,
 };
+use super::repo_mode::internal_source_delivery_observation_outcome;
 use super::runs::{
     cancel_run, create_operator_run, create_run, decide_run_approval, get_run, get_run_diff,
     get_run_events, get_run_operator_summary, internal_workspace_provisioned, last_event_seq,
@@ -150,13 +151,14 @@ use crate::dto::{
     CreateWorkPlanFromRemediationPlanRequest, DecideApprovalGateRequest, DecideApprovalRequest,
     DeploymentIntentDeliveryFlowResponse, DeploymentIntentPreflightRequest,
     ExecuteCapabilityRequest, ExecuteCapabilityResponse, ExecuteDeploymentIntentRequest,
-    ExecuteWorkItemActionRequest, GitDeliveryFlowResponse, GitDeliveryPreflightRequest,
-    GitOpsDeliveryFlowResponse, GitOpsDeliveryObservationOutcomeRequest,
-    GitOpsDeliveryOutcomeRequest, GitOpsDeliveryPreflightRequest,
-    PipelineIntentExecutionOutcomeRequest, PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest,
-    ReconcileDueControllerWaitsRequest, ReconcileWorkItemRequest, ReleaseResponse,
-    ReplanWorkItemRequest, ReviewApprovalRequest, ReviseChangeSetRequest, ReviseWorkPlanRequest,
-    RevokePermissionGrantRequest, TransitionChangeSetRequest, TransitionDeploymentContractRequest,
+    ExecuteWorkItemActionRequest, GitDeliveryFlowResponse, GitDeliveryObservationOutcomeRequest,
+    GitDeliveryPreflightRequest, GitOpsDeliveryFlowResponse,
+    GitOpsDeliveryObservationOutcomeRequest, GitOpsDeliveryOutcomeRequest,
+    GitOpsDeliveryPreflightRequest, PipelineIntentExecutionOutcomeRequest,
+    PrepareGitDeliveryRequest, PrepareGitOpsDeliveryRequest, ReconcileDueControllerWaitsRequest,
+    ReconcileWorkItemRequest, ReleaseResponse, ReplanWorkItemRequest, ReviewApprovalRequest,
+    ReviseChangeSetRequest, ReviseWorkPlanRequest, RevokePermissionGrantRequest,
+    TransitionChangeSetRequest, TransitionDeploymentContractRequest,
     TransitionDeploymentIntentRequest, TransitionPipelineIntentRequest,
     TransitionRegistryEvidenceRequest, TransitionReleaseRequest, TransitionRemediationPlanRequest,
     TransitionWorkItemRequest, TransitionWorkPlanRequest, VerifyReleaseRequest,
@@ -168,16 +170,19 @@ use axum::{Extension, Json};
 use pharness_config::WorkerKubernetesConfig;
 use pharness_core::{
     AgentAction, AgentEvent, EventId, EventKind, PolicyDecision, PolicyMode, ReadOnlyClusterTools,
-    RiskLevel, RunId, RunScope, SafetyPolicy, SessionId,
+    RiskLevel, RunBudget, RunId, RunScope, SafetyPolicy, SessionId,
 };
 use pharness_store::{
-    ApprovalGateListFilter, ApprovalGateSummaryFilter, CreateApproval, CreateApprovalGate,
-    CreateArtifact, CreateChangeSet, CreateControllerWait, CreateDeploymentIntent,
-    CreateFileChange, CreateGitOpsChangeSet, CreateIncident, CreateObservation,
-    CreatePipelineContract, CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun,
-    CreateSession, CreateWorkItem, CreateWorkPlan, CreateWorkspace, ObservationListFilter,
-    SqliteStore, StoredDeploymentContract, StoredGitOpsChangeSet, StoredPipelineContract,
-    StoredPipelineIntent, StoredRelease,
+    ApprovalGateListFilter, ApprovalGateSummaryFilter, ApproveRepositoryOnboardingProposal,
+    CreateApproval, CreateApprovalGate, CreateArtifact, CreateChangeSet, CreateControllerWait,
+    CreateDeploymentIntent, CreateFileChange, CreateGitOpsChangeSet, CreateIncident,
+    CreateObservation, CreatePipelineContract, CreatePipelineIntent, CreateProductAggregate,
+    CreateRelease, CreateRemediationPlan, CreateRepoWorkItem, CreateRepositoryContractVersion,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
+    CreateSession, CreateSourceDeliveryIntent, CreateWorkItem, CreateWorkPlan, CreateWorkspace,
+    ObservationListFilter, RegisterRepositoryAggregate, SqliteStore, StoredDeploymentContract,
+    StoredGitOpsChangeSet, StoredPipelineContract, StoredPipelineIntent, StoredRelease,
+    StoredRepositoryDraft,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -192,4 +197,5 @@ mod delivery_reconcile;
 mod pipeline_delivery;
 mod plans_changes;
 mod production;
+mod repo_mode_v1;
 mod runs_capabilities;
