@@ -3737,7 +3737,9 @@ async fn start_repo_followup_stage(
             payload: json!({"source":"repo_mode_controller","stage":stage,"stage_execution_id":execution.id,"chain_authorization_id":authorization.id}),
         })
         .await?;
-    state.worker.spawn_run(run.clone(), cwd);
+    state
+        .worker
+        .spawn_chained_run(run.clone(), cwd, completed_run.id.as_str());
     Ok(json!({"run":run,"stage_execution":execution,"context_pack":pack,"workspace":workspace}))
 }
 
