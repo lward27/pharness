@@ -26,9 +26,9 @@ organization:
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    digest: sha256:e4fec20ca1650ce51c1d17233be0b4dda185f5942e79a15d4f54308bc368cdd9
+    digest: sha256:c3d15d5762cc679e806509bc82456080990c28c1813f2fc1a46c39ee378bf39e
     pullPolicy: IfNotPresent
-    revision: 0a9351b040a44f3aa8ca390610e3222bcee6d11a
+    revision: 7c561db8c2df060d35ce87cf4f7b3aef294a72f5
   # SQLite single-writer: keep exactly one API replica.
   replicas: 1
   host: pharness-api.lucas.engineering
@@ -158,8 +158,8 @@ worker:
 environmentProfiles:
   - id: python-3.11
     active: true
-    image: registry.lucas.engineering/pharness-python-runner@sha256:b3008c86b9feb24f82c44f29a6a1575b898e71b5862ef9850663addc7c933ac9
-    revision: 0a9351b040a44f3aa8ca390610e3222bcee6d11a
+    image: registry.lucas.engineering/pharness-python-runner@sha256:3378283f7c6deededdc7ab22e9f2cef945e989b8e4cb5865a9b1483e733c1085
+    revision: 7c561db8c2df060d35ce87cf4f7b3aef294a72f5
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -199,9 +199,9 @@ tektonE2eBuildOutputSmoke:
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    digest: sha256:9fecd49856d03c8013ea4fbf7955d75f8fed9ef1cbee5d4c64ba8fe2f640c3eb
+    digest: sha256:61ab85ae1d7f31c96f1f6255ee2337efdb4c2c3bd68771d2852edf52a943b90d
     pullPolicy: IfNotPresent
-    revision: 0a9351b040a44f3aa8ca390610e3222bcee6d11a
+    revision: 7c561db8c2df060d35ce87cf4f7b3aef294a72f5
   replicas: 1
   host: pharness.lucas.engineering
   resources:
