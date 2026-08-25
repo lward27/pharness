@@ -1060,7 +1060,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$GIT_ASKPASS_VALUE" GIT_CONFIG_NOSYSTEM=1 git
             "source_writer" | "source_observer" | "gitops_writer" | "gitops_observer" => {
                 let (enabled, service_account, secret, repos, required_permission) = match capability {
                     "source_writer" => (self.git_writer_available(), &self.config.git_writer_service_account, self.config.git_writer_token_secret_name.as_deref(), &self.config.git_writer_allowed_repos, "push"),
-                    "source_observer" => (self.git_observer_available(), &self.config.git_observer_service_account, self.config.git_observer_token_secret_name.as_deref(), &self.config.git_observer_allowed_repos, "pull"),
+                    "source_observer" => (self.git_observer_available(), &self.config.git_observer_service_account, self.config.git_observer_token_secret_name.as_deref(), &self.config.git_observer_allowed_repos, "pull_rules_checks_statuses"),
                     "gitops_writer" => (self.gitops_writer_available(), &self.config.gitops_writer_service_account, self.config.gitops_writer_token_secret_name.as_deref(), &self.config.gitops_writer_allowed_repos, "push"),
                     _ => (self.gitops_observer_available(), &self.config.gitops_observer_service_account, self.config.gitops_observer_token_secret_name.as_deref(), &self.config.gitops_observer_allowed_repos, "pull"),
                 };
@@ -1071,7 +1071,17 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$GIT_ASKPASS_VALUE" GIT_CONFIG_NOSYSTEM=1 git
                 env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
                 env.push(serde_json::json!({"name":"REPOSITORY_API","value":format!("https://api.github.com/repos/{repo_path}")}));
                 env.push(serde_json::json!({"name":"REQUIRED_PERMISSION","value":required_permission}));
-                let script = if required_permission == "push" {
+                let script = if capability == "source_observer" {
+                    env.push(serde_json::json!({
+                        "name":"PHARNESS_EXECUTION_KIND",
+                        "value":"source_observer_capability_preflight"
+                    }));
+                    env.push(serde_json::json!({
+                        "name":"GITHUB_API_URL",
+                        "value":self.config.git_observer_github_api_url
+                    }));
+                    "exec /usr/local/bin/pharness-worker".to_string()
+                } else if required_permission == "push" {
                     env.push(serde_json::json!({
                         "name":"PREFLIGHT_REF",
                         "value":format!("refs/heads/pharness/capability-preflight-{suffix}")
@@ -4090,6 +4100,41 @@ mod tests {
                 && entry["value"].as_str().is_some_and(|value| {
                     value.starts_with("refs/heads/pharness/capability-preflight-")
                 })
+        }));
+    }
+
+    #[tokio::test]
+    async fn source_observer_preflight_exercises_rules_checks_and_statuses() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.git_observer_enabled = true;
+        dispatcher.config.git_observer_token_secret_name =
+            Some("pharness-git-observer-token".to_string());
+        dispatcher.config.git_observer_allowed_repos =
+            vec!["https://github.com/example/test.git".to_string()];
+        let (_, permission, repository, manifest) = dispatcher
+            .capability_preflight_manifest("source_observer", None)
+            .unwrap();
+        let script = manifest
+            .pointer("/spec/template/spec/containers/0/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+
+        assert_eq!(permission, "repository_pull_rules_checks_statuses");
+        assert_eq!(
+            repository.as_deref(),
+            Some("https://github.com/example/test.git")
+        );
+        assert_eq!(script, "exec /usr/local/bin/pharness-worker");
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "PHARNESS_EXECUTION_KIND"
+                && entry["value"] == "source_observer_capability_preflight"
+        }));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "GITHUB_API_URL" && entry["value"] == "https://api.github.com"
         }));
     }
 
