@@ -2,11 +2,12 @@ use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
 use super::{ApiError, AppState};
 use crate::dispatch::RepositoryDiscoveryRequest;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use pharness_store::{
-    CreateProductAggregate, CreateRepositoryOnboarding, RegisterRepositoryAggregate,
+    CreateProductAggregate, CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
+    CreateRepositoryReadinessAssessment, RegisterRepositoryAggregate,
     RegisteredRepositoryAggregate, StoredProduct, StoredProductModelSnapshot, StoredRepository,
     StoredRepositoryBinding, StoredRepositoryDraft, StoredRepositoryOnboarding, StoredService,
     UpdateProductAggregate,
@@ -41,6 +42,14 @@ pub(super) fn router() -> Router<AppState> {
         )
         .route("/api/repositories/:repository_id", get(get_repository))
         .route(
+            "/api/repositories/:repository_id/readiness",
+            get(get_repository_readiness),
+        )
+        .route(
+            "/api/repositories/:repository_id/readiness-assessments",
+            post(create_repository_readiness_assessment),
+        )
+        .route(
             "/api/repositories/:repository_id/onboardings",
             post(create_repository_onboarding),
         )
@@ -53,9 +62,14 @@ pub(super) fn router() -> Router<AppState> {
             get(get_repository_onboarding_flow),
         )
         .route(
+            "/api/repository-onboardings/:onboarding_id/proposal",
+            axum::routing::put(put_repository_onboarding_proposal),
+        )
+        .route(
             "/api/repository-onboardings/:onboarding_id/actions/:action_id/execute",
             post(execute_repository_onboarding_action),
         )
+        .route("/api/agent-profiles", get(list_agent_profiles))
 }
 
 #[derive(Debug, Serialize)]
@@ -116,7 +130,27 @@ struct CreateRepositoryOnboardingRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct RepositoryReadinessQuery {
+    source_commit: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateRepositoryReadinessRequest {
+    source_commit: String,
+    actor: String,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ExecuteRepositoryOnboardingActionRequest {
+    actor: String,
+    reason: String,
+    state_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PutRepositoryOnboardingProposalRequest {
+    proposal: pharness_core::RepositoryOnboardingProposal,
     actor: String,
     reason: String,
     state_hash: String,
@@ -289,6 +323,20 @@ async fn get_organization(
         display_name: organization.display_name,
         repo_mode_v1_enabled: state.repo_mode.enabled,
     }))
+}
+
+async fn list_agent_profiles(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    let config = state.worker.config_json();
+    let model = config
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("unconfigured");
+    let profiles =
+        pharness_core::compiled_agent_profiles(model, pharness_runhost::SYSTEM_PROMPT_VERSION);
+    Ok(Json(
+        json!({"agent_profiles": profiles, "count": profiles.len()}),
+    ))
 }
 
 async fn organization_overview(
@@ -662,6 +710,202 @@ async fn get_repository(
     Ok(Json(repository_response(repository, None, None)))
 }
 
+async fn get_repository_readiness(
+    State(state): State<AppState>,
+    Path(repository_id): Path<String>,
+    Query(query): Query<RepositoryReadinessQuery>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    if !is_git_sha(&query.source_commit) {
+        return Err(ApiError::bad_request(
+            "source_commit must be a full 40-character Git object ID",
+        ));
+    }
+    let repository = state
+        .store
+        .get_repository(&repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &repository_id))?;
+    let assessment = state
+        .store
+        .latest_repository_readiness_assessment(
+            &repository_id,
+            &query.source_commit.to_ascii_lowercase(),
+        )
+        .await?;
+    Ok(Json(readiness_response(&state, &repository, assessment)))
+}
+
+async fn create_repository_readiness_assessment(
+    State(state): State<AppState>,
+    Path(repository_id): Path<String>,
+    Json(request): Json<CreateRepositoryReadinessRequest>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    validate_required(&request.actor, "actor", 200)?;
+    validate_required(&request.reason, "reason", 1_000)?;
+    if !is_git_sha(&request.source_commit) {
+        return Err(ApiError::bad_request(
+            "source_commit must be a full 40-character Git object ID",
+        ));
+    }
+    let source_commit = request.source_commit.to_ascii_lowercase();
+    let repository = state
+        .store
+        .get_repository(&repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &repository_id))?;
+    let version = state
+        .store
+        .latest_repository_contract_version(&repository_id, &source_commit)
+        .await?;
+    let mut blockers = Vec::<Value>::new();
+    let mut warnings = Vec::<Value>::new();
+    let mut checks = Vec::<Value>::new();
+    let mut profile = None;
+    let mut dependency_lock_hash = None;
+    let contract_status;
+    if let Some(version) = &version {
+        let contract: pharness_core::RepositoryContract =
+            serde_json::from_value(version.contract.clone()).map_err(|error| {
+                ApiError::internal(format!("stored RepositoryContract is invalid: {error}"))
+            })?;
+        contract
+            .validate_candidate()
+            .map_err(|error| ApiError::internal(error.to_string()))?;
+        dependency_lock_hash = Some(contract.dependency_lock.sha256.clone());
+        profile = state
+            .environment_profiles
+            .iter()
+            .find(|profile| profile.active && profile.id == contract.environment_profile)
+            .cloned();
+        if profile.is_none() {
+            blockers.push(json!({
+                "code": "environment_profile_unavailable",
+                "summary": "the merged RepositoryContract selects no active runner profile",
+            }));
+        }
+        checks.push(json!({
+            "key": "canonical_contract",
+            "status": "passed",
+            "evidence": {"contract_version_id": version.id, "contract_hash": version.content_hash},
+        }));
+        contract_status = if profile.is_some() {
+            "ready"
+        } else {
+            "blocked"
+        };
+    } else {
+        blockers.push(json!({
+            "code": "canonical_contract_version_missing",
+            "summary": "no validated canonical contract was loaded from this exact merged revision",
+        }));
+        checks.push(json!({"key":"canonical_contract","status":"unavailable"}));
+        contract_status = "blocked";
+    }
+    let coding_status = if contract_status == "ready" {
+        warnings.push(json!({
+            "code": "coding_readiness_requires_isolated_preparation",
+            "summary": "contract inputs are valid but exact checkout, preparation, executables and acceptance execution have not yet been proven",
+        }));
+        "configured_unverified"
+    } else {
+        "blocked"
+    };
+    let input = json!({
+        "schema_version": "pharness.dev/repository-readiness-input/v1alpha1",
+        "repository_id": repository_id,
+        "source_commit": source_commit,
+        "contract_version_id": version.as_ref().map(|version| &version.id),
+        "contract_hash": version.as_ref().map(|version| &version.content_hash),
+        "dependency_lock_hash": dependency_lock_hash,
+        "environment_profile_id": profile.as_ref().map(|profile| &profile.id),
+        "environment_profile_revision": profile.as_ref().map(|profile| &profile.revision),
+        "runner_image": profile.as_ref().map(|profile| &profile.image),
+        "validation_policy_version": "repo-mode-v1",
+        "source_reader_available": state.worker.source_reader_available(),
+        "source_reader_allowed": state.worker.source_reader_allows_repository(&repository.canonical_url),
+    });
+    let input_hash = canonical_material_hash(&input)?;
+    let material = json!({
+        "schema_version": "pharness.dev/repository-readiness/v1alpha1",
+        "input": input,
+        "contract_status": contract_status,
+        "coding_status": coding_status,
+        "checks": checks,
+        "blockers": blockers,
+        "warnings": warnings,
+        "evidence_refs": version.as_ref().map(|version| vec![json!({"kind":"repository_contract_version","id":version.id,"hash":version.content_hash})]).unwrap_or_default(),
+    });
+    let content_hash = canonical_material_hash(&material)?;
+    let assessment = state
+        .store
+        .create_repository_readiness_assessment(CreateRepositoryReadinessAssessment {
+            id: new_prefixed_id("rready"),
+            repository_id: repository_id.clone(),
+            source_commit,
+            contract_version_id: version.as_ref().map(|version| version.id.clone()),
+            contract_hash: version.as_ref().map(|version| version.content_hash.clone()),
+            dependency_lock_hash,
+            environment_profile_id: profile.as_ref().map(|profile| profile.id.clone()),
+            environment_profile_revision: profile.as_ref().map(|profile| profile.revision.clone()),
+            runner_image_digest: profile.as_ref().and_then(|profile| {
+                profile
+                    .image
+                    .split_once('@')
+                    .map(|(_, digest)| digest.to_string())
+            }),
+            validation_policy_version: "repo-mode-v1".into(),
+            contract_status: contract_status.into(),
+            coding_status: coding_status.into(),
+            checks: material["checks"].clone(),
+            blockers: material["blockers"].clone(),
+            warnings: material["warnings"].clone(),
+            evidence_refs: material["evidence_refs"].clone(),
+            input_hash,
+            content_hash,
+            expires_at: None,
+        })
+        .await?;
+    tracing::info!(repository_id = %repository_id, actor = %request.actor, reason = %request.reason, assessment_id = %assessment.id, "repository readiness assessment created");
+    Ok(Json(readiness_response(
+        &state,
+        &repository,
+        Some(assessment),
+    )))
+}
+
+fn readiness_response(
+    state: &AppState,
+    repository: &StoredRepository,
+    assessment: Option<pharness_store::StoredRepositoryReadinessAssessment>,
+) -> Value {
+    let writer = state.worker.git_writer_settings();
+    let observer = state.worker.git_observer_settings();
+    json!({
+        "repository_id": repository.id,
+        "source_commit": assessment.as_ref().map(|assessment| assessment.source_commit.as_str()),
+        "assessment": assessment,
+        "capabilities": {
+            "source_reader": {
+                "availability": if state.worker.source_reader_available() { "available" } else { "unavailable" },
+                "trust_policy": if state.worker.source_reader_allows_repository(&repository.canonical_url) { "allowed" } else { "denied" },
+                "authorization": "not_required_for_read_only_assessment",
+            },
+            "source_writer": {
+                "availability": if writer.is_some() { "configured_unverified" } else { "unavailable" },
+                "trust_policy": if writer.as_ref().is_some_and(|settings| settings.allowed_repos.contains(&repository.canonical_url)) { "allowed" } else { "denied" },
+                "authorization": "not_granted",
+            },
+            "provider_observer": {
+                "availability": if observer.is_some() { "configured_unverified" } else { "unavailable" },
+                "trust_policy": if observer.as_ref().is_some_and(|settings| settings.allowed_repos.contains(&repository.canonical_url)) { "allowed" } else { "denied" },
+                "authorization": "not_required_for_read_only_observation",
+            },
+        },
+    })
+}
+
 async fn create_repository_onboarding(
     State(state): State<AppState>,
     Path(repository_id): Path<String>,
@@ -724,14 +968,96 @@ async fn get_repository_onboarding_flow(
         Some(id) => state.store.get_repository_discovery(id).await?,
         None => None,
     };
+    let proposal = state
+        .store
+        .get_current_repository_onboarding_proposal(&onboarding.id)
+        .await?;
     let response = onboarding_response(onboarding)?;
     Ok(Json(json!({
         "onboarding": response,
         "discovery": discovery,
-        "proposal": null,
+        "proposal": proposal,
         "source_delivery_intent": null,
         "readiness": null,
     })))
+}
+
+async fn put_repository_onboarding_proposal(
+    State(state): State<AppState>,
+    Path(onboarding_id): Path<String>,
+    Json(request): Json<PutRepositoryOnboardingProposalRequest>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    validate_required(&request.actor, "actor", 200)?;
+    validate_required(&request.reason, "reason", 1_000)?;
+    if request.proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA {
+        return Err(ApiError::bad_request(
+            "proposal schema_version must be pharness.dev/repository-onboarding-proposal/v1alpha1",
+        ));
+    }
+    if request.proposal.instructions.len() > 32 * 1024 {
+        return Err(ApiError::bad_request(
+            "repository instructions must not exceed 32 KiB",
+        ));
+    }
+    let onboarding = find_onboarding(&state, &onboarding_id).await?;
+    let preview = onboarding_response(onboarding.clone())?;
+    if preview.state_hash != request.state_hash {
+        return Err(ApiError::conflict(
+            "repository onboarding changed after proposal preview; refresh and retry",
+        ));
+    }
+    let discovery_id = onboarding
+        .current_discovery_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("onboarding has no current discovery"))?;
+    let discovery = state
+        .store
+        .get_repository_discovery(discovery_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository_discovery", discovery_id))?;
+    if discovery.status != "succeeded"
+        || request.proposal.discovery_id != discovery.id
+        || request.proposal.discovery_hash != discovery.content_hash.clone().unwrap_or_default()
+    {
+        return Err(ApiError::conflict(
+            "proposal must reference the exact current successful discovery",
+        ));
+    }
+    let contract: pharness_core::RepositoryContract =
+        serde_json::from_value(request.proposal.candidate_contract.clone()).map_err(|error| {
+            ApiError::bad_request(format!("candidate contract is invalid: {error}"))
+        })?;
+    contract
+        .validate_candidate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    if !state
+        .environment_profiles
+        .iter()
+        .any(|profile| profile.active && profile.id == contract.environment_profile)
+    {
+        return Err(ApiError::conflict(
+            "candidate contract selects an unavailable EnvironmentProfile",
+        ));
+    }
+    let proposal_value = serde_json::to_value(&request.proposal)
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    let content_hash = canonical_material_hash(&proposal_value)?;
+    let stored = state
+        .store
+        .create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
+            id: new_prefixed_id("rprop"),
+            onboarding_id,
+            expected_state_version: onboarding.state_version,
+            proposal: proposal_value,
+            content_hash,
+            discovery_id: discovery.id,
+            discovery_hash: discovery.content_hash.unwrap_or_default(),
+            actor: request.actor.trim().into(),
+            origin: "operator".into(),
+        })
+        .await?;
+    Ok(Json(json!({"proposal": stored})))
 }
 
 async fn execute_repository_onboarding_action(
@@ -817,6 +1143,24 @@ async fn execute_repository_onboarding_action(
                     )));
                 }
             }
+        }
+        "approve_proposal" => {
+            let proposal = state
+                .store
+                .get_current_repository_onboarding_proposal(&onboarding.id)
+                .await?
+                .ok_or_else(|| ApiError::conflict("onboarding has no proposed revision"))?;
+            state
+                .store
+                .approve_repository_onboarding_proposal(
+                    &onboarding.id,
+                    &proposal.id,
+                    &proposal.content_hash,
+                    onboarding.state_version,
+                    request.actor.trim(),
+                    request.reason.trim(),
+                )
+                .await?;
         }
         _ => {
             return Err(ApiError::bad_request(
@@ -992,6 +1336,7 @@ fn onboarding_response(
     let action = match onboarding.status.as_str() {
         "registered" => Some(("start_discovery", Vec::new())),
         "discovery_failed" => Some(("retry_discovery", Vec::new())),
+        "proposal_ready" => Some(("approve_proposal", Vec::new())),
         _ => None,
     };
     let actions = action
@@ -1003,8 +1348,12 @@ fn onboarding_response(
             } else {
                 "blocked".into()
             },
-            effect_class: "isolated_read".into(),
-            requires_confirmation: false,
+            effect_class: if id == "approve_proposal" {
+                "human_review".into()
+            } else {
+                "isolated_read".into()
+            },
+            requires_confirmation: id == "approve_proposal",
             blockers,
             state_hash: state_hash.clone(),
         })

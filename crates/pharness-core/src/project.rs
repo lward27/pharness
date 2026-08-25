@@ -262,6 +262,60 @@ impl EnvironmentProfile {
 }
 
 impl RepositoryContract {
+    /// Validate the executable shape of an onboarding proposal before a
+    /// checkout exists. Exact lock bytes, roots, and symlink containment are
+    /// still revalidated from the merged immutable revision before readiness.
+    pub fn validate_candidate(&self) -> Result<(), RepositoryContractError> {
+        if self.api_version != "pharness.dev/v1alpha1" {
+            return Err(RepositoryContractError::Invalid(
+                "api_version must be pharness.dev/v1alpha1".into(),
+            ));
+        }
+        validate_identifier(&self.environment_profile, "environment_profile")?;
+        if self.dependency_lock.kind != "pip_requirements" {
+            return Err(RepositoryContractError::Invalid(
+                "dependency_lock.kind must be pip_requirements".into(),
+            ));
+        }
+        validate_relative_path(&self.dependency_lock.path, false)?;
+        if !is_sha256(&self.dependency_lock.sha256) {
+            return Err(RepositoryContractError::Invalid(
+                "dependency lock must declare a full SHA-256".into(),
+            ));
+        }
+        validate_unique_paths(&self.writable_paths, "writable_paths", true)?;
+        if self.writable_paths.is_empty() {
+            return Err(RepositoryContractError::Invalid(
+                "writable_paths must not be empty".into(),
+            ));
+        }
+        let mut command_names = BTreeSet::new();
+        if self.acceptance_commands.is_empty() {
+            return Err(RepositoryContractError::Invalid(
+                "acceptance_commands must not be empty".into(),
+            ));
+        }
+        for command in &self.acceptance_commands {
+            validate_identifier(&command.name, "acceptance command name")?;
+            if !command_names.insert(command.name.as_str()) {
+                return Err(RepositoryContractError::Invalid(format!(
+                    "duplicate acceptance command {}",
+                    command.name
+                )));
+            }
+            validate_command(&command.command)?;
+        }
+        validate_unique_paths(&self.roots.source, "roots.source", false)?;
+        validate_unique_paths(&self.roots.tests, "roots.tests", false)?;
+        validate_unique_paths(&self.roots.documentation, "roots.documentation", false)?;
+        if self.roots.source.is_empty() || self.roots.tests.is_empty() {
+            return Err(RepositoryContractError::Invalid(
+                "source and test roots are required".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Compatibility loader used by legacy WorkItems. Repo Mode callers must
     /// use `load_for_repo_mode`, which rejects alias-only repositories.
     pub fn load(workspace: &Path) -> Result<(Self, String), RepositoryContractError> {
@@ -342,17 +396,7 @@ impl RepositoryContract {
     }
 
     pub fn validate(&self, workspace: &Path) -> Result<(), RepositoryContractError> {
-        if self.api_version != "pharness.dev/v1alpha1" {
-            return Err(RepositoryContractError::Invalid(
-                "api_version must be pharness.dev/v1alpha1".into(),
-            ));
-        }
-        validate_identifier(&self.environment_profile, "environment_profile")?;
-        if self.dependency_lock.kind != "pip_requirements" {
-            return Err(RepositoryContractError::Invalid(
-                "dependency_lock.kind must be pip_requirements".into(),
-            ));
-        }
+        self.validate_candidate()?;
         let lock = resolve_declared_path(workspace, &self.dependency_lock.path)?;
         let lock_bytes =
             std::fs::read(&lock).map_err(|error| RepositoryContractError::Io(error.to_string()))?;
@@ -364,37 +408,7 @@ impl RepositoryContract {
             ));
         }
         validate_immutable_pip_lock(&lock_bytes)?;
-        validate_unique_paths(&self.writable_paths, "writable_paths", true)?;
-        if self.writable_paths.is_empty() {
-            return Err(RepositoryContractError::Invalid(
-                "writable_paths must not be empty".into(),
-            ));
-        }
         validate_declared_paths(workspace, &self.writable_paths)?;
-        let mut command_names = BTreeSet::new();
-        if self.acceptance_commands.is_empty() {
-            return Err(RepositoryContractError::Invalid(
-                "acceptance_commands must not be empty".into(),
-            ));
-        }
-        for command in &self.acceptance_commands {
-            validate_identifier(&command.name, "acceptance command name")?;
-            if !command_names.insert(command.name.as_str()) {
-                return Err(RepositoryContractError::Invalid(format!(
-                    "duplicate acceptance command {}",
-                    command.name
-                )));
-            }
-            validate_command(&command.command)?;
-        }
-        validate_unique_paths(&self.roots.source, "roots.source", false)?;
-        validate_unique_paths(&self.roots.tests, "roots.tests", false)?;
-        validate_unique_paths(&self.roots.documentation, "roots.documentation", false)?;
-        if self.roots.source.is_empty() || self.roots.tests.is_empty() {
-            return Err(RepositoryContractError::Invalid(
-                "source and test roots are required".into(),
-            ));
-        }
         validate_declared_paths(workspace, &self.roots.source)?;
         validate_declared_paths(workspace, &self.roots.tests)?;
         validate_declared_paths(workspace, &self.roots.documentation)?;

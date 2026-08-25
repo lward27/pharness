@@ -35,6 +35,7 @@ mod policy;
 mod principals;
 mod products;
 mod releases;
+mod repo_mode;
 mod risk;
 mod runs;
 mod sdlc;
@@ -137,6 +138,7 @@ pub fn router(
         .merge(work_items::router())
         .merge(operator::router())
         .merge(products::router())
+        .merge(repo_mode::router())
         .merge(source::router())
         .merge(gitops::router())
         .merge(pipeline::router())

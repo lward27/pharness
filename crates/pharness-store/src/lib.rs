@@ -3,6 +3,7 @@
 mod models;
 mod onboarding;
 mod product;
+mod repo_mode;
 mod sqlite;
 
 pub use models::{
@@ -32,13 +33,21 @@ pub use models::{
     UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 pub use onboarding::{
-    CreateRepositoryOnboarding, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
+    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,
+    StoredRepositoryContractVersion, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
+    StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,
 };
 pub use product::{
     BootstrapOrganization, CreateProductAggregate, RegisterRepositoryAggregate,
     RegisteredRepositoryAggregate, StoredOrganization, StoredProduct, StoredProductModelSnapshot,
     StoredRepository, StoredRepositoryBinding, StoredRepositoryBindingRevision,
     StoredRepositoryDraft, StoredService, UpdateProductAggregate,
+};
+pub use repo_mode::{
+    CreateAgentContextPack, CreateEvidenceValidation, CreateOperatorAnnotation, CreateRepoWorkItem,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
+    StoredRepoWorkItemMetadata, StoredStageExecution, StoredStageOutcome,
 };
 pub use sqlite::{SqliteStore, StoreError};
 

@@ -55,3 +55,104 @@ pub struct StoredRepositoryDiscovery {
     pub created_at: String,
     pub updated_at: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateRepositoryOnboardingProposal {
+    pub id: String,
+    pub onboarding_id: String,
+    pub expected_state_version: u64,
+    pub proposal: serde_json::Value,
+    pub content_hash: String,
+    pub discovery_id: String,
+    pub discovery_hash: String,
+    pub actor: String,
+    pub origin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredRepositoryOnboardingProposal {
+    pub id: String,
+    pub onboarding_id: String,
+    pub revision: u64,
+    pub status: String,
+    pub proposal: serde_json::Value,
+    pub content_hash: String,
+    pub discovery_id: String,
+    pub discovery_hash: String,
+    pub created_by: String,
+    pub origin: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateRepositoryContractVersion {
+    pub id: String,
+    pub repository_id: String,
+    pub onboarding_id: String,
+    pub source_commit: String,
+    pub contract: serde_json::Value,
+    pub content_hash: String,
+    pub merge_provenance: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredRepositoryContractVersion {
+    pub id: String,
+    pub repository_id: String,
+    pub onboarding_id: String,
+    pub source_commit: String,
+    pub contract_path: String,
+    pub api_version: String,
+    pub contract: serde_json::Value,
+    pub content_hash: String,
+    pub merge_provenance: serde_json::Value,
+    pub status: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateRepositoryReadinessAssessment {
+    pub id: String,
+    pub repository_id: String,
+    pub source_commit: String,
+    pub contract_version_id: Option<String>,
+    pub contract_hash: Option<String>,
+    pub dependency_lock_hash: Option<String>,
+    pub environment_profile_id: Option<String>,
+    pub environment_profile_revision: Option<String>,
+    pub runner_image_digest: Option<String>,
+    pub validation_policy_version: String,
+    pub contract_status: String,
+    pub coding_status: String,
+    pub checks: serde_json::Value,
+    pub blockers: serde_json::Value,
+    pub warnings: serde_json::Value,
+    pub evidence_refs: serde_json::Value,
+    pub input_hash: String,
+    pub content_hash: String,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredRepositoryReadinessAssessment {
+    pub id: String,
+    pub repository_id: String,
+    pub source_commit: String,
+    pub contract_version_id: Option<String>,
+    pub contract_hash: Option<String>,
+    pub dependency_lock_hash: Option<String>,
+    pub environment_profile_id: Option<String>,
+    pub environment_profile_revision: Option<String>,
+    pub runner_image_digest: Option<String>,
+    pub validation_policy_version: String,
+    pub contract_status: String,
+    pub coding_status: String,
+    pub checks: serde_json::Value,
+    pub blockers: serde_json::Value,
+    pub warnings: serde_json::Value,
+    pub evidence_refs: serde_json::Value,
+    pub input_hash: String,
+    pub content_hash: String,
+    pub assessed_at: String,
+    pub expires_at: Option<String>,
+}

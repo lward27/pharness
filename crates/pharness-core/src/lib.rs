@@ -7,6 +7,7 @@ pub mod ids;
 pub mod model;
 pub mod policy;
 pub mod project;
+pub mod repo_mode;
 pub mod repository;
 pub mod resources;
 pub mod tools;
@@ -37,6 +38,11 @@ pub use project::{
 };
 #[allow(deprecated)]
 pub use project::{ProjectContract, ProjectContractError};
+pub use repo_mode::{
+    compiled_agent_profiles, AgentProfile, RepoStageKey, RepositoryOnboardingProposal,
+    StageOutcomeDocument, StageTerminalStatus, AGENT_CONTEXT_SCHEMA, EVIDENCE_VALIDATION_SCHEMA,
+    ONBOARDING_PROPOSAL_SCHEMA, STAGE_OUTCOME_SCHEMA,
+};
 pub use repository::{
     discover_repository, DiscoveredCandidate, DiscoveredCommandCandidate, DiscoveredContractState,
     DiscoveredRepositoryEntry, DiscoveredSubmodule, DiscoveredSymlink, DiscoveryFinding,

@@ -1,5 +1,10 @@
 use super::{now_string, SqliteStore, StoreError};
-use crate::{CreateRepositoryOnboarding, StoredRepositoryDiscovery, StoredRepositoryOnboarding};
+use crate::{
+    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,
+    StoredRepositoryContractVersion, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
+    StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,
+};
 use sqlx::{Row, Sqlite, Transaction};
 
 impl SqliteStore {
@@ -104,6 +109,29 @@ impl SqliteStore {
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
+        row.map(row_to_discovery).transpose()
+    }
+
+    pub async fn latest_successful_repository_discovery(
+        &self,
+        repository_id: &str,
+        source_commit: &str,
+    ) -> Result<Option<StoredRepositoryDiscovery>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT d.id, d.onboarding_id, d.source_commit, d.resolved_commit, d.status,
+                   d.schema_version, d.inventory_json, d.content_hash, d.error_code,
+                   d.error_summary, d.started_at, d.finished_at, d.created_at, d.updated_at
+            FROM repository_discoveries d
+            JOIN repository_onboardings o ON o.id = d.onboarding_id
+            WHERE o.repository_id = ?1 AND d.source_commit = ?2 AND d.status = 'succeeded'
+            ORDER BY d.finished_at DESC, d.id DESC LIMIT 1
+            "#,
+        )
+        .bind(repository_id)
+        .bind(source_commit)
+        .fetch_optional(&self.pool)
+        .await?;
         row.map(row_to_discovery).transpose()
     }
 
@@ -242,6 +270,331 @@ impl SqliteStore {
     }
 }
 
+impl SqliteStore {
+    pub async fn create_repository_onboarding_proposal(
+        &self,
+        proposal: CreateRepositoryOnboardingProposal,
+    ) -> Result<StoredRepositoryOnboardingProposal, StoreError> {
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
+        let onboarding = sqlx::query(
+            "SELECT state_version, current_discovery_id, current_proposal_revision, status FROM repository_onboardings WHERE id = ?1",
+        )
+        .bind(&proposal.onboarding_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| StoreError::NotFound {
+            entity: "repository_onboarding".into(),
+            id: proposal.onboarding_id.clone(),
+        })?;
+        let state_version = onboarding.try_get::<i64, _>("state_version")? as u64;
+        let discovery_id: Option<String> = onboarding.try_get("current_discovery_id")?;
+        let status: String = onboarding.try_get("status")?;
+        if state_version != proposal.expected_state_version
+            || discovery_id.as_deref() != Some(proposal.discovery_id.as_str())
+            || !matches!(status.as_str(), "discovered" | "proposal_ready")
+        {
+            return Err(StoreError::Conflict(
+                "repository onboarding changed after proposal preview".into(),
+            ));
+        }
+        let discovery =
+            sqlx::query("SELECT status, content_hash FROM repository_discoveries WHERE id = ?1")
+                .bind(&proposal.discovery_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        let discovery_status: String = discovery.try_get("status")?;
+        let discovery_hash: Option<String> = discovery.try_get("content_hash")?;
+        if discovery_status != "succeeded"
+            || discovery_hash.as_deref() != Some(proposal.discovery_hash.as_str())
+        {
+            return Err(StoreError::Conflict(
+                "proposal does not reference current validated discovery evidence".into(),
+            ));
+        }
+        let revision = onboarding.try_get::<i64, _>("current_proposal_revision")? + 1;
+        sqlx::query(
+            r#"
+            INSERT INTO repository_onboarding_proposals (
+              id, onboarding_id, revision, status, proposal_json, content_hash,
+              discovery_id, discovery_hash, created_by, origin, created_at
+            ) VALUES (?1, ?2, ?3, 'proposed', ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "#,
+        )
+        .bind(&proposal.id)
+        .bind(&proposal.onboarding_id)
+        .bind(revision)
+        .bind(serde_json::to_string(&proposal.proposal)?)
+        .bind(&proposal.content_hash)
+        .bind(&proposal.discovery_id)
+        .bind(&proposal.discovery_hash)
+        .bind(&proposal.actor)
+        .bind(&proposal.origin)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'proposal_ready', current_proposal_revision = ?2,
+                state_version = state_version + 1, updated_at = ?3,
+                status_changed_at = ?3, status_changed_by = ?4,
+                status_reason = 'onboarding proposal revision created'
+            WHERE id = ?1 AND state_version = ?5
+            "#,
+        )
+        .bind(&proposal.onboarding_id)
+        .bind(revision)
+        .bind(&now)
+        .bind(&proposal.actor)
+        .bind(proposal.expected_state_version as i64)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.get_repository_onboarding_proposal(&proposal.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding_proposal".into(),
+                id: proposal.id,
+            })
+    }
+
+    pub async fn get_repository_onboarding_proposal(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredRepositoryOnboardingProposal>, StoreError> {
+        let row = sqlx::query(&proposal_select_sql("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_proposal).transpose()
+    }
+
+    pub async fn get_current_repository_onboarding_proposal(
+        &self,
+        onboarding_id: &str,
+    ) -> Result<Option<StoredRepositoryOnboardingProposal>, StoreError> {
+        let row = sqlx::query(&proposal_select_sql(
+            "WHERE onboarding_id = ?1 ORDER BY revision DESC LIMIT 1",
+        ))
+        .bind(onboarding_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_proposal).transpose()
+    }
+
+    pub async fn approve_repository_onboarding_proposal(
+        &self,
+        onboarding_id: &str,
+        proposal_id: &str,
+        proposal_hash: &str,
+        expected_state_version: u64,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
+        let proposal = sqlx::query(
+            "SELECT onboarding_id, status, content_hash FROM repository_onboarding_proposals WHERE id = ?1",
+        )
+        .bind(proposal_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| StoreError::NotFound {
+            entity: "repository_onboarding_proposal".into(),
+            id: proposal_id.into(),
+        })?;
+        if proposal.try_get::<String, _>("onboarding_id")? != onboarding_id
+            || proposal.try_get::<String, _>("status")? != "proposed"
+            || proposal.try_get::<String, _>("content_hash")? != proposal_hash
+        {
+            return Err(StoreError::Conflict(
+                "onboarding proposal approval does not match the proposed revision".into(),
+            ));
+        }
+        let updated = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'proposal_approved', approved_proposal_hash = ?2,
+                state_version = state_version + 1, updated_at = ?3,
+                status_changed_at = ?3, status_changed_by = ?4, status_reason = ?5
+            WHERE id = ?1 AND state_version = ?6 AND status = 'proposal_ready'
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(proposal_hash)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .bind(expected_state_version as i64)
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding changed after approval preview".into(),
+            ));
+        }
+        sqlx::query("UPDATE repository_onboarding_proposals SET status = 'approved' WHERE id = ?1")
+            .bind(proposal_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn create_repository_contract_version(
+        &self,
+        version: CreateRepositoryContractVersion,
+    ) -> Result<StoredRepositoryContractVersion, StoreError> {
+        let now = now_string();
+        let api_version = version
+            .contract
+            .get("api_version")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| StoreError::InvalidData("contract has no api_version".into()))?;
+        sqlx::query(
+            r#"
+            INSERT INTO repository_contract_versions (
+              id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+              contract_json, content_hash, merge_provenance_json, status, created_at
+            ) VALUES (?1, ?2, ?3, ?4, '.pharness/repository.yaml', ?5, ?6, ?7, ?8, 'active', ?9)
+            "#,
+        )
+        .bind(&version.id)
+        .bind(&version.repository_id)
+        .bind(&version.onboarding_id)
+        .bind(&version.source_commit)
+        .bind(api_version)
+        .bind(serde_json::to_string(&version.contract)?)
+        .bind(&version.content_hash)
+        .bind(serde_json::to_string(&version.merge_provenance)?)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        self.get_repository_contract_version(&version.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_contract_version".into(),
+                id: version.id,
+            })
+    }
+
+    pub async fn get_repository_contract_version(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredRepositoryContractVersion>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+                   contract_json, content_hash, merge_provenance_json, status, created_at
+            FROM repository_contract_versions WHERE id = ?1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_contract_version).transpose()
+    }
+
+    pub async fn latest_repository_contract_version(
+        &self,
+        repository_id: &str,
+        source_commit: &str,
+    ) -> Result<Option<StoredRepositoryContractVersion>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+                   contract_json, content_hash, merge_provenance_json, status, created_at
+            FROM repository_contract_versions
+            WHERE repository_id = ?1 AND source_commit = ?2 AND status = 'active'
+            ORDER BY created_at DESC, id DESC LIMIT 1
+            "#,
+        )
+        .bind(repository_id)
+        .bind(source_commit)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_contract_version).transpose()
+    }
+
+    pub async fn create_repository_readiness_assessment(
+        &self,
+        assessment: CreateRepositoryReadinessAssessment,
+    ) -> Result<StoredRepositoryReadinessAssessment, StoreError> {
+        sqlx::query(
+            r#"
+            INSERT INTO repository_readiness_assessments (
+              id, repository_id, source_commit, contract_version_id, contract_hash,
+              dependency_lock_hash, environment_profile_id, environment_profile_revision,
+              runner_image_digest, validation_policy_version, contract_status, coding_status,
+              checks_json, blockers_json, warnings_json, evidence_refs_json, input_hash,
+              content_hash, assessed_at, expires_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+                      ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            "#,
+        )
+        .bind(&assessment.id)
+        .bind(&assessment.repository_id)
+        .bind(&assessment.source_commit)
+        .bind(&assessment.contract_version_id)
+        .bind(&assessment.contract_hash)
+        .bind(&assessment.dependency_lock_hash)
+        .bind(&assessment.environment_profile_id)
+        .bind(&assessment.environment_profile_revision)
+        .bind(&assessment.runner_image_digest)
+        .bind(&assessment.validation_policy_version)
+        .bind(&assessment.contract_status)
+        .bind(&assessment.coding_status)
+        .bind(serde_json::to_string(&assessment.checks)?)
+        .bind(serde_json::to_string(&assessment.blockers)?)
+        .bind(serde_json::to_string(&assessment.warnings)?)
+        .bind(serde_json::to_string(&assessment.evidence_refs)?)
+        .bind(&assessment.input_hash)
+        .bind(&assessment.content_hash)
+        .bind(now_string())
+        .bind(&assessment.expires_at)
+        .execute(&self.pool)
+        .await?;
+        self.get_repository_readiness_assessment(&assessment.id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_readiness_assessment".into(),
+                id: assessment.id,
+            })
+    }
+
+    pub async fn get_repository_readiness_assessment(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredRepositoryReadinessAssessment>, StoreError> {
+        let row = sqlx::query(&readiness_select_sql("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_readiness).transpose()
+    }
+
+    pub async fn latest_repository_readiness_assessment(
+        &self,
+        repository_id: &str,
+        source_commit: &str,
+    ) -> Result<Option<StoredRepositoryReadinessAssessment>, StoreError> {
+        let row = sqlx::query(&readiness_select_sql(
+            "WHERE repository_id = ?1 AND source_commit = ?2 ORDER BY assessed_at DESC, id DESC LIMIT 1",
+        ))
+        .bind(repository_id)
+        .bind(source_commit)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_readiness).transpose()
+    }
+}
+
 pub(super) async fn insert_repository_onboarding(
     tx: &mut Transaction<'_, Sqlite>,
     onboarding: &CreateRepositoryOnboarding,
@@ -285,6 +638,23 @@ fn discovery_select_sql(where_clause: &str) -> String {
         "SELECT id, onboarding_id, source_commit, resolved_commit, status, schema_version, \
          inventory_json, content_hash, error_code, error_summary, started_at, finished_at, \
          created_at, updated_at FROM repository_discoveries {where_clause}"
+    )
+}
+
+fn proposal_select_sql(where_clause: &str) -> String {
+    format!(
+        "SELECT id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, \
+         discovery_hash, created_by, origin, created_at FROM repository_onboarding_proposals {where_clause}"
+    )
+}
+
+fn readiness_select_sql(where_clause: &str) -> String {
+    format!(
+        "SELECT id, repository_id, source_commit, contract_version_id, contract_hash, \
+         dependency_lock_hash, environment_profile_id, environment_profile_revision, \
+         runner_image_digest, validation_policy_version, contract_status, coding_status, \
+         checks_json, blockers_json, warnings_json, evidence_refs_json, input_hash, content_hash, \
+         assessed_at, expires_at FROM repository_readiness_assessments {where_clause}"
     )
 }
 
@@ -337,5 +707,70 @@ fn row_to_discovery(row: sqlx::sqlite::SqliteRow) -> Result<StoredRepositoryDisc
         finished_at: row.try_get("finished_at")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn row_to_proposal(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredRepositoryOnboardingProposal, StoreError> {
+    Ok(StoredRepositoryOnboardingProposal {
+        id: row.try_get("id")?,
+        onboarding_id: row.try_get("onboarding_id")?,
+        revision: row.try_get::<i64, _>("revision")? as u64,
+        status: row.try_get("status")?,
+        proposal: serde_json::from_str(&row.try_get::<String, _>("proposal_json")?)?,
+        content_hash: row.try_get("content_hash")?,
+        discovery_id: row.try_get("discovery_id")?,
+        discovery_hash: row.try_get("discovery_hash")?,
+        created_by: row.try_get("created_by")?,
+        origin: row.try_get("origin")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn row_to_contract_version(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredRepositoryContractVersion, StoreError> {
+    Ok(StoredRepositoryContractVersion {
+        id: row.try_get("id")?,
+        repository_id: row.try_get("repository_id")?,
+        onboarding_id: row.try_get("onboarding_id")?,
+        source_commit: row.try_get("source_commit")?,
+        contract_path: row.try_get("contract_path")?,
+        api_version: row.try_get("api_version")?,
+        contract: serde_json::from_str(&row.try_get::<String, _>("contract_json")?)?,
+        content_hash: row.try_get("content_hash")?,
+        merge_provenance: serde_json::from_str(
+            &row.try_get::<String, _>("merge_provenance_json")?,
+        )?,
+        status: row.try_get("status")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn row_to_readiness(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredRepositoryReadinessAssessment, StoreError> {
+    Ok(StoredRepositoryReadinessAssessment {
+        id: row.try_get("id")?,
+        repository_id: row.try_get("repository_id")?,
+        source_commit: row.try_get("source_commit")?,
+        contract_version_id: row.try_get("contract_version_id")?,
+        contract_hash: row.try_get("contract_hash")?,
+        dependency_lock_hash: row.try_get("dependency_lock_hash")?,
+        environment_profile_id: row.try_get("environment_profile_id")?,
+        environment_profile_revision: row.try_get("environment_profile_revision")?,
+        runner_image_digest: row.try_get("runner_image_digest")?,
+        validation_policy_version: row.try_get("validation_policy_version")?,
+        contract_status: row.try_get("contract_status")?,
+        coding_status: row.try_get("coding_status")?,
+        checks: serde_json::from_str(&row.try_get::<String, _>("checks_json")?)?,
+        blockers: serde_json::from_str(&row.try_get::<String, _>("blockers_json")?)?,
+        warnings: serde_json::from_str(&row.try_get::<String, _>("warnings_json")?)?,
+        evidence_refs: serde_json::from_str(&row.try_get::<String, _>("evidence_refs_json")?)?,
+        input_hash: row.try_get("input_hash")?,
+        content_hash: row.try_get("content_hash")?,
+        assessed_at: row.try_get("assessed_at")?,
+        expires_at: row.try_get("expires_at")?,
     })
 }
