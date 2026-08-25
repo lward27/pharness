@@ -11,8 +11,9 @@ use anyhow::Context;
 use hmac::{Hmac, Mac};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot, ProjectContract,
-    ReadOnlyClusterTools, ToolExecutor,
+    discover_repository, AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot,
+    ReadOnlyClusterTools, RepositoryContract, RepositoryContractSource,
+    RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -20,7 +21,7 @@ use pharness_runhost::{
 };
 use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::Command;
@@ -242,6 +243,24 @@ async fn main() -> anyhow::Result<()> {
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("environment_prepare") {
         return execute_environment_preparation().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("repository_discovery") {
+        return execute_repository_discovery().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("onboarding_patch") {
+        return execute_onboarding_patch().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref()
+        == Some("onboarding_contract_validate")
+    {
+        return execute_onboarding_contract_validation().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("repository_readiness") {
+        return execute_repository_readiness().await;
     }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
@@ -535,6 +554,962 @@ async fn execute_environment_preparation() -> anyhow::Result<()> {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct RepositoryDiscoveryContext {
+    discovery_id: String,
+    onboarding_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    limits: RepositoryDiscoveryLimits,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OnboardingPatchContext {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    candidate_contract: serde_json::Value,
+    instructions: String,
+    remove_alias: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OnboardingContractValidationContext {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    expected_contract: serde_json::Value,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RepositoryReadinessContext {
+    preparation_id: String,
+    workspace_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    default_branch: String,
+    source_commit: String,
+    contract_version_id: String,
+    contract_content_hash: String,
+    contract: serde_json::Value,
+    environment_profile_id: String,
+}
+
+async fn execute_repository_readiness() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let preparation_id = required_env("PHARNESS_REPOSITORY_PREPARATION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build repository readiness client")?;
+    let context = fetch_internal_context_with_retry::<RepositoryReadinessContext>(
+        &client,
+        &format!(
+            "{api_url}/api/internal/repository-readiness-preparations/{preparation_id}/context"
+        ),
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch repository readiness context")?;
+    if context.preparation_id != preparation_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+        || context.repository_id.trim().is_empty()
+        || context.default_branch.trim().is_empty()
+        || context.environment_profile_id != required_env("PHARNESS_ENVIRONMENT_PROFILE_ID")?
+    {
+        anyhow::bail!("invalid_repository_readiness_context");
+    }
+    let outcome = match prepare_repository_readiness(&context, &worker_token).await {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let code = repository_readiness_error_code(&error);
+            tracing::warn!(
+                preparation_id,
+                error_code = code,
+                "repository readiness preparation failed"
+            );
+            serde_json::json!({"status":"failed","error_code":code,"logs":[{"step":"readiness","status":"failed","summary":code}]})
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!(
+            "{api_url}/api/internal/repository-readiness-preparations/{preparation_id}/outcome"
+        ),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn prepare_repository_readiness(
+    context: &RepositoryReadinessContext,
+    worker_token: &str,
+) -> anyhow::Result<serde_json::Value> {
+    parse_github_repository(&context.canonical_url)?;
+    let expected: RepositoryContract =
+        serde_json::from_value(context.contract.clone()).context("invalid_expected_contract")?;
+    expected
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_expected_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let loaded = RepositoryContract::load_for_repo_mode(&root)
+        .map_err(|error| anyhow::anyhow!("repository_contract_invalid:{error}"))?;
+    let loaded_hash = format!("sha256:{}", loaded.content_sha256);
+    if loaded.contract != expected || loaded_hash != context.contract_content_hash {
+        anyhow::bail!("repository_contract_provenance_mismatch");
+    }
+    let profile_id = required_env("PHARNESS_ENVIRONMENT_PROFILE_ID")?;
+    if loaded.contract.environment_profile != profile_id {
+        anyhow::bail!("runner_profile_mismatch");
+    }
+    let required_executables =
+        serde_json::from_str::<Vec<String>>(&required_env("PHARNESS_REQUIRED_EXECUTABLES_JSON")?)
+            .context("required_executable_inventory_invalid")?;
+    let mut executable_paths = serde_json::Map::new();
+    for executable in &required_executables {
+        executable_paths.insert(
+            executable.clone(),
+            serde_json::Value::String(executable_path(executable).await?),
+        );
+    }
+    let python = required_executables
+        .iter()
+        .find(|name| matches!(name.as_str(), "python" | "python3"))
+        .context("python_executable_missing")?;
+    let python_path = executable_paths
+        .get(python)
+        .and_then(serde_json::Value::as_str)
+        .context("python_executable_missing")?;
+    let runtime_dir = root.join(".pharness-runtime");
+    let venv = runtime_dir.join("venv");
+    tokio::fs::create_dir_all(&runtime_dir).await?;
+    exclude_runtime_from_git(&root).await?;
+    run_checked(
+        &root,
+        python_path,
+        &["-m", "venv", venv.to_string_lossy().as_ref()],
+    )
+    .await?;
+    let venv_python = venv.join("bin/python");
+    run_checked(
+        &root,
+        venv_python.to_string_lossy().as_ref(),
+        &[
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--require-hashes",
+            "--only-binary=:all:",
+            "-r",
+            &loaded.contract.dependency_lock.path,
+        ],
+    )
+    .await?;
+    let python_version = run_output(
+        &root,
+        venv_python.to_string_lossy().as_ref(),
+        &["--version"],
+    )
+    .await?;
+    let effective_user = run_output(&root, "id", &["-u"]).await?;
+    let mut unavailable_tools = Vec::new();
+    for executable in ["docker", "podman", "apt", "apt-get", "apk"] {
+        if executable_path_optional(executable).await.is_none() {
+            unavailable_tools.push(executable.into());
+        }
+    }
+    let snapshot = EnvironmentSnapshot {
+        source_sha: context.source_commit.clone(),
+        manifest_sha256: loaded_hash.clone(),
+        dependency_lock_sha256: loaded.contract.dependency_lock.sha256.clone(),
+        runner_image_digest: required_env("PHARNESS_RUNNER_IMAGE")?,
+        runner_revision: required_env("PHARNESS_RUNNER_REVISION")?,
+        os: std::env::consts::OS.into(),
+        architecture: std::env::consts::ARCH.into(),
+        effective_user,
+        python_version,
+        python_path: venv_python.to_string_lossy().to_string(),
+        writable_paths: loaded.contract.writable_paths.clone(),
+        unavailable_tools,
+        agent_network: loaded.contract.agent_network,
+        package_installation: loaded.contract.package_installation,
+        acceptance_commands: loaded.contract.acceptance_commands.clone(),
+        preparation_evidence: serde_json::json!({
+            "required_executables":executable_paths,
+            "venv":venv,
+            "dependency_install":"pip --require-hashes --only-binary=:all:",
+            "platform":required_env("PHARNESS_RUNNER_PLATFORM")?,
+            "workspace_id":context.workspace_id,
+            "contract_version_id":context.contract_version_id,
+        }),
+    };
+    let venv_bin = venv.join("bin");
+    let inherited_path = std::env::var("PATH").unwrap_or_default();
+    let readiness_path = format!("{}:{inherited_path}", venv_bin.to_string_lossy());
+    let mut acceptance_results = Vec::new();
+    for command in &loaded.contract.acceptance_commands {
+        let output = Command::new("/bin/sh")
+            .args(["-lc", &command.command])
+            .current_dir(&root)
+            .env("PATH", &readiness_path)
+            .env("PYTHONPATH", root.join("src"))
+            .output()
+            .await
+            .context("acceptance_command_structurally_unexecutable")?;
+        acceptance_results.push(serde_json::json!({
+            "name":command.name,
+            "command":command.command,
+            "status":if output.status.success() {"passed"} else {"baseline_failed"},
+            "exit_code":output.status.code(),
+            "stdout":bounded_output(&output.stdout),
+            "stderr":bounded_output(&output.stderr),
+        }));
+    }
+    let snapshot_json = serde_json::to_value(&snapshot)?;
+    Ok(serde_json::json!({
+        "status":"succeeded",
+        "resolved_commit":context.source_commit,
+        "repository_contract":loaded.contract,
+        "repository_contract_hash":loaded_hash,
+        "environment_snapshot":snapshot_json,
+        "snapshot_signature":signed_payload(worker_token,&snapshot_json),
+        "acceptance_results":acceptance_results,
+        "logs":[
+            {"step":"checkout","status":"succeeded","source_sha":context.source_commit},
+            {"step":"contract","status":"succeeded","contract_version_id":context.contract_version_id},
+            {"step":"executables","status":"succeeded","inventory":required_executables},
+            {"step":"dependencies","status":"succeeded","lock_sha256":snapshot.dependency_lock_sha256},
+            {"step":"acceptance","status":"executed","commands":acceptance_results.len()},
+        ],
+    }))
+}
+
+fn bounded_output(bytes: &[u8]) -> String {
+    const LIMIT: usize = 16 * 1024;
+    let end = bytes.len().min(LIMIT);
+    String::from_utf8_lossy(&bytes[..end]).to_string()
+}
+
+fn repository_readiness_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_expected_contract",
+        "repository_contract_provenance_mismatch",
+        "runner_profile_mismatch",
+        "required_executable_inventory_invalid",
+        "python_executable_missing",
+        "acceptance_command_structurally_unexecutable",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("dependency lock SHA-256") {
+        "immutable_dependency_lock_mismatch"
+    } else if text.contains("dependency lock") {
+        "immutable_dependency_lock_invalid"
+    } else if text.contains("runner is missing required executable") {
+        "required_executable_missing"
+    } else if text.contains("repository_contract_invalid") {
+        "repository_contract_invalid"
+    } else {
+        "repository_readiness_failed"
+    }
+}
+
+async fn execute_onboarding_contract_validation() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let onboarding_id = required_env("PHARNESS_REPOSITORY_ONBOARDING_ID")?;
+    let execution_id = required_env("PHARNESS_ONBOARDING_VALIDATION_EXECUTION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build onboarding contract validation client")?;
+    let context_url = format!(
+        "{api_url}/api/internal/repository-onboardings/{onboarding_id}/contract-validation-context?execution_id={execution_id}"
+    );
+    let context = fetch_internal_context_with_retry::<OnboardingContractValidationContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch onboarding contract validation context")?;
+    if context.onboarding_id != onboarding_id
+        || context.execution_id != execution_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+    {
+        anyhow::bail!("invalid_onboarding_contract_validation_context");
+    }
+    let outcome = match validate_merged_onboarding_contract(&context).await {
+        Ok(loaded) => serde_json::json!({
+            "status":"succeeded",
+            "contract":loaded.contract,
+            "contract_content_hash":format!("sha256:{}", loaded.content_sha256),
+            "contract_source":loaded.source,
+            "warnings":loaded.warnings,
+        }),
+        Err(error) => {
+            let code = onboarding_contract_validation_error_code(&error);
+            tracing::warn!(
+                onboarding_id,
+                execution_id,
+                error_code = code,
+                "merged onboarding contract validation failed"
+            );
+            serde_json::json!({"status":"failed","error_code":code})
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-onboardings/{onboarding_id}/contract-validation-outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn validate_merged_onboarding_contract(
+    context: &OnboardingContractValidationContext,
+) -> anyhow::Result<pharness_core::LoadedRepositoryContract> {
+    parse_github_repository(&context.canonical_url)?;
+    let expected: RepositoryContract = serde_json::from_value(context.expected_contract.clone())
+        .context("invalid_expected_contract")?;
+    expected
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_expected_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let loaded = RepositoryContract::load_for_repo_mode(&root)
+        .map_err(|error| anyhow::anyhow!("merged_contract_invalid:{error}"))?;
+    if loaded.contract != expected {
+        anyhow::bail!("merged_contract_differs_from_approved_proposal");
+    }
+    if !matches!(
+        loaded.source,
+        RepositoryContractSource::Canonical | RepositoryContractSource::CanonicalWithMatchingAlias
+    ) {
+        anyhow::bail!("canonical_repository_contract_missing");
+    }
+    let _ = (
+        &context.repository_id,
+        &context.proposal_id,
+        &context.proposal_hash,
+    );
+    Ok(loaded)
+}
+
+fn onboarding_contract_validation_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_expected_contract",
+        "merged_contract_differs_from_approved_proposal",
+        "canonical_repository_contract_missing",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("dependency lock SHA-256") {
+        "immutable_dependency_lock_mismatch"
+    } else if text.contains("dependency lock") {
+        "immutable_dependency_lock_invalid"
+    } else if text.contains("merged_contract_invalid") {
+        "merged_contract_invalid"
+    } else {
+        "onboarding_contract_validation_failed"
+    }
+}
+
+async fn execute_onboarding_patch() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let onboarding_id = required_env("PHARNESS_REPOSITORY_ONBOARDING_ID")?;
+    let execution_id = required_env("PHARNESS_ONBOARDING_PATCH_EXECUTION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build onboarding patch client")?;
+    let context_url = format!(
+        "{api_url}/api/internal/repository-onboardings/{onboarding_id}/patch-context?execution_id={execution_id}"
+    );
+    let context = fetch_internal_context_with_retry::<OnboardingPatchContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch onboarding patch context")?;
+    if context.onboarding_id != onboarding_id
+        || context.execution_id != execution_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+        || context.instructions.len() > 32 * 1024
+    {
+        anyhow::bail!("invalid_onboarding_patch_context");
+    }
+    let outcome = match materialize_onboarding_patch(&context).await {
+        Ok((patch, patch_hash, changed_paths)) => serde_json::json!({
+            "status": "succeeded",
+            "patch": patch,
+            "patch_hash": patch_hash,
+            "changed_paths": changed_paths,
+        }),
+        Err(error) => {
+            let error_code = onboarding_patch_error_code(&error);
+            tracing::warn!(
+                onboarding_id,
+                execution_id,
+                error_code,
+                "onboarding patch materialization failed"
+            );
+            serde_json::json!({
+                "status": "failed",
+                "error_code": error_code,
+            })
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-onboardings/{onboarding_id}/patch-outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn materialize_onboarding_patch(
+    context: &OnboardingPatchContext,
+) -> anyhow::Result<(String, String, Vec<String>)> {
+    parse_github_repository(&context.canonical_url)?;
+    let contract: RepositoryContract = serde_json::from_value(context.candidate_contract.clone())
+        .context("invalid_candidate_contract")?;
+    contract
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_candidate_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let pharness_dir = root.join(".pharness");
+    ensure_onboarding_patch_path_safe(&root, &pharness_dir)?;
+    tokio::fs::create_dir_all(&pharness_dir)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    let canonical_path = pharness_dir.join("repository.yaml");
+    let instructions_path = pharness_dir.join("instructions.md");
+    let alias_path = pharness_dir.join("project.yaml");
+    ensure_onboarding_patch_path_safe(&root, &canonical_path)?;
+    ensure_onboarding_patch_path_safe(&root, &instructions_path)?;
+    ensure_onboarding_patch_path_safe(&root, &alias_path)?;
+    let mut contract_yaml =
+        serde_yaml::to_string(&contract).context("candidate_contract_serialization_failed")?;
+    if !contract_yaml.ends_with('\n') {
+        contract_yaml.push('\n');
+    }
+    tokio::fs::write(&canonical_path, contract_yaml)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    tokio::fs::write(&instructions_path, &context.instructions)
+        .await
+        .context("onboarding_patch_write_failed")?;
+    if context.remove_alias && tokio::fs::try_exists(&alias_path).await? {
+        tokio::fs::remove_file(&alias_path)
+            .await
+            .context("onboarding_patch_alias_removal_failed")?;
+    }
+
+    let askpass = source_reader_askpass().await?;
+    let status = repository_git_stdout_preserve(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ],
+        &askpass,
+    )
+    .await?;
+    let changed_paths = parse_porcelain_paths(&status)?;
+    let allowed = [
+        ".pharness/repository.yaml",
+        ".pharness/instructions.md",
+        ".pharness/project.yaml",
+    ];
+    if changed_paths.is_empty()
+        || changed_paths.len() > allowed.len()
+        || changed_paths
+            .iter()
+            .any(|path| !allowed.contains(&path.as_str()))
+    {
+        anyhow::bail!("onboarding_patch_path_violation");
+    }
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "add",
+            "--intent-to-add",
+            "--",
+            ".pharness/repository.yaml",
+            ".pharness/instructions.md",
+        ],
+        &askpass,
+    )
+    .await?;
+    let patch = repository_git_stdout_preserve(
+        &[
+            "-C",
+            root.to_str().context("invalid onboarding patch path")?,
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--",
+            ".pharness/repository.yaml",
+            ".pharness/instructions.md",
+            ".pharness/project.yaml",
+        ],
+        &askpass,
+    )
+    .await?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    if patch.is_empty() || patch.len() > 512 * 1024 {
+        anyhow::bail!("onboarding_patch_size_invalid");
+    }
+    let patch_hash = format!("sha256:{:x}", Sha256::digest(patch.as_bytes()));
+    let _ = (
+        &context.repository_id,
+        &context.default_branch,
+        &context.proposal_id,
+        &context.proposal_hash,
+    );
+    Ok((patch, patch_hash, changed_paths))
+}
+
+async fn checkout_exact_repository(
+    root: &std::path::Path,
+    canonical_url: &str,
+    source_commit: &str,
+) -> anyhow::Result<()> {
+    tokio::fs::create_dir_all(root).await?;
+    let askpass = source_reader_askpass().await?;
+    let root_text = root.to_str().context("invalid repository checkout path")?;
+    repository_git_command(&["init", root_text], &askpass).await?;
+    repository_git_command(
+        &["-C", root_text, "remote", "add", "origin", canonical_url],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root_text,
+            "fetch",
+            "--depth",
+            "1",
+            "--no-tags",
+            "--filter=blob:none",
+            "--no-recurse-submodules",
+            "origin",
+            source_commit,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &["-C", root_text, "checkout", "--detach", "FETCH_HEAD"],
+        &askpass,
+    )
+    .await?;
+    let resolved = repository_git_stdout(&["-C", root_text, "rev-parse", "HEAD"], &askpass).await?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    if !resolved.eq_ignore_ascii_case(source_commit) {
+        anyhow::bail!("resolved_commit_mismatch");
+    }
+    Ok(())
+}
+
+async fn source_reader_askpass() -> anyhow::Result<std::path::PathBuf> {
+    let askpass = std::path::PathBuf::from("/tmp/source-reader-askpass");
+    tokio::fs::write(
+        &askpass,
+        "#!/bin/sh\ncase \"$1\" in\n  *Username*) printf '%s\\n' x-access-token ;;\n  *) printf '%s\\n' \"${PHARNESS_SOURCE_READER_TOKEN:-}\" ;;\nesac\n",
+    )
+    .await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700)).await?;
+    }
+    Ok(askpass)
+}
+
+fn ensure_onboarding_patch_path_safe(
+    root: &std::path::Path,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    if !path.starts_with(root) {
+        anyhow::bail!("onboarding_patch_path_violation");
+    }
+    let mut current = root.to_path_buf();
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| anyhow::anyhow!("onboarding_patch_path_violation"))?;
+    for component in relative.components() {
+        current.push(component);
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                anyhow::bail!("onboarding_patch_symlink_rejected")
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(_) => anyhow::bail!("onboarding_patch_path_inspection_failed"),
+        }
+    }
+    Ok(())
+}
+
+fn parse_porcelain_paths(status: &str) -> anyhow::Result<Vec<String>> {
+    let mut paths = Vec::new();
+    for entry in status.split('\0').filter(|entry| !entry.is_empty()) {
+        if entry.len() < 4 || !entry.is_char_boundary(3) {
+            anyhow::bail!("onboarding_patch_status_invalid");
+        }
+        let path = &entry[3..];
+        if path.is_empty() || path.contains('\0') || path.starts_with('/') || path.contains("..") {
+            anyhow::bail!("onboarding_patch_path_violation");
+        }
+        paths.push(path.to_string());
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+async fn repository_git_stdout_preserve(
+    args: &[&str],
+    askpass: &std::path::Path,
+) -> anyhow::Result<String> {
+    let output = repository_git_output(args, askpass).await?;
+    if !output.status.success() {
+        anyhow::bail!(repository_git_error_code(args));
+    }
+    String::from_utf8(output.stdout).context("repository Git output was not UTF-8")
+}
+
+fn onboarding_patch_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_candidate_contract",
+        "candidate_contract_serialization_failed",
+        "onboarding_patch_path_violation",
+        "onboarding_patch_symlink_rejected",
+        "onboarding_patch_path_inspection_failed",
+        "onboarding_patch_write_failed",
+        "onboarding_patch_alias_removal_failed",
+        "onboarding_patch_status_invalid",
+        "onboarding_patch_size_invalid",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    "onboarding_patch_failed"
+}
+
+async fn execute_repository_discovery() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let discovery_id = required_env("PHARNESS_REPOSITORY_DISCOVERY_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build repository discovery client")?;
+    let context_url =
+        format!("{api_url}/api/internal/repository-discoveries/{discovery_id}/context");
+    let context = fetch_internal_context_with_retry::<RepositoryDiscoveryContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch repository discovery context")?;
+    if context.discovery_id != discovery_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+    {
+        anyhow::bail!("invalid_repository_discovery_context");
+    }
+    let outcome = match discover_repository_checkout(&context).await {
+        Ok(discovery) => serde_json::json!({
+            "status": "succeeded",
+            "discovery": discovery,
+        }),
+        Err(error) => {
+            tracing::warn!(
+                discovery_id = %discovery_id,
+                error_code = %repository_discovery_error_code(&error),
+                "isolated repository discovery failed"
+            );
+            serde_json::json!({
+                "status": "failed",
+                "error_code": repository_discovery_error_code(&error),
+                "error_summary": "isolated exact-revision repository discovery failed",
+            })
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-discoveries/{discovery_id}/outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn discover_repository_checkout(
+    context: &RepositoryDiscoveryContext,
+) -> anyhow::Result<pharness_core::RepositoryDiscovery> {
+    parse_github_repository(&context.canonical_url)?;
+    let root = std::path::PathBuf::from("/work/repository");
+    tokio::fs::create_dir_all(&root).await?;
+    let askpass = std::path::PathBuf::from("/tmp/source-reader-askpass");
+    tokio::fs::write(
+        &askpass,
+        "#!/bin/sh\ncase \"$1\" in\n  *Username*) printf '%s\\n' x-access-token ;;\n  *) printf '%s\\n' \"${PHARNESS_SOURCE_READER_TOKEN:-}\" ;;\nesac\n",
+    )
+    .await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700)).await?;
+    }
+    repository_git_command(
+        &["init", root.to_str().context("invalid discovery path")?],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "remote",
+            "add",
+            "origin",
+            &context.canonical_url,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "fetch",
+            "--depth",
+            "1",
+            "--no-tags",
+            "--filter=blob:none",
+            "--no-recurse-submodules",
+            "origin",
+            &context.source_commit,
+        ],
+        &askpass,
+    )
+    .await?;
+    repository_git_command(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "checkout",
+            "--detach",
+            "FETCH_HEAD",
+        ],
+        &askpass,
+    )
+    .await?;
+    let resolved = repository_git_stdout(
+        &[
+            "-C",
+            root.to_str().context("invalid discovery path")?,
+            "rev-parse",
+            "HEAD",
+        ],
+        &askpass,
+    )
+    .await?;
+    if !resolved.eq_ignore_ascii_case(&context.source_commit) {
+        anyhow::bail!("resolved_commit_mismatch");
+    }
+    let discovery = discover_repository(
+        &root,
+        RepositoryDiscoveryIdentity {
+            provider: context.provider.clone(),
+            canonical_url: context.canonical_url.clone(),
+            default_branch: context.default_branch.clone(),
+            registered_commit: context.source_commit.to_ascii_lowercase(),
+            resolved_commit: resolved.to_ascii_lowercase(),
+        },
+        context.limits.clone(),
+    )?;
+    let _ = tokio::fs::remove_file(&askpass).await;
+    let _ = (&context.onboarding_id, &context.repository_id);
+    Ok(discovery)
+}
+
+async fn repository_git_command(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<()> {
+    let output = repository_git_output(args, askpass).await?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!(repository_git_error_code(args))
+    }
+}
+
+async fn repository_git_stdout(args: &[&str], askpass: &std::path::Path) -> anyhow::Result<String> {
+    let output = repository_git_output(args, askpass).await?;
+    if !output.status.success() {
+        anyhow::bail!(repository_git_error_code(args));
+    }
+    String::from_utf8(output.stdout)
+        .map(|value| value.trim().to_string())
+        .context("repository Git output was not UTF-8")
+}
+
+async fn repository_git_output(
+    args: &[&str],
+    askpass: &std::path::Path,
+) -> anyhow::Result<std::process::Output> {
+    Command::new("git")
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", askpass)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .await
+        .context("failed to spawn repository Git command")
+}
+
+fn repository_git_error_code(args: &[&str]) -> &'static str {
+    if args.contains(&"fetch") {
+        "git_fetch_failed"
+    } else if args.contains(&"checkout") {
+        "git_checkout_failed"
+    } else if args.contains(&"rev-parse") {
+        "git_revision_failed"
+    } else {
+        "git_setup_failed"
+    }
+}
+
+fn repository_discovery_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("entry limit") {
+        "repository_entry_limit_exceeded"
+    } else if text.contains("inspected-text limit") {
+        "repository_text_limit_exceeded"
+    } else {
+        "repository_discovery_failed"
+    }
+}
+
+async fn post_internal_json_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    payload: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let mut last_error = None;
+    for attempt in 1..=INGEST_ATTEMPTS {
+        match client
+            .post(url)
+            .bearer_auth(token)
+            .json(payload)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) if response.status().is_client_error() => {
+                anyhow::bail!(
+                    "internal outcome request was rejected with {}",
+                    response.status()
+                );
+            }
+            Ok(response) => {
+                last_error = Some(anyhow::anyhow!(
+                    "internal outcome request returned {}",
+                    response.status()
+                ));
+            }
+            Err(error) => last_error = Some(error.into()),
+        }
+        if attempt < INGEST_ATTEMPTS {
+            tokio::time::sleep(INGEST_RETRY_DELAY).await;
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("internal outcome request failed")))
+}
+
 async fn prepare_project_environment(
     spec: &AttemptSpec,
     worker_token: &str,
@@ -560,7 +1535,7 @@ async fn prepare_project_environment(
     {
         anyhow::bail!("runner profile does not match the server-selected run profile");
     }
-    let (contract, contract_hash) = ProjectContract::load(&cwd)?;
+    let (contract, contract_hash) = RepositoryContract::load(&cwd)?;
     if contract.environment_profile != profile_id {
         anyhow::bail!(
             "repository contract selects {} rather than runner profile {profile_id}",
@@ -1263,7 +2238,11 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
     let api_url = required_env("PHARNESS_API_URL")?
         .trim_end_matches('/')
         .to_string();
-    let change_set_id = required_env("PHARNESS_CHANGE_SET_ID")?;
+    let source_delivery_intent_id = std::env::var("PHARNESS_SOURCE_DELIVERY_INTENT_ID").ok();
+    let resource_id = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => intent_id.to_string(),
+        None => required_env("PHARNESS_CHANGE_SET_ID")?,
+    };
     let execution_id = required_env("PHARNESS_GIT_DELIVERY_EXECUTION_ID")?;
     let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
     let git_token = required_env("PHARNESS_GIT_WRITER_TOKEN")?;
@@ -1271,7 +2250,10 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(60))
         .build()
         .context("failed to build Git writer http client")?;
-    let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-context?execution_id={execution_id}");
+    let context_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/context?execution_id={execution_id}"),
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-context?execution_id={execution_id}"),
+    };
     let context = fetch_internal_context_with_retry::<GitDeliveryContext>(
         &client,
         &context_url,
@@ -1288,14 +2270,18 @@ async fn execute_git_delivery() -> anyhow::Result<()> {
             "pull_request_number": completed.pull_request_number,
         }),
         Err(error) => {
-            tracing::warn!(change_set_id = %change_set_id, error = %error, "Git writer failed without exposing command output");
+            tracing::warn!(delivery_resource_id = %resource_id, error = %error, "Git writer failed without exposing command output");
             serde_json::json!({
                 "execution_id": execution_id, "status": "failed", "error_code": git_delivery_error_code(&error),
             })
         }
     };
-    let outcome_url =
-        format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-outcome");
+    let outcome_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => {
+            format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/writer-outcome")
+        }
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-outcome"),
+    };
     post_git_delivery_outcome(&client, &outcome_url, &worker_token, &outcome).await
 }
 
@@ -1306,7 +2292,11 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
     let api_url = required_env("PHARNESS_API_URL")?
         .trim_end_matches('/')
         .to_string();
-    let change_set_id = required_env("PHARNESS_CHANGE_SET_ID")?;
+    let source_delivery_intent_id = std::env::var("PHARNESS_SOURCE_DELIVERY_INTENT_ID").ok();
+    let resource_id = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => intent_id.to_string(),
+        None => required_env("PHARNESS_CHANGE_SET_ID")?,
+    };
     let execution_id = required_env("PHARNESS_GIT_DELIVERY_EXECUTION_ID")?;
     let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
     let git_token = required_env("PHARNESS_GIT_OBSERVER_TOKEN")?;
@@ -1314,7 +2304,10 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(30))
         .build()
         .context("failed to build Git observer http client")?;
-    let context_url = format!("{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-observation-context?execution_id={execution_id}");
+    let context_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!("{api_url}/api/internal/source-delivery-intents/{intent_id}/observation-context?execution_id={execution_id}"),
+        None => format!("{api_url}/api/internal/change-sets/{resource_id}/git-delivery-observation-context?execution_id={execution_id}"),
+    };
     let context = fetch_internal_context_with_retry::<GitDeliveryObservationContext>(
         &client,
         &context_url,
@@ -1322,7 +2315,12 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
     )
     .await
     .context("failed to fetch Git observer context")?;
-    let outcome = match observe_github_pull_request(&client, &context, &git_token).await {
+    let observed = if source_delivery_intent_id.is_some() {
+        observe_github_source_delivery(&client, &context, &git_token).await
+    } else {
+        observe_github_pull_request(&client, &context, &git_token).await
+    };
+    let outcome = match observed {
         Ok(observation) => serde_json::json!({
             "execution_id": execution_id,
             "status": "observed",
@@ -1331,9 +2329,14 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
             "merge_commit_sha": observation.merge_commit_sha,
             "head_branch": observation.head_branch,
             "head_commit_sha": observation.head_commit_sha,
+            "authoritative_rules_succeeded": observation.authoritative_rules_succeeded,
+            "required_checks": observation.required_checks,
+            "check_runs": observation.check_runs,
+            "commit_statuses": observation.commit_statuses,
+            "provider_check_status": observation.provider_check_status,
         }),
         Err(error) => {
-            tracing::warn!(change_set_id = %change_set_id, error = %error, "Git observer failed without exposing provider output");
+            tracing::warn!(delivery_resource_id = %resource_id, error = %error, "Git observer failed without exposing provider output");
             serde_json::json!({
                 "execution_id": execution_id,
                 "status": "failed",
@@ -1341,9 +2344,14 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
             })
         }
     };
-    let outcome_url = format!(
-        "{api_url}/api/internal/change-sets/{change_set_id}/git-delivery-observation-outcome"
-    );
+    let outcome_url = match source_delivery_intent_id.as_deref() {
+        Some(intent_id) => format!(
+            "{api_url}/api/internal/source-delivery-intents/{intent_id}/observation-outcome"
+        ),
+        None => format!(
+            "{api_url}/api/internal/change-sets/{resource_id}/git-delivery-observation-outcome"
+        ),
+    };
     post_git_delivery_outcome(&client, &outcome_url, &worker_token, &outcome).await
 }
 
@@ -1463,6 +2471,7 @@ async fn execute_gitops_delivery_observation() -> anyhow::Result<()> {
     let source_context = GitDeliveryObservationContext {
         execution_id: context.execution_id,
         repository: context.repository,
+        base_ref: None,
         head_branch: context.head_branch,
         source_commit_sha: context.source_commit_sha,
         pull_request_url: context.pull_request_url,
@@ -1567,6 +2576,8 @@ async fn resolve_github_base_revision(
 struct GitDeliveryObservationContext {
     execution_id: String,
     repository: String,
+    #[serde(default)]
+    base_ref: Option<String>,
     head_branch: String,
     source_commit_sha: String,
     pull_request_url: String,
@@ -1580,6 +2591,11 @@ struct GitPullRequestObservation {
     merge_commit_sha: Option<String>,
     head_branch: String,
     head_commit_sha: String,
+    authoritative_rules_succeeded: bool,
+    required_checks: serde_json::Value,
+    check_runs: serde_json::Value,
+    commit_statuses: serde_json::Value,
+    provider_check_status: String,
 }
 
 async fn observe_github_pull_request(
@@ -1619,6 +2635,21 @@ async fn observe_github_pull_request(
         .await
         .context("GitHub pull request observation response was invalid")?;
     parse_github_pull_request_observation(&value, context)
+}
+
+async fn observe_github_source_delivery(
+    client: &reqwest::Client,
+    context: &GitDeliveryObservationContext,
+    token: &str,
+) -> anyhow::Result<GitPullRequestObservation> {
+    let mut observation = observe_github_pull_request(client, context, token).await?;
+    let provider = observe_github_required_checks(client, context, token).await?;
+    observation.authoritative_rules_succeeded = true;
+    observation.required_checks = provider.required_checks;
+    observation.check_runs = provider.check_runs;
+    observation.commit_statuses = provider.commit_statuses;
+    observation.provider_check_status = provider.status;
+    Ok(observation)
 }
 
 fn parse_github_pull_request_observation(
@@ -1667,7 +2698,322 @@ fn parse_github_pull_request_observation(
         merge_commit_sha,
         head_branch: head_branch.expect("validated branch").to_string(),
         head_commit_sha: head_commit_sha.expect("validated sha").to_string(),
+        authoritative_rules_succeeded: false,
+        required_checks: serde_json::json!([]),
+        check_runs: serde_json::json!([]),
+        commit_statuses: serde_json::json!([]),
+        provider_check_status: "unavailable".into(),
     })
+}
+
+struct GitHubRequiredCheckObservation {
+    required_checks: serde_json::Value,
+    check_runs: serde_json::Value,
+    commit_statuses: serde_json::Value,
+    status: String,
+}
+
+async fn observe_github_required_checks(
+    client: &reqwest::Client,
+    context: &GitDeliveryObservationContext,
+    token: &str,
+) -> anyhow::Result<GitHubRequiredCheckObservation> {
+    let (owner, repo) = parse_github_repository(&context.repository)?;
+    let api = context.github_api_url.trim_end_matches('/');
+    let branch = percent_encode_path_segment(
+        context
+            .base_ref
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("github_base_ref_unavailable"))?,
+    );
+    let rules = github_observer_json(
+        client,
+        &format!("{api}/repos/{owner}/{repo}/rules/branches/{branch}?per_page=100"),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_unavailable"))?;
+    let classic = github_observer_json(
+        client,
+        &format!("{api}/repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks"),
+        token,
+        true,
+    )
+    .await?;
+    let check_runs = github_observer_json(
+        client,
+        &format!(
+            "{api}/repos/{owner}/{repo}/commits/{}/check-runs?per_page=100",
+            context.source_commit_sha
+        ),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_check_runs_unavailable"))?;
+    let statuses = github_observer_json(
+        client,
+        &format!(
+            "{api}/repos/{owner}/{repo}/commits/{}/status?per_page=100",
+            context.source_commit_sha
+        ),
+        token,
+        false,
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("github_commit_statuses_unavailable"))?;
+    evaluate_github_required_checks(&rules, classic.as_ref(), &check_runs, &statuses)
+}
+
+async fn github_observer_json(
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+    not_found_is_empty: bool,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    let response = client
+        .get(url)
+        .bearer_auth(token)
+        .header("accept", "application/vnd.github+json")
+        .header("x-github-api-version", "2022-11-28")
+        .header("user-agent", "pharness-git-observer")
+        .send()
+        .await
+        .context("GitHub provider-check observation request failed")?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND && not_found_is_empty {
+        return Ok(None);
+    }
+    if !response.status().is_success() {
+        anyhow::bail!("github_provider_check_query_unavailable");
+    }
+    if response
+        .headers()
+        .get(reqwest::header::LINK)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.contains("rel=\"next\""))
+    {
+        anyhow::bail!("github_provider_check_query_exceeded_bound");
+    }
+    Ok(Some(
+        response
+            .json()
+            .await
+            .context("GitHub provider-check response was invalid")?,
+    ))
+}
+
+fn evaluate_github_required_checks(
+    active_rules: &serde_json::Value,
+    classic: Option<&serde_json::Value>,
+    check_runs_response: &serde_json::Value,
+    statuses_response: &serde_json::Value,
+) -> anyhow::Result<GitHubRequiredCheckObservation> {
+    let mut required =
+        std::collections::BTreeMap::<(String, Option<i64>), serde_json::Value>::new();
+    let rules = active_rules
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_invalid"))?;
+    for rule in rules {
+        if rule.get("type").and_then(serde_json::Value::as_str) != Some("required_status_checks") {
+            continue;
+        }
+        let entries = rule
+            .pointer("/parameters/required_status_checks")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| anyhow::anyhow!("github_active_branch_rules_invalid"))?;
+        for entry in entries {
+            add_required_check(&mut required, entry, "integration_id")?;
+        }
+    }
+    if let Some(classic) = classic {
+        for context in classic
+            .get("contexts")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let name = context
+                .as_str()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!("github_classic_branch_protection_invalid"))?;
+            required
+                .entry((name.to_string(), None))
+                .or_insert_with(|| serde_json::json!({"name":name,"app_id":null}));
+        }
+        for entry in classic
+            .get("checks")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            add_required_check(&mut required, entry, "app_id")?;
+        }
+    }
+    let check_runs = check_runs_response
+        .get("check_runs")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("github_check_runs_invalid"))?;
+    let statuses = statuses_response
+        .get("statuses")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("github_commit_statuses_invalid"))?;
+    if check_runs.len() > 100 || statuses.len() > 100 || required.len() > 100 {
+        anyhow::bail!("github_provider_check_query_exceeded_bound");
+    }
+
+    let bounded_runs = check_runs
+        .iter()
+        .filter_map(|run| {
+            Some(serde_json::json!({
+                "name":run.get("name")?.as_str()?,
+                "status":run.get("status").and_then(serde_json::Value::as_str),
+                "conclusion":run.get("conclusion").and_then(serde_json::Value::as_str),
+                "app_id":run.pointer("/app/id").and_then(serde_json::Value::as_i64),
+            }))
+        })
+        .collect::<Vec<_>>();
+    let mut bounded_statuses = Vec::new();
+    let mut seen_statuses = std::collections::BTreeSet::new();
+    for status in statuses {
+        let Some(name) = status.get("context").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if seen_statuses.insert(name.to_string()) {
+            bounded_statuses.push(serde_json::json!({
+                "name":name,
+                "state":status.get("state").and_then(serde_json::Value::as_str),
+            }));
+        }
+    }
+
+    let mut overall = "passing";
+    let mut required_output = Vec::new();
+    for ((name, app_id), _) in required {
+        let matching_runs = bounded_runs
+            .iter()
+            .filter(|run| {
+                run.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str())
+                    && app_id.map_or(true, |expected| {
+                        run.get("app_id").and_then(serde_json::Value::as_i64) == Some(expected)
+                    })
+            })
+            .collect::<Vec<_>>();
+        let matching_status = bounded_statuses.iter().find(|status| {
+            status.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str())
+        });
+        let run_state = if matching_runs.is_empty() {
+            "missing"
+        } else if matching_runs.iter().any(|run| {
+            run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+                && !matches!(
+                    run.get("conclusion").and_then(serde_json::Value::as_str),
+                    Some("success" | "skipped" | "neutral")
+                )
+        }) {
+            "failed"
+        } else if matching_runs.iter().all(|run| {
+            run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+                && matches!(
+                    run.get("conclusion").and_then(serde_json::Value::as_str),
+                    Some("success" | "skipped" | "neutral")
+                )
+        }) {
+            "passing"
+        } else {
+            "pending"
+        };
+        let status_state = matching_status
+            .and_then(|status| status.get("state"))
+            .and_then(serde_json::Value::as_str)
+            .map(|state| {
+                if state == "success" {
+                    "passing"
+                } else if matches!(state, "pending" | "expected") {
+                    "pending"
+                } else {
+                    "failed"
+                }
+            })
+            .unwrap_or("missing");
+        let effective = if app_id.is_some() {
+            // App-bound requirements can only be satisfied by the bound check-run identity.
+            // If a commit status of the same name also exists, both systems must pass.
+            combine_provider_states(run_state, matching_status.map(|_| status_state))
+        } else if matching_runs.is_empty() {
+            status_state
+        } else if matching_status.is_none() {
+            run_state
+        } else {
+            combine_provider_states(run_state, Some(status_state))
+        };
+        overall = combine_overall_status(overall, effective);
+        required_output.push(serde_json::json!({
+            "name":name,
+            "app_id":app_id,
+            "check_run_state":run_state,
+            "commit_status_state":status_state,
+            "status":effective,
+        }));
+    }
+    Ok(GitHubRequiredCheckObservation {
+        required_checks: serde_json::Value::Array(required_output),
+        check_runs: serde_json::Value::Array(bounded_runs),
+        commit_statuses: serde_json::Value::Array(bounded_statuses),
+        status: overall.into(),
+    })
+}
+
+fn add_required_check(
+    required: &mut std::collections::BTreeMap<(String, Option<i64>), serde_json::Value>,
+    entry: &serde_json::Value,
+    app_field: &str,
+) -> anyhow::Result<()> {
+    let name = entry
+        .get("context")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("github_required_check_invalid"))?;
+    let app_id = entry.get(app_field).and_then(serde_json::Value::as_i64);
+    required
+        .entry((name.to_string(), app_id))
+        .or_insert_with(|| serde_json::json!({"name":name,"app_id":app_id}));
+    Ok(())
+}
+
+fn combine_provider_states(first: &str, second: Option<&str>) -> &'static str {
+    let second = second.unwrap_or("passing");
+    if first == "failed" || second == "failed" {
+        "failed"
+    } else if first == "passing" && second == "passing" {
+        "passing"
+    } else {
+        "pending"
+    }
+}
+
+fn combine_overall_status(current: &str, next: &str) -> &'static str {
+    if current == "failed" || next == "failed" {
+        "failed"
+    } else if current == "pending" || next != "passing" {
+        "pending"
+    } else {
+        "passing"
+    }
+}
+
+fn percent_encode_path_segment(value: &str) -> String {
+    value
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -2128,7 +3474,7 @@ fn parse_github_repository(repository: &str) -> anyhow::Result<(String, String)>
 fn is_github_name(value: &str) -> bool {
     value
         .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 fn is_git_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -3007,7 +4353,7 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        fetch_internal_context, git_delivery_command_error_code,
+        evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_patch_for_apply,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
         update_kustomization_image, validate_git_delivery_context,
@@ -3302,6 +4648,7 @@ mod tests {
         let context = GitDeliveryObservationContext {
             execution_id: "gobserve_1".to_string(),
             repository: "https://github.com/example/gitops.git".to_string(),
+            base_ref: None,
             head_branch: "pharness/gitops/revision-2".to_string(),
             source_commit_sha: "a".repeat(40),
             pull_request_url: "https://github.com/example/gitops/pull/25".to_string(),
@@ -3327,6 +4674,48 @@ mod tests {
         assert_eq!(observation.merge_commit_sha, None);
         assert_eq!(observation.head_branch, "pharness/gitops/revision-2");
         assert_eq!(observation.head_commit_sha, "a".repeat(40));
+    }
+
+    #[test]
+    fn provider_checks_require_both_check_run_and_status_for_duplicate_names() {
+        let result = evaluate_github_required_checks(
+            &json!([{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci/test","integration_id":42}]}}]),
+            Some(&json!({"contexts":["legacy/lint"],"checks":[]})),
+            &json!({"check_runs":[
+                {"name":"ci/test","status":"completed","conclusion":"success","app":{"id":42}},
+            ]}),
+            &json!({"statuses":[
+                {"context":"ci/test","state":"pending"},
+                {"context":"legacy/lint","state":"success"},
+            ]}),
+        )
+        .unwrap();
+        assert_eq!(result.status, "pending");
+        assert_eq!(result.required_checks.as_array().unwrap().len(), 2);
+
+        let passing = evaluate_github_required_checks(
+            &json!([{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci/test","integration_id":42}]}}]),
+            None,
+            &json!({"check_runs":[
+                {"name":"ci/test","status":"completed","conclusion":"neutral","app":{"id":42}},
+            ]}),
+            &json!({"statuses":[]}),
+        )
+        .unwrap();
+        assert_eq!(passing.status, "passing");
+    }
+
+    #[test]
+    fn authoritative_empty_required_set_is_passing() {
+        let result = evaluate_github_required_checks(
+            &json!([]),
+            None,
+            &json!({"check_runs":[]}),
+            &json!({"statuses":[]}),
+        )
+        .unwrap();
+        assert_eq!(result.status, "passing");
+        assert_eq!(result.required_checks, json!([]));
     }
 
     #[test]

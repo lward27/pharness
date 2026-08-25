@@ -4,28 +4,61 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
-pub const PROJECT_CONTRACT_PATH: &str = ".pharness/project.yaml";
-pub const MAX_PROJECT_CONTRACT_BYTES: usize = 32 * 1024;
+pub const REPOSITORY_CONTRACT_PATH: &str = ".pharness/repository.yaml";
+pub const LEGACY_PROJECT_CONTRACT_PATH: &str = ".pharness/project.yaml";
+#[deprecated(note = "use REPOSITORY_CONTRACT_PATH")]
+pub const PROJECT_CONTRACT_PATH: &str = LEGACY_PROJECT_CONTRACT_PATH;
+pub const MAX_REPOSITORY_CONTRACT_BYTES: usize = 32 * 1024;
+#[deprecated(note = "use MAX_REPOSITORY_CONTRACT_BYTES")]
+pub const MAX_PROJECT_CONTRACT_BYTES: usize = MAX_REPOSITORY_CONTRACT_BYTES;
 
 #[derive(Debug, Error)]
-pub enum ProjectContractError {
-    #[error("project contract is missing at {PROJECT_CONTRACT_PATH}")]
+pub enum RepositoryContractError {
+    #[error(
+        "repository contract is missing at {REPOSITORY_CONTRACT_PATH} or {LEGACY_PROJECT_CONTRACT_PATH}"
+    )]
     Missing,
-    #[error("project contract exceeds {MAX_PROJECT_CONTRACT_BYTES} bytes")]
+    #[error("repository contract exceeds {MAX_REPOSITORY_CONTRACT_BYTES} bytes")]
     TooLarge,
-    #[error("project contract is not valid YAML: {0}")]
+    #[error("repository contract is not valid YAML: {0}")]
     InvalidYaml(String),
-    #[error("project contract is invalid: {0}")]
+    #[error("repository contract is invalid: {0}")]
     Invalid(String),
-    #[error("project contract path escapes the repository: {0}")]
+    #[error("repository contract path escapes the repository: {0}")]
     PathEscape(String),
-    #[error("project contract I/O failed: {0}")]
+    #[error("repository contract I/O failed: {0}")]
     Io(String),
+    #[error("canonical repository contract is required at {REPOSITORY_CONTRACT_PATH}")]
+    CanonicalRequired,
+    #[error(
+        "canonical and deprecated repository contracts conflict: {REPOSITORY_CONTRACT_PATH} and {LEGACY_PROJECT_CONTRACT_PATH}"
+    )]
+    ConflictingAliases,
+}
+
+#[deprecated(note = "use RepositoryContractError")]
+pub type ProjectContractError = RepositoryContractError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepositoryContractSource {
+    Canonical,
+    CanonicalWithMatchingAlias,
+    LegacyAlias,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoadedRepositoryContract {
+    pub contract: RepositoryContract,
+    pub content_sha256: String,
+    pub active_path: String,
+    pub source: RepositoryContractSource,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectContract {
+pub struct RepositoryContract {
     pub api_version: String,
     pub environment_profile: String,
     pub dependency_lock: DependencyLock,
@@ -35,6 +68,9 @@ pub struct ProjectContract {
     pub agent_network: AgentNetworkPolicy,
     pub package_installation: PackageInstallationPolicy,
 }
+
+#[deprecated(note = "use RepositoryContract")]
+pub type ProjectContract = RepositoryContract;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -161,12 +197,12 @@ pub struct RunBudgetConsumption {
 }
 
 impl RunBudget {
-    pub fn validate(&self) -> Result<(), ProjectContractError> {
+    pub fn validate(&self) -> Result<(), RepositoryContractError> {
         if !(1..=100).contains(&self.initial_turns)
             || self.hard_turns > 100
             || self.initial_turns > self.hard_turns
         {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "turn budget must be ordered and capped at 100".into(),
             ));
         }
@@ -174,7 +210,7 @@ impl RunBudget {
             || self.hard_tokens > 1_000_000
             || self.initial_tokens > self.hard_tokens
         {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "token budget must be ordered and capped at 1000000".into(),
             ));
         }
@@ -183,7 +219,7 @@ impl RunBudget {
             || !(1..=3).contains(&self.identical_failures)
             || self.verification_reserve_turns >= self.initial_turns
         {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "active time or recovery thresholds are invalid".into(),
             ));
         }
@@ -192,16 +228,16 @@ impl RunBudget {
 }
 
 impl EnvironmentProfile {
-    pub fn validate(&self) -> Result<(), ProjectContractError> {
+    pub fn validate(&self) -> Result<(), RepositoryContractError> {
         validate_identifier(&self.id, "environment profile id")?;
         validate_digest_ref(&self.image)?;
         if !is_full_sha(&self.revision) {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "environment profile revision must be a full Git SHA".into(),
             ));
         }
         if self.platform != "linux/amd64" {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "production environment profiles must use linux/amd64".into(),
             ));
         }
@@ -212,12 +248,12 @@ impl EnvironmentProfile {
                     || !value.bytes().all(is_safe_identifier_byte)
             })
         {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "required executables must be non-empty command names".into(),
             ));
         }
         if self.service_account.trim().is_empty() {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "environment profile service account is required".into(),
             ));
         }
@@ -225,74 +261,44 @@ impl EnvironmentProfile {
     }
 }
 
-impl ProjectContract {
-    pub fn load(workspace: &Path) -> Result<(Self, String), ProjectContractError> {
-        let root = workspace
-            .canonicalize()
-            .map_err(|error| ProjectContractError::Io(error.to_string()))?;
-        let path = root.join(PROJECT_CONTRACT_PATH);
-        if !path.exists() {
-            return Err(ProjectContractError::Missing);
-        }
-        let canonical = path
-            .canonicalize()
-            .map_err(|error| ProjectContractError::Io(error.to_string()))?;
-        if !canonical.starts_with(&root) {
-            return Err(ProjectContractError::PathEscape(
-                PROJECT_CONTRACT_PATH.into(),
-            ));
-        }
-        let bytes = std::fs::read(&canonical)
-            .map_err(|error| ProjectContractError::Io(error.to_string()))?;
-        if bytes.len() > MAX_PROJECT_CONTRACT_BYTES {
-            return Err(ProjectContractError::TooLarge);
-        }
-        let contract: Self = serde_yaml::from_slice(&bytes)
-            .map_err(|error| ProjectContractError::InvalidYaml(error.to_string()))?;
-        contract.validate(&root)?;
-        Ok((contract, sha256_hex(&bytes)))
-    }
-
-    pub fn validate(&self, workspace: &Path) -> Result<(), ProjectContractError> {
+impl RepositoryContract {
+    /// Validate the executable shape of an onboarding proposal before a
+    /// checkout exists. Exact lock bytes, roots, and symlink containment are
+    /// still revalidated from the merged immutable revision before readiness.
+    pub fn validate_candidate(&self) -> Result<(), RepositoryContractError> {
         if self.api_version != "pharness.dev/v1alpha1" {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "api_version must be pharness.dev/v1alpha1".into(),
             ));
         }
         validate_identifier(&self.environment_profile, "environment_profile")?;
         if self.dependency_lock.kind != "pip_requirements" {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "dependency_lock.kind must be pip_requirements".into(),
             ));
         }
-        let lock = resolve_declared_path(workspace, &self.dependency_lock.path)?;
-        let lock_bytes =
-            std::fs::read(&lock).map_err(|error| ProjectContractError::Io(error.to_string()))?;
-        if !is_sha256(&self.dependency_lock.sha256)
-            || sha256_hex(&lock_bytes) != self.dependency_lock.sha256.to_ascii_lowercase()
-        {
-            return Err(ProjectContractError::Invalid(
-                "dependency lock SHA-256 does not match the pinned file".into(),
+        validate_relative_path(&self.dependency_lock.path, false)?;
+        if !is_sha256(&self.dependency_lock.sha256) {
+            return Err(RepositoryContractError::Invalid(
+                "dependency lock must declare a full SHA-256".into(),
             ));
         }
-        validate_immutable_pip_lock(&lock_bytes)?;
         validate_unique_paths(&self.writable_paths, "writable_paths", true)?;
         if self.writable_paths.is_empty() {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "writable_paths must not be empty".into(),
             ));
         }
-        validate_declared_paths(workspace, &self.writable_paths)?;
         let mut command_names = BTreeSet::new();
         if self.acceptance_commands.is_empty() {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "acceptance_commands must not be empty".into(),
             ));
         }
         for command in &self.acceptance_commands {
             validate_identifier(&command.name, "acceptance command name")?;
             if !command_names.insert(command.name.as_str()) {
-                return Err(ProjectContractError::Invalid(format!(
+                return Err(RepositoryContractError::Invalid(format!(
                     "duplicate acceptance command {}",
                     command.name
                 )));
@@ -303,10 +309,106 @@ impl ProjectContract {
         validate_unique_paths(&self.roots.tests, "roots.tests", false)?;
         validate_unique_paths(&self.roots.documentation, "roots.documentation", false)?;
         if self.roots.source.is_empty() || self.roots.tests.is_empty() {
-            return Err(ProjectContractError::Invalid(
+            return Err(RepositoryContractError::Invalid(
                 "source and test roots are required".into(),
             ));
         }
+        Ok(())
+    }
+
+    /// Compatibility loader used by legacy WorkItems. Repo Mode callers must
+    /// use `load_for_repo_mode`, which rejects alias-only repositories.
+    pub fn load(workspace: &Path) -> Result<(Self, String), RepositoryContractError> {
+        let loaded = Self::load_with_metadata(workspace)?;
+        Ok((loaded.contract, loaded.content_sha256))
+    }
+
+    pub fn load_for_repo_mode(
+        workspace: &Path,
+    ) -> Result<LoadedRepositoryContract, RepositoryContractError> {
+        let loaded = Self::load_with_metadata(workspace)?;
+        if loaded.source == RepositoryContractSource::LegacyAlias {
+            return Err(RepositoryContractError::CanonicalRequired);
+        }
+        Ok(loaded)
+    }
+
+    pub fn load_with_metadata(
+        workspace: &Path,
+    ) -> Result<LoadedRepositoryContract, RepositoryContractError> {
+        let root = workspace
+            .canonicalize()
+            .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
+        let canonical_path = root.join(REPOSITORY_CONTRACT_PATH);
+        let alias_path = root.join(LEGACY_PROJECT_CONTRACT_PATH);
+        let canonical_exists = canonical_path.exists();
+        let alias_exists = alias_path.exists();
+        if !canonical_exists && !alias_exists {
+            return Err(RepositoryContractError::Missing);
+        }
+
+        let (path, active_path, source, warnings) = match (canonical_exists, alias_exists) {
+            (true, true) => {
+                let canonical_bytes =
+                    read_contract_bytes(&root, &canonical_path, REPOSITORY_CONTRACT_PATH)?;
+                let alias_bytes =
+                    read_contract_bytes(&root, &alias_path, LEGACY_PROJECT_CONTRACT_PATH)?;
+                if canonical_bytes != alias_bytes {
+                    return Err(RepositoryContractError::ConflictingAliases);
+                }
+                (
+                    canonical_path,
+                    REPOSITORY_CONTRACT_PATH,
+                    RepositoryContractSource::CanonicalWithMatchingAlias,
+                    vec![format!(
+                        "{LEGACY_PROJECT_CONTRACT_PATH} is deprecated and should be removed"
+                    )],
+                )
+            }
+            (true, false) => (
+                canonical_path,
+                REPOSITORY_CONTRACT_PATH,
+                RepositoryContractSource::Canonical,
+                Vec::new(),
+            ),
+            (false, true) => (
+                alias_path,
+                LEGACY_PROJECT_CONTRACT_PATH,
+                RepositoryContractSource::LegacyAlias,
+                vec![format!(
+                    "{LEGACY_PROJECT_CONTRACT_PATH} is a deprecated compatibility alias"
+                )],
+            ),
+            (false, false) => unreachable!("missing contracts returned above"),
+        };
+
+        let bytes = read_contract_bytes(&root, &path, active_path)?;
+        let contract: Self = serde_yaml::from_slice(&bytes)
+            .map_err(|error| RepositoryContractError::InvalidYaml(error.to_string()))?;
+        contract.validate(&root)?;
+        Ok(LoadedRepositoryContract {
+            contract,
+            content_sha256: sha256_hex(&bytes),
+            active_path: active_path.to_string(),
+            source,
+            warnings,
+        })
+    }
+
+    pub fn validate(&self, workspace: &Path) -> Result<(), RepositoryContractError> {
+        self.validate_candidate()?;
+        let lock = resolve_declared_path(workspace, &self.dependency_lock.path)?;
+        let lock_bytes =
+            std::fs::read(&lock).map_err(|error| RepositoryContractError::Io(error.to_string()))?;
+        if !is_sha256(&self.dependency_lock.sha256)
+            || sha256_hex(&lock_bytes) != self.dependency_lock.sha256.to_ascii_lowercase()
+        {
+            return Err(RepositoryContractError::Invalid(
+                "dependency lock SHA-256 does not match the pinned file".into(),
+            ));
+        }
+        validate_immutable_pip_lock(&lock_bytes)?;
+        validate_declared_paths(workspace, &self.writable_paths)?;
         validate_declared_paths(workspace, &self.roots.source)?;
         validate_declared_paths(workspace, &self.roots.tests)?;
         validate_declared_paths(workspace, &self.roots.documentation)?;
@@ -320,17 +422,36 @@ impl ProjectContract {
     }
 }
 
-fn resolve_declared_path(root: &Path, value: &str) -> Result<PathBuf, ProjectContractError> {
+fn read_contract_bytes(
+    root: &Path,
+    path: &Path,
+    display_path: &str,
+) -> Result<Vec<u8>, RepositoryContractError> {
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
+    if !canonical.starts_with(root) {
+        return Err(RepositoryContractError::PathEscape(display_path.into()));
+    }
+    let bytes = std::fs::read(&canonical)
+        .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
+    if bytes.len() > MAX_REPOSITORY_CONTRACT_BYTES {
+        return Err(RepositoryContractError::TooLarge);
+    }
+    Ok(bytes)
+}
+
+fn resolve_declared_path(root: &Path, value: &str) -> Result<PathBuf, RepositoryContractError> {
     validate_relative_path(value, false)?;
     let canonical_root = root
         .canonicalize()
-        .map_err(|error| ProjectContractError::Io(error.to_string()))?;
+        .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
     let path = canonical_root.join(value);
     let canonical = path
         .canonicalize()
-        .map_err(|error| ProjectContractError::Io(error.to_string()))?;
+        .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
     if !canonical.starts_with(&canonical_root) {
-        return Err(ProjectContractError::PathEscape(value.into()));
+        return Err(RepositoryContractError::PathEscape(value.into()));
     }
     Ok(canonical)
 }
@@ -339,12 +460,12 @@ fn validate_unique_paths(
     values: &[String],
     label: &str,
     allow_glob: bool,
-) -> Result<(), ProjectContractError> {
+) -> Result<(), RepositoryContractError> {
     let mut unique = BTreeSet::new();
     for value in values {
         validate_relative_path(value, allow_glob)?;
         if !unique.insert(value.as_str()) {
-            return Err(ProjectContractError::Invalid(format!(
+            return Err(RepositoryContractError::Invalid(format!(
                 "{label} contains duplicate path {value}"
             )));
         }
@@ -355,10 +476,10 @@ fn validate_unique_paths(
 fn validate_declared_paths(
     workspace: &Path,
     values: &[String],
-) -> Result<(), ProjectContractError> {
+) -> Result<(), RepositoryContractError> {
     let canonical_root = workspace
         .canonicalize()
-        .map_err(|error| ProjectContractError::Io(error.to_string()))?;
+        .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
     for value in values {
         let value = value.strip_suffix("/**").unwrap_or(value);
         validate_relative_path(value, false)?;
@@ -367,21 +488,22 @@ fn validate_declared_paths(
         while !existing.exists() {
             existing = existing
                 .parent()
-                .ok_or_else(|| ProjectContractError::PathEscape(value.to_string()))?;
+                .ok_or_else(|| RepositoryContractError::PathEscape(value.to_string()))?;
         }
         let canonical_existing = existing
             .canonicalize()
-            .map_err(|error| ProjectContractError::Io(error.to_string()))?;
+            .map_err(|error| RepositoryContractError::Io(error.to_string()))?;
         if !canonical_existing.starts_with(&canonical_root) {
-            return Err(ProjectContractError::PathEscape(value.to_string()));
+            return Err(RepositoryContractError::PathEscape(value.to_string()));
         }
     }
     Ok(())
 }
 
-fn validate_immutable_pip_lock(bytes: &[u8]) -> Result<(), ProjectContractError> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|_| ProjectContractError::Invalid("pip requirements lock must be UTF-8".into()))?;
+fn validate_immutable_pip_lock(bytes: &[u8]) -> Result<(), RepositoryContractError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| {
+        RepositoryContractError::Invalid("pip requirements lock must be UTF-8".into())
+    })?;
     let mut logical = String::new();
     let mut requirements = 0_u32;
     for raw_line in text.lines() {
@@ -407,14 +529,14 @@ fn validate_immutable_pip_lock(bytes: &[u8]) -> Result<(), ProjectContractError>
         requirements = requirements.saturating_add(1);
     }
     if requirements == 0 {
-        return Err(ProjectContractError::Invalid(
+        return Err(RepositoryContractError::Invalid(
             "pip requirements lock must contain at least one exact requirement".into(),
         ));
     }
     Ok(())
 }
 
-fn validate_locked_requirement(requirement: &str) -> Result<(), ProjectContractError> {
+fn validate_locked_requirement(requirement: &str) -> Result<(), RepositoryContractError> {
     let lower = requirement.to_ascii_lowercase();
     if requirement.starts_with('-')
         || !requirement.contains("==")
@@ -426,7 +548,7 @@ fn validate_locked_requirement(requirement: &str) -> Result<(), ProjectContractE
         || lower.contains("../")
         || lower.contains("./")
     {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "pip requirements lock contains a mutable dependency input: {requirement:?}"
         )));
     }
@@ -435,22 +557,22 @@ fn validate_locked_requirement(requirement: &str) -> Result<(), ProjectContractE
         .filter_map(|part| part.strip_prefix("--hash=sha256:"))
         .collect::<Vec<_>>();
     if hashes.is_empty() || hashes.iter().any(|hash| !is_sha256(hash)) {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "exact requirement is missing a valid SHA-256 hash: {requirement:?}"
         )));
     }
     Ok(())
 }
 
-fn validate_relative_path(value: &str, allow_glob: bool) -> Result<(), ProjectContractError> {
+fn validate_relative_path(value: &str, allow_glob: bool) -> Result<(), RepositoryContractError> {
     if value.is_empty() || value.len() > 256 || value.contains('\\') {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "invalid repository-relative path {value:?}"
         )));
     }
     let plain = value.strip_suffix("/**").unwrap_or(value);
     if value.contains('*') && (!allow_glob || !value.ends_with("/**") || plain.contains('*')) {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "unsupported path glob {value:?}"
         )));
     }
@@ -464,14 +586,14 @@ fn validate_relative_path(value: &str, allow_glob: bool) -> Result<(), ProjectCo
         })
         || secret_shaped_path(plain)
     {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "unsafe repository-relative path {value:?}"
         )));
     }
     Ok(())
 }
 
-fn validate_command(command: &str) -> Result<(), ProjectContractError> {
+fn validate_command(command: &str) -> Result<(), RepositoryContractError> {
     let lower = command.to_ascii_lowercase();
     if command.is_empty()
         || command.len() > 1024
@@ -492,14 +614,14 @@ fn validate_command(command: &str) -> Result<(), ProjectContractError> {
         .iter()
         .any(|needle| lower.contains(needle))
     {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "acceptance command is not an exact offline command: {command:?}"
         )));
     }
     Ok(())
 }
 
-fn validate_identifier(value: &str, label: &str) -> Result<(), ProjectContractError> {
+fn validate_identifier(value: &str, label: &str) -> Result<(), RepositoryContractError> {
     if value.is_empty()
         || value.len() > 64
         || !value.bytes().all(is_safe_identifier_byte)
@@ -508,7 +630,7 @@ fn validate_identifier(value: &str, label: &str) -> Result<(), ProjectContractEr
             .next()
             .is_some_and(|byte| byte.is_ascii_alphanumeric())
     {
-        return Err(ProjectContractError::Invalid(format!(
+        return Err(RepositoryContractError::Invalid(format!(
             "{label} is not a safe identifier"
         )));
     }
@@ -533,14 +655,14 @@ fn secret_shaped_path(value: &str) -> bool {
     })
 }
 
-fn validate_digest_ref(value: &str) -> Result<(), ProjectContractError> {
+fn validate_digest_ref(value: &str) -> Result<(), RepositoryContractError> {
     let Some((repository, digest)) = value.rsplit_once("@sha256:") else {
-        return Err(ProjectContractError::Invalid(
+        return Err(RepositoryContractError::Invalid(
             "environment profile image must use repository@sha256:digest".into(),
         ));
     };
     if repository.is_empty() || !is_sha256(digest) {
-        return Err(ProjectContractError::Invalid(
+        return Err(RepositoryContractError::Invalid(
             "environment profile image digest is malformed".into(),
         ));
     }
@@ -606,29 +728,70 @@ agent_network: denied
 package_installation: preparation_only
 "#
         );
-        std::fs::write(root.join(PROJECT_CONTRACT_PATH), yaml).unwrap();
+        std::fs::write(root.join(LEGACY_PROJECT_CONTRACT_PATH), yaml).unwrap();
         root
     }
 
     #[test]
     fn loads_strict_hashed_contract() {
         let root = fixture();
-        let (contract, hash) = ProjectContract::load(&root).unwrap();
-        assert_eq!(contract.environment_profile, "python-3.11");
-        assert_eq!(hash.len(), 64);
+        let loaded = RepositoryContract::load_with_metadata(&root).unwrap();
+        assert_eq!(loaded.contract.environment_profile, "python-3.11");
+        assert_eq!(loaded.content_sha256.len(), 64);
+        assert_eq!(loaded.source, RepositoryContractSource::LegacyAlias);
+        assert!(matches!(
+            RepositoryContract::load_for_repo_mode(&root),
+            Err(RepositoryContractError::CanonicalRequired)
+        ));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn repo_mode_requires_canonical_contract_and_reports_matching_alias() {
+        let root = fixture();
+        let alias = root.join(LEGACY_PROJECT_CONTRACT_PATH);
+        let canonical = root.join(REPOSITORY_CONTRACT_PATH);
+        std::fs::copy(&alias, &canonical).unwrap();
+
+        let loaded = RepositoryContract::load_for_repo_mode(&root).unwrap();
+        assert_eq!(
+            loaded.source,
+            RepositoryContractSource::CanonicalWithMatchingAlias
+        );
+        assert_eq!(loaded.active_path, REPOSITORY_CONTRACT_PATH);
+        assert_eq!(loaded.warnings.len(), 1);
+
+        std::fs::remove_file(alias).unwrap();
+        let loaded = RepositoryContract::load_for_repo_mode(&root).unwrap();
+        assert_eq!(loaded.source, RepositoryContractSource::Canonical);
+        assert!(loaded.warnings.is_empty());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn conflicting_canonical_and_alias_contracts_block_loading() {
+        let root = fixture();
+        let canonical = root.join(REPOSITORY_CONTRACT_PATH);
+        let mut yaml = std::fs::read_to_string(root.join(LEGACY_PROJECT_CONTRACT_PATH)).unwrap();
+        yaml.push_str("# canonical formatting differs\n");
+        std::fs::write(canonical, yaml).unwrap();
+        assert!(matches!(
+            RepositoryContract::load_with_metadata(&root),
+            Err(RepositoryContractError::ConflictingAliases)
+        ));
         let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
     fn rejects_unknown_fields_and_lock_drift() {
         let root = fixture();
-        let path = root.join(PROJECT_CONTRACT_PATH);
+        let path = root.join(LEGACY_PROJECT_CONTRACT_PATH);
         let mut yaml = std::fs::read_to_string(&path).unwrap();
         yaml.push_str("surprise: true\n");
         std::fs::write(&path, yaml).unwrap();
         assert!(matches!(
-            ProjectContract::load(&root),
-            Err(ProjectContractError::InvalidYaml(_))
+            RepositoryContract::load(&root),
+            Err(RepositoryContractError::InvalidYaml(_))
         ));
         let _ = std::fs::remove_dir_all(root);
     }

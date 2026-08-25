@@ -1263,6 +1263,7 @@ pub(in crate::app) async fn internal_git_delivery_observation_context(
     Ok(Json(GitDeliveryObservationContextResponse {
         execution_id: query.execution_id,
         repository: source.repository,
+        base_ref: source.base_ref,
         head_branch: required_json_string(source_content, "head_branch", "Git observation source")?,
         source_commit_sha: required_json_string(
             source_content,

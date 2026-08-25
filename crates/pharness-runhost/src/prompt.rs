@@ -4,19 +4,19 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-15.2";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-24.1";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
 Use exactly one tool call per turn. Do not answer with prose unless you call the respond tool.
-Available action tools are: respond, finish, environment_info, list_dir, read_file, search_files, create_directory, write_file, patch_file, run_acceptance_command, run_shell, git_diff, git_status, kubernetes_get, argo_get_app, prometheus_query, prometheus_inventory, loki_log_summary, tekton_get_pipeline_runs, tekton_get_task_runs, tekton_analyze_pipeline_run.
+The tool schemas supplied with this request are the exact available action tools. Never attempt a tool that is not exposed. Repo Mode profiles may expose typed get_evidence and stage-submission tools instead of the general coding tools.
 Prefer read-only repo inspection first. Never read secrets, .env files, private keys, kubeconfigs, tokens, or credential files.
 File writes, destructive commands, network commands, and production mutations are policy-gated and may pause for approval.
 For available policy-gated actions, call the concrete tool. The runtime will pause for approval before execution.
 Use patch_file for small existing-file text edits when an exact find/replace patch is safer than rewriting the whole file.
 When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
 For coding work, inspect the final Git status or diff after your last edit before calling finish.
-When an EnvironmentSnapshot and ProjectContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
+When an EnvironmentSnapshot and RepositoryContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
 - kubernetes_get fields: resource, namespace, name, all_namespaces, label_selector.
 - argo_get_app fields: app.
@@ -49,7 +49,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "environment_info",
-            "Return the durable pre-model EnvironmentSnapshot and repository ProjectContract without probing the shell.",
+            "Return the durable pre-model EnvironmentSnapshot and RepositoryContract without probing the shell.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -178,7 +178,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "run_acceptance_command",
-            "Run one exact offline acceptance command selected by name from the immutable ProjectContract.",
+            "Run one exact offline acceptance command selected by name from the immutable RepositoryContract.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -188,6 +188,44 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                     "name": { "type": "string" }
                 }
             }),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "get_evidence",
+            "Retrieve one evidence item from the controller-allowlisted context catalog.",
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["reason", "evidence_id"],
+                "properties": {
+                    "reason": { "type": "string" },
+                    "evidence_id": { "type": "string" }
+                }
+            }),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_onboarding_proposal",
+            "Submit one structured repository onboarding proposal for controller validation.",
+            structured_submission_schema("proposal"),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_work_plan",
+            "Submit one structured WorkPlan for controller validation and operator review.",
+            work_plan_submission_schema(),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_test_outcome",
+            "Submit structured test findings bound to declared acceptance evidence.",
+            test_outcome_submission_schema(),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_verification",
+            "Submit structured verification findings with claims separated from evidence-backed facts.",
+            verification_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
@@ -369,6 +407,100 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
     ]
 }
 
+fn structured_submission_schema(field: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", field],
+        "properties": {
+            "reason": { "type": "string" },
+            (field): { "type": "object" }
+        }
+    })
+}
+
+fn work_plan_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","work_plan"],
+        "properties":{
+            "reason":{"type":"string"},
+            "work_plan":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["title","summary","risk_level","steps"],
+                "properties":{
+                    "title":{"type":"string","minLength":1,"maxLength":200},
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "risk_level":{"type":"string","enum":["low","medium","high"]},
+                    "steps":{
+                        "type":"array","minItems":1,"maxItems":50,
+                        "items":{
+                            "type":"object",
+                            "additionalProperties":false,
+                            "required":["title","description"],
+                            "properties":{
+                                "title":{"type":"string","minLength":1,"maxLength":200},
+                                "description":{"type":"string","minLength":1,"maxLength":2000},
+                                "paths":{"type":"array","items":{"type":"string"},"maxItems":100},
+                                "acceptance_names":{"type":"array","items":{"type":"string"},"maxItems":50}
+                            }
+                        }
+                    },
+                    "assumptions":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
+fn test_outcome_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","outcome"],
+        "properties":{
+            "reason":{"type":"string"},
+            "outcome":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","acceptance_names","claims"],
+                "properties":{
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "acceptance_names":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50},
+                    "claims":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
+fn verification_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","verification"],
+        "properties":{
+            "reason":{"type":"string"},
+            "verification":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["decision","summary","evidence_refs","contradictions","risks"],
+                "properties":{
+                    "decision":{"type":"string","enum":["approved","rejected"]},
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "evidence_refs":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":100},
+                    "contradictions":{"type":"array","items":{"type":"string"},"maxItems":50},
+                    "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::worker_tool_specs;
@@ -400,6 +532,11 @@ mod tests {
             "tekton_get_pipeline_runs",
             "tekton_get_task_runs",
             "tekton_analyze_pipeline_run",
+            "get_evidence",
+            "submit_onboarding_proposal",
+            "submit_work_plan",
+            "submit_test_outcome",
+            "submit_verification",
         ] {
             assert!(names.contains(expected), "missing tool spec for {expected}");
         }

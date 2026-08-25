@@ -1,7 +1,11 @@
 #![forbid(unsafe_code)]
 
 mod models;
+mod onboarding;
+mod product;
+mod repo_mode;
 mod sqlite;
+mod subject_preparation;
 
 pub use models::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
@@ -29,6 +33,32 @@ pub use models::{
     UpdateRegistryEvidenceDraft, UpdateReleaseDraft, UpdateReleaseEvidence, UpdateWorkPlanRevision,
     UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
+pub use onboarding::{
+    ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
+    ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,
+    StoredRepositoryContractVersion, StoredRepositoryDiscovery, StoredRepositoryOnboarding,
+    StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,
+};
+pub use product::{
+    BootstrapOrganization, CreateProductAggregate, RegisterRepositoryAggregate,
+    RegisteredRepositoryAggregate, StoredOrganization, StoredProduct, StoredProductModelSnapshot,
+    StoredRepository, StoredRepositoryBinding, StoredRepositoryBindingRevision,
+    StoredRepositoryDraft, StoredService, UpdateProductAggregate,
+};
+pub use repo_mode::{
+    CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
+    CreateOperatorAnnotation, CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation,
+    CreateRepoWorkItem, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
+    StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
+    StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageChainAuthorization,
+    StoredStageExecution, StoredStageOutcome,
+};
 pub use sqlite::{SqliteStore, StoreError};
+pub use subject_preparation::{
+    CompleteSubjectEnvironmentPreparation, CreateSubjectEnvironmentPreparation,
+    CreateSubjectWorkspace, StoredSubjectEnvironmentPreparation, StoredSubjectWorkspace,
+};
 
 pub const INITIAL_MIGRATION_NAME: &str = "0001_initial";

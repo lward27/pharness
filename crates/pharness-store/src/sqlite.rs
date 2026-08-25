@@ -31,6 +31,11 @@ use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
 
+mod onboarding;
+mod product;
+mod repo_mode;
+mod subject_preparation;
+
 #[derive(Debug, Clone)]
 pub struct SqliteStore {
     pool: SqlitePool,
@@ -1836,10 +1841,12 @@ impl SqliteStore {
         &self,
         work_item_id: &str,
     ) -> Result<Option<StoredWorkPlan>, StoreError> {
-        let row = sqlx::query(work_plan_select_sql("WHERE wp.work_item_id = ?1"))
-            .bind(work_item_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(work_plan_select_sql(
+            "WHERE wp.work_item_id = ?1 ORDER BY wp.created_at DESC, wp.id DESC LIMIT 1",
+        ))
+        .bind(work_item_id)
+        .fetch_optional(&self.pool)
+        .await?;
 
         row.map(row_to_work_plan).transpose()
     }
@@ -4456,6 +4463,28 @@ impl SqliteStore {
         row.map(row_to_capability_verification).transpose()
     }
 
+    pub async fn latest_capability_verification_for_repository(
+        &self,
+        capability: &str,
+        repository: &str,
+    ) -> Result<Option<StoredCapabilityVerification>, StoreError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, capability, status, summary, principal, repository, permission,
+                   verified_at, expires_at
+            FROM capability_verifications
+            WHERE capability = ?1 AND repository = ?2
+            ORDER BY verified_at DESC, id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(capability)
+        .bind(repository)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(row_to_capability_verification).transpose()
+    }
+
     pub async fn create_environment_preparation(
         &self,
         preparation: CreateEnvironmentPreparation,
@@ -5621,6 +5650,20 @@ fn work_plan_select_sql(where_clause: &str) -> &'static str {
             WHERE wp.work_item_id = ?1
             "#
         }
+        "WHERE wp.work_item_id = ?1 ORDER BY wp.created_at DESC, wp.id DESC LIMIT 1" => {
+            r#"
+            SELECT wp.id, wp.work_item_id, wp.remediation_plan_id, wp.incident_id, wp.session_id, wp.run_id,
+                   wp.status, wp.title, wp.summary, wp.risk_level, wp.requires_approval, wp.resource_namespace,
+                   wp.resource_kind, wp.resource_name, wp.work_plan_json, wp.created_at, wp.updated_at,
+                   wp.revision, wp.status_changed_at, wp.status_changed_by, wp.status_reason,
+                   wi.created_by AS created_by, COALESCE(wi.origin, 'legacy') AS origin
+            FROM work_plans wp
+            LEFT JOIN work_items wi ON wi.id = wp.work_item_id
+            WHERE wp.work_item_id = ?1
+            ORDER BY wp.created_at DESC, wp.id DESC
+            LIMIT 1
+            "#
+        }
         _ => unreachable!("work plan select SQL only supports known static clauses"),
     }
 }
@@ -6552,6 +6595,93 @@ mod tests {
     use pharness_core::{
         AgentEvent, EventId, EventKind, RunBudget, RunBudgetConsumption, RunId, SessionId,
     };
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use std::borrow::Cow;
+
+    #[tokio::test]
+    async fn migration_0039_database_upgrades_without_breaking_legacy_reads() {
+        let database_path = std::env::temp_dir().join(format!(
+            "pharness-migration-0039-{}-{}.db",
+            std::process::id(),
+            super::now_string()
+        ));
+        let options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let all = sqlx::migrate!("./migrations");
+        let through_0039 = sqlx::migrate::Migrator {
+            migrations: Cow::Owned(
+                all.iter()
+                    .filter(|migration| migration.version <= 39)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        through_0039.run(&pool).await.unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO work_items (
+              id, status, title, intent, acceptance_criteria_json,
+              source_repo, source_ref, target_environment, production_impacting,
+              max_attempts, max_elapsed_seconds, created_at, updated_at,
+              status_changed_at, status_changed_by, status_reason
+            ) VALUES (
+              'witem_legacy_0039', 'triage', 'Legacy item', 'Preserve this item', '[]',
+              'https://github.com/example/legacy.git', 'main', 'development', 0,
+              2, 3600, '1', '1', '1', 'operator', 'fixture'
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let store = SqliteStore::connect(&database_path).await.unwrap();
+        let item = store
+            .get_work_item("witem_legacy_0039")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(item.title, "Legacy item");
+        assert!(store
+            .get_repo_work_item_metadata("witem_legacy_0039")
+            .await
+            .unwrap()
+            .is_none());
+
+        // This is the exact additive read surface an old release used before
+        // Repo Mode. It must remain valid after the new migrations so a GitOps
+        // rollback can start the prior binary against a copied database.
+        let legacy_read: (String, String, String, String, String) = sqlx::query_as(
+            "SELECT id, status, title, source_repo, source_ref FROM work_items WHERE id = ?1",
+        )
+        .bind("witem_legacy_0039")
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(legacy_read.0, "witem_legacy_0039");
+        assert_eq!(legacy_read.1, "triage");
+        assert_eq!(legacy_read.4, "main");
+        let latest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+        assert_eq!(latest, 47);
+        store.pool.close().await;
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
+        }
+    }
 
     #[tokio::test]
     async fn persists_runs_and_events() {

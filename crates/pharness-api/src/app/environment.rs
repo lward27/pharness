@@ -1,5 +1,5 @@
 use crate::dto::EnvironmentProfileResponse;
-use pharness_core::{EnvironmentProfile, ProjectContract};
+use pharness_core::{EnvironmentProfile, RepositoryContract};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
@@ -76,7 +76,7 @@ pub fn select_profile<'a>(
 pub async fn inspect_remote_project_contract(
     repository: &str,
     commit: &str,
-) -> Result<(ProjectContract, String), String> {
+) -> Result<(RepositoryContract, String), String> {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -95,7 +95,7 @@ async fn inspect_remote_project_contract_inner(
     root: &Path,
     repository: &str,
     commit: &str,
-) -> Result<(ProjectContract, String), String> {
+) -> Result<(RepositoryContract, String), String> {
     command(root, &["init", "--quiet"]).await?;
     command(root, &["remote", "add", "origin", repository]).await?;
     command(
@@ -120,7 +120,7 @@ async fn inspect_remote_project_contract_inner(
             resolved.trim()
         ));
     }
-    ProjectContract::load(root).map_err(|error| error.to_string())
+    RepositoryContract::load(root).map_err(|error| error.to_string())
 }
 
 async fn command(root: &Path, args: &[&str]) -> Result<String, String> {

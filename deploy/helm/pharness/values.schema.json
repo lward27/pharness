@@ -1,13 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["api", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget"],
+  "required": ["features", "organization", "api", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget"],
   "properties": {
+    "features": {
+      "type": "object",
+      "required": ["repoModeV1"],
+      "properties": {
+        "repoModeV1": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": { "enabled": { "type": "boolean" } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "organization": {
+      "type": "object",
+      "required": ["id", "key", "displayName"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^org_[A-Za-z0-9._-]{1,120}$" },
+        "key": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }
+      },
+      "additionalProperties": false
+    },
     "api": {
       "type": "object",
       "required": ["image"],
       "properties": {
         "image": { "$ref": "#/$defs/immutableImage" }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "required": ["sourceReader"],
+      "properties": {
+        "sourceReader": { "$ref": "#/$defs/sourceReader" }
       }
     },
     "ui": {
@@ -71,6 +101,35 @@
       "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "features": {
+            "properties": {
+              "repoModeV1": {
+                "properties": { "enabled": { "const": true } },
+                "required": ["enabled"]
+              }
+            },
+            "required": ["repoModeV1"]
+          }
+        },
+        "required": ["features"]
+      },
+      "then": {
+        "properties": {
+          "worker": {
+            "properties": {
+              "sourceReader": {
+                "properties": { "enabled": { "const": true } }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "immutableImage": {
       "type": "object",
@@ -80,6 +139,24 @@
         "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "pullPolicy": { "enum": ["IfNotPresent", "Never"] }
+      },
+      "additionalProperties": false
+    },
+    "sourceReader": {
+      "type": "object",
+      "required": ["enabled", "serviceAccount", "tokenSecretName", "allowedRepos", "activeDeadlineSeconds", "ttlSecondsAfterFinished"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "serviceAccount": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "tokenSecretName": { "type": "string", "maxLength": 253 },
+        "allowedRepos": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+\\.git$" }
+        },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "ttlSecondsAfterFinished": { "type": "integer", "minimum": 1, "maximum": 86400 }
       },
       "additionalProperties": false
     },

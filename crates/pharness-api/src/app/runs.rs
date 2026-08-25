@@ -15,7 +15,9 @@ use crate::dto::{
     FileChangeResponse, ObservationResponse, ObservationsResponse, RunDiffResponse,
     RunOperatorSummaryResponse, RunResponse, RunSummaryResponse, RunsResponse, WorkspaceResponse,
 };
-use crate::worker::{attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event};
+use crate::worker::{
+    attempt_spec_for_run, finish_run_from_attempt, ingest_agent_event, sync_repo_stage_run,
+};
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -23,7 +25,9 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use futures::stream::{self, Stream};
 use hmac::{Hmac, Mac};
-use pharness_core::{AgentEvent, EventId, EventKind, ProjectContract, RunId, RunScope, SessionId};
+use pharness_core::{
+    AgentEvent, EventId, EventKind, RepositoryContract, RunId, RunScope, SessionId,
+};
 use pharness_runhost::AttemptOutcome;
 use pharness_store::{
     ApprovalListFilter, CreateRun, CreateSession, RunListFilter, RunSummaryFilter, SqliteStore,
@@ -171,15 +175,25 @@ pub(super) async fn internal_environment_preparation(
                 Some(error.clone()),
             )
             .await?;
-        state
-            .store
-            .update_work_item_status(
-                &work_item.id,
-                "blocked",
-                Some("agent:environment-preparer".to_string()),
-                Some(error),
+        if run.execution_target_json.get("repo_mode").is_some() {
+            sync_repo_stage_run(
+                &state.store,
+                &run,
+                &AttemptOutcome::failed(format!("environment preparation failed: {error}")),
             )
-            .await?;
+            .await
+            .map_err(|sync_error| ApiError::internal(sync_error.to_string()))?;
+        } else {
+            state
+                .store
+                .update_work_item_status(
+                    &work_item.id,
+                    "blocked",
+                    Some("agent:environment-preparer".to_string()),
+                    Some(error),
+                )
+                .await?;
+        }
         return Ok(Json(preparation.into()));
     }
     if request.status != "succeeded" {
@@ -191,10 +205,11 @@ pub(super) async fn internal_environment_preparation(
         .project_contract
         .clone()
         .ok_or_else(|| ApiError::conflict("successful preparation has no project contract"))?;
-    let contract = serde_json::from_value::<pharness_core::ProjectContract>(contract_json.clone())
-        .map_err(|error| {
-            ApiError::conflict(format!("prepared project contract is invalid: {error}"))
-        })?;
+    let contract =
+        serde_json::from_value::<pharness_core::RepositoryContract>(contract_json.clone())
+            .map_err(|error| {
+                ApiError::conflict(format!("prepared project contract is invalid: {error}"))
+            })?;
     let contract_hash = request
         .project_contract_hash
         .clone()
@@ -281,7 +296,11 @@ pub(super) async fn internal_environment_preparation(
     Ok(Json(preparation.into()))
 }
 
-fn verify_environment_snapshot(token: &str, payload: &serde_json::Value, signature: &str) -> bool {
+pub(in crate::app) fn verify_environment_snapshot(
+    token: &str,
+    payload: &serde_json::Value,
+    signature: &str,
+) -> bool {
     let Some(signature) = signature.strip_prefix("hmac-sha256:") else {
         return false;
     };
@@ -520,6 +539,13 @@ pub(super) async fn internal_ingest_outcome(
         .get_run(&run_id)
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+
+    super::products::finalize_repository_onboarding_proposer_run(&state, &run).await?;
+
+    if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
+        tracing::error!(run_id=%run.id, ?error, "authorized Repo Mode stage continuation failed");
+        super::repo_mode::record_repo_chain_continuation_failure(&state, &run).await?;
+    }
 
     Ok(Json(run.into()))
 }
@@ -811,7 +837,7 @@ pub(super) async fn get_run_operator_summary(
         .execution_target_json
         .get("repository_contract")
         .cloned()
-        .and_then(|value| serde_json::from_value::<ProjectContract>(value).ok());
+        .and_then(|value| serde_json::from_value::<RepositoryContract>(value).ok());
     let pending_approvals = state
         .store
         .pending_approval_for_run(&run_id)

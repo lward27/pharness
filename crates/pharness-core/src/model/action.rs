@@ -64,6 +64,31 @@ pub enum AgentAction {
         reason: String,
         name: String,
     },
+    GetEvidence {
+        id: ActionId,
+        reason: String,
+        evidence_id: String,
+    },
+    SubmitOnboardingProposal {
+        id: ActionId,
+        reason: String,
+        proposal: serde_json::Value,
+    },
+    SubmitWorkPlan {
+        id: ActionId,
+        reason: String,
+        work_plan: serde_json::Value,
+    },
+    SubmitTestOutcome {
+        id: ActionId,
+        reason: String,
+        outcome: serde_json::Value,
+    },
+    SubmitVerification {
+        id: ActionId,
+        reason: String,
+        verification: serde_json::Value,
+    },
     RunShell {
         id: ActionId,
         reason: String,
@@ -173,6 +198,11 @@ impl AgentAction {
             | Self::EnvironmentInfo { id, .. }
             | Self::CreateDirectory { id, .. }
             | Self::RunAcceptanceCommand { id, .. }
+            | Self::GetEvidence { id, .. }
+            | Self::SubmitOnboardingProposal { id, .. }
+            | Self::SubmitWorkPlan { id, .. }
+            | Self::SubmitTestOutcome { id, .. }
+            | Self::SubmitVerification { id, .. }
             | Self::RunShell { id, .. }
             | Self::GitDiff { id, .. }
             | Self::GitStatus { id, .. }
@@ -201,6 +231,11 @@ impl AgentAction {
             Self::EnvironmentInfo { .. } => "environment_info",
             Self::CreateDirectory { .. } => "create_directory",
             Self::RunAcceptanceCommand { .. } => "run_acceptance_command",
+            Self::GetEvidence { .. } => "get_evidence",
+            Self::SubmitOnboardingProposal { .. } => "submit_onboarding_proposal",
+            Self::SubmitWorkPlan { .. } => "submit_work_plan",
+            Self::SubmitTestOutcome { .. } => "submit_test_outcome",
+            Self::SubmitVerification { .. } => "submit_verification",
             Self::RunShell { .. } => "run_shell",
             Self::GitDiff { .. } => "git_diff",
             Self::GitStatus { .. } => "git_status",
@@ -362,6 +397,64 @@ mod tests {
             }
             other => panic!("expected read_file action, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn builds_typed_repo_mode_submission_from_native_tool_call() {
+        let action = AgentAction::from_tool_call(
+            "submit_work_plan",
+            "call_plan",
+            r#"{"reason":"Submit bounded plan","work_plan":{"steps":[{"title":"Change validation"}]}}"#,
+        )
+        .unwrap();
+
+        match action {
+            AgentAction::SubmitWorkPlan { id, work_plan, .. } => {
+                assert_eq!(id.as_str(), "call_plan");
+                assert_eq!(work_plan["steps"][0]["title"], "Change validation");
+            }
+            other => panic!("expected submit_work_plan action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builds_fixed_onboarding_test_and_verifier_submissions() {
+        let onboarding = AgentAction::from_tool_call(
+            "submit_onboarding_proposal",
+            "call_onboarding",
+            r#"{"reason":"Submit reviewed discovery synthesis","proposal":{"schema_version":"pharness.dev/repository-onboarding-proposal/v1alpha1","discovery":{"id":"rdisc_1","hash":"sha256:discovery"},"blockers":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            onboarding,
+            AgentAction::SubmitOnboardingProposal { proposal, .. }
+                if proposal["discovery"]["id"] == "rdisc_1"
+        ));
+
+        let tester = AgentAction::from_tool_call(
+            "submit_test_outcome",
+            "call_test",
+            r#"{"reason":"Report declared acceptance","outcome":{"summary":"Both declared commands completed","acceptance_names":["unit","compile"],"claims":[],"risks":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            tester,
+            AgentAction::SubmitTestOutcome { outcome, .. }
+                if outcome["acceptance_names"] == serde_json::json!(["unit", "compile"])
+        ));
+
+        let verifier = AgentAction::from_tool_call(
+            "submit_verification",
+            "call_verify",
+            r#"{"reason":"Bind the decision to sealed evidence","verification":{"decision":"approved","summary":"Diff and acceptance agree","evidence_refs":["stageout_test"],"contradictions":[],"risks":[]}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            verifier,
+            AgentAction::SubmitVerification { verification, .. }
+                if verification["decision"] == "approved"
+                    && verification["evidence_refs"][0] == "stageout_test"
+        ));
     }
 
     #[test]

@@ -51,6 +51,23 @@ pub(in crate::app) async fn execute_work_item_action(
     if request.reason.trim().is_empty() {
         return Err(ApiError::bad_request("action execution reason is required"));
     }
+    if super::super::repo_mode::is_repo_work_item(&state, &work_item_id).await? {
+        let actor = identity
+            .clone()
+            .map(|Extension(OperatorIdentity(name))| name)
+            .or_else(|| clean_optional_text(request.actor.clone()))
+            .ok_or_else(|| ApiError::bad_request("action execution actor is required"))?;
+        let value = super::super::repo_mode::execute_repo_work_item_action(
+            &state,
+            &work_item_id,
+            &action_id,
+            actor,
+            request.reason,
+            request.state_hash,
+        )
+        .await?;
+        return Ok(Json(value));
+    }
     if matches!(
         action_id.as_str(),
         "approve_rollback"

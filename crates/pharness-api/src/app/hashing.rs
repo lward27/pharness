@@ -7,3 +7,12 @@ pub(in crate::app) fn material_hash(value: &serde_json::Value) -> Result<String,
     let digest = Sha256::digest(encoded);
     Ok(format!("sha256:{digest:x}"))
 }
+
+/// Stable hashing for new versioned product contracts. Existing material
+/// hashes intentionally keep their historical serialization behavior.
+pub(in crate::app) fn canonical_material_hash(
+    value: &serde_json::Value,
+) -> Result<String, ApiError> {
+    pharness_core::canonical_json_sha256(value)
+        .map_err(|error| ApiError::internal(format!("failed to encode canonical hash: {error}")))
+}

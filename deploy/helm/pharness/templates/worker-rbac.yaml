@@ -6,6 +6,19 @@ metadata:
   labels:
     app.kubernetes.io/part-of: pharness
     agentic.lucas.engineering/role: readonly-observer
+{{- if .Values.worker.sourceReader.enabled }}
+---
+# This identity has no Kubernetes RoleBinding. Its optional GitHub credential
+# is mounted only into short-lived deterministic source-reader Jobs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.worker.sourceReader.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    agentic.lucas.engineering/role: source-reader
+{{- end }}
 {{- range .Values.environmentProfiles }}
 ---
 # Runner profiles deliberately receive no Kubernetes RoleBinding. Preparation

@@ -159,6 +159,11 @@ impl SafetyPolicy {
             | AgentAction::ListDir { .. }
             | AgentAction::SearchFiles { .. }
             | AgentAction::EnvironmentInfo { .. }
+            | AgentAction::GetEvidence { .. }
+            | AgentAction::SubmitOnboardingProposal { .. }
+            | AgentAction::SubmitWorkPlan { .. }
+            | AgentAction::SubmitTestOutcome { .. }
+            | AgentAction::SubmitVerification { .. }
             | AgentAction::RunAcceptanceCommand { .. }
             | AgentAction::GitDiff { .. }
             | AgentAction::GitStatus { .. } => PolicyDecision::allow(
@@ -554,7 +559,12 @@ fn capability_kind_for_action(action: &AgentAction) -> CapabilityKind {
     match action {
         AgentAction::Respond { .. }
         | AgentAction::RequestApproval { .. }
-        | AgentAction::Finish { .. } => CapabilityKind::AgentControl,
+        | AgentAction::Finish { .. }
+        | AgentAction::GetEvidence { .. }
+        | AgentAction::SubmitOnboardingProposal { .. }
+        | AgentAction::SubmitWorkPlan { .. }
+        | AgentAction::SubmitTestOutcome { .. }
+        | AgentAction::SubmitVerification { .. } => CapabilityKind::AgentControl,
         AgentAction::ReadFile { .. }
         | AgentAction::WriteFile { .. }
         | AgentAction::PatchFile { .. }

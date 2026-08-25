@@ -21,7 +21,7 @@ use crate::workspace::collect_git_evidence;
 use axum::extract::{Path, Query, State};
 use axum::{Extension, Json};
 use pharness_core::{
-    AgentEvent, EventId, EventKind, ProjectContract, RunBudgetConsumption, RunId, RunScope,
+    AgentEvent, EventId, EventKind, RepositoryContract, RunBudgetConsumption, RunId, RunScope,
     SessionId,
 };
 use pharness_runhost::WorkspaceSourceSpec;
@@ -350,7 +350,7 @@ pub(in crate::app) async fn execute_work_item(
     let contract = work_item
         .repository_contract_json
         .clone()
-        .map(serde_json::from_value::<ProjectContract>)
+        .map(serde_json::from_value::<RepositoryContract>)
         .transpose()
         .map_err(|error| {
             ApiError::internal(format!("stored repository contract is invalid: {error}"))

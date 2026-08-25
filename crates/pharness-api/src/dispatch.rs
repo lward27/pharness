@@ -18,6 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
+const WORKSPACE_ID_LABEL: &str = "pharness.lucas.engineering/workspace-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
 const JOB_NAME_VALUE: &str = "pharness-run";
 const WORKSPACE_CLAIM_NAME_VALUE: &str = "pharness-run-workspace";
@@ -29,6 +30,10 @@ const GIT_OBSERVER_JOB_NAME_VALUE: &str = "pharness-git-observer";
 const GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE: &str = "pharness-gitops-revision-resolver";
 const CAPABILITY_PREFLIGHT_JOB_NAME_VALUE: &str = "pharness-capability-preflight";
 const ENVIRONMENT_PREPARATION_JOB_NAME_VALUE: &str = "pharness-environment-preparation";
+const REPOSITORY_DISCOVERY_JOB_NAME_VALUE: &str = "pharness-repository-discovery";
+const ONBOARDING_PATCH_JOB_NAME_VALUE: &str = "pharness-onboarding-patch";
+const ONBOARDING_VALIDATION_JOB_NAME_VALUE: &str = "pharness-onboarding-validation";
+const REPOSITORY_READINESS_JOB_NAME_VALUE: &str = "pharness-repository-readiness";
 // K3s's selector-backed NetworkPolicy rules converge asynchronously after a
 // Pod receives its IP. Short-lived Jobs otherwise race the policy controller
 // and fail their first API or proxy connection before the rule includes them.
@@ -38,6 +43,7 @@ const NETWORK_POLICY_STABILIZATION_SECONDS: u64 = 15;
 const PIPELINE_INTENT_LABEL: &str = "pharness.lucas.engineering/pipeline-intent";
 const DEPLOYMENT_INTENT_LABEL: &str = "pharness.lucas.engineering/deployment-intent";
 const CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/change-set";
+const SOURCE_DELIVERY_INTENT_LABEL: &str = "pharness.lucas.engineering/source-delivery-intent";
 const GITOPS_CHANGE_SET_LABEL: &str = "pharness.lucas.engineering/gitops-change-set";
 const PIPELINE_INTENT_ID_ANNOTATION: &str = "pharness.lucas.engineering/pipeline-intent-id";
 const EXECUTION_ID_ANNOTATION: &str = "pharness.lucas.engineering/execution-id";
@@ -86,6 +92,18 @@ pub struct GitDeliveryObservationRequest {
 #[derive(Debug, Clone)]
 pub struct GitDeliveryObservationReceipt {
     pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceDeliveryExecutionRequest {
+    pub source_delivery_intent_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceDeliveryObservationRequest {
+    pub source_delivery_intent_id: String,
+    pub execution_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +163,49 @@ pub struct CapabilityVerificationOutcome {
 
 #[derive(Debug, Clone)]
 pub struct EnvironmentPreparationReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryDiscoveryRequest {
+    pub discovery_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryDiscoveryReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingPatchRequest {
+    pub onboarding_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingPatchReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingContractValidationRequest {
+    pub onboarding_id: String,
+    pub execution_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnboardingContractValidationReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryReadinessExecutionRequest {
+    pub preparation_id: String,
+    pub profile: EnvironmentProfile,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryReadinessExecutionReceipt {
     pub job_name: String,
 }
 
@@ -247,6 +308,13 @@ impl RunDispatcher {
                     "allowed_repos": dispatcher.config.gitops_observer_allowed_repos,
                     "github_api_url": dispatcher.config.gitops_observer_github_api_url,
                 },
+                "source_reader": {
+                    "enabled": dispatcher.config.source_reader_enabled,
+                    "available": dispatcher.source_reader_available(),
+                    "service_account": dispatcher.config.source_reader_service_account,
+                    "allowed_repos": dispatcher.config.source_reader_allowed_repos,
+                    "private_credential_configured": dispatcher.config.source_reader_token_secret_name.is_some(),
+                },
                 "argo_executor": {
                     "enabled": dispatcher.config.argo_executor_enabled,
                     "available": dispatcher.argo_executor_available(),
@@ -318,6 +386,94 @@ impl RunDispatcher {
             }
             Self::Local(_) => {
                 anyhow::bail!("immutable environment profiles are unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub fn source_reader_available(&self) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher) if dispatcher.source_reader_available())
+    }
+
+    pub fn source_reader_allows_repository(&self, repository: &str) -> bool {
+        matches!(self, Self::Kubernetes(dispatcher)
+            if dispatcher.source_reader_available()
+                && dispatcher.config.source_reader_allowed_repos.iter()
+                    .any(|allowed| allowed == repository))
+    }
+
+    pub fn source_reader_allowed_repos(&self) -> Vec<String> {
+        match self {
+            Self::Kubernetes(dispatcher) if dispatcher.source_reader_available() => {
+                dispatcher.config.source_reader_allowed_repos.clone()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    pub async fn dispatch_repository_discovery(
+        &self,
+        request: RepositoryDiscoveryRequest,
+    ) -> anyhow::Result<RepositoryDiscoveryReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_repository_discovery_job(&request).await
+            }
+            Self::Disabled => {
+                anyhow::bail!("repository discovery requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("isolated repository discovery is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_onboarding_patch(
+        &self,
+        request: OnboardingPatchRequest,
+    ) -> anyhow::Result<OnboardingPatchReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.create_onboarding_patch_job(&request).await,
+            Self::Disabled => {
+                anyhow::bail!("onboarding patch requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("onboarding patch is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_onboarding_contract_validation(
+        &self,
+        request: OnboardingContractValidationRequest,
+    ) -> anyhow::Result<OnboardingContractValidationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .create_onboarding_contract_validation_job(&request)
+                    .await
+            }
+            Self::Disabled => {
+                anyhow::bail!("onboarding contract validation requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("onboarding contract validation is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_repository_readiness(
+        &self,
+        request: RepositoryReadinessExecutionRequest,
+    ) -> anyhow::Result<RepositoryReadinessExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_repository_readiness_job(&request).await
+            }
+            Self::Disabled => {
+                anyhow::bail!("repository readiness requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("repository readiness is unavailable in local worker mode")
             }
         }
     }
@@ -414,6 +570,19 @@ impl RunDispatcher {
         }
     }
 
+    pub async fn dispatch_source_delivery(
+        &self,
+        request: SourceDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_source_delivery_writer_job(&request).await
+            }
+            Self::Disabled => anyhow::bail!("source delivery requires kubernetes_job worker mode"),
+            Self::Local(_) => anyhow::bail!("source delivery is unavailable in local worker mode"),
+        }
+    }
+
     /// Dispatch a separate GitOps writer Job. It is intentionally distinct
     /// from the application source writer and can only receive its own token.
     pub async fn dispatch_gitops_delivery(
@@ -474,6 +643,25 @@ impl RunDispatcher {
             Self::Kubernetes(dispatcher) => dispatcher.create_git_observer_job(&request).await,
             Self::Disabled => anyhow::bail!("Git observation requires kubernetes_job worker mode"),
             Self::Local(_) => anyhow::bail!("Git observation is unavailable in local worker mode"),
+        }
+    }
+
+    pub async fn dispatch_source_delivery_observation(
+        &self,
+        request: SourceDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .create_source_delivery_observer_job(&request)
+                    .await
+            }
+            Self::Disabled => {
+                anyhow::bail!("source delivery observation requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("source delivery observation is unavailable in local worker mode")
+            }
         }
     }
 
@@ -590,6 +778,10 @@ impl KubernetesJobDispatcher {
         self.config.gitops_observer_enabled
             && self.config.gitops_observer_token_secret_name.is_some()
             && !self.config.gitops_observer_allowed_repos.is_empty()
+    }
+
+    fn source_reader_available(&self) -> bool {
+        self.config.source_reader_enabled && !self.config.source_reader_allowed_repos.is_empty()
     }
 
     async fn verify_capability(
@@ -811,7 +1003,7 @@ impl KubernetesJobDispatcher {
         let mut env = Vec::new();
         let proxy_phase = match capability {
             "model_provider" => Some("coding"),
-            "source_workspace" => Some("preparation"),
+            "source_workspace" | "source_reader" => Some("preparation"),
             _ => None,
         };
         if let Some(phase) = proxy_phase {
@@ -836,6 +1028,34 @@ impl KubernetesJobDispatcher {
                 let repo = requested_repository.ok_or_else(|| anyhow::anyhow!("source workspace repository is unavailable"))?;
                 env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
                 (self.config.service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.service_account), "repository_read".to_string(), Some(repo.to_string()), "git ls-remote --exit-code \"$REPOSITORY\" HEAD >/dev/null".to_string())
+            }
+            "source_reader" => {
+                if !self.source_reader_available() {
+                    anyhow::bail!("source reader is not configured");
+                }
+                let repo = requested_repository.ok_or_else(|| anyhow::anyhow!("source reader repository is unavailable"))?;
+                if !self.config.source_reader_allowed_repos.iter().any(|allowed| allowed == repo) {
+                    anyhow::bail!("source reader repository is not allowlisted");
+                }
+                if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+                    env.push(serde_json::json!({"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+                }
+                env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
+                let script = r#"if [ -n "${GITHUB_TOKEN:-}" ]; then
+cat > /tmp/askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' x-access-token ;;
+  *) printf '%s\n' "$GITHUB_TOKEN" ;;
+esac
+EOF
+chmod 700 /tmp/askpass
+GIT_ASKPASS_VALUE=/tmp/askpass
+else
+GIT_ASKPASS_VALUE=/bin/false
+fi
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$GIT_ASKPASS_VALUE" GIT_CONFIG_NOSYSTEM=1 git ls-remote --exit-code "$REPOSITORY" HEAD >/dev/null"#.to_string();
+                (self.config.source_reader_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.source_reader_service_account), "repository_read".to_string(), Some(repo.to_string()), script)
             }
             "source_writer" | "source_observer" | "gitops_writer" | "gitops_observer" => {
                 let (enabled, service_account, secret, repos, required_permission) = match capability {
@@ -1011,8 +1231,68 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         Ok(EnvironmentPreparationReceipt { job_name })
     }
 
+    async fn create_repository_discovery_job(
+        &self,
+        request: &RepositoryDiscoveryRequest,
+    ) -> anyhow::Result<RepositoryDiscoveryReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader capability is unavailable");
+        }
+        let manifest = self.repository_discovery_job_manifest(request);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let job_name = repository_discovery_job_name(&request.discovery_id);
+        tracing::info!(discovery_id = %request.discovery_id, job = %job_name, "created isolated repository discovery job");
+        Ok(RepositoryDiscoveryReceipt { job_name })
+    }
+
+    async fn create_onboarding_patch_job(
+        &self,
+        request: &OnboardingPatchRequest,
+    ) -> anyhow::Result<OnboardingPatchReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader is not configured");
+        }
+        let manifest = self.onboarding_patch_job_manifest(request);
+        let job_name = onboarding_patch_job_name(&request.execution_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(onboarding_id=%request.onboarding_id, execution_id=%request.execution_id, job=%job_name, "created onboarding patch materializer job");
+        Ok(OnboardingPatchReceipt { job_name })
+    }
+
+    async fn create_onboarding_contract_validation_job(
+        &self,
+        request: &OnboardingContractValidationRequest,
+    ) -> anyhow::Result<OnboardingContractValidationReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader is not configured");
+        }
+        let manifest = self.onboarding_contract_validation_job_manifest(request);
+        let job_name = onboarding_contract_validation_job_name(&request.execution_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(onboarding_id=%request.onboarding_id, execution_id=%request.execution_id, job=%job_name, "created merged onboarding contract validation job");
+        Ok(OnboardingContractValidationReceipt { job_name })
+    }
+
+    async fn create_repository_readiness_job(
+        &self,
+        request: &RepositoryReadinessExecutionRequest,
+    ) -> anyhow::Result<RepositoryReadinessExecutionReceipt> {
+        if !self.source_reader_available() {
+            anyhow::bail!("source reader is not configured");
+        }
+        request
+            .profile
+            .validate()
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let manifest = self.repository_readiness_job_manifest(request);
+        let job_name = repository_readiness_job_name(&request.preparation_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(preparation_id=%request.preparation_id, job=%job_name, profile=%request.profile.id, "created repository coding-readiness job");
+        Ok(RepositoryReadinessExecutionReceipt { job_name })
+    }
+
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
-        let name = workspace_claim_name(run.id.as_str());
+        let name = workspace_claim_name_for_run(run);
         let output = tokio::process::Command::new(&self.kubectl_bin)
             .args([
                 "get",
@@ -1081,11 +1361,12 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     }
 
     fn workspace_claim_manifest(&self, run: &StoredRun) -> serde_json::Value {
+        let claim_name = workspace_claim_name_for_run(run);
         let mut manifest = serde_json::json!({
             "apiVersion": "v1",
             "kind": "PersistentVolumeClaim",
             "metadata": {
-                "name": workspace_claim_name(run.id.as_str()),
+                "name": claim_name,
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: WORKSPACE_CLAIM_NAME_VALUE,
@@ -1099,6 +1380,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 },
             },
         });
+        if let Some(workspace_id) = shared_repo_workspace_id(run) {
+            if let Some(labels) = manifest
+                .pointer_mut("/metadata/labels")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                labels.remove(RUN_ID_LABEL);
+                labels.insert(
+                    WORKSPACE_ID_LABEL.into(),
+                    serde_json::Value::String(job_label_value(workspace_id)),
+                );
+            }
+        }
         if let Some(storage_class) = self.config.workspace_storage_class.as_deref() {
             manifest["spec"]["storageClassName"] = serde_json::json!(storage_class);
         }
@@ -1201,6 +1494,34 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         Ok(GitDeliveryExecutionReceipt { job_name })
     }
 
+    async fn create_source_delivery_writer_job(
+        &self,
+        request: &SourceDeliveryExecutionRequest,
+    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
+        if !self.git_writer_available() {
+            anyhow::bail!("Git writer executor is not configured");
+        }
+        let legacy = GitDeliveryExecutionRequest {
+            change_set_id: request.source_delivery_intent_id.clone(),
+            execution_id: request.execution_id.clone(),
+        };
+        let job_name = git_writer_job_name(&request.execution_id);
+        let mut manifest = self.git_writer_job_manifest(&legacy, &job_name);
+        bind_source_delivery_manifest(
+            &mut manifest,
+            &request.source_delivery_intent_id,
+            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
+        )?;
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            source_delivery_intent_id = %request.source_delivery_intent_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created source delivery writer job"
+        );
+        Ok(GitDeliveryExecutionReceipt { job_name })
+    }
+
     async fn create_argo_executor_job(
         &self,
         request: &ArgoSyncExecutionRequest,
@@ -1235,6 +1556,34 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             execution_id = %request.execution_id,
             job = %job_name,
             "created Git observer job"
+        );
+        Ok(GitDeliveryObservationReceipt { job_name })
+    }
+
+    async fn create_source_delivery_observer_job(
+        &self,
+        request: &SourceDeliveryObservationRequest,
+    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
+        if !self.git_observer_available() {
+            anyhow::bail!("Git observer executor is not configured");
+        }
+        let legacy = GitDeliveryObservationRequest {
+            change_set_id: request.source_delivery_intent_id.clone(),
+            execution_id: request.execution_id.clone(),
+        };
+        let job_name = git_observer_job_name(&request.execution_id);
+        let mut manifest = self.git_observer_job_manifest(&legacy, &job_name);
+        bind_source_delivery_manifest(
+            &mut manifest,
+            &request.source_delivery_intent_id,
+            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
+        )?;
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(
+            source_delivery_intent_id = %request.source_delivery_intent_id,
+            execution_id = %request.execution_id,
+            job = %job_name,
+            "created source delivery observer job"
         );
         Ok(GitDeliveryObservationReceipt { job_name })
     }
@@ -1789,15 +2138,24 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         approval: Option<&StoredApproval>,
     ) -> serde_json::Value {
         let job_name = job_name(run.id.as_str(), approval);
+        let agent_profile_id = run
+            .execution_target_json
+            .pointer("/agent_profile/id")
+            .and_then(serde_json::Value::as_str);
+        let onboarding_proposer = agent_profile_id == Some("repository-onboarding-proposer");
         let runner_profile = run.execution_target_json.get("runner_profile");
         let runner_image = runner_profile
             .and_then(|profile| profile.get("image"))
             .and_then(serde_json::Value::as_str)
             .unwrap_or(&self.config.image);
-        let service_account = runner_profile
-            .and_then(|profile| profile.get("service_account"))
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(&self.config.service_account);
+        let service_account = if onboarding_proposer {
+            self.config.source_reader_service_account.as_str()
+        } else {
+            runner_profile
+                .and_then(|profile| profile.get("service_account"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&self.config.service_account)
+        };
         let cpu_limit = runner_profile
             .and_then(|profile| profile.pointer("/limits/cpu"))
             .and_then(serde_json::Value::as_str)
@@ -1938,7 +2296,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             {
                                 "name": "workspace",
                                 "persistentVolumeClaim": {
-                                    "claimName": workspace_claim_name(run.id.as_str()),
+                                    "claimName": workspace_claim_name_for_run(run),
                                 },
                             },
                             { "name": "tmp", "emptyDir": {} },
@@ -1947,6 +2305,59 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 },
             },
         });
+        if onboarding_proposer {
+            bind_onboarding_proposer_workspace(
+                &mut manifest,
+                run,
+                self.config.source_reader_token_secret_name.as_deref(),
+                &self.config.namespace,
+                runner_image,
+                &self.config.workspace_dir,
+            );
+        }
+        match run
+            .execution_target_json
+            .pointer("/repo_mode/workspace_access")
+            .and_then(serde_json::Value::as_str)
+        {
+            Some("ephemeral_copy") => {
+                manifest["spec"]["template"]["spec"]["initContainers"] = serde_json::json!([
+                    network_policy_stabilization_container(runner_image),
+                    {
+                        "name":"copy-authorized-workspace",
+                        "image":runner_image,
+                        "imagePullPolicy":"IfNotPresent",
+                        "command":["/bin/sh","-ec"],
+                        "args":["cp -a /source-workspace/. /workspace/"],
+                        "volumeMounts":[
+                            {"name":"source-workspace","mountPath":"/source-workspace","readOnly":true},
+                            {"name":"workspace","mountPath":self.config.workspace_dir},
+                        ],
+                        "securityContext":{
+                            "allowPrivilegeEscalation":false,
+                            "readOnlyRootFilesystem":true,
+                            "capabilities":{"drop":["ALL"]},
+                        },
+                        "resources":{
+                            "requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"256Mi"},
+                            "limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":ephemeral_limit},
+                        },
+                    }
+                ]);
+                manifest["spec"]["template"]["spec"]["volumes"] = serde_json::json!([
+                    {"name":"workspace","emptyDir":{"sizeLimit":self.config.workspace_size_limit}},
+                    {"name":"source-workspace","persistentVolumeClaim":{"claimName":workspace_claim_name_for_run(run),"readOnly":true}},
+                    {"name":"tmp","emptyDir":{}},
+                ]);
+            }
+            Some("read_only") => {
+                manifest["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0]
+                    ["readOnly"] = serde_json::json!(true);
+                manifest["spec"]["template"]["spec"]["volumes"][0]["persistentVolumeClaim"]
+                    ["readOnly"] = serde_json::json!(true);
+            }
+            _ => {}
+        }
         if let Some(hostname) = self.config.workspace_node_hostname.as_deref() {
             manifest["spec"]["template"]["spec"]["affinity"] = serde_json::json!({
                 "nodeAffinity": {
@@ -1971,6 +2382,31 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         profile: &EnvironmentProfile,
     ) -> serde_json::Value {
         let job_name = environment_preparation_job_name(run.id.as_str());
+        let mut environment = vec![
+            serde_json::json!({ "name": "PHARNESS_EXECUTION_KIND", "value": "environment_prepare" }),
+            serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
+            serde_json::json!({ "name": "PHARNESS_RUN_ID", "value": run.id.as_str() }),
+            serde_json::json!({ "name": "PHARNESS_ENVIRONMENT_PROFILE_ID", "value": profile.id }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision }),
+            serde_json::json!({ "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform }),
+            serde_json::json!({ "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) }),
+            serde_json::json!({ "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
+            serde_json::json!({ "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" }),
+            serde_json::json!({ "name": "HOME", "value": self.config.workspace_dir }),
+            serde_json::json!({ "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+            }}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            environment.push(
+                serde_json::json!({ "name": "PHARNESS_SOURCE_READER_TOKEN", "valueFrom": {
+                    "secretKeyRef": { "name": secret, "key": "token" }
+                }}),
+            );
+        }
         serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -2009,24 +2445,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             "image": profile.image,
                             "imagePullPolicy": "IfNotPresent",
                             "command": ["pharness-worker"],
-                            "env": [
-                                { "name": "PHARNESS_EXECUTION_KIND", "value": "environment_prepare" },
-                                { "name": "PHARNESS_API_URL", "value": self.config.api_url },
-                                { "name": "PHARNESS_RUN_ID", "value": run.id.as_str() },
-                                { "name": "PHARNESS_ENVIRONMENT_PROFILE_ID", "value": profile.id },
-                                { "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image },
-                                { "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision },
-                                { "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform },
-                                { "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) },
-                                { "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
-                                { "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) },
-                                { "name": "NO_PROXY", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
-                                { "name": "no_proxy", "value": ".svc,.cluster.local,127.0.0.1,localhost" },
-                                { "name": "HOME", "value": self.config.workspace_dir },
-                                { "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
-                                    "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
-                                }},
-                            ],
+                            "env": environment,
                             "volumeMounts": [
                                 { "name": "workspace", "mountPath": self.config.workspace_dir },
                                 { "name": "tmp", "mountPath": "/tmp" },
@@ -2042,12 +2461,209 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                             },
                         }],
                         "volumes": [
-                            { "name": "workspace", "persistentVolumeClaim": { "claimName": workspace_claim_name(run.id.as_str()) } },
+                            { "name": "workspace", "persistentVolumeClaim": { "claimName": workspace_claim_name_for_run(run) } },
                             { "name": "tmp", "emptyDir": {} },
                         ],
                     },
                 },
             },
+        })
+    }
+
+    fn repository_discovery_job_manifest(
+        &self,
+        request: &RepositoryDiscoveryRequest,
+    ) -> serde_json::Value {
+        let mut env = vec![
+            serde_json::json!({ "name": "PHARNESS_EXECUTION_KIND", "value": "repository_discovery" }),
+            serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
+            serde_json::json!({ "name": "PHARNESS_REPOSITORY_DISCOVERY_ID", "value": request.discovery_id }),
+            serde_json::json!({ "name": "PHARNESS_WORKER_TOKEN", "valueFrom": {
+                "secretKeyRef": { "name": self.config.worker_token_secret_name, "key": "token" }
+            }}),
+            serde_json::json!({ "name": "HOME", "value": "/work" }),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(
+                serde_json::json!({ "name": "PHARNESS_SOURCE_READER_TOKEN", "valueFrom": {
+                    "secretKeyRef": { "name": secret, "key": "token" }
+                }}),
+            );
+        }
+        serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": repository_discovery_job_name(&request.discovery_id),
+                "namespace": self.config.namespace,
+                "labels": {
+                    JOB_NAME_LABEL: REPOSITORY_DISCOVERY_JOB_NAME_VALUE,
+                    "pharness.lucas.engineering/discovery-id": job_label_value(&request.discovery_id),
+                },
+            },
+            "spec": {
+                "backoffLimit": 0,
+                "activeDeadlineSeconds": self.config.source_reader_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished": self.config.source_reader_ttl_seconds_after_finished,
+                "template": {
+                    "metadata": { "labels": {
+                        "app": "pharness-source-reader",
+                        "agentic.lucas.engineering/phase": "discovery",
+                        JOB_NAME_LABEL: REPOSITORY_DISCOVERY_JOB_NAME_VALUE,
+                    }},
+                    "spec": {
+                        "serviceAccountName": self.config.source_reader_service_account,
+                        "restartPolicy": "Never",
+                        "automountServiceAccountToken": false,
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "runAsUser": 65532,
+                            "runAsGroup": 65532,
+                            "fsGroup": 65532,
+                            "seccompProfile": { "type": "RuntimeDefault" },
+                        },
+                        "initContainers": [network_policy_stabilization_container(&self.config.image)],
+                        "containers": [{
+                            "name": "discover",
+                            "image": self.config.image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": ["pharness-worker"],
+                            "env": env,
+                            "volumeMounts": [
+                                { "name": "work", "mountPath": "/work" },
+                                { "name": "tmp", "mountPath": "/tmp" },
+                            ],
+                            "securityContext": {
+                                "allowPrivilegeEscalation": false,
+                                "readOnlyRootFilesystem": true,
+                                "capabilities": { "drop": ["ALL"] },
+                            },
+                            "resources": {
+                                "requests": { "cpu": "100m", "memory": "256Mi", "ephemeral-storage": "512Mi" },
+                                "limits": { "cpu": "1", "memory": "1Gi", "ephemeral-storage": "2Gi" },
+                            },
+                        }],
+                        "volumes": [
+                            { "name": "work", "emptyDir": { "sizeLimit": "2Gi" } },
+                            { "name": "tmp", "emptyDir": { "sizeLimit": "128Mi" } },
+                        ],
+                    },
+                },
+            },
+        })
+    }
+
+    fn onboarding_patch_job_manifest(&self, request: &OnboardingPatchRequest) -> serde_json::Value {
+        let mut env = vec![
+            serde_json::json!({"name":"PHARNESS_EXECUTION_KIND","value":"onboarding_patch"}),
+            serde_json::json!({"name":"PHARNESS_API_URL","value":self.config.api_url}),
+            serde_json::json!({"name":"PHARNESS_REPOSITORY_ONBOARDING_ID","value":request.onboarding_id}),
+            serde_json::json!({"name":"PHARNESS_ONBOARDING_PATCH_EXECUTION_ID","value":request.execution_id}),
+            serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HOME","value":"/work"}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+        }
+        serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":onboarding_patch_job_name(&request.execution_id),"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:ONBOARDING_PATCH_JOB_NAME_VALUE,"pharness.lucas.engineering/onboarding-id":job_label_value(&request.onboarding_id)}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.source_reader_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.source_reader_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{"app":"pharness-source-reader","agentic.lucas.engineering/phase":"discovery",JOB_NAME_LABEL:ONBOARDING_PATCH_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":self.config.source_reader_service_account,"restartPolicy":"Never","automountServiceAccountToken":false,
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "initContainers":[network_policy_stabilization_container(&self.config.image)],
+                        "containers":[{"name":"materialize","image":self.config.image,"imagePullPolicy":"IfNotPresent","command":["pharness-worker"],"env":env,
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"100m","memory":"256Mi","ephemeral-storage":"512Mi"},"limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}}],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"2Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+                    }
+                }
+            }
+        })
+    }
+
+    fn onboarding_contract_validation_job_manifest(
+        &self,
+        request: &OnboardingContractValidationRequest,
+    ) -> serde_json::Value {
+        let mut env = vec![
+            serde_json::json!({"name":"PHARNESS_EXECUTION_KIND","value":"onboarding_contract_validate"}),
+            serde_json::json!({"name":"PHARNESS_API_URL","value":self.config.api_url}),
+            serde_json::json!({"name":"PHARNESS_REPOSITORY_ONBOARDING_ID","value":request.onboarding_id}),
+            serde_json::json!({"name":"PHARNESS_ONBOARDING_VALIDATION_EXECUTION_ID","value":request.execution_id}),
+            serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HOME","value":"/work"}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+        }
+        serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":onboarding_contract_validation_job_name(&request.execution_id),"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:ONBOARDING_VALIDATION_JOB_NAME_VALUE,"pharness.lucas.engineering/onboarding-id":job_label_value(&request.onboarding_id)}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.source_reader_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.source_reader_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{"app":"pharness-source-reader","agentic.lucas.engineering/phase":"validation",JOB_NAME_LABEL:ONBOARDING_VALIDATION_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":self.config.source_reader_service_account,"restartPolicy":"Never","automountServiceAccountToken":false,
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "initContainers":[network_policy_stabilization_container(&self.config.image)],
+                        "containers":[{"name":"validate","image":self.config.image,"imagePullPolicy":"IfNotPresent","command":["pharness-worker"],"env":env,
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"100m","memory":"256Mi","ephemeral-storage":"512Mi"},"limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}}],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"2Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+                    }
+                }
+            }
+        })
+    }
+
+    fn repository_readiness_job_manifest(
+        &self,
+        request: &RepositoryReadinessExecutionRequest,
+    ) -> serde_json::Value {
+        let profile = &request.profile;
+        let mut env = vec![
+            serde_json::json!({"name":"PHARNESS_EXECUTION_KIND","value":"repository_readiness"}),
+            serde_json::json!({"name":"PHARNESS_API_URL","value":self.config.api_url}),
+            serde_json::json!({"name":"PHARNESS_REPOSITORY_PREPARATION_ID","value":request.preparation_id}),
+            serde_json::json!({"name":"PHARNESS_ENVIRONMENT_PROFILE_ID","value":profile.id}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_IMAGE","value":profile.image}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_REVISION","value":profile.revision}),
+            serde_json::json!({"name":"PHARNESS_RUNNER_PLATFORM","value":profile.platform}),
+            serde_json::json!({"name":"PHARNESS_REQUIRED_EXECUTABLES_JSON","value":serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".into())}),
+            serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
+            serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
+            serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+            serde_json::json!({"name":"HOME","value":"/work"}),
+        ];
+        if let Some(secret) = self.config.source_reader_token_secret_name.as_deref() {
+            env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+        }
+        serde_json::json!({
+            "apiVersion":"batch/v1","kind":"Job",
+            "metadata":{"name":repository_readiness_job_name(&request.preparation_id),"namespace":self.config.namespace,
+                "labels":{JOB_NAME_LABEL:REPOSITORY_READINESS_JOB_NAME_VALUE,"pharness.lucas.engineering/preparation-id":job_label_value(&request.preparation_id)}},
+            "spec":{"backoffLimit":0,"activeDeadlineSeconds":1800 + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.source_reader_ttl_seconds_after_finished,
+                "template":{"metadata":{"labels":{"app":"pharness-runner","agentic.lucas.engineering/phase":"preparation",JOB_NAME_LABEL:REPOSITORY_READINESS_JOB_NAME_VALUE}},
+                    "spec":{"serviceAccountName":profile.service_account,"restartPolicy":"Never","automountServiceAccountToken":false,
+                        "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
+                        "initContainers":[network_policy_stabilization_container(&profile.image)],
+                        "containers":[{"name":"prepare","image":profile.image,"imagePullPolicy":"IfNotPresent","command":["pharness-worker"],"env":env,
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{"requests":{"cpu":"100m","memory":"256Mi","ephemeral-storage":"512Mi"},"limits":{"cpu":profile.limits.cpu,"memory":profile.limits.memory,"ephemeral-storage":profile.limits.ephemeral_storage}}}],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"2Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+                    }
+                }
+            }
         })
     }
 
@@ -2465,6 +3081,111 @@ fn job_label_value(run_id: &str) -> String {
     run_id.replace('_', "-")
 }
 
+fn bind_source_delivery_manifest(
+    manifest: &mut serde_json::Value,
+    intent_id: &str,
+    env_name: &str,
+) -> anyhow::Result<()> {
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        let labels = manifest
+            .pointer_mut(pointer)
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| anyhow::anyhow!("source delivery Job has no labels at {pointer}"))?;
+        labels.remove(CHANGE_SET_LABEL);
+        labels.insert(
+            SOURCE_DELIVERY_INTENT_LABEL.into(),
+            serde_json::Value::String(job_label_value(intent_id)),
+        );
+    }
+    let env = manifest
+        .pointer_mut("/spec/template/spec/containers/0/env")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| anyhow::anyhow!("source delivery Job has no executor environment"))?;
+    env.retain(|entry| {
+        entry.get("name").and_then(serde_json::Value::as_str) != Some("PHARNESS_CHANGE_SET_ID")
+    });
+    env.push(serde_json::json!({"name":env_name,"value":intent_id}));
+    Ok(())
+}
+
+fn bind_onboarding_proposer_workspace(
+    manifest: &mut serde_json::Value,
+    run: &StoredRun,
+    source_reader_secret: Option<&str>,
+    namespace: &str,
+    image: &str,
+    workspace_dir: &str,
+) {
+    let source = run
+        .execution_target_json
+        .get("workspace_source")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        if let Some(labels) = manifest
+            .pointer_mut(pointer)
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            labels.insert(
+                "agentic.lucas.engineering/onboarding-proposer".into(),
+                serde_json::Value::String("true".into()),
+            );
+        }
+    }
+    manifest["spec"]["template"]["spec"]["automountServiceAccountToken"] = serde_json::json!(false);
+    let mut env = vec![
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_REPOSITORY","value":source.get("source_repo").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_SOURCE_COMMIT","value":source.get("source_commit").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_BRANCH","value":source.get("branch").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
+        serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
+        serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+        serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+        serde_json::json!({"name":"HOME","value":"/tmp"}),
+    ];
+    if let Some(secret) = source_reader_secret {
+        env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+    }
+    manifest["spec"]["template"]["spec"]["initContainers"] = serde_json::json!([
+        network_policy_stabilization_container(image),
+        {
+            "name":"prepare-onboarding-source",
+            "image":image,
+            "imagePullPolicy":"IfNotPresent",
+            "command":["/bin/sh","-ec"],
+            "args":[r#"
+test -n "$PHARNESS_ONBOARDING_REPOSITORY"
+test -n "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+test -n "$PHARNESS_ONBOARDING_BRANCH"
+cat > /tmp/askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' x-access-token ;;
+  *) printf '%s\n' "${PHARNESS_SOURCE_READER_TOKEN:-}" ;;
+esac
+EOF
+chmod 700 /tmp/askpass
+git init -q "$PHARNESS_WORKSPACE_DIR"
+git -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_ONBOARDING_REPOSITORY"
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+git -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_ONBOARDING_BRANCH" FETCH_HEAD
+test "$(git -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+"#],
+            "env":env,
+            "volumeMounts":[
+                {"name":"workspace","mountPath":workspace_dir},
+                {"name":"tmp","mountPath":"/tmp"},
+            ],
+            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+            "resources":{"requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"1Gi"}},
+        }
+    ]);
+    manifest["spec"]["template"]["spec"]["initContainers"][1]["env"]
+        .as_array_mut()
+        .expect("onboarding proposer env is an array")
+        .push(serde_json::json!({"name":"PHARNESS_WORKSPACE_DIR","value":workspace_dir}));
+}
+
 fn run_label_to_run_id(label: &str) -> String {
     // run ids are `run_<digits>`; the label form is `run-<digits>`.
     match label.strip_prefix("run-") {
@@ -2491,8 +3212,56 @@ fn workspace_claim_name(run_id: &str) -> String {
     format!("pharness-{}-ws", job_label_value(run_id))
 }
 
+fn shared_repo_workspace_id(run: &StoredRun) -> Option<&str> {
+    run.execution_target_json
+        .pointer("/repo_mode/chain_authorization_id")?;
+    run.execution_target_json
+        .pointer("/workspace_source/workspace_id")
+        .and_then(serde_json::Value::as_str)
+}
+
+fn workspace_claim_name_for_run(run: &StoredRun) -> String {
+    shared_repo_workspace_id(run)
+        .map(workspace_claim_name)
+        .unwrap_or_else(|| workspace_claim_name(run.id.as_str()))
+}
+
 fn environment_preparation_job_name(run_id: &str) -> String {
     format!("pharness-{}-prepare", job_label_value(run_id))
+}
+
+fn repository_discovery_job_name(discovery_id: &str) -> String {
+    let digest = Sha256::digest(discovery_id.as_bytes());
+    let suffix = digest
+        .iter()
+        .take(9)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("pharness-discovery-{suffix}")
+}
+
+fn onboarding_patch_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    format!(
+        "pharness-onboarding-patch-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
+}
+
+fn onboarding_contract_validation_job_name(execution_id: &str) -> String {
+    let digest = Sha256::digest(execution_id.as_bytes());
+    format!(
+        "pharness-onboarding-validate-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
+}
+
+fn repository_readiness_job_name(preparation_id: &str) -> String {
+    let digest = Sha256::digest(preparation_id.as_bytes());
+    format!(
+        "pharness-repository-ready-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
 }
 
 fn tekton_executor_job_name(execution_id: &str) -> String {
@@ -2597,10 +3366,12 @@ mod tests {
         active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
         executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
         gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
-        run_label_to_run_id, workspace_claim_name, ArgoSyncExecutionRequest,
-        ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
-        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
-        NETWORK_POLICY_STABILIZATION_SECONDS,
+        run_label_to_run_id, workspace_claim_name, workspace_claim_name_for_run,
+        ArgoSyncExecutionRequest, ExecutorJobTerminalState, GitDeliveryExecutionRequest,
+        GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
+        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
+        OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
+        RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -2729,8 +3500,121 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preparation_manifest_uses_only_the_preparation_proxy() {
+    async fn repo_stage_manifests_reuse_workspace_and_isolate_test_writes() {
         let dispatcher = test_dispatcher(None).await;
+        let mut tester = test_run();
+        tester.execution_target_json = json!({
+            "repo_mode": {
+                "chain_authorization_id": "chain_test",
+                "workspace_access": "ephemeral_copy"
+            },
+            "workspace_source": {
+                "workspace_id": "ws_shared",
+                "source_repo": "https://github.com/example/repo.git",
+                "source_ref": "main",
+                "source_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "branch": "pharness/test",
+                "resolved_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let shared_claim = workspace_claim_name("ws_shared");
+        assert_eq!(workspace_claim_name_for_run(&tester), shared_claim);
+        let claim = dispatcher.workspace_claim_manifest(&tester);
+        assert_eq!(
+            claim.pointer("/metadata/labels/pharness.lucas.engineering~1workspace-id"),
+            Some(&json!(job_label_value("ws_shared")))
+        );
+        assert!(claim
+            .pointer("/metadata/labels/pharness.lucas.engineering~1run-id")
+            .is_none());
+
+        let manifest = dispatcher.job_manifest(&tester, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("4Gi"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/1/persistentVolumeClaim/claimName"),
+            Some(&json!(shared_claim))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/1/persistentVolumeClaim/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/name"),
+            Some(&json!("copy-authorized-workspace"))
+        );
+
+        let mut verifier = tester;
+        verifier.execution_target_json["repo_mode"]["workspace_access"] = json!("read_only");
+        let manifest = dispatcher.job_manifest(&verifier, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/volumeMounts/0/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/readOnly"),
+            Some(&json!(true))
+        );
+    }
+
+    #[tokio::test]
+    async fn onboarding_proposer_reader_credential_is_init_only() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name =
+            Some("pharness-source-reader-token".into());
+        let mut run = test_run();
+        run.execution_target_json = json!({
+            "agent_profile":{"id":"repository-onboarding-proposer"},
+            "workspace_source":{
+                "workspace_id":"onboarding-ronb-test",
+                "source_repo":"https://github.com/example/test.git",
+                "source_ref":"main",
+                "source_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "branch":"pharness/onboarding/ronb-test",
+                "resolved_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let manifest = dispatcher.job_manifest(&run, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/name"),
+            Some(&json!("prepare-onboarding-source"))
+        );
+        let init_env = manifest
+            .pointer("/spec/template/spec/initContainers/1/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(init_env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        let model_env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(model_env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_SOURCE_READER_TOKEN"));
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1onboarding-proposer"
+            ),
+            Some(&json!("true"))
+        );
+    }
+
+    #[tokio::test]
+    async fn preparation_manifest_uses_only_the_preparation_proxy() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
         let profile = EnvironmentProfile {
             id: "python-3.11".to_string(),
             active: true,
@@ -2764,6 +3648,12 @@ mod tests {
                 .is_some_and(|value| value.contains("pharness-coding-egress-proxy"))
         }));
         assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
         assert_eq!(
             manifest.pointer("/spec/template/spec/initContainers/0/image"),
             Some(&json!(profile.image))
@@ -2774,6 +3664,157 @@ mod tests {
                 "sleep {NETWORK_POLICY_STABILIZATION_SECONDS}"
             )))
         );
+    }
+
+    #[tokio::test]
+    async fn discovery_manifest_uses_the_isolated_reader_without_model_or_writer_credentials() {
+        let dispatcher = test_dispatcher(None).await;
+        let manifest = dispatcher.repository_discovery_job_manifest(&RepositoryDiscoveryRequest {
+            discovery_id: "rdisc_test".to_string(),
+        });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("2Gi"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+    }
+
+    #[tokio::test]
+    async fn onboarding_patch_manifest_has_reader_but_no_model_or_writer_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
+        let manifest = dispatcher.onboarding_patch_job_manifest(&OnboardingPatchRequest {
+            onboarding_id: "ronb_test".into(),
+            execution_id: "onbpatch_test".into(),
+        });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/emptyDir/sizeLimit"),
+            Some(&json!("2Gi"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/env/0/value"),
+            Some(&json!("onboarding_patch"))
+        );
+    }
+
+    #[tokio::test]
+    async fn onboarding_validation_manifest_is_an_isolated_exact_source_reader() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
+        let manifest = dispatcher.onboarding_contract_validation_job_manifest(
+            &OnboardingContractValidationRequest {
+                onboarding_id: "ronb_test".into(),
+                execution_id: "onbvalidate_test".into(),
+            },
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "PHARNESS_EXECUTION_KIND"
+                && entry["value"] == "onboarding_contract_validate"
+        }));
+    }
+
+    #[tokio::test]
+    async fn repository_readiness_uses_pinned_runner_without_model_or_writer_credentials() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
+        let profile = EnvironmentProfile {
+            id: "python-3.11".into(),
+            active: true,
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec!["pharness-worker".into(), "python".into()],
+            preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+            service_account: "pharness-python-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/test.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "1".into(),
+                memory: "1Gi".into(),
+                ephemeral_storage: "2Gi".into(),
+            },
+        };
+        let manifest =
+            dispatcher.repository_readiness_job_manifest(&RepositoryReadinessExecutionRequest {
+                preparation_id: "sprep_test".into(),
+                profile: profile.clone(),
+            });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/image"),
+            Some(&json!(profile.image))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!(profile.service_account))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_GIT_WRITER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("preparation-egress-proxy"))
+        }));
     }
 
     #[tokio::test]
@@ -2793,6 +3834,45 @@ mod tests {
             source_manifest.pointer("/spec/template/spec/initContainers/0/name"),
             Some(&json!("network-policy-stabilization"))
         );
+        let (principal, permission, repository, reader_manifest) = dispatcher
+            .capability_preflight_manifest(
+                "source_reader",
+                Some("https://github.com/example/test.git"),
+            )
+            .unwrap();
+        assert_eq!(
+            principal,
+            "system:serviceaccount:pharness:pharness-source-reader"
+        );
+        assert_eq!(permission, "repository_read");
+        assert_eq!(
+            repository.as_deref(),
+            Some("https://github.com/example/test.git")
+        );
+        assert_eq!(
+            reader_manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            reader_manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(75 + NETWORK_POLICY_STABILIZATION_SECONDS))
+        );
+        let reader_env = reader_manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(reader_env.iter().all(|entry| {
+            !matches!(
+                entry.get("name").and_then(serde_json::Value::as_str),
+                Some("FIREWORKS_API_KEY" | "GITHUB_TOKEN")
+            )
+        }));
+        let reader_script = reader_manifest
+            .pointer("/spec/template/spec/containers/0/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert!(reader_script.contains("git ls-remote"));
+        assert!(reader_script.contains("GIT_ASKPASS_VALUE=/bin/false"));
 
         let (_, _, _, writer_manifest) = dispatcher
             .capability_preflight_manifest(
@@ -3076,6 +4156,12 @@ mod tests {
                 gitops_observer_github_api_url: "https://api.github.com".to_string(),
                 gitops_observer_active_deadline_seconds: 300,
                 gitops_observer_ttl_seconds_after_finished: 3600,
+                source_reader_enabled: true,
+                source_reader_service_account: "pharness-source-reader".to_string(),
+                source_reader_token_secret_name: None,
+                source_reader_allowed_repos: vec!["https://github.com/example/test.git".to_string()],
+                source_reader_active_deadline_seconds: 600,
+                source_reader_ttl_seconds_after_finished: 3600,
                 api_url: "http://pharness-api:4777".to_string(),
                 workspace_dir: "/workspace".to_string(),
                 workspace_size_limit: "4Gi".to_string(),
