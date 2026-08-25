@@ -873,28 +873,99 @@ pub(in crate::app) async fn internal_source_delivery_context(
     Query(query): Query<InternalSourceDeliveryQuery>,
 ) -> Result<Json<GitDeliveryContextResponse>, ApiError> {
     let intent = current_source_delivery_writer(&state, &intent_id, &query.execution_id).await?;
-    let change_set = state
-        .store
-        .get_change_set(&intent.subject_id)
-        .await?
-        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent ChangeSet is unavailable"))?;
-    let run_id = change_set
-        .run_id
-        .as_ref()
-        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent has no Builder Run"))?;
     let artifact_id = intent
         .patch_artifact_id
         .as_deref()
         .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent has no patch artifact"))?;
-    let diff = state
-        .store
-        .list_artifacts(run_id)
-        .await?
-        .into_iter()
-        .find(|artifact| artifact.id == artifact_id && artifact.kind == "workspace_git_diff")
-        .and_then(|artifact| artifact.content_text)
-        .filter(|diff| format!("sha256:{:x}", Sha256::digest(diff.as_bytes())) == intent.patch_hash)
-        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent patch evidence is invalid"))?;
+    let (diff, subject, commit_body, pull_request_body) = match intent.subject_kind.as_str() {
+        "work_item_change_set" => {
+            let change_set = state
+                .store
+                .get_change_set(&intent.subject_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent ChangeSet is unavailable")
+                })?;
+            let run_id = change_set
+                .run_id
+                .as_ref()
+                .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent has no Builder Run"))?;
+            let diff = state
+                .store
+                .list_artifacts(run_id)
+                .await?
+                .into_iter()
+                .find(|artifact| {
+                    artifact.id == artifact_id && artifact.kind == "workspace_git_diff"
+                })
+                .and_then(|artifact| artifact.content_text)
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent patch evidence is invalid")
+                })?;
+            let subject = change_set.title.trim().replace(['\r', '\n'], " ");
+            let commit_body = format!(
+                "PHarness WorkItem {}\n\nChangeSet: {}",
+                change_set.work_item_id.as_deref().unwrap_or("unknown"),
+                change_set.id
+            );
+            let pull_request_body = format!(
+                "Controller-derived source delivery for ChangeSet `{}`. Manual merge is required.",
+                change_set.id
+            );
+            (diff, subject, commit_body, pull_request_body)
+        }
+        "repository_onboarding_proposal" => {
+            let proposal = state
+                .store
+                .get_repository_onboarding_proposal(&intent.subject_id)
+                .await?
+                .filter(|proposal| proposal.status == "approved")
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent onboarding proposal is unavailable")
+                })?;
+            let onboarding = state
+                .store
+                .get_repository_onboarding(&proposal.onboarding_id)
+                .await?
+                .filter(|onboarding| {
+                    onboarding.source_delivery_intent_id.as_deref() == Some(intent.id.as_str())
+                        && onboarding.approved_proposal_hash.as_deref()
+                            == Some(proposal.content_hash.as_str())
+                })
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent onboarding provenance is unavailable")
+                })?;
+            let diff = state
+                .store
+                .get_artifact(artifact_id)
+                .await?
+                .filter(|artifact| artifact.kind == "repository_onboarding_patch")
+                .and_then(|artifact| artifact.content_text)
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent onboarding patch is unavailable")
+                })?;
+            let subject = format!("Onboard repository with PHarness ({})", onboarding.id);
+            let commit_body = format!(
+                "PHarness Repository onboarding\n\nOnboarding: {}\nProposal: {}",
+                onboarding.id, proposal.id
+            );
+            let pull_request_body = format!(
+                "Controller-materialized onboarding contract for proposal `{}`. Manual merge is required.",
+                proposal.id
+            );
+            (diff, subject, commit_body, pull_request_body)
+        }
+        _ => {
+            return Err(ApiError::conflict(
+                "SourceDeliveryIntent subject kind is unsupported",
+            ))
+        }
+    };
+    if format!("sha256:{:x}", Sha256::digest(diff.as_bytes())) != intent.patch_hash {
+        return Err(ApiError::conflict(
+            "SourceDeliveryIntent patch evidence hash is invalid",
+        ));
+    }
     let settings = state
         .worker
         .git_writer_settings()
@@ -908,7 +979,6 @@ pub(in crate::app) async fn internal_source_delivery_context(
             "SourceDeliveryIntent repository is not writer-allowlisted",
         ));
     }
-    let subject = change_set.title.trim().replace(['\r', '\n'], " ");
     Ok(Json(GitDeliveryContextResponse {
         execution_id: query.execution_id,
         repository: intent.source_repo,
@@ -917,16 +987,9 @@ pub(in crate::app) async fn internal_source_delivery_context(
         head_branch: intent.head_branch,
         diff,
         commit_subject: subject.clone(),
-        commit_body: format!(
-            "PHarness WorkItem {}\n\nChangeSet: {}",
-            change_set.work_item_id.as_deref().unwrap_or("unknown"),
-            change_set.id
-        ),
+        commit_body,
         pull_request_title: subject,
-        pull_request_body: format!(
-            "Controller-derived source delivery for ChangeSet `{}`. Manual merge is required.",
-            change_set.id
-        ),
+        pull_request_body,
         github_api_url: settings.github_api_url,
         author_name: settings.author_name,
         author_email: settings.author_email,
@@ -939,7 +1002,7 @@ pub(in crate::app) async fn internal_source_delivery_writer_outcome(
     Json(request): Json<GitDeliveryOutcomeRequest>,
 ) -> Result<Json<Value>, ApiError> {
     let intent = current_source_delivery_writer(&state, &intent_id, &request.execution_id).await?;
-    let work_item_id = source_delivery_work_item_id(&state, &intent).await?;
+    let subject = source_delivery_subject(&state, &intent).await?;
     match request.status.as_str() {
         "completed" => {
             let branch = request
@@ -992,12 +1055,24 @@ pub(in crate::app) async fn internal_source_delivery_writer_outcome(
                     "isolated writer reported exact pull-request provenance",
                 )
                 .await?;
-            let item = state.store.update_repo_work_item_status(
-                &work_item_id, "waiting_external", "controller:repo-mode",
-                "source pull request is open; authoritative checks and manual merge are pending", false,
-            ).await?;
+            let subject_response = match subject {
+                SourceDeliverySubject::WorkItem(work_item_id) => {
+                    let item = state.store.update_repo_work_item_status(
+                        &work_item_id, "waiting_external", "controller:repo-mode",
+                        "source pull request is open; authoritative checks and manual merge are pending", false,
+                    ).await?;
+                    json!({"work_item":item})
+                }
+                SourceDeliverySubject::Onboarding(onboarding_id) => {
+                    let onboarding = state.store.update_repository_onboarding_source_delivery(
+                        &onboarding_id, &intent.id, "waiting_external", None,
+                        "controller:repo-mode", "onboarding pull request is open; authoritative checks and manual merge are pending",
+                    ).await?;
+                    json!({"onboarding":onboarding})
+                }
+            };
             Ok(Json(
-                json!({"source_delivery_intent":intent,"work_item":item}),
+                json!({"source_delivery_intent":intent,"subject":subject_response}),
             ))
         }
         "failed" => {
@@ -1019,18 +1094,30 @@ pub(in crate::app) async fn internal_source_delivery_writer_outcome(
                     &error,
                 )
                 .await?;
-            let item = state
-                .store
-                .update_repo_work_item_status(
-                    &work_item_id,
-                    "blocked",
-                    "controller:repo-mode",
-                    "source writer failed before pull-request provenance was confirmed",
-                    false,
-                )
-                .await?;
+            let subject_response = match subject {
+                SourceDeliverySubject::WorkItem(work_item_id) => {
+                    let item = state
+                        .store
+                        .update_repo_work_item_status(
+                            &work_item_id,
+                            "blocked",
+                            "controller:repo-mode",
+                            "source writer failed before pull-request provenance was confirmed",
+                            false,
+                        )
+                        .await?;
+                    json!({"work_item":item})
+                }
+                SourceDeliverySubject::Onboarding(onboarding_id) => {
+                    let onboarding = state.store.update_repository_onboarding_source_delivery(
+                        &onboarding_id, &intent.id, "delivery_failed", None,
+                        "controller:repo-mode", "onboarding source writer failed before pull-request provenance was confirmed",
+                    ).await?;
+                    json!({"onboarding":onboarding})
+                }
+            };
             Ok(Json(
-                json!({"source_delivery_intent":intent,"work_item":item}),
+                json!({"source_delivery_intent":intent,"subject":subject_response}),
             ))
         }
         _ => Err(ApiError::bad_request(
@@ -1100,7 +1187,7 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
 ) -> Result<Json<Value>, ApiError> {
     let intent =
         current_source_delivery_observer(&state, &intent_id, &request.execution_id).await?;
-    let work_item_id = source_delivery_work_item_id(&state, &intent).await?;
+    let subject = source_delivery_subject(&state, &intent).await?;
     if request.status == "failed" {
         let restored = state
             .store
@@ -1120,6 +1207,19 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
                     .unwrap_or("git_observer_failed"),
             )
             .await?;
+        if let SourceDeliverySubject::Onboarding(onboarding_id) = &subject {
+            state
+                .store
+                .update_repository_onboarding_source_delivery(
+                    onboarding_id,
+                    &intent.id,
+                    "waiting_external",
+                    None,
+                    "controller:repo-mode",
+                    "Git observer failed; onboarding observation remains retryable",
+                )
+                .await?;
+        }
         return Ok(Json(
             json!({"source_delivery_intent":restored,"status":"observation_failed"}),
         ));
@@ -1208,16 +1308,18 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
     if head_sha != expected_head {
         let terminal = merged;
         if terminal {
-            seal_source_delivery_closure(
-                &state,
-                &work_item_id,
-                &intent,
-                &provider_observation,
-                "failed",
-                "merged pull-request head does not match approved source provenance",
-                request.merge_commit_sha.as_deref(),
-            )
-            .await?;
+            if let SourceDeliverySubject::WorkItem(work_item_id) = &subject {
+                seal_source_delivery_closure(
+                    &state,
+                    work_item_id,
+                    &intent,
+                    &provider_observation,
+                    "failed",
+                    "merged pull-request head does not match approved source provenance",
+                    request.merge_commit_sha.as_deref(),
+                )
+                .await?;
+            }
         }
         let drift_provenance = terminal.then(|| {
             json!({
@@ -1240,22 +1342,35 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
                 "pull-request head drifted from approved provenance",
             )
             .await?;
-        let item = state
-            .store
-            .update_repo_work_item_status(
-                &work_item_id,
-                if terminal { "failed" } else { "blocked" },
-                "controller:repo-mode",
-                if terminal {
-                    "merged source provenance does not match the approved ChangeSet"
-                } else {
-                    "unapproved pull-request head drift; close the PR before correction"
-                },
-                terminal,
-            )
-            .await?;
+        let subject_response = match &subject {
+            SourceDeliverySubject::WorkItem(work_item_id) => {
+                let item = state
+                    .store
+                    .update_repo_work_item_status(
+                        work_item_id,
+                        if terminal { "failed" } else { "blocked" },
+                        "controller:repo-mode",
+                        if terminal {
+                            "merged source provenance does not match the approved ChangeSet"
+                        } else {
+                            "unapproved pull-request head drift; close the PR before correction"
+                        },
+                        terminal,
+                    )
+                    .await?;
+                json!({"work_item":item})
+            }
+            SourceDeliverySubject::Onboarding(onboarding_id) => {
+                let onboarding = state.store.update_repository_onboarding_source_delivery(
+                    onboarding_id, &intent.id, if terminal { "delivery_failed" } else { "blocked" },
+                    request.merge_commit_sha.as_deref(), "controller:repo-mode",
+                    if terminal { "merged onboarding head does not match approved proposal provenance" } else { "unapproved onboarding pull-request head drift; close the PR before correction" },
+                ).await?;
+                json!({"onboarding":onboarding})
+            }
+        };
         return Ok(Json(
-            json!({"source_delivery_intent":intent,"work_item":item,"provider_checks":provider_observation}),
+            json!({"source_delivery_intent":intent,"subject":subject_response,"provider_checks":provider_observation}),
         ));
     }
     if !merged {
@@ -1281,26 +1396,56 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
                 "fresh pre-merge provider observation recorded",
             )
             .await?;
-        let item = state
-            .store
-            .update_repo_work_item_status(
-                &work_item_id,
-                if pull_request_state == "closed" {
+        let subject_response = match &subject {
+            SourceDeliverySubject::WorkItem(work_item_id) => {
+                let item = state
+                    .store
+                    .update_repo_work_item_status(
+                        work_item_id,
+                        if pull_request_state == "closed" {
+                            "blocked"
+                        } else {
+                            "waiting_external"
+                        },
+                        "controller:repo-mode",
+                        if pull_request_state == "closed" {
+                            "source pull request closed without merge"
+                        } else {
+                            "manual merge and provider checks remain external"
+                        },
+                        false,
+                    )
+                    .await?;
+                json!({"work_item":item})
+            }
+            SourceDeliverySubject::Onboarding(onboarding_id) => {
+                let onboarding_status = if pull_request_state == "closed" {
                     "blocked"
+                } else if provider_status == "passing" {
+                    "waiting_merge"
                 } else {
-                    "waiting_external"
-                },
-                "controller:repo-mode",
-                if pull_request_state == "closed" {
-                    "source pull request closed without merge"
-                } else {
-                    "manual merge and provider checks remain external"
-                },
-                false,
-            )
-            .await?;
+                    "waiting_checks"
+                };
+                let onboarding = state
+                    .store
+                    .update_repository_onboarding_source_delivery(
+                        onboarding_id,
+                        &intent.id,
+                        onboarding_status,
+                        None,
+                        "controller:repo-mode",
+                        if pull_request_state == "closed" {
+                            "onboarding pull request closed without merge"
+                        } else {
+                            "manual onboarding merge and provider checks remain external"
+                        },
+                    )
+                    .await?;
+                json!({"onboarding":onboarding})
+            }
+        };
         return Ok(Json(
-            json!({"source_delivery_intent":intent,"work_item":item,"provider_checks":provider_observation}),
+            json!({"source_delivery_intent":intent,"subject":subject_response,"provider_checks":provider_observation}),
         ));
     }
     let merge_sha = request
@@ -1335,16 +1480,18 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
     } else {
         "merge occurred without matching fresh passing pre-merge provider evidence"
     };
-    seal_source_delivery_closure(
-        &state,
-        &work_item_id,
-        &intent,
-        &provider_observation,
-        terminal_status,
-        stop_reason,
-        merge_sha,
-    )
-    .await?;
+    if let SourceDeliverySubject::WorkItem(work_item_id) = &subject {
+        seal_source_delivery_closure(
+            &state,
+            work_item_id,
+            &intent,
+            &provider_observation,
+            terminal_status,
+            stop_reason,
+            merge_sha,
+        )
+        .await?;
+    }
     let provenance = json!({
         "pull_request":pull_request,
         "head_sha":head_sha,
@@ -1373,22 +1520,36 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
             stop_reason,
         )
         .await?;
-    let item = state
-        .store
-        .update_repo_work_item_status(
-            &work_item_id,
-            if delivery_succeeded {
-                "completed"
-            } else {
-                "failed"
-            },
-            "controller:repo-mode",
-            stop_reason,
-            true,
-        )
-        .await?;
+    let subject_response = match &subject {
+        SourceDeliverySubject::WorkItem(work_item_id) => {
+            let item = state
+                .store
+                .update_repo_work_item_status(
+                    work_item_id,
+                    if delivery_succeeded {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                    "controller:repo-mode",
+                    stop_reason,
+                    true,
+                )
+                .await?;
+            json!({"work_item":item})
+        }
+        SourceDeliverySubject::Onboarding(onboarding_id) => {
+            let onboarding = state.store.update_repository_onboarding_source_delivery(
+                onboarding_id, &intent.id,
+                if delivery_succeeded { "merge_observed" } else { "delivery_failed" },
+                merge_sha, "controller:repo-mode",
+                if delivery_succeeded { "onboarding merge matched approved provenance; canonical contract validation is required" } else { stop_reason },
+            ).await?;
+            json!({"onboarding":onboarding})
+        }
+    };
     Ok(Json(
-        json!({"source_delivery_intent":intent,"work_item":item,"provider_checks":provider_observation,"delivery_status":terminal_status}),
+        json!({"source_delivery_intent":intent,"subject":subject_response,"provider_checks":provider_observation,"delivery_status":terminal_status}),
     ))
 }
 
@@ -1424,23 +1585,52 @@ async fn current_source_delivery_observer(
         .ok_or_else(|| ApiError::conflict("source delivery observer execution is not current"))
 }
 
-async fn source_delivery_work_item_id(
+enum SourceDeliverySubject {
+    WorkItem(String),
+    Onboarding(String),
+}
+
+async fn source_delivery_subject(
     state: &AppState,
     intent: &StoredSourceDeliveryIntent,
-) -> Result<String, ApiError> {
-    if intent.subject_kind != "work_item_change_set" {
-        return Err(ApiError::conflict(
-            "SourceDeliveryIntent is not WorkItem-backed",
-        ));
+) -> Result<SourceDeliverySubject, ApiError> {
+    match intent.subject_kind.as_str() {
+        "work_item_change_set" => state
+            .store
+            .get_change_set(&intent.subject_id)
+            .await?
+            .and_then(|change_set| change_set.work_item_id)
+            .map(SourceDeliverySubject::WorkItem)
+            .ok_or_else(|| {
+                ApiError::conflict("SourceDeliveryIntent WorkItem provenance is unavailable")
+            }),
+        "repository_onboarding_proposal" => {
+            let proposal = state
+                .store
+                .get_repository_onboarding_proposal(&intent.subject_id)
+                .await?
+                .filter(|proposal| proposal.status == "approved")
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent onboarding proposal is unavailable")
+                })?;
+            state
+                .store
+                .get_repository_onboarding(&proposal.onboarding_id)
+                .await?
+                .filter(|onboarding| {
+                    onboarding.source_delivery_intent_id.as_deref() == Some(intent.id.as_str())
+                        && onboarding.approved_proposal_hash.as_deref()
+                            == Some(proposal.content_hash.as_str())
+                })
+                .map(|onboarding| SourceDeliverySubject::Onboarding(onboarding.id))
+                .ok_or_else(|| {
+                    ApiError::conflict("SourceDeliveryIntent onboarding provenance is unavailable")
+                })
+        }
+        _ => Err(ApiError::conflict(
+            "SourceDeliveryIntent subject kind is unsupported",
+        )),
     }
-    state
-        .store
-        .get_change_set(&intent.subject_id)
-        .await?
-        .and_then(|change_set| change_set.work_item_id)
-        .ok_or_else(|| {
-            ApiError::conflict("SourceDeliveryIntent WorkItem provenance is unavailable")
-        })
 }
 
 fn derive_provider_check_status(required_checks: &Value) -> Result<&'static str, ApiError> {

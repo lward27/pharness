@@ -202,6 +202,103 @@ impl SqliteStore {
             })
     }
 
+    pub async fn bind_repository_onboarding_source_delivery(
+        &self,
+        onboarding_id: &str,
+        expected_state_version: u64,
+        intent_id: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'delivery_authorized', source_delivery_intent_id = ?3,
+                state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = ?5, status_reason = ?6
+            WHERE id = ?1 AND state_version = ?2 AND status = 'delivery_ready'
+                  AND source_delivery_intent_id IS NULL
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(i64::try_from(expected_state_version).unwrap_or(i64::MAX))
+        .bind(intent_id)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding source delivery is no longer authorizable".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_repository_onboarding_source_delivery(
+        &self,
+        onboarding_id: &str,
+        intent_id: &str,
+        status: &str,
+        resolved_commit: Option<&str>,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        if !matches!(
+            status,
+            "writer_dispatched"
+                | "waiting_external"
+                | "observer_dispatched"
+                | "waiting_checks"
+                | "waiting_merge"
+                | "blocked"
+                | "merge_observed"
+                | "delivery_failed"
+        ) {
+            return Err(StoreError::Conflict(
+                "invalid repository onboarding source delivery status".into(),
+            ));
+        }
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = ?3, resolved_commit = COALESCE(?4, resolved_commit),
+                state_version = state_version + 1, updated_at = ?5,
+                status_changed_at = ?5, status_changed_by = ?6, status_reason = ?7
+            WHERE id = ?1 AND source_delivery_intent_id = ?2
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(intent_id)
+        .bind(status)
+        .bind(resolved_commit)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding source delivery is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
     pub async fn create_repository_onboarding(
         &self,
         onboarding: CreateRepositoryOnboarding,
@@ -978,4 +1075,90 @@ fn row_to_readiness(
         assessed_at: row.try_get("assessed_at")?,
         expires_at: row.try_get("expires_at")?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SqliteStore;
+    use crate::CreateRepositoryOnboarding;
+
+    #[tokio::test]
+    async fn onboarding_source_delivery_binds_once_and_tracks_external_wait() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let now = "2026-08-24T00:00:00Z";
+        sqlx::query("INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_test', 'test', 'Test', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, created_at, updated_at) VALUES ('prod_test', 'org_test', 'product', 'Product', '', 'operator', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_test', 'github', '1', 'https://github.com/example/repo.git', 'main', ?1, ?2, ?2)")
+            .bind("a".repeat(40)).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_bindings (id, product_id, repository_id, status, created_at, updated_at) VALUES ('rbind_test', 'prod_test', 'repo_test', 'active', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        let onboarding = store
+            .create_repository_onboarding(CreateRepositoryOnboarding {
+                id: "ronb_test".into(),
+                product_id: "prod_test".into(),
+                repository_id: "repo_test".into(),
+                binding_id: "rbind_test".into(),
+                onboarding_kind: "initial".into(),
+                registered_commit: "a".repeat(40),
+                actor: "operator".into(),
+                reason: "register repository".into(),
+            })
+            .await
+            .unwrap();
+        sqlx::query("UPDATE repository_onboardings SET status = 'delivery_ready' WHERE id = ?1")
+            .bind(&onboarding.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let bound = store
+            .bind_repository_onboarding_source_delivery(
+                &onboarding.id,
+                onboarding.state_version,
+                "srcintent_test",
+                "operator",
+                "deliver approved proposal",
+            )
+            .await
+            .unwrap();
+        assert_eq!(bound.status, "delivery_authorized");
+        assert_eq!(
+            bound.source_delivery_intent_id.as_deref(),
+            Some("srcintent_test")
+        );
+        assert!(store
+            .bind_repository_onboarding_source_delivery(
+                &onboarding.id,
+                onboarding.state_version,
+                "srcintent_other",
+                "operator",
+                "stale duplicate",
+            )
+            .await
+            .is_err());
+        let waiting = store
+            .update_repository_onboarding_source_delivery(
+                &onboarding.id,
+                "srcintent_test",
+                "waiting_external",
+                None,
+                "controller:repo-mode",
+                "manual merge pending",
+            )
+            .await
+            .unwrap();
+        assert_eq!(waiting.status, "waiting_external");
+        assert!(store
+            .update_repository_onboarding_source_delivery(
+                &onboarding.id,
+                "srcintent_test",
+                "completed",
+                None,
+                "controller:repo-mode",
+                "invalid state",
+            )
+            .await
+            .is_err());
+    }
 }

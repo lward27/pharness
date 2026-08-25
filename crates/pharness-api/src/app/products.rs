@@ -1,7 +1,10 @@
 use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
 use super::{ApiError, AppState};
-use crate::dispatch::{OnboardingPatchRequest, RepositoryDiscoveryRequest};
+use crate::dispatch::{
+    OnboardingPatchRequest, RepositoryDiscoveryRequest, SourceDeliveryExecutionRequest,
+    SourceDeliveryObservationRequest,
+};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -1265,6 +1268,24 @@ async fn execute_repository_onboarding_action(
                 }
             }
         }
+        "authorize_onboarding_source_delivery" => {
+            authorize_and_dispatch_onboarding_source_delivery(
+                &state,
+                &onboarding,
+                request.actor.trim(),
+                request.reason.trim(),
+            )
+            .await?;
+        }
+        "observe_onboarding_source_delivery" => {
+            dispatch_onboarding_source_delivery_observation(
+                &state,
+                &onboarding,
+                request.actor.trim(),
+                request.reason.trim(),
+            )
+            .await?;
+        }
         _ => {
             return Err(ApiError::bad_request(
                 "unsupported repository onboarding action",
@@ -1273,6 +1294,275 @@ async fn execute_repository_onboarding_action(
     }
     let updated = find_onboarding(&state, &onboarding_id).await?;
     Ok(Json(onboarding_response(updated)?))
+}
+
+async fn authorize_and_dispatch_onboarding_source_delivery(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+    actor: &str,
+    reason: &str,
+) -> Result<(), ApiError> {
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    let writer = state
+        .worker
+        .git_writer_settings()
+        .filter(|settings| settings.allowed_repos.contains(&repository.canonical_url))
+        .ok_or_else(|| {
+            ApiError::conflict("repository is not allowlisted for the isolated Git writer")
+        })?;
+    let proposal = state
+        .store
+        .get_current_repository_onboarding_proposal(&onboarding.id)
+        .await?
+        .filter(|proposal| {
+            proposal.status == "approved"
+                && onboarding.approved_proposal_hash.as_deref()
+                    == Some(proposal.content_hash.as_str())
+        })
+        .ok_or_else(|| ApiError::conflict("exact approved onboarding proposal is unavailable"))?;
+    let artifact_id = onboarding
+        .patch_artifact_id
+        .clone()
+        .ok_or_else(|| ApiError::conflict("approved onboarding patch artifact is unavailable"))?;
+    let patch_hash = onboarding
+        .patch_hash
+        .clone()
+        .ok_or_else(|| ApiError::conflict("approved onboarding patch hash is unavailable"))?;
+    let artifact = state
+        .store
+        .get_artifact(&artifact_id)
+        .await?
+        .filter(|artifact| artifact.kind == "repository_onboarding_patch")
+        .ok_or_else(|| ApiError::conflict("approved onboarding patch artifact is invalid"))?;
+    let diff = artifact
+        .content_text
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("approved onboarding patch artifact is empty"))?;
+    if format!("sha256:{:x}", Sha256::digest(diff.as_bytes())) != patch_hash {
+        return Err(ApiError::conflict(
+            "approved onboarding patch artifact hash does not match",
+        ));
+    }
+    onboarding_patch_paths(diff)?;
+    let intent_id = new_prefixed_id("srcintent");
+    let execution_id = new_prefixed_id("srcexec");
+    let branch = format!("pharness/onboarding/{}", onboarding.id);
+    let authorization = json!({
+        "schema_version":"pharness.dev/source-delivery-authorization/v1alpha1",
+        "actor":actor,
+        "reason":reason,
+        "onboarding_id":onboarding.id,
+        "onboarding_state_hash":onboarding_response(onboarding.clone())?.state_hash,
+        "proposal":{"id":proposal.id,"revision":proposal.revision,"hash":proposal.content_hash},
+        "repository_id":repository.id,
+        "source_repo":repository.canonical_url,
+        "base_ref":repository.default_branch,
+        "base_commit":onboarding.registered_commit,
+        "head_branch":branch,
+        "patch_hash":patch_hash,
+        "external_effect":"create one GitHub branch, commit, and onboarding pull request; merge is not authorized",
+    });
+    let intent = state
+        .store
+        .create_source_delivery_intent(pharness_store::CreateSourceDeliveryIntent {
+            id: intent_id,
+            subject_kind: "repository_onboarding_proposal".into(),
+            subject_id: proposal.id,
+            repository_id: repository.id,
+            source_repo: repository.canonical_url,
+            base_ref: repository.default_branch,
+            base_commit: onboarding.registered_commit.clone(),
+            head_branch: branch,
+            patch_artifact_id: Some(artifact.id),
+            patch_hash,
+            authorization,
+            created_by: actor.into(),
+            creation_reason: reason.into(),
+        })
+        .await?;
+    state
+        .store
+        .bind_repository_onboarding_source_delivery(
+            &onboarding.id,
+            onboarding.state_version,
+            &intent.id,
+            actor,
+            reason,
+        )
+        .await?;
+    match state
+        .worker
+        .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+            source_delivery_intent_id: intent.id.clone(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+    {
+        Ok(receipt) => {
+            state
+                .store
+                .update_source_delivery_intent(
+                    &intent.id,
+                    intent.state_version,
+                    "writer_dispatched",
+                    Some(&execution_id),
+                    None,
+                    None,
+                    None,
+                    None,
+                    actor,
+                    reason,
+                )
+                .await?;
+            state
+                .store
+                .update_repository_onboarding_source_delivery(
+                    &onboarding.id,
+                    &intent.id,
+                    "writer_dispatched",
+                    None,
+                    actor,
+                    reason,
+                )
+                .await?;
+            tracing::info!(onboarding_id=%onboarding.id, intent_id=%intent.id, job=%receipt.job_name, "onboarding source writer dispatched");
+            let _ = writer;
+            Ok(())
+        }
+        Err(error) => {
+            state
+                .store
+                .update_source_delivery_intent(
+                    &intent.id,
+                    intent.state_version,
+                    "failed",
+                    Some(&execution_id),
+                    None,
+                    None,
+                    None,
+                    None,
+                    "controller:repo-mode",
+                    "onboarding source writer dispatch failed",
+                )
+                .await?;
+            state
+                .store
+                .update_repository_onboarding_source_delivery(
+                    &onboarding.id,
+                    &intent.id,
+                    "delivery_failed",
+                    None,
+                    "controller:repo-mode",
+                    "onboarding source writer dispatch failed",
+                )
+                .await?;
+            tracing::warn!(onboarding_id=%onboarding.id, intent_id=%intent.id, %error, "onboarding source writer dispatch failed");
+            Err(ApiError::unavailable(
+                "onboarding source writer dispatch failed",
+            ))
+        }
+    }
+}
+
+async fn dispatch_onboarding_source_delivery_observation(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+    actor: &str,
+    reason: &str,
+) -> Result<(), ApiError> {
+    let intent_id = onboarding
+        .source_delivery_intent_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("onboarding source delivery intent is unavailable"))?;
+    let intent = state
+        .store
+        .get_source_delivery_intent(intent_id)
+        .await?
+        .filter(|intent| {
+            matches!(
+                intent.status.as_str(),
+                "pull_request_open" | "waiting_checks" | "waiting_merge"
+            )
+        })
+        .ok_or_else(|| ApiError::conflict("onboarding source delivery is not observable"))?;
+    state
+        .worker
+        .git_observer_settings()
+        .filter(|settings| settings.allowed_repos.contains(&intent.source_repo))
+        .ok_or_else(|| {
+            ApiError::conflict("repository is not allowlisted for the isolated Git observer")
+        })?;
+    let execution_id = new_prefixed_id("srcobserve");
+    let dispatched = state
+        .store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "observer_dispatched",
+            None,
+            Some(&execution_id),
+            None,
+            None,
+            None,
+            actor,
+            reason,
+        )
+        .await?;
+    state
+        .store
+        .update_repository_onboarding_source_delivery(
+            &onboarding.id,
+            &intent.id,
+            "observer_dispatched",
+            None,
+            actor,
+            reason,
+        )
+        .await?;
+    if let Err(error) = state
+        .worker
+        .dispatch_source_delivery_observation(SourceDeliveryObservationRequest {
+            source_delivery_intent_id: intent.id.clone(),
+            execution_id,
+        })
+        .await
+    {
+        state
+            .store
+            .update_source_delivery_intent(
+                &intent.id,
+                dispatched.state_version,
+                &intent.status,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "controller:repo-mode",
+                "onboarding source observer dispatch failed",
+            )
+            .await?;
+        state
+            .store
+            .update_repository_onboarding_source_delivery(
+                &onboarding.id,
+                &intent.id,
+                "waiting_external",
+                None,
+                "controller:repo-mode",
+                "onboarding source observer dispatch failed",
+            )
+            .await?;
+        tracing::warn!(onboarding_id=%onboarding.id, intent_id=%intent.id, %error, "onboarding source observer dispatch failed");
+        return Err(ApiError::unavailable(
+            "onboarding source observer dispatch failed",
+        ));
+    }
+    Ok(())
 }
 
 async fn start_repository_onboarding_proposer(
@@ -1637,6 +1927,10 @@ fn onboarding_response(
         "proposal_ready" => Some(("approve_proposal", Vec::new())),
         "proposal_approved" => Some(("prepare_onboarding_patch", Vec::new())),
         "patch_failed" => Some(("retry_onboarding_patch", Vec::new())),
+        "delivery_ready" => Some(("authorize_onboarding_source_delivery", Vec::new())),
+        "waiting_external" | "waiting_checks" | "waiting_merge" => {
+            Some(("observe_onboarding_source_delivery", Vec::new()))
+        }
         _ => None,
     };
     let actions = action
@@ -1654,6 +1948,10 @@ fn onboarding_response(
                 "model_execution".into()
             } else if matches!(id, "prepare_onboarding_patch" | "retry_onboarding_patch") {
                 "isolated_source_materialization".into()
+            } else if id == "authorize_onboarding_source_delivery" {
+                "external_source_mutation".into()
+            } else if id == "observe_onboarding_source_delivery" {
+                "external_observation".into()
             } else {
                 "isolated_read".into()
             },
@@ -1664,6 +1962,8 @@ fn onboarding_response(
                     | "retry_proposer"
                     | "prepare_onboarding_patch"
                     | "retry_onboarding_patch"
+                    | "authorize_onboarding_source_delivery"
+                    | "observe_onboarding_source_delivery"
             ),
             blockers,
             state_hash: state_hash.clone(),
