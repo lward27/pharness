@@ -1540,7 +1540,10 @@ async fn prepare_project_environment(
     {
         anyhow::bail!("runner profile does not match the server-selected run profile");
     }
-    let (contract, contract_hash) = RepositoryContract::load(&cwd)?;
+    let (contract, contract_hash) = load_preparation_contract(
+        &cwd,
+        spec.run.execution_target_json.get("repo_mode").is_some(),
+    )?;
     if contract.environment_profile != profile_id {
         anyhow::bail!(
             "repository contract selects {} rather than runner profile {profile_id}",
@@ -1636,6 +1639,17 @@ async fn prepare_project_environment(
             {"step":"dependencies","status":"succeeded","lock_sha256":snapshot.dependency_lock_sha256},
         ],
     }))
+}
+
+fn load_preparation_contract(
+    workspace: &std::path::Path,
+    repo_mode: bool,
+) -> anyhow::Result<(RepositoryContract, String)> {
+    if repo_mode {
+        let loaded = RepositoryContract::load_for_repo_mode(workspace)?;
+        return Ok((loaded.contract, format!("sha256:{}", loaded.content_sha256)));
+    }
+    RepositoryContract::load(workspace).map_err(Into::into)
 }
 
 async fn executable_path(executable: &str) -> anyhow::Result<String> {
@@ -4505,7 +4519,7 @@ mod tests {
         allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
         evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
-        github_observer_json, github_observer_json_with_public_fallback,
+        github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
         update_kustomization_image, validate_git_delivery_context,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
@@ -4513,9 +4527,55 @@ mod tests {
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
+    use sha2::{Digest, Sha256};
     use std::path::Path;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn repo_mode_preparation_uses_the_canonical_prefixed_contract_hash() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-worker-repo-contract-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join(".pharness")).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        std::fs::write(root.join("readme.md"), "# Fixture\n").unwrap();
+        let lock = b"fastapi==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n";
+        std::fs::write(root.join("requirements.lock"), lock).unwrap();
+        let lock_hash = format!("{:x}", Sha256::digest(lock));
+        let contract = format!(
+            r#"api_version: pharness.dev/v1alpha1
+environment_profile: python-3.11
+dependency_lock:
+  kind: pip_requirements
+  path: requirements.lock
+  sha256: {lock_hash}
+writable_paths: [src/**, tests/**, readme.md]
+acceptance_commands:
+  - name: unit
+    command: python -m unittest discover -s tests -v
+roots:
+  source: [src]
+  tests: [tests]
+  documentation: [readme.md]
+agent_network: denied
+package_installation: preparation_only
+"#
+        );
+        std::fs::write(root.join(".pharness/repository.yaml"), contract.as_bytes()).unwrap();
+
+        let (_, repo_mode_hash) = load_preparation_contract(&root, true).unwrap();
+        let (_, legacy_hash) = load_preparation_contract(&root, false).unwrap();
+        assert_eq!(repo_mode_hash, format!("sha256:{legacy_hash}"));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[tokio::test]
     async fn retries_transient_internal_context_fetches_for_fresh_executor_pods() {
