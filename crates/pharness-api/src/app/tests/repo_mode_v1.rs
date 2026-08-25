@@ -3,8 +3,9 @@ use super::{
     internal_source_delivery_observation_outcome, json, ApproveRepositoryOnboardingProposal,
     CreateChangeSet, CreateProductAggregate, CreateRepoWorkItem, CreateRepositoryContractVersion,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateSession,
-    CreateSourceDeliveryIntent, CreateWorkPlan, GitDeliveryObservationOutcomeRequest, Json, Path,
-    RegisterRepositoryAggregate, RunBudget, SessionId, State, StoredRepositoryDraft, Value,
+    CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan,
+    GitDeliveryObservationOutcomeRequest, Json, Path, RegisterRepositoryAggregate, RunBudget,
+    RunId, SessionId, State, StoredRepositoryDraft, Value,
 };
 
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -446,6 +447,99 @@ async fn repo_mode_fake_provider_closes_failed_when_merge_lacks_premerge_evidenc
         .unwrap()
         .closed_at
         .is_some());
+}
+
+#[tokio::test]
+async fn worker_boundary_failure_seals_repo_stage_and_blocks_for_correction() {
+    let fixture = repo_delivery_fixture("worker_boundary_failure").await;
+    let run_id = RunId::new("run_worker_boundary_failure");
+    let stage_execution_id = "stageexec_worker_boundary_failure";
+    fixture
+        .state
+        .store
+        .create_run(super::CreateRun {
+            id: run_id.clone(),
+            session_id: SessionId::new("ses_worker_boundary_failure"),
+            user_task: "verify retained workspace".into(),
+            cwd: "/workspace".into(),
+            max_turns: 12,
+            initial_status: "queued".into(),
+            execution_target_json: json!({
+                "repo_mode": {
+                    "stage": "verify",
+                    "stage_execution_id": stage_execution_id,
+                },
+            }),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_stage_execution(CreateStageExecution {
+            id: stage_execution_id.into(),
+            work_item_id: fixture.work_item_id.clone(),
+            stage_key: "verify".into(),
+            sequence: 1,
+            status: "queued".into(),
+            agent_profile_id: Some("repo-verifier".into()),
+            agent_profile_version: Some("v1".into()),
+            agent_profile_hash: Some("sha256:verifier".into()),
+            context_pack_id: None,
+            run_id: Some(run_id.clone()),
+            workspace_id: None,
+            input_snapshot: json!({"source_commit": SOURCE_SHA}),
+            input_hash: "sha256:worker-boundary-input".into(),
+        })
+        .await
+        .unwrap();
+
+    crate::worker::fail_run_from_dispatch(
+        &fixture.state.store,
+        &run_id,
+        "worker job failed before reporting a durable outcome".into(),
+    )
+    .await
+    .unwrap();
+
+    let run = fixture.state.store.get_run(&run_id).await.unwrap().unwrap();
+    assert_eq!(run.status, "failed");
+    assert_eq!(run.budget_consumption.turns_used, 0);
+    let execution = fixture
+        .state
+        .store
+        .get_stage_execution(stage_execution_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.status, "failed");
+    assert_eq!(
+        execution.stop_reason.as_deref(),
+        Some("worker job failed before reporting a durable outcome")
+    );
+    let outcome = fixture
+        .state
+        .store
+        .get_stage_outcome_for_execution(stage_execution_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome.status, "failed");
+    assert_eq!(
+        outcome.outcome["stop_reason"],
+        "worker job failed before reporting a durable outcome"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "blocked"
+    );
 }
 
 #[test]

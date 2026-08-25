@@ -2598,6 +2598,7 @@ async fn fail_run_from_worker_boundary(
             .mark_budget_extension_dispatch_failed(run_id, &message)
             .await?;
     } else {
+        let failed_outcome = AttemptOutcome::failed(message.clone());
         store
             .complete_run(
                 run_id,
@@ -2611,6 +2612,12 @@ async fn fail_run_from_worker_boundary(
                 Some(message),
             )
             .await?;
+        if let Err(error) = sync_repo_stage_run(store, &run, &failed_outcome).await {
+            // The Kubernetes reaper retries this idempotent synchronization
+            // for failed Jobs. Do not hide the durable Run failure if a
+            // secondary stage-finalization write is temporarily unavailable.
+            tracing::error!(run_id = %run.id, %error, "failed to seal Repo Mode stage after worker-boundary failure");
+        }
     }
 
     Ok(())
