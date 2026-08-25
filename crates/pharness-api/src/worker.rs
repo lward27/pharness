@@ -1491,6 +1491,27 @@ async fn persist_workspace_evidence(
         .ok_or_else(|| anyhow::anyhow!("completed remote workspace run has no Git evidence"))?;
     validate_workspace_evidence(&source, evidence)?;
     let scope = run_scope_for_run(run);
+
+    // Read-only and ephemeral-copy profile runs use an exact checkout but do
+    // not own a durable mutable Workspace record. Validate their evidence at
+    // the boundary, then discard it instead of trying to persist Builder
+    // artifacts against a nonexistent or differently owned Workspace.
+    let repo_stage = run
+        .execution_target_json
+        .pointer("/repo_mode/stage")
+        .and_then(serde_json::Value::as_str);
+    if matches!(repo_stage, Some("test" | "verify")) {
+        return Ok(());
+    }
+    if scope.workspace_id.is_none() {
+        if !evidence.status.trim().is_empty()
+            || !evidence.diff.trim().is_empty()
+            || !evidence.changed_paths.is_empty()
+        {
+            anyhow::bail!("read-only remote workspace run modified its checkout");
+        }
+        return Ok(());
+    }
     if scope.workspace_id.as_deref() != Some(evidence.workspace_id.as_str()) {
         anyhow::bail!("workspace evidence does not match the run scope");
     }
@@ -2531,8 +2552,9 @@ mod tests {
         approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
         classify_work_item_attempt, file_change_from_event, finish_run_from_attempt,
         grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
-        remediation_plan_from_incident, result_json_for_attempt, structured_submission_from_events,
-        validate_repo_work_plan, validate_workspace_evidence, workspace_source_for_run,
+        persist_workspace_evidence, remediation_plan_from_incident, result_json_for_attempt,
+        structured_submission_from_events, validate_repo_work_plan, validate_workspace_evidence,
+        workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
@@ -2723,6 +2745,56 @@ mod tests {
             ..evidence
         };
         assert!(validate_workspace_evidence(&source, &evidence).is_err());
+    }
+
+    #[tokio::test]
+    async fn read_only_remote_profile_accepts_only_clean_ephemeral_evidence() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let run = stored_run(serde_json::json!({
+            "kind":"kubernetes_workspace",
+            "onboarding":{"onboarding_id":"ronb_test"},
+            "workspace_source":{
+                "workspace_id":"onboarding-ronb_test",
+                "source_repo":"https://github.com/example/finance-app.git",
+                "source_ref":"main",
+                "source_commit":"a".repeat(40),
+                "branch":"pharness/onboarding/ronb_test",
+                "resolved_commit":"a".repeat(40)
+            }
+        }));
+        let clean = AttemptOutcome {
+            status: "completed".into(),
+            turns: 1,
+            summary: Some("submitted proposal".into()),
+            error: None,
+            approval: None,
+            workspace_evidence: Some(WorkspaceGitEvidence {
+                workspace_id: "onboarding-ronb_test".into(),
+                base_commit: "a".repeat(40),
+                branch: "pharness/onboarding/ronb_test".into(),
+                status: String::new(),
+                diff: String::new(),
+                changed_paths: Vec::new(),
+            }),
+            budget_extension: None,
+            consumption: run.budget_consumption.clone(),
+        };
+        persist_workspace_evidence(&store, &run, &clean)
+            .await
+            .unwrap();
+        assert!(store.list_artifacts(&run.id).await.unwrap().is_empty());
+
+        let mut dirty = clean;
+        dirty.workspace_evidence.as_mut().unwrap().status = " M readme.md".into();
+        dirty
+            .workspace_evidence
+            .as_mut()
+            .unwrap()
+            .changed_paths
+            .push("readme.md".into());
+        assert!(persist_workspace_evidence(&store, &run, &dirty)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
