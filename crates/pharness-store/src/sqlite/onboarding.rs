@@ -24,6 +24,7 @@ impl SqliteStore {
             UPDATE repository_onboardings
             SET status = 'proposal_running', proposer_run_id = ?3,
                 proposer_profile_hash = ?4, proposer_stop_reason = NULL,
+                blockers_json = '[]',
                 state_version = state_version + 1, updated_at = ?5,
                 status_changed_at = ?5, status_changed_by = ?6, status_reason = ?7
             WHERE id = ?1 AND state_version = ?2 AND status IN ('discovered', 'proposal_failed')
@@ -1411,12 +1412,13 @@ mod tests {
     use crate::{
         ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
         ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
-        CreateRepositoryReadinessAssessment,
+        CreateRepositoryReadinessAssessment, CreateRun, CreateSession,
     };
+    use pharness_core::{RunId, SessionId};
     use serde_json::json;
 
     #[tokio::test]
-    async fn successful_discovery_clears_prior_failure_blockers() {
+    async fn successful_retries_clear_stale_onboarding_blockers() {
         let store = SqliteStore::connect_in_memory().await.unwrap();
         let now = "2026-08-24T00:00:00Z";
         let source_commit = "a".repeat(40);
@@ -1464,13 +1466,70 @@ mod tests {
             .await
             .unwrap();
 
-        let onboarding = store
+        let discovered = store
             .get_repository_onboarding(&onboarding.id)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(onboarding.status, "discovered");
-        assert!(onboarding.blockers.is_empty());
+        assert_eq!(discovered.status, "discovered");
+        assert!(discovered.blockers.is_empty());
+
+        let session_id = SessionId::new("ses_discovery");
+        store
+            .create_session(CreateSession {
+                id: session_id.clone(),
+                title: "Discovery proposer".into(),
+                cwd: "/workspace".into(),
+            })
+            .await
+            .unwrap();
+        for run_id in ["run_failed", "run_retry"] {
+            store
+                .create_run(CreateRun {
+                    id: RunId::new(run_id),
+                    session_id: session_id.clone(),
+                    user_task: "propose onboarding".into(),
+                    cwd: "/workspace".into(),
+                    max_turns: 16,
+                    initial_status: "queued".into(),
+                    execution_target_json: json!({}),
+                })
+                .await
+                .unwrap();
+        }
+        store
+            .start_repository_onboarding_proposer(
+                &discovered.id,
+                discovered.state_version,
+                "run_failed",
+                "sha256:profile",
+                "operator",
+                "start proposer",
+            )
+            .await
+            .unwrap();
+        let failed = store
+            .fail_repository_onboarding_proposer(
+                &discovered.id,
+                "run_failed",
+                "worker startup failed",
+            )
+            .await
+            .unwrap();
+        assert!(!failed.blockers.is_empty());
+        let retried = store
+            .start_repository_onboarding_proposer(
+                &discovered.id,
+                failed.state_version,
+                "run_retry",
+                "sha256:profile",
+                "operator",
+                "retry proposer",
+            )
+            .await
+            .unwrap();
+        assert_eq!(retried.status, "proposal_running");
+        assert!(retried.blockers.is_empty());
     }
 
     #[tokio::test]
