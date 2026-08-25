@@ -1415,7 +1415,7 @@ async fn work_item_planning_declares_a_work_plan_and_ephemeral_workspace() {
 }
 
 #[tokio::test]
-async fn worker_can_only_pin_the_exact_issued_remote_workspace() {
+async fn worker_can_pin_the_exact_issued_remote_workspace_while_preparing() {
     let state = AppState {
         store: Arc::new(SqliteStore::connect_in_memory().await.unwrap()),
         worker: RunDispatcher::Disabled,
@@ -1513,7 +1513,11 @@ async fn worker_can_only_pin_the_exact_issued_remote_workspace() {
             id: workspace_id.to_string(),
             work_item_id: work_item.id.clone(),
             run_id: Some(run_id.clone()),
-            status: "provisioning".to_string(),
+            // Repo Mode holds a fresh immutable-runner workspace in
+            // `preparing` while its dedicated preparation Job checks out the
+            // issued source contract. The worker's provisioning callback must
+            // accept that state as well as the legacy `provisioning` state.
+            status: "preparing".to_string(),
             source_repo: "https://github.com/example/finance-app.git".to_string(),
             source_ref: "main".to_string(),
             resolved_commit: None,

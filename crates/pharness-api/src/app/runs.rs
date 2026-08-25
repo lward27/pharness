@@ -457,7 +457,7 @@ pub(super) async fn internal_workspace_provisioned(
     {
         return Ok(Json(workspace.into()));
     }
-    if workspace.status != "provisioning" {
+    if !matches!(workspace.status.as_str(), "provisioning" | "preparing") {
         return Err(ApiError::conflict(
             "workspace is not awaiting source provisioning",
         ));
