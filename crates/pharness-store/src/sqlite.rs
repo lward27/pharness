@@ -2249,6 +2249,57 @@ impl SqliteStore {
             })
     }
 
+    pub async fn rebind_approved_change_set_provenance(
+        &self,
+        change_set_id: &str,
+        expected_revision: i64,
+        expected_material_hash: &str,
+        session_id: &SessionId,
+        run_id: &RunId,
+    ) -> Result<StoredChangeSet, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE change_sets
+            SET session_id = ?4,
+                run_id = ?5,
+                updated_at = ?6
+            WHERE id = ?1
+              AND status = 'approved'
+              AND revision = ?2
+              AND material_hash = ?3
+            "#,
+        )
+        .bind(change_set_id)
+        .bind(expected_revision)
+        .bind(expected_material_hash)
+        .bind(session_id.as_str())
+        .bind(run_id.as_str())
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return match self.get_change_set(change_set_id).await? {
+                Some(_) => Err(StoreError::Conflict(
+                    "approved ChangeSet provenance repair no longer matches its reviewed revision"
+                        .to_string(),
+                )),
+                None => Err(StoreError::NotFound {
+                    entity: "change_set".to_string(),
+                    id: change_set_id.to_string(),
+                }),
+            };
+        }
+
+        self.get_change_set(change_set_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "change_set".to_string(),
+                id: change_set_id.to_string(),
+            })
+    }
+
     pub async fn create_gitops_change_set(
         &self,
         change_set: CreateGitOpsChangeSet,
@@ -8205,6 +8256,59 @@ mod tests {
         assert_eq!(revised_change_set.status, "proposed");
         assert_eq!(revised_change_set.session_id, revised_session_id);
         assert_eq!(revised_change_set.run_id.as_ref(), Some(&revised_run_id));
+        let approved_change_set = store
+            .update_change_set_status(
+                &change_set.id,
+                "approved",
+                Some("operator".to_string()),
+                Some("reviewed exact revision".to_string()),
+            )
+            .await
+            .unwrap();
+        let repaired_session_id = SessionId::new("ses_change_set_provenance_repair");
+        let repaired_run_id = RunId::new("run_change_set_provenance_repair");
+        store
+            .create_session(CreateSession {
+                id: repaired_session_id.clone(),
+                title: "change set provenance repair".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_run(CreateRun {
+                id: repaired_run_id.clone(),
+                session_id: repaired_session_id.clone(),
+                user_task: "repair approved change set provenance".to_string(),
+                cwd: ".".to_string(),
+                max_turns: 10,
+                initial_status: "completed".to_string(),
+                execution_target_json: serde_json::json!({"kind":"local_process"}),
+            })
+            .await
+            .unwrap();
+        let repaired_change_set = store
+            .rebind_approved_change_set_provenance(
+                &approved_change_set.id,
+                approved_change_set.revision,
+                &approved_change_set.material_hash,
+                &repaired_session_id,
+                &repaired_run_id,
+            )
+            .await
+            .unwrap();
+        assert_eq!(repaired_change_set.status, "approved");
+        assert_eq!(repaired_change_set.revision, approved_change_set.revision);
+        assert_eq!(
+            repaired_change_set.material_hash,
+            approved_change_set.material_hash
+        );
+        assert_eq!(
+            repaired_change_set.change_set_json,
+            approved_change_set.change_set_json
+        );
+        assert_eq!(repaired_change_set.session_id, repaired_session_id);
+        assert_eq!(repaired_change_set.run_id.as_ref(), Some(&repaired_run_id));
         let pipeline_intent = store
             .create_pipeline_intent(crate::CreatePipelineIntent {
                 id: "pint_test".to_string(),
