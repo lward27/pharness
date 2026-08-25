@@ -5,7 +5,9 @@
 //! Job orchestration shells out to kubectl with the pod service account,
 //! matching how the typed read-only cluster capabilities already execute.
 
-use crate::worker::{fail_run_from_dispatch, fail_run_from_job_creation, LocalWorker};
+use crate::worker::{
+    fail_run_from_dispatch, fail_run_from_job_creation, sync_repo_stage_run, LocalWorker,
+};
 use pharness_config::WorkerKubernetesConfig;
 use pharness_core::EnvironmentProfile;
 use pharness_store::{
@@ -2409,7 +2411,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                         "image":runner_image,
                         "imagePullPolicy":"IfNotPresent",
                         "command":["/bin/sh","-ec"],
-                        "args":["cp -a /source-workspace/. /workspace/"],
+                        "args":["cp -a --no-preserve=ownership,timestamps /source-workspace/. /workspace/"],
                         "volumeMounts":[
                             {"name":"source-workspace","mountPath":"/source-workspace","readOnly":true},
                             {"name":"workspace","mountPath":self.config.workspace_dir},
@@ -2974,6 +2976,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             if matches!(run.status.as_str(), "queued" | "running") {
                 tracing::warn!(run_id = %run_id, "worker job failed without durable outcome");
                 fail_run_from_dispatch(&self.store, &run_id, failure.to_string()).await?;
+            } else if run.status == "failed" {
+                // Recover runs that were made terminal by an earlier API
+                // version before the corresponding Repo Mode StageExecution
+                // could be sealed. The stage finalizer is idempotent and is a
+                // no-op for non-Repo-Mode runs.
+                let error = run.error.clone().unwrap_or_else(|| failure.to_string());
+                sync_repo_stage_run(
+                    &self.store,
+                    &run,
+                    &pharness_runhost::AttemptOutcome::failed(error),
+                )
+                .await?;
             }
 
             // A proposer can fail in an init container before its worker can
@@ -3868,6 +3882,12 @@ mod tests {
         assert_eq!(
             manifest.pointer("/spec/template/spec/initContainers/1/name"),
             Some(&json!("copy-authorized-workspace"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/args/0"),
+            Some(&json!(
+                "cp -a --no-preserve=ownership,timestamps /source-workspace/. /workspace/"
+            ))
         );
 
         let mut verifier = tester;

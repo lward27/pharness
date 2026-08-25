@@ -179,10 +179,10 @@ use pharness_store::{
     CreateObservation, CreatePipelineContract, CreatePipelineIntent, CreateProductAggregate,
     CreateRelease, CreateRemediationPlan, CreateRepoWorkItem, CreateRepositoryContractVersion,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
-    CreateSession, CreateSourceDeliveryIntent, CreateWorkItem, CreateWorkPlan, CreateWorkspace,
-    ObservationListFilter, RegisterRepositoryAggregate, SqliteStore, StoredDeploymentContract,
-    StoredGitOpsChangeSet, StoredPipelineContract, StoredPipelineIntent, StoredRelease,
-    StoredRepositoryDraft,
+    CreateSession, CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkItem,
+    CreateWorkPlan, CreateWorkspace, ObservationListFilter, RegisterRepositoryAggregate,
+    SqliteStore, StoredDeploymentContract, StoredGitOpsChangeSet, StoredPipelineContract,
+    StoredPipelineIntent, StoredRelease, StoredRepositoryDraft,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
