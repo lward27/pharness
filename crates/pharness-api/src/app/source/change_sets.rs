@@ -303,6 +303,8 @@ pub(in crate::app) async fn revise_change_set(
                 risk_level: clean_optional_text(request.risk_level),
                 material_hash,
                 change_set_json: request.change_set_json,
+                session_id: None,
+                run_id: None,
                 status: None,
                 actor: actor.clone(),
                 reason: reason.clone(),

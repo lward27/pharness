@@ -986,6 +986,8 @@ async fn create_repo_change_set(
                     risk_level: Some(plan.risk_level.clone()),
                     material_hash,
                     change_set_json: material,
+                    session_id: Some(run.session_id.clone()),
+                    run_id: Some(builder_run_id.clone()),
                     status: Some("proposed".into()),
                     actor: Some("controller".into()),
                     reason: Some(
