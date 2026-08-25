@@ -3015,29 +3015,19 @@ async fn start_repo_builder(
             .ok_or_else(|| {
                 ApiError::conflict("correction workspace has no reusable EnvironmentSnapshot")
             })?;
-        let typed: pharness_core::EnvironmentSnapshot = serde_json::from_value(snapshot.clone())
-            .map_err(|error| {
-                ApiError::conflict(format!(
-                    "correction EnvironmentSnapshot is invalid: {error}"
-                ))
-            })?;
-        if typed.source_sha != work_item.source_commit.clone().unwrap_or_default()
-            || typed.runner_image_digest != environment_profile.image
-            || typed.runner_revision != environment_profile.revision
-            || typed.manifest_sha256
-                != work_item
-                    .repository_contract_hash
-                    .clone()
-                    .unwrap_or_default()
-        {
-            return Err(ApiError::conflict(
-                "correction EnvironmentSnapshot no longer matches the pinned source, contract, or runner",
-            ));
-        }
-        Some(snapshot)
+        reusable_correction_environment_snapshot(
+            snapshot,
+            work_item.source_commit.as_deref().unwrap_or_default(),
+            work_item
+                .repository_contract_hash
+                .as_deref()
+                .unwrap_or_default(),
+            &environment_profile,
+        )?
     } else {
         None
     };
+    let reuse_prepared_environment = reused_environment_snapshot.is_some();
     if !state.worker.supports_remote_workspace() {
         return Err(ApiError::conflict(
             "Repo Mode V1 immutable runner preparation requires kubernetes_job worker mode",
@@ -3061,6 +3051,10 @@ async fn start_repo_builder(
         source_ref: work_item.source_ref.clone(),
         source_commit: Some(source_commit.clone()),
         branch: branch.clone(),
+        // A correction always keeps the existing detached-base checkout and
+        // uncommitted Builder diff. Setting the resolved commit makes the
+        // preparation worker verify that preserved checkout rather than
+        // trying to clone over a nonempty PVC.
         resolved_commit: reuse_prepared_workspace.then(|| source_commit.clone()),
     };
     state
@@ -3187,7 +3181,7 @@ async fn start_repo_builder(
             ),
             cwd: cwd.clone(),
             max_turns: work_item.run_budget.initial_turns,
-            initial_status: if reuse_prepared_workspace {
+            initial_status: if reuse_prepared_environment {
                 "queued".into()
             } else {
                 "preparing".into()
@@ -3241,7 +3235,7 @@ async fn start_repo_builder(
             work_item_id: work_item.id.clone(),
             stage_key: pharness_core::RepoStageKey::Implement.as_str().into(),
             sequence: implement_sequence,
-            status: if reuse_prepared_workspace {
+            status: if reuse_prepared_environment {
                 "queued".into()
             } else {
                 "preparing".into()
@@ -3288,7 +3282,7 @@ async fn start_repo_builder(
             &workspace.id,
             UpdateWorkspaceExecution {
                 run_id: Some(run.id.clone()),
-                status: if reuse_prepared_workspace {
+                status: if reuse_prepared_environment {
                     "running".into()
                 } else {
                     "preparing".into()
@@ -3309,7 +3303,7 @@ async fn start_repo_builder(
             Some(reason.into()),
         )
         .await?;
-    if reuse_prepared_workspace {
+    if reuse_prepared_environment {
         state.worker.spawn_run(run.clone(), cwd);
         return Ok(json!({
             "run":run,
@@ -3357,7 +3351,36 @@ async fn start_repo_builder(
         "workspace":workspace,
         "permission_grant":grant,
         "environment_preparation":preparation,
+        "refreshed_environment_snapshot":reuse_prepared_workspace,
     }))
+}
+
+fn reusable_correction_environment_snapshot(
+    snapshot: Value,
+    source_commit: &str,
+    repository_contract_hash: &str,
+    environment_profile: &pharness_core::EnvironmentProfile,
+) -> Result<Option<Value>, ApiError> {
+    let typed: pharness_core::EnvironmentSnapshot = serde_json::from_value(snapshot.clone())
+        .map_err(|error| {
+            ApiError::conflict(format!(
+                "correction EnvironmentSnapshot is invalid: {error}"
+            ))
+        })?;
+    if typed.source_sha != source_commit || typed.manifest_sha256 != repository_contract_hash {
+        return Err(ApiError::conflict(
+            "correction EnvironmentSnapshot no longer matches the pinned source or contract",
+        ));
+    }
+    if typed.runner_image_digest != environment_profile.image
+        || typed.runner_revision != environment_profile.revision
+    {
+        // Runner provenance changed after the original attempt. Preserve the
+        // exact source PVC, but require a new isolated preparation Job to
+        // verify the checkout and seal a snapshot for the current runner.
+        return Ok(None);
+    }
+    Ok(Some(snapshot))
 }
 
 fn agent_profile_from_chain(
@@ -4608,6 +4631,46 @@ mod tests {
     use super::*;
     use pharness_core::{RunId, SessionId};
 
+    fn correction_environment_profile(
+        image: &str,
+        revision: &str,
+    ) -> pharness_core::EnvironmentProfile {
+        serde_json::from_value(json!({
+            "id":"python-3.11",
+            "active":true,
+            "image":image,
+            "revision":revision,
+            "platform":"linux/amd64",
+            "required_executables":["pharness-worker","git","python","pip"],
+            "preparation_strategy":"python_hashed_requirements",
+            "service_account":"pharness-python-runner",
+            "repository_allowlist":["https://github.com/example/repo.git"],
+            "limits":{"cpu":"1","memory":"1Gi","ephemeral_storage":"2Gi"},
+        }))
+        .unwrap()
+    }
+
+    fn correction_environment_snapshot(image: &str, revision: &str) -> Value {
+        json!({
+            "source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "manifest_sha256":format!("sha256:{}", "b".repeat(64)),
+            "dependency_lock_sha256":format!("sha256:{}", "c".repeat(64)),
+            "runner_image_digest":image,
+            "runner_revision":revision,
+            "os":"linux",
+            "architecture":"x86_64",
+            "effective_user":"65532",
+            "python_version":"Python 3.11.16",
+            "python_path":"/workspace/.pharness-runtime/venv/bin/python",
+            "writable_paths":["src/**"],
+            "unavailable_tools":["docker"],
+            "agent_network":"denied",
+            "package_installation":"preparation_only",
+            "acceptance_commands":[{"name":"unit","command":"python -m unittest"}],
+            "preparation_evidence":{},
+        })
+    }
+
     fn metadata() -> StoredRepoWorkItemMetadata {
         StoredRepoWorkItemMetadata {
             work_item_id: "witem_repo".into(),
@@ -4879,6 +4942,67 @@ mod tests {
         )
         .unwrap();
         assert!(exhausted.iter().all(|action| action.status == "blocked"));
+    }
+
+    #[test]
+    fn correction_reuses_an_exact_environment_snapshot() {
+        let revision = "d".repeat(40);
+        let image = format!("registry.example/runner@sha256:{}", "e".repeat(64));
+        let profile = correction_environment_profile(&image, &revision);
+        let snapshot = correction_environment_snapshot(&image, &revision);
+
+        assert_eq!(
+            reusable_correction_environment_snapshot(
+                snapshot.clone(),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                &format!("sha256:{}", "b".repeat(64)),
+                &profile,
+            )
+            .unwrap(),
+            Some(snapshot)
+        );
+    }
+
+    #[test]
+    fn correction_refreshes_runner_provenance_on_the_preserved_workspace() {
+        let old_revision = "d".repeat(40);
+        let current_revision = "e".repeat(40);
+        let old_image = format!("registry.example/runner@sha256:{}", "f".repeat(64));
+        let current_image = format!("registry.example/runner@sha256:{}", "1".repeat(64));
+        let profile = correction_environment_profile(&current_image, &current_revision);
+        let snapshot = correction_environment_snapshot(&old_image, &old_revision);
+
+        assert!(reusable_correction_environment_snapshot(
+            snapshot,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            &format!("sha256:{}", "b".repeat(64)),
+            &profile,
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    #[test]
+    fn correction_never_refreshes_around_source_or_contract_drift() {
+        let revision = "d".repeat(40);
+        let image = format!("registry.example/runner@sha256:{}", "e".repeat(64));
+        let profile = correction_environment_profile(&image, &revision);
+        let snapshot = correction_environment_snapshot(&image, &revision);
+
+        assert!(reusable_correction_environment_snapshot(
+            snapshot.clone(),
+            "ffffffffffffffffffffffffffffffffffffffff",
+            &format!("sha256:{}", "b".repeat(64)),
+            &profile,
+        )
+        .is_err());
+        assert!(reusable_correction_environment_snapshot(
+            snapshot,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            &format!("sha256:{}", "9".repeat(64)),
+            &profile,
+        )
+        .is_err());
     }
 
     #[test]
