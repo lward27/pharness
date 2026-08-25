@@ -207,7 +207,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::new(
             "submit_onboarding_proposal",
             "Submit one structured repository onboarding proposal for controller validation.",
-            structured_submission_schema("proposal"),
+            onboarding_proposal_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
@@ -407,14 +407,102 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
     ]
 }
 
-fn structured_submission_schema(field: &str) -> serde_json::Value {
+fn onboarding_proposal_submission_schema() -> serde_json::Value {
     serde_json::json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["reason", field],
-        "properties": {
-            "reason": { "type": "string" },
-            (field): { "type": "object" }
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","proposal"],
+        "properties":{
+            "reason":{"type":"string","minLength":1,"maxLength":2000},
+            "proposal":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":[
+                    "schema_version","discovery_id","discovery_hash",
+                    "candidate_contract","instructions","service_proposals",
+                    "binding_proposals","assumptions","conflicts","blockers",
+                    "readiness_forecast"
+                ],
+                "properties":{
+                    "schema_version":{"type":"string","enum":[pharness_core::ONBOARDING_PROPOSAL_SCHEMA]},
+                    "discovery_id":{"type":"string","minLength":1},
+                    "discovery_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+                    "candidate_contract":{
+                        "type":"object",
+                        "additionalProperties":false,
+                        "required":[
+                            "api_version","environment_profile","dependency_lock",
+                            "writable_paths","acceptance_commands","roots",
+                            "agent_network","package_installation"
+                        ],
+                        "properties":{
+                            "api_version":{"type":"string","enum":["pharness.dev/v1alpha1"]},
+                            "environment_profile":{"type":"string","minLength":1},
+                            "dependency_lock":{
+                                "type":"object",
+                                "additionalProperties":false,
+                                "required":["kind","path","sha256"],
+                                "properties":{
+                                    "kind":{"type":"string","minLength":1},
+                                    "path":{"type":"string","minLength":1},
+                                    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}
+                                }
+                            },
+                            "writable_paths":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"string","minLength":1}},
+                            "acceptance_commands":{
+                                "type":"array","minItems":1,"maxItems":50,
+                                "items":{
+                                    "type":"object","additionalProperties":false,
+                                    "required":["name","command"],
+                                    "properties":{
+                                        "name":{"type":"string","minLength":1},
+                                        "command":{"type":"string","minLength":1}
+                                    }
+                                }
+                            },
+                            "roots":{
+                                "type":"object","additionalProperties":false,
+                                "required":["source","tests","documentation"],
+                                "properties":{
+                                    "source":{"type":"array","items":{"type":"string"}},
+                                    "tests":{"type":"array","items":{"type":"string"}},
+                                    "documentation":{"type":"array","items":{"type":"string"}}
+                                }
+                            },
+                            "agent_network":{"type":"string","enum":["denied"]},
+                            "package_installation":{"type":"string","enum":["preparation_only","denied"]}
+                        }
+                    },
+                    "instructions":{"type":"string","maxLength":32768},
+                    "service_proposals":{
+                        "type":"array","maxItems":50,
+                        "items":{
+                            "type":"object","additionalProperties":false,
+                            "required":["service_key","display_name","description"],
+                            "properties":{
+                                "service_key":{"type":"string","minLength":1},
+                                "display_name":{"type":"string","minLength":1},
+                                "description":{"type":"string"}
+                            }
+                        }
+                    },
+                    "binding_proposals":{
+                        "type":"array","maxItems":50,
+                        "items":{
+                            "type":"object","additionalProperties":false,
+                            "required":["service_keys","scopes"],
+                            "properties":{
+                                "service_keys":{"type":"array","items":{"type":"string"}},
+                                "scopes":{"type":"array","items":{"type":"string"}}
+                            }
+                        }
+                    },
+                    "assumptions":{"type":"array","maxItems":100,"items":{"type":"string"}},
+                    "conflicts":{"type":"array","maxItems":100,"items":{"type":"string"}},
+                    "blockers":{"type":"array","maxItems":100,"items":{"type":"string"}},
+                    "readiness_forecast":{"type":"object"}
+                }
+            }
         }
     })
 }
@@ -550,5 +638,25 @@ mod tests {
             .collect::<HashSet<_>>();
 
         assert!(!names.contains("request_approval"));
+    }
+
+    #[test]
+    fn onboarding_tool_schema_requires_the_controller_contract_shape() {
+        let tool = worker_tool_specs()
+            .into_iter()
+            .find(|tool| tool.name == "submit_onboarding_proposal")
+            .unwrap();
+        let proposal = &tool.parameters_schema["properties"]["proposal"];
+        assert_eq!(proposal["additionalProperties"], false);
+        assert!(proposal["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "discovery_hash"));
+        assert_eq!(
+            proposal["properties"]["candidate_contract"]["properties"]["dependency_lock"]
+                ["properties"]["sha256"]["pattern"],
+            "^[0-9a-f]{64}$"
+        );
     }
 }

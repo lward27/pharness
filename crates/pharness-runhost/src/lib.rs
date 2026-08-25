@@ -800,6 +800,7 @@ struct ProjectTools {
     selected_acceptance_commands: Vec<String>,
     evidence_catalog: Vec<serde_json::Value>,
     evidence_payloads: Vec<serde_json::Value>,
+    onboarding_discovery: Option<(String, String)>,
 }
 
 impl ProjectTools {
@@ -839,6 +840,15 @@ impl ProjectTools {
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
+        let onboarding_discovery = run
+            .execution_target_json
+            .pointer("/agent_context/discovery")
+            .and_then(|discovery| {
+                Some((
+                    discovery.get("id")?.as_str()?.to_string(),
+                    discovery.get("hash")?.as_str()?.to_string(),
+                ))
+            });
         Ok(Self {
             workspace: workspace.to_path_buf(),
             canonical_workspace: workspace.canonicalize()?,
@@ -847,6 +857,7 @@ impl ProjectTools {
             selected_acceptance_commands,
             evidence_catalog,
             evidence_payloads,
+            onboarding_discovery,
         })
     }
 
@@ -1051,7 +1062,7 @@ impl ToolExecutor for ProjectTools {
                 ))
             }
             pharness_core::AgentAction::SubmitOnboardingProposal { proposal, .. } => {
-                structured_submission("repository_onboarding_proposal", proposal)
+                onboarding_submission(self, proposal)
             }
             pharness_core::AgentAction::SubmitWorkPlan { work_plan, .. } => {
                 structured_submission("work_plan", work_plan)
@@ -1067,6 +1078,42 @@ impl ToolExecutor for ProjectTools {
             }),
         }
     }
+}
+
+fn onboarding_submission(
+    tools: &ProjectTools,
+    document: &serde_json::Value,
+) -> Result<ToolResult, ToolError> {
+    let proposal: pharness_core::RepositoryOnboardingProposal =
+        serde_json::from_value(document.clone()).map_err(|error| ToolError::InvalidArguments {
+            message: format!("repository onboarding proposal is invalid: {error}"),
+        })?;
+    if proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA {
+        return Err(ToolError::InvalidArguments {
+            message: "repository onboarding proposal has the wrong schema_version".into(),
+        });
+    }
+    let Some((discovery_id, discovery_hash)) = &tools.onboarding_discovery else {
+        return Err(ToolError::InvalidArguments {
+            message: "repository onboarding proposal has no controller-bound discovery".into(),
+        });
+    };
+    if &proposal.discovery_id != discovery_id || &proposal.discovery_hash != discovery_hash {
+        return Err(ToolError::InvalidArguments {
+            message: "repository onboarding proposal does not match its controller-bound discovery"
+                .into(),
+        });
+    }
+    let contract: RepositoryContract = serde_json::from_value(proposal.candidate_contract.clone())
+        .map_err(|error| ToolError::InvalidArguments {
+            message: format!("candidate repository contract is invalid: {error}"),
+        })?;
+    contract
+        .validate_candidate()
+        .map_err(|error| ToolError::InvalidArguments {
+            message: error.to_string(),
+        })?;
+    structured_submission("repository_onboarding_proposal", document)
 }
 
 fn structured_submission(
@@ -1307,9 +1354,13 @@ mod workspace_source_tests {
         ));
     }
 
-    #[test]
-    fn onboarding_profile_uses_its_controller_owned_subject_stage() {
+    #[tokio::test]
+    async fn onboarding_profile_uses_its_controller_owned_subject_stage() {
         let mut run = profile_run(&["read_file", "submit_onboarding_proposal", "finish"]);
+        run.cwd = std::env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         run.execution_target_json
             .as_object_mut()
             .unwrap()
@@ -1320,10 +1371,58 @@ mod workspace_source_tests {
         run.execution_target_json["agent_context"] = serde_json::json!({
             "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
             "subject":{"kind":"repository_onboarding","id":"ronb_test"},
+            "discovery":{"id":"rdisc_test","hash":format!("sha256:{}", "a".repeat(64))},
         });
 
         let instruction = profile_instruction(&run).unwrap().unwrap();
         assert!(instruction.contains("repository_onboarding stage"));
+
+        let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
+        let proposal = serde_json::json!({
+            "schema_version":pharness_core::ONBOARDING_PROPOSAL_SCHEMA,
+            "discovery_id":"rdisc_test",
+            "discovery_hash":format!("sha256:{}", "a".repeat(64)),
+            "candidate_contract":{
+                "api_version":"pharness.dev/v1alpha1",
+                "environment_profile":"python-3.11",
+                "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":"b".repeat(64)},
+                "writable_paths":["src/**","tests/**","readme.md"],
+                "acceptance_commands":[{"name":"unit-tests","command":"python -m unittest discover -s tests -v"}],
+                "roots":{"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
+                "agent_network":"denied",
+                "package_installation":"preparation_only"
+            },
+            "instructions":"Follow the repository contract.",
+            "service_proposals":[],
+            "binding_proposals":[],
+            "assumptions":[],
+            "conflicts":[],
+            "blockers":[],
+            "readiness_forecast":{}
+        });
+        let accepted = tools
+            .execute(&AgentAction::SubmitOnboardingProposal {
+                id: ActionId::new("act_onboarding"),
+                reason: "submit bounded proposal".into(),
+                proposal: proposal.clone(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(accepted.content["structured_submission"], true);
+
+        let mut invalid = proposal;
+        invalid["candidate_contract"]["dependency_lock"]["sha256"] =
+            serde_json::json!(format!("sha256:{}", "b".repeat(64)));
+        assert!(matches!(
+            tools
+                .execute(&AgentAction::SubmitOnboardingProposal {
+                    id: ActionId::new("act_invalid_onboarding"),
+                    reason: "submit invalid proposal".into(),
+                    proposal: invalid,
+                })
+                .await,
+            Err(ToolError::InvalidArguments { .. })
+        ));
     }
 
     #[test]
