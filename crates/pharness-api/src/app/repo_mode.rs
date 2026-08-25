@@ -1001,6 +1001,19 @@ async fn apply_repo_stage_correction(
     actor: &str,
     reason: &str,
 ) -> Result<Value, ApiError> {
+    if let Some(chain) = state
+        .store
+        .active_stage_chain_authorization(work_item_id)
+        .await?
+    {
+        state
+            .store
+            .revoke_stage_chain_authorization(
+                &chain.id,
+                "operator authorized a fresh correction chain",
+            )
+            .await?;
+    }
     let work_item = state
         .store
         .get_work_item(work_item_id)
