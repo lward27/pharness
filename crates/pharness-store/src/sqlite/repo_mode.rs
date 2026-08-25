@@ -151,7 +151,7 @@ impl SqliteStore {
               repository_contract_json, repository_contract_hash, environment_preparation_status,
               mode, product_id, mutable_repository_id, product_model_snapshot_id,
               product_model_snapshot_hash, repository_contract_version_id, contract_version,
-              selected_acceptance_names_json, context_repositories_json, state_version,
+              selected_acceptance_names_json, context_repository_snapshots_json, state_version,
               created_at, updated_at, status_changed_at, status_changed_by, status_reason
             ) VALUES (
               ?1, 'proposed', ?2, ?3, ?4, ?5, ?6, ?7, 'repository', 0, ?8, ?9, ?10,
@@ -201,7 +201,7 @@ impl SqliteStore {
             r#"
             SELECT id, mode, product_id, mutable_repository_id, product_model_snapshot_id,
                    product_model_snapshot_hash, repository_contract_version_id, contract_version,
-                   selected_acceptance_names_json, context_repositories_json,
+                   selected_acceptance_names_json, context_repository_snapshots_json,
                    current_stage_execution_id, state_version, closed_at, closure_reason
             FROM work_items WHERE id = ?1 AND mode = 'repo'
             "#,
@@ -849,7 +849,7 @@ fn row_to_repo_metadata(
             &row.try_get::<String, _>("selected_acceptance_names_json")?,
         )?,
         context_repositories: serde_json::from_str(
-            &row.try_get::<String, _>("context_repositories_json")?,
+            &row.try_get::<String, _>("context_repository_snapshots_json")?,
         )?,
         current_stage_execution_id: row.try_get("current_stage_execution_id")?,
         state_version: row.try_get::<i64, _>("state_version")? as u64,
@@ -1270,5 +1270,44 @@ mod tests {
             )
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn repo_work_item_persists_context_repository_snapshots() {
+        let store = store_with_repo_work_item().await;
+        insert_stage_chain_scope(&store).await;
+        let item = store
+            .create_repo_work_item(CreateRepoWorkItem {
+                id: "witem_created".into(),
+                product_id: "prod_test".into(),
+                repository_id: "repo_test".into(),
+                product_model_snapshot_id: "pmodel_test".into(),
+                product_model_snapshot_hash: "sha256:model".into(),
+                repository_contract_version_id: "rcontract_test".into(),
+                contract_version: "pharness.dev/v1alpha1".into(),
+                title: "Created item".into(),
+                intent: "Make a bounded source change".into(),
+                acceptance_command_names: vec!["unit".into()],
+                acceptance_commands: vec!["cargo test".into()],
+                context_repositories: json!([{"repository_id":"repo_test","source_commit":"a".repeat(40)}]),
+                source_repo: "https://github.com/example/repo.git".into(),
+                source_ref: "main".into(),
+                source_commit: "a".repeat(40),
+                environment_profile_id: "rust".into(),
+                run_budget: pharness_core::RunBudget::default(),
+                max_attempts: 2,
+                repository_contract_json: json!({"api_version":"pharness.dev/v1alpha1"}),
+                repository_contract_hash: "sha256:contract".into(),
+                actor: "operator".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(item.id, "witem_created");
+        let metadata = store
+            .get_repo_work_item_metadata("witem_created")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(metadata.context_repositories.as_array().unwrap().len(), 1);
     }
 }

@@ -1269,7 +1269,7 @@ async fn seal_repo_plan_stage(
     Ok(())
 }
 
-fn structured_submission_from_events(
+pub(crate) fn structured_submission_from_events(
     events: &[AgentEvent],
     kind: &str,
 ) -> Option<serde_json::Value> {

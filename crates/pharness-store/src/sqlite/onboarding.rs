@@ -8,6 +8,85 @@ use crate::{
 use sqlx::{Row, Sqlite, Transaction};
 
 impl SqliteStore {
+    pub async fn start_repository_onboarding_proposer(
+        &self,
+        onboarding_id: &str,
+        expected_state_version: u64,
+        run_id: &str,
+        profile_hash: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'proposal_running', proposer_run_id = ?3,
+                proposer_profile_hash = ?4, proposer_stop_reason = NULL,
+                state_version = state_version + 1, updated_at = ?5,
+                status_changed_at = ?5, status_changed_by = ?6, status_reason = ?7
+            WHERE id = ?1 AND state_version = ?2 AND status IN ('discovered', 'proposal_failed')
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(i64::try_from(expected_state_version).unwrap_or(i64::MAX))
+        .bind(run_id)
+        .bind(profile_hash)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding is no longer ready for its proposer".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn fail_repository_onboarding_proposer(
+        &self,
+        onboarding_id: &str,
+        run_id: &str,
+        stop_reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'proposal_failed', proposer_stop_reason = ?3,
+                blockers_json = json_array(json_object(
+                  'code', 'onboarding_proposer_failed', 'summary', ?3
+                )), state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = 'controller', status_reason = ?3
+            WHERE id = ?1 AND proposer_run_id = ?2 AND status = 'proposal_running'
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(run_id)
+        .bind(stop_reason)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding proposer is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
     pub async fn create_repository_onboarding(
         &self,
         onboarding: CreateRepositoryOnboarding,
@@ -292,7 +371,10 @@ impl SqliteStore {
         let status: String = onboarding.try_get("status")?;
         if state_version != proposal.expected_state_version
             || discovery_id.as_deref() != Some(proposal.discovery_id.as_str())
-            || !matches!(status.as_str(), "discovered" | "proposal_ready")
+            || !matches!(
+                status.as_str(),
+                "discovered" | "proposal_running" | "proposal_ready"
+            )
         {
             return Err(StoreError::Conflict(
                 "repository onboarding changed after proposal preview".into(),
@@ -627,7 +709,8 @@ fn onboarding_select_sql(where_clause: &str) -> String {
     format!(
         "SELECT id, product_id, repository_id, binding_id, onboarding_kind, status, \
          registered_commit, resolved_commit, current_discovery_id, current_proposal_revision, \
-         approved_proposal_hash, source_delivery_intent_id, contract_version_id, state_version, \
+         approved_proposal_hash, source_delivery_intent_id, contract_version_id, proposer_run_id, \
+         proposer_profile_hash, proposer_stop_reason, state_version, \
          blockers_json, created_by, creation_reason, created_at, updated_at, status_changed_at, \
          status_changed_by, status_reason FROM repository_onboardings {where_clause}"
     )
@@ -676,6 +759,9 @@ fn row_to_onboarding(
         approved_proposal_hash: row.try_get("approved_proposal_hash")?,
         source_delivery_intent_id: row.try_get("source_delivery_intent_id")?,
         contract_version_id: row.try_get("contract_version_id")?,
+        proposer_run_id: row.try_get("proposer_run_id")?,
+        proposer_profile_hash: row.try_get("proposer_profile_hash")?,
+        proposer_stop_reason: row.try_get("proposer_stop_reason")?,
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         blockers: serde_json::from_str(&blockers)?,
         created_by: row.try_get("created_by")?,

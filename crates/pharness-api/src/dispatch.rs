@@ -1968,15 +1968,24 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         approval: Option<&StoredApproval>,
     ) -> serde_json::Value {
         let job_name = job_name(run.id.as_str(), approval);
+        let agent_profile_id = run
+            .execution_target_json
+            .pointer("/agent_profile/id")
+            .and_then(serde_json::Value::as_str);
+        let onboarding_proposer = agent_profile_id == Some("repository-onboarding-proposer");
         let runner_profile = run.execution_target_json.get("runner_profile");
         let runner_image = runner_profile
             .and_then(|profile| profile.get("image"))
             .and_then(serde_json::Value::as_str)
             .unwrap_or(&self.config.image);
-        let service_account = runner_profile
-            .and_then(|profile| profile.get("service_account"))
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(&self.config.service_account);
+        let service_account = if onboarding_proposer {
+            self.config.source_reader_service_account.as_str()
+        } else {
+            runner_profile
+                .and_then(|profile| profile.get("service_account"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&self.config.service_account)
+        };
         let cpu_limit = runner_profile
             .and_then(|profile| profile.pointer("/limits/cpu"))
             .and_then(serde_json::Value::as_str)
@@ -2126,6 +2135,16 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 },
             },
         });
+        if onboarding_proposer {
+            bind_onboarding_proposer_workspace(
+                &mut manifest,
+                run,
+                self.config.source_reader_token_secret_name.as_deref(),
+                &self.config.namespace,
+                runner_image,
+                &self.config.workspace_dir,
+            );
+        }
         match run
             .execution_target_json
             .pointer("/repo_mode/workspace_access")
@@ -2797,6 +2816,84 @@ fn bind_source_delivery_manifest(
     Ok(())
 }
 
+fn bind_onboarding_proposer_workspace(
+    manifest: &mut serde_json::Value,
+    run: &StoredRun,
+    source_reader_secret: Option<&str>,
+    namespace: &str,
+    image: &str,
+    workspace_dir: &str,
+) {
+    let source = run
+        .execution_target_json
+        .get("workspace_source")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        if let Some(labels) = manifest
+            .pointer_mut(pointer)
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            labels.insert(
+                "agentic.lucas.engineering/onboarding-proposer".into(),
+                serde_json::Value::String("true".into()),
+            );
+        }
+    }
+    manifest["spec"]["template"]["spec"]["automountServiceAccountToken"] = serde_json::json!(false);
+    let mut env = vec![
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_REPOSITORY","value":source.get("source_repo").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_SOURCE_COMMIT","value":source.get("source_commit").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_ONBOARDING_BRANCH","value":source.get("branch").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
+        serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
+        serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+        serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
+        serde_json::json!({"name":"HOME","value":"/tmp"}),
+    ];
+    if let Some(secret) = source_reader_secret {
+        env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
+    }
+    manifest["spec"]["template"]["spec"]["initContainers"] = serde_json::json!([
+        network_policy_stabilization_container(image),
+        {
+            "name":"prepare-onboarding-source",
+            "image":image,
+            "imagePullPolicy":"IfNotPresent",
+            "command":["/bin/sh","-ec"],
+            "args":[r#"
+test -n "$PHARNESS_ONBOARDING_REPOSITORY"
+test -n "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+test -n "$PHARNESS_ONBOARDING_BRANCH"
+cat > /tmp/askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' x-access-token ;;
+  *) printf '%s\n' "${PHARNESS_SOURCE_READER_TOKEN:-}" ;;
+esac
+EOF
+chmod 700 /tmp/askpass
+git init -q "$PHARNESS_WORKSPACE_DIR"
+git -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_ONBOARDING_REPOSITORY"
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+git -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_ONBOARDING_BRANCH" FETCH_HEAD
+test "$(git -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+"#],
+            "env":env,
+            "volumeMounts":[
+                {"name":"workspace","mountPath":workspace_dir},
+                {"name":"tmp","mountPath":"/tmp"},
+            ],
+            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+            "resources":{"requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"1Gi"}},
+        }
+    ]);
+    manifest["spec"]["template"]["spec"]["initContainers"][1]["env"]
+        .as_array_mut()
+        .expect("onboarding proposer env is an array")
+        .push(serde_json::json!({"name":"PHARNESS_WORKSPACE_DIR","value":workspace_dir}));
+}
+
 fn run_label_to_run_id(label: &str) -> String {
     // run ids are `run_<digits>`; the label form is `run-<digits>`.
     match label.strip_prefix("run-") {
@@ -3142,6 +3239,58 @@ mod tests {
         assert_eq!(
             manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/readOnly"),
             Some(&json!(true))
+        );
+    }
+
+    #[tokio::test]
+    async fn onboarding_proposer_reader_credential_is_init_only() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name =
+            Some("pharness-source-reader-token".into());
+        let mut run = test_run();
+        run.execution_target_json = json!({
+            "agent_profile":{"id":"repository-onboarding-proposer"},
+            "workspace_source":{
+                "workspace_id":"onboarding-ronb-test",
+                "source_repo":"https://github.com/example/test.git",
+                "source_ref":"main",
+                "source_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "branch":"pharness/onboarding/ronb-test",
+                "resolved_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let manifest = dispatcher.job_manifest(&run, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/name"),
+            Some(&json!("prepare-onboarding-source"))
+        );
+        let init_env = manifest
+            .pointer("/spec/template/spec/initContainers/1/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(init_env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        let model_env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(model_env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_SOURCE_READER_TOKEN"));
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1onboarding-proposer"
+            ),
+            Some(&json!("true"))
         );
     }
 

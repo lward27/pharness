@@ -5,9 +5,12 @@ use crate::dispatch::RepositoryDiscoveryRequest;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use pharness_core::{
+    AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
+};
 use pharness_store::{
     CreateProductAggregate, CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
-    CreateRepositoryReadinessAssessment, RegisterRepositoryAggregate,
+    CreateRepositoryReadinessAssessment, CreateRun, CreateSession, RegisterRepositoryAggregate,
     RegisteredRepositoryAggregate, StoredProduct, StoredProductModelSnapshot, StoredRepository,
     StoredRepositoryBinding, StoredRepositoryDraft, StoredRepositoryOnboarding, StoredService,
     UpdateProductAggregate,
@@ -279,6 +282,9 @@ struct RepositoryOnboardingResponse {
     approved_proposal_hash: Option<String>,
     source_delivery_intent_id: Option<String>,
     contract_version_id: Option<String>,
+    proposer_run_id: Option<String>,
+    proposer_profile_hash: Option<String>,
+    proposer_stop_reason: Option<String>,
     state_version: u64,
     state_hash: String,
     blockers: Vec<Value>,
@@ -972,12 +978,21 @@ async fn get_repository_onboarding_flow(
         .store
         .get_current_repository_onboarding_proposal(&onboarding.id)
         .await?;
+    let proposer_run = match onboarding.proposer_run_id.as_deref() {
+        Some(run_id) => state.store.get_run(&RunId::new(run_id)).await?,
+        None => None,
+    };
+    let source_delivery_intent = match onboarding.source_delivery_intent_id.as_deref() {
+        Some(intent_id) => state.store.get_source_delivery_intent(intent_id).await?,
+        None => None,
+    };
     let response = onboarding_response(onboarding)?;
     Ok(Json(json!({
         "onboarding": response,
         "discovery": discovery,
         "proposal": proposal,
-        "source_delivery_intent": null,
+        "proposer_run": proposer_run,
+        "source_delivery_intent": source_delivery_intent,
         "readiness": null,
     })))
 }
@@ -1162,6 +1177,15 @@ async fn execute_repository_onboarding_action(
                 )
                 .await?;
         }
+        "start_proposer" | "retry_proposer" => {
+            start_repository_onboarding_proposer(
+                &state,
+                &onboarding,
+                request.actor.trim(),
+                request.reason.trim(),
+            )
+            .await?;
+        }
         _ => {
             return Err(ApiError::bad_request(
                 "unsupported repository onboarding action",
@@ -1170,6 +1194,193 @@ async fn execute_repository_onboarding_action(
     }
     let updated = find_onboarding(&state, &onboarding_id).await?;
     Ok(Json(onboarding_response(updated)?))
+}
+
+async fn start_repository_onboarding_proposer(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+    actor: &str,
+    reason: &str,
+) -> Result<(), ApiError> {
+    if !state.worker.supports_remote_workspace() {
+        return Err(ApiError::unavailable(
+            "repository onboarding proposer requires kubernetes_job worker mode",
+        ));
+    }
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    if !state.worker.source_reader_available()
+        || !state
+            .worker
+            .source_reader_allows_repository(&repository.canonical_url)
+    {
+        return Err(ApiError::conflict(
+            "repository onboarding proposer requires the isolated source-reader allowlist",
+        ));
+    }
+    let discovery_id = onboarding
+        .current_discovery_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("onboarding has no deterministic discovery"))?;
+    let discovery = state
+        .store
+        .get_repository_discovery(discovery_id)
+        .await?
+        .filter(|discovery| {
+            discovery.status == "succeeded"
+                && discovery.source_commit == onboarding.registered_commit
+                && discovery.resolved_commit.as_deref()
+                    == Some(onboarding.registered_commit.as_str())
+        })
+        .ok_or_else(|| ApiError::conflict("current deterministic discovery is unavailable"))?;
+    let discovery_hash = discovery
+        .content_hash
+        .clone()
+        .ok_or_else(|| ApiError::conflict("deterministic discovery has no content hash"))?;
+    let inventory = discovery
+        .inventory_json
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("deterministic discovery inventory is unavailable"))?;
+    let model = state
+        .worker
+        .config_json()
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("unconfigured")
+        .to_string();
+    let profile =
+        pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
+            .into_iter()
+            .find(|profile| profile.id == "repository-onboarding-proposer")
+            .ok_or_else(|| {
+                ApiError::internal("compiled onboarding proposer profile is unavailable")
+            })?;
+    let bounded_discovery = json!({
+        "id":discovery.id,
+        "hash":discovery_hash,
+        "repository":inventory.get("repository"),
+        "contract":inventory.get("contract"),
+        "language_indicators":inventory.get("language_indicators"),
+        "dependency_candidates":inventory.get("dependency_candidates"),
+        "command_candidates":inventory.get("command_candidates"),
+        "root_candidates":inventory.get("root_candidates"),
+        "automation_references":inventory.get("automation_references"),
+        "conflicts":inventory.get("conflicts"),
+        "blockers":inventory.get("blockers"),
+        "limits":inventory.get("limits"),
+    });
+    let context = json!({
+        "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
+        "subject":{"kind":"repository_onboarding","id":onboarding.id},
+        "intent":"Propose the canonical RepositoryContract and bounded instructions from deterministic discovery and exact read-only repository evidence.",
+        "pinned_repository":{"id":repository.id,"url":repository.canonical_url,"default_branch":repository.default_branch,"source_commit":onboarding.registered_commit},
+        "discovery":bounded_discovery,
+        "policies":{"allowed_source_changes":[".pharness/repository.yaml",".pharness/instructions.md","remove .pharness/project.yaml"],"dependency_lock_generation":false,"agent_network":"denied"},
+        "remaining_budgets":profile.budget,
+    });
+    let estimated_tokens = context.to_string().len() / 4;
+    if estimated_tokens > 16_000 {
+        return Err(ApiError::conflict(
+            "mandatory onboarding context exceeds the 16,000-token context limit",
+        ));
+    }
+    let run_id = RunId::new(new_prefixed_id("run"));
+    let session_id = SessionId::new(new_prefixed_id("ses"));
+    let branch = format!("pharness/onboarding/{}", onboarding.id);
+    let source = pharness_runhost::WorkspaceSourceSpec {
+        workspace_id: format!("onboarding-{}", onboarding.id),
+        source_repo: repository.canonical_url.clone(),
+        source_ref: repository.default_branch.clone(),
+        source_commit: Some(onboarding.registered_commit.clone()),
+        branch: branch.clone(),
+        resolved_commit: Some(onboarding.registered_commit.clone()),
+    };
+    source
+        .validate()
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    state
+        .workspace
+        .remote_source_allowed(&source)
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    let cwd = state.worker.effective_cwd("/workspace");
+    state
+        .store
+        .create_session(CreateSession {
+            id: session_id.clone(),
+            title: format!("Repository onboarding proposer: {}", repository.external_id),
+            cwd: cwd.clone(),
+        })
+        .await?;
+    let scope = RunScope {
+        run_id: Some(run_id.to_string()),
+        repo: Some(repository.canonical_url.clone()),
+        branch: Some(branch),
+        ..RunScope::default()
+    };
+    let run = state
+        .store
+        .create_run(CreateRun {
+            id: run_id.clone(),
+            session_id: session_id.clone(),
+            user_task: "Submit one bounded Repository onboarding proposal. Treat discovery facts as authoritative, inspect only what is needed, and do not modify the checkout.".into(),
+            cwd: cwd.clone(),
+            max_turns: profile.budget.initial_turns,
+            initial_status: "queued".into(),
+            execution_target_json: json!({
+                "kind":state.worker.execution_target_kind(),
+                "onboarding":{"onboarding_id":onboarding.id,"discovery_id":discovery.id,"discovery_hash":discovery_hash},
+                "agent_profile":profile,
+                "agent_context":context,
+                "workspace_source":source,
+                "run_scope":scope.to_optional_json(),
+                "run_budget":profile.budget,
+            }),
+        })
+        .await?;
+    let run = state
+        .store
+        .set_run_budget(
+            &run.id,
+            &profile.budget,
+            &RunBudgetConsumption {
+                allowed_turns: profile.budget.initial_turns,
+                allowed_tokens: profile.budget.initial_tokens,
+                ..RunBudgetConsumption::default()
+            },
+        )
+        .await?;
+    let run = state.store.set_run_origin(&run.id, "controller").await?;
+    let run = state
+        .store
+        .set_run_created_by(&run.id, Some(actor.into()))
+        .await?;
+    state
+        .store
+        .start_repository_onboarding_proposer(
+            &onboarding.id,
+            onboarding.state_version,
+            run.id.as_str(),
+            &profile.profile_hash,
+            actor,
+            reason,
+        )
+        .await?;
+    state
+        .store
+        .append_event(&AgentEvent {
+            event_id: EventId::new(new_prefixed_id("evt")),
+            session_id,
+            run_id: run.id.clone(),
+            seq: 1,
+            kind: EventKind::RunQueued,
+            payload: json!({"source":"repo_mode_controller","subject":"repository_onboarding","onboarding_id":onboarding.id,"discovery_id":discovery.id,"actor":actor,"reason":reason}),
+        })
+        .await?;
+    state.worker.spawn_run(run, cwd);
+    Ok(())
 }
 
 async fn repository_registration_preflight(
@@ -1332,10 +1543,15 @@ fn onboarding_response(
         "approved_proposal_hash": onboarding.approved_proposal_hash,
         "source_delivery_intent_id": onboarding.source_delivery_intent_id,
         "contract_version_id": onboarding.contract_version_id,
+        "proposer_run_id": onboarding.proposer_run_id,
+        "proposer_profile_hash": onboarding.proposer_profile_hash,
+        "proposer_stop_reason": onboarding.proposer_stop_reason,
     }))?;
     let action = match onboarding.status.as_str() {
         "registered" => Some(("start_discovery", Vec::new())),
         "discovery_failed" => Some(("retry_discovery", Vec::new())),
+        "discovered" => Some(("start_proposer", Vec::new())),
+        "proposal_failed" => Some(("retry_proposer", Vec::new())),
         "proposal_ready" => Some(("approve_proposal", Vec::new())),
         _ => None,
     };
@@ -1350,10 +1566,15 @@ fn onboarding_response(
             },
             effect_class: if id == "approve_proposal" {
                 "human_review".into()
+            } else if matches!(id, "start_proposer" | "retry_proposer") {
+                "model_execution".into()
             } else {
                 "isolated_read".into()
             },
-            requires_confirmation: id == "approve_proposal",
+            requires_confirmation: matches!(
+                id,
+                "approve_proposal" | "start_proposer" | "retry_proposer"
+            ),
             blockers,
             state_hash: state_hash.clone(),
         })
@@ -1372,6 +1593,9 @@ fn onboarding_response(
         approved_proposal_hash: onboarding.approved_proposal_hash,
         source_delivery_intent_id: onboarding.source_delivery_intent_id,
         contract_version_id: onboarding.contract_version_id,
+        proposer_run_id: onboarding.proposer_run_id,
+        proposer_profile_hash: onboarding.proposer_profile_hash,
+        proposer_stop_reason: onboarding.proposer_stop_reason,
         state_version: onboarding.state_version,
         state_hash,
         blockers: onboarding.blockers,
@@ -1379,6 +1603,116 @@ fn onboarding_response(
         created_at: onboarding.created_at,
         updated_at: onboarding.updated_at,
     })
+}
+
+pub(in crate::app) async fn finalize_repository_onboarding_proposer_run(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+) -> Result<(), ApiError> {
+    let Some(onboarding_id) = run
+        .execution_target_json
+        .pointer("/onboarding/onboarding_id")
+        .and_then(Value::as_str)
+    else {
+        return Ok(());
+    };
+    let onboarding = find_onboarding(state, onboarding_id).await?;
+    if onboarding.proposer_run_id.as_deref() != Some(run.id.as_str())
+        || onboarding.status != "proposal_running"
+    {
+        return Ok(());
+    }
+    let result = validate_and_store_agent_onboarding_proposal(state, run, &onboarding).await;
+    if let Err(error) = result {
+        tracing::warn!(onboarding_id, run_id=%run.id, ?error, "repository onboarding proposer result was rejected");
+        state
+            .store
+            .fail_repository_onboarding_proposer(
+                onboarding_id,
+                run.id.as_str(),
+                "onboarding proposer did not produce a controller-valid proposal",
+            )
+            .await?;
+    }
+    Ok(())
+}
+
+async fn validate_and_store_agent_onboarding_proposal(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    onboarding: &StoredRepositoryOnboarding,
+) -> Result<(), ApiError> {
+    if run.status != "completed" {
+        return Err(ApiError::conflict(
+            "onboarding proposer Run did not complete successfully",
+        ));
+    }
+    let discovery_id = onboarding
+        .current_discovery_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("onboarding discovery is unavailable"))?;
+    let discovery = state
+        .store
+        .get_repository_discovery(discovery_id)
+        .await?
+        .filter(|discovery| discovery.status == "succeeded")
+        .ok_or_else(|| ApiError::conflict("onboarding discovery is not successful"))?;
+    let discovery_hash = discovery
+        .content_hash
+        .clone()
+        .ok_or_else(|| ApiError::conflict("onboarding discovery has no content hash"))?;
+    let events = state.store.list_events(&run.id).await?;
+    let submitted =
+        crate::worker::structured_submission_from_events(&events, "repository_onboarding_proposal")
+            .ok_or_else(|| ApiError::conflict("onboarding proposer made no typed submission"))?;
+    let proposal: pharness_core::RepositoryOnboardingProposal =
+        serde_json::from_value(submitted.clone()).map_err(|error| {
+            ApiError::conflict(format!(
+                "onboarding proposer submission is invalid: {error}"
+            ))
+        })?;
+    if proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA
+        || proposal.discovery_id != discovery.id
+        || proposal.discovery_hash != discovery_hash
+        || proposal.instructions.len() > 32 * 1024
+    {
+        return Err(ApiError::conflict(
+            "onboarding proposal does not match its exact discovery or bounded schema",
+        ));
+    }
+    let contract: pharness_core::RepositoryContract =
+        serde_json::from_value(proposal.candidate_contract.clone()).map_err(|error| {
+            ApiError::conflict(format!("candidate contract is invalid: {error}"))
+        })?;
+    contract
+        .validate_candidate()
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    if !state
+        .environment_profiles
+        .iter()
+        .any(|profile| profile.active && profile.id == contract.environment_profile)
+    {
+        return Err(ApiError::conflict(
+            "candidate contract selects no active EnvironmentProfile",
+        ));
+    }
+    let value =
+        serde_json::to_value(&proposal).map_err(|error| ApiError::internal(error.to_string()))?;
+    state
+        .store
+        .create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
+            id: new_prefixed_id("rprop"),
+            onboarding_id: onboarding.id.clone(),
+            expected_state_version: onboarding.state_version,
+            content_hash: canonical_material_hash(&value)?,
+            proposal: value,
+            discovery_id: discovery.id,
+            discovery_hash,
+            actor: "agent:repository-onboarding-proposer".into(),
+            origin: "agent".into(),
+        })
+        .await?;
+    Ok(())
 }
 
 pub(in crate::app) async fn internal_repository_discovery_context(

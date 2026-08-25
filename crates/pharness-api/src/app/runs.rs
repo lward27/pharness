@@ -536,6 +536,8 @@ pub(super) async fn internal_ingest_outcome(
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
 
+    super::products::finalize_repository_onboarding_proposer_run(&state, &run).await?;
+
     if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
         tracing::error!(run_id=%run.id, ?error, "authorized Repo Mode stage continuation failed");
         super::repo_mode::record_repo_chain_continuation_failure(&state, &run).await?;
