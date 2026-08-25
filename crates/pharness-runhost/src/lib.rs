@@ -292,10 +292,26 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         .get("id")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow::anyhow!("agent_profile has no id"))?;
+    // The stage is controller-owned execution state, not mutable profile
+    // configuration. Legacy payloads may still carry it on the profile.
     let stage = profile
         .get("stage")
         .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("agent_profile has no stage"))?;
+        .or_else(|| {
+            run.execution_target_json
+                .pointer("/repo_mode/stage")
+                .and_then(serde_json::Value::as_str)
+        })
+        .or_else(|| {
+            (id == "repository-onboarding-proposer"
+                && run
+                    .execution_target_json
+                    .pointer("/onboarding/onboarding_id")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some())
+            .then_some("repository_onboarding")
+        })
+        .ok_or_else(|| anyhow::anyhow!("agent profile execution target has no stage"))?;
     let context = run
         .execution_target_json
         .get("agent_context")
@@ -1171,9 +1187,9 @@ mod workspace_source_tests {
             user_task: "plan a bounded change".into(),
             max_turns: 24,
             execution_target_json: serde_json::json!({
+                "repo_mode": {"stage": "plan"},
                 "agent_profile": {
                     "id": "repo-planner",
-                    "stage": "plan",
                     "tools": tools,
                 }
             }),
@@ -1289,6 +1305,25 @@ mod workspace_source_tests {
                 .await,
             Err(ToolError::InvalidArguments { .. })
         ));
+    }
+
+    #[test]
+    fn onboarding_profile_uses_its_controller_owned_subject_stage() {
+        let mut run = profile_run(&["read_file", "submit_onboarding_proposal", "finish"]);
+        run.execution_target_json
+            .as_object_mut()
+            .unwrap()
+            .remove("repo_mode");
+        run.execution_target_json["agent_profile"]["id"] =
+            serde_json::json!("repository-onboarding-proposer");
+        run.execution_target_json["onboarding"] = serde_json::json!({"onboarding_id":"ronb_test"});
+        run.execution_target_json["agent_context"] = serde_json::json!({
+            "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
+            "subject":{"kind":"repository_onboarding","id":"ronb_test"},
+        });
+
+        let instruction = profile_instruction(&run).unwrap().unwrap();
+        assert!(instruction.contains("repository_onboarding stage"));
     }
 
     #[test]
