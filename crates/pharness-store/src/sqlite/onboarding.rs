@@ -516,6 +516,17 @@ impl SqliteStore {
         rows.into_iter().map(row_to_onboarding).collect()
     }
 
+    pub async fn list_repository_onboardings_awaiting_isolated_job(
+        &self,
+    ) -> Result<Vec<StoredRepositoryOnboarding>, StoreError> {
+        let rows = sqlx::query(&onboarding_select_sql(
+            "WHERE status IN ('patch_queued', 'validation_queued') ORDER BY updated_at, id",
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_onboarding).collect()
+    }
+
     pub async fn create_repository_discovery(
         &self,
         id: &str,
@@ -1729,6 +1740,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(validating.status, "validation_queued");
+        assert_eq!(
+            store
+                .list_repository_onboardings_awaiting_isolated_job()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            vec![onboarding.id.clone()]
+        );
         let completed = store
             .complete_repository_onboarding_contract_validation(
                 "onbvalidate_test",
@@ -1745,6 +1766,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(completed.status, "contract_ready");
+        assert!(store
+            .list_repository_onboardings_awaiting_isolated_job()
+            .await
+            .unwrap()
+            .is_empty());
         assert_eq!(
             completed.contract_version_id.as_deref(),
             Some("rcontract_test")
