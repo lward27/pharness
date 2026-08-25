@@ -832,24 +832,6 @@ async fn seal_repo_verify_stage(
             content_hash: pharness_core::canonical_json_sha256(&validation)?,
         })
         .await?;
-    let change_set = if passed {
-        Some(create_repo_change_set(store, run, execution, &upstream).await?)
-    } else {
-        None
-    };
-    store
-        .update_repo_work_item_status(
-            &execution.work_item_id,
-            if passed {
-                "awaiting_approval"
-            } else {
-                "blocked"
-            },
-            "controller",
-            &stop_reason,
-            false,
-        )
-        .await?;
     let metadata = store
         .get_repo_work_item_metadata(&execution.work_item_id)
         .await?
@@ -870,21 +852,28 @@ async fn seal_repo_verify_stage(
         pinned_inputs: execution.input_snapshot.clone(),
         verified_facts: vec![facts],
         agent_claims: submission.into_iter().collect(),
-        outputs: change_set
-            .as_ref()
-            .map(|change_set| vec![serde_json::json!({"kind":"change_set","id":change_set.id,"revision":change_set.revision,"material_hash":change_set.material_hash})])
-            .unwrap_or_default(),
+        outputs: Vec::new(),
         acceptance: Vec::new(),
-        decisions: vec![serde_json::json!({"kind":"controller_verification_validation","status":status})],
+        decisions: vec![
+            serde_json::json!({"kind":"controller_verification_validation","status":status}),
+        ],
         authorizations: execution
             .input_snapshot
             .get("chain_authorization_id")
             .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
             .unwrap_or_default(),
-        contradictions: if passed { Vec::new() } else { vec![serde_json::json!({"kind":"verification_not_approved"})] },
+        contradictions: if passed {
+            Vec::new()
+        } else {
+            vec![serde_json::json!({"kind":"verification_not_approved"})]
+        },
         risks: Vec::new(),
         unavailable_capabilities: Vec::new(),
-        recommendations: if passed { vec![serde_json::json!({"next":"review_change_set"})] } else { vec![serde_json::json!({"next":"correct_or_replan"})] },
+        recommendations: if passed {
+            vec![serde_json::json!({"next":"review_change_set"})]
+        } else {
+            vec![serde_json::json!({"next":"correct_or_replan"})]
+        },
         stop_reason: stop_reason.clone(),
         sealed_state_version: metadata.state_version,
     };
@@ -904,6 +893,22 @@ async fn seal_repo_verify_stage(
             reason: "validate typed Verifier result against sealed evidence".into(),
         })
         .await?;
+    if passed {
+        create_repo_change_set(store, run, execution).await?;
+    }
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            if passed {
+                "awaiting_approval"
+            } else {
+                "blocked"
+            },
+            "controller",
+            &stop_reason,
+            false,
+        )
+        .await?;
     revoke_repo_chain_for_run(store, run, "Verifier reached a terminal outcome").await?;
     Ok(())
 }
@@ -912,7 +917,6 @@ async fn create_repo_change_set(
     store: &SqliteStore,
     run: &StoredRun,
     verify_execution: &pharness_store::StoredStageExecution,
-    outcomes: &[pharness_store::StoredStageOutcome],
 ) -> anyhow::Result<pharness_store::StoredChangeSet> {
     let work_item = store
         .get_work_item(&verify_execution.work_item_id)
@@ -922,6 +926,9 @@ async fn create_repo_change_set(
         .get_work_plan_by_work_item(&verify_execution.work_item_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkPlan no longer exists"))?;
+    let outcomes = store
+        .list_effective_stage_outcomes(&verify_execution.work_item_id)
+        .await?;
     let implement = outcomes
         .iter()
         .find(|outcome| outcome.stage_key == "implement" && outcome.status == "succeeded")
@@ -2679,15 +2686,17 @@ mod tests {
     use super::{
         approval_gates_from_remediation_plan, artifact_from_event, attempt_actor,
         attempt_spec_for_run, change_set_can_be_revised_for_work_plan, classify_work_item_attempt,
-        file_change_from_event, finish_run_from_attempt, grant_used_audit_event_from_event,
-        incident_from_observation, observation_from_event, persist_workspace_evidence,
-        remediation_plan_from_incident, result_json_for_attempt, structured_submission_from_events,
-        validate_repo_work_plan, validate_workspace_evidence, workspace_source_for_run,
+        create_repo_change_set, file_change_from_event, finish_run_from_attempt,
+        grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
+        persist_workspace_evidence, remediation_plan_from_incident, result_json_for_attempt,
+        structured_submission_from_events, validate_repo_work_plan, validate_workspace_evidence,
+        workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
     use pharness_store::{
-        CreateRun, CreateSession, CreateWorkItem, CreateWorkspace, SqliteStore, StoredChangeSet,
+        CreateArtifact, CreateRun, CreateSession, CreateStageExecution, CreateWorkItem,
+        CreateWorkPlan, CreateWorkspace, SealStageOutcome, SqliteStore, StoredChangeSet,
         StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun, StoredWorkPlan,
     };
 
@@ -2749,6 +2758,230 @@ mod tests {
         change_set.status = "rejected".into();
         change_set.change_set_json["work_plan"]["revision"] = serde_json::json!(2);
         assert!(!change_set_can_be_revised_for_work_plan(&change_set, &plan));
+    }
+
+    #[tokio::test]
+    async fn repo_change_set_material_captures_the_current_verify_outcome() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let work_item_id = "witem_change_set_outcome_order";
+        let source_commit = "a".repeat(40);
+        store
+            .create_work_item(CreateWorkItem {
+                id: work_item_id.into(),
+                status: "verifying".into(),
+                title: "capture current verifier".into(),
+                intent: "prove ChangeSet outcome ordering".into(),
+                acceptance_criteria: vec![],
+                source_repo: "https://github.com/example/repo.git".into(),
+                source_ref: "main".into(),
+                source_commit: Some(source_commit.clone()),
+                pipeline_contract_id: None,
+                deployment_contract_id: None,
+                gitops_repo: None,
+                gitops_ref: None,
+                gitops_kustomization_path: None,
+                gitops_image_name: None,
+                target_environment: "dev".into(),
+                target_namespace: None,
+                argo_application: None,
+                workload_kind: None,
+                workload_name: None,
+                rollback_owner: None,
+                production_impacting: false,
+                max_attempts: 2,
+                max_elapsed_seconds: 600,
+                environment_profile_id: None,
+                run_budget: Default::default(),
+                repository_contract_json: None,
+                repository_contract_hash: None,
+                environment_preparation_status: "not_required".into(),
+                created_by: Some("operator".into()),
+            })
+            .await
+            .unwrap();
+
+        let plan_session_id = SessionId::new("ses_change_set_plan");
+        let plan_run_id = RunId::new("run_change_set_plan");
+        let builder_session_id = SessionId::new("ses_change_set_builder");
+        let builder_run_id = RunId::new("run_change_set_builder");
+        let verifier_session_id = SessionId::new("ses_change_set_verifier");
+        let verifier_run_id = RunId::new("run_change_set_verifier");
+        for (session_id, run_id, title) in [
+            (&plan_session_id, &plan_run_id, "plan"),
+            (&builder_session_id, &builder_run_id, "builder"),
+            (&verifier_session_id, &verifier_run_id, "verifier"),
+        ] {
+            store
+                .create_session(CreateSession {
+                    id: session_id.clone(),
+                    title: title.into(),
+                    cwd: "/workspace".into(),
+                })
+                .await
+                .unwrap();
+            store
+                .create_run(CreateRun {
+                    id: run_id.clone(),
+                    session_id: session_id.clone(),
+                    user_task: title.into(),
+                    cwd: "/workspace".into(),
+                    max_turns: 2,
+                    initial_status: "completed".into(),
+                    execution_target_json: serde_json::json!({"kind":"local_process"}),
+                })
+                .await
+                .unwrap();
+        }
+        let plan = store
+            .create_work_plan(CreateWorkPlan {
+                id: "wplan_change_set_outcome_order".into(),
+                work_item_id: Some(work_item_id.into()),
+                remediation_plan_id: None,
+                incident_id: None,
+                session_id: plan_session_id,
+                run_id: Some(plan_run_id),
+                status: "approved".into(),
+                title: "approved plan".into(),
+                summary: "capture current verifier".into(),
+                risk_level: "low".into(),
+                requires_approval: true,
+                resource_namespace: None,
+                resource_kind: Some("Repository".into()),
+                resource_name: Some("https://github.com/example/repo.git".into()),
+                work_plan_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let workspace_id = "ws_change_set_outcome_order";
+        store
+            .create_workspace(CreateWorkspace {
+                id: workspace_id.into(),
+                work_item_id: work_item_id.into(),
+                run_id: Some(builder_run_id.clone()),
+                status: "verifying".into(),
+                source_repo: "https://github.com/example/repo.git".into(),
+                source_ref: "main".into(),
+                resolved_commit: Some(source_commit),
+                branch: Some("pharness/test".into()),
+                retention_status: "retained".into(),
+                actor: Some("controller".into()),
+                reason: Some("test".into()),
+            })
+            .await
+            .unwrap();
+        let implement_execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: "stageexec_change_set_implement".into(),
+                work_item_id: work_item_id.into(),
+                stage_key: "implement".into(),
+                sequence: 1,
+                status: "succeeded".into(),
+                agent_profile_id: Some("repo-builder".into()),
+                agent_profile_version: Some("v1".into()),
+                agent_profile_hash: Some(format!("sha256:{}", "b".repeat(64))),
+                context_pack_id: None,
+                run_id: Some(builder_run_id.clone()),
+                workspace_id: Some(workspace_id.into()),
+                input_hash: format!("sha256:{}", "c".repeat(64)),
+                input_snapshot: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let verify_execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: "stageexec_change_set_verify".into(),
+                work_item_id: work_item_id.into(),
+                stage_key: "verify".into(),
+                sequence: 1,
+                status: "succeeded".into(),
+                agent_profile_id: Some("repo-verifier".into()),
+                agent_profile_version: Some("v1".into()),
+                agent_profile_hash: Some(format!("sha256:{}", "d".repeat(64))),
+                context_pack_id: None,
+                run_id: Some(verifier_run_id.clone()),
+                workspace_id: Some(workspace_id.into()),
+                input_hash: format!("sha256:{}", "e".repeat(64)),
+                input_snapshot: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+        let implement_outcome = store
+            .seal_stage_outcome(SealStageOutcome {
+                id: "stageout_change_set_implement".into(),
+                stage_execution_id: implement_execution.id.clone(),
+                work_item_id: work_item_id.into(),
+                stage_key: "implement".into(),
+                status: "succeeded".into(),
+                content_hash: format!("sha256:{}", "f".repeat(64)),
+                outcome: serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA}),
+                state_version: 1,
+                supersedes_outcome_id: None,
+                actor: "controller".into(),
+                reason: "test".into(),
+            })
+            .await
+            .unwrap();
+        let verify_outcome = store
+            .seal_stage_outcome(SealStageOutcome {
+                id: "stageout_change_set_verify".into(),
+                stage_execution_id: verify_execution.id.clone(),
+                work_item_id: work_item_id.into(),
+                stage_key: "verify".into(),
+                status: "succeeded".into(),
+                content_hash: format!("sha256:{}", "1".repeat(64)),
+                outcome: serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA}),
+                state_version: 1,
+                supersedes_outcome_id: None,
+                actor: "controller".into(),
+                reason: "test".into(),
+            })
+            .await
+            .unwrap();
+        let diff = "diff --git a/readme.md b/readme.md\n--- a/readme.md\n+++ b/readme.md\n@@ -1 +1 @@\n-old\n+new\n";
+        store
+            .create_artifact(CreateArtifact {
+                id: "art_change_set_diff".into(),
+                session_id: builder_session_id.clone(),
+                run_id: Some(builder_run_id.clone()),
+                kind: "workspace_git_diff".into(),
+                label: "diff".into(),
+                mime_type: Some("text/x-diff".into()),
+                path: None,
+                content_text: Some(diff.into()),
+                content_json: None,
+            })
+            .await
+            .unwrap();
+        store
+            .create_artifact(CreateArtifact {
+                id: "art_change_set_status".into(),
+                session_id: builder_session_id,
+                run_id: Some(builder_run_id.clone()),
+                kind: "workspace_git_status".into(),
+                label: "status".into(),
+                mime_type: Some("application/json".into()),
+                path: None,
+                content_text: None,
+                content_json: Some(serde_json::json!({"changed_paths":["readme.md"]})),
+            })
+            .await
+            .unwrap();
+        let verifier_run = store.get_run(&verifier_run_id).await.unwrap().unwrap();
+        let change_set = create_repo_change_set(&store, &verifier_run, &verify_execution)
+            .await
+            .unwrap();
+        assert_eq!(change_set.work_plan_id, plan.id);
+        assert_eq!(change_set.run_id.as_ref(), Some(&builder_run_id));
+        let refs = change_set.change_set_json["effective_outcomes"]
+            .as_array()
+            .unwrap();
+        assert!(refs.iter().any(|reference| {
+            reference["id"] == verify_outcome.id && reference["hash"] == verify_outcome.content_hash
+        }));
+        assert!(refs.iter().any(|reference| {
+            reference["id"] == implement_outcome.id
+                && reference["hash"] == implement_outcome.content_hash
+        }));
     }
 
     #[test]
