@@ -2,8 +2,9 @@ nameOverride: pharness
 
 features:
   repoModeV1:
-    # Repo Mode is enabled only in the post-verification release values.
-    enabled: false
+    # Enabled after the release passed isolated source-reader, GitHub-observer,
+    # Python runner, and model-provider capability verification.
+    enabled: true
 
 organization:
   id: org_lucas_engineering
