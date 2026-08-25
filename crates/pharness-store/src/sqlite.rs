@@ -4965,22 +4965,25 @@ impl SqliteStore {
                 "run is not recoverable from a failed budget-extension dispatch".into(),
             ));
         }
-        let queued_result = serde_json::json!({
-            "status":"queued",
-            "resume":"approved_budget_extension_dispatch_retry",
-            "budget_extension_id":extension.id,
-        });
+        if run
+            .result_json
+            .as_ref()
+            .and_then(|result| result.get("budget_extension"))
+            .is_none()
+        {
+            return Err(StoreError::Conflict(
+                "failed budget-extension dispatch has no durable resume payload".into(),
+            ));
+        }
         let update = sqlx::query(
             r#"
             UPDATE runs
-            SET status = 'queued', finished_at = NULL, result_json = ?2,
-                error = NULL, stop_reason = NULL
+            SET status = 'queued', finished_at = NULL, error = NULL, stop_reason = NULL
             WHERE id = ?1 AND status = 'failed'
               AND error LIKE 'failed to launch worker job:%'
             "#,
         )
         .bind(run.id.as_str())
-        .bind(serde_json::to_string(&queued_result)?)
         .execute(&self.pool)
         .await?;
         if update.rows_affected() != 1 {
@@ -4996,6 +4999,39 @@ impl SqliteStore {
                 id: run.id.to_string(),
             })?;
         Ok((extension, run))
+    }
+
+    pub async fn mark_budget_extension_dispatch_failed(
+        &self,
+        run_id: &RunId,
+        error: &str,
+    ) -> Result<StoredRun, StoreError> {
+        let now = now_string();
+        let update = sqlx::query(
+            r#"
+            UPDATE runs
+            SET status = 'failed', finished_at = ?2, error = ?3,
+                stop_reason = 'budget_extension_dispatch_failed'
+            WHERE id = ?1 AND status = 'queued'
+              AND json_type(result_json, '$.budget_extension') IS NOT NULL
+            "#,
+        )
+        .bind(run_id.as_str())
+        .bind(now)
+        .bind(error)
+        .execute(&self.pool)
+        .await?;
+        if update.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "run has no resumable budget-extension dispatch state".into(),
+            ));
+        }
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
     }
 }
 
@@ -6895,7 +6931,14 @@ mod tests {
         store
             .pause_run_for_budget(
                 &run_id,
-                serde_json::json!({"transcript": []}),
+                serde_json::json!({
+                    "status":"budget_extension_required",
+                    "budget_extension":{
+                        "resume_messages":[],
+                        "turns_completed":budget.initial_turns,
+                        "consumption":initial,
+                    },
+                }),
                 "turn_budget",
             )
             .await
@@ -6923,18 +6966,15 @@ mod tests {
         assert_eq!(resumed.budget_consumption.allowed_turns, 68);
         assert_eq!(resumed.budget_consumption.allowed_tokens, 600_000);
 
-        store
-            .complete_run(
+        let failed_dispatch = store
+            .mark_budget_extension_dispatch_failed(
                 &run_id,
-                "failed",
-                serde_json::json!({
-                    "status":"failed",
-                    "error":"failed to launch worker job: job already exists",
-                }),
-                Some("failed to launch worker job: job already exists".to_string()),
+                "failed to launch worker job: job already exists",
             )
             .await
             .unwrap();
+        let sealed_resume = failed_dispatch.result_json.clone().unwrap();
+        assert!(sealed_resume.get("budget_extension").is_some());
         let latest = store
             .latest_approved_budget_extension_for_run(&run_id)
             .await
@@ -6953,14 +6993,7 @@ mod tests {
         assert_eq!(dispatch_retry.status, "queued");
         assert!(dispatch_retry.finished_at.is_none());
         assert!(dispatch_retry.error.is_none());
-        assert_eq!(
-            dispatch_retry
-                .result_json
-                .as_ref()
-                .and_then(|result| result.get("resume"))
-                .and_then(serde_json::Value::as_str),
-            Some("approved_budget_extension_dispatch_retry")
-        );
+        assert_eq!(dispatch_retry.result_json, Some(sealed_resume));
 
         let second = store
             .create_budget_extension(CreateBudgetExtension {

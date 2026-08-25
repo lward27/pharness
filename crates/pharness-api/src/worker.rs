@@ -2550,35 +2550,68 @@ pub(crate) async fn fail_run_from_dispatch(
     run_id: &RunId,
     message: String,
 ) -> Result<(), StoreError> {
+    fail_run_from_worker_boundary(store, run_id, message, false).await
+}
+
+pub(crate) async fn fail_run_from_job_creation(
+    store: &SqliteStore,
+    run_id: &RunId,
+    message: String,
+) -> Result<(), StoreError> {
+    fail_run_from_worker_boundary(store, run_id, message, true).await
+}
+
+async fn fail_run_from_worker_boundary(
+    store: &SqliteStore,
+    run_id: &RunId,
+    message: String,
+    preserve_budget_resume: bool,
+) -> Result<(), StoreError> {
     let seq = store.list_events(run_id).await?.len() as u64 + 1;
     let Some(run) = store.get_run(run_id).await? else {
         return Ok(());
     };
+    let has_budget_resume = run.status == "queued"
+        && run.budget_consumption.extensions > 0
+        && run
+            .result_json
+            .as_ref()
+            .and_then(|result| result.get("budget_extension"))
+            .is_some();
 
     store
         .append_event(&AgentEvent {
             event_id: EventId::new(format!("evt_{}_{}", run_id.as_str(), seq)),
-            session_id: run.session_id,
+            session_id: run.session_id.clone(),
             run_id: run_id.clone(),
             seq,
             kind: EventKind::RunFailed,
-            payload: serde_json::json!({ "error": message }),
+            payload: serde_json::json!({
+                "error":message,
+                "resume_state_preserved":preserve_budget_resume && has_budget_resume,
+            }),
         })
         .await?;
 
-    store
-        .complete_run(
-            run_id,
-            "failed",
-            serde_json::json!({
-                "status": "failed",
-                "turns": 0,
-                "summary": null,
-                "error": message,
-            }),
-            Some(message),
-        )
-        .await?;
+    if preserve_budget_resume && has_budget_resume {
+        store
+            .mark_budget_extension_dispatch_failed(run_id, &message)
+            .await?;
+    } else {
+        store
+            .complete_run(
+                run_id,
+                "failed",
+                serde_json::json!({
+                    "status": "failed",
+                    "turns": 0,
+                    "summary": null,
+                    "error": message,
+                }),
+                Some(message),
+            )
+            .await?;
+    }
 
     Ok(())
 }

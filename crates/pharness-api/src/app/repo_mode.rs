@@ -135,6 +135,11 @@ pub(in crate::app) async fn repo_work_item_flow(
                 .error
                 .as_deref()
                 .is_some_and(|error| error.starts_with("failed to launch worker job:"))
+            && run
+                .result_json
+                .as_ref()
+                .and_then(|result| result.get("budget_extension"))
+                .is_some()
     }) {
         Some(run) => {
             state
@@ -946,6 +951,11 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 .error
                 .as_deref()
                 .is_some_and(|error| error.starts_with("failed to launch worker job:"))
+            && run
+                .result_json
+                .as_ref()
+                .and_then(|result| result.get("budget_extension"))
+                .is_some()
     }) {
         Some(run) => {
             state
@@ -4913,7 +4923,13 @@ mod tests {
                 "failed to launch worker job: jobs.batch pharness-run-current-i already exists"
                     .into(),
             ),
-            result_json: Some(json!({"status":"failed"})),
+            result_json: Some(json!({
+                "status":"budget_extension_required",
+                "budget_extension":{
+                    "resume_messages":[],
+                    "turns_completed":22,
+                },
+            })),
             execution_target_json: json!({"kind":"kubernetes_job"}),
             origin: "controller".into(),
             created_by: Some("operator".into()),
