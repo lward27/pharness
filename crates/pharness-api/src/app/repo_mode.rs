@@ -23,10 +23,10 @@ use pharness_store::{
     CreateEvidenceValidation, CreateOperatorAnnotation, CreateOperatorAnnotationDecision,
     CreateProviderCheckSetObservation, CreateRepoWorkItem, CreateRun, CreateSession,
     CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
-    CreateWorkspace, SealStageOutcome, StoredChangeSet, StoredOperatorAnnotation,
-    StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent,
-    StoredStageOutcome, UpdateEnvironmentPreparation, UpdateWorkspaceExecution,
-    WorkspaceListFilter,
+    CreateWorkspace, SealStageOutcome, StoredBudgetExtension, StoredChangeSet,
+    StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata,
+    StoredSourceDeliveryIntent, StoredStageOutcome, UpdateEnvironmentPreparation,
+    UpdateWorkspaceExecution, WorkspaceListFilter,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -116,6 +116,10 @@ pub(in crate::app) async fn repo_work_item_flow(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
+    let pending_budget_extension = match work_item.current_run_id.as_ref() {
+        Some(run_id) => state.store.pending_budget_extension_for_run(run_id).await?,
+        None => None,
+    };
     let action_rail = derive_repo_actions(
         &metadata,
         RepoActionInputs {
@@ -126,6 +130,7 @@ pub(in crate::app) async fn repo_work_item_flow(
             executions: &executions,
             chain: chain.as_ref(),
             pending_annotation_effects: &pending_annotation_effects,
+            pending_budget_extension: pending_budget_extension.as_ref(),
         },
     )?;
     let workspaces = state
@@ -243,6 +248,7 @@ struct RepoActionInputs<'a> {
     executions: &'a [pharness_store::StoredStageExecution],
     chain: Option<&'a pharness_store::StoredStageChainAuthorization>,
     pending_annotation_effects: &'a [&'a StoredOperatorAnnotation],
+    pending_budget_extension: Option<&'a StoredBudgetExtension>,
 }
 
 fn derive_repo_actions(
@@ -257,12 +263,30 @@ fn derive_repo_actions(
         executions,
         chain,
         pending_annotation_effects,
+        pending_budget_extension,
     } = inputs;
     let (attempt_count, max_attempts) = attempts;
     if metadata.closed_at.is_some() {
         return Ok(Vec::new());
     }
     let state_hash = repo_work_item_state_hash(metadata)?;
+    if let Some(extension) = pending_budget_extension {
+        return Ok(vec![WorkItemActionResponse {
+            id: "approve_budget_extension".into(),
+            lifecycle_stage: "implement".into(),
+            resource: extension.id.clone(),
+            status: "ready".into(),
+            effect_class: "approval_boundary".into(),
+            blockers: Vec::new(),
+            approval_required: true,
+            approval_requirements: vec!["budget_extension".into()],
+            external_effect_summary: format!(
+                "Resume the current Repo Mode stage on its preserved workspace with exactly {} additional turns and {} additional tokens.",
+                extension.turn_increment, extension.token_increment
+            ),
+            state_hash: extension.state_hash.clone(),
+        }]);
+    }
     let plan_execution = executions
         .iter()
         .rev()
@@ -851,6 +875,10 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
+    let pending_budget_extension = match work_item.current_run_id.as_ref() {
+        Some(run_id) => state.store.pending_budget_extension_for_run(run_id).await?,
+        None => None,
+    };
     let action = derive_repo_actions(
         &metadata,
         RepoActionInputs {
@@ -861,6 +889,7 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             executions: &executions,
             chain: chain.as_ref(),
             pending_annotation_effects: &pending_annotation_effects,
+            pending_budget_extension: pending_budget_extension.as_ref(),
         },
     )?
     .into_iter()
@@ -944,6 +973,19 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         }
         "authorize_stage_chain" => {
             authorize_repo_stage_chain(state, work_item_id, &actor, &reason, None).await
+        }
+        "approve_budget_extension" => {
+            let extension = pending_budget_extension.ok_or_else(|| {
+                ApiError::conflict("Repo Mode budget extension is no longer pending")
+            })?;
+            let (extension, run) = state
+                .store
+                .approve_budget_extension(&extension.id, &state_hash, &actor, &reason)
+                .await?;
+            state.worker.spawn_run(run.clone(), run.cwd.clone());
+            Ok(json!({
+                "budget_extension": crate::dto::BudgetExtensionResponse::from(extension),
+            }))
         }
         "correct_stage_chain" => {
             apply_repo_stage_correction(state, work_item_id, &actor, &reason).await
@@ -4606,6 +4648,7 @@ mod tests {
                 executions: &[],
                 chain: None,
                 pending_annotation_effects: &[],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
@@ -4655,6 +4698,7 @@ mod tests {
                 executions: &executions,
                 chain: None,
                 pending_annotation_effects: &[],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
@@ -4679,10 +4723,57 @@ mod tests {
                 executions: &executions,
                 chain: None,
                 pending_annotation_effects: &[],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
         assert!(exhausted.iter().all(|action| action.status == "blocked"));
+    }
+
+    #[test]
+    fn pending_budget_extension_preempts_stale_failed_attempt_actions() {
+        let executions = vec![
+            stage_execution("stageexec_plan", "plan", "succeeded", "1"),
+            stage_execution("stageexec_prior", "implement", "failed", "2"),
+            stage_execution("stageexec_current", "implement", "paused", "3"),
+        ];
+        let extension = StoredBudgetExtension {
+            id: "budgetext_repo".into(),
+            work_item_id: "witem_repo".into(),
+            run_id: RunId::new("run_current"),
+            status: "pending".into(),
+            turn_increment: 20,
+            token_increment: 200_000,
+            state_hash: "sha256:budget-extension-state".into(),
+            requested_at: "4".into(),
+            approved_at: None,
+            approved_by: None,
+            approval_reason: None,
+        };
+
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: Some(&extension),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "approve_budget_extension");
+        assert_eq!(actions[0].resource, extension.id);
+        assert_eq!(actions[0].status, "ready");
+        assert_eq!(actions[0].state_hash, extension.state_hash);
+        assert!(actions[0]
+            .external_effect_summary
+            .contains("200000 additional tokens"));
     }
 
     #[test]
@@ -4710,6 +4801,7 @@ mod tests {
                 executions: &[],
                 chain: None,
                 pending_annotation_effects: &[&annotation],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
@@ -4728,6 +4820,7 @@ mod tests {
                 executions: &[],
                 chain: None,
                 pending_annotation_effects: &[&annotation],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
@@ -4750,6 +4843,7 @@ mod tests {
                 executions: &[],
                 chain: None,
                 pending_annotation_effects: &[],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
@@ -4767,6 +4861,7 @@ mod tests {
                 executions: &[],
                 chain: None,
                 pending_annotation_effects: &[],
+                pending_budget_extension: None,
             },
         )
         .unwrap();
