@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
+const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
+const CHAINED_RUN_HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const WORKSPACE_ID_LABEL: &str = "pharness.lucas.engineering/workspace-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
@@ -358,7 +360,25 @@ impl RunDispatcher {
         match self {
             Self::Disabled => {}
             Self::Local(worker) => worker.spawn_run(run, cwd),
-            Self::Kubernetes(dispatcher) => dispatcher.clone().launch(run, None),
+            Self::Kubernetes(dispatcher) => dispatcher.clone().launch(run, None, None),
+        }
+    }
+
+    /// Dispatch a controller-authorized follow-up Run without racing the
+    /// predecessor Kubernetes Job's terminal status update. The predecessor
+    /// has already reported a durable successful outcome, but Kubernetes can
+    /// still count its Job as active for a short interval while the worker
+    /// process exits. Keep the next Run queued during that interval rather
+    /// than weakening the global worker concurrency limit.
+    pub fn spawn_chained_run(&self, run: StoredRun, cwd: String, predecessor_run_id: &str) {
+        match self {
+            Self::Disabled => {}
+            Self::Local(worker) => worker.spawn_run(run, cwd),
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .clone()
+                    .launch(run, None, Some(predecessor_run_id.to_string()))
+            }
         }
     }
 
@@ -366,7 +386,7 @@ impl RunDispatcher {
         match self {
             Self::Disabled => {}
             Self::Local(worker) => worker.resume_run(run, approval),
-            Self::Kubernetes(dispatcher) => dispatcher.clone().launch(run, Some(approval)),
+            Self::Kubernetes(dispatcher) => dispatcher.clone().launch(run, Some(approval), None),
         }
     }
 
@@ -736,10 +756,18 @@ impl KubernetesJobDispatcher {
         dispatcher
     }
 
-    fn launch(self: Arc<Self>, run: StoredRun, approval: Option<StoredApproval>) {
+    fn launch(
+        self: Arc<Self>,
+        run: StoredRun,
+        approval: Option<StoredApproval>,
+        predecessor_run_id: Option<String>,
+    ) {
         tokio::spawn(async move {
             let run_id = run.id.clone();
-            if let Err(error) = self.create_job(&run, approval.as_ref()).await {
+            if let Err(error) = self
+                .create_job(&run, approval.as_ref(), predecessor_run_id.as_deref())
+                .await
+            {
                 tracing::error!(run_id = %run_id, %error, "failed to launch worker job");
                 let _ = fail_run_from_job_creation(
                     &self.store,
@@ -1190,8 +1218,13 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         &self,
         run: &StoredRun,
         approval: Option<&StoredApproval>,
+        predecessor_run_id: Option<&str>,
     ) -> anyhow::Result<()> {
-        self.ensure_run_job_capacity().await?;
+        if let Some(predecessor_run_id) = predecessor_run_id {
+            self.await_chained_run_capacity(predecessor_run_id).await?;
+        } else {
+            self.ensure_run_job_capacity().await?;
+        }
         self.ensure_workspace_claim(run).await?;
         let manifest = self.job_manifest(run, approval);
         let payload = serde_json::to_vec(&manifest)?;
@@ -1412,7 +1445,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     /// store, so this read-before-create admission check is sufficient for the
     /// first bounded coding-worker pool. A future multi-worker controller must
     /// replace it with durable queue admission.
-    async fn ensure_run_job_capacity(&self) -> anyhow::Result<()> {
+    async fn list_run_jobs_for_capacity(&self) -> anyhow::Result<serde_json::Value> {
         let selector = format!("{JOB_NAME_LABEL}={JOB_NAME_VALUE}");
         let output = tokio::process::Command::new(&self.kubectl_bin)
             .args([
@@ -1433,8 +1466,46 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 String::from_utf8_lossy(&output.stderr)
             );
         }
-        let jobs: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        Ok(serde_json::from_slice(&output.stdout)?)
+    }
+
+    async fn ensure_run_job_capacity(&self) -> anyhow::Result<()> {
+        let jobs = self.list_run_jobs_for_capacity().await?;
         enforce_run_job_capacity(&jobs, self.config.max_concurrent_run_jobs)
+    }
+
+    async fn await_chained_run_capacity(&self, predecessor_run_id: &str) -> anyhow::Result<()> {
+        let predecessor = self
+            .store
+            .get_run(&pharness_core::RunId::new(predecessor_run_id))
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("predecessor Run {predecessor_run_id} is missing"))?;
+        if predecessor.status != "completed" {
+            anyhow::bail!(
+                "predecessor Run {predecessor_run_id} is {}, not durably completed",
+                predecessor.status
+            );
+        }
+        let predecessor_label = job_label_value(predecessor_run_id);
+        let started = std::time::Instant::now();
+        loop {
+            let jobs = self.list_run_jobs_for_capacity().await?;
+            match chained_run_capacity(
+                &jobs,
+                self.config.max_concurrent_run_jobs,
+                &predecessor_label,
+            )? {
+                ChainedRunCapacity::Available => return Ok(()),
+                ChainedRunCapacity::WaitingForPredecessor { active } => {
+                    if started.elapsed() >= CHAINED_RUN_HANDOFF_TIMEOUT {
+                        anyhow::bail!(
+                            "timed out waiting for predecessor Run {predecessor_run_id} Job to release worker capacity ({active} active)"
+                        );
+                    }
+                    tokio::time::sleep(CHAINED_RUN_HANDOFF_POLL_INTERVAL).await;
+                }
+            }
+        }
     }
 
     async fn create_tekton_executor_job(
@@ -3182,6 +3253,48 @@ fn enforce_run_job_capacity(
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ChainedRunCapacity {
+    Available,
+    WaitingForPredecessor { active: u64 },
+}
+
+fn chained_run_capacity(
+    jobs: &serde_json::Value,
+    max_concurrent_jobs: u32,
+    predecessor_run_label: &str,
+) -> anyhow::Result<ChainedRunCapacity> {
+    let active = active_run_job_count(jobs);
+    if active < max_concurrent_jobs as u64 {
+        return Ok(ChainedRunCapacity::Available);
+    }
+
+    let only_predecessor_is_active = jobs
+        .get("items")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|job| {
+            job.pointer("/status/active")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+                > 0
+        })
+        .all(|job| {
+            job.pointer("/metadata/labels")
+                .and_then(|labels| labels.get(RUN_ID_LABEL))
+                .and_then(serde_json::Value::as_str)
+                == Some(predecessor_run_label)
+        });
+    if only_predecessor_is_active {
+        return Ok(ChainedRunCapacity::WaitingForPredecessor { active });
+    }
+
+    anyhow::bail!(
+        "worker Job concurrency limit reached: {active} active, limit {max_concurrent_jobs}; active capacity is not owned exclusively by predecessor Run {predecessor_run_label}"
+    )
+}
+
 fn execution_is_current(
     intent: &StoredPipelineIntent,
     execution_id: &str,
@@ -3505,15 +3618,15 @@ async fn create_job_from_manifest(
 #[cfg(test)]
 mod tests {
     use super::{
-        active_run_job_count, argo_executor_job_name, enforce_run_job_capacity,
-        executor_job_terminal_state, git_observer_job_name, git_writer_job_name,
-        gitops_observer_job_name, gitops_writer_job_name, job_label_value, job_name,
-        onboarding_proposer_id, run_label_to_run_id, workspace_claim_name,
-        workspace_claim_name_for_run, ArgoSyncExecutionRequest, ExecutorJobTerminalState,
-        GitDeliveryExecutionRequest, GitDeliveryObservationRequest, GitOpsDeliveryExecutionRequest,
-        GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
+        active_run_job_count, argo_executor_job_name, chained_run_capacity,
+        enforce_run_job_capacity, executor_job_terminal_state, git_observer_job_name,
+        git_writer_job_name, gitops_observer_job_name, gitops_writer_job_name, job_label_value,
+        job_name, onboarding_proposer_id, run_label_to_run_id, workspace_claim_name,
+        workspace_claim_name_for_run, ArgoSyncExecutionRequest, ChainedRunCapacity,
+        ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
+        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
         OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
-        RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS,
+        RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS, RUN_ID_LABEL,
     };
     use pharness_config::WorkerKubernetesConfig;
     use pharness_core::{
@@ -3594,6 +3707,58 @@ mod tests {
         let error = enforce_run_job_capacity(&jobs, 1).unwrap_err();
         assert!(error.to_string().contains("concurrency limit reached"));
         assert!(enforce_run_job_capacity(&jobs, 2).is_ok());
+    }
+
+    #[test]
+    fn chained_run_waits_only_for_its_exact_predecessor_job() {
+        let predecessor_label = job_label_value("run_predecessor");
+        let jobs = json!({
+            "items": [{
+                "metadata": {"labels": {RUN_ID_LABEL: predecessor_label}},
+                "status": {"active": 1}
+            }]
+        });
+
+        assert_eq!(
+            chained_run_capacity(&jobs, 1, &job_label_value("run_predecessor")).unwrap(),
+            ChainedRunCapacity::WaitingForPredecessor { active: 1 }
+        );
+        assert!(chained_run_capacity(&jobs, 1, &job_label_value("run_unrelated")).is_err());
+    }
+
+    #[test]
+    fn chained_run_never_ignores_unrelated_active_capacity() {
+        let jobs = json!({
+            "items": [
+                {
+                    "metadata": {"labels": {RUN_ID_LABEL: job_label_value("run_predecessor")}},
+                    "status": {"active": 1}
+                },
+                {
+                    "metadata": {"labels": {RUN_ID_LABEL: job_label_value("run_unrelated")}},
+                    "status": {"active": 1}
+                }
+            ]
+        });
+
+        let error =
+            chained_run_capacity(&jobs, 1, &job_label_value("run_predecessor")).unwrap_err();
+        assert!(error.to_string().contains("not owned exclusively"));
+    }
+
+    #[test]
+    fn chained_run_dispatches_after_predecessor_releases_capacity() {
+        let jobs = json!({
+            "items": [{
+                "metadata": {"labels": {RUN_ID_LABEL: job_label_value("run_predecessor")}},
+                "status": {"succeeded": 1}
+            }]
+        });
+
+        assert_eq!(
+            chained_run_capacity(&jobs, 1, &job_label_value("run_predecessor")).unwrap(),
+            ChainedRunCapacity::Available
+        );
     }
 
     #[tokio::test]
