@@ -2,8 +2,8 @@ use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
 use super::{ApiError, AppState};
 use crate::dispatch::{
-    OnboardingPatchRequest, RepositoryDiscoveryRequest, SourceDeliveryExecutionRequest,
-    SourceDeliveryObservationRequest,
+    OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
+    SourceDeliveryExecutionRequest, SourceDeliveryObservationRequest,
 };
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
@@ -12,11 +12,12 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    CreateArtifact, CreateProductAggregate, CreateRepositoryOnboarding,
-    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
-    CreateSession, RegisterRepositoryAggregate, RegisteredRepositoryAggregate, StoredProduct,
-    StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding, StoredRepositoryDraft,
-    StoredRepositoryOnboarding, StoredService, UpdateProductAggregate,
+    CreateArtifact, CreateProductAggregate, CreateRepositoryContractVersion,
+    CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
+    CreateRepositoryReadinessAssessment, CreateRun, CreateSession, RegisterRepositoryAggregate,
+    RegisteredRepositoryAggregate, StoredProduct, StoredProductModelSnapshot, StoredRepository,
+    StoredRepositoryBinding, StoredRepositoryDraft, StoredRepositoryOnboarding, StoredService,
+    UpdateProductAggregate,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -220,6 +221,39 @@ pub(in crate::app) struct OnboardingPatchOutcomeRequest {
     error_code: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub(in crate::app) struct InternalOnboardingContractValidationQuery {
+    execution_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(in crate::app) struct OnboardingContractValidationContextResponse {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    expected_contract: Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub(in crate::app) struct OnboardingContractValidationOutcomeRequest {
+    status: String,
+    #[serde(default)]
+    contract: Option<Value>,
+    #[serde(default)]
+    contract_content_hash: Option<String>,
+    #[serde(default)]
+    contract_source: Option<String>,
+    #[serde(default)]
+    warnings: Vec<String>,
+    #[serde(default)]
+    error_code: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct RepositoryRegistrationPreflightResponse {
     product_id: String,
@@ -326,6 +360,8 @@ struct RepositoryOnboardingResponse {
     patch_execution_id: Option<String>,
     patch_artifact_id: Option<String>,
     patch_hash: Option<String>,
+    validation_execution_id: Option<String>,
+    validation_stop_reason: Option<String>,
     state_version: u64,
     state_hash: String,
     blockers: Vec<Value>,
@@ -1286,6 +1322,44 @@ async fn execute_repository_onboarding_action(
             )
             .await?;
         }
+        "validate_merged_contract" | "retry_merged_contract_validation" => {
+            let execution_id = new_prefixed_id("onbvalidate");
+            state
+                .store
+                .start_repository_onboarding_contract_validation(
+                    &onboarding.id,
+                    onboarding.state_version,
+                    &execution_id,
+                    request.actor.trim(),
+                    request.reason.trim(),
+                )
+                .await?;
+            let dispatch = state
+                .worker
+                .dispatch_onboarding_contract_validation(OnboardingContractValidationRequest {
+                    onboarding_id: onboarding.id.clone(),
+                    execution_id: execution_id.clone(),
+                })
+                .await;
+            match dispatch {
+                Ok(receipt) => {
+                    tracing::info!(onboarding_id=%onboarding.id, execution_id, job=%receipt.job_name, "merged onboarding contract validation dispatched")
+                }
+                Err(error) => {
+                    let _ = state
+                        .store
+                        .fail_repository_onboarding_contract_validation(
+                            &onboarding.id,
+                            &execution_id,
+                            "merged contract validation could not be dispatched",
+                        )
+                        .await;
+                    return Err(ApiError::unavailable(format!(
+                        "merged contract validation dispatch failed: {error}"
+                    )));
+                }
+            }
+        }
         _ => {
             return Err(ApiError::bad_request(
                 "unsupported repository onboarding action",
@@ -1918,6 +1992,8 @@ fn onboarding_response(
         "patch_execution_id": onboarding.patch_execution_id,
         "patch_artifact_id": onboarding.patch_artifact_id,
         "patch_hash": onboarding.patch_hash,
+        "validation_execution_id": onboarding.validation_execution_id,
+        "validation_stop_reason": onboarding.validation_stop_reason,
     }))?;
     let action = match onboarding.status.as_str() {
         "registered" => Some(("start_discovery", Vec::new())),
@@ -1931,6 +2007,8 @@ fn onboarding_response(
         "waiting_external" | "waiting_checks" | "waiting_merge" => {
             Some(("observe_onboarding_source_delivery", Vec::new()))
         }
+        "merge_observed" => Some(("validate_merged_contract", Vec::new())),
+        "validation_failed" => Some(("retry_merged_contract_validation", Vec::new())),
         _ => None,
     };
     let actions = action
@@ -1952,6 +2030,11 @@ fn onboarding_response(
                 "external_source_mutation".into()
             } else if id == "observe_onboarding_source_delivery" {
                 "external_observation".into()
+            } else if matches!(
+                id,
+                "validate_merged_contract" | "retry_merged_contract_validation"
+            ) {
+                "isolated_read".into()
             } else {
                 "isolated_read".into()
             },
@@ -1964,6 +2047,8 @@ fn onboarding_response(
                     | "retry_onboarding_patch"
                     | "authorize_onboarding_source_delivery"
                     | "observe_onboarding_source_delivery"
+                    | "validate_merged_contract"
+                    | "retry_merged_contract_validation"
             ),
             blockers,
             state_hash: state_hash.clone(),
@@ -1989,6 +2074,8 @@ fn onboarding_response(
         patch_execution_id: onboarding.patch_execution_id,
         patch_artifact_id: onboarding.patch_artifact_id,
         patch_hash: onboarding.patch_hash,
+        validation_execution_id: onboarding.validation_execution_id,
+        validation_stop_reason: onboarding.validation_stop_reason,
         state_version: onboarding.state_version,
         state_hash,
         blockers: onboarding.blockers,
@@ -2433,6 +2520,238 @@ fn onboarding_patch_paths(patch: &str) -> Result<Vec<String>, ApiError> {
         ));
     }
     Ok(paths)
+}
+
+pub(in crate::app) async fn internal_onboarding_contract_validation_context(
+    State(state): State<AppState>,
+    Path(onboarding_id): Path<String>,
+    Query(query): Query<InternalOnboardingContractValidationQuery>,
+) -> Result<Json<OnboardingContractValidationContextResponse>, ApiError> {
+    let onboarding = find_onboarding(&state, &onboarding_id).await?;
+    if onboarding.status != "validation_queued"
+        || onboarding.validation_execution_id.as_deref() != Some(query.execution_id.as_str())
+    {
+        return Err(ApiError::conflict(
+            "merged onboarding contract validation is no longer current",
+        ));
+    }
+    let source_commit = onboarding
+        .resolved_commit
+        .clone()
+        .filter(|commit| is_git_sha(commit))
+        .ok_or_else(|| ApiError::conflict("onboarding merge commit is unavailable"))?;
+    let intent = state
+        .store
+        .get_source_delivery_intent(
+            onboarding
+                .source_delivery_intent_id
+                .as_deref()
+                .ok_or_else(|| ApiError::conflict("onboarding source intent is unavailable"))?,
+        )
+        .await?
+        .filter(|intent| {
+            intent.status == "merged"
+                && intent
+                    .merge_provenance
+                    .as_ref()
+                    .and_then(|value| value.get("merge_commit_sha"))
+                    .and_then(Value::as_str)
+                    == Some(source_commit.as_str())
+        })
+        .ok_or_else(|| ApiError::conflict("onboarding merge provenance is unavailable"))?;
+    let proposal = state
+        .store
+        .get_current_repository_onboarding_proposal(&onboarding.id)
+        .await?
+        .filter(|proposal| {
+            proposal.status == "approved"
+                && intent.subject_kind == "repository_onboarding_proposal"
+                && intent.subject_id == proposal.id
+                && onboarding.approved_proposal_hash.as_deref()
+                    == Some(proposal.content_hash.as_str())
+        })
+        .ok_or_else(|| ApiError::conflict("approved onboarding proposal is unavailable"))?;
+    let typed: pharness_core::RepositoryOnboardingProposal =
+        serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
+            ApiError::conflict(format!("approved proposal is invalid: {error}"))
+        })?;
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    if !state.worker.source_reader_available()
+        || !state
+            .worker
+            .source_reader_allows_repository(&repository.canonical_url)
+    {
+        return Err(ApiError::conflict(
+            "merged contract validation requires the isolated source-reader allowlist",
+        ));
+    }
+    Ok(Json(OnboardingContractValidationContextResponse {
+        onboarding_id,
+        execution_id: query.execution_id,
+        repository_id: repository.id,
+        provider: repository.provider,
+        canonical_url: repository.canonical_url,
+        source_commit,
+        proposal_id: proposal.id,
+        proposal_hash: proposal.content_hash,
+        expected_contract: typed.candidate_contract,
+    }))
+}
+
+pub(in crate::app) async fn internal_onboarding_contract_validation_outcome(
+    State(state): State<AppState>,
+    Path(onboarding_id): Path<String>,
+    Json(request): Json<OnboardingContractValidationOutcomeRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let onboarding = find_onboarding(&state, &onboarding_id).await?;
+    let execution_id = onboarding
+        .validation_execution_id
+        .clone()
+        .filter(|_| onboarding.status == "validation_queued")
+        .ok_or_else(|| ApiError::conflict("merged contract validation is already terminal"))?;
+    match request.status.as_str() {
+        "succeeded" => {
+            if request.warnings.len() > 20
+                || request.warnings.iter().any(|warning| warning.len() > 1_000)
+            {
+                return Err(ApiError::bad_request(
+                    "merged contract validation warnings exceed their bound",
+                ));
+            }
+            if !matches!(
+                request.contract_source.as_deref(),
+                Some("canonical") | Some("canonical_with_matching_alias")
+            ) {
+                return Err(ApiError::conflict(
+                    "Repo Mode requires a canonical RepositoryContract",
+                ));
+            }
+            let contract_value = request
+                .contract
+                .ok_or_else(|| ApiError::bad_request("successful validation needs a contract"))?;
+            let contract: pharness_core::RepositoryContract =
+                serde_json::from_value(contract_value.clone()).map_err(|error| {
+                    ApiError::bad_request(format!(
+                        "validated RepositoryContract is invalid: {error}"
+                    ))
+                })?;
+            contract
+                .validate_candidate()
+                .map_err(|error| ApiError::bad_request(error.to_string()))?;
+            if !state
+                .environment_profiles
+                .iter()
+                .any(|profile| profile.active && profile.id == contract.environment_profile)
+            {
+                return Err(ApiError::conflict(
+                    "validated RepositoryContract selects no active EnvironmentProfile",
+                ));
+            }
+            let proposal = state
+                .store
+                .get_current_repository_onboarding_proposal(&onboarding.id)
+                .await?
+                .filter(|proposal| {
+                    proposal.status == "approved"
+                        && onboarding.approved_proposal_hash.as_deref()
+                            == Some(proposal.content_hash.as_str())
+                })
+                .ok_or_else(|| ApiError::conflict("approved proposal is unavailable"))?;
+            let typed: pharness_core::RepositoryOnboardingProposal =
+                serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
+                    ApiError::conflict(format!("approved proposal is invalid: {error}"))
+                })?;
+            if typed.candidate_contract != contract_value {
+                return Err(ApiError::conflict(
+                    "merged RepositoryContract differs from the approved proposal",
+                ));
+            }
+            let content_hash = request
+                .contract_content_hash
+                .filter(|hash| valid_prefixed_sha256(hash))
+                .ok_or_else(|| {
+                    ApiError::bad_request("validated RepositoryContract needs a SHA-256 hash")
+                })?;
+            let source_commit = onboarding
+                .resolved_commit
+                .clone()
+                .filter(|commit| is_git_sha(commit))
+                .ok_or_else(|| ApiError::conflict("onboarding merge commit is unavailable"))?;
+            let intent = state
+                .store
+                .get_source_delivery_intent(
+                    onboarding
+                        .source_delivery_intent_id
+                        .as_deref()
+                        .ok_or_else(|| {
+                            ApiError::conflict("source delivery intent is unavailable")
+                        })?,
+                )
+                .await?
+                .filter(|intent| intent.status == "merged")
+                .ok_or_else(|| ApiError::conflict("source merge provenance is unavailable"))?;
+            let merge_provenance = json!({
+                "source_delivery_intent_id":intent.id,
+                "source_delivery":intent.merge_provenance,
+                "proposal":{"id":proposal.id,"hash":proposal.content_hash},
+                "validation_execution_id":execution_id,
+                "contract_source":request.contract_source,
+                "warnings":request.warnings,
+            });
+            let completed = state
+                .store
+                .complete_repository_onboarding_contract_validation(
+                    &execution_id,
+                    CreateRepositoryContractVersion {
+                        id: new_prefixed_id("rcontract"),
+                        repository_id: onboarding.repository_id,
+                        onboarding_id: onboarding.id,
+                        source_commit,
+                        contract: contract_value,
+                        content_hash,
+                        merge_provenance,
+                    },
+                )
+                .await?;
+            Ok(Json(json!({"onboarding":onboarding_response(completed)?})))
+        }
+        "failed" => {
+            let code = request
+                .error_code
+                .as_deref()
+                .unwrap_or("merged_contract_validation_failed");
+            if code.is_empty()
+                || code.len() > 120
+                || !code
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+            {
+                return Err(ApiError::bad_request(
+                    "invalid merged contract validation error code",
+                ));
+            }
+            let failed = state
+                .store
+                .fail_repository_onboarding_contract_validation(&onboarding_id, &execution_id, code)
+                .await?;
+            Ok(Json(json!({"onboarding":onboarding_response(failed)?})))
+        }
+        _ => Err(ApiError::bad_request(
+            "merged contract validation status must be succeeded or failed",
+        )),
+    }
+}
+
+fn valid_prefixed_sha256(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn registered_repository_response(

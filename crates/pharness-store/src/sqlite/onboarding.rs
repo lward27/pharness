@@ -299,6 +299,181 @@ impl SqliteStore {
             })
     }
 
+    pub async fn start_repository_onboarding_contract_validation(
+        &self,
+        onboarding_id: &str,
+        expected_state_version: u64,
+        execution_id: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'validation_queued', validation_execution_id = ?3,
+                validation_stop_reason = NULL, state_version = state_version + 1,
+                updated_at = ?4, status_changed_at = ?4,
+                status_changed_by = ?5, status_reason = ?6
+            WHERE id = ?1 AND state_version = ?2
+                  AND status IN ('merge_observed', 'validation_failed')
+                  AND resolved_commit IS NOT NULL
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(i64::try_from(expected_state_version).unwrap_or(i64::MAX))
+        .bind(execution_id)
+        .bind(&now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding is no longer ready for merged contract validation".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn fail_repository_onboarding_contract_validation(
+        &self,
+        onboarding_id: &str,
+        execution_id: &str,
+        stop_reason: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'validation_failed', validation_stop_reason = ?3,
+                blockers_json = json_array(json_object(
+                  'code', 'merged_contract_validation_failed', 'summary', ?3
+                )), state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = 'controller',
+                status_reason = ?3
+            WHERE id = ?1 AND validation_execution_id = ?2
+                  AND status = 'validation_queued'
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(execution_id)
+        .bind(stop_reason)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding contract validation is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
+    pub async fn complete_repository_onboarding_contract_validation(
+        &self,
+        execution_id: &str,
+        version: CreateRepositoryContractVersion,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let api_version = version
+            .contract
+            .get("api_version")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| StoreError::InvalidData("contract has no api_version".into()))?;
+        let mut tx = self.pool.begin().await?;
+        let current = sqlx::query(
+            "SELECT repository_id, resolved_commit, status, validation_execution_id FROM repository_onboardings WHERE id = ?1",
+        )
+        .bind(&version.onboarding_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| StoreError::NotFound {
+            entity: "repository_onboarding".into(),
+            id: version.onboarding_id.clone(),
+        })?;
+        if current.try_get::<String, _>("repository_id")? != version.repository_id
+            || current
+                .try_get::<Option<String>, _>("resolved_commit")?
+                .as_deref()
+                != Some(version.source_commit.as_str())
+            || current.try_get::<String, _>("status")? != "validation_queued"
+            || current
+                .try_get::<Option<String>, _>("validation_execution_id")?
+                .as_deref()
+                != Some(execution_id)
+        {
+            return Err(StoreError::Conflict(
+                "repository onboarding contract validation provenance changed".into(),
+            ));
+        }
+        sqlx::query(
+            r#"
+            INSERT INTO repository_contract_versions (
+              id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+              contract_json, content_hash, merge_provenance_json, status, created_at
+            ) VALUES (?1, ?2, ?3, ?4, '.pharness/repository.yaml', ?5, ?6, ?7, ?8, 'active', ?9)
+            "#,
+        )
+        .bind(&version.id)
+        .bind(&version.repository_id)
+        .bind(&version.onboarding_id)
+        .bind(&version.source_commit)
+        .bind(api_version)
+        .bind(serde_json::to_string(&version.contract)?)
+        .bind(&version.content_hash)
+        .bind(serde_json::to_string(&version.merge_provenance)?)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'contract_ready', contract_version_id = ?3,
+                validation_stop_reason = NULL, blockers_json = '[]',
+                state_version = state_version + 1, updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = 'controller',
+                status_reason = 'merged canonical RepositoryContract validated'
+            WHERE id = ?1 AND validation_execution_id = ?2 AND status = 'validation_queued'
+            "#,
+        )
+        .bind(&version.onboarding_id)
+        .bind(execution_id)
+        .bind(&version.id)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            r#"
+            UPDATE repositories
+            SET registered_commit = ?2, state_version = state_version + 1, updated_at = ?3
+            WHERE id = ?1
+            "#,
+        )
+        .bind(&version.repository_id)
+        .bind(&version.source_commit)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.get_repository_onboarding(&version.onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: version.onboarding_id,
+            })
+    }
+
     pub async fn create_repository_onboarding(
         &self,
         onboarding: CreateRepositoryOnboarding,
@@ -923,7 +1098,7 @@ fn onboarding_select_sql(where_clause: &str) -> String {
          registered_commit, resolved_commit, current_discovery_id, current_proposal_revision, \
          approved_proposal_hash, source_delivery_intent_id, contract_version_id, proposer_run_id, \
          proposer_profile_hash, proposer_stop_reason, patch_execution_id, patch_artifact_id, \
-         patch_hash, state_version, \
+         patch_hash, validation_execution_id, validation_stop_reason, state_version, \
          blockers_json, created_by, creation_reason, created_at, updated_at, status_changed_at, \
          status_changed_by, status_reason FROM repository_onboardings {where_clause}"
     )
@@ -978,6 +1153,8 @@ fn row_to_onboarding(
         patch_execution_id: row.try_get("patch_execution_id")?,
         patch_artifact_id: row.try_get("patch_artifact_id")?,
         patch_hash: row.try_get("patch_hash")?,
+        validation_execution_id: row.try_get("validation_execution_id")?,
+        validation_stop_reason: row.try_get("validation_stop_reason")?,
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         blockers: serde_json::from_str(&blockers)?,
         created_by: row.try_get("created_by")?,
@@ -1080,7 +1257,8 @@ fn row_to_readiness(
 #[cfg(test)]
 mod tests {
     use super::SqliteStore;
-    use crate::CreateRepositoryOnboarding;
+    use crate::{CreateRepositoryContractVersion, CreateRepositoryOnboarding};
+    use serde_json::json;
 
     #[tokio::test]
     async fn onboarding_source_delivery_binds_once_and_tracks_external_wait() {
@@ -1160,5 +1338,58 @@ mod tests {
             )
             .await
             .is_err());
+
+        let merged_commit = "b".repeat(40);
+        let merged = store
+            .update_repository_onboarding_source_delivery(
+                &onboarding.id,
+                "srcintent_test",
+                "merge_observed",
+                Some(&merged_commit),
+                "controller:repo-mode",
+                "merge provenance verified",
+            )
+            .await
+            .unwrap();
+        let validating = store
+            .start_repository_onboarding_contract_validation(
+                &onboarding.id,
+                merged.state_version,
+                "onbvalidate_test",
+                "operator",
+                "validate merged contract",
+            )
+            .await
+            .unwrap();
+        assert_eq!(validating.status, "validation_queued");
+        let completed = store
+            .complete_repository_onboarding_contract_validation(
+                "onbvalidate_test",
+                CreateRepositoryContractVersion {
+                    id: "rcontract_test".into(),
+                    repository_id: "repo_test".into(),
+                    onboarding_id: onboarding.id.clone(),
+                    source_commit: merged_commit.clone(),
+                    contract: json!({"api_version":"pharness.dev/v1alpha1"}),
+                    content_hash: format!("sha256:{}", "c".repeat(64)),
+                    merge_provenance: json!({"merge_commit_sha":merged_commit}),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(completed.status, "contract_ready");
+        assert_eq!(
+            completed.contract_version_id.as_deref(),
+            Some("rcontract_test")
+        );
+        assert_eq!(
+            store
+                .get_repository("repo_test")
+                .await
+                .unwrap()
+                .unwrap()
+                .registered_commit,
+            "b".repeat(40)
+        );
     }
 }

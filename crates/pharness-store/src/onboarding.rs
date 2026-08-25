@@ -21,6 +21,8 @@ pub struct StoredRepositoryOnboarding {
     pub patch_execution_id: Option<String>,
     pub patch_artifact_id: Option<String>,
     pub patch_hash: Option<String>,
+    pub validation_execution_id: Option<String>,
+    pub validation_stop_reason: Option<String>,
     pub state_version: u64,
     pub blockers: Vec<serde_json::Value>,
     pub created_by: String,

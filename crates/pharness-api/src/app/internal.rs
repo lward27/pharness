@@ -14,8 +14,10 @@ use super::gitops::delivery::{
 };
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
 use super::products::{
-    internal_onboarding_patch_context, internal_onboarding_patch_outcome,
-    internal_repository_discovery_context, internal_repository_discovery_outcome,
+    internal_onboarding_contract_validation_context,
+    internal_onboarding_contract_validation_outcome, internal_onboarding_patch_context,
+    internal_onboarding_patch_outcome, internal_repository_discovery_context,
+    internal_repository_discovery_outcome,
 };
 use super::repo_mode::{
     internal_source_delivery_context, internal_source_delivery_observation_context,
@@ -228,6 +230,14 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/repository-onboardings/:onboarding_id/patch-outcome",
             post(internal_onboarding_patch_outcome),
+        )
+        .route(
+            "/api/internal/repository-onboardings/:onboarding_id/contract-validation-context",
+            get(internal_onboarding_contract_validation_context),
+        )
+        .route(
+            "/api/internal/repository-onboardings/:onboarding_id/contract-validation-outcome",
+            post(internal_onboarding_contract_validation_outcome),
         )
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

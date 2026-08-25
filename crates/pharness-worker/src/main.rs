@@ -12,8 +12,8 @@ use hmac::{Hmac, Mac};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
     discover_repository, AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot,
-    ReadOnlyClusterTools, RepositoryContract, RepositoryDiscoveryIdentity,
-    RepositoryDiscoveryLimits, ToolExecutor,
+    ReadOnlyClusterTools, RepositoryContract, RepositoryContractSource,
+    RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -251,6 +251,12 @@ async fn main() -> anyhow::Result<()> {
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("onboarding_patch") {
         return execute_onboarding_patch().await;
+    }
+
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref()
+        == Some("onboarding_contract_validate")
+    {
+        return execute_onboarding_contract_validation().await;
     }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("tekton_trigger") {
@@ -570,6 +576,133 @@ struct OnboardingPatchContext {
     candidate_contract: serde_json::Value,
     instructions: String,
     remove_alias: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OnboardingContractValidationContext {
+    onboarding_id: String,
+    execution_id: String,
+    repository_id: String,
+    provider: String,
+    canonical_url: String,
+    source_commit: String,
+    proposal_id: String,
+    proposal_hash: String,
+    expected_contract: serde_json::Value,
+}
+
+async fn execute_onboarding_contract_validation() -> anyhow::Result<()> {
+    let api_url = required_env("PHARNESS_API_URL")?
+        .trim_end_matches('/')
+        .to_string();
+    let onboarding_id = required_env("PHARNESS_REPOSITORY_ONBOARDING_ID")?;
+    let execution_id = required_env("PHARNESS_ONBOARDING_VALIDATION_EXECUTION_ID")?;
+    let worker_token = required_env("PHARNESS_WORKER_TOKEN")?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("failed to build onboarding contract validation client")?;
+    let context_url = format!(
+        "{api_url}/api/internal/repository-onboardings/{onboarding_id}/contract-validation-context?execution_id={execution_id}"
+    );
+    let context = fetch_internal_context_with_retry::<OnboardingContractValidationContext>(
+        &client,
+        &context_url,
+        &worker_token,
+    )
+    .await
+    .context("failed to fetch onboarding contract validation context")?;
+    if context.onboarding_id != onboarding_id
+        || context.execution_id != execution_id
+        || context.provider != "github"
+        || !is_git_sha(&context.source_commit)
+    {
+        anyhow::bail!("invalid_onboarding_contract_validation_context");
+    }
+    let outcome = match validate_merged_onboarding_contract(&context).await {
+        Ok(loaded) => serde_json::json!({
+            "status":"succeeded",
+            "contract":loaded.contract,
+            "contract_content_hash":format!("sha256:{}", loaded.content_sha256),
+            "contract_source":loaded.source,
+            "warnings":loaded.warnings,
+        }),
+        Err(error) => {
+            let code = onboarding_contract_validation_error_code(&error);
+            tracing::warn!(
+                onboarding_id,
+                execution_id,
+                error_code = code,
+                "merged onboarding contract validation failed"
+            );
+            serde_json::json!({"status":"failed","error_code":code})
+        }
+    };
+    post_internal_json_with_retry(
+        &client,
+        &format!("{api_url}/api/internal/repository-onboardings/{onboarding_id}/contract-validation-outcome"),
+        &worker_token,
+        &outcome,
+    )
+    .await
+}
+
+async fn validate_merged_onboarding_contract(
+    context: &OnboardingContractValidationContext,
+) -> anyhow::Result<pharness_core::LoadedRepositoryContract> {
+    parse_github_repository(&context.canonical_url)?;
+    let expected: RepositoryContract = serde_json::from_value(context.expected_contract.clone())
+        .context("invalid_expected_contract")?;
+    expected
+        .validate_candidate()
+        .map_err(|_| anyhow::anyhow!("invalid_expected_contract"))?;
+    let root = std::path::PathBuf::from("/work/repository");
+    checkout_exact_repository(&root, &context.canonical_url, &context.source_commit).await?;
+    let loaded = RepositoryContract::load_for_repo_mode(&root)
+        .map_err(|error| anyhow::anyhow!("merged_contract_invalid:{error}"))?;
+    if loaded.contract != expected {
+        anyhow::bail!("merged_contract_differs_from_approved_proposal");
+    }
+    if !matches!(
+        loaded.source,
+        RepositoryContractSource::Canonical | RepositoryContractSource::CanonicalWithMatchingAlias
+    ) {
+        anyhow::bail!("canonical_repository_contract_missing");
+    }
+    let _ = (
+        &context.repository_id,
+        &context.proposal_id,
+        &context.proposal_hash,
+    );
+    Ok(loaded)
+}
+
+fn onboarding_contract_validation_error_code(error: &anyhow::Error) -> &'static str {
+    let text = error.to_string();
+    for code in [
+        "resolved_commit_mismatch",
+        "invalid_expected_contract",
+        "merged_contract_differs_from_approved_proposal",
+        "canonical_repository_contract_missing",
+        "git_fetch_failed",
+        "git_checkout_failed",
+        "git_revision_failed",
+        "git_setup_failed",
+        "repository_not_github_https",
+    ] {
+        if text.contains(code) {
+            return code;
+        }
+    }
+    if text.contains("dependency lock SHA-256") {
+        "immutable_dependency_lock_mismatch"
+    } else if text.contains("dependency lock") {
+        "immutable_dependency_lock_invalid"
+    } else if text.contains("merged_contract_invalid") {
+        "merged_contract_invalid"
+    } else {
+        "onboarding_contract_validation_failed"
+    }
 }
 
 async fn execute_onboarding_patch() -> anyhow::Result<()> {
