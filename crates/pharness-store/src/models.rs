@@ -770,6 +770,7 @@ pub struct UpdateChangeSetRevision {
     pub risk_level: Option<String>,
     pub material_hash: String,
     pub change_set_json: serde_json::Value,
+    pub status: Option<String>,
     pub actor: Option<String>,
     pub reason: Option<String>,
 }

@@ -284,6 +284,25 @@ struct RepoActionInputs<'a> {
     retryable_budget_extension: Option<&'a StoredBudgetExtension>,
 }
 
+fn rejected_change_set_precedes_work_plan(
+    change_set: &StoredChangeSet,
+    work_plan: &pharness_store::StoredWorkPlan,
+    source_delivery_intent: Option<&StoredSourceDeliveryIntent>,
+) -> bool {
+    change_set.status == "rejected"
+        && source_delivery_intent.is_none()
+        && change_set
+            .change_set_json
+            .pointer("/work_plan/id")
+            .and_then(Value::as_str)
+            == Some(work_plan.id.as_str())
+        && change_set
+            .change_set_json
+            .pointer("/work_plan/revision")
+            .and_then(Value::as_i64)
+            .is_some_and(|revision| revision < work_plan.revision)
+}
+
 fn derive_repo_actions(
     metadata: &StoredRepoWorkItemMetadata,
     inputs: RepoActionInputs<'_>,
@@ -300,6 +319,11 @@ fn derive_repo_actions(
         current_run,
         retryable_budget_extension,
     } = inputs;
+    let change_set = change_set.filter(|change_set| {
+        !work_plan.is_some_and(|work_plan| {
+            rejected_change_set_precedes_work_plan(change_set, work_plan, source_delivery_intent)
+        })
+    });
     let (attempt_count, max_attempts) = attempts;
     if metadata.closed_at.is_some() {
         return Ok(Vec::new());
@@ -4872,6 +4896,34 @@ mod tests {
         }
     }
 
+    fn proposed_work_plan(revision: i64) -> pharness_store::StoredWorkPlan {
+        pharness_store::StoredWorkPlan {
+            id: "wplan_repo".into(),
+            work_item_id: Some("witem_repo".into()),
+            remediation_plan_id: None,
+            incident_id: None,
+            session_id: SessionId::new("ses_repo"),
+            run_id: Some(RunId::new("run_plan")),
+            status: "proposed".into(),
+            title: "Plan".into(),
+            summary: "Correct the rejected source change".into(),
+            risk_level: "medium".into(),
+            requires_approval: true,
+            resource_namespace: None,
+            resource_kind: Some("Repository".into()),
+            resource_name: Some("https://github.com/example/repo.git".into()),
+            work_plan_json: json!({}),
+            created_at: "1".into(),
+            updated_at: Some("3".into()),
+            revision,
+            status_changed_at: Some("3".into()),
+            status_changed_by: Some("controller".into()),
+            status_reason: Some("new Planner submission".into()),
+            created_by: Some("operator".into()),
+            origin: "operator".into(),
+        }
+    }
+
     fn stage_execution(
         id: &str,
         stage_key: &str,
@@ -5023,6 +5075,50 @@ mod tests {
                 .map(|action| action.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["approve_change_set", "reject_change_set"]
+        );
+    }
+
+    #[test]
+    fn newer_proposed_work_plan_preempts_a_rejected_change_set_revision() {
+        let plan = proposed_work_plan(2);
+        let mut change_set = proposed_change_set();
+        change_set.status = "rejected".into();
+        change_set.change_set_json = json!({"work_plan":{"id":"wplan_repo","revision":1}});
+        let executions = vec![stage_execution(
+            "stageexec_plan_2",
+            "plan",
+            "succeeded",
+            "3",
+        )];
+
+        assert!(rejected_change_set_precedes_work_plan(
+            &change_set,
+            &plan,
+            None
+        ));
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 3),
+                work_plan: Some(&plan),
+                change_set: Some(&change_set),
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            actions
+                .iter()
+                .map(|action| action.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["approve_work_plan", "reject_work_plan"]
         );
     }
 
