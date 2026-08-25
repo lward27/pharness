@@ -64,6 +64,31 @@ pub enum AgentAction {
         reason: String,
         name: String,
     },
+    GetEvidence {
+        id: ActionId,
+        reason: String,
+        evidence_id: String,
+    },
+    SubmitOnboardingProposal {
+        id: ActionId,
+        reason: String,
+        proposal: serde_json::Value,
+    },
+    SubmitWorkPlan {
+        id: ActionId,
+        reason: String,
+        work_plan: serde_json::Value,
+    },
+    SubmitTestOutcome {
+        id: ActionId,
+        reason: String,
+        outcome: serde_json::Value,
+    },
+    SubmitVerification {
+        id: ActionId,
+        reason: String,
+        verification: serde_json::Value,
+    },
     RunShell {
         id: ActionId,
         reason: String,
@@ -173,6 +198,11 @@ impl AgentAction {
             | Self::EnvironmentInfo { id, .. }
             | Self::CreateDirectory { id, .. }
             | Self::RunAcceptanceCommand { id, .. }
+            | Self::GetEvidence { id, .. }
+            | Self::SubmitOnboardingProposal { id, .. }
+            | Self::SubmitWorkPlan { id, .. }
+            | Self::SubmitTestOutcome { id, .. }
+            | Self::SubmitVerification { id, .. }
             | Self::RunShell { id, .. }
             | Self::GitDiff { id, .. }
             | Self::GitStatus { id, .. }
@@ -201,6 +231,11 @@ impl AgentAction {
             Self::EnvironmentInfo { .. } => "environment_info",
             Self::CreateDirectory { .. } => "create_directory",
             Self::RunAcceptanceCommand { .. } => "run_acceptance_command",
+            Self::GetEvidence { .. } => "get_evidence",
+            Self::SubmitOnboardingProposal { .. } => "submit_onboarding_proposal",
+            Self::SubmitWorkPlan { .. } => "submit_work_plan",
+            Self::SubmitTestOutcome { .. } => "submit_test_outcome",
+            Self::SubmitVerification { .. } => "submit_verification",
             Self::RunShell { .. } => "run_shell",
             Self::GitDiff { .. } => "git_diff",
             Self::GitStatus { .. } => "git_status",
@@ -361,6 +396,24 @@ mod tests {
                 assert_eq!(max_bytes, Some(1000));
             }
             other => panic!("expected read_file action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builds_typed_repo_mode_submission_from_native_tool_call() {
+        let action = AgentAction::from_tool_call(
+            "submit_work_plan",
+            "call_plan",
+            r#"{"reason":"Submit bounded plan","work_plan":{"steps":[{"title":"Change validation"}]}}"#,
+        )
+        .unwrap();
+
+        match action {
+            AgentAction::SubmitWorkPlan { id, work_plan, .. } => {
+                assert_eq!(id.as_str(), "call_plan");
+                assert_eq!(work_plan["steps"][0]["title"], "Change validation");
+            }
+            other => panic!("expected submit_work_plan action, got {other:?}"),
         }
     }
 

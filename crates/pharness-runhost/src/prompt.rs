@@ -4,12 +4,12 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-15.2";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-24.1";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
 Use exactly one tool call per turn. Do not answer with prose unless you call the respond tool.
-Available action tools are: respond, finish, environment_info, list_dir, read_file, search_files, create_directory, write_file, patch_file, run_acceptance_command, run_shell, git_diff, git_status, kubernetes_get, argo_get_app, prometheus_query, prometheus_inventory, loki_log_summary, tekton_get_pipeline_runs, tekton_get_task_runs, tekton_analyze_pipeline_run.
+The tool schemas supplied with this request are the exact available action tools. Never attempt a tool that is not exposed. Repo Mode profiles may expose typed get_evidence and stage-submission tools instead of the general coding tools.
 Prefer read-only repo inspection first. Never read secrets, .env files, private keys, kubeconfigs, tokens, or credential files.
 File writes, destructive commands, network commands, and production mutations are policy-gated and may pause for approval.
 For available policy-gated actions, call the concrete tool. The runtime will pause for approval before execution.
@@ -191,6 +191,44 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
+            "get_evidence",
+            "Retrieve one evidence item from the controller-allowlisted context catalog.",
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["reason", "evidence_id"],
+                "properties": {
+                    "reason": { "type": "string" },
+                    "evidence_id": { "type": "string" }
+                }
+            }),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_onboarding_proposal",
+            "Submit one structured repository onboarding proposal for controller validation.",
+            structured_submission_schema("proposal"),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_work_plan",
+            "Submit one structured WorkPlan for controller validation and operator review.",
+            structured_submission_schema("work_plan"),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_test_outcome",
+            "Submit structured test findings bound to declared acceptance evidence.",
+            structured_submission_schema("outcome"),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_verification",
+            "Submit structured verification findings with claims separated from evidence-backed facts.",
+            structured_submission_schema("verification"),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
             "run_shell",
             "Run a policy-gated local shell command inside the workspace. Non-zero exit is returned as structured output.",
             serde_json::json!({
@@ -369,6 +407,18 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
     ]
 }
 
+fn structured_submission_schema(field: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", field],
+        "properties": {
+            "reason": { "type": "string" },
+            (field): { "type": "object" }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::worker_tool_specs;
@@ -400,6 +450,11 @@ mod tests {
             "tekton_get_pipeline_runs",
             "tekton_get_task_runs",
             "tekton_analyze_pipeline_run",
+            "get_evidence",
+            "submit_onboarding_proposal",
+            "submit_work_plan",
+            "submit_test_outcome",
+            "submit_verification",
         ] {
             assert!(names.contains(expected), "missing tool spec for {expected}");
         }

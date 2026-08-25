@@ -23,6 +23,7 @@ use pharness_core::{
 };
 use pharness_fireworks::FireworksClient;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::process::Command;
@@ -197,6 +198,109 @@ pub struct AttemptHost {
     pub context_budget: ContextBudget,
 }
 
+#[derive(Clone)]
+struct ProfileRestrictedTools<T> {
+    inner: T,
+    allowed: Option<BTreeSet<String>>,
+}
+
+impl<T> ProfileRestrictedTools<T> {
+    fn new(inner: T, allowed: Option<BTreeSet<String>>) -> Self {
+        Self { inner, allowed }
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: ToolExecutor> ToolExecutor for ProfileRestrictedTools<T> {
+    async fn execute(&self, action: &pharness_core::AgentAction) -> Result<ToolResult, ToolError> {
+        if self
+            .allowed
+            .as_ref()
+            .is_some_and(|allowed| !allowed.contains(action.kind_name()))
+        {
+            return Err(ToolError::UnsupportedAction {
+                action: action.kind_name().to_string(),
+            });
+        }
+        self.inner.execute(action).await
+    }
+}
+
+fn profile_tool_names(run: &RunSpec) -> anyhow::Result<Option<BTreeSet<String>>> {
+    let Some(profile) = run.execution_target_json.get("agent_profile") else {
+        return Ok(None);
+    };
+    let tools = profile
+        .get("tools")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("agent_profile has no tool allowlist"))?;
+    let mut allowed = BTreeSet::new();
+    for tool in tools {
+        let name = tool
+            .as_str()
+            .filter(|name| !name.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("agent_profile tool allowlist is invalid"))?;
+        if !allowed.insert(name.to_string()) {
+            anyhow::bail!("agent_profile tool allowlist contains duplicates");
+        }
+    }
+    if allowed.is_empty() {
+        anyhow::bail!("agent_profile tool allowlist is empty");
+    }
+    Ok(Some(allowed))
+}
+
+fn tool_specs_for_run(
+    run: &RunSpec,
+    allowed: Option<&BTreeSet<String>>,
+) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
+    let all = worker_tool_specs();
+    let Some(allowed) = allowed else {
+        return Ok(all);
+    };
+    let available = all
+        .iter()
+        .map(|spec| spec.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let unknown = allowed
+        .iter()
+        .filter(|name| !available.contains(name.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown.is_empty() {
+        anyhow::bail!(
+            "agent_profile requests unsupported tools: {}",
+            unknown.join(", ")
+        );
+    }
+    let filtered = all
+        .into_iter()
+        .filter(|spec| allowed.contains(&spec.name))
+        .collect::<Vec<_>>();
+    if filtered.is_empty() {
+        anyhow::bail!("agent_profile exposes no tools");
+    }
+    let _ = run;
+    Ok(filtered)
+}
+
+fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
+    let Some(profile) = run.execution_target_json.get("agent_profile") else {
+        return Ok(None);
+    };
+    let id = profile
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("agent_profile has no id"))?;
+    let stage = profile
+        .get("stage")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("agent_profile has no stage"))?;
+    Ok(Some(format!(
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success."
+    )))
+}
+
 pub fn run_status_str(status: RunStatus) -> &'static str {
     match status {
         RunStatus::Completed => "completed",
@@ -367,6 +471,8 @@ pub async fn execute_attempt<B: AttemptBackend>(
             LocalShellTools::new(&cwd)?,
         ),
     );
+    let allowed_tools = profile_tool_names(&spec.run)?;
+    let tools = ProfileRestrictedTools::new(tools, allowed_tools.clone());
     let runtime = AgentRuntime::with_tools(host.provider, sink, tools);
 
     let policy = policy_for_spec(&spec.run, &host.default_policy)?;
@@ -388,16 +494,20 @@ pub async fn execute_attempt<B: AttemptBackend>(
             let (repository_instruction_content, repository_instruction_files) =
                 repository_instructions(&cwd)?;
             let environment_content = environment_instructions(&spec.run)?;
+            let mut messages = vec![
+                ModelMessage::system(system_prompt()),
+                ModelMessage::system(repository_instruction_content),
+                ModelMessage::system(environment_content),
+            ];
+            if let Some(instruction) = profile_instruction(&spec.run)? {
+                messages.push(ModelMessage::system(instruction));
+            }
+            messages.push(ModelMessage::user(spec.run.user_task.clone()));
             let config = RunConfig {
                 session_id,
                 run_id,
-                messages: vec![
-                    ModelMessage::system(system_prompt()),
-                    ModelMessage::system(repository_instruction_content),
-                    ModelMessage::system(environment_content),
-                    ModelMessage::user(spec.run.user_task.clone()),
-                ],
-                tools: worker_tool_specs(),
+                messages,
+                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
                 tool_protocol: ToolProtocolMode::NativeTools,
                 temperature: 0.1,
                 max_tokens: 4096,
@@ -427,7 +537,7 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 session_id,
                 run_id,
                 messages: Vec::new(),
-                tools: worker_tool_specs(),
+                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
                 tool_protocol: ToolProtocolMode::NativeTools,
                 temperature: 0.1,
                 max_tokens: 4096,
@@ -457,7 +567,7 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 session_id,
                 run_id,
                 messages: Vec::new(),
-                tools: worker_tool_specs(),
+                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
                 tool_protocol: ToolProtocolMode::NativeTools,
                 temperature: 0.1,
                 max_tokens: 4096,
@@ -657,6 +767,7 @@ struct ProjectTools {
     contract: Option<RepositoryContract>,
     snapshot: Option<EnvironmentSnapshot>,
     selected_acceptance_commands: Vec<String>,
+    evidence_catalog: Vec<serde_json::Value>,
 }
 
 impl ProjectTools {
@@ -682,12 +793,20 @@ impl ProjectTools {
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
+        let evidence_catalog = run
+            .execution_target_json
+            .pointer("/agent_context/evidence_catalog")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             workspace: workspace.to_path_buf(),
             canonical_workspace: workspace.canonicalize()?,
             contract,
             snapshot,
             selected_acceptance_commands,
+            evidence_catalog,
         })
     }
 
@@ -832,11 +951,67 @@ impl ToolExecutor for ProjectTools {
             pharness_core::AgentAction::RunAcceptanceCommand { name, .. } => {
                 self.run_acceptance(name).await
             }
+            pharness_core::AgentAction::GetEvidence { evidence_id, .. } => {
+                let evidence = self
+                    .evidence_catalog
+                    .iter()
+                    .find(|entry| {
+                        entry.get("id").and_then(serde_json::Value::as_str)
+                            == Some(evidence_id.as_str())
+                    })
+                    .ok_or_else(|| ToolError::InvalidArguments {
+                        message: "evidence_id is outside the context-pack allowlist".into(),
+                    })?;
+                Ok(ToolResult::ok(
+                    format!("returned allowlisted evidence {evidence_id}"),
+                    serde_json::json!({
+                        "evidence_id": evidence_id,
+                        "evidence": evidence,
+                    }),
+                ))
+            }
+            pharness_core::AgentAction::SubmitOnboardingProposal { proposal, .. } => {
+                structured_submission("repository_onboarding_proposal", proposal)
+            }
+            pharness_core::AgentAction::SubmitWorkPlan { work_plan, .. } => {
+                structured_submission("work_plan", work_plan)
+            }
+            pharness_core::AgentAction::SubmitTestOutcome { outcome, .. } => {
+                structured_submission("test_outcome", outcome)
+            }
+            pharness_core::AgentAction::SubmitVerification { verification, .. } => {
+                structured_submission("verification", verification)
+            }
             _ => Err(ToolError::UnsupportedAction {
                 action: action.kind_name().to_string(),
             }),
         }
     }
+}
+
+fn structured_submission(
+    kind: &str,
+    document: &serde_json::Value,
+) -> Result<ToolResult, ToolError> {
+    let object = document
+        .as_object()
+        .filter(|object| !object.is_empty())
+        .ok_or_else(|| ToolError::InvalidArguments {
+            message: format!("{kind} must be a non-empty JSON object"),
+        })?;
+    if object.len() > 128 || document.to_string().len() > 128 * 1024 {
+        return Err(ToolError::InvalidArguments {
+            message: format!("{kind} exceeds the structured submission limit"),
+        });
+    }
+    Ok(ToolResult::ok(
+        format!("accepted typed {kind} for controller validation"),
+        serde_json::json!({
+            "structured_submission": true,
+            "kind": kind,
+            "document": document,
+        }),
+    ))
 }
 
 fn project_path_glob_matches(pattern: &str, path: &str) -> bool {
@@ -897,13 +1072,96 @@ impl EventSink for ChannelEventSink {
 #[cfg(test)]
 mod workspace_source_tests {
     use super::{
-        collect_workspace_git_evidence, git_evidence_args, repository_instructions,
+        collect_workspace_git_evidence, git_evidence_args, profile_tool_names,
+        repository_instructions, tool_specs_for_run, ProfileRestrictedTools, RunSpec,
         WorkspaceSourceSpec,
     };
+    use pharness_core::{
+        ActionId, AgentAction, RunBudgetConsumption, TaskContract, ToolError, ToolExecutor,
+        ToolResult,
+    };
+    use std::collections::BTreeSet;
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[derive(Clone)]
+    struct AcceptingTools;
+
+    #[async_trait::async_trait]
+    impl ToolExecutor for AcceptingTools {
+        async fn execute(&self, action: &AgentAction) -> Result<ToolResult, ToolError> {
+            Ok(ToolResult::ok(
+                format!("executed {}", action.kind_name()),
+                serde_json::json!({}),
+            ))
+        }
+    }
+
+    fn profile_run(tools: &[&str]) -> RunSpec {
+        RunSpec {
+            run_id: "run_profile".into(),
+            session_id: "ses_profile".into(),
+            cwd: "/tmp/workspace".into(),
+            user_task: "plan a bounded change".into(),
+            max_turns: 24,
+            execution_target_json: serde_json::json!({
+                "agent_profile": {
+                    "id": "repo-planner",
+                    "stage": "plan",
+                    "tools": tools,
+                }
+            }),
+            workspace_source: None,
+            task_contract: TaskContract::default(),
+            run_budget: None,
+            budget_consumption: RunBudgetConsumption::default(),
+        }
+    }
+
+    #[test]
+    fn profile_tool_specs_expose_only_the_pinned_allowlist() {
+        let run = profile_run(&["get_evidence", "submit_work_plan", "finish"]);
+        let allowed = profile_tool_names(&run).unwrap().unwrap();
+        let names = tool_specs_for_run(&run, Some(&allowed))
+            .unwrap()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            names,
+            BTreeSet::from([
+                "finish".to_string(),
+                "get_evidence".to_string(),
+                "submit_work_plan".to_string(),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn profile_executor_rejects_tools_outside_the_pinned_allowlist() {
+        let restricted = ProfileRestrictedTools::new(
+            AcceptingTools,
+            Some(BTreeSet::from(["get_evidence".to_string()])),
+        );
+        let allowed = AgentAction::GetEvidence {
+            id: ActionId::new("act_evidence"),
+            reason: "inspect evidence".into(),
+            evidence_id: "ev_1".into(),
+        };
+        assert!(restricted.execute(&allowed).await.is_ok());
+
+        let denied = AgentAction::EnvironmentInfo {
+            id: ActionId::new("act_environment"),
+            reason: "probe environment".into(),
+        };
+        assert!(matches!(
+            restricted.execute(&denied).await,
+            Err(ToolError::UnsupportedAction { action }) if action == "environment_info"
+        ));
+    }
 
     #[test]
     fn accepts_a_safe_https_repository_and_refs() {

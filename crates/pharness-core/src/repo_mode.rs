@@ -124,6 +124,7 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
                 "list_dir",
                 "search_files",
                 "submit_onboarding_proposal",
+                "finish",
             ],
         ),
         (
@@ -133,7 +134,7 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
             100_000,
             200_000,
             600,
-            vec!["get_evidence", "submit_work_plan"],
+            vec!["get_evidence", "submit_work_plan", "finish"],
         ),
         (
             "repo-builder",
@@ -168,6 +169,7 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
                 "get_evidence",
                 "run_acceptance_command",
                 "submit_test_outcome",
+                "finish",
             ],
         ),
         (
@@ -184,6 +186,7 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
                 "git_diff",
                 "git_status",
                 "submit_verification",
+                "finish",
             ],
         ),
     ];
