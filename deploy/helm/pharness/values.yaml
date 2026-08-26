@@ -7,7 +7,7 @@ features:
     enabled: true
     # Full operator-experience cutover. Keep disabled until the complete
     # repository onboarding and Repo Mode WorkItem journey passes.
-    uiEnabled: false
+    uiEnabled: true
 
 organization:
   id: org_lucas_engineering
