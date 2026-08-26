@@ -193,6 +193,7 @@ test("flagged shell uses the approved hierarchy and read-only overview", async (
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Products");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).not.toContainText("Triage");
   await expect(page.getByText("Manual source merge is required.")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth)).toBeLessThanOrEqual(1);
   await assertNoSeriousAccessibilityViolations(page);
   await expect(page).toHaveScreenshot(`repo-mode-overview-${testInfo.project.name}.png`, { fullPage: true });
 });

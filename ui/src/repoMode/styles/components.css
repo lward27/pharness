@@ -31,8 +31,8 @@
 .repo-list-row { width:100%; min-width:0; display:flex; align-items:center; gap:11px; padding:11px 12px; border:1px solid var(--repo-border); border-radius:10px; background:rgba(144,174,211,.035); color:inherit; text-align:left; }
 button.repo-list-row { cursor:pointer; }
 button.repo-list-row:hover:not(:disabled) { border-color:var(--repo-border-strong); background:rgba(80,158,220,.08); }
-.repo-list-row>div { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
-.repo-list-row strong,.repo-list-row span { overflow:hidden; text-overflow:ellipsis; }
+.repo-list-row>div { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+.repo-list-row strong,.repo-list-row span,.repo-list-row small { overflow:hidden; text-overflow:ellipsis; }
 .repo-list-row div>span,.repo-list-row div>small { color:var(--repo-muted); white-space:nowrap; }
 .repo-status { display:inline-flex; align-items:center; gap:6px; color:var(--repo-muted); font-size:11px; font-weight:700; text-transform:capitalize; white-space:nowrap; }
 .repo-status>span { width:7px; height:7px; border-radius:50%; background:currentColor; }
