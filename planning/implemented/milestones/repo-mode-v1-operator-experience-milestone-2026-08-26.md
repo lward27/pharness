@@ -146,3 +146,51 @@ inapplicable and no runtime state is manufactured.
   server-side dry-run, and OCI platform/revision inspection.
 - Detailed release evidence is recorded in
   [`../../evidence/smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md`](../../evidence/smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md).
+
+## Corrective completion release
+
+A contract-level audit after the first cutover found that the durable read
+models and visual shell existed, but several approved operator projections
+were still incomplete. Corrective implementation PR `#165` added complete
+WorkItem outcome history and ownership, Product binding revisions, evidence
+and audit rollups, genuine connected Release data, actionable onboarding
+attention, server-authored authorization boundaries, structured evidence
+presentation, route-owned AgentRun pagination, and deterministic real-server
+screenshots. Its merged source revision was
+`c187cc58ff9f19ad0e9a0695779266706a555ccf`.
+
+The first corrective flag-off/enable rollout (`#166` and `#167`) proved the
+new projections live, but the live Organization Overview exposed a horizontal
+overflow caused by long durable owner and action text. That rollout was not
+accepted as the stable completion. PR `#168` added an explicit desktop/phone
+overflow regression and clipped only presentation text while preserving the
+durable values. The accepted source revision is
+`c3638afa6d14819adca82006630858935c616172`.
+
+- Final flag-off release PR/revision: `#169` /
+  `8662e27e1d1ad944dcc93af75d37b398adc03d95`.
+- Final flag-enable release PR/revision: `#170` /
+  `05f0c079c43c8f3491ba76c451356d1d55324767`.
+- Runtime digest:
+  `sha256:5a304073220f370433f615e73ea914a36e306e4cbd61a64a55562ff349135c7f`.
+- UI digest:
+  `sha256:78930c2bff88497e72927c788ffbdad23f15d6c38126bc9296028b043fb1e3f6`.
+- Python runner digest:
+  `sha256:62474fc976a185b26fac6bd3439d58f6fe88f0c8bb4e5a76ee06f06c2a29a921`.
+- All three artifacts report `linux/amd64`, the accepted source revision, and
+  `https://github.com/lward27/pharness` as their OCI source.
+- Pre-rollout online backup:
+  `/data/backups/pharness-before-c187cc5-20260826T230516Z.db`, 7,221,248 bytes,
+  integrity `ok`. The responsive correction added no migration or persistence
+  change, so no database rollback is required.
+- Full Rust formatting, workspace tests, and all-target Clippy passed on the
+  corrective implementation. The accepted source additionally passed the UI
+  production build, 43 Vitest tests, and the complete Playwright suite: 85
+  passed with one intentional mobile-only skip.
+- Final live browser acceptance loaded all eight routes at desktop and phone
+  widths with no alert, page exception, or horizontal overflow. The completed
+  yfinance WorkItem still rendered successful Source Delivery, two
+  controller-recorded inapplicable downstream stages, and no legacy warning.
+- Final platform readiness reported matching API/UI revisions and immutable
+  digests. Expired isolated capability evidence remains honestly `stale` and
+  continues to gate new work until refreshed.
