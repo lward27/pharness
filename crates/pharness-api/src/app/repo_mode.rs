@@ -19,14 +19,14 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    CreateAgentContextPack, CreateAuditEvent, CreateEnvironmentPreparation,
+    ChangeSetListFilter, CreateAgentContextPack, CreateAuditEvent, CreateEnvironmentPreparation,
     CreateEvidenceValidation, CreateOperatorAnnotation, CreateOperatorAnnotationDecision,
     CreateProviderCheckSetObservation, CreateRepoWorkItem, CreateRun, CreateSession,
     CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
-    CreateWorkspace, SealStageOutcome, StoredBudgetExtension, StoredChangeSet,
+    CreateWorkspace, RunListFilter, SealStageOutcome, StoredBudgetExtension, StoredChangeSet,
     StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata,
     StoredRun, StoredSourceDeliveryIntent, StoredStageOutcome, UpdateEnvironmentPreparation,
-    UpdateWorkspaceExecution, WorkspaceListFilter,
+    UpdateWorkspaceExecution, WorkPlanListFilter, WorkspaceListFilter,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -113,6 +113,63 @@ pub(in crate::app) async fn repo_work_item_flow(
         .store
         .list_effective_stage_outcomes(work_item_id)
         .await?;
+    let all_outcomes = state.store.list_stage_outcomes(work_item_id).await?;
+    let work_plan_history = state
+        .store
+        .list_work_plans(WorkPlanListFilter {
+            work_item_id: Some(work_item_id.into()),
+            limit: 200,
+            ..WorkPlanListFilter::default()
+        })
+        .await?;
+    let change_set_history = state
+        .store
+        .list_change_sets(ChangeSetListFilter {
+            work_item_id: Some(work_item_id.into()),
+            limit: 200,
+            ..ChangeSetListFilter::default()
+        })
+        .await?;
+    let run_history = state
+        .store
+        .list_runs(RunListFilter {
+            work_item_id: Some(work_item_id.into()),
+            limit: 200,
+            ..RunListFilter::default()
+        })
+        .await?;
+    let product = state.store.get_product(&metadata.product_id).await?;
+    let repository = state.store.get_repository(&metadata.repository_id).await?;
+    let binding = state
+        .store
+        .get_repository_binding(&metadata.product_id, &metadata.repository_id)
+        .await?;
+    let binding_revision = match binding.as_ref() {
+        Some(binding) => {
+            state
+                .store
+                .get_repository_binding_revision(&binding.current_revision_id)
+                .await?
+        }
+        None => None,
+    };
+    let service_ids = binding_revision
+        .as_ref()
+        .map(|revision| {
+            revision
+                .service_ids
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let services = state
+        .store
+        .list_product_services(&metadata.product_id)
+        .await?
+        .into_iter()
+        .filter(|service| service_ids.contains(&service.id))
+        .collect::<Vec<_>>();
     let chain = state
         .store
         .active_stage_chain_authorization(work_item_id)
@@ -183,7 +240,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         .into_iter()
         .map(Into::into)
         .collect::<Vec<_>>();
-    let audit_events = state
+    let audit_events: Vec<crate::dto::AuditEventResponse> = state
         .store
         .list_audit_events(Some("work_item"), Some(work_item_id), None, 100)
         .await?
@@ -265,9 +322,9 @@ pub(in crate::app) async fn repo_work_item_flow(
         reconcile_preview,
         sdlc_flow: None,
         delivery_segments: repo_delivery_segments(&executions, &outcomes),
-        workspaces,
+        workspaces: workspaces.clone(),
         controller_waits: Vec::new(),
-        audit_events,
+        audit_events: audit_events.clone(),
         action_rail,
         delivery_configuration: json!({
             "kind":"repo_mode_source_only",
@@ -279,8 +336,23 @@ pub(in crate::app) async fn repo_work_item_flow(
         repo_mode: Some(json!({
             "metadata":metadata,
             "state_hash":repo_work_item_state_hash(&metadata)?,
+            "ownership":{
+                "product":product,
+                "repository":repository,
+                "repository_binding":binding,
+                "repository_binding_revision":binding_revision,
+                "services":services,
+            },
             "stage_executions":executions,
             "effective_stage_outcomes":outcomes,
+            "history":{
+                "stage_outcomes":all_outcomes,
+                "work_plans":work_plan_history,
+                "change_sets":change_set_history,
+                "runs":run_history,
+                "workspaces":workspaces,
+                "audit_events":audit_events,
+            },
             "stage_chain_authorization":chain,
             "operator_annotations":annotations,
             "operator_annotation_decisions":annotation_decisions,
@@ -4430,6 +4502,7 @@ struct RepoWorkItemPreflightResponse {
     blockers: Vec<Value>,
     warnings: Vec<Value>,
     predicted_mutations: Vec<String>,
+    authorization_boundaries: Vec<Value>,
     preflight_hash: String,
 }
 
@@ -4821,6 +4894,33 @@ async fn build_repo_work_item_preflight(
     } else {
         Vec::new()
     };
+    let authorization_boundaries = vec![
+        json!({
+            "boundary":"planner_model_execution",
+            "authorization":"explicit_work_item_action",
+            "effect":"Run the pinned repo-planner profile against the sealed context pack",
+        }),
+        json!({
+            "boundary":"stage_chain",
+            "authorization":"approved_work_plan_and_exact_chain_grant",
+            "effect":"Authorize one bounded Builder, Tester, and Verifier sequence",
+        }),
+        json!({
+            "boundary":"workspace_write",
+            "authorization":"attempt_scoped_writable_path_grant",
+            "effect":"Write only inside RepositoryContract-declared paths in one durable workspace",
+        }),
+        json!({
+            "boundary":"source_delivery",
+            "authorization":"approved_change_set_and_source_mutation_grant",
+            "effect":"Create one pull request for the exact approved head and patch",
+        }),
+        json!({
+            "boundary":"merge",
+            "authorization":"manual_provider_action",
+            "effect":"PHarness observes but never performs the source merge",
+        }),
+    ];
     let material = json!({
         "schema_version":"pharness.dev/repo-work-item-preflight/v1alpha1",
         "product_id":product_id,
@@ -4843,6 +4943,7 @@ async fn build_repo_work_item_preflight(
         "blockers":blockers,
         "warnings":warnings,
         "predicted_mutations":predicted_mutations,
+        "authorization_boundaries":authorization_boundaries,
     });
     let preflight_hash = canonical_material_hash(&material)?;
     Ok(RepoWorkItemPreflightResponse {
@@ -4866,6 +4967,7 @@ async fn build_repo_work_item_preflight(
         blockers,
         warnings,
         predicted_mutations,
+        authorization_boundaries,
         preflight_hash,
     })
 }

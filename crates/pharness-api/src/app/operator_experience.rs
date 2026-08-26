@@ -1,11 +1,11 @@
 use super::clock::current_millis;
-use super::products::ensure_repo_mode_enabled;
+use super::products::{ensure_repo_mode_enabled, onboarding_operator_projection};
 use super::system::{capability_statuses, environment_profile_capability_status};
 use super::{ApiError, AppState};
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
-use pharness_store::{RunListFilter, StoredWorkItem, WorkItemListFilter};
+use pharness_store::{ReleaseListFilter, RunListFilter, StoredWorkItem, WorkItemListFilter};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -153,6 +153,7 @@ pub(in crate::app) async fn organization_overview_value(
     let mut repository_ids = BTreeSet::new();
     let mut readiness_gap_repository_ids = BTreeSet::new();
     let mut readiness_gap_repositories = Vec::new();
+    let mut onboarding_attention_items = Vec::new();
     for product in &products {
         let repositories = state.store.list_product_repositories(&product.id).await?;
         repository_ids.extend(repositories.iter().map(|repository| repository.id.clone()));
@@ -182,22 +183,49 @@ pub(in crate::app) async fn organization_overview_value(
                 repo_metadata_by_item
                     .get(&item.id)
                     .is_some_and(|metadata| metadata.closed_at.is_none())
-                    && matches!(item.status.as_str(), "blocked" | "waiting_external")
+                    && matches!(
+                        item.status.as_str(),
+                        "blocked" | "waiting_external" | "awaiting_approval"
+                    )
             })
             .count();
-        product_summaries.push(json!({
-            "id":product.id,
-            "product_key":product.product_key,
-            "display_name":product.display_name,
-            "owner_principal":product.owner_principal,
-            "repository_count":repositories.len(),
-            "current_work_items":current,
-            "actionable_waits":attention,
-            "evidence_freshness":{"latest_work_item_update":latest_work_item_update,"as_of":current_millis().to_string()},
-            "capability_posture":&source_capability_posture,
-            "updated_at":product.updated_at,
-        }));
+        let repository_count = repositories.len();
+        let mut onboarding_waits = 0usize;
         for repository in repositories {
+            if let Some(onboarding) = state
+                .store
+                .list_repository_onboardings(&repository.id)
+                .await?
+                .into_iter()
+                .next()
+            {
+                let projection = onboarding_operator_projection(onboarding)?;
+                let action = projection
+                    .get("actions")
+                    .and_then(Value::as_array)
+                    .and_then(|actions| actions.first())
+                    .filter(|action| {
+                        action.get("status").and_then(Value::as_str) == Some("available")
+                            && action
+                                .get("requires_confirmation")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false)
+                    });
+                if let Some(action) = action {
+                    onboarding_waits += 1;
+                    onboarding_attention_items.push(json!({
+                        "kind":"human_action",
+                        "resource_kind":"repository_onboarding",
+                        "resource_id":projection.get("id"),
+                        "title":format!("Onboard {}", repository.external_id),
+                        "product_id":projection.get("product_id"),
+                        "repository_id":projection.get("repository_id"),
+                        "status":projection.get("status"),
+                        "reason":action.get("external_effect_summary"),
+                        "action":action,
+                    }));
+                }
+            }
             let assessment = state
                 .store
                 .latest_repository_readiness_assessment(
@@ -219,9 +247,22 @@ pub(in crate::app) async fn organization_overview_value(
                 }));
             }
         }
+        product_summaries.push(json!({
+            "id":product.id,
+            "product_key":product.product_key,
+            "display_name":product.display_name,
+            "owner_principal":product.owner_principal,
+            "repository_count":repository_count,
+            "current_work_items":current,
+            "actionable_waits":attention + onboarding_waits,
+            "evidence_freshness":{"latest_work_item_update":latest_work_item_update,"as_of":current_millis().to_string()},
+            "capability_posture":&source_capability_posture,
+            "updated_at":product.updated_at,
+        }));
     }
 
     let mut by_status = BTreeMap::<String, usize>::new();
+    let mut current_by_status = BTreeMap::<String, usize>::new();
     let mut by_stage = BTreeMap::<String, usize>::new();
     let mut attention = Vec::new();
     let mut active_runs = Vec::new();
@@ -235,20 +276,44 @@ pub(in crate::app) async fn organization_overview_value(
         let is_current = summary.get("closed_at").is_some_and(Value::is_null);
         if is_current {
             *by_stage.entry(stage.to_string()).or_default() += 1;
+            if let Some(status) = summary.get("status").and_then(Value::as_str) {
+                *current_by_status.entry(status.to_string()).or_default() += 1;
+            }
         }
-        if is_current
-            && matches!(
-                summary.get("status").and_then(Value::as_str),
-                Some("blocked" | "waiting_external")
+        let flow = if is_current {
+            Some(
+                super::repo_mode::repo_work_item_flow(
+                    state,
+                    summary["id"].as_str().unwrap_or_default(),
+                )
+                .await?,
             )
-        {
+        } else {
+            None
+        };
+        let recommended_action = flow.as_ref().and_then(|flow| flow.action_rail.first());
+        let status = summary
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let actionable = is_current
+            && (matches!(status, "blocked" | "waiting_external" | "awaiting_approval")
+                || recommended_action.is_some_and(|action| {
+                    action.status == "ready"
+                        && (action.approval_required
+                            || action.effect_class != "controller_internal")
+                }));
+        if actionable {
             attention.push(json!({
-                "kind":"work_item",
+                "kind":if status == "waiting_external" { "external_wait" } else if recommended_action.is_some() { "human_action" } else { "work_item" },
+                "resource_kind":"work_item",
                 "resource_id":summary.get("id"),
+                "title":summary.get("title"),
                 "product_id":summary.get("product_id"),
                 "repository_id":summary.get("repository_id"),
                 "status":summary.get("status"),
-                "reason":summary.get("status_reason"),
+                "reason":recommended_action.map(|action| action.external_effect_summary.as_str()).or_else(|| summary.get("status_reason").and_then(Value::as_str)),
+                "action":recommended_action,
             }));
         }
         if let Some(run) = summary
@@ -263,6 +328,7 @@ pub(in crate::app) async fn organization_overview_value(
             }));
         }
     }
+    attention.extend(onboarding_attention_items);
     let current = repo_metadata_by_item
         .values()
         .filter(|metadata| metadata.closed_at.is_none())
@@ -284,6 +350,24 @@ pub(in crate::app) async fn organization_overview_value(
     let ready_repositories = repository_ids
         .len()
         .saturating_sub(readiness_gap_repositories.len());
+    let repository_capability_gaps = repository_ids
+        .iter()
+        .flat_map(|repository_id| {
+            source_capability_posture
+                .iter()
+                .filter(|capability| capability.status != "available")
+                .map(move |capability| {
+                    json!({
+                        "repository_id":repository_id,
+                        "capability":capability.capability,
+                        "status":capability.status,
+                        "summary":capability.summary,
+                        "verified_at":capability.verified_at,
+                        "expires_at":capability.expires_at,
+                    })
+                })
+        })
+        .collect::<Vec<_>>();
     Ok(json!({
         "organization":{
             "id":organization.id,
@@ -297,8 +381,9 @@ pub(in crate::app) async fn organization_overview_value(
         "product_summaries":product_summaries,
         "work_items":{
             "current":current,
-            "waiting":by_status.get("waiting_external").copied().unwrap_or(0),
-            "blocked":by_status.get("blocked").copied().unwrap_or(0),
+            "waiting":current_by_status.get("waiting_external").copied().unwrap_or(0)
+                + current_by_status.get("awaiting_approval").copied().unwrap_or(0),
+            "blocked":current_by_status.get("blocked").copied().unwrap_or(0),
             "failed":by_status.get("failed").copied().unwrap_or(0),
             "recently_completed":recently_completed,
             "by_lifecycle_boundary":by_stage,
@@ -307,6 +392,7 @@ pub(in crate::app) async fn organization_overview_value(
         "attention":attention,
         "active_agent_runs":active_runs,
         "repository_readiness_gaps":readiness_gap_repositories,
+        "repository_capability_gaps":repository_capability_gaps,
         "repository_readiness_rate":{
             "ready":ready_repositories,
             "total":repository_ids.len(),
@@ -336,6 +422,14 @@ pub(in crate::app) async fn product_overview(
         .store
         .list_product_repository_bindings(&product_id)
         .await?;
+    let mut binding_summaries = Vec::with_capacity(bindings.len());
+    for binding in &bindings {
+        let revision = state
+            .store
+            .get_repository_binding_revision(&binding.current_revision_id)
+            .await?;
+        binding_summaries.push(json!({"binding":binding,"current_revision":revision}));
+    }
     let current = all_work_items(
         &state,
         WorkItemListFilter {
@@ -356,6 +450,11 @@ pub(in crate::app) async fn product_overview(
         },
     )
     .await?;
+    let work_item_ids = current
+        .iter()
+        .chain(history.iter())
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
     let mut current_summaries = Vec::new();
     for item in current {
         current_summaries.push(work_item_summary(&state, item).await?);
@@ -374,17 +473,112 @@ pub(in crate::app) async fn product_overview(
         })
         .await?;
     let capabilities = capability_statuses(&state).await?;
+    let mut evidence_by_work_item = Vec::with_capacity(work_item_ids.len());
+    let mut work_items_with_validations = 0usize;
+    let mut validation_count = 0usize;
+    let mut latest_validated_at: Option<String> = None;
+    let mut validators = BTreeMap::<String, usize>::new();
+    let mut audit_events = Vec::new();
+    for work_item_id in &work_item_ids {
+        let validations = state.store.list_evidence_validations(work_item_id).await?;
+        if !validations.is_empty() {
+            work_items_with_validations += 1;
+        }
+        validation_count += validations.len();
+        for validation in &validations {
+            *validators
+                .entry(validation.validator_key.clone())
+                .or_default() += 1;
+            if latest_validated_at
+                .as_deref()
+                .map_or(true, |current| validation.validated_at.as_str() > current)
+            {
+                latest_validated_at = Some(validation.validated_at.clone());
+            }
+        }
+        evidence_by_work_item.push(json!({
+            "work_item_id":work_item_id,
+            "validation_count":validations.len(),
+            "latest_validated_at":validations.iter().map(|validation| validation.validated_at.as_str()).max(),
+            "failed_or_contradicted":validations.iter().filter(|validation| validation.status != "passed" && validation.status != "succeeded").count(),
+        }));
+        audit_events.extend(
+            state
+                .store
+                .list_audit_events(Some("work_item"), Some(work_item_id), None, 25)
+                .await?,
+        );
+    }
+    audit_events.sort_by(|left, right| {
+        right
+            .created_at
+            .cmp(&left.created_at)
+            .then_with(|| right.id.cmp(&left.id))
+    });
+    audit_events.truncate(100);
+    let mut connected_releases = Vec::new();
+    for release in state
+        .store
+        .list_releases(ReleaseListFilter {
+            limit: 200,
+            ..ReleaseListFilter::default()
+        })
+        .await?
+    {
+        let Some(work_item_id) = state
+            .store
+            .get_work_plan(&release.work_plan_id)
+            .await?
+            .and_then(|plan| plan.work_item_id)
+        else {
+            continue;
+        };
+        let belongs_to_product = state
+            .store
+            .get_repo_work_item_metadata(&work_item_id)
+            .await?
+            .is_some_and(|metadata| metadata.product_id == product_id);
+        if belongs_to_product {
+            connected_releases.push(json!({
+                "id":release.id,
+                "title":release.title,
+                "summary":release.summary,
+                "status":release.status,
+                "work_item_id":work_item_id,
+                "source_revision":release.commit_sha,
+                "image_digest":release.image_digest,
+                "target_environment":release.target_environment,
+                "target_namespace":release.target_namespace,
+                "argo_application":release.argo_application,
+                "created_at":release.created_at,
+                "updated_at":release.updated_at,
+            }));
+        }
+    }
     Ok(Json(json!({
         "product":product,
         "services":services,
-        "repository_bindings":bindings,
+        "repository_bindings":binding_summaries,
         "repositories":repositories,
         "current_work_items":current_summaries,
         "historical_work_items":history_summaries,
         "active_agent_runs":runs.iter().map(|run| json!({"id":run.id,"status":run.status,"work_item_id":run.execution_target_json.pointer("/run_scope/work_item_id"),"stage_execution_id":run.execution_target_json.pointer("/repo_mode/stage_execution_id"),"profile_id":run.execution_target_json.pointer("/agent_profile/id")})).collect::<Vec<_>>(),
         "capability_posture":capabilities,
-        "connected_release_data":{"available":false,"releases":[]},
-        "evidence_freshness":{"as_of":current_millis().to_string()},
+        "connected_release_data":{"available":!connected_releases.is_empty(),"releases":connected_releases},
+        "evidence_summary":{
+            "validation_count":validation_count,
+            "work_items_with_validations":work_items_with_validations,
+            "work_item_denominator":work_item_ids.len(),
+            "latest_validated_at":latest_validated_at,
+            "validators":validators.into_iter().map(|(name, count)| json!({"name":name,"count":count})).collect::<Vec<_>>(),
+            "by_work_item":evidence_by_work_item,
+        },
+        "audit_events":audit_events,
+        "evidence_freshness":{
+            "as_of":current_millis().to_string(),
+            "work_items_with_validations":work_items_with_validations,
+            "work_item_denominator":work_item_ids.len(),
+        },
     })))
 }
 
@@ -551,7 +745,11 @@ async fn repository_overview(
             .get_repository_binding(&product.id, &repository_id)
             .await?
         {
-            bindings.push(json!({"product":product,"binding":binding}));
+            let revision = state
+                .store
+                .get_repository_binding_revision(&binding.current_revision_id)
+                .await?;
+            bindings.push(json!({"product":product,"binding":binding,"current_revision":revision}));
         }
     }
     let onboardings = state

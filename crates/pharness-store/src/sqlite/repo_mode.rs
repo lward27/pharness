@@ -446,6 +446,23 @@ impl SqliteStore {
         rows.into_iter().map(row_to_stage_outcome).collect()
     }
 
+    /// Returns every sealed outcome for a WorkItem, including outcomes that
+    /// have been superseded. The effective-outcome pointer remains the
+    /// authoritative current projection; this read is intended for immutable
+    /// operator history and never changes that pointer.
+    pub async fn list_stage_outcomes(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Vec<StoredStageOutcome>, StoreError> {
+        let rows = sqlx::query(&stage_outcome_select(
+            "WHERE stage_outcomes.work_item_id = ?1 ORDER BY stage_outcomes.sealed_at, stage_outcomes.id",
+        ))
+        .bind(work_item_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_stage_outcome).collect()
+    }
+
     pub async fn create_evidence_validation(
         &self,
         validation: CreateEvidenceValidation,
@@ -1301,6 +1318,53 @@ mod tests {
             .execute(&store.pool)
             .await;
         assert!(delete.is_err());
+        let second_execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: "stageexec_two".into(),
+                work_item_id: "witem_repo".into(),
+                stage_key: "discover".into(),
+                sequence: 2,
+                status: "running".into(),
+                agent_profile_id: None,
+                agent_profile_version: None,
+                agent_profile_hash: None,
+                context_pack_id: None,
+                run_id: None,
+                workspace_id: None,
+                input_snapshot: json!({"source_commit": "a".repeat(40)}),
+                input_hash: "sha256:input-two".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .seal_stage_outcome(SealStageOutcome {
+                id: "stageout_two".into(),
+                stage_execution_id: second_execution.id,
+                work_item_id: "witem_repo".into(),
+                stage_key: "discover".into(),
+                status: "succeeded".into(),
+                outcome: json!({"stop_reason":"controller sealed refreshed readiness"}),
+                content_hash: "sha256:outcome-two".into(),
+                state_version: 3,
+                supersedes_outcome_id: Some("stageout_one".into()),
+                actor: "controller".into(),
+                reason: "validated refreshed evidence".into(),
+            })
+            .await
+            .unwrap();
+        let all_outcomes = store.list_stage_outcomes("witem_repo").await.unwrap();
+        assert_eq!(
+            all_outcomes
+                .iter()
+                .map(|outcome| outcome.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["stageout_one", "stageout_two"]
+        );
+        let effective = store
+            .list_effective_stage_outcomes("witem_repo")
+            .await
+            .unwrap();
+        assert_eq!(effective[0].id, "stageout_two");
     }
 
     #[tokio::test]
