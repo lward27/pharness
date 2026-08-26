@@ -62,6 +62,14 @@ pub(super) fn router() -> Router<AppState> {
             "/api/work-items/:work_item_id/annotations",
             get(list_annotations).post(create_annotation),
         )
+        .route(
+            "/api/work-items/:work_item_id/evidence",
+            get(list_work_item_evidence),
+        )
+        .route(
+            "/api/evidence-validations/:evidence_validation_id",
+            get(get_evidence_validation),
+        )
 }
 
 pub(in crate::app) async fn is_repo_work_item(
@@ -183,6 +191,36 @@ pub(in crate::app) async fn repo_work_item_flow(
         .map(Into::into)
         .collect();
     let first_action = action_rail.first();
+    let safe_advance = first_action
+        .map(|action| {
+            let eligible = action.status == "ready"
+                && !action.approval_required
+                && action.effect_class == "controller_internal";
+            json!({
+                "eligible": eligible,
+                "action_id": eligible.then_some(action.id.as_str()),
+                "state_hash": eligible.then_some(action.state_hash.as_str()),
+                "summary": if eligible {
+                    action.external_effect_summary.as_str()
+                } else {
+                    "No safe internal Repo Mode action is currently eligible"
+                },
+                "blockers": if eligible {
+                    Vec::<String>::new()
+                } else {
+                    vec!["The next boundary requires human review, model execution, or an external effect".to_string()]
+                },
+            })
+        })
+        .unwrap_or_else(|| {
+            json!({
+                "eligible": false,
+                "action_id": Value::Null,
+                "state_hash": Value::Null,
+                "summary": "No controller action is currently available",
+                "blockers": ["The WorkItem is waiting or closed"],
+            })
+        });
     let work_item_response: crate::dto::WorkItemResponse =
         crate::dto::WorkItemResponse::from(work_item.clone()).with_repo_metadata(&metadata);
     let reconcile_preview = ReconcileWorkItemResponse {
@@ -253,6 +291,7 @@ pub(in crate::app) async fn repo_work_item_flow(
             "repository_contract_version_id":metadata.repository_contract_version_id,
             "change_set":change_set,
             "source_delivery_intent":source_delivery_intent,
+            "safe_advance":safe_advance,
         })),
     })
 }
@@ -3046,50 +3085,7 @@ async fn seal_source_delivery_closure(
             reason: stop_reason.into(),
         })
         .await?;
-    for stage in ["release", "observe"] {
-        let input =
-            json!({"reason":"Repo Mode V1 is source-only","source_delivery_intent_id":intent.id});
-        let execution = state
-            .store
-            .create_stage_execution(CreateStageExecution {
-                id: new_prefixed_id("stageexec"),
-                work_item_id: work_item_id.into(),
-                stage_key: stage.into(),
-                sequence: 1,
-                status: "inapplicable".into(),
-                agent_profile_id: None,
-                agent_profile_version: None,
-                agent_profile_hash: None,
-                context_pack_id: None,
-                run_id: None,
-                workspace_id: None,
-                input_hash: canonical_material_hash(&input)?,
-                input_snapshot: input.clone(),
-            })
-            .await?;
-        let metadata = repo_metadata(state, work_item_id).await?;
-        let outcome = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"work_item_id":work_item_id,
-            "stage_execution_id":execution.id,"stage":stage,"status":"inapplicable","objective":{"kind":"source_only_repo_mode"},
-            "pinned_inputs":input,"verified_facts":[],"agent_claims":[],"outputs":[],"acceptance":[],"decisions":[],
-            "authorizations":[],"contradictions":[],"risks":[],"unavailable_capabilities":[],"recommendations":[],
-            "stop_reason":"Repo Mode V1 does not create deployment Release or Observe work","sealed_state_version":metadata.state_version});
-        state
-            .store
-            .seal_stage_outcome(SealStageOutcome {
-                id: new_prefixed_id("stageout"),
-                stage_execution_id: execution.id,
-                work_item_id: work_item_id.into(),
-                stage_key: stage.into(),
-                status: "inapplicable".into(),
-                content_hash: canonical_material_hash(&outcome)?,
-                outcome,
-                state_version: metadata.state_version,
-                supersedes_outcome_id: None,
-                actor: "controller:repo-mode".into(),
-                reason: "source-only contract".into(),
-            })
-            .await?;
-    }
+    seal_repo_inapplicable_tail(&state.store, work_item_id).await?;
     Ok(())
 }
 
@@ -3117,7 +3113,7 @@ async fn append_repo_audit(
     Ok(())
 }
 
-async fn seal_repo_inapplicable_tail(
+pub(in crate::app) async fn seal_repo_inapplicable_tail(
     store: &pharness_store::SqliteStore,
     work_item_id: &str,
 ) -> Result<(), ApiError> {
@@ -5081,6 +5077,38 @@ async fn list_annotations(
         "count": annotations.len(),
         "decisions":decisions,
     })))
+}
+
+async fn list_work_item_evidence(
+    State(state): State<AppState>,
+    Path(work_item_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    repo_metadata(&state, &work_item_id).await?;
+    let validations = state.store.list_evidence_validations(&work_item_id).await?;
+    let outcomes = state
+        .store
+        .list_effective_stage_outcomes(&work_item_id)
+        .await?;
+    Ok(Json(json!({
+        "work_item_id": work_item_id,
+        "evidence_validations": validations,
+        "effective_stage_outcomes": outcomes,
+        "count": validations.len(),
+    })))
+}
+
+async fn get_evidence_validation(
+    State(state): State<AppState>,
+    Path(evidence_validation_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    let validation = state
+        .store
+        .get_evidence_validation(&evidence_validation_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("evidence_validation", &evidence_validation_id))?;
+    Ok(Json(json!({"evidence_validation": validation})))
 }
 
 async fn create_annotation(

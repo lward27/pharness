@@ -38,6 +38,11 @@ pub(in crate::app) struct ListWorkItemsQuery {
     pub(in crate::app) production_impacting: Option<bool>,
     pub(in crate::app) actor: Option<String>,
     pub(in crate::app) origin: Option<String>,
+    pub(in crate::app) mode: Option<String>,
+    pub(in crate::app) product_id: Option<String>,
+    pub(in crate::app) repository_id: Option<String>,
+    pub(in crate::app) lifecycle: Option<String>,
+    pub(in crate::app) search: Option<String>,
     pub(in crate::app) include: Option<String>,
     pub(in crate::app) limit: Option<u32>,
     pub(in crate::app) offset: Option<u32>,
@@ -57,6 +62,11 @@ pub(in crate::app) async fn list_work_items(
         production_impacting: query.production_impacting,
         created_by: clean_optional_text(query.actor),
         origin: clean_optional_text(query.origin),
+        mode: clean_optional_text(query.mode),
+        product_id: clean_optional_text(query.product_id),
+        repository_id: clean_optional_text(query.repository_id),
+        lifecycle: clean_optional_text(query.lifecycle),
+        search: clean_optional_text(query.search),
         limit,
         offset,
     };
@@ -74,6 +84,44 @@ pub(in crate::app) async fn list_work_items(
                 .store
                 .get_active_controller_wait_for_work_item(&item.id)
                 .await?;
+            let metadata = state.store.get_repo_work_item_metadata(&item.id).await?;
+            let current_execution = match metadata
+                .as_ref()
+                .and_then(|metadata| metadata.current_stage_execution_id.as_deref())
+            {
+                Some(id) => state.store.get_stage_execution(id).await?,
+                None => None,
+            };
+            let effective_outcome = match current_execution.as_ref() {
+                Some(execution) => {
+                    state
+                        .store
+                        .get_stage_outcome_for_execution(&execution.id)
+                        .await?
+                }
+                None => None,
+            };
+            let active_run = match item.current_run_id.as_ref() {
+                Some(run_id) => state
+                    .store
+                    .get_run(run_id)
+                    .await?
+                    .filter(|run| run.finished_at.is_none()),
+                None => None,
+            };
+            let recommended_action = if metadata.is_some() {
+                super::super::repo_mode::repo_work_item_flow(&state, &item.id)
+                    .await?
+                    .action_rail
+                    .into_iter()
+                    .next()
+            } else {
+                None
+            };
+            let current_lifecycle_stage = current_execution
+                .as_ref()
+                .map(|execution| execution.stage_key.clone())
+                .or_else(|| metadata.as_ref().map(|_| "discover".to_string()));
             operator_state.insert(
                 item.id.clone(),
                 WorkItemOperatorStateResponse {
@@ -83,7 +131,28 @@ pub(in crate::app) async fn list_work_items(
                         .unwrap_or_else(|| item.status.clone()),
                     attempts_remaining: item.max_attempts.saturating_sub(item.attempt_count),
                     attention_reason: item.status_reason.clone(),
-                    active_wait: active_wait.map(Into::into),
+                    active_wait: active_wait.clone().map(Into::into),
+                    current_lifecycle_stage,
+                    current_stage_execution: current_execution
+                        .as_ref()
+                        .map(serde_json::to_value)
+                        .transpose()
+                        .map_err(|error| ApiError::internal(error.to_string()))?,
+                    effective_stage_outcome: effective_outcome
+                        .as_ref()
+                        .map(serde_json::to_value)
+                        .transpose()
+                        .map_err(|error| ApiError::internal(error.to_string()))?,
+                    active_agent_run: active_run
+                        .as_ref()
+                        .map(serde_json::to_value)
+                        .transpose()
+                        .map_err(|error| ApiError::internal(error.to_string()))?,
+                    exact_wait_or_blocker: active_wait
+                        .as_ref()
+                        .map(|wait| format!("waiting for {}", wait.wait_kind))
+                        .or_else(|| item.status_reason.clone()),
+                    recommended_action,
                 },
             );
         }

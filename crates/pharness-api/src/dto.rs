@@ -40,11 +40,40 @@ pub struct RunResponse {
     pub run_budget: RunBudget,
     pub budget_consumption: RunBudgetConsumption,
     pub stop_reason: Option<String>,
+    pub ownership: RunOwnershipResponse,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct RunOwnershipResponse {
+    pub product_id: Option<String>,
+    pub work_item_id: Option<String>,
+    pub repository_id: Option<String>,
+    pub stage_execution_id: Option<String>,
+    pub agent_profile_id: Option<String>,
 }
 
 impl From<StoredRun> for RunResponse {
     fn from(run: StoredRun) -> Self {
         let scope = RunScope::from_execution_target(&run.execution_target_json);
+        let ownership = RunOwnershipResponse {
+            product_id: None,
+            work_item_id: run
+                .execution_target_json
+                .pointer("/run_scope/work_item_id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            repository_id: None,
+            stage_execution_id: run
+                .execution_target_json
+                .pointer("/repo_mode/stage_execution_id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            agent_profile_id: run
+                .execution_target_json
+                .pointer("/agent_profile/id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+        };
         Self {
             id: run.id,
             status: run.status,
@@ -67,6 +96,7 @@ impl From<StoredRun> for RunResponse {
             run_budget: run.run_budget,
             budget_consumption: run.budget_consumption,
             stop_reason: run.stop_reason,
+            ownership,
         }
     }
 }
@@ -733,6 +763,12 @@ pub struct WorkItemOperatorStateResponse {
     pub attempts_remaining: u32,
     pub attention_reason: Option<String>,
     pub active_wait: Option<ControllerWaitResponse>,
+    pub current_lifecycle_stage: Option<String>,
+    pub current_stage_execution: Option<serde_json::Value>,
+    pub effective_stage_outcome: Option<serde_json::Value>,
+    pub active_agent_run: Option<serde_json::Value>,
+    pub exact_wait_or_blocker: Option<String>,
+    pub recommended_action: Option<WorkItemActionResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]

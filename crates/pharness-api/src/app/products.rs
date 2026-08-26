@@ -92,13 +92,7 @@ struct OrganizationResponse {
     organization_key: String,
     display_name: String,
     repo_mode_v1_enabled: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct OrganizationOverviewResponse {
-    organization: OrganizationResponse,
-    products: usize,
-    repositories: usize,
+    repo_mode_v1_ui_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -416,8 +410,13 @@ struct RepositoryOnboardingResponse {
 #[derive(Debug, Clone, Serialize)]
 struct RepositoryOnboardingActionResponse {
     id: String,
+    lifecycle_stage: String,
+    resource: Value,
     status: String,
     effect_class: String,
+    external_effect_summary: String,
+    approval_requirements: Vec<String>,
+    expected_result: String,
     requires_confirmation: bool,
     blockers: Vec<String>,
     state_hash: String,
@@ -441,13 +440,23 @@ async fn get_organization(
 ) -> Result<Json<OrganizationResponse>, ApiError> {
     let organization = state
         .store
-        .ensure_bootstrap_organization(&state.repo_mode.organization)
+        .get_organization(&state.repo_mode.organization.id)
         .await?;
     Ok(Json(OrganizationResponse {
-        id: organization.id,
-        organization_key: organization.organization_key,
-        display_name: organization.display_name,
+        id: organization
+            .as_ref()
+            .map(|value| value.id.clone())
+            .unwrap_or_else(|| state.repo_mode.organization.id.clone()),
+        organization_key: organization
+            .as_ref()
+            .map(|value| value.organization_key.clone())
+            .unwrap_or_else(|| state.repo_mode.organization.organization_key.clone()),
+        display_name: organization
+            .as_ref()
+            .map(|value| value.display_name.clone())
+            .unwrap_or_else(|| state.repo_mode.organization.display_name.clone()),
         repo_mode_v1_enabled: state.repo_mode.enabled,
+        repo_mode_v1_ui_enabled: state.repo_mode.ui_enabled,
     }))
 }
 
@@ -465,40 +474,25 @@ async fn list_agent_profiles(State(state): State<AppState>) -> Result<Json<Value
     ))
 }
 
-async fn organization_overview(
-    State(state): State<AppState>,
-) -> Result<Json<OrganizationOverviewResponse>, ApiError> {
+async fn organization_overview(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     let organization = state
         .store
-        .ensure_bootstrap_organization(&state.repo_mode.organization)
-        .await?;
-    let products = state.store.list_products(&organization.id).await?;
-    let mut repository_count = 0usize;
-    for product in &products {
-        repository_count += state
-            .store
-            .list_product_repositories(&product.id)
-            .await?
-            .len();
-    }
-    Ok(Json(OrganizationOverviewResponse {
-        organization: OrganizationResponse {
-            id: organization.id,
-            organization_key: organization.organization_key,
-            display_name: organization.display_name,
-            repo_mode_v1_enabled: state.repo_mode.enabled,
-        },
-        products: products.len(),
-        repositories: repository_count,
-    }))
+        .get_organization(&state.repo_mode.organization.id)
+        .await?
+        .unwrap_or_else(|| pharness_store::StoredOrganization {
+            id: state.repo_mode.organization.id.clone(),
+            organization_key: state.repo_mode.organization.organization_key.clone(),
+            display_name: state.repo_mode.organization.display_name.clone(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        });
+    Ok(Json(
+        super::operator_experience::organization_overview_value(&state, &organization).await?,
+    ))
 }
 
 async fn list_products(State(state): State<AppState>) -> Result<Json<ProductsResponse>, ApiError> {
     ensure_repo_mode_enabled(&state)?;
-    state
-        .store
-        .ensure_bootstrap_organization(&state.repo_mode.organization)
-        .await?;
     let products = state
         .store
         .list_products(&state.repo_mode.organization.id)
@@ -2499,6 +2493,15 @@ fn onboarding_response(
         .into_iter()
         .map(|(id, blockers)| RepositoryOnboardingActionResponse {
             id: id.into(),
+            lifecycle_stage: onboarding_stage_for_action(id).into(),
+            resource: json!({
+                "kind": "repository_onboarding",
+                "id": onboarding.id,
+                "product_id": onboarding.product_id,
+                "repository_id": onboarding.repository_id,
+                "source_commit": onboarding.registered_commit,
+                "proposal_revision": onboarding.current_proposal_revision,
+            }),
             status: if blockers.is_empty() {
                 "available".into()
             } else {
@@ -2517,6 +2520,16 @@ fn onboarding_response(
             } else {
                 "isolated_read".into()
             },
+            external_effect_summary: onboarding_action_effect(id, &onboarding),
+            approval_requirements: if matches!(
+                id,
+                "approve_proposal" | "authorize_onboarding_source_delivery"
+            ) {
+                vec!["actor, reason, and current state hash".into()]
+            } else {
+                Vec::new()
+            },
+            expected_result: onboarding_action_result(id).into(),
             requires_confirmation: matches!(
                 id,
                 "approve_proposal"
@@ -2563,6 +2576,67 @@ fn onboarding_response(
         created_at: onboarding.created_at,
         updated_at: onboarding.updated_at,
     })
+}
+
+fn onboarding_stage_for_action(action_id: &str) -> &'static str {
+    match action_id {
+        "start_discovery" | "retry_discovery" => "discovery",
+        "start_proposer" | "retry_proposer" | "approve_proposal" => "proposal",
+        "prepare_onboarding_patch" | "retry_onboarding_patch" => "contract_change",
+        "authorize_onboarding_source_delivery" | "observe_onboarding_source_delivery" => {
+            "source_delivery"
+        }
+        "validate_merged_contract" | "retry_merged_contract_validation" => "readiness",
+        _ => "onboarding",
+    }
+}
+
+fn onboarding_action_effect(action_id: &str, onboarding: &StoredRepositoryOnboarding) -> String {
+    match action_id {
+        "approve_proposal" => format!(
+            "Approve onboarding proposal revision {} for Repository {}",
+            onboarding.current_proposal_revision, onboarding.repository_id
+        ),
+        "prepare_onboarding_patch" | "retry_onboarding_patch" => format!(
+            "Materialize the reviewed .pharness configuration change for Repository {} at {}",
+            onboarding.repository_id, onboarding.registered_commit
+        ),
+        "authorize_onboarding_source_delivery" => format!(
+            "Create one reviewed onboarding pull request for Repository {} at {}",
+            onboarding.repository_id, onboarding.registered_commit
+        ),
+        "observe_onboarding_source_delivery" => format!(
+            "Read pull-request and provider-check state for Repository {}",
+            onboarding.repository_id
+        ),
+        "start_proposer" | "retry_proposer" => {
+            "Run the bounded repository-onboarding proposer".into()
+        }
+        _ => "Advance the isolated onboarding lifecycle without changing provider state".into(),
+    }
+}
+
+fn onboarding_action_result(action_id: &str) -> &'static str {
+    match action_id {
+        "start_discovery" | "retry_discovery" => "Immutable discovery evidence is recorded",
+        "start_proposer" | "retry_proposer" => {
+            "A versioned onboarding proposal is ready for review"
+        }
+        "approve_proposal" => "The exact proposal revision becomes the reviewed configuration",
+        "prepare_onboarding_patch" | "retry_onboarding_patch" => {
+            "A bounded onboarding patch is materialized"
+        }
+        "authorize_onboarding_source_delivery" => {
+            "The onboarding source-delivery intent is dispatched"
+        }
+        "observe_onboarding_source_delivery" => {
+            "Provider checks and manual-merge state are refreshed"
+        }
+        "validate_merged_contract" | "retry_merged_contract_validation" => {
+            "The merged canonical contract is validated"
+        }
+        _ => "The onboarding state advances",
+    }
 }
 
 pub(in crate::app) async fn finalize_repository_onboarding_proposer_run(
@@ -3756,7 +3830,8 @@ async fn resolve_public_github_repository(
         .user_agent("pharness-repository-registration/1")
         .build()
         .map_err(|error| ApiError::internal(format!("GitHub client setup failed: {error}")))?;
-    let repository_url = format!("https://api.github.com/repos/{external_id}");
+    let github_api_url = repository_registration_github_api_url()?;
+    let repository_url = format!("{github_api_url}/repos/{external_id}");
     let response = client
         .get(repository_url)
         .header("Accept", "application/vnd.github+json")
@@ -3782,7 +3857,7 @@ async fn resolve_public_github_repository(
             "GitHub resolved the repository URL to a different provider identity",
         ));
     }
-    let commit_url = format!("https://api.github.com/repos/{external_id}/commits/{source_commit}");
+    let commit_url = format!("{github_api_url}/repos/{external_id}/commits/{source_commit}");
     let response = client
         .get(commit_url)
         .header("Accept", "application/vnd.github+json")
@@ -3807,6 +3882,30 @@ async fn resolve_public_github_repository(
         ));
     }
     Ok(repository)
+}
+
+fn repository_registration_github_api_url() -> Result<String, ApiError> {
+    #[cfg(feature = "ui-e2e")]
+    if let Ok(value) = std::env::var("PHARNESS_UI_E2E_GITHUB_API_URL") {
+        let parsed = url::Url::parse(value.trim())
+            .map_err(|_| ApiError::internal("PHARNESS_UI_E2E_GITHUB_API_URL is not a valid URL"))?;
+        let loopback = parsed
+            .host_str()
+            .is_some_and(|host| matches!(host, "127.0.0.1" | "localhost" | "::1"));
+        if parsed.scheme() != "http"
+            || !loopback
+            || parsed.username() != ""
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            return Err(ApiError::internal(
+                "the UI E2E GitHub adapter must be a credential-free loopback HTTP URL",
+            ));
+        }
+        return Ok(value.trim().trim_end_matches('/').to_string());
+    }
+    Ok("https://api.github.com".into())
 }
 
 fn github_external_id(canonical_url: &str) -> String {

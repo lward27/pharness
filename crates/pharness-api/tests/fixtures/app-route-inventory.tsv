@@ -42,6 +42,7 @@ POST	/api/deployment-intents/:deployment_intent_id/transition	operator
 POST	/api/deployment-intents/:deployment_intent_id/trusted-envelope	operator
 POST	/api/deployment-intents/from-pipeline-intent	operator
 GET	/api/environment-profiles	operator
+GET	/api/evidence-validations/:evidence_validation_id	operator
 GET	/api/agent-profiles	operator
 GET	/api/gitops-change-sets	operator
 POST	/api/gitops-change-sets	operator
@@ -115,11 +116,13 @@ GET	/api/products	operator
 POST	/api/products	operator
 GET	/api/products/:product_id	operator
 PATCH	/api/products/:product_id	operator
+GET	/api/products/:product_id/overview	operator
 GET	/api/products/:product_id/model-snapshots/:snapshot_id	operator
 GET	/api/products/:product_id/repositories	operator
 POST	/api/products/:product_id/repositories	operator
 POST	/api/products/:product_id/repositories/preflight	operator
 GET	/api/products/:product_id/services	operator
+GET	/api/repositories	operator
 POST	/api/products/:product_id/work-items	operator
 POST	/api/products/:product_id/work-items/preflight	operator
 GET	/api/registry-evidence	operator
@@ -128,6 +131,7 @@ POST	/api/registry-evidence/:evidence_id/transition	operator
 POST	/api/registry-evidence/from-registry-inspection	operator
 POST	/api/registry-evidence/from-release	operator
 GET	/api/repositories/:repository_id	operator
+GET	/api/repositories/:repository_id/overview	operator
 POST	/api/repositories/:repository_id/onboardings	operator
 GET	/api/repositories/:repository_id/readiness	operator
 POST	/api/repositories/:repository_id/readiness-assessments	operator
@@ -163,6 +167,7 @@ GET	/api/runs/:run_id/events/stream	operator
 GET	/api/runs/:run_id/observations	operator
 GET	/api/runs/:run_id/operator-summary	operator
 GET	/api/runs/summary	operator
+GET	/api/search	operator
 GET	/api/scopes/options	operator
 POST	/api/system/capabilities/:capability/preflight	operator
 GET	/api/stage-executions/:stage_execution_id	operator
@@ -180,6 +185,7 @@ POST	/api/work-items/:work_item_id/cancel	operator
 POST	/api/work-items/:work_item_id/capture-change-set	operator
 GET	/api/work-items/:work_item_id/controller-waits	operator
 GET	/api/work-items/:work_item_id/events	operator
+GET	/api/work-items/:work_item_id/evidence	operator
 POST	/api/work-items/:work_item_id/execute	operator
 GET	/api/work-items/:work_item_id/flow	operator
 POST	/api/work-items/:work_item_id/pipeline-intent	operator

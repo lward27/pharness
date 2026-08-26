@@ -128,6 +128,22 @@ pub struct CreateEvidenceValidation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredEvidenceValidation {
+    pub id: String,
+    pub work_item_id: String,
+    pub stage_execution_id: Option<String>,
+    pub validator_key: String,
+    pub schema_version: String,
+    pub status: String,
+    pub subject: serde_json::Value,
+    pub evidence_refs: serde_json::Value,
+    pub facts: serde_json::Value,
+    pub contradictions: serde_json::Value,
+    pub content_hash: String,
+    pub validated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateAgentContextPack {
     pub id: String,
     pub work_item_id: String,

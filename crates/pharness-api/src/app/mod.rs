@@ -30,6 +30,7 @@ mod identifiers;
 mod internal;
 mod json_values;
 mod operator;
+mod operator_experience;
 mod pipeline;
 mod policy;
 mod principals;
@@ -52,6 +53,7 @@ use system::{BuildMetadata, ProtectedTargetConfiguration};
 #[derive(Debug, Clone)]
 struct RepoModeConfiguration {
     enabled: bool,
+    ui_enabled: bool,
     organization: pharness_store::BootstrapOrganization,
 }
 
@@ -62,8 +64,14 @@ impl RepoModeConfiguration {
             .is_some_and(|value| {
                 matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
             });
+        let ui_enabled = std::env::var("PHARNESS_REPO_MODE_V1_UI_ENABLED")
+            .ok()
+            .is_some_and(|value| {
+                matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+            });
         Self {
             enabled,
+            ui_enabled,
             organization: pharness_store::BootstrapOrganization {
                 id: std::env::var("PHARNESS_ORGANIZATION_ID")
                     .unwrap_or_else(|_| "org_default".into()),
@@ -79,6 +87,7 @@ impl RepoModeConfiguration {
     fn test_enabled() -> Self {
         Self {
             enabled: true,
+            ui_enabled: true,
             organization: pharness_store::BootstrapOrganization {
                 id: "org_test".into(),
                 organization_key: "test".into(),
@@ -137,6 +146,7 @@ pub fn router(
         .merge(evidence::router())
         .merge(work_items::router())
         .merge(operator::router())
+        .merge(operator_experience::router())
         .merge(products::router())
         .merge(repo_mode::router())
         .merge(source::router())

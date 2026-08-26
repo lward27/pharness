@@ -3,8 +3,8 @@ use crate::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
     CreateOperatorAnnotation, CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation,
     CreateRepoWorkItem, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
-    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredEvidenceValidation,
+    StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
     StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageChainAuthorization,
     StoredStageExecution, StoredStageOutcome,
 };
@@ -476,6 +476,30 @@ impl SqliteStore {
         Ok(())
     }
 
+    pub async fn get_evidence_validation(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredEvidenceValidation>, StoreError> {
+        let row = sqlx::query(&evidence_validation_select("WHERE id = ?1"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(row_to_evidence_validation).transpose()
+    }
+
+    pub async fn list_evidence_validations(
+        &self,
+        work_item_id: &str,
+    ) -> Result<Vec<StoredEvidenceValidation>, StoreError> {
+        let rows = sqlx::query(&evidence_validation_select(
+            "WHERE work_item_id = ?1 ORDER BY validated_at, id",
+        ))
+        .bind(work_item_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_evidence_validation).collect()
+    }
+
     pub async fn create_agent_context_pack(
         &self,
         pack: CreateAgentContextPack,
@@ -869,6 +893,14 @@ fn stage_execution_select(where_clause: &str) -> String {
     )
 }
 
+fn evidence_validation_select(where_clause: &str) -> String {
+    format!(
+        "SELECT id, work_item_id, stage_execution_id, validator_key, schema_version, status, \
+         subject_json, evidence_refs_json, facts_json, contradictions_json, content_hash, \
+         validated_at FROM evidence_validations {where_clause}"
+    )
+}
+
 fn stage_outcome_select(where_clause: &str) -> String {
     format!(
         "SELECT stage_outcomes.id, stage_outcomes.stage_execution_id, stage_outcomes.work_item_id, \
@@ -1012,6 +1044,25 @@ fn row_to_stage_outcome(row: sqlx::sqlite::SqliteRow) -> Result<StoredStageOutco
         supersedes_outcome_id: row.try_get("supersedes_outcome_id")?,
         sealed_by: row.try_get("sealed_by")?,
         sealed_at: row.try_get("sealed_at")?,
+    })
+}
+
+fn row_to_evidence_validation(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<StoredEvidenceValidation, StoreError> {
+    Ok(StoredEvidenceValidation {
+        id: row.try_get("id")?,
+        work_item_id: row.try_get("work_item_id")?,
+        stage_execution_id: row.try_get("stage_execution_id")?,
+        validator_key: row.try_get("validator_key")?,
+        schema_version: row.try_get("schema_version")?,
+        status: row.try_get("status")?,
+        subject: serde_json::from_str(&row.try_get::<String, _>("subject_json")?)?,
+        evidence_refs: serde_json::from_str(&row.try_get::<String, _>("evidence_refs_json")?)?,
+        facts: serde_json::from_str(&row.try_get::<String, _>("facts_json")?)?,
+        contradictions: serde_json::from_str(&row.try_get::<String, _>("contradictions_json")?)?,
+        content_hash: row.try_get("content_hash")?,
+        validated_at: row.try_get("validated_at")?,
     })
 }
 

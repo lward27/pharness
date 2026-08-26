@@ -50,8 +50,8 @@ pub use repo_mode::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
     CreateOperatorAnnotation, CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation,
     CreateRepoWorkItem, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
-    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredOperatorAnnotation,
-    StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
+    CreateStageExecution, SealStageOutcome, StoredAgentContextPack, StoredEvidenceValidation,
+    StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredProviderCheckSetObservation,
     StoredRepoWorkItemMetadata, StoredSourceDeliveryIntent, StoredStageChainAuthorization,
     StoredStageExecution, StoredStageOutcome,
 };
