@@ -1,15 +1,15 @@
 # PHarness documentation map
 
-Last organized: 2026-08-24
+Last organized: 2026-08-26
 
 PHarness documentation is organized by purpose and lifecycle so an agent can
 distinguish current work from shipped behavior and historical context before it
 acts.
 
-The current stable release baseline is the annotated tag
-`v3-operator-cockpit` at release commit
-`597edaf0bb32baf84a23142d61e4c28ac2788191`. Its compiled source revision is
-`8c3e2a7985d142cd32b19d6ea6d89fee76d43abc`.
+The current stable release baseline is the Repo Mode V1 operator-experience
+GitOps commit `7c27b6e29905a17c8aeb7eb63ee386646738fc04`. Its compiled source revision is
+`069ce56078da1081c01570844e792bda8a95c9ee`; immutable artifact provenance is
+recorded in the completed milestone and dated release evidence.
 
 ## Start here
 
@@ -26,22 +26,17 @@ The current stable release baseline is the annotated tag
 
 ## Current work
 
-No implementation milestone is currently active. The most recent maintenance
-milestone, the
-[`app.rs` behavior-preserving decomposition](implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md), completed at
-`v3-decomposed-stable`; the later operator-cockpit release remains the current
-stable product baseline. Add the next approved milestone under
-[`active/`](active/README.md) before implementation begins.
+No implementation milestone is currently active. The most recently completed
+product milestone is the
+[`Repo Mode V1 operator experience`](implemented/milestones/repo-mode-v1-operator-experience-milestone-2026-08-26.md).
+Add the next approved milestone under [`active/`](active/README.md) before
+implementation begins.
 
-Repo Mode V1 product discovery is complete enough for two separately sequenced
-Plan Mode tasks:
-
-1. [`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md)
-2. [`Repo Mode V1 screen contract`](design/repo-mode-v1-screen-contract.md)
-
-Create the Product Plan first and the Screen Plan second. These are design
-authorities, not active implementation milestones. No implementation begins
-until the resulting plan is reviewed and added under [`active/`](active/README.md).
+The approved
+[`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md) and
+[`Repo Mode V1 screen contract`](design/repo-mode-v1-screen-contract.md) remain
+the design authorities for the shipped V1. Future work must begin from a new
+reviewed active milestone instead of replaying either completed plan.
 
 ## Source-of-truth order
 
