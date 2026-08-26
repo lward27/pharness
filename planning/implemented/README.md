@@ -11,6 +11,7 @@ provenance remain authoritative.
 - [`app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md`](milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md)
 - [`ui-v3-operator-console.md`](milestones/ui-v3-operator-console.md)
 - [`ui-operator-cockpit-redesign-milestone-2026-08-22.md`](milestones/ui-operator-cockpit-redesign-milestone-2026-08-22.md)
+- [`repo-mode-v1-operator-experience-milestone-2026-08-26.md`](milestones/repo-mode-v1-operator-experience-milestone-2026-08-26.md)
 
 ## Agent execution and policy
 

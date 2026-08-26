@@ -1,13 +1,13 @@
 # PHarness Repo Mode V1 Operator Experience Milestone
 
-Status: approved and active
+Status: completed and deployed
 
 Baseline: `448c65259ed01de509336d2fa83382678a4be737`
 
 Deployed source at planning time: `a6c7c39e250ebfdb6104f9050de3abc4ba4e7c93`
 
 Governing contract:
-[`../design/repo-mode-v1-screen-contract.md`](../design/repo-mode-v1-screen-contract.md)
+[`../../design/repo-mode-v1-screen-contract.md`](../../design/repo-mode-v1-screen-contract.md)
 
 ## Outcome
 
@@ -106,3 +106,43 @@ inapplicable and no runtime state is manufactured.
   transitions as characterization evidence.
 - Rollback consists of disabling the UI flag through GitOps; no evidence
   deletion or database down-migration is permitted.
+
+## Completion evidence
+
+- Implementation PR: `#161`; implementation commit
+  `f4127e1d73d6d0b04760e8e36279a5ec9464975d`; merged source revision
+  `069ce56078da1081c01570844e792bda8a95c9ee`.
+- Flag-off release PR: `#162`; release commit
+  `cbfccd079ef082a9425546399f1ac1cc7d109d0e`.
+- Flag-enable PR: `#163`; deployed GitOps revision
+  `7c27b6e29905a17c8aeb7eb63ee386646738fc04`.
+- Runtime digest:
+  `sha256:1bb00ca024d097e0c1f03c08d0dc9c8e43902a7204926fb6550aa44ea9f931e4`.
+- UI digest:
+  `sha256:57ea5473989cc158faf82a0e7dbbb66d2bf58d6552ed5e5e6dfda420c792eec2`.
+- Python runner digest:
+  `sha256:e641183ef11d76ffc67074142a945a546d1f110153c8920ca985753c9ebaecdf`.
+- All three OCI artifacts report `linux/amd64`, the merged source revision,
+  and the PHarness source URL.
+- The online SQLite backup
+  `/data/backups/pharness-before-069ce560-20260826T0335Z.db` completed with
+  `PRAGMA integrity_check = ok` before rollout.
+- Argo reached `Synced/Healthy` at the flag-off and flag-enabled revisions.
+  Live API, proxy, and UI Pod image IDs matched their declared digests.
+- API and UI both reported source revision `069ce560...` with platform version
+  alignment. The flag-off browser check rendered the legacy shell; the
+  flag-enabled check rendered the approved eight-item Repo Mode hierarchy.
+- The complete yfinance Repo Mode WorkItem
+  `witem_01a03a99600479a095e3533c5f61c7b6` renders Source Delivery as
+  `succeeded` and Release/Observe as controller-recorded `inapplicable` with no
+  legacy delivery warning.
+- All eight top-level routes loaded without alerts. Phone-width acceptance
+  showed one content column, a hidden slide-over navigation, and no horizontal
+  overflow.
+- Deterministic gates passed: Rust formatting, all workspace tests, all-target
+  Clippy with warnings denied, UI production build, 36 Vitest tests, 81
+  Playwright tests with one intentional mobile skip, accessibility assertions,
+  Helm lint/template/schema, rendered immutable-image scans, Kubernetes
+  server-side dry-run, and OCI platform/revision inspection.
+- Detailed release evidence is recorded in
+  [`../../evidence/smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md`](../../evidence/smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md).

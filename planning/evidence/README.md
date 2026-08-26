@@ -16,6 +16,7 @@ behavior.
 
 - [`live-smoke-results-2026-05-15.md`](smoke-results/live-smoke-results-2026-05-15.md)
 - [`tekton-live-smoke-2026-08-02.md`](smoke-results/tekton-live-smoke-2026-08-02.md)
+- [`repo-mode-v1-operator-experience-release-2026-08-26.md`](smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md)
 
 The durable yfinance release characterization identifiers are also frozen in
 the
