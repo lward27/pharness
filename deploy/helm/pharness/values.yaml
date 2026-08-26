@@ -7,7 +7,7 @@ features:
     enabled: true
     # Full operator-experience cutover. Keep disabled until the complete
     # repository onboarding and Repo Mode WorkItem journey passes.
-    uiEnabled: true
+    uiEnabled: false
 
 organization:
   id: org_lucas_engineering
@@ -29,9 +29,9 @@ organization:
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    digest: sha256:dced28581aeeb4e9cb43328dbc2150d5708d2d59ee1e1a35e891d3d9d77f24c4
+    digest: sha256:5a304073220f370433f615e73ea914a36e306e4cbd61a64a55562ff349135c7f
     pullPolicy: IfNotPresent
-    revision: c187cc58ff9f19ad0e9a0695779266706a555ccf
+    revision: c3638afa6d14819adca82006630858935c616172
   # SQLite single-writer: keep exactly one API replica.
   replicas: 1
   host: pharness-api.lucas.engineering
@@ -161,8 +161,8 @@ worker:
 environmentProfiles:
   - id: python-3.11
     active: true
-    image: registry.lucas.engineering/pharness-python-runner@sha256:711d4590ee79ba160e65a4ee7d60e2f54690614f83b23eef2ad86369845a0471
-    revision: c187cc58ff9f19ad0e9a0695779266706a555ccf
+    image: registry.lucas.engineering/pharness-python-runner@sha256:62474fc976a185b26fac6bd3439d58f6fe88f0c8bb4e5a76ee06f06c2a29a921
+    revision: c3638afa6d14819adca82006630858935c616172
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -202,9 +202,9 @@ tektonE2eBuildOutputSmoke:
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    digest: sha256:43e8c953bf5d8343e71205f0b81d99d7c461cd172bcbd02c55d1746c942604eb
+    digest: sha256:78930c2bff88497e72927c788ffbdad23f15d6c38126bc9296028b043fb1e3f6
     pullPolicy: IfNotPresent
-    revision: c187cc58ff9f19ad0e9a0695779266706a555ccf
+    revision: c3638afa6d14819adca82006630858935c616172
   replicas: 1
   host: pharness.lucas.engineering
   resources:
