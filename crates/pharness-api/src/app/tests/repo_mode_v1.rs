@@ -376,6 +376,35 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         pre_merge["source_delivery_intent"]["status"],
         "waiting_merge"
     );
+    let organization = fixture
+        .state
+        .store
+        .get_organization(&fixture.state.repo_mode.organization.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let overview = super::super::operator_experience::organization_overview_value(
+        &fixture.state,
+        &organization,
+    )
+    .await
+    .unwrap();
+    assert_eq!(overview["work_items"]["waiting"], 1);
+    assert!(overview["attention"].as_array().is_some_and(|items| {
+        items.iter().any(|item| {
+            item["resource_id"] == fixture.work_item_id
+                && item["resource_kind"] == "work_item"
+                && item["kind"] == "external_wait"
+                && item["action"]["external_effect_summary"].is_string()
+        })
+    }));
+    assert!(overview["attention"].as_array().is_some_and(|items| {
+        items.iter().any(|item| {
+            item["resource_id"] == "onboard_success"
+                && item["resource_kind"] == "repository_onboarding"
+                && item["action"]["id"] == "prepare_onboarding_patch"
+        })
+    }));
 
     let intent = fixture
         .state
@@ -511,6 +540,26 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         product_overview["repositories"][0]["coding_readiness"],
         "ready"
     );
+    assert_eq!(
+        product_overview["repository_bindings"][0]["binding"]["repository_id"],
+        metadata.repository_id
+    );
+    assert!(
+        product_overview["repository_bindings"][0]["current_revision"]["revision"]
+            .as_u64()
+            .is_some()
+    );
+    assert!(product_overview["connected_release_data"]["releases"]
+        .as_array()
+        .is_some());
+    assert!(product_overview["evidence_summary"]["validation_count"]
+        .as_u64()
+        .is_some());
+    assert_eq!(
+        product_overview["evidence_summary"]["work_item_denominator"],
+        1
+    );
+    assert!(product_overview["audit_events"].as_array().is_some());
     let outcomes = fixture
         .state
         .store
@@ -524,6 +573,22 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
     assert!(statuses.contains(&("source_delivery", "succeeded")));
     assert!(statuses.contains(&("release", "inapplicable")));
     assert!(statuses.contains(&("observe", "inapplicable")));
+    let flow = crate::app::repo_mode::repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    let history = flow.repo_mode.as_ref().unwrap().get("history").unwrap();
+    assert!(history["stage_outcomes"].as_array().is_some_and(|items| {
+        items
+            .iter()
+            .any(|item| item["stage_key"] == "source_delivery")
+    }));
+    assert!(history["work_plans"].as_array().is_some());
+    assert!(history["change_sets"].as_array().is_some());
+    assert!(history["runs"].as_array().is_some());
+    assert_eq!(
+        flow.repo_mode.as_ref().unwrap()["ownership"]["product"]["id"],
+        metadata.product_id
+    );
 }
 
 #[tokio::test]

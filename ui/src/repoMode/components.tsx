@@ -59,6 +59,13 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const external = action.effect_class?.includes("external");
+  const model = action.effect_class?.includes("model");
+  const effectTone = external ? "is-external" : model ? "is-model" : "is-internal";
+  const resourceTarget = typeof action.resource === "string"
+    ? action.resource
+    : action.resource
+      ? Object.entries(action.resource).map(([key, value]) => `${key.replaceAll("_", " ")}: ${String(value)}`).join(" · ")
+      : `${owner.kind} ${owner.id}`;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -96,9 +103,10 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
   return <div className="repo-dialog-backdrop" onMouseDown={event => { if (event.currentTarget === event.target) onClose(); }}>
     <div className="repo-dialog" role="dialog" aria-modal="true" aria-labelledby="action-title" ref={dialogRef}>
       <header><div><span className="repo-eyebrow">{action.lifecycle_stage || "Lifecycle"} boundary</span><h2 id="action-title">{action.id.replaceAll("_", " ")}</h2></div><button type="button" aria-label="Close action review" onClick={onClose}><X size={18} /></button></header>
-      <div className={`repo-effect ${external ? "is-external" : ""}`}><LockKey size={20} /><div><strong>{external ? "External effect" : action.effect_class?.replaceAll("_", " ") || "Controller action"}</strong><p>{action.external_effect_summary || "Advance the owning resource at this exact state."}</p></div></div>
+      <div className={`repo-effect ${effectTone}`}><LockKey size={20} /><div><strong>{external ? "External effect" : model ? "Model execution" : action.effect_class?.replaceAll("_", " ") || "Controller action"}</strong><p>{action.external_effect_summary || "Advance the owning resource at this exact state."}</p></div></div>
       <dl className="repo-bindings">
         <div><dt>Owner</dt><dd>{owner.kind} · {owner.id}</dd></div>
+        <div><dt>Exact action target</dt><dd>{resourceTarget}</dd></div>
         {owner.product ? <div><dt>Product</dt><dd>{owner.product}</dd></div> : null}
         {owner.repository ? <div><dt>Repository</dt><dd>{owner.repository}</dd></div> : null}
         {owner.revision ? <div><dt>Revision</dt><dd className="repo-mono">{owner.revision}</dd></div> : null}
@@ -124,7 +132,26 @@ export function OutcomeDetails({ outcome }: { outcome: any }) {
     ["Risks and contradictions", [...(payload.risks || []), ...(payload.contradictions || [])]],
     ["Decisions and authorizations", [...(payload.decisions || []), ...(payload.authorizations || [])]],
   ].filter(([, value]) => Array.isArray(value) ? value.length : value && Object.keys(value).length);
-  return <div className="repo-outcome-details">{groups.map(([label, value]) => <section key={label as string}><h4>{label as string}</h4><pre>{JSON.stringify(value, null, 2)}</pre></section>)}<section><h4>Provenance</h4><p className="repo-mono">{outcome.content_hash}</p><small>Sealed {outcome.sealed_at}{outcome.supersedes_outcome_id ? ` · supersedes ${outcome.supersedes_outcome_id}` : ""}</small></section></div>;
+  return <div className="repo-outcome-details">
+    {groups.map(([label, value]) => <section key={label as string}><h4>{label as string}</h4><StructuredValues value={value} /></section>)}
+    {payload.unavailable_capabilities?.length ? <section><h4>Unavailable capabilities</h4><StructuredValues value={payload.unavailable_capabilities} /></section> : null}
+    {payload.recommendations?.length ? <section><h4>Recommendations</h4><StructuredValues value={payload.recommendations} /></section> : null}
+    <section className="repo-provenance"><h4>Freshness and provenance</h4><dl><div><dt>Outcome</dt><dd className="repo-mono">{outcome.id}</dd></div><div><dt>Content hash</dt><dd className="repo-mono">{outcome.content_hash}</dd></div><div><dt>Sealed</dt><dd>{outcome.sealed_at || "Unavailable"}</dd></div><div><dt>State version</dt><dd>{outcome.sealed_state_version ?? "Unavailable"}</dd></div>{outcome.supersedes_outcome_id ? <div><dt>Supersedes</dt><dd className="repo-mono">{outcome.supersedes_outcome_id}</dd></div> : null}</dl></section>
+    <details className="repo-raw-record"><summary>Raw sealed outcome</summary><pre>{JSON.stringify(outcome, null, 2)}</pre></details>
+  </div>;
+}
+
+function StructuredValues({ value }: { value: any }) {
+  const entries = Array.isArray(value) ? value : value && typeof value === "object" ? Object.entries(value).map(([key, detail]) => ({ key, detail })) : [value];
+  return <div className="repo-structured-list">{entries.map((entry, index) => {
+    if (entry && typeof entry === "object") {
+      const record = entry as Record<string, any>;
+      const title = record.statement || record.summary || record.name || record.key || record.kind || record.command || `Record ${index + 1}`;
+      const details = Object.entries(record).filter(([key]) => !["statement", "summary", "name", "key", "kind", "command"].includes(key));
+      return <article className="repo-structured-record" key={`${title}-${index}`}><strong>{String(title)}</strong>{details.length ? <dl>{details.map(([key, detail]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof detail === "object" ? JSON.stringify(detail) : String(detail)}</dd></div>)}</dl> : null}</article>;
+    }
+    return <article className="repo-structured-record" key={`${String(entry)}-${index}`}>{String(entry)}</article>;
+  })}</div>;
 }
 
 export function SuccessMark() { return <CheckCircle size={18} weight="fill" aria-hidden="true" />; }

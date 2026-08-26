@@ -37,8 +37,8 @@ export function OverviewScreen() {
       <section className="repo-panel">
         <header><div><span className="repo-eyebrow">Attention</span><h2>Owned boundaries</h2></div><span className="repo-count">{data?.attention?.length || 0}</span></header>
         <div className="repo-list">
-          {(data?.attention || []).map((item: any) => <button type="button" className="repo-list-row" key={item.resource_id} onClick={() => { window.location.hash = `#/work-items/${item.resource_id}/overview`; }}>
-            <WarningCircle size={19} /><div><strong>{item.resource_id}</strong><span>{item.reason || "Operator attention required"}</span></div><Status value={item.status} />
+          {(data?.attention || []).map((item: any) => <button type="button" className="repo-list-row" key={`${item.resource_kind || item.kind}-${item.resource_id}-${item.action?.id || item.kind}`} onClick={() => { window.location.hash = item.resource_kind === "repository_onboarding" ? `#/repository-onboardings/${item.resource_id}` : `#/work-items/${item.resource_id}/overview`; }}>
+            <WarningCircle size={19} /><div><strong>{item.title || item.action?.id?.replaceAll("_", " ") || item.resource_id}</strong><span>{item.action?.external_effect_summary || item.reason || "Operator attention required"}</span><small>{item.kind?.replaceAll("_", " ")} · owner {item.resource_id}</small></div><Status value={item.action?.status || item.status} />
           </button>)}
           {!data?.attention?.length ? <p className="repo-muted">No WorkItem currently needs human attention.</p> : null}
         </div>
@@ -63,6 +63,11 @@ export function OverviewScreen() {
           {!data?.repository_readiness_gaps?.length ? <p className="repo-muted">Every registered Repository has current contract and coding readiness.</p> : null}
         </div>
       </section>
+
+      {(data?.repository_capability_gaps || []).length ? <section className="repo-panel repo-span-2">
+        <header><div><span className="repo-eyebrow">Capability availability</span><h2>Stale or unavailable Repository capabilities</h2></div><span className="repo-count">{data.repository_capability_gaps.length}</span></header>
+        <div className="repo-list repo-columns">{data.repository_capability_gaps.map((gap:any) => <button type="button" className="repo-list-row" key={`${gap.repository_id}-${gap.capability}`} onClick={() => { window.location.hash = `#/repositories/${gap.repository_id}/overview`; }}><WarningCircle size={18} /><div><strong>{gap.capability.replaceAll("_", " ")}</strong><span>{gap.summary}</span><small>{gap.verified_at ? `Verified ${gap.verified_at}` : "No fresh isolated verification"}</small></div><Status value={gap.status} /></button>)}</div>
+      </section> : null}
     </div>
     {data?.unassigned_legacy?.count ? <aside className="repo-legacy-note"><strong>{data.unassigned_legacy.count} legacy WorkItems are unassigned.</strong><span>They remain available through WorkItems history and are not attributed to a Product.</span></aside> : null}
   </ResourceState>;

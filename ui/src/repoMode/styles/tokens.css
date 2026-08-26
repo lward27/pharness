@@ -1,0 +1,29 @@
+:root {
+  --repo-bg: #07111f;
+  --repo-panel: #0d1a2b;
+  --repo-panel-2: #122238;
+  --repo-border: rgba(151, 177, 211, .18);
+  --repo-border-strong: rgba(112, 183, 255, .34);
+  --repo-text: #eef5ff;
+  --repo-muted: #91a3bc;
+  --repo-accent: #52b8ff;
+  --repo-accent-2: #7d78ff;
+  --repo-good: #6dd889;
+  --repo-wait: #ffb84d;
+  --repo-bad: #ff7187;
+  --repo-shadow: 0 22px 60px rgba(0, 0, 0, .28);
+  --repo-radius: 15px;
+}
+
+.repo-app.theme-light {
+  --repo-bg: #eef3f9;
+  --repo-panel: #ffffff;
+  --repo-panel-2: #f5f8fc;
+  --repo-border: rgba(36, 62, 92, .16);
+  --repo-border-strong: rgba(13, 112, 183, .35);
+  --repo-text: #122236;
+  --repo-muted: #60728a;
+  --repo-accent: #0878c9;
+  --repo-accent-2: #6254da;
+  --repo-shadow: 0 18px 48px rgba(26, 49, 78, .12);
+}

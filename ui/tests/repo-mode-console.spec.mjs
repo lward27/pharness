@@ -42,6 +42,7 @@ const completedWorkItem = {
   run_budget: { initial_turns: 48, hard_turns: 100, initial_tokens: 400000, hard_tokens: 1000000, active_execution_seconds: 3600 },
   attempt_count: 1,
   max_attempts: 2,
+  updated_at: "2026-08-25T09:30:00Z",
   closed_at: "2026-08-25T09:30:00Z",
   closure_reason: "Source Delivery succeeded after exact merge provenance was observed.",
 };
@@ -101,7 +102,7 @@ const overview = {
   as_of: "2026-08-25T10:00:00Z",
   work_items: { current: 1, waiting: 1, blocked: 0, failed: 0, recently_completed: 1, by_lifecycle_boundary: { source_delivery: 1 }, denominator: 2 },
   product_summaries: [{ ...product, repository_count: 1, current_work_items: 1, actionable_waits: 1 }],
-  attention: [{ kind: "work_item", resource_id: "witem_01jwaiting", product_id: productId, repository_id: repositoryId, status: "waiting_external", reason: "Manual source merge is required." }],
+  attention: [{ kind: "external_wait", resource_kind:"work_item", resource_id: "witem_01jwaiting", product_id: productId, repository_id: repositoryId, status: "waiting_external", reason: "Manual source merge is required." }],
   active_agent_runs: [],
   repository_readiness_gaps: [],
   repository_readiness_rate: { ready: 1, total: 1 },
@@ -196,6 +197,21 @@ test("flagged shell uses the approved hierarchy and read-only overview", async (
   await expect(page).toHaveScreenshot(`repo-mode-overview-${testInfo.project.name}.png`, { fullPage: true });
 });
 
+test("overview attention navigates to the exact owning Repository onboarding", async ({ page }) => {
+  const onboardingId = "onboard_attention";
+  await mockRepoModeApi(page, {
+    "/api/organization/overview": {
+      ...overview,
+      attention:[{kind:"human_action",resource_kind:"repository_onboarding",resource_id:onboardingId,product_id:productId,repository_id:repositoryId,status:"proposal_ready",reason:"Review the exact onboarding proposal",action:{id:"approve_proposal",status:"available"}}],
+    },
+    [`/api/repository-onboardings/${onboardingId}/flow`]: {onboarding:{id:onboardingId,product_id:productId,repository_id:repositoryId,registered_commit:sourceSha,status:"proposal_ready",actions:[]}},
+  });
+  await page.goto("/#/overview");
+  await page.getByRole("button", {name:/approve proposal/i}).click();
+  await expect(page).toHaveURL(new RegExp(`#/repository-onboardings/${onboardingId}$`));
+  await expect(page.getByRole("heading", {name:repository.external_id})).toBeVisible();
+});
+
 test("completed Repo Mode delivery shows source success and inapplicable downstream stages", async ({ page }, testInfo) => {
   await mockRepoModeApi(page);
   await page.goto(`/#/work-items/${workItemId}/delivery`);
@@ -219,6 +235,22 @@ test("server search is keyboard accessible and navigates to the owning resource"
   await expect(dialog.getByRole("button", { name: new RegExp(completedWorkItem.title) })).toBeVisible();
   await dialog.getByRole("button", { name: new RegExp(completedWorkItem.title) }).click();
   await expect(page).toHaveURL(new RegExp(`#\/work-items\/${workItemId}\/overview$`));
+});
+
+test("AgentRun history pagination remains server-owned", async ({ page }) => {
+  const offsets = [];
+  await mockRepoModeApi(page, {
+    "/api/runs": (_route,url) => {
+      const offset = Number(url.searchParams.get("offset") || 0);
+      offsets.push(offset);
+      return {count:51,limit:50,offset,runs:[{id:offset ? "run_page_two" : "run_page_one",task:"Bounded fixture",status:"completed",max_turns:48,ownership:{product_id:productId,work_item_id:workItemId,stage_execution_id:"stage_fixture",agent_profile_id:"repo-tester"},budget_consumption:{turns_used:4,allowed_turns:48}}]};
+    },
+  });
+  await page.goto("/#/agents");
+  await expect(page.getByText("run_page_one")).toBeVisible();
+  await page.getByRole("button", {name:"Next"}).click();
+  await expect(page.getByText("run_page_two")).toBeVisible();
+  expect(offsets).toContain(50);
 });
 
 test("a stale state-hashed action closes, refreshes, and is not retried", async ({ page }) => {
@@ -368,7 +400,7 @@ test("Repo Mode state catalog remains legible", async ({ page }) => {
 
   repositoryState = {...repositoryOverview,readiness:{...repositoryOverview.readiness,coding_status:"blocked",blockers:[{code:"runner_verification_stale",summary:"Refresh the isolated runner verification."}]},readiness_stale_reasons:["assessment_expired"],capabilities:[{capability:"source_reader",status:"stale"},{capability:"source_writer",status:"configured_unverified"},{capability:"source_observer",status:"available"}]};
   await page.goto(`/#/repositories/${repositoryId}/readiness`);
-  await expect(page.getByText("assessment expired")).toBeVisible();
+  await expect(page.getByText("assessment expired").first()).toBeVisible();
   await expect(page).toHaveScreenshot("repo-mode-state-coding-blocked-stale.png",{fullPage:true});
 
   repositoryState = repositoryOverview;

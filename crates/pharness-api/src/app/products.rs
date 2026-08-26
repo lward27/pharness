@@ -2578,6 +2578,13 @@ fn onboarding_response(
     })
 }
 
+pub(in crate::app) fn onboarding_operator_projection(
+    onboarding: StoredRepositoryOnboarding,
+) -> Result<Value, ApiError> {
+    serde_json::to_value(onboarding_response(onboarding)?)
+        .map_err(|error| ApiError::internal(error.to_string()))
+}
+
 fn onboarding_stage_for_action(action_id: &str) -> &'static str {
     match action_id {
         "start_discovery" | "retry_discovery" => "discovery",

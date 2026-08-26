@@ -1,0 +1,24 @@
+@media (max-width:1120px) {
+  .repo-app { grid-template-columns:210px minmax(0,1fr); }
+  .repo-content { padding-inline:22px; }
+  .repo-overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .repo-card-grid.repo-three { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .repo-workitem-row { grid-template-columns:minmax(260px,1fr) minmax(300px,1fr) auto; }.repo-workitem-boundary { grid-column:1/-1; }
+}
+
+@media (max-width:760px) {
+  .repo-app { display:block; }
+  .repo-sidebar { position:fixed; left:0; width:min(310px,88vw); transform:translateX(-105%); transition:transform .18s ease; box-shadow:var(--repo-shadow); }.repo-sidebar.is-open { transform:translateX(0); }.repo-brand>button { display:block; }
+  .repo-nav-scrim { display:block; position:fixed; inset:0; z-index:25; border:0; background:rgba(0,0,0,.45); }
+  .repo-topbar { height:62px; padding:0 13px; gap:10px; }.repo-menu { display:block; }.repo-search-trigger { height:37px; }.repo-search-trigger span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }.repo-search-trigger kbd,.repo-operator>div { display:none; }.repo-theme { display:none; }
+  .repo-content { padding:20px 13px 45px; }.repo-section-header { align-items:flex-start; flex-direction:column; }.repo-section-header h1 { font-size:26px; }.repo-section-header>.repo-primary,.repo-section-header>.repo-link-button,.repo-header-actions { width:100%; }.repo-header-actions>* { flex:1; }
+  .repo-metrics,.repo-metrics.repo-compact,.repo-card-grid,.repo-card-grid.repo-three,.repo-overview-grid,.repo-two-columns,.repo-stage-grid { grid-template-columns:1fr; }.repo-span-2 { grid-column:span 1; }.repo-stage-counts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .repo-list.repo-columns { display:flex; }.repo-product-card dl { grid-template-columns:repeat(3,1fr); }
+  .repo-list-controls { align-items:stretch; flex-direction:column; }.repo-filterbar { max-width:none; }
+  .repo-inline-form,.repo-form-grid,.repo-proposal-editor .repo-inline-form { grid-template-columns:1fr; }.repo-form-grid .repo-span-2 { grid-column:span 1; }
+  .repo-bindings { grid-template-columns:1fr; }.repo-axis-grid { grid-template-columns:1fr; }
+  .repo-stepper { overflow-x:auto; padding-bottom:8px; }.repo-stepper li { min-width:85px; }
+  .repo-workitem-row { grid-template-columns:1fr; }.repo-workitem-row .repo-lifecycle { order:2; }.repo-workitem-row .repo-workitem-boundary { grid-column:auto; display:flex; order:3; }.repo-workitem-row>.repo-link-button { justify-self:start; order:4; }.repo-workitem-header { grid-template-columns:auto 1fr; }.repo-workitem-header>div { grid-column:2; }.repo-workitem-header .repo-workitem-status { grid-column:1/2; grid-row:2; align-items:flex-start; }.repo-workitem-header>.repo-primary { grid-column:2; grid-row:2; }
+  .repo-lifecycle li small { font-size:7px; }.repo-onboarding-grid .repo-panel { max-height:none; }
+  .repo-dialog-backdrop,.repo-search-backdrop { padding:0; align-items:end; }.repo-dialog,.repo-search-dialog { width:100%; max-height:92vh; border-radius:16px 16px 0 0; }.repo-dialog footer { position:sticky; bottom:-20px; margin:15px -20px -20px; padding:12px 20px; background:var(--repo-panel); border-top:1px solid var(--repo-border); }
+}

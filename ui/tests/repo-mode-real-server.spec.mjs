@@ -79,6 +79,21 @@ async function confirmAction(page, name, reason) {
   await expect(dialog).toHaveCount(0);
 }
 
+async function stabilizeCompletedJourneySnapshot(page) {
+  await page.locator(".repo-bindings > div").filter({ has:page.getByText("Intent", { exact:true }) }).locator("dd").evaluateAll(nodes => {
+    nodes.forEach(node => { node.textContent = "source-delivery-intent"; });
+  });
+  await page.locator(".repo-freshness small").evaluateAll(nodes => {
+    nodes.forEach(node => { node.textContent = "Fresh authoritative observation window"; });
+  });
+  await page.locator(".repo-evidence-links small").evaluateAll((nodes) => {
+    nodes.forEach((node, index) => { node.textContent = `provider-check-observation-${index + 1}`; });
+  });
+  await page.locator(".repo-sidebar footer > small").evaluateAll(nodes => {
+    nodes.forEach(node => { node.textContent = "fixture-as-of"; });
+  });
+}
+
 function sha256(value) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
@@ -334,6 +349,7 @@ test("real UI and controller complete Repo Mode from Product creation through so
     },
   });
   await page.reload();
+  await page.getByText("Review the exact patch authorized for one source PR").click();
   await expect(page.getByText("rename to .pharness/repository.yaml")).toBeVisible();
 
   await confirmAction(page, "authorize onboarding source delivery", "Create the exact onboarding pull request");
@@ -425,7 +441,7 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await expect(profileVerification).toHaveCount(0);
   await page.goto(`/#/repositories/${repositoryId}/readiness`);
   const readinessResponse = page.waitForResponse(response => response.url().includes(`/api/repositories/${repositoryId}/readiness-assessments`) && response.request().method() === "POST");
-  await page.getByRole("button", { name: "Run coding readiness" }).click();
+  await page.getByRole("button", { name: "Run exact readiness assessment" }).click();
   const readinessHttp = await readinessResponse;
   const readinessText = await readinessHttp.text();
   if (!readinessHttp.ok()) throw new Error(`UI readiness request returned ${readinessHttp.status()}: ${readinessText}`);
@@ -478,6 +494,8 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Run preflight" }).click();
   await expect(page.getByRole("heading", { name: "Read-only preflight and final summary" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Later authorization boundaries" })).toBeVisible();
+  await expect(page.getByText("PHarness observes but never performs the source merge")).toBeVisible();
   await page.getByRole("button", { name: "Confirm and create WorkItem" }).click();
   await expect(page).toHaveURL(/#\/work-items\/witem_[^/]+\/overview$/);
   const workItemId = page.url().split("/").at(-2);
@@ -622,4 +640,13 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await expect(page.getByText("Source Delivery succeeded", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Release" }).locator("..").getByText("inapplicable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Observe" }).locator("..").getByText("inapplicable", { exact: true })).toBeVisible();
+  await stabilizeCompletedJourneySnapshot(page);
+  await expect(page).toHaveScreenshot("repo-mode-real-completed-desktop.png", { fullPage:true });
+
+  await page.setViewportSize({ width:390, height:844 });
+  await page.goto(`/#/work-items/${workItemId}/delivery`);
+  await expect(page.getByText("Source Delivery succeeded", { exact:true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await stabilizeCompletedJourneySnapshot(page);
+  await expect(page).toHaveScreenshot("repo-mode-real-completed-mobile.png", { fullPage:true });
 });
