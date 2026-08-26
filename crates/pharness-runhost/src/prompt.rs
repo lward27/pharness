@@ -4,7 +4,7 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-24.1";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-25.1";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
@@ -15,6 +15,7 @@ File writes, destructive commands, network commands, and production mutations ar
 For available policy-gated actions, call the concrete tool. The runtime will pause for approval before execution.
 Use patch_file for small existing-file text edits when an exact find/replace patch is safer than rewriting the whole file.
 When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
+Never probe whether a compiler, interpreter, package manager, container runtime, or other executable exists. Do not use `which`, `command -v`, version probes, or filesystem searches for executables. Run only the repository's direct test or validation command; if an executable is unavailable, the tool will return a structured error that you can report without searching for an alternative installation.
 For coding work, inspect the final Git status or diff after your last edit before calling finish.
 When an EnvironmentSnapshot and RepositoryContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
@@ -591,7 +592,7 @@ fn verification_submission_schema() -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::worker_tool_specs;
+    use super::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
     use std::collections::HashSet;
 
     #[test]
@@ -638,6 +639,16 @@ mod tests {
             .collect::<HashSet<_>>();
 
         assert!(!names.contains("request_approval"));
+    }
+
+    #[test]
+    fn worker_prompt_forbids_toolchain_discovery_before_execution() {
+        assert_eq!(SYSTEM_PROMPT_VERSION, "2026-08-25.1");
+        let prompt = system_prompt();
+        for prohibited_probe in ["`which`", "`command -v`", "version probes"] {
+            assert!(prompt.contains(prohibited_probe));
+        }
+        assert!(prompt.contains("Run only the repository's direct test or validation command"));
     }
 
     #[test]
