@@ -356,6 +356,15 @@ fn provider_observation(execution_id: &str, merged: bool) -> GitDeliveryObservat
 #[tokio::test]
 async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge() {
     let fixture = repo_delivery_fixture("success").await;
+    // Repo Mode records Release and Observe as inapplicable before source
+    // delivery can close. Final merge sealing must reuse that immutable tail
+    // rather than attempting duplicate StageExecution sequence 1 records.
+    super::super::repo_mode::seal_repo_inapplicable_tail(
+        &fixture.state.store,
+        &fixture.work_item_id,
+    )
+    .await
+    .unwrap();
     let Json(pre_merge) = internal_source_delivery_observation_outcome(
         State(fixture.state.clone()),
         Path(fixture.intent_id.clone()),
@@ -456,6 +465,52 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         .unwrap();
     assert_eq!(listed.closed_at, metadata.closed_at);
     assert_eq!(listed.state_version, Some(metadata.state_version));
+    let Json(history) = super::list_work_items(
+        State(fixture.state.clone()),
+        axum::extract::Query(super::ListWorkItemsQuery {
+            mode: Some("repo".into()),
+            product_id: Some(metadata.product_id.clone()),
+            repository_id: Some(metadata.repository_id.clone()),
+            lifecycle: Some("history".into()),
+            search: Some("reviewed source".into()),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(history.count, 1);
+    assert_eq!(history.work_items[0].id, fixture.work_item_id);
+    let Json(current) = super::list_work_items(
+        State(fixture.state.clone()),
+        axum::extract::Query(super::ListWorkItemsQuery {
+            mode: Some("repo".into()),
+            product_id: Some(metadata.product_id.clone()),
+            repository_id: Some(metadata.repository_id.clone()),
+            lifecycle: Some("current".into()),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(current.count, 0);
+    let Json(product_overview) = super::super::operator_experience::product_overview(
+        State(fixture.state.clone()),
+        Path(metadata.product_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        product_overview["repositories"][0]["id"],
+        metadata.repository_id
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["contract_readiness"],
+        "ready"
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["coding_readiness"],
+        "ready"
+    );
     let outcomes = fixture
         .state
         .store

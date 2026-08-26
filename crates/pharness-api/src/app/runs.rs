@@ -670,6 +670,12 @@ pub(super) struct ListRunsQuery {
     pub(super) production_impacting: Option<bool>,
     pub(super) started_after_ms: Option<i64>,
     pub(super) started_before_ms: Option<i64>,
+    pub(super) product_id: Option<String>,
+    pub(super) work_item_id: Option<String>,
+    pub(super) repository_id: Option<String>,
+    pub(super) stage_execution_id: Option<String>,
+    pub(super) agent_profile_id: Option<String>,
+    pub(super) lifecycle: Option<String>,
     pub(super) limit: Option<u32>,
     pub(super) offset: Option<u32>,
 }
@@ -691,17 +697,32 @@ pub(super) async fn list_runs(
         production_impacting: query.production_impacting,
         started_after_ms: query.started_after_ms,
         started_before_ms: query.started_before_ms,
+        product_id: clean_optional_text(query.product_id),
+        work_item_id: clean_optional_text(query.work_item_id),
+        repository_id: clean_optional_text(query.repository_id),
+        stage_execution_id: clean_optional_text(query.stage_execution_id),
+        agent_profile_id: clean_optional_text(query.agent_profile_id),
+        lifecycle: clean_optional_text(query.lifecycle),
         limit,
         offset,
     };
     let count = state.store.count_runs(filter.clone()).await?;
-    let runs = state
-        .store
-        .list_runs(filter.clone())
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<RunResponse>>();
+    let stored_runs = state.store.list_runs(filter.clone()).await?;
+    let mut runs = Vec::with_capacity(stored_runs.len());
+    for stored in stored_runs {
+        let mut response: RunResponse = stored.into();
+        if let Some(work_item_id) = response.ownership.work_item_id.as_deref() {
+            if let Some(metadata) = state
+                .store
+                .get_repo_work_item_metadata(work_item_id)
+                .await?
+            {
+                response.ownership.product_id = Some(metadata.product_id);
+                response.ownership.repository_id = Some(metadata.repository_id);
+            }
+        }
+        runs.push(response);
+    }
     let group_runs = all_runs_for_operator_groups(state.store.as_ref(), filter).await?;
     let groups = group_operator_records(group_runs.iter().map(|run| {
         (

@@ -68,7 +68,7 @@ async fn route_inventory_matches_mounted_routes_and_auth_classes() {
     inventory.sort();
     assert_eq!(
         inventory.len(),
-        206,
+        212,
         "update the checked-in inventory only after reviewing an intentional route change"
     );
     assert_eq!(
@@ -134,6 +134,43 @@ async fn route_inventory_matches_mounted_routes_and_auth_classes() {
         .await
         .unwrap();
     assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn organization_overview_is_a_read_only_projection() {
+    use tower::ServiceExt;
+
+    let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
+    let organization_id = RepoModeConfiguration::from_env().organization.id;
+    assert!(store
+        .get_organization(&organization_id)
+        .await
+        .unwrap()
+        .is_none());
+    let app = router(
+        store.clone(),
+        RunDispatcher::Disabled,
+        ReadOnlyClusterTools::default(),
+        SafetyPolicy::default(),
+        None,
+        Vec::new(),
+        WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+    );
+    let response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/organization/overview")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(store
+        .get_organization(&organization_id)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[test]

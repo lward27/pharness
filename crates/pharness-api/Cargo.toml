@@ -6,6 +6,12 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[features]
+default = []
+# Compiles deterministic loopback-only provider hooks used by the browser
+# acceptance harness. Production images are built without this feature.
+ui-e2e = []
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

@@ -183,6 +183,32 @@ async fn environment_profile_responses(
     Ok(responses)
 }
 
+pub(super) async fn environment_profile_capability_status(
+    state: &AppState,
+    profile_id: &str,
+) -> Result<Option<CapabilityStatusResponse>, ApiError> {
+    let capability = format!("environment_profile:{profile_id}");
+    let verification = state
+        .store
+        .latest_capability_verification(&capability)
+        .await?;
+    Ok(environment_profile_responses(state)
+        .await?
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+        .map(|profile| CapabilityStatusResponse {
+            capability,
+            status: profile.status,
+            summary: if profile.blockers.is_empty() {
+                "Runner profile passed isolated verification.".to_string()
+            } else {
+                profile.blockers.join("; ")
+            },
+            verified_at: verification.as_ref().map(|value| value.verified_at.clone()),
+            expires_at: verification.as_ref().map(|value| value.expires_at.clone()),
+        }))
+}
+
 pub(super) fn environment_profile_readiness_blocker(
     profile: &EnvironmentProfileResponse,
 ) -> Option<String> {
@@ -246,6 +272,12 @@ pub(super) async fn config_effective(
             "allowed_repo_count": state.workspace.allowed_repo_count(),
         },
         "operator": operator,
+        "features": {
+            "repo_mode_v1": {
+                "enabled": state.repo_mode.enabled,
+                "ui_enabled": state.repo_mode.ui_enabled,
+            }
+        },
     }))
 }
 

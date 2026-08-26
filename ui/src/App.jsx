@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowsClockwise,
   ChartLineUp,
@@ -35,6 +35,9 @@ import { IncidentsView as IncidentsPanel, ObservationsView as ObservationsPanel,
 import { FlowView as FlowPanel } from "./views/FlowView.tsx";
 import { StatusView as StatusPanel } from "./views/StatusView.tsx";
 import { loadDashboardData, loadTriage, loadTriageSummary } from "./pharnessApi";
+import { fetchJson } from "./api/http";
+
+const RepoModeApp = lazy(() => import("./repoMode/RepoModeApp").then((module) => ({ default: module.RepoModeApp })));
 
 const navGroups = [
   { id: "operate", label: "Operate", items: [
@@ -469,7 +472,7 @@ function ScopeSelect({ icon: Icon, label, value, options, onChange }) {
 }
 
 
-export function App() {
+export function LegacyApp() {
   const [route, setRoute] = useState(parseHash);
   const [lastRunId, setLastRunId] = useState(null);
   const [theme, setTheme] = useState("dark");
@@ -493,4 +496,17 @@ export function App() {
   const flowRoot = route.view === "Flow" && route.param?.kind ? route.param : null;
   const dashboard = usePharnessDashboard(flowRoot, scope, autoRefresh, route.view, route.view === "WorkItems" && Boolean(route.param));
   return <AppShell route={route} selectedRunId={routeRunId ?? lastRunId} theme={theme} setTheme={setTheme} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} actionNotice={actionNotice} setActionNotice={setActionNotice} dashboard={dashboard} scope={scope} setScope={setScope} />;
+}
+
+export function App() {
+  const [cutover, setCutover] = useState({ status: "loading", enabled: false });
+  useEffect(() => {
+    let active = true;
+    fetchJson("/api/config/effective")
+      .then((config) => { if (active) setCutover({ status: "ready", enabled: config?.features?.repo_mode_v1?.ui_enabled === true }); })
+      .catch(() => { if (active) setCutover({ status: "ready", enabled: false }); });
+    return () => { active = false; };
+  }, []);
+  if (cutover.status === "loading") return <div className="repo-boot" role="status">Loading PHarness operator experience…</div>;
+  return cutover.enabled ? <Suspense fallback={<div className="repo-boot" role="status">Loading Repo Mode operator experience…</div>}><RepoModeApp /></Suspense> : <LegacyApp />;
 }

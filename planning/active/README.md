@@ -5,12 +5,10 @@ An agent should not infer additional active work from the roadmap or archive.
 
 ## Current milestone
 
-None. Do not infer an implementation backlog from archived plans, completed
-milestones, presentations, or evidence records.
-
-Before implementation begins, add one approved milestone here with its exact
-baseline, scope, behavioral invariants, acceptance gates, rollout boundary, and
-completion evidence requirements.
+[`PHarness Repo Mode V1 Operator Experience`](PHarness-Repo-Mode-V1-Operator-Experience.md)
+is the only active implementation milestone. It is governed by the approved
+Repo Mode V1 screen contract and preserves the shipped Product/control-plane
+semantics.
 
 The most recently closed maintenance milestone is the
 [`app.rs` behavior-preserving decomposition](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md).

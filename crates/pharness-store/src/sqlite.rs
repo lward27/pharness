@@ -172,9 +172,9 @@ impl SqliteStore {
     pub async fn get_run(&self, run_id: &RunId) -> Result<Option<StoredRun>, StoreError> {
         let row = sqlx::query(
             r#"
-            SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by,
-                   run_budget_json, budget_consumption_json, stop_reason
+            SELECT runs.id, runs.session_id, sessions.cwd, runs.status, runs.user_task, runs.max_turns, runs.started_at,
+                   runs.finished_at, runs.cancel_requested_at, runs.error, runs.result_json, runs.execution_target_json, runs.origin, runs.created_by,
+                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
             WHERE runs.id = ?1
@@ -196,23 +196,31 @@ impl SqliteStore {
                 .map(|value| if value { 1_i64 } else { 0_i64 });
         let rows = sqlx::query(
             r#"
-            SELECT runs.id, runs.session_id, sessions.cwd, status, user_task, max_turns, started_at,
-                   finished_at, cancel_requested_at, error, result_json, execution_target_json, runs.origin, runs.created_by,
-                   run_budget_json, budget_consumption_json, stop_reason
+            SELECT runs.id, runs.session_id, sessions.cwd, runs.status, runs.user_task, runs.max_turns, runs.started_at,
+                   runs.finished_at, runs.cancel_requested_at, runs.error, runs.result_json, runs.execution_target_json, runs.origin, runs.created_by,
+                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
+            LEFT JOIN work_items metadata
+              ON metadata.id = json_extract(runs.execution_target_json, '$.run_scope.work_item_id')
             WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
-              AND (?2 IS NULL OR status = ?2)
+              AND (?2 IS NULL OR runs.status = ?2)
               AND (?3 IS NULL OR runs.origin = ?3)
               AND (?4 IS NULL OR runs.created_by = ?4)
               AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?5)
               AND (?6 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?6)
               AND (?7 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?7)
               AND (?8 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?8)
-              AND (?9 IS NULL OR CAST(started_at AS INTEGER) >= ?9)
-              AND (?10 IS NULL OR CAST(started_at AS INTEGER) <= ?10)
-            ORDER BY started_at DESC, runs.id DESC
-            LIMIT ?11 OFFSET ?12
+              AND (?9 IS NULL OR CAST(runs.started_at AS INTEGER) >= ?9)
+              AND (?10 IS NULL OR CAST(runs.started_at AS INTEGER) <= ?10)
+              AND (?11 IS NULL OR metadata.product_id = ?11)
+              AND (?12 IS NULL OR json_extract(execution_target_json, '$.run_scope.work_item_id') = ?12)
+              AND (?13 IS NULL OR metadata.mutable_repository_id = ?13)
+              AND (?14 IS NULL OR json_extract(execution_target_json, '$.repo_mode.stage_execution_id') = ?14)
+              AND (?15 IS NULL OR json_extract(execution_target_json, '$.agent_profile.id') = ?15)
+              AND (?16 IS NULL OR (?16 = 'current' AND runs.finished_at IS NULL) OR (?16 = 'history' AND runs.finished_at IS NOT NULL))
+            ORDER BY runs.started_at DESC, runs.id DESC
+            LIMIT ?17 OFFSET ?18
             "#,
         )
         .bind(filter.search)
@@ -225,6 +233,12 @@ impl SqliteStore {
         .bind(production_impacting)
         .bind(filter.started_after_ms)
         .bind(filter.started_before_ms)
+        .bind(filter.product_id)
+        .bind(filter.work_item_id)
+        .bind(filter.repository_id)
+        .bind(filter.stage_execution_id)
+        .bind(filter.agent_profile_id)
+        .bind(filter.lifecycle)
         .bind(limit)
         .bind(offset)
         .fetch_all(&self.pool)
@@ -243,16 +257,24 @@ impl SqliteStore {
             SELECT COUNT(*)
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
+            LEFT JOIN work_items metadata
+              ON metadata.id = json_extract(runs.execution_target_json, '$.run_scope.work_item_id')
             WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
-              AND (?2 IS NULL OR status = ?2)
+              AND (?2 IS NULL OR runs.status = ?2)
               AND (?3 IS NULL OR runs.origin = ?3)
               AND (?4 IS NULL OR runs.created_by = ?4)
               AND (?5 IS NULL OR json_extract(execution_target_json, '$.run_scope.namespace') = ?5)
               AND (?6 IS NULL OR json_extract(execution_target_json, '$.run_scope.repo') = ?6)
               AND (?7 IS NULL OR json_extract(execution_target_json, '$.run_scope.branch') = ?7)
               AND (?8 IS NULL OR json_extract(execution_target_json, '$.run_scope.production_impacting') = ?8)
-              AND (?9 IS NULL OR CAST(started_at AS INTEGER) >= ?9)
-              AND (?10 IS NULL OR CAST(started_at AS INTEGER) <= ?10)
+              AND (?9 IS NULL OR CAST(runs.started_at AS INTEGER) >= ?9)
+              AND (?10 IS NULL OR CAST(runs.started_at AS INTEGER) <= ?10)
+              AND (?11 IS NULL OR metadata.product_id = ?11)
+              AND (?12 IS NULL OR json_extract(execution_target_json, '$.run_scope.work_item_id') = ?12)
+              AND (?13 IS NULL OR metadata.mutable_repository_id = ?13)
+              AND (?14 IS NULL OR json_extract(execution_target_json, '$.repo_mode.stage_execution_id') = ?14)
+              AND (?15 IS NULL OR json_extract(execution_target_json, '$.agent_profile.id') = ?15)
+              AND (?16 IS NULL OR (?16 = 'current' AND runs.finished_at IS NULL) OR (?16 = 'history' AND runs.finished_at IS NOT NULL))
             "#,
         )
         .bind(filter.search)
@@ -265,6 +287,12 @@ impl SqliteStore {
         .bind(production_impacting)
         .bind(filter.started_after_ms)
         .bind(filter.started_before_ms)
+        .bind(filter.product_id)
+        .bind(filter.work_item_id)
+        .bind(filter.repository_id)
+        .bind(filter.stage_execution_id)
+        .bind(filter.agent_profile_id)
+        .bind(filter.lifecycle)
         .fetch_one(&self.pool)
         .await?;
         usize::try_from(count)
@@ -1302,16 +1330,25 @@ impl SqliteStore {
                    attempt_count, current_run_id, created_by, origin, created_at, updated_at,
                    status_changed_at, status_changed_by, status_reason
             FROM work_items
-            WHERE (?1 IS NULL OR status = ?1)
-              AND (?2 IS NULL OR source_repo = ?2)
-              AND (?3 IS NULL OR target_environment = ?3)
-              AND (?4 IS NULL OR target_namespace = ?4)
-              AND (?5 IS NULL OR production_impacting = ?5)
-              AND (?6 IS NULL OR created_by = ?6)
-              AND (?7 IS NULL OR origin = ?7)
-            ORDER BY CASE WHEN status = 'blocked' THEN 0 ELSE 1 END,
-                     updated_at DESC, id DESC
-            LIMIT ?8 OFFSET ?9
+            WHERE (?1 IS NULL OR work_items.status = ?1)
+              AND (?2 IS NULL OR work_items.source_repo = ?2)
+              AND (?3 IS NULL OR work_items.target_environment = ?3)
+              AND (?4 IS NULL OR work_items.target_namespace = ?4)
+              AND (?5 IS NULL OR work_items.production_impacting = ?5)
+              AND (?6 IS NULL OR work_items.created_by = ?6)
+              AND (?7 IS NULL OR work_items.origin = ?7)
+              AND (?8 IS NULL OR work_items.mode = ?8 OR (?8 = 'legacy' AND work_items.mode IS NULL))
+              AND (?9 IS NULL OR work_items.product_id = ?9)
+              AND (?10 IS NULL OR work_items.mutable_repository_id = ?10)
+              AND (
+                ?11 IS NULL
+                OR (?11 = 'current' AND ((work_items.mode IS NOT NULL AND work_items.closed_at IS NULL) OR (work_items.mode IS NULL AND work_items.status NOT IN ('completed', 'failed', 'cancelled'))))
+                OR (?11 = 'history' AND ((work_items.mode IS NOT NULL AND work_items.closed_at IS NOT NULL) OR (work_items.mode IS NULL AND work_items.status IN ('completed', 'failed', 'cancelled'))))
+              )
+              AND (?12 IS NULL OR work_items.id LIKE '%' || ?12 || '%' OR work_items.title LIKE '%' || ?12 || '%' OR work_items.intent LIKE '%' || ?12 || '%')
+            ORDER BY CASE WHEN work_items.status = 'blocked' THEN 0 ELSE 1 END,
+                     work_items.updated_at DESC, work_items.id DESC
+            LIMIT ?13 OFFSET ?14
             "#,
         )
         .bind(filter.status)
@@ -1321,6 +1358,11 @@ impl SqliteStore {
         .bind(production_impacting)
         .bind(filter.created_by)
         .bind(filter.origin)
+        .bind(filter.mode)
+        .bind(filter.product_id)
+        .bind(filter.repository_id)
+        .bind(filter.lifecycle)
+        .bind(filter.search)
         .bind(limit)
         .bind(offset)
         .fetch_all(&self.pool)
@@ -1338,13 +1380,22 @@ impl SqliteStore {
             r#"
             SELECT COUNT(*)
             FROM work_items
-            WHERE (?1 IS NULL OR status = ?1)
-              AND (?2 IS NULL OR source_repo = ?2)
-              AND (?3 IS NULL OR target_environment = ?3)
-              AND (?4 IS NULL OR target_namespace = ?4)
-              AND (?5 IS NULL OR production_impacting = ?5)
-              AND (?6 IS NULL OR created_by = ?6)
-              AND (?7 IS NULL OR origin = ?7)
+            WHERE (?1 IS NULL OR work_items.status = ?1)
+              AND (?2 IS NULL OR work_items.source_repo = ?2)
+              AND (?3 IS NULL OR work_items.target_environment = ?3)
+              AND (?4 IS NULL OR work_items.target_namespace = ?4)
+              AND (?5 IS NULL OR work_items.production_impacting = ?5)
+              AND (?6 IS NULL OR work_items.created_by = ?6)
+              AND (?7 IS NULL OR work_items.origin = ?7)
+              AND (?8 IS NULL OR work_items.mode = ?8 OR (?8 = 'legacy' AND work_items.mode IS NULL))
+              AND (?9 IS NULL OR work_items.product_id = ?9)
+              AND (?10 IS NULL OR work_items.mutable_repository_id = ?10)
+              AND (
+                ?11 IS NULL
+                OR (?11 = 'current' AND ((work_items.mode IS NOT NULL AND work_items.closed_at IS NULL) OR (work_items.mode IS NULL AND work_items.status NOT IN ('completed', 'failed', 'cancelled'))))
+                OR (?11 = 'history' AND ((work_items.mode IS NOT NULL AND work_items.closed_at IS NOT NULL) OR (work_items.mode IS NULL AND work_items.status IN ('completed', 'failed', 'cancelled'))))
+              )
+              AND (?12 IS NULL OR work_items.id LIKE '%' || ?12 || '%' OR work_items.title LIKE '%' || ?12 || '%' OR work_items.intent LIKE '%' || ?12 || '%')
             "#,
         )
         .bind(filter.status)
@@ -1354,6 +1405,11 @@ impl SqliteStore {
         .bind(production_impacting)
         .bind(filter.created_by)
         .bind(filter.origin)
+        .bind(filter.mode)
+        .bind(filter.product_id)
+        .bind(filter.repository_id)
+        .bind(filter.lifecycle)
+        .bind(filter.search)
         .fetch_one(&self.pool)
         .await?;
         usize::try_from(count)
