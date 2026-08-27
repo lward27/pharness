@@ -314,20 +314,20 @@ pub(in crate::app) struct OnboardingPatchContextResponse {
 
 #[derive(Debug, Deserialize)]
 pub(in crate::app) struct OnboardingPatchOutcomeRequest {
-    status: String,
+    pub(in crate::app) status: String,
     #[serde(default)]
-    patch: Option<String>,
+    pub(in crate::app) patch: Option<String>,
     #[serde(default)]
-    patch_hash: Option<String>,
+    pub(in crate::app) patch_hash: Option<String>,
     #[serde(default)]
-    changed_paths: Vec<String>,
+    pub(in crate::app) changed_paths: Vec<String>,
     #[serde(default)]
-    error_code: Option<String>,
+    pub(in crate::app) error_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(in crate::app) struct InternalOnboardingContractValidationQuery {
-    execution_id: String,
+    pub(in crate::app) execution_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -3334,6 +3334,66 @@ pub(in crate::app) async fn internal_onboarding_patch_outcome(
                 json!({"onboarding":onboarding_response(updated)?,"artifact_id":artifact.id}),
             ))
         }
+        "unchanged" => {
+            let patch = request.patch.unwrap_or_default();
+            let patch_hash = request.patch_hash.ok_or_else(|| {
+                ApiError::bad_request("unchanged onboarding outcome needs a hash")
+            })?;
+            let empty_hash = format!("sha256:{:x}", Sha256::digest([]));
+            if !patch.is_empty()
+                || !request.changed_paths.is_empty()
+                || patch_hash != empty_hash
+                || onboarding.source_delivery_intent_id.is_some()
+            {
+                return Err(ApiError::conflict(
+                    "unchanged onboarding evidence must contain an empty patch and no source delivery",
+                ));
+            }
+            let run_id = RunId::new(onboarding.proposer_run_id.clone().ok_or_else(|| {
+                ApiError::conflict("onboarding no-change evidence has no proposer Run provenance")
+            })?);
+            let run = state
+                .store
+                .get_run(&run_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+            let proposal_hash = onboarding.approved_proposal_hash.clone().ok_or_else(|| {
+                ApiError::conflict("onboarding no-change evidence has no approved proposal")
+            })?;
+            let artifact = state
+                .store
+                .create_artifact(CreateArtifact {
+                    id: new_prefixed_id("art"),
+                    session_id: run.session_id,
+                    run_id: Some(run.id),
+                    kind: "repository_onboarding_no_change".into(),
+                    label: format!("No-change onboarding evidence for {onboarding_id}"),
+                    mime_type: Some("application/json".into()),
+                    path: None,
+                    content_text: None,
+                    content_json: Some(json!({
+                        "schema_version":"pharness.dev/repository-onboarding-no-change/v1alpha1",
+                        "onboarding_id":onboarding_id,
+                        "execution_id":execution_id,
+                        "proposal_hash":proposal_hash,
+                        "source_commit":onboarding.registered_commit,
+                        "empty_patch_hash":patch_hash,
+                        "changed_paths":[],
+                    })),
+                })
+                .await?;
+            let updated = state
+                .store
+                .finish_repository_onboarding_patch_unchanged(
+                    &onboarding_id,
+                    &execution_id,
+                    &artifact.id,
+                )
+                .await?;
+            Ok(Json(
+                json!({"onboarding":onboarding_response(updated)?,"artifact_id":artifact.id}),
+            ))
+        }
         "failed" => {
             let error_code = request
                 .error_code
@@ -3354,7 +3414,7 @@ pub(in crate::app) async fn internal_onboarding_patch_outcome(
             Ok(Json(json!({"onboarding":onboarding_response(updated)?})))
         }
         _ => Err(ApiError::bad_request(
-            "onboarding patch outcome status must be succeeded or failed",
+            "onboarding patch outcome status must be succeeded, unchanged, or failed",
         )),
     }
 }
@@ -3411,37 +3471,62 @@ pub(in crate::app) async fn internal_onboarding_contract_validation_context(
         .clone()
         .filter(|commit| is_git_sha(commit))
         .ok_or_else(|| ApiError::conflict("onboarding merge commit is unavailable"))?;
-    let intent = state
-        .store
-        .get_source_delivery_intent(
-            onboarding
-                .source_delivery_intent_id
-                .as_deref()
-                .ok_or_else(|| ApiError::conflict("onboarding source intent is unavailable"))?,
-        )
-        .await?
-        .filter(|intent| {
-            intent.status == "merged"
-                && intent
-                    .merge_provenance
-                    .as_ref()
-                    .and_then(|value| value.get("merge_commit_sha"))
-                    .and_then(Value::as_str)
-                    == Some(source_commit.as_str())
-        })
-        .ok_or_else(|| ApiError::conflict("onboarding merge provenance is unavailable"))?;
     let proposal = state
         .store
         .get_current_repository_onboarding_proposal(&onboarding.id)
         .await?
         .filter(|proposal| {
             proposal.status == "approved"
-                && intent.subject_kind == "repository_onboarding_proposal"
-                && intent.subject_id == proposal.id
                 && onboarding.approved_proposal_hash.as_deref()
                     == Some(proposal.content_hash.as_str())
         })
         .ok_or_else(|| ApiError::conflict("approved onboarding proposal is unavailable"))?;
+    if let Some(intent_id) = onboarding.source_delivery_intent_id.as_deref() {
+        state
+            .store
+            .get_source_delivery_intent(intent_id)
+            .await?
+            .filter(|intent| {
+                intent.status == "merged"
+                    && intent.subject_kind == "repository_onboarding_proposal"
+                    && intent.subject_id == proposal.id
+                    && intent
+                        .merge_provenance
+                        .as_ref()
+                        .and_then(|value| value.get("merge_commit_sha"))
+                        .and_then(Value::as_str)
+                        == Some(source_commit.as_str())
+            })
+            .ok_or_else(|| ApiError::conflict("onboarding merge provenance is unavailable"))?;
+    } else {
+        let artifact_id = onboarding.patch_artifact_id.as_deref().ok_or_else(|| {
+            ApiError::conflict("onboarding source or no-change provenance is unavailable")
+        })?;
+        state
+            .store
+            .get_artifact(artifact_id)
+            .await?
+            .filter(|artifact| {
+                artifact.kind == "repository_onboarding_no_change"
+                    && artifact.content_json.as_ref().is_some_and(|content| {
+                        content.get("schema_version").and_then(Value::as_str)
+                            == Some("pharness.dev/repository-onboarding-no-change/v1alpha1")
+                            && content.get("onboarding_id").and_then(Value::as_str)
+                                == Some(onboarding.id.as_str())
+                            && content.get("execution_id").and_then(Value::as_str)
+                                == onboarding.patch_execution_id.as_deref()
+                            && content.get("proposal_hash").and_then(Value::as_str)
+                                == Some(proposal.content_hash.as_str())
+                            && content.get("source_commit").and_then(Value::as_str)
+                                == Some(source_commit.as_str())
+                            && content
+                                .get("changed_paths")
+                                .and_then(Value::as_array)
+                                .is_some_and(Vec::is_empty)
+                    })
+            })
+            .ok_or_else(|| ApiError::conflict("onboarding no-change provenance is unavailable"))?;
+    }
     let typed: pharness_core::RepositoryOnboardingProposal =
         serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
             ApiError::conflict(format!("approved proposal is invalid: {error}"))

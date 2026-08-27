@@ -995,7 +995,7 @@ async fn execute_onboarding_patch() -> anyhow::Result<()> {
     }
     let outcome = match materialize_onboarding_patch(&context).await {
         Ok((patch, patch_hash, changed_paths)) => serde_json::json!({
-            "status": "succeeded",
+            "status": if changed_paths.is_empty() { "unchanged" } else { "succeeded" },
             "patch": patch,
             "patch_hash": patch_hash,
             "changed_paths": changed_paths,
@@ -1076,18 +1076,12 @@ async fn materialize_onboarding_patch(
     )
     .await?;
     let changed_paths = parse_porcelain_paths(&status)?;
-    let allowed = [
-        ".pharness/repository.yaml",
-        ".pharness/instructions.md",
-        ".pharness/project.yaml",
-    ];
-    if changed_paths.is_empty()
-        || changed_paths.len() > allowed.len()
-        || changed_paths
-            .iter()
-            .any(|path| !allowed.contains(&path.as_str()))
-    {
-        anyhow::bail!("onboarding_patch_path_violation");
+    validate_onboarding_patch_changed_paths(&changed_paths)?;
+    if changed_paths.is_empty() {
+        let _ = tokio::fs::remove_file(&askpass).await;
+        let patch = String::new();
+        let patch_hash = format!("sha256:{:x}", Sha256::digest(patch.as_bytes()));
+        return Ok((patch, patch_hash, changed_paths));
     }
     repository_git_command(
         &[
@@ -1129,6 +1123,22 @@ async fn materialize_onboarding_patch(
         &context.proposal_hash,
     );
     Ok((patch, patch_hash, changed_paths))
+}
+
+fn validate_onboarding_patch_changed_paths(changed_paths: &[String]) -> anyhow::Result<()> {
+    let allowed = [
+        ".pharness/repository.yaml",
+        ".pharness/instructions.md",
+        ".pharness/project.yaml",
+    ];
+    if changed_paths.len() > allowed.len()
+        || changed_paths
+            .iter()
+            .any(|path| !allowed.contains(&path.as_str()))
+    {
+        anyhow::bail!("onboarding_patch_path_violation");
+    }
+    Ok(())
 }
 
 async fn checkout_exact_repository(
@@ -4522,8 +4532,9 @@ mod tests {
         github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
         update_kustomization_image, validate_git_delivery_context,
-        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
-        GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
+        validate_onboarding_patch_changed_paths, validate_resumed_workspace_identity,
+        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext,
+        GitDeliveryObservationContext, PipelineRunTerminal,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
@@ -4531,6 +4542,13 @@ mod tests {
     use std::path::Path;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn onboarding_materializer_accepts_an_exact_no_change_result() {
+        validate_onboarding_patch_changed_paths(&[]).unwrap();
+        validate_onboarding_patch_changed_paths(&[".pharness/repository.yaml".into()]).unwrap();
+        assert!(validate_onboarding_patch_changed_paths(&["src/main.rs".into()]).is_err());
+    }
 
     #[test]
     fn repo_mode_preparation_uses_the_canonical_prefixed_contract_hash() {
