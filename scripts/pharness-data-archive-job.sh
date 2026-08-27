@@ -41,13 +41,17 @@ for work_item_id in "$@"; do
 done
 
 JOB_NAME="pharness-data-archive-${ARCHIVE_NAME}"
-CREATE_ARGS=()
 case "$DRY_RUN" in
-  "") ;;
-  client|server) CREATE_ARGS+=("--dry-run=${DRY_RUN}" -o yaml) ;;
+  "") KUBECTL_CREATE=(kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" create -f -) ;;
+  client|server)
+    KUBECTL_CREATE=(
+      kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE"
+      create "--dry-run=${DRY_RUN}" -o yaml -f -
+    )
+    ;;
   *) echo "PHARNESS_ARCHIVE_JOB_DRY_RUN must be client, server, or unset" >&2; exit 1 ;;
 esac
-kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" create "${CREATE_ARGS[@]}" -f - <<MANIFEST
+"${KUBECTL_CREATE[@]}" <<MANIFEST
 apiVersion: batch/v1
 kind: Job
 metadata:
