@@ -36,7 +36,7 @@ api:
   replicas: 1
   host: pharness-api.lucas.engineering
   dbPath: /data/pharness.db
-  operationalMode: draining
+  operationalMode: read_only
   legacyWorkItemCreationEnabled: false
   databaseGeneration:
     id: dbgen_legacy_20260826
