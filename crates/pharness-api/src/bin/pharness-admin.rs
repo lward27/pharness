@@ -160,7 +160,7 @@ async fn export_work_item_characterization(
 ) -> anyhow::Result<Value> {
     let work_item = bound_json_rows(
         pool,
-        "SELECT json_object('id',id,'mode',mode,'status',status,'title',title,'product_id',product_id,'repository_id',repository_id,'source_commit',source_commit,'state_version',state_version,'closed_at',closed_at,'closure_reason',closure_reason) AS value FROM work_items WHERE id=?1",
+        "SELECT json_object('id',id,'mode',mode,'status',status,'title',title,'product_id',product_id,'repository_id',mutable_repository_id,'source_commit',source_commit,'state_version',state_version,'closed_at',closed_at,'closure_reason',closure_reason) AS value FROM work_items WHERE id=?1",
         work_item_id,
     )
     .await?;
@@ -267,8 +267,37 @@ mod tests {
             .await
             .unwrap();
         drop(store);
+        let seed_pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&database)
+                    .create_if_missing(false),
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO work_items (
+              id,status,title,intent,acceptance_criteria_json,source_repo,source_ref,
+              target_environment,production_impacting,max_attempts,max_elapsed_seconds,
+              attempt_count,created_at,updated_at,status_changed_at,mode,state_version,
+              closed_at,closure_reason
+            ) VALUES (
+              'witem_archive','completed','archive','characterize accepted evidence','[]',
+              'https://github.com/example/repo','main','repository',0,2,3600,0,
+              '1','1','1','repo',1,'1','merged'
+            )
+            "#,
+        )
+        .execute(&seed_pool)
+        .await
+        .unwrap();
+        seed_pool.close().await;
 
-        archive(&database, &output, &[]).await.unwrap();
+        archive(&database, &output, &["witem_archive".into()])
+            .await
+            .unwrap();
 
         let manifest: Value =
             serde_json::from_slice(&std::fs::read(output.join("manifest.json")).unwrap()).unwrap();
@@ -278,6 +307,15 @@ mod tests {
         assert!(manifest["archive_database_sha256"]
             .as_str()
             .is_some_and(|value| value.starts_with("sha256:")));
+        assert_eq!(
+            manifest["accepted_work_item_characterization"]["witem_archive"]["work_item"][0]["id"],
+            "witem_archive"
+        );
+        assert_eq!(
+            manifest["accepted_work_item_characterization"]["witem_archive"]["work_item"][0]
+                ["repository_id"],
+            Value::Null
+        );
         assert!(output.join("pharness.db").is_file());
 
         std::fs::remove_dir_all(&root).unwrap();
