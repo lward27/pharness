@@ -2467,12 +2467,28 @@ async fn start_repository_onboarding_proposer(
         "blockers":inventory.get("blockers"),
         "limits":inventory.get("limits"),
     });
+    let active_environment_profile_ids = onboarding_environment_profile_ids(
+        state
+            .environment_profiles
+            .iter()
+            .map(|profile| (profile.id.as_str(), profile.active)),
+    );
+    if active_environment_profile_ids.is_empty() {
+        return Err(ApiError::conflict(
+            "repository onboarding proposer requires at least one active EnvironmentProfile",
+        ));
+    }
+    let active_environment_profile_summary = active_environment_profile_ids.join(", ");
     let context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "subject":{"kind":"repository_onboarding","id":onboarding.id},
         "intent":"Propose the canonical RepositoryContract and bounded instructions from deterministic discovery and exact read-only repository evidence.",
         "pinned_repository":{"id":repository.id,"url":repository.canonical_url,"default_branch":repository.default_branch,"source_commit":onboarding.registered_commit},
         "discovery":bounded_discovery,
+        "contract_constraints":{
+            "active_environment_profile_ids":active_environment_profile_ids,
+            "environment_profile_rule":"candidate_contract.environment_profile must exactly equal one listed active EnvironmentProfile ID; generic language names and shortened aliases are invalid",
+        },
         "policies":{"allowed_source_changes":[".pharness/repository.yaml",".pharness/instructions.md","remove .pharness/project.yaml"],"dependency_lock_generation":false,"agent_network":"denied"},
         "remaining_budgets":profile.budget,
     });
@@ -2520,7 +2536,9 @@ async fn start_repository_onboarding_proposer(
         .create_run(CreateRun {
             id: run_id.clone(),
             session_id: session_id.clone(),
-            user_task: "Submit one bounded Repository onboarding proposal. Treat discovery facts as authoritative, inspect only what is needed, and do not modify the checkout.".into(),
+            user_task: format!(
+                "Submit one bounded Repository onboarding proposal. Treat discovery facts as authoritative, inspect only what is needed, and do not modify the checkout. candidate_contract.environment_profile must exactly equal one of these active IDs: {active_environment_profile_summary}."
+            ),
             cwd: cwd.clone(),
             max_turns: profile.budget.initial_turns,
             initial_status: "queued".into(),
@@ -2576,6 +2594,18 @@ async fn start_repository_onboarding_proposer(
         .await?;
     state.worker.spawn_run(run, cwd);
     Ok(())
+}
+
+fn onboarding_environment_profile_ids<'a>(
+    profiles: impl IntoIterator<Item = (&'a str, bool)>,
+) -> Vec<String> {
+    let mut active = profiles
+        .into_iter()
+        .filter(|(_, is_active)| *is_active)
+        .map(|(id, _)| id.to_string())
+        .collect::<Vec<_>>();
+    active.sort();
+    active
 }
 
 async fn repository_registration_preflight(
@@ -4737,8 +4767,9 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_key, onboarding_patch_paths, parse_github_repository_url,
-        readiness_current_state, validate_binding_scope, validate_repository_binding_scope,
+        normalize_key, onboarding_environment_profile_ids, onboarding_patch_paths,
+        parse_github_repository_url, readiness_current_state, validate_binding_scope,
+        validate_repository_binding_scope,
     };
     use serde_json::json;
 
@@ -4813,6 +4844,18 @@ mod tests {
         assert!(
             serde_json::from_value::<pharness_core::RepositoryOnboardingProposal>(proposal)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn onboarding_context_lists_only_exact_active_environment_profile_ids() {
+        assert_eq!(
+            onboarding_environment_profile_ids([
+                ("python-3.12", true),
+                ("python", false),
+                ("python-3.11", true),
+            ]),
+            vec!["python-3.11".to_string(), "python-3.12".to_string()]
         );
     }
 
