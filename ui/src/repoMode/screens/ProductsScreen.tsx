@@ -5,6 +5,7 @@ import { Empty, LinkButton, ResourceState, SectionHeader, Status } from "../comp
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
 import { FactGrid, formatMoment, humanize, RecordList } from "../presentation";
+import { ProductTopologyEditor } from "./ProductTopologyEditor";
 
 export function ProductsScreen({ operatorName }: { operatorName?: string }) {
   const resource = useResource<any>("/api/products");
@@ -75,7 +76,7 @@ export function ProductScreen({ productId, section, operatorName }: { productId:
     {editing ? <form className="repo-inline-form" onSubmit={save}><label>Name<input required value={draft.display_name} onChange={event => setDraft(value => ({...value,display_name:event.target.value}))} /></label><label>Description<textarea required rows={2} value={draft.description} onChange={event => setDraft(value => ({...value,description:event.target.value}))} /></label><label>Owner<input required value={draft.owner_principal} onChange={event => setDraft(value => ({...value,owner_principal:event.target.value}))} /></label><label>Operator<input required value={draft.actor} onChange={event => setDraft(value => ({...value,actor:event.target.value}))} /></label><label className="repo-span-2">Reason<input required value={draft.reason} onChange={event => setDraft(value => ({...value,reason:event.target.value}))} /></label>{editError ? <div className="repo-error" role="alert">{editError}</div> : null}<footer><button className="repo-primary" type="submit" disabled={!editable.data?.state_hash}>Save exact revision</button><button type="button" onClick={() => setEditing(false)}>Cancel</button></footer></form> : null}
     <nav className="repo-tabs" aria-label="Product sections">{sections.map(value => <button type="button" className={section === value ? "is-active" : ""} key={value} onClick={() => navigate(`products/${productId}/${value}`)}>{value.replaceAll("-", " ")}</button>)}</nav>
     {section === "work-items" ? <WorkItemRollup title="Current WorkItems" items={data?.current_work_items || []} /> : null}
-    {section === "services-repositories" ? <ServicesAndRepositories data={data} /> : null}
+    {section === "services-repositories" ? <ServicesAndRepositories data={data} productId={productId} operatorName={operatorName || "operator"} onApplied={() => resource.refresh()} /> : null}
     {section === "agents" ? <ResourceCollection title="Active AgentRuns" icon={<Stack size={19} />} items={(data?.active_agent_runs || []).map((item: any) => ({ id:item.id, title:item.profile_id || item.id, status:item.status, detail:item.work_item_id, href:`agents/runs/${item.id}` }))} /> : null}
     {section === "releases" ? <ProductReleases data={data?.connected_release_data} /> : null}
     {section === "evidence-audit" ? <ProductEvidenceAudit data={data} /> : null}
@@ -83,7 +84,7 @@ export function ProductScreen({ productId, section, operatorName }: { productId:
   </ResourceState>;
 }
 
-function ServicesAndRepositories({ data }: { data:any }) {
+function ServicesAndRepositories({ data,productId,operatorName,onApplied }: { data:any;productId:string;operatorName:string;onApplied:()=>void }) {
   return <div className="repo-two-columns">
     <ResourceCollection title="Services" icon={<Cube size={19} />} items={(data?.services || []).map((item: any) => ({ id:item.id, title:item.display_name, status:item.status, detail:item.description }))} />
     <section className="repo-panel"><header><span><Stack size={19} /><h2>Repository bindings</h2></span><span className="repo-count">{data?.repositories?.length || 0}</span></header><div className="repo-list">{(data?.repositories || []).map((repository:any) => {
@@ -95,6 +96,7 @@ function ServicesAndRepositories({ data }: { data:any }) {
       const revision = bindingSummary?.current_revision || bindingSummary?.binding_revision;
       return <button className="repo-list-row" type="button" key={repository.id} onClick={() => navigate(`repositories/${repository.id}/overview`)}><GitBranch size={18} /><div><strong>{repository.external_id}</strong><span>Binding revision {revision?.revision ?? binding?.revision ?? "unavailable"} · {(revision?.service_ids || binding?.service_ids || []).length} Service mappings</span><small className="repo-mono">{repository.registered_commit}</small></div><Status value={repository.coding_readiness || "registered"} /></button>;
     })}{!data?.repositories?.length ? <p className="repo-muted">No durable Repository bindings.</p> : null}</div></section>
+    <ProductTopologyEditor productId={productId} operatorName={operatorName} onApplied={onApplied}/>
   </div>;
 }
 

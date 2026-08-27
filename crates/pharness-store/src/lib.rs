@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod data_lifecycle;
 mod models;
 mod onboarding;
 mod product;
@@ -41,10 +42,11 @@ pub use onboarding::{
     StoredRepositoryOnboardingProposal, StoredRepositoryReadinessAssessment,
 };
 pub use product::{
-    BootstrapOrganization, CreateProductAggregate, RegisterRepositoryAggregate,
-    RegisteredRepositoryAggregate, StoredOrganization, StoredProduct, StoredProductModelSnapshot,
-    StoredRepository, StoredRepositoryBinding, StoredRepositoryBindingRevision,
-    StoredRepositoryDraft, StoredService, UpdateProductAggregate,
+    ApplyProductModelRevision, BootstrapOrganization, CreateProductAggregate,
+    ProductModelBindingRevision, ProductModelServiceRevision, RegisterRepositoryAggregate,
+    RegisteredRepositoryAggregate, RepositoryBindingScope, StoredOrganization, StoredProduct,
+    StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding,
+    StoredRepositoryBindingRevision, StoredRepositoryDraft, StoredService, UpdateProductAggregate,
 };
 pub use repo_mode::{
     CreateAgentContextPack, CreateEvidenceRetrieval, CreateEvidenceValidation,
@@ -62,3 +64,9 @@ pub use subject_preparation::{
 };
 
 pub const INITIAL_MIGRATION_NAME: &str = "0001_initial";
+pub use data_lifecycle::{
+    CreateArchiveRecord, CreateRetentionHold, CreateRetentionPreview, DataInventory,
+    DatabaseGeneration, DeleteArchiveRecord, EvidenceValidationReference, StoredArchiveRecord,
+    StoredRetentionHold, StoredRetentionPreview, StoredRetentionReceipt, StoredRunSummaryRecord,
+    RETENTION_POLICY_VERSION,
+};

@@ -1,7 +1,9 @@
 use crate::dispatch::RunDispatcher;
 use crate::workspace::WorkspaceProvisioner;
 use axum::http::StatusCode;
+use axum::http::{Method, Request};
 use axum::middleware;
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use pharness_core::{ReadOnlyClusterTools, SafetyPolicy};
@@ -17,6 +19,7 @@ mod audit;
 mod auth;
 mod capabilities;
 mod clock;
+mod data_lifecycle;
 mod delivery_actions;
 mod delivery_segments;
 mod deployment;
@@ -54,6 +57,7 @@ use system::{BuildMetadata, ProtectedTargetConfiguration};
 struct RepoModeConfiguration {
     enabled: bool,
     ui_enabled: bool,
+    legacy_work_item_creation_enabled: bool,
     organization: pharness_store::BootstrapOrganization,
 }
 
@@ -69,9 +73,15 @@ impl RepoModeConfiguration {
             .is_some_and(|value| {
                 matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
             });
+        let legacy_work_item_creation_enabled =
+            std::env::var("PHARNESS_LEGACY_WORK_ITEM_CREATION_ENABLED")
+                .ok()
+                .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false);
         Self {
             enabled,
             ui_enabled,
+            legacy_work_item_creation_enabled,
             organization: pharness_store::BootstrapOrganization {
                 id: std::env::var("PHARNESS_ORGANIZATION_ID")
                     .unwrap_or_else(|_| "org_default".into()),
@@ -88,6 +98,7 @@ impl RepoModeConfiguration {
         Self {
             enabled: true,
             ui_enabled: true,
+            legacy_work_item_creation_enabled: true,
             organization: pharness_store::BootstrapOrganization {
                 id: "org_test".into(),
                 organization_key: "test".into(),
@@ -139,10 +150,12 @@ pub fn router(
         environment_profiles: Arc::new(environment::load_environment_profiles()),
         repo_mode: RepoModeConfiguration::from_env(),
     };
+    data_lifecycle::spawn_retention_scheduler(state.clone());
 
-    Router::new()
+    let operator_routes = Router::new()
         .merge(runs::router())
         .merge(system::router())
+        .merge(data_lifecycle::router())
         .merge(evidence::router())
         .merge(work_items::router())
         .merge(operator::router())
@@ -155,10 +168,13 @@ pub fn router(
         .merge(deployment::router())
         .merge(releases::router())
         .merge(approvals::router())
+        .route_layer(middleware::from_fn(enforce_operational_mode))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_operator_token,
-        ))
+        ));
+
+    operator_routes
         .merge(internal::router(state.clone()))
         .layer(
             TraceLayer::new_for_http()
@@ -166,6 +182,99 @@ pub fn router(
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
         .with_state(state)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OperationalMode {
+    Normal,
+    Draining,
+    ReadOnly,
+}
+
+impl OperationalMode {
+    pub(crate) fn from_env() -> Self {
+        match std::env::var("PHARNESS_OPERATIONAL_MODE")
+            .unwrap_or_else(|_| "normal".into())
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "draining" => Self::Draining,
+            "read_only" | "readonly" => Self::ReadOnly,
+            _ => Self::Normal,
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Draining => "draining",
+            Self::ReadOnly => "read_only",
+        }
+    }
+}
+
+async fn enforce_operational_mode(request: Request<axum::body::Body>, next: Next) -> Response {
+    let path = request.uri().path();
+    let mode = OperationalMode::from_env();
+    match operational_mutation_decision(
+        mode,
+        request.method(),
+        path,
+        RepoModeConfiguration::from_env().legacy_work_item_creation_enabled,
+    ) {
+        OperationalMutationDecision::Allowed => next.run(request).await,
+        OperationalMutationDecision::Blocked => (
+            StatusCode::LOCKED,
+            Json(json!({
+                "error":"PHarness is not accepting this mutation in the current operational mode",
+                "code":"operational_mode_blocks_mutation",
+                "operational_mode":mode.as_str(),
+            })),
+        )
+            .into_response(),
+        OperationalMutationDecision::LegacyCreationDisabled => (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error":"legacy WorkItem creation is disabled; create a Product-scoped Repo Mode WorkItem",
+                "code":"legacy_work_item_creation_disabled",
+                "route":"/api/products/:product_id/work-items",
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OperationalMutationDecision {
+    Allowed,
+    Blocked,
+    LegacyCreationDisabled,
+}
+
+fn operational_mutation_decision(
+    mode: OperationalMode,
+    method: &Method,
+    path: &str,
+    legacy_work_item_creation_enabled: bool,
+) -> OperationalMutationDecision {
+    if matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return OperationalMutationDecision::Allowed;
+    }
+    let allowed = match mode {
+        OperationalMode::Normal => true,
+        OperationalMode::Draining => {
+            path.starts_with("/api/internal/") || path.ends_with("/cancel")
+        }
+        OperationalMode::ReadOnly => false,
+    };
+    if !allowed {
+        return OperationalMutationDecision::Blocked;
+    }
+    if method == Method::POST && path == "/api/work-items" && !legacy_work_item_creation_enabled {
+        return OperationalMutationDecision::LegacyCreationDisabled;
+    }
+    OperationalMutationDecision::Allowed
 }
 
 #[derive(Debug)]
@@ -245,3 +354,83 @@ impl IntoResponse for ApiError {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod operational_mode_tests {
+    use super::*;
+
+    #[test]
+    fn read_only_serves_reads_and_blocks_every_mutation() {
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::ReadOnly,
+                &Method::GET,
+                "/api/products",
+                false
+            ),
+            OperationalMutationDecision::Allowed
+        );
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::ReadOnly,
+                &Method::POST,
+                "/api/internal/runs/run/outcome",
+                false
+            ),
+            OperationalMutationDecision::Blocked
+        );
+    }
+
+    #[test]
+    fn draining_allows_callbacks_and_cancellation_but_not_new_work() {
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::Draining,
+                &Method::POST,
+                "/api/internal/runs/run/outcome",
+                false
+            ),
+            OperationalMutationDecision::Allowed
+        );
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::Draining,
+                &Method::POST,
+                "/api/runs/run/cancel",
+                false
+            ),
+            OperationalMutationDecision::Allowed
+        );
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::Draining,
+                &Method::POST,
+                "/api/products",
+                false
+            ),
+            OperationalMutationDecision::Blocked
+        );
+    }
+
+    #[test]
+    fn legacy_work_item_creation_is_an_explicit_normal_mode_exception() {
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::Normal,
+                &Method::POST,
+                "/api/work-items",
+                false
+            ),
+            OperationalMutationDecision::LegacyCreationDisabled
+        );
+        assert_eq!(
+            operational_mutation_decision(
+                OperationalMode::Normal,
+                &Method::POST,
+                "/api/products/prod/work-items",
+                false
+            ),
+            OperationalMutationDecision::Allowed
+        );
+    }
+}

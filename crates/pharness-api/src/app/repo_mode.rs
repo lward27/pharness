@@ -5188,6 +5188,16 @@ async fn list_work_item_evidence(
     ensure_repo_mode_enabled(&state)?;
     repo_metadata(&state, &work_item_id).await?;
     let validations = state.store.list_evidence_validations(&work_item_id).await?;
+    let mut validation_references = Vec::with_capacity(validations.len());
+    for validation in &validations {
+        validation_references.push(json!({
+            "evidence_validation_id": validation.id,
+            "typed_references": state
+                .store
+                .list_evidence_validation_references(&validation.id)
+                .await?,
+        }));
+    }
     let outcomes = state
         .store
         .list_effective_stage_outcomes(&work_item_id)
@@ -5195,6 +5205,7 @@ async fn list_work_item_evidence(
     Ok(Json(json!({
         "work_item_id": work_item_id,
         "evidence_validations": validations,
+        "validation_references": validation_references,
         "effective_stage_outcomes": outcomes,
         "count": validations.len(),
     })))
@@ -5210,7 +5221,14 @@ async fn get_evidence_validation(
         .get_evidence_validation(&evidence_validation_id)
         .await?
         .ok_or_else(|| ApiError::not_found("evidence_validation", &evidence_validation_id))?;
-    Ok(Json(json!({"evidence_validation": validation})))
+    let typed_references = state
+        .store
+        .list_evidence_validation_references(&evidence_validation_id)
+        .await?;
+    Ok(Json(json!({
+        "evidence_validation": validation,
+        "typed_references": typed_references,
+    })))
 }
 
 async fn create_annotation(
@@ -5904,6 +5922,8 @@ mod tests {
                 ..RunBudgetConsumption::default()
             },
             stop_reason: None,
+            retention_state: "retained".into(),
+            sealed_summary: None,
         };
         let actions = derive_repo_actions(
             &metadata,
@@ -6098,6 +6118,8 @@ mod tests {
                 extensions: 1,
             },
             stop_reason: None,
+            retention_state: "retained".into(),
+            sealed_summary: None,
         };
         let extension = StoredBudgetExtension {
             id: "budgetext_repo_approved".into(),

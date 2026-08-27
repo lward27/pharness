@@ -124,6 +124,49 @@ pub struct StoredRepositoryBindingRevision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepositoryBindingScope {
+    pub id: String,
+    pub binding_revision_id: String,
+    pub path_glob: String,
+    pub role: String,
+    pub service_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProductModelServiceRevision {
+    pub id: String,
+    pub service_key: String,
+    pub display_name: String,
+    pub description: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProductModelBindingRevision {
+    pub binding_id: String,
+    pub repository_id: String,
+    pub revision_id: String,
+    pub status: String,
+    pub scopes: Vec<RepositoryBindingScope>,
+    pub evidence_json: serde_json::Value,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplyProductModelRevision {
+    pub product_id: String,
+    pub expected_state_version: u64,
+    pub services: Vec<ProductModelServiceRevision>,
+    pub bindings: Vec<ProductModelBindingRevision>,
+    pub snapshot_id: String,
+    pub snapshot_json: serde_json::Value,
+    pub snapshot_hash: String,
+    pub actor: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegisterRepositoryAggregate {
     pub repository: StoredRepositoryDraft,
     pub binding_id: String,

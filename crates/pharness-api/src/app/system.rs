@@ -2,7 +2,7 @@ use super::capabilities::execute_capability;
 use super::clock::{current_millis, unique_suffix};
 use super::identifiers::safe_id_fragment;
 use super::policy::policy_json;
-use super::{environment, ApiError, AppState};
+use super::{environment, ApiError, AppState, OperationalMode};
 use crate::dispatch::CapabilityVerificationOutcome;
 use crate::dto::{
     CapabilityStatusResponse, EnvironmentProfileResponse, EnvironmentProfilesResponse,
@@ -276,8 +276,11 @@ pub(super) async fn config_effective(
             "repo_mode_v1": {
                 "enabled": state.repo_mode.enabled,
                 "ui_enabled": state.repo_mode.ui_enabled,
-            }
+            },
+            "legacy_work_item_creation_enabled": state.repo_mode.legacy_work_item_creation_enabled,
         },
+        "database_generation": state.store.get_database_generation().await.ok().flatten(),
+        "operational_mode": OperationalMode::from_env().as_str(),
     }))
 }
 
@@ -425,6 +428,10 @@ pub(super) async fn system_readiness(
             && state.build.api_revision == state.build.ui_revision
             && immutable_image_digest(&state.build.runtime_image_digest)
             && immutable_image_digest(&state.build.ui_image_digest),
+        database_generation: serde_json::to_value(state.store.get_database_generation().await?)
+            .unwrap_or(json!(null)),
+        operational_mode: OperationalMode::from_env().as_str().into(),
+        legacy_work_item_creation_enabled: state.repo_mode.legacy_work_item_creation_enabled,
         capabilities,
         repository_allowlists: json!({
             "workspace": state.workspace.allowed_remote_repos(),

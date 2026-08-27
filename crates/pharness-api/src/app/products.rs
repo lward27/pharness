@@ -14,12 +14,14 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
-    ApprovedOnboardingService, CompleteSubjectEnvironmentPreparation, CreateArtifact,
-    CreateProductAggregate, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+    ApplyProductModelRevision, ApproveRepositoryOnboardingProposal,
+    ApprovedOnboardingProductModelChange, ApprovedOnboardingService,
+    CompleteSubjectEnvironmentPreparation, CreateArtifact, CreateProductAggregate,
+    CreateRepositoryContractVersion, CreateRepositoryOnboarding,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
     CreateSession, CreateSubjectEnvironmentPreparation, CreateSubjectWorkspace,
-    RegisterRepositoryAggregate, RegisteredRepositoryAggregate, StoredProduct,
+    ProductModelBindingRevision, ProductModelServiceRevision, RegisterRepositoryAggregate,
+    RegisteredRepositoryAggregate, RepositoryBindingScope, StoredProduct,
     StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding, StoredRepositoryDraft,
     StoredRepositoryOnboarding, StoredRepositoryOnboardingProposal, StoredService,
     UpdateProductAggregate,
@@ -41,6 +43,15 @@ pub(super) fn router() -> Router<AppState> {
         .route(
             "/api/products/:product_id/model-snapshots/:snapshot_id",
             get(get_product_model_snapshot),
+        )
+        .route("/api/products/:product_id/model", get(get_product_model))
+        .route(
+            "/api/products/:product_id/model-changes/preflight",
+            post(preflight_product_model_change),
+        )
+        .route(
+            "/api/products/:product_id/model-changes",
+            post(apply_product_model_change),
         )
         .route(
             "/api/products/:product_id/services",
@@ -112,6 +123,99 @@ struct UpdateProductRequest {
     actor: String,
     reason: String,
     state_hash: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct ProductModelServiceInput {
+    #[serde(default)]
+    id: Option<String>,
+    service_key: String,
+    display_name: String,
+    description: String,
+    #[serde(default = "default_active_status")]
+    status: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct ProductModelScopeInput {
+    path_glob: String,
+    role: String,
+    #[serde(default)]
+    service_id: Option<String>,
+    #[serde(default)]
+    service_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct ProductModelBindingInput {
+    repository_id: String,
+    #[serde(default = "default_active_status")]
+    status: String,
+    scopes: Vec<ProductModelScopeInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProductModelChangePreflightRequest {
+    services: Vec<ProductModelServiceInput>,
+    bindings: Vec<ProductModelBindingInput>,
+    actor: String,
+    reason: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NormalizedProductModelService {
+    id: String,
+    service_key: String,
+    display_name: String,
+    description: String,
+    status: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NormalizedProductModelScope {
+    id: String,
+    path_glob: String,
+    role: String,
+    service_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NormalizedProductModelBinding {
+    binding_id: String,
+    repository_id: String,
+    revision_id: String,
+    status: String,
+    scopes: Vec<NormalizedProductModelScope>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NormalizedProductModelChange {
+    services: Vec<NormalizedProductModelService>,
+    bindings: Vec<NormalizedProductModelBinding>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProductModelChangePreflightResponse {
+    product_id: String,
+    state_hash: String,
+    normalized_change: NormalizedProductModelChange,
+    resulting_snapshot: Value,
+    resulting_snapshot_hash: String,
+    preflight_hash: String,
+    predicted_mutations: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApplyProductModelChangeRequest {
+    normalized_change: NormalizedProductModelChange,
+    state_hash: String,
+    preflight_hash: String,
+    actor: String,
+    reason: String,
+}
+
+fn default_active_status() -> String {
+    "active".into()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -652,6 +756,165 @@ async fn get_product_model_snapshot(
     if snapshot.product_id != product_id {
         return Err(ApiError::not_found("product_model_snapshot", &snapshot_id));
     }
+    Ok(Json(snapshot_response(snapshot)))
+}
+
+async fn get_product_model(
+    State(state): State<AppState>,
+    Path(product_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    let product = find_product(&state, &product_id).await?;
+    let snapshot = state
+        .store
+        .get_product_model_snapshot(&product.current_model_snapshot_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::not_found("product_model_snapshot", &product.current_model_snapshot_id)
+        })?;
+    let services = state.store.list_product_services(&product_id).await?;
+    let repositories = state.store.list_product_repositories(&product_id).await?;
+    let bindings = state
+        .store
+        .list_product_repository_bindings(&product_id)
+        .await?;
+    let mut binding_models = Vec::with_capacity(bindings.len());
+    for binding in bindings {
+        let revision = state
+            .store
+            .get_repository_binding_revision(&binding.current_revision_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::internal(format!(
+                    "binding {} references missing revision {}",
+                    binding.id, binding.current_revision_id
+                ))
+            })?;
+        let typed_scopes = state
+            .store
+            .list_repository_binding_scopes(&revision.id)
+            .await?;
+        binding_models.push(json!({
+            "id": binding.id,
+            "repository_id": binding.repository_id,
+            "status": binding.status,
+            "current_revision": revision,
+            "typed_scopes": typed_scopes,
+            "scope_model": if typed_scopes.is_empty() { "legacy" } else { "typed" },
+        }));
+    }
+    Ok(Json(json!({
+        "product": product_response(&state, product).await?,
+        "snapshot": snapshot_response(snapshot),
+        "services": services,
+        "repositories": repositories,
+        "bindings": binding_models,
+        "database_generation_id": state.store.get_database_generation().await?.map(|value| value.id),
+    })))
+}
+
+async fn preflight_product_model_change(
+    State(state): State<AppState>,
+    Path(product_id): Path<String>,
+    Json(request): Json<ProductModelChangePreflightRequest>,
+) -> Result<Json<ProductModelChangePreflightResponse>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    validate_required(&request.actor, "actor", 200)?;
+    validate_required(&request.reason, "reason", 1_000)?;
+    let product = find_product(&state, &product_id).await?;
+    let response =
+        build_product_model_change_preflight(&state, &product, request.services, request.bindings)
+            .await?;
+    Ok(Json(response))
+}
+
+async fn apply_product_model_change(
+    State(state): State<AppState>,
+    Path(product_id): Path<String>,
+    Json(request): Json<ApplyProductModelChangeRequest>,
+) -> Result<Json<ProductModelSnapshotResponse>, ApiError> {
+    ensure_repo_mode_enabled(&state)?;
+    validate_required(&request.actor, "actor", 200)?;
+    validate_required(&request.reason, "reason", 1_000)?;
+    let product = find_product(&state, &product_id).await?;
+    let current = product_response(&state, product.clone()).await?;
+    if request.state_hash != current.state_hash {
+        return Err(ApiError::conflict(
+            "product changed after the topology preview; refresh and review again",
+        ));
+    }
+    validate_normalized_product_model_change(&state, &product, &request.normalized_change).await?;
+    let snapshot =
+        product_model_v1alpha2_json(&state, &product, &request.normalized_change).await?;
+    let snapshot_hash = canonical_material_hash(&snapshot)?;
+    let expected_preflight_hash = canonical_material_hash(&json!({
+        "product_id": product.id,
+        "state_hash": current.state_hash,
+        "normalized_change": request.normalized_change,
+        "resulting_snapshot_hash": snapshot_hash,
+    }))?;
+    if request.preflight_hash != expected_preflight_hash {
+        return Err(ApiError::conflict(
+            "product topology differs from the reviewed preflight",
+        ));
+    }
+    let mut binding_revisions = Vec::with_capacity(request.normalized_change.bindings.len());
+    for binding in &request.normalized_change.bindings {
+        binding_revisions.push(ProductModelBindingRevision {
+            binding_id: binding.binding_id.clone(),
+            repository_id: binding.repository_id.clone(),
+            revision_id: binding.revision_id.clone(),
+            status: binding.status.clone(),
+            scopes: binding
+                .scopes
+                .iter()
+                .map(|scope| RepositoryBindingScope {
+                    id: scope.id.clone(),
+                    binding_revision_id: binding.revision_id.clone(),
+                    path_glob: scope.path_glob.clone(),
+                    role: scope.role.clone(),
+                    service_id: scope.service_id.clone(),
+                    created_at: String::new(),
+                })
+                .collect(),
+            evidence_json: json!({
+                "kind": "operator_product_model_revision",
+                "preflight_hash": request.preflight_hash,
+            }),
+            content_hash: canonical_material_hash(&json!({
+                "binding_id": binding.binding_id,
+                "repository_id": binding.repository_id,
+                "status": binding.status,
+                "scopes": binding.scopes,
+            }))?,
+        });
+    }
+    let model_revision = ApplyProductModelRevision {
+        product_id: product.id.clone(),
+        expected_state_version: product.state_version,
+        services: request
+            .normalized_change
+            .services
+            .iter()
+            .map(|service| ProductModelServiceRevision {
+                id: service.id.clone(),
+                service_key: service.service_key.clone(),
+                display_name: service.display_name.clone(),
+                description: service.description.clone(),
+                status: service.status.clone(),
+            })
+            .collect(),
+        bindings: binding_revisions,
+        snapshot_id: new_prefixed_id("pmodel"),
+        snapshot_json: snapshot,
+        snapshot_hash,
+        actor: request.actor.trim().into(),
+        reason: request.reason.trim().into(),
+    };
+    let snapshot = state
+        .store
+        .apply_product_model_revision(model_revision)
+        .await?;
     Ok(Json(snapshot_response(snapshot)))
 }
 
@@ -1492,8 +1755,20 @@ async fn execute_repository_onboarding_action(
                 serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
                     ApiError::internal(format!("stored onboarding proposal is invalid: {error}"))
                 })?;
+            validate_onboarding_product_proposals(&state, &onboarding, &typed).await?;
+            // Product topology and executable Repository onboarding are separate
+            // review boundaries. This switch exists only to finish an explicitly
+            // reviewed onboarding on a retained legacy generation.
             let model_change =
-                approved_onboarding_model_change(&state, &onboarding, &proposal, &typed).await?;
+                if std::env::var("PHARNESS_LEGACY_ONBOARDING_PRODUCT_MODEL_APPLY_ENABLED")
+                    .ok()
+                    .as_deref()
+                    == Some("true")
+                {
+                    approved_onboarding_model_change(&state, &onboarding, &proposal, &typed).await?
+                } else {
+                    None
+                };
             state
                 .store
                 .approve_repository_onboarding_proposal(ApproveRepositoryOnboardingProposal {
@@ -2629,7 +2904,9 @@ fn onboarding_action_result(action_id: &str) -> &'static str {
         "start_proposer" | "retry_proposer" => {
             "A versioned onboarding proposal is ready for review"
         }
-        "approve_proposal" => "The exact proposal revision becomes the reviewed configuration",
+        "approve_proposal" => {
+            "The exact executable proposal is approved; Product topology suggestions remain a separate Product-model review"
+        }
         "prepare_onboarding_patch" | "retry_onboarding_patch" => {
             "A bounded onboarding patch is materialized"
         }
@@ -3934,6 +4211,372 @@ pub(super) fn ensure_repo_mode_enabled(state: &AppState) -> Result<(), ApiError>
     }
 }
 
+async fn build_product_model_change_preflight(
+    state: &AppState,
+    product: &StoredProduct,
+    services: Vec<ProductModelServiceInput>,
+    bindings: Vec<ProductModelBindingInput>,
+) -> Result<ProductModelChangePreflightResponse, ApiError> {
+    let current = product_response(state, product.clone()).await?;
+    let existing_services = state.store.list_product_services(&product.id).await?;
+    let service_by_key = existing_services
+        .iter()
+        .map(|service| (service.service_key.as_str(), service))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let service_by_id = existing_services
+        .iter()
+        .map(|service| (service.id.as_str(), service))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut normalized_services = Vec::with_capacity(services.len());
+    let mut service_ids = std::collections::BTreeSet::new();
+    let mut service_keys = std::collections::BTreeSet::new();
+    for service in services {
+        let service_key = normalize_key(&service.service_key)?;
+        validate_required(&service.display_name, "service display_name", 120)?;
+        validate_required(&service.description, "service description", 2_000)?;
+        validate_product_model_status(&service.status, "service")?;
+        if !service_keys.insert(service_key.clone()) {
+            return Err(ApiError::bad_request(format!(
+                "duplicate service key {service_key}"
+            )));
+        }
+        let id = match service.id {
+            Some(id) => {
+                let existing = service_by_id.get(id.as_str()).ok_or_else(|| {
+                    ApiError::bad_request(format!(
+                        "service id {id} is not part of Product {}",
+                        product.id
+                    ))
+                })?;
+                if existing.service_key != service_key {
+                    return Err(ApiError::bad_request(format!(
+                        "service id {id} cannot change its stable service key"
+                    )));
+                }
+                id
+            }
+            None => service_by_key
+                .get(service_key.as_str())
+                .map(|service| service.id.clone())
+                .unwrap_or_else(|| new_prefixed_id("svc")),
+        };
+        if !service_ids.insert(id.clone()) {
+            return Err(ApiError::bad_request(format!("duplicate service id {id}")));
+        }
+        normalized_services.push(NormalizedProductModelService {
+            id,
+            service_key,
+            display_name: service.display_name.trim().into(),
+            description: service.description.trim().into(),
+            status: service.status,
+        });
+    }
+    normalized_services.sort_by(|left, right| {
+        left.service_key
+            .cmp(&right.service_key)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let service_id_by_key = normalized_services
+        .iter()
+        .map(|service| (service.service_key.as_str(), service.id.as_str()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let existing_bindings = state
+        .store
+        .list_product_repository_bindings(&product.id)
+        .await?;
+    if bindings.len() != existing_bindings.len() {
+        return Err(ApiError::bad_request(
+            "product-model changes must include every registered Repository binding",
+        ));
+    }
+    let binding_by_repository = existing_bindings
+        .iter()
+        .map(|binding| (binding.repository_id.as_str(), binding))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut seen_repositories = std::collections::BTreeSet::new();
+    let mut normalized_bindings = Vec::with_capacity(bindings.len());
+    for binding in bindings {
+        validate_product_model_status(&binding.status, "binding")?;
+        if !seen_repositories.insert(binding.repository_id.clone()) {
+            return Err(ApiError::bad_request(format!(
+                "duplicate Repository binding {}",
+                binding.repository_id
+            )));
+        }
+        let current_binding = binding_by_repository
+            .get(binding.repository_id.as_str())
+            .ok_or_else(|| {
+                ApiError::bad_request(format!(
+                    "Repository {} is not bound to Product {}",
+                    binding.repository_id, product.id
+                ))
+            })?;
+        if binding.scopes.is_empty() {
+            return Err(ApiError::bad_request(format!(
+                "Repository {} must have at least one reviewed scope",
+                binding.repository_id
+            )));
+        }
+        let revision_id = new_prefixed_id("rbindrev");
+        let mut normalized_scopes = Vec::with_capacity(binding.scopes.len());
+        let mut unique_scopes = std::collections::BTreeSet::new();
+        for scope in binding.scopes {
+            validate_repository_binding_scope(&scope.path_glob, &scope.role)?;
+            if scope.service_id.is_some() && scope.service_key.is_some() {
+                return Err(ApiError::bad_request(
+                    "scope must identify a Service by id or key, not both",
+                ));
+            }
+            let service_id = if let Some(id) = scope.service_id {
+                if !service_ids.contains(&id) {
+                    return Err(ApiError::bad_request(format!(
+                        "scope Service {id} is not part of the resulting Product model"
+                    )));
+                }
+                Some(id)
+            } else if let Some(key) = scope.service_key {
+                let key = normalize_key(&key)?;
+                Some(
+                    service_id_by_key
+                        .get(key.as_str())
+                        .ok_or_else(|| {
+                            ApiError::bad_request(format!(
+                                "scope Service key {key} is not part of the resulting Product model"
+                            ))
+                        })?
+                        .to_string(),
+                )
+            } else {
+                None
+            };
+            let unique = (
+                scope.path_glob.clone(),
+                scope.role.clone(),
+                service_id.clone(),
+            );
+            if !unique_scopes.insert(unique) {
+                return Err(ApiError::bad_request(format!(
+                    "duplicate scope {} ({})",
+                    scope.path_glob, scope.role
+                )));
+            }
+            normalized_scopes.push(NormalizedProductModelScope {
+                id: new_prefixed_id("rbscope"),
+                path_glob: scope.path_glob,
+                role: scope.role,
+                service_id,
+            });
+        }
+        normalized_scopes.sort_by(|left, right| {
+            left.path_glob
+                .cmp(&right.path_glob)
+                .then_with(|| left.role.cmp(&right.role))
+                .then_with(|| left.service_id.cmp(&right.service_id))
+        });
+        normalized_bindings.push(NormalizedProductModelBinding {
+            binding_id: current_binding.id.clone(),
+            repository_id: binding.repository_id,
+            revision_id,
+            status: binding.status,
+            scopes: normalized_scopes,
+        });
+    }
+    normalized_bindings.sort_by(|left, right| left.repository_id.cmp(&right.repository_id));
+    let normalized_change = NormalizedProductModelChange {
+        services: normalized_services,
+        bindings: normalized_bindings,
+    };
+    let resulting_snapshot =
+        product_model_v1alpha2_json(state, product, &normalized_change).await?;
+    let resulting_snapshot_hash = canonical_material_hash(&resulting_snapshot)?;
+    let preflight_hash = canonical_material_hash(&json!({
+        "product_id": product.id,
+        "state_hash": current.state_hash,
+        "normalized_change": normalized_change,
+        "resulting_snapshot_hash": resulting_snapshot_hash,
+    }))?;
+    Ok(ProductModelChangePreflightResponse {
+        product_id: product.id.clone(),
+        state_hash: current.state_hash,
+        normalized_change,
+        resulting_snapshot,
+        resulting_snapshot_hash,
+        preflight_hash,
+        predicted_mutations: vec![
+            "create or update the reviewed Service definitions".into(),
+            "create immutable typed Repository binding revisions".into(),
+            "create a pharness.dev/product-model/v1alpha2 snapshot".into(),
+        ],
+    })
+}
+
+async fn validate_normalized_product_model_change(
+    state: &AppState,
+    product: &StoredProduct,
+    change: &NormalizedProductModelChange,
+) -> Result<(), ApiError> {
+    let inputs = change
+        .services
+        .iter()
+        .map(|service| ProductModelServiceInput {
+            id: Some(service.id.clone()),
+            service_key: service.service_key.clone(),
+            display_name: service.display_name.clone(),
+            description: service.description.clone(),
+            status: service.status.clone(),
+        })
+        .collect::<Vec<_>>();
+    let existing_service_ids = state
+        .store
+        .list_product_services(&product.id)
+        .await?
+        .into_iter()
+        .map(|service| service.id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut service_ids = std::collections::BTreeSet::new();
+    let mut service_keys = std::collections::BTreeSet::new();
+    for service in &inputs {
+        let id = service.id.as_deref().unwrap_or_default();
+        if !id.starts_with("svc_") || id.len() < 8 || !service_ids.insert(id.to_string()) {
+            return Err(ApiError::bad_request(
+                "invalid or duplicate normalized Service id",
+            ));
+        }
+        let key = normalize_key(&service.service_key)?;
+        if key != service.service_key || !service_keys.insert(key) {
+            return Err(ApiError::bad_request(
+                "invalid or duplicate normalized Service key",
+            ));
+        }
+        validate_required(&service.display_name, "service display_name", 120)?;
+        validate_required(&service.description, "service description", 2_000)?;
+        validate_product_model_status(&service.status, "service")?;
+        if !existing_service_ids.contains(id) && !id.starts_with("svc_") {
+            return Err(ApiError::bad_request("invalid new Service identity"));
+        }
+    }
+    let current_bindings = state
+        .store
+        .list_product_repository_bindings(&product.id)
+        .await?;
+    if current_bindings.len() != change.bindings.len() {
+        return Err(ApiError::bad_request(
+            "normalized topology must include every Repository binding",
+        ));
+    }
+    let binding_map = current_bindings
+        .iter()
+        .map(|binding| (binding.id.as_str(), binding.repository_id.as_str()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut seen_bindings = std::collections::BTreeSet::new();
+    for binding in &change.bindings {
+        if binding_map.get(binding.binding_id.as_str()).copied()
+            != Some(binding.repository_id.as_str())
+            || !seen_bindings.insert(binding.binding_id.clone())
+            || !binding.revision_id.starts_with("rbindrev_")
+        {
+            return Err(ApiError::bad_request(
+                "normalized Repository binding identity is invalid",
+            ));
+        }
+        validate_product_model_status(&binding.status, "binding")?;
+        if binding.scopes.is_empty() {
+            return Err(ApiError::bad_request(
+                "Repository binding has no typed scopes",
+            ));
+        }
+        let mut unique = std::collections::BTreeSet::new();
+        for scope in &binding.scopes {
+            if !scope.id.starts_with("rbscope_") {
+                return Err(ApiError::bad_request("invalid binding scope identity"));
+            }
+            validate_repository_binding_scope(&scope.path_glob, &scope.role)?;
+            if scope
+                .service_id
+                .as_ref()
+                .is_some_and(|id| !service_ids.contains(id))
+            {
+                return Err(ApiError::bad_request(
+                    "binding scope references a Service outside the Product model",
+                ));
+            }
+            if !unique.insert((
+                scope.path_glob.as_str(),
+                scope.role.as_str(),
+                scope.service_id.as_deref(),
+            )) {
+                return Err(ApiError::bad_request("duplicate normalized binding scope"));
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn product_model_v1alpha2_json(
+    state: &AppState,
+    product: &StoredProduct,
+    change: &NormalizedProductModelChange,
+) -> Result<Value, ApiError> {
+    let mut repositories = state.store.list_product_repositories(&product.id).await?;
+    repositories.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(json!({
+        "schema_version": "pharness.dev/product-model/v1alpha2",
+        "organization_id": product.organization_id,
+        "product": {
+            "id": product.id,
+            "product_key": product.product_key,
+            "display_name": product.display_name,
+            "description": product.description,
+            "owner_principal": product.owner_principal,
+            "state_version": product.state_version + 1,
+        },
+        "services": change.services,
+        "repositories": repositories.iter().map(normalized_repository_model).collect::<Vec<_>>(),
+        "repository_bindings": change.bindings,
+    }))
+}
+
+fn validate_product_model_status(value: &str, resource: &str) -> Result<(), ApiError> {
+    if matches!(value, "active" | "retired") {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(format!(
+            "{resource} status must be active or retired"
+        )))
+    }
+}
+
+fn validate_repository_binding_scope(path_glob: &str, role: &str) -> Result<(), ApiError> {
+    if !matches!(
+        role,
+        "source" | "delivery" | "automation" | "product_integration" | "documentation"
+    ) {
+        return Err(ApiError::bad_request(format!(
+            "unknown Repository binding scope role {role}"
+        )));
+    }
+    if path_glob.is_empty()
+        || path_glob.len() > 256
+        || path_glob.starts_with('/')
+        || path_glob.contains('\\')
+        || path_glob.contains("//")
+        || path_glob
+            .split('/')
+            .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+    {
+        return Err(ApiError::bad_request(format!(
+            "unsafe repository-relative scope {path_glob:?}"
+        )));
+    }
+    globset::Glob::new(path_glob).map_err(|error| {
+        ApiError::bad_request(format!(
+            "malformed Repository scope glob {path_glob:?}: {error}"
+        ))
+    })?;
+    Ok(())
+}
+
 async fn find_product(state: &AppState, id: &str) -> Result<StoredProduct, ApiError> {
     state
         .store
@@ -4095,7 +4738,7 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 mod tests {
     use super::{
         normalize_key, onboarding_patch_paths, parse_github_repository_url,
-        readiness_current_state, validate_binding_scope,
+        readiness_current_state, validate_binding_scope, validate_repository_binding_scope,
     };
     use serde_json::json;
 
@@ -4117,6 +4760,34 @@ mod tests {
                 "accepted {invalid}"
             );
         }
+    }
+
+    #[test]
+    fn typed_product_scopes_accept_bounded_globs_and_reject_escapes() {
+        for (path, role) in [
+            ("**", "source"),
+            ("charts/yfinance-wrapper/**", "delivery"),
+            (
+                "charts/root-app/templates/yfinance-wrapper.yaml",
+                "product_integration",
+            ),
+            ("charts/root-app/templates/*.yaml", "product_integration"),
+        ] {
+            assert!(
+                validate_repository_binding_scope(path, role).is_ok(),
+                "rejected {path}"
+            );
+        }
+        for path in [
+            "",
+            "/charts/**",
+            "../charts/**",
+            "charts/../secret",
+            "charts\\**",
+        ] {
+            assert!(validate_repository_binding_scope(path, "delivery").is_err());
+        }
+        assert!(validate_repository_binding_scope("charts/**", "cluster_owner").is_err());
     }
 
     #[test]

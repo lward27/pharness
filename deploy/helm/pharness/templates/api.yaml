@@ -38,13 +38,20 @@ roleRef:
   kind: Role
   name: pharness-api-jobs
 ---
+{{- if .Values.api.persistence.create }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pharness-api-data
+  name: {{ .Values.api.persistence.claimName }}
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/part-of: pharness
+    pharness.dev/data-generation: {{ .Values.api.databaseGeneration.id | quote }}
+  {{- if .Values.api.persistence.retain }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false
+  {{- end }}
 spec:
   accessModes:
     - ReadWriteOnce
@@ -53,6 +60,29 @@ spec:
     requests:
       storage: {{ .Values.api.persistence.size }}
 ---
+{{- end }}
+{{- if .Values.archivePersistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.archivePersistence.claimName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    pharness.dev/data-generation: {{ .Values.archivePersistence.archivedGenerationId | quote }}
+    pharness.dev/archive-role: database-backup
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.archivePersistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.archivePersistence.size }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -95,6 +125,28 @@ spec:
               value: "0.0.0.0:4777"
             - name: PHARNESS_DB_PATH
               value: {{ .Values.api.dbPath | quote }}
+            - name: PHARNESS_DATABASE_GENERATION_ID
+              value: {{ .Values.api.databaseGeneration.id | quote }}
+            - name: PHARNESS_DATABASE_GENERATION_PURPOSE
+              value: {{ .Values.api.databaseGeneration.purpose | quote }}
+            - name: PHARNESS_DATABASE_GENERATION_ADOPT_EXISTING
+              value: {{ .Values.api.databaseGeneration.adoptExisting | quote }}
+            - name: PHARNESS_DATABASE_GENERATION_ACCEPTED
+              value: {{ .Values.api.databaseGeneration.accepted | quote }}
+            - name: PHARNESS_OPERATIONAL_MODE
+              value: {{ .Values.api.operationalMode | quote }}
+            - name: PHARNESS_LEGACY_WORK_ITEM_CREATION_ENABLED
+              value: {{ .Values.api.legacyWorkItemCreationEnabled | quote }}
+            - name: PHARNESS_LEGACY_ONBOARDING_PRODUCT_MODEL_APPLY_ENABLED
+              value: "false"
+            - name: PHARNESS_RETENTION_AUTOMATIC_EXECUTION_ENABLED
+              value: {{ .Values.retention.automaticExecutionEnabled | quote }}
+            - name: PHARNESS_RETENTION_PREVIEW_ONLY
+              value: {{ .Values.retention.previewOnly | quote }}
+            - name: PHARNESS_RETENTION_SCHEDULED_ENABLED
+              value: {{ .Values.retention.scheduledEnabled | quote }}
+            - name: PHARNESS_RETENTION_INTERVAL_SECONDS
+              value: {{ .Values.retention.intervalSeconds | quote }}
             - name: HOME
               value: /tmp
             - name: PHARNESS_WORKER_MODE
@@ -325,7 +377,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: pharness-api-data
+            claimName: {{ ternary .Values.api.persistence.claimName .Values.api.persistence.existingClaim .Values.api.persistence.create }}
         - name: tmp
           emptyDir: {}
 ---

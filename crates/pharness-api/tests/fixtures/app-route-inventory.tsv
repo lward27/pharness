@@ -117,6 +117,9 @@ POST	/api/products	operator
 GET	/api/products/:product_id	operator
 PATCH	/api/products/:product_id	operator
 GET	/api/products/:product_id/overview	operator
+GET	/api/products/:product_id/model	operator
+POST	/api/products/:product_id/model-changes	operator
+POST	/api/products/:product_id/model-changes/preflight	operator
 GET	/api/products/:product_id/model-snapshots/:snapshot_id	operator
 GET	/api/products/:product_id/repositories	operator
 POST	/api/products/:product_id/repositories	operator
@@ -170,6 +173,14 @@ GET	/api/runs/summary	operator
 GET	/api/search	operator
 GET	/api/scopes/options	operator
 POST	/api/system/capabilities/:capability/preflight	operator
+GET	/api/system/archives	operator
+POST	/api/system/archives	operator
+POST	/api/system/archives/:archive_id/delete	operator
+GET	/api/system/data-inventory	operator
+GET	/api/system/retention/previews	operator
+POST	/api/system/retention/previews	operator
+POST	/api/system/retention/previews/:preview_id/execute	operator
+GET	/api/system/retention/receipts	operator
 GET	/api/stage-executions/:stage_execution_id	operator
 GET	/api/stage-executions/:stage_execution_id/context-pack	operator
 GET	/api/stage-executions/:stage_execution_id/outcome	operator
@@ -192,6 +203,7 @@ POST	/api/work-items/:work_item_id/pipeline-intent	operator
 GET	/api/work-items/:work_item_id/pipeline-intent-context	operator
 POST	/api/work-items/:work_item_id/reconcile	operator
 POST	/api/work-items/:work_item_id/replan	operator
+POST	/api/work-items/:work_item_id/retention-holds	operator
 GET	/api/work-items/:work_item_id/rollback-intents	operator
 POST	/api/work-items/:work_item_id/rollback-intents/prepare	operator
 POST	/api/work-items/:work_item_id/transition	operator
@@ -208,6 +220,7 @@ POST	/api/work-plans/:work_plan_id/revise	operator
 POST	/api/work-plans/:work_plan_id/transition	operator
 POST	/api/work-plans/:work_plan_id/trusted-envelope	operator
 POST	/api/work-plans/from-remediation-plan	operator
+POST	/api/retention-holds/:hold_id/release	operator
 GET	/api/workspaces	operator
 GET	/api/workspaces/:workspace_id	operator
 GET	/health	open

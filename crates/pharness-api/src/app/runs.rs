@@ -842,6 +842,16 @@ pub(super) async fn get_run_operator_summary(
         .get_run(&run_id)
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    if run.retention_state == "compacted" {
+        let summary = run.sealed_summary.ok_or_else(|| {
+            ApiError::internal("compacted Run is missing its immutable sealed summary")
+        })?;
+        let response =
+            serde_json::from_value::<RunOperatorSummaryResponse>(summary).map_err(|error| {
+                ApiError::internal(format!("sealed RunSummary is invalid: {error}"))
+            })?;
+        return Ok(Json(response));
+    }
     let events = state.store.list_events(&run_id).await?;
     let changes = state.store.list_file_changes(&run_id).await?;
     let scope = RunScope::from_execution_target(&run.execution_target_json).unwrap_or_default();

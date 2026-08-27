@@ -175,6 +175,26 @@ function RunArtifacts({ artifacts }: { artifacts: any[] }) {
   return <details className="attempt-artifacts" open><summary>Additional durable artifacts <strong>{artifacts.length}</strong></summary><div className="artifact-grid">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><span>{artifact.kind}</span><strong>{artifact.label}</strong><small>{artifact.mime_type ?? artifact.path ?? compactId(artifact.id)}</small><p>{artifactSummary(artifact)}</p></div>)}</div></details>;
 }
 
+function CompactedRunSummary({ run, operatorSummary }: { run:any; operatorSummary:any }) {
+  const summary = run?.sealed_summary ?? operatorSummary ?? {};
+  return <section className="attempt-boundary-banner is-compacted" role="status">
+    <FileText size={22} />
+    <div>
+      <span className="eyebrow">Retention lifecycle</span>
+      <h3>Raw Run payload intentionally expired</h3>
+      <p>The immutable Run identity, sealed summary, changed-path hashes, acceptance results, and evidence references remain available. Raw messages, event payloads, tool bodies, and diff content were compacted by policy.</p>
+      <div className="environment-fact-grid">
+        <ReviewItem label="Turns / tokens" value={`${summary.turns ?? 0} · ${(summary.actual_total_tokens ?? 0).toLocaleString()}`} />
+        <ReviewItem label="Tools / failures" value={`${summary.tools_completed ?? 0} · ${summary.tools_failed ?? 0}`} />
+        <ReviewItem label="Changed paths" value={(summary.changed_paths ?? []).length} />
+        <ReviewItem label="Acceptance passed" value={(summary.acceptance_evidence ?? []).length} />
+        <ReviewItem label="Approvals / wait" value={`${summary.approval_count ?? 0} · ${formatRunDuration((summary.approval_wait_ms ?? 0) / 1000)}`} />
+        <ReviewItem label="Stop reason" value={summary.stop_reason ?? run?.stop_reason ?? "Not recorded"} />
+      </div>
+    </div>
+  </section>;
+}
+
 export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorName, embedded = false }: RunDetailViewProps) {
   const [state, setState] = useState<any>({ status: runId ? "loading" : "empty", detail: null, error: null });
   const [reloadToken, setReloadToken] = useState(0);
@@ -254,6 +274,7 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
   if (!runId) return <EmptyState title="No run selected" body="Open a run from the Queue view to inspect events, diffs, artifacts, and final result JSON." />;
   const pendingApprovals = operatorSummary?.pending_approvals ?? [];
   const active = isActiveRun(run);
+  const compacted = run?.retention_state === "compacted";
   return <section className={`run-detail-view attempt-workspace ${embedded ? "is-embedded" : "is-standalone"}`}>
     <header className="attempt-workspace-header">
       <div><span className="eyebrow">{embedded ? "Current isolated run" : "Run Detail"}</span>{embedded ? <h3>{run?.task ?? `Loading ${compactId(runId)}...`}</h3> : <h1>Run Detail</h1>}<p>{embedded ? <CopyIdentifier value={runId} label={run?.task ?? "Run"} /> : (run?.task ?? `Loading ${compactId(runId)}...`)}</p></div>
@@ -265,14 +286,16 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
 
     {state.error ? <div className="api-banner">Run detail failed: {state.error}</div> : null}{streamState.status === "error" ? <div className="api-banner">Event stream: {streamState.error}</div> : null}{runNotice ? <span className="action-notice">{runNotice}</span> : null}
 
+    {compacted ? <CompactedRunSummary run={run} operatorSummary={operatorSummary} /> : null}
+
     {run?.status === "budget_extension_required" ? <section className="attempt-boundary-banner is-budget"><Warning size={22} /><div><span className="eyebrow">Budget boundary</span><h3>Workspace retained for in-place extension</h3><p>The run transcript and workspace remain intact. Review the current WorkItem action to authorize only the server-derived extension.</p></div></section> : null}
     {pendingApprovals.length ? <section className="attempt-boundary-banner attempt-inline-approval"><Warning size={22} /><div><span className="eyebrow">Inline tool approval</span><h3>Model action is paused for review</h3><p>Pending approval {pendingApprovals.join(", ")}. The exact action remains durable and execution resumes only after this decision.</p><label>Decision reason<textarea rows={2} value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} /></label><div className="inline-approval-actions"><button className="primary-action" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("approve")}>Approve and resume</button><button className="deny" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("deny")}>Deny</button></div></div></section> : null}
 
     <BudgetPanel run={run} operatorSummary={operatorSummary} />
-    <EnvironmentPanel preparation={preparation} active={run?.status === "preparing" || preparation?.status === "failed"} />
+    {!compacted ? <EnvironmentPanel preparation={preparation} active={run?.status === "preparing" || preparation?.status === "failed"} /> : null}
 
     <div className="attempt-workspace-grid">
-      <div className="attempt-workspace-primary"><ToolStream events={events} /><AcceptancePanel operatorSummary={operatorSummary} /></div>
+      <div className="attempt-workspace-primary">{!compacted ? <ToolStream events={events} /> : null}<AcceptancePanel operatorSummary={operatorSummary} /></div>
       <aside className="attempt-workspace-evidence"><WorkspaceChanges diff={detail?.diff} changes={changes} operatorSummary={operatorSummary} /><ReliabilityPanel operatorSummary={operatorSummary} run={run} /></aside>
     </div>
 

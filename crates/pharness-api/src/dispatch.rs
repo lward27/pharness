@@ -248,6 +248,45 @@ impl RunDispatcher {
         }
     }
 
+    pub async fn cleanup_retention_resources(
+        &self,
+        resources: &[serde_json::Value],
+    ) -> anyhow::Result<Vec<serde_json::Value>> {
+        if resources.is_empty() {
+            return Ok(Vec::new());
+        }
+        match self {
+            Self::Kubernetes(dispatcher) => dispatcher.cleanup_retention_resources(resources).await,
+            Self::Disabled | Self::Local(_) => {
+                anyhow::bail!("Kubernetes retention resources require kubernetes_job worker mode")
+            }
+        }
+    }
+
+    pub async fn delete_archive_claims(
+        &self,
+        archive_id: &str,
+        archived_generation_id: &str,
+        database_claim: &str,
+        archive_claim: &str,
+    ) -> anyhow::Result<Vec<serde_json::Value>> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher
+                    .delete_archive_claims(
+                        archive_id,
+                        archived_generation_id,
+                        database_claim,
+                        archive_claim,
+                    )
+                    .await
+            }
+            Self::Disabled | Self::Local(_) => {
+                anyhow::bail!("archive deletion requires kubernetes_job worker mode")
+            }
+        }
+    }
+
     /// The workspace the run actually executes in. Kubernetes attempts run
     /// in the Job workspace volume, not in an operator-local path.
     pub fn effective_cwd(&self, requested: &str) -> String {
@@ -2778,7 +2817,6 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     async fn reap_once(&self) -> anyhow::Result<()> {
         self.reap_run_jobs().await?;
         self.reap_onboarding_jobs().await?;
-        self.reap_run_workspace_claims().await?;
         self.reap_tekton_executor_jobs().await
     }
 
@@ -2876,51 +2914,286 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         Ok(())
     }
 
-    async fn reap_run_workspace_claims(&self) -> anyhow::Result<()> {
-        let selector = format!("{JOB_NAME_LABEL}={WORKSPACE_CLAIM_NAME_VALUE}");
-        let output = tokio::process::Command::new(&self.kubectl_bin)
-            .args([
-                "get",
-                "persistentvolumeclaims",
-                "-n",
-                &self.config.namespace,
-                "-l",
-                &selector,
-                "-o",
-                "json",
-            ])
+    async fn cleanup_retention_resources(
+        &self,
+        resources: &[serde_json::Value],
+    ) -> anyhow::Result<Vec<serde_json::Value>> {
+        let pods_output = tokio::process::Command::new(&self.kubectl_bin)
+            .args(["get", "pods", "-n", &self.config.namespace, "-o", "json"])
             .output()
             .await?;
-        if !output.status.success() {
+        if !pods_output.status.success() {
             anyhow::bail!(
-                "kubectl get workspace claims failed: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "kubectl get pods failed during retention precondition: {}",
+                String::from_utf8_lossy(&pods_output.stderr)
             );
         }
-        let claims: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-        for claim in claims
-            .get("items")
-            .and_then(serde_json::Value::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let Some(run_label) = claim
-                .pointer("/metadata/labels")
-                .and_then(|labels| labels.get(RUN_ID_LABEL))
+        let pods: serde_json::Value = serde_json::from_slice(&pods_output.stdout)?;
+        let mut cleaned = Vec::new();
+        for resource in resources {
+            let workspace_id = resource
+                .get("workspace_id")
                 .and_then(serde_json::Value::as_str)
-            else {
-                continue;
-            };
-            let run_id_text = run_label_to_run_id(run_label);
-            let run_id = pharness_core::RunId::new(run_id_text.clone());
-            let terminal = self.store.get_run(&run_id).await?.map_or(true, |run| {
-                matches!(run.status.as_str(), "completed" | "failed" | "cancelled")
-            });
-            if terminal {
-                self.delete_workspace_claim(&run_id_text).await?;
+                .ok_or_else(|| anyhow::anyhow!("retention workspace has no workspace_id"))?;
+            let claim_name = resource
+                .get("pvc_name")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("retention workspace has no pvc_name"))?;
+            let pvc_identity = resource
+                .get("pvc_identity")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("retention workspace has no PVC identity"))?;
+            let pvc_identity_kind = resource
+                .get("pvc_identity_kind")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("retention workspace has no PVC identity kind"))?;
+            if claim_name != workspace_claim_name(pvc_identity) {
+                anyhow::bail!(
+                    "retention PVC name does not match its server-derived workspace identity"
+                );
             }
+            let pvc_output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "get",
+                    "persistentvolumeclaim",
+                    claim_name,
+                    "-n",
+                    &self.config.namespace,
+                    "--ignore-not-found=true",
+                    "-o",
+                    "json",
+                ])
+                .output()
+                .await?;
+            if !pvc_output.status.success() {
+                anyhow::bail!(
+                    "kubectl get retention PVC failed: {}",
+                    String::from_utf8_lossy(&pvc_output.stderr)
+                );
+            }
+            if !pvc_output.stdout.is_empty() {
+                let pvc: serde_json::Value = serde_json::from_slice(&pvc_output.stdout)?;
+                let labels = pvc
+                    .pointer("/metadata/labels")
+                    .and_then(serde_json::Value::as_object)
+                    .ok_or_else(|| anyhow::anyhow!("retention PVC has no PHarness labels"))?;
+                let expected_identity_label = if pvc_identity_kind == "workspace" {
+                    WORKSPACE_ID_LABEL
+                } else if pvc_identity_kind == "run" {
+                    RUN_ID_LABEL
+                } else {
+                    anyhow::bail!("retention PVC identity kind is unsupported");
+                };
+                if labels
+                    .get(JOB_NAME_LABEL)
+                    .and_then(serde_json::Value::as_str)
+                    != Some(WORKSPACE_CLAIM_NAME_VALUE)
+                    || labels
+                        .get(expected_identity_label)
+                        .and_then(serde_json::Value::as_str)
+                        != Some(job_label_value(pvc_identity).as_str())
+                {
+                    anyhow::bail!("retention PVC is not labeled for the exact PHarness workspace");
+                }
+                let mounted = pods
+                    .get("items")
+                    .and_then(serde_json::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .any(|pod| {
+                        let phase = pod
+                            .pointer("/status/phase")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("Unknown");
+                        !matches!(phase, "Succeeded" | "Failed")
+                            && pod
+                                .pointer("/spec/volumes")
+                                .and_then(serde_json::Value::as_array)
+                                .into_iter()
+                                .flatten()
+                                .any(|volume| {
+                                    volume
+                                        .pointer("/persistentVolumeClaim/claimName")
+                                        .and_then(serde_json::Value::as_str)
+                                        == Some(claim_name)
+                                })
+                    });
+                if mounted {
+                    anyhow::bail!("retention PVC is still mounted by a nonterminal Pod");
+                }
+                let deleted = tokio::process::Command::new(&self.kubectl_bin)
+                    .args([
+                        "delete",
+                        "persistentvolumeclaim",
+                        claim_name,
+                        "-n",
+                        &self.config.namespace,
+                        "--ignore-not-found=true",
+                        "--wait=false",
+                    ])
+                    .output()
+                    .await?;
+                if !deleted.status.success() {
+                    anyhow::bail!(
+                        "kubectl delete retention PVC failed: {}",
+                        String::from_utf8_lossy(&deleted.stderr)
+                    );
+                }
+            }
+            for run_id in resource
+                .get("run_ids")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+            {
+                let selector = format!(
+                    "{RUN_ID_LABEL}={},{}",
+                    job_label_value(run_id),
+                    JOB_NAME_LABEL
+                );
+                let deleted = tokio::process::Command::new(&self.kubectl_bin)
+                    .args([
+                        "delete",
+                        "jobs",
+                        "-n",
+                        &self.config.namespace,
+                        "-l",
+                        &selector,
+                        "--ignore-not-found=true",
+                        "--wait=false",
+                    ])
+                    .output()
+                    .await?;
+                if !deleted.status.success() {
+                    anyhow::bail!(
+                        "kubectl delete retention Jobs failed: {}",
+                        String::from_utf8_lossy(&deleted.stderr)
+                    );
+                }
+            }
+            cleaned.push(serde_json::json!({
+                "workspace_id":workspace_id,
+                "pvc_name":claim_name,
+                "namespace":self.config.namespace,
+                "status":"deleted_or_already_absent",
+            }));
         }
-        Ok(())
+        Ok(cleaned)
+    }
+
+    async fn delete_archive_claims(
+        &self,
+        archive_id: &str,
+        archived_generation_id: &str,
+        database_claim: &str,
+        archive_claim: &str,
+    ) -> anyhow::Result<Vec<serde_json::Value>> {
+        let pods_output = tokio::process::Command::new(&self.kubectl_bin)
+            .args(["get", "pods", "-n", &self.config.namespace, "-o", "json"])
+            .output()
+            .await?;
+        if !pods_output.status.success() {
+            anyhow::bail!("could not verify archive PVC mount state");
+        }
+        let pods: serde_json::Value = serde_json::from_slice(&pods_output.stdout)?;
+        let mut deleted = Vec::new();
+        for (claim_name, role) in [(database_claim, "database"), (archive_claim, "archive")] {
+            let output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "get",
+                    "persistentvolumeclaim",
+                    claim_name,
+                    "-n",
+                    &self.config.namespace,
+                    "--ignore-not-found=true",
+                    "-o",
+                    "json",
+                ])
+                .output()
+                .await?;
+            if !output.status.success() {
+                anyhow::bail!("could not inspect exact archive PVC {claim_name}");
+            }
+            if output.stdout.is_empty() {
+                deleted.push(
+                    serde_json::json!({"claim":claim_name,"role":role,"status":"already_absent"}),
+                );
+                continue;
+            }
+            let pvc: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+            let labels = pvc
+                .pointer("/metadata/labels")
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| anyhow::anyhow!("archive PVC {claim_name} has no labels"))?;
+            if labels
+                .get("app.kubernetes.io/part-of")
+                .and_then(serde_json::Value::as_str)
+                != Some("pharness")
+                || labels
+                    .get("pharness.dev/data-generation")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(archived_generation_id)
+            {
+                anyhow::bail!(
+                    "archive PVC {claim_name} is not bound to the archived PHarness generation"
+                );
+            }
+            if role == "archive" {
+                if labels
+                    .get("pharness.dev/archive-role")
+                    .and_then(serde_json::Value::as_str)
+                    != Some("database-backup")
+                {
+                    anyhow::bail!("archive backup PVC does not have the database-backup role");
+                }
+                if let Some(label_archive_id) = labels
+                    .get("pharness.dev/archive-id")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    if label_archive_id != archive_id {
+                        anyhow::bail!("archive backup PVC is bound to a different ArchiveRecord");
+                    }
+                }
+            }
+            let mounted = pods
+                .get("items")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .any(|pod| {
+                    pod.pointer("/spec/volumes")
+                        .and_then(serde_json::Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .any(|volume| {
+                            volume
+                                .pointer("/persistentVolumeClaim/claimName")
+                                .and_then(serde_json::Value::as_str)
+                                == Some(claim_name)
+                        })
+                });
+            if mounted {
+                anyhow::bail!("archive PVC {claim_name} is still mounted");
+            }
+            let output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "delete",
+                    "persistentvolumeclaim",
+                    claim_name,
+                    "-n",
+                    &self.config.namespace,
+                    "--ignore-not-found=true",
+                    "--wait=false",
+                ])
+                .output()
+                .await?;
+            if !output.status.success() {
+                anyhow::bail!("could not delete exact archive PVC {claim_name}");
+            }
+            deleted.push(serde_json::json!({"claim":claim_name,"role":role,"status":"deleted"}));
+        }
+        Ok(deleted)
     }
 
     async fn reap_run_jobs(&self) -> anyhow::Result<()> {
@@ -4595,6 +4868,8 @@ mod tests {
             run_budget: Default::default(),
             budget_consumption: Default::default(),
             stop_reason: None,
+            retention_state: "retained".into(),
+            sealed_summary: None,
             started_at: "0".to_string(),
             finished_at: None,
             cancel_requested_at: None,
