@@ -1,6 +1,8 @@
 use super::super::products::{
-    internal_onboarding_contract_validation_context, internal_onboarding_patch_outcome,
-    InternalOnboardingContractValidationQuery, OnboardingPatchOutcomeRequest,
+    internal_onboarding_contract_validation_context,
+    internal_onboarding_contract_validation_outcome, internal_onboarding_patch_outcome,
+    InternalOnboardingContractValidationQuery, OnboardingContractValidationOutcomeRequest,
+    OnboardingPatchOutcomeRequest,
 };
 use super::characterization::{test_state, test_state_with_git_observer};
 use super::{
@@ -25,11 +27,27 @@ struct RepoDeliveryFixture {
 
 #[tokio::test]
 async fn existing_canonical_contract_records_no_change_provenance_without_a_source_pr() {
-    let state = test_state_with_git_observer(
+    let mut state = test_state_with_git_observer(
         "/bin/true".into(),
         "https://github.com/example/no-change.git".into(),
     )
     .await;
+    state.environment_profiles = std::sync::Arc::new(vec![pharness_core::EnvironmentProfile {
+        id: "python-3.11".into(),
+        active: true,
+        image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+        revision: "b".repeat(40),
+        platform: "linux/amd64".into(),
+        required_executables: vec!["python".into()],
+        preparation_strategy: pharness_core::PreparationStrategy::PythonHashedRequirements,
+        service_account: "pharness-python-runner".into(),
+        repository_allowlist: vec!["https://github.com/example/no-change.git".into()],
+        limits: pharness_core::EnvironmentProfileLimits {
+            cpu: "1".into(),
+            memory: "1Gi".into(),
+            ephemeral_storage: "1Gi".into(),
+        },
+    }]);
     state
         .store
         .ensure_bootstrap_organization(&state.repo_mode.organization)
@@ -140,6 +158,16 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
         .await
         .unwrap()
         .unwrap();
+    let candidate_contract = json!({
+        "api_version":"pharness.dev/v1alpha1",
+        "environment_profile":"python-3.11",
+        "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":format!("{}", "d".repeat(64))},
+        "writable_paths":["src/**","tests/**","readme.md"],
+        "acceptance_commands":[{"name":"unit-tests","command":"python -m unittest discover -s tests -v"}],
+        "roots":{"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
+        "agent_network":"denied",
+        "package_installation":"preparation_only"
+    });
     let proposal = state
         .store
         .create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
@@ -150,16 +178,7 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
                 "schema_version":"pharness.dev/repository-onboarding-proposal/v1alpha1",
                 "discovery_id":"rdisc_no_change",
                 "discovery_hash":"sha256:discovery-no-change",
-                "candidate_contract":{
-                    "api_version":"pharness.dev/v1alpha1",
-                    "environment_profile":"python-3.11",
-                    "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":format!("{}", "d".repeat(64))},
-                    "writable_paths":["src/**","tests/**","readme.md"],
-                    "acceptance_commands":[{"name":"unit-tests","command":"python -m unittest discover -s tests -v"}],
-                    "roots":{"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
-                    "agent_network":"denied",
-                    "package_installation":"preparation_only"
-                },
+                "candidate_contract":candidate_contract.clone(),
                 "instructions":"Existing reviewed instructions.\n",
                 "service_proposals":[],
                 "binding_proposals":[],
@@ -251,8 +270,8 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
         .await
         .unwrap();
     let Json(context) = internal_onboarding_contract_validation_context(
-        State(state),
-        Path(registered.onboarding.id),
+        State(state.clone()),
+        Path(registered.onboarding.id.clone()),
         Query(InternalOnboardingContractValidationQuery {
             execution_id: "onbvalidate_no_change".into(),
         }),
@@ -262,6 +281,40 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
     let context = serde_json::to_value(context).unwrap();
     assert_eq!(context["source_commit"], SOURCE_SHA);
     assert_eq!(context["proposal_id"], "rprop_no_change");
+
+    let Json(outcome) = internal_onboarding_contract_validation_outcome(
+        State(state.clone()),
+        Path(registered.onboarding.id),
+        Json(OnboardingContractValidationOutcomeRequest {
+            status: "succeeded".into(),
+            contract: Some(candidate_contract),
+            contract_content_hash: Some(format!("sha256:{}", "e".repeat(64))),
+            contract_source: Some("canonical".into()),
+            warnings: Vec::new(),
+            error_code: None,
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome["onboarding"]["status"], "contract_ready");
+    let contract_version_id = outcome["onboarding"]["contract_version_id"]
+        .as_str()
+        .unwrap();
+    let contract_version = state
+        .store
+        .get_repository_contract_version(contract_version_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(contract_version.merge_provenance["source_delivery_intent_id"].is_null());
+    assert_eq!(
+        contract_version.merge_provenance["no_change_artifact_id"],
+        artifact_id
+    );
+    assert_eq!(
+        contract_version.merge_provenance["no_change"]["changed_paths"],
+        json!([])
+    );
 }
 
 async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
