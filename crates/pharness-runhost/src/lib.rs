@@ -327,8 +327,13 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
     if serialized_context.len() / 4 > 16_000 {
         anyhow::bail!("agent_profile AgentContext exceeds the 16,000-token limit");
     }
+    let profile_constraint = if id == "repository-onboarding-proposer" {
+        "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids. Generic language names and shortened aliases are invalid."
+    } else {
+        ""
+    };
     Ok(Some(format!(
-        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success.\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success.{profile_constraint}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
     )))
 }
 
@@ -1372,10 +1377,17 @@ mod workspace_source_tests {
             "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
             "subject":{"kind":"repository_onboarding","id":"ronb_test"},
             "discovery":{"id":"rdisc_test","hash":format!("sha256:{}", "a".repeat(64))},
+            "contract_constraints":{
+                "active_environment_profile_ids":["python-3.11"],
+            },
         });
 
         let instruction = profile_instruction(&run).unwrap().unwrap();
         assert!(instruction.contains("repository_onboarding stage"));
+        assert!(instruction.contains(
+            "candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids"
+        ));
+        assert!(instruction.contains("python-3.11"));
 
         let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
         let proposal = serde_json::json!({
