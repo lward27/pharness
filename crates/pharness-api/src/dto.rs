@@ -41,6 +41,8 @@ pub struct RunResponse {
     pub budget_consumption: RunBudgetConsumption,
     pub stop_reason: Option<String>,
     pub ownership: RunOwnershipResponse,
+    pub retention_state: String,
+    pub sealed_summary: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -97,6 +99,8 @@ impl From<StoredRun> for RunResponse {
             budget_consumption: run.budget_consumption,
             stop_reason: run.stop_reason,
             ownership,
+            retention_state: run.retention_state,
+            sealed_summary: run.sealed_summary,
         }
     }
 }
@@ -143,7 +147,7 @@ pub struct RunDiffResponse {
     pub diff: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunOperatorSummaryResponse {
     pub run_id: RunId,
     pub turns: u32,
@@ -972,6 +976,9 @@ pub struct SystemReadinessResponse {
     pub runtime_image_digest: String,
     pub ui_image_digest: String,
     pub platform_versions_match: bool,
+    pub database_generation: serde_json::Value,
+    pub operational_mode: String,
+    pub legacy_work_item_creation_enabled: bool,
     pub capabilities: Vec<CapabilityStatusResponse>,
     pub repository_allowlists: serde_json::Value,
     pub targets: serde_json::Value,

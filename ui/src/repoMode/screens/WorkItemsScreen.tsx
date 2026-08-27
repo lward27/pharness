@@ -132,7 +132,7 @@ function History({ flow }: any) {
 }
 
 function HistoryRecords({ title, records = [] }: { title:string; records?:any[] }) {
-  return <details className="repo-history-group"><summary>{title}<span className="repo-count">{records.length}</span></summary><RecordList values={records.map(record => ({status:record.status,id:record.id,revision:record.revision,created_at:formatMoment(record.created_at)}))} empty={`No ${title}.`} /></details>;
+  return <details className="repo-history-group"><summary>{title}<span className="repo-count">{records.length}</span></summary><RecordList values={records.map(record => ({status:record.status,id:record.id,revision:record.revision,retention:record.retention_state === "compacted" ? "raw detail intentionally expired; sealed summary retained" : record.retention_state ? "raw detail retained" : undefined,created_at:formatMoment(record.created_at)}))} empty={`No ${title}.`} /></details>;
 }
 
 const defaultBudget = { initial_turns:48, hard_turns:100, initial_tokens:400000, hard_tokens:1000000, active_execution_seconds:3600, recoverable_tool_errors:4, identical_failures:2, verification_reserve_turns:8 };

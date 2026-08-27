@@ -36,7 +36,18 @@ api:
   replicas: 1
   host: pharness-api.lucas.engineering
   dbPath: /data/pharness.db
+  operationalMode: normal
+  legacyWorkItemCreationEnabled: false
+  databaseGeneration:
+    id: dbgen_legacy_20260826
+    purpose: legacy-safety-generation
+    adoptExisting: true
+    accepted: false
   persistence:
+    create: true
+    claimName: pharness-api-data
+    existingClaim: ""
+    retain: true
     storageClass: local-path
     size: 2Gi
   fireworksSecretName: pharness-fireworks
@@ -58,6 +69,23 @@ api:
     limits:
       cpu: 1000m
       memory: 1Gi
+
+retention:
+  scheduledEnabled: true
+  intervalSeconds: 86400
+  automaticExecutionEnabled: false
+  previewOnly: true
+
+# A separately retained volume for consistent offline database archives. It is
+# tied to the archived generation, not to whichever database generation is
+# currently active after cutover.
+archivePersistence:
+  enabled: true
+  claimName: pharness-data-archive-legacy-20260826
+  archivedGenerationId: dbgen_legacy_20260826
+  retain: true
+  storageClass: local-path
+  size: 4Gi
 
 worker:
   serviceAccount: pharness-worker

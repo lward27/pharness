@@ -38,6 +38,8 @@ pub struct StoredRun {
     pub run_budget: RunBudget,
     pub budget_consumption: RunBudgetConsumption,
     pub stop_reason: Option<String>,
+    pub retention_state: String,
+    pub sealed_summary: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -225,6 +227,9 @@ pub struct StoredArtifact {
     pub path: Option<String>,
     pub content_text: Option<String>,
     pub content_json: Option<serde_json::Value>,
+    pub content_hash: Option<String>,
+    pub retention_class: String,
+    pub purged_at: Option<String>,
     pub created_at: String,
 }
 

@@ -467,6 +467,41 @@ impl SqliteStore {
         &self,
         validation: CreateEvidenceValidation,
     ) -> Result<(), StoreError> {
+        let references = validation
+            .evidence_refs
+            .as_array()
+            .ok_or_else(|| StoreError::InvalidData("evidence references must be an array".into()))?
+            .iter()
+            .enumerate()
+            .map(|(index, reference)| {
+                let kind = reference
+                    .get("kind")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        StoreError::InvalidData("evidence reference is missing a typed kind".into())
+                    })?;
+                let id = reference
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        StoreError::InvalidData("evidence reference is missing an id".into())
+                    })?;
+                let hash = reference
+                    .get("hash")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        StoreError::InvalidData("evidence reference is missing a hash".into())
+                    })?;
+                if kind.is_empty() || id.is_empty() || hash.is_empty() {
+                    return Err(StoreError::InvalidData(
+                        "evidence reference fields must not be blank".into(),
+                    ));
+                }
+                Ok((index, kind.to_string(), id.to_string(), hash.to_string()))
+            })
+            .collect::<Result<Vec<_>, StoreError>>()?;
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
         sqlx::query(
             r#"
             INSERT INTO evidence_validations (
@@ -477,19 +512,38 @@ impl SqliteStore {
                       ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             "#,
         )
-        .bind(validation.id)
-        .bind(validation.work_item_id)
-        .bind(validation.stage_execution_id)
-        .bind(validation.validator_key)
-        .bind(validation.status)
+        .bind(&validation.id)
+        .bind(&validation.work_item_id)
+        .bind(&validation.stage_execution_id)
+        .bind(&validation.validator_key)
+        .bind(&validation.status)
         .bind(serde_json::to_string(&validation.subject)?)
         .bind(serde_json::to_string(&validation.evidence_refs)?)
         .bind(serde_json::to_string(&validation.facts)?)
         .bind(serde_json::to_string(&validation.contradictions)?)
-        .bind(validation.content_hash)
-        .bind(now_string())
-        .execute(&self.pool)
+        .bind(&validation.content_hash)
+        .bind(&now)
+        .execute(&mut *tx)
         .await?;
+        for (index, reference_kind, reference_id, reference_hash) in references {
+            sqlx::query(
+                r#"
+                INSERT INTO evidence_validation_references (
+                  id, evidence_validation_id, reference_kind, reference_id,
+                  reference_hash, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "#,
+            )
+            .bind(format!("evref_{}_{index}", validation.id))
+            .bind(&validation.id)
+            .bind(reference_kind)
+            .bind(reference_id)
+            .bind(reference_hash)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 
@@ -515,6 +569,36 @@ impl SqliteStore {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(row_to_evidence_validation).collect()
+    }
+
+    pub async fn list_evidence_validation_references(
+        &self,
+        evidence_validation_id: &str,
+    ) -> Result<Vec<crate::EvidenceValidationReference>, StoreError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, evidence_validation_id, reference_kind, reference_id,
+                   reference_hash, created_at
+            FROM evidence_validation_references
+            WHERE evidence_validation_id = ?1
+            ORDER BY reference_kind, reference_id, id
+            "#,
+        )
+        .bind(evidence_validation_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(crate::EvidenceValidationReference {
+                    id: row.try_get("id")?,
+                    evidence_validation_id: row.try_get("evidence_validation_id")?,
+                    reference_kind: row.try_get("reference_kind")?,
+                    reference_id: row.try_get("reference_id")?,
+                    reference_hash: row.try_get("reference_hash")?,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect()
     }
 
     pub async fn create_agent_context_pack(

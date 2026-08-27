@@ -677,7 +677,21 @@ async fn seal_repo_test_stage(
             evidence_refs: serde_json::json!(events
                 .iter()
                 .filter(|event| event.kind == EventKind::ToolFinished)
-                .map(|event| event.event_id.to_string())
+                .map(|event| {
+                    let material = serde_json::json!({
+                        "id":event.event_id,
+                        "run_id":event.run_id,
+                        "seq":event.seq,
+                        "type":event.kind.as_str(),
+                        "payload":event.payload,
+                    });
+                    serde_json::json!({
+                        "kind":"event",
+                        "id":event.event_id,
+                        "hash":pharness_core::canonical_json_sha256(&material)
+                            .expect("event evidence material is serializable"),
+                    })
+                })
                 .collect::<Vec<_>>()),
             facts: facts.clone(),
             contradictions: if passed {
@@ -821,7 +835,11 @@ async fn seal_repo_verify_stage(
             subject: serde_json::json!({"run_id":run.id}),
             evidence_refs: serde_json::json!(upstream
                 .iter()
-                .map(|item| &item.id)
+                .map(|item| serde_json::json!({
+                    "kind":"stage_outcome",
+                    "id":item.id,
+                    "hash":item.content_hash,
+                }))
                 .collect::<Vec<_>>()),
             facts: facts.clone(),
             contradictions: if passed {
@@ -1124,7 +1142,14 @@ async fn seal_repo_implement_stage(
                 "workspace_git_diff" | "workspace_git_status"
             )
         })
-        .map(|artifact| serde_json::json!({"kind":artifact.kind,"id":artifact.id}))
+        .filter_map(|artifact| {
+            Some(serde_json::json!({
+                "kind":"artifact",
+                "id":artifact.id,
+                "hash":artifact.content_hash.as_ref()?,
+                "artifact_kind":artifact.kind,
+            }))
+        })
         .collect::<Vec<_>>();
     let facts = serde_json::json!({
         "base_commit":evidence.map(|evidence| &evidence.base_commit),
@@ -3832,6 +3857,8 @@ mod tests {
             run_budget: Default::default(),
             budget_consumption: Default::default(),
             stop_reason: None,
+            retention_state: "retained".into(),
+            sealed_summary: None,
             started_at: "0".to_string(),
             finished_at: None,
             cancel_requested_at: None,

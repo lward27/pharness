@@ -179,7 +179,7 @@ async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
             checks: json!([{"key":"exact_checkout","status":"passing"}]),
             blockers: json!([]),
             warnings: json!([]),
-            evidence_refs: json!([{"kind":"repository_discovery","id":format!("rdisc_{suffix}")}]),
+            evidence_refs: json!([{"kind":"repository_discovery","id":format!("rdisc_{suffix}"),"hash":format!("sha256:discovery-{suffix}")}]),
             input_hash: format!("sha256:readiness-input-{suffix}"),
             content_hash: format!("sha256:readiness-{suffix}"),
             expires_at: None,

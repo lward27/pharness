@@ -1,9 +1,10 @@
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
-    BootstrapOrganization, CreateProductAggregate, CreateRepositoryOnboarding,
-    RegisterRepositoryAggregate, RegisteredRepositoryAggregate, StoredOrganization, StoredProduct,
-    StoredProductModelSnapshot, StoredRepository, StoredRepositoryBinding,
-    StoredRepositoryBindingRevision, StoredService, UpdateProductAggregate,
+    ApplyProductModelRevision, BootstrapOrganization, CreateProductAggregate,
+    CreateRepositoryOnboarding, RegisterRepositoryAggregate, RegisteredRepositoryAggregate,
+    RepositoryBindingScope, StoredOrganization, StoredProduct, StoredProductModelSnapshot,
+    StoredRepository, StoredRepositoryBinding, StoredRepositoryBindingRevision, StoredService,
+    UpdateProductAggregate,
 };
 use sqlx::{Row, Sqlite, Transaction};
 
@@ -481,6 +482,231 @@ impl SqliteStore {
         .await?;
         row.map(row_to_binding_revision).transpose()
     }
+
+    pub async fn list_repository_binding_scopes(
+        &self,
+        binding_revision_id: &str,
+    ) -> Result<Vec<RepositoryBindingScope>, StoreError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, binding_revision_id, path_glob, role, service_id, created_at
+            FROM repository_binding_revision_scopes
+            WHERE binding_revision_id = ?1
+            ORDER BY path_glob, role, COALESCE(service_id, ''), id
+            "#,
+        )
+        .bind(binding_revision_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(row_to_binding_scope).collect()
+    }
+
+    pub async fn apply_product_model_revision(
+        &self,
+        revision: ApplyProductModelRevision,
+    ) -> Result<StoredProductModelSnapshot, StoreError> {
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
+        let product_version: Option<i64> =
+            sqlx::query_scalar("SELECT state_version FROM products WHERE id = ?1")
+                .bind(&revision.product_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if product_version != Some(revision.expected_state_version as i64) {
+            return Err(StoreError::Conflict(
+                "product changed after product-model preview".into(),
+            ));
+        }
+
+        for service in &revision.services {
+            let existing_product: Option<String> =
+                sqlx::query_scalar("SELECT product_id FROM services WHERE id = ?1")
+                    .bind(&service.id)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+            if existing_product
+                .as_deref()
+                .is_some_and(|product_id| product_id != revision.product_id)
+            {
+                return Err(StoreError::Conflict(format!(
+                    "service {} belongs to a different product",
+                    service.id
+                )));
+            }
+            sqlx::query(
+                r#"
+                INSERT INTO services (
+                  id, product_id, service_key, display_name, description, status,
+                  created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                ON CONFLICT(id) DO UPDATE SET
+                  service_key = excluded.service_key,
+                  display_name = excluded.display_name,
+                  description = excluded.description,
+                  status = excluded.status,
+                  updated_at = excluded.updated_at
+                "#,
+            )
+            .bind(&service.id)
+            .bind(&revision.product_id)
+            .bind(&service.service_key)
+            .bind(&service.display_name)
+            .bind(&service.description)
+            .bind(&service.status)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await
+            .map_err(map_constraint("service"))?;
+        }
+
+        for binding in &revision.bindings {
+            let row = sqlx::query(
+                "SELECT product_id, repository_id FROM repository_bindings WHERE id = ?1",
+            )
+            .bind(&binding.binding_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_binding".into(),
+                id: binding.binding_id.clone(),
+            })?;
+            let product_id: String = row.try_get("product_id")?;
+            let repository_id: String = row.try_get("repository_id")?;
+            if product_id != revision.product_id || repository_id != binding.repository_id {
+                return Err(StoreError::Conflict(format!(
+                    "binding {} no longer matches the reviewed Product and Repository",
+                    binding.binding_id
+                )));
+            }
+            for scope in &binding.scopes {
+                if let Some(service_id) = &scope.service_id {
+                    let service_product: Option<String> =
+                        sqlx::query_scalar("SELECT product_id FROM services WHERE id = ?1")
+                            .bind(service_id)
+                            .fetch_optional(&mut *tx)
+                            .await?;
+                    if service_product.as_deref() != Some(revision.product_id.as_str()) {
+                        return Err(StoreError::Conflict(format!(
+                            "scope service {service_id} does not belong to the Product"
+                        )));
+                    }
+                }
+            }
+            let next_revision: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(MAX(revision), 0) + 1 FROM repository_binding_revisions WHERE binding_id = ?1",
+            )
+            .bind(&binding.binding_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            let service_ids = binding
+                .scopes
+                .iter()
+                .filter_map(|scope| scope.service_id.clone())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let scope_paths = binding
+                .scopes
+                .iter()
+                .map(|scope| scope.path_glob.clone())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            sqlx::query(
+                r#"
+                INSERT INTO repository_binding_revisions (
+                  id, binding_id, revision, service_ids_json, scopes_json, status,
+                  evidence_json, content_hash, reviewed_by, review_reason, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                "#,
+            )
+            .bind(&binding.revision_id)
+            .bind(&binding.binding_id)
+            .bind(next_revision)
+            .bind(serde_json::to_string(&service_ids)?)
+            .bind(serde_json::to_string(&scope_paths)?)
+            .bind(&binding.status)
+            .bind(serde_json::to_string(&binding.evidence_json)?)
+            .bind(&binding.content_hash)
+            .bind(&revision.actor)
+            .bind(&revision.reason)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await
+            .map_err(map_constraint("repository binding revision"))?;
+            for scope in &binding.scopes {
+                sqlx::query(
+                    r#"
+                    INSERT INTO repository_binding_revision_scopes (
+                      id, binding_revision_id, path_glob, role, service_id, created_at
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    "#,
+                )
+                .bind(&scope.id)
+                .bind(&binding.revision_id)
+                .bind(&scope.path_glob)
+                .bind(&scope.role)
+                .bind(&scope.service_id)
+                .bind(&now)
+                .execute(&mut *tx)
+                .await
+                .map_err(map_constraint("repository binding scope"))?;
+            }
+            sqlx::query(
+                r#"
+                UPDATE repository_bindings
+                SET current_revision_id = ?2, status = ?3, updated_at = ?4
+                WHERE id = ?1
+                "#,
+            )
+            .bind(&binding.binding_id)
+            .bind(&binding.revision_id)
+            .bind(&binding.status)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        insert_product_snapshot(
+            &mut tx,
+            &revision.snapshot_id,
+            &revision.product_id,
+            revision.expected_state_version + 1,
+            &revision.snapshot_json,
+            &revision.snapshot_hash,
+            &revision.actor,
+            &revision.reason,
+            &now,
+        )
+        .await?;
+        let updated = sqlx::query(
+            r#"
+            UPDATE products
+            SET state_version = state_version + 1,
+                current_model_snapshot_id = ?3,
+                updated_at = ?4
+            WHERE id = ?1 AND state_version = ?2
+            "#,
+        )
+        .bind(&revision.product_id)
+        .bind(revision.expected_state_version as i64)
+        .bind(&revision.snapshot_id)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "product changed while applying product-model revision".into(),
+            ));
+        }
+        tx.commit().await?;
+        self.get_product_model_snapshot(&revision.snapshot_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "product_model_snapshot".into(),
+                id: revision.snapshot_id,
+            })
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -650,6 +876,19 @@ fn row_to_binding_revision(
     })
 }
 
+fn row_to_binding_scope(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<RepositoryBindingScope, StoreError> {
+    Ok(RepositoryBindingScope {
+        id: row.try_get("id")?,
+        binding_revision_id: row.try_get("binding_revision_id")?,
+        path_glob: row.try_get("path_glob")?,
+        role: row.try_get("role")?,
+        service_id: row.try_get("service_id")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -770,5 +1009,67 @@ mod tests {
         let product = store.get_product("prod_one").await.unwrap().unwrap();
         assert_eq!(product.state_version, 2);
         assert_eq!(product.current_model_snapshot_id, "pmodel_two");
+
+        let snapshot = store
+            .apply_product_model_revision(ApplyProductModelRevision {
+                product_id: "prod_one".into(),
+                expected_state_version: 2,
+                services: vec![crate::ProductModelServiceRevision {
+                    id: "svc_market".into(),
+                    service_key: "market-data-api".into(),
+                    display_name: "Market Data API".into(),
+                    description: "Market data".into(),
+                    status: "active".into(),
+                }],
+                bindings: vec![crate::ProductModelBindingRevision {
+                    binding_id: "rbind_one".into(),
+                    repository_id: "repo_one".into(),
+                    revision_id: "rbindrev_two".into(),
+                    status: "active".into(),
+                    scopes: vec![RepositoryBindingScope {
+                        id: "rbscope_one".into(),
+                        binding_revision_id: "rbindrev_two".into(),
+                        path_glob: "src/**".into(),
+                        role: "source".into(),
+                        service_id: Some("svc_market".into()),
+                        created_at: String::new(),
+                    }],
+                    evidence_json: json!({"kind":"reviewed"}),
+                    content_hash: "sha256:binding-two".into(),
+                }],
+                snapshot_id: "pmodel_three".into(),
+                snapshot_json: json!({"schema_version":"pharness.dev/product-model/v1alpha2"}),
+                snapshot_hash: "sha256:three".into(),
+                actor: "operator".into(),
+                reason: "map market data service".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(snapshot.version, 3);
+        let scopes = store
+            .list_repository_binding_scopes("rbindrev_two")
+            .await
+            .unwrap();
+        assert_eq!(scopes.len(), 1);
+        assert_eq!(scopes[0].path_glob, "src/**");
+        assert_eq!(scopes[0].service_id.as_deref(), Some("svc_market"));
+        let binding_mutation = sqlx::query(
+            "UPDATE repository_binding_revisions SET status='retired' WHERE id='rbindrev_two'",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap_err();
+        assert!(binding_mutation
+            .to_string()
+            .contains("repository binding revisions are immutable"));
+        let snapshot_mutation = sqlx::query(
+            "UPDATE product_model_snapshots SET content_hash='changed' WHERE id='pmodel_three'",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap_err();
+        assert!(snapshot_mutation
+            .to_string()
+            .contains("product model snapshots are immutable"));
     }
 }

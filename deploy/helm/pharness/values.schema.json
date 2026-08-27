@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["features", "organization", "api", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget"],
+  "required": ["features", "organization", "api", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget", "retention", "archivePersistence"],
   "properties": {
     "features": {
       "type": "object",
@@ -31,10 +31,67 @@
     },
     "api": {
       "type": "object",
-      "required": ["image"],
+      "required": ["image", "operationalMode", "legacyWorkItemCreationEnabled", "databaseGeneration", "persistence"],
       "properties": {
-        "image": { "$ref": "#/$defs/immutableImage" }
+        "image": { "$ref": "#/$defs/immutableImage" },
+        "operationalMode": { "enum": ["normal", "draining", "read_only"] },
+        "legacyWorkItemCreationEnabled": { "type": "boolean" },
+        "databaseGeneration": {
+          "type": "object",
+          "required": ["id", "purpose", "adoptExisting", "accepted"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^dbgen_[A-Za-z0-9._-]{1,120}$" },
+            "purpose": { "type": "string", "minLength": 1, "maxLength": 240 },
+            "adoptExisting": { "type": "boolean" },
+            "accepted": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "required": ["create", "claimName", "existingClaim", "retain", "storageClass", "size"],
+          "properties": {
+            "create": { "type": "boolean" },
+            "claimName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+            "existingClaim": { "type": "string", "maxLength": 253 },
+            "retain": { "const": true },
+            "storageClass": { "type": "string", "minLength": 1 },
+            "size": { "type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$" }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "create": { "const": true } }, "required": ["create"] },
+              "then": { "properties": { "existingClaim": { "maxLength": 0 } } },
+              "else": { "properties": { "existingClaim": { "minLength": 1 } } }
+            }
+          ],
+          "additionalProperties": false
+        }
       }
+    },
+    "retention": {
+      "type": "object",
+      "required": ["scheduledEnabled", "intervalSeconds", "automaticExecutionEnabled", "previewOnly"],
+      "properties": {
+        "scheduledEnabled": { "type": "boolean" },
+        "intervalSeconds": { "type": "integer", "minimum": 3600, "maximum": 604800 },
+        "automaticExecutionEnabled": { "type": "boolean" },
+        "previewOnly": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "archivePersistence": {
+      "type": "object",
+      "required": ["enabled", "claimName", "archivedGenerationId", "retain", "storageClass", "size"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "claimName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "archivedGenerationId": { "type": "string", "pattern": "^dbgen_[A-Za-z0-9._-]{1,120}$" },
+        "retain": { "const": true },
+        "storageClass": { "type": "string", "minLength": 1 },
+        "size": { "type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$" }
+      },
+      "additionalProperties": false
     },
     "worker": {
       "type": "object",

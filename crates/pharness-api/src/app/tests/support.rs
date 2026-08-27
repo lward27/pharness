@@ -125,6 +125,7 @@ pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
         include_str!("../products.rs"),
         include_str!("../repo_mode.rs"),
         include_str!("../operator_experience.rs"),
+        include_str!("../data_lifecycle.rs"),
     ] {
         let mut remaining = source;
         while let Some(route_offset) = remaining.find(".route") {

@@ -31,6 +31,7 @@ use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
 
+mod data_lifecycle;
 mod onboarding;
 mod product;
 mod repo_mode;
@@ -48,6 +49,18 @@ impl SqliteStore {
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal);
         Self::connect_with_options(options).await
+    }
+
+    pub async fn connect_read_only(path: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let options = SqliteConnectOptions::new()
+            .filename(path.as_ref())
+            .create_if_missing(false)
+            .read_only(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with(options)
+            .await?;
+        Ok(Self { pool })
     }
 
     pub async fn connect_in_memory() -> Result<Self, StoreError> {
@@ -174,9 +187,11 @@ impl SqliteStore {
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, runs.status, runs.user_task, runs.max_turns, runs.started_at,
                    runs.finished_at, runs.cancel_requested_at, runs.error, runs.result_json, runs.execution_target_json, runs.origin, runs.created_by,
-                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason
+                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason,
+                   runs.retention_state, sealed.summary_json AS sealed_summary_json
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
+            LEFT JOIN sealed_run_summaries sealed ON sealed.run_id = runs.id
             WHERE runs.id = ?1
             "#,
         )
@@ -198,9 +213,11 @@ impl SqliteStore {
             r#"
             SELECT runs.id, runs.session_id, sessions.cwd, runs.status, runs.user_task, runs.max_turns, runs.started_at,
                    runs.finished_at, runs.cancel_requested_at, runs.error, runs.result_json, runs.execution_target_json, runs.origin, runs.created_by,
-                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason
+                   runs.run_budget_json, runs.budget_consumption_json, runs.stop_reason,
+                   runs.retention_state, sealed.summary_json AS sealed_summary_json
             FROM runs
             JOIN sessions ON sessions.id = runs.session_id
+            LEFT JOIN sealed_run_summaries sealed ON sealed.run_id = runs.id
             LEFT JOIN work_items metadata
               ON metadata.id = json_extract(runs.execution_target_json, '$.run_scope.work_item_id')
             WHERE (?1 IS NULL OR runs.id LIKE '%' || ?1 || '%' OR user_task LIKE '%' || ?1 || '%' OR sessions.cwd LIKE '%' || ?1 || '%')
@@ -776,13 +793,21 @@ impl SqliteStore {
             .content_json
             .map(|value| serde_json::to_string(&value))
             .transpose()?;
+        let content_hash = pharness_core::canonical_json_sha256(&serde_json::json!({
+            "kind":&artifact.kind,
+            "label":&artifact.label,
+            "mime_type":&artifact.mime_type,
+            "path":&artifact.path,
+            "content_text":&artifact.content_text,
+            "content_json":&content_json,
+        }))?;
         sqlx::query(
             r#"
             INSERT INTO artifacts (
               id, session_id, run_id, kind, label, mime_type, path,
-              content_text, content_json, created_at
+              content_text, content_json, created_at, content_hash, retention_class
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'operational')
             "#,
         )
         .bind(&artifact.id)
@@ -795,6 +820,7 @@ impl SqliteStore {
         .bind(artifact.content_text)
         .bind(content_json)
         .bind(now)
+        .bind(content_hash)
         .execute(&self.pool)
         .await?;
 
@@ -5307,6 +5333,9 @@ fn row_to_artifact(row: sqlx::sqlite::SqliteRow) -> Result<StoredArtifact, Store
         content_json: content_json
             .map(|value| serde_json::from_str(&value))
             .transpose()?,
+        content_hash: row.try_get("content_hash")?,
+        retention_class: row.try_get("retention_class")?,
+        purged_at: row.try_get("purged_at")?,
         created_at: row.try_get("created_at")?,
     })
 }
@@ -5796,7 +5825,7 @@ fn artifact_select_sql(where_clause: &str) -> &'static str {
         "WHERE id = ?1" => {
             r#"
             SELECT id, session_id, run_id, kind, label, mime_type, path,
-                   content_text, content_json, created_at
+                   content_text, content_json, content_hash, retention_class, purged_at, created_at
             FROM artifacts
             WHERE id = ?1
             "#
@@ -5804,7 +5833,7 @@ fn artifact_select_sql(where_clause: &str) -> &'static str {
         "WHERE run_id = ?1 ORDER BY created_at ASC, id ASC" => {
             r#"
             SELECT id, session_id, run_id, kind, label, mime_type, path,
-                   content_text, content_json, created_at
+                   content_text, content_json, content_hash, retention_class, purged_at, created_at
             FROM artifacts
             WHERE run_id = ?1
             ORDER BY created_at ASC, id ASC
@@ -6182,6 +6211,7 @@ fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
     let result_json: Option<String> = row.try_get("result_json")?;
     let run_budget_json: String = row.try_get("run_budget_json")?;
     let budget_consumption_json: String = row.try_get("budget_consumption_json")?;
+    let sealed_summary_json: Option<String> = row.try_get("sealed_summary_json")?;
     Ok(StoredRun {
         id: RunId::new(row.try_get::<String, _>("id")?),
         session_id: SessionId::new(row.try_get::<String, _>("session_id")?),
@@ -6202,6 +6232,10 @@ fn row_to_run(row: sqlx::sqlite::SqliteRow) -> Result<StoredRun, StoreError> {
         run_budget: serde_json::from_str(&run_budget_json)?,
         budget_consumption: serde_json::from_str(&budget_consumption_json)?,
         stop_reason: row.try_get("stop_reason")?,
+        retention_state: row.try_get("retention_state")?,
+        sealed_summary: sealed_summary_json
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
     })
 }
 
@@ -6968,7 +7002,109 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 48);
+        assert_eq!(latest, 49);
+        store.pool.close().await;
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
+        }
+    }
+
+    #[tokio::test]
+    async fn migration_0048_backfills_only_unambiguously_closed_work_items() {
+        let database_path = std::env::temp_dir().join(format!(
+            "pharness-migration-0048-{}-{}.db",
+            std::process::id(),
+            super::now_string()
+        ));
+        let options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let all = sqlx::migrate!("./migrations");
+        let through_0048 = sqlx::migrate::Migrator {
+            migrations: Cow::Owned(
+                all.iter()
+                    .filter(|migration| migration.version <= 48)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        through_0048.run(&pool).await.unwrap();
+        for (id, status) in [
+            ("witem_completed_0048", "completed"),
+            ("witem_cancelled_0048", "cancelled"),
+            ("witem_failed_open_0048", "failed"),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO work_items (
+                  id, status, title, intent, acceptance_criteria_json,
+                  source_repo, source_ref, target_environment, production_impacting,
+                  max_attempts, max_elapsed_seconds, created_at, updated_at,
+                  status_changed_at, status_changed_by, status_reason
+                ) VALUES (?1, ?2, 'Legacy item', 'Preserve this item', '[]',
+                  'https://github.com/example/legacy.git', 'main', 'development', 0,
+                  2, 3600, '100', '200', '300', 'operator', 'fixture')
+                "#,
+            )
+            .bind(id)
+            .bind(status)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        pool.close().await;
+
+        let store = SqliteStore::connect(&database_path).await.unwrap();
+        for id in ["witem_completed_0048", "witem_cancelled_0048"] {
+            let closure: (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT closed_at, closure_reason FROM work_items WHERE id=?1")
+                    .bind(id)
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(closure.0.as_deref(), Some("300"));
+            assert_eq!(
+                closure.1.as_deref(),
+                Some("terminal_status_migration_backfill")
+            );
+        }
+        let failed_closure: Option<String> = sqlx::query_scalar(
+            "SELECT closed_at FROM work_items WHERE id='witem_failed_open_0048'",
+        )
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert!(failed_closure.is_none());
+
+        sqlx::query(
+            "UPDATE work_items SET status='completed', status_changed_at='400' WHERE id='witem_failed_open_0048'",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        let controller_closure: String = sqlx::query_scalar(
+            "SELECT closed_at FROM work_items WHERE id='witem_failed_open_0048'",
+        )
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(controller_closure, "400");
+        assert!(sqlx::query(
+            "UPDATE work_items SET closed_at=NULL WHERE id='witem_failed_open_0048'",
+        )
+        .execute(&store.pool)
+        .await
+        .is_err());
+
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));

@@ -28,11 +28,62 @@ async fn main() -> anyhow::Result<()> {
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
 
+    let operational_mode = app::OperationalMode::from_env();
     let store = Arc::new(
-        SqliteStore::connect(&db_path)
-            .await
-            .with_context(|| format!("failed to open {}", db_path.display()))?,
+        if operational_mode == app::OperationalMode::ReadOnly {
+            SqliteStore::connect_read_only(&db_path).await
+        } else {
+            SqliteStore::connect(&db_path).await
+        }
+        .with_context(|| format!("failed to open {}", db_path.display()))?,
     );
+    let database_generation =
+        std::env::var("PHARNESS_DATABASE_GENERATION_ID").unwrap_or_else(|_| "local".into());
+    let database_purpose = std::env::var("PHARNESS_DATABASE_GENERATION_PURPOSE")
+        .unwrap_or_else(|_| "local development".into());
+    let build_revision = std::env::var("PHARNESS_BUILD_REVISION").unwrap_or_else(|_| {
+        option_env!("PHARNESS_BUILD_REVISION")
+            .unwrap_or("unknown")
+            .into()
+    });
+    let adopt_existing_generation = std::env::var("PHARNESS_DATABASE_GENERATION_ADOPT_EXISTING")
+        .ok()
+        .is_some_and(|value| value == "true");
+    if operational_mode == app::OperationalMode::ReadOnly {
+        let mounted = store.get_database_generation().await?.ok_or_else(|| {
+            anyhow::anyhow!("read-only mode requires an initialized database generation")
+        })?;
+        anyhow::ensure!(
+            mounted.id == database_generation,
+            "mounted database generation {} does not match expected generation {}",
+            mounted.id,
+            database_generation
+        );
+    } else if adopt_existing_generation {
+        store
+            .adopt_existing_database_generation(
+                &database_generation,
+                &build_revision,
+                &database_purpose,
+            )
+            .await?;
+    } else {
+        store
+            .ensure_database_generation(&database_generation, &build_revision, &database_purpose)
+            .await?;
+    }
+    if operational_mode == app::OperationalMode::Normal {
+        store
+            .ensure_bootstrap_organization(&pharness_store::BootstrapOrganization {
+                id: std::env::var("PHARNESS_ORGANIZATION_ID")
+                    .unwrap_or_else(|_| "org_default".into()),
+                organization_key: std::env::var("PHARNESS_ORGANIZATION_KEY")
+                    .unwrap_or_else(|_| "default".into()),
+                display_name: std::env::var("PHARNESS_ORGANIZATION_NAME")
+                    .unwrap_or_else(|_| "PHarness".into()),
+            })
+            .await?;
+    }
     let dispatcher = match config.worker.mode {
         pharness_config::WorkerMode::Local => {
             let worker = worker::LocalWorker::from_options(

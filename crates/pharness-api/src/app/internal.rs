@@ -35,7 +35,7 @@ use super::work_items::rollback::{
     internal_rollback_delivery_observation_context, internal_rollback_delivery_observation_outcome,
     internal_rollback_delivery_outcome,
 };
-use super::{ApiError, AppState};
+use super::{enforce_operational_mode, ApiError, AppState};
 use crate::dto::{
     ArgoSyncContextResponse, ArgoSyncControlResponse, ArgoSyncOutcomeRequest, ArtifactResponse,
     GitOpsDeliveryContextResponse, GitOpsDeliveryObservationContextResponse,
@@ -248,5 +248,6 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
             "/api/internal/repository-readiness-preparations/:preparation_id/outcome",
             post(internal_repository_readiness_outcome),
         )
+        .route_layer(middleware::from_fn(enforce_operational_mode))
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

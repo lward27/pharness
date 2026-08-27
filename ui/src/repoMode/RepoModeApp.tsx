@@ -54,7 +54,7 @@ function RouteContent({ route,operatorName }: { route:AppRoute; operatorName:str
     case "agentRun": return <AgentRunScreen runId={route.params.runId} operatorName={operatorName} />;
     case "releases": return <ReleasesScreen />;
     case "insights": return <InsightsScreen section={route.section || "audit"} />;
-    case "settings": return <SettingsScreen section={route.section || "platform"} />;
+    case "settings": return <SettingsScreen section={route.section || "platform"} operatorName={operatorName} />;
     case "compatibility": return <CompatibilityScreen root={route.params.root} id={route.params.id} nestedId={route.params.nestedId} />;
   }
 }
