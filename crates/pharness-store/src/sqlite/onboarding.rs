@@ -167,6 +167,44 @@ impl SqliteStore {
             })
     }
 
+    pub async fn finish_repository_onboarding_patch_unchanged(
+        &self,
+        onboarding_id: &str,
+        execution_id: &str,
+        artifact_id: &str,
+    ) -> Result<StoredRepositoryOnboarding, StoreError> {
+        let now = now_string();
+        let result = sqlx::query(
+            r#"
+            UPDATE repository_onboardings
+            SET status = 'merge_observed', patch_artifact_id = ?3, patch_hash = NULL,
+                resolved_commit = registered_commit,
+                state_version = state_version + 1, blockers_json = '[]', updated_at = ?4,
+                status_changed_at = ?4, status_changed_by = 'controller',
+                status_reason = 'approved onboarding configuration already matches the pinned source revision'
+            WHERE id = ?1 AND patch_execution_id = ?2 AND status = 'patch_queued'
+                  AND source_delivery_intent_id IS NULL
+            "#,
+        )
+        .bind(onboarding_id)
+        .bind(execution_id)
+        .bind(artifact_id)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "repository onboarding no-change execution is no longer current".into(),
+            ));
+        }
+        self.get_repository_onboarding(onboarding_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_onboarding".into(),
+                id: onboarding_id.into(),
+            })
+    }
+
     pub async fn fail_repository_onboarding_patch(
         &self,
         onboarding_id: &str,
@@ -1473,6 +1511,58 @@ mod tests {
     };
     use pharness_core::{RunId, SessionId};
     use serde_json::json;
+
+    #[tokio::test]
+    async fn unchanged_onboarding_configuration_skips_source_delivery() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let now = "2026-08-27T00:00:00Z";
+        let source_commit = "a".repeat(40);
+        sqlx::query("INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_no_change', 'no-change', 'No Change', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, state_version, created_at, updated_at) VALUES ('prod_no_change', 'org_no_change', 'product', 'Product', '', 'operator', 1, ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_no_change', 'github', '4', 'https://github.com/example/no-change.git', 'main', ?1, ?2, ?2)")
+            .bind(&source_commit).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_bindings (id, product_id, repository_id, status, created_at, updated_at) VALUES ('rbind_no_change', 'prod_no_change', 'repo_no_change', 'active', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        let onboarding = store
+            .create_repository_onboarding(CreateRepositoryOnboarding {
+                id: "ronb_no_change".into(),
+                product_id: "prod_no_change".into(),
+                repository_id: "repo_no_change".into(),
+                binding_id: "rbind_no_change".into(),
+                onboarding_kind: "refresh".into(),
+                registered_commit: source_commit.clone(),
+                actor: "operator".into(),
+                reason: "refresh existing contract".into(),
+            })
+            .await
+            .unwrap();
+        sqlx::query("UPDATE repository_onboardings SET status = 'patch_queued', patch_execution_id = 'onbpatch_no_change', resolved_commit = ?2 WHERE id = ?1")
+            .bind(&onboarding.id).bind(&source_commit).execute(&store.pool).await.unwrap();
+
+        let unchanged = store
+            .finish_repository_onboarding_patch_unchanged(
+                &onboarding.id,
+                "onbpatch_no_change",
+                "art_no_change",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(unchanged.status, "merge_observed");
+        assert_eq!(
+            unchanged.resolved_commit.as_deref(),
+            Some(source_commit.as_str())
+        );
+        assert_eq!(
+            unchanged.patch_artifact_id.as_deref(),
+            Some("art_no_change")
+        );
+        assert!(unchanged.patch_hash.is_none());
+        assert!(unchanged.source_delivery_intent_id.is_none());
+        assert!(unchanged.blockers.is_empty());
+    }
 
     #[tokio::test]
     async fn successful_retries_clear_stale_onboarding_blockers() {

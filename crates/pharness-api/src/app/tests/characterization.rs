@@ -655,16 +655,14 @@ pub(super) async fn test_state_with_git_observer(
             gitops_observer_enabled: true,
             gitops_observer_service_account: "pharness-gitops-observer".to_string(),
             gitops_observer_token_secret_name: Some("pharness-gitops-observer-token".to_string()),
-            gitops_observer_allowed_repos: vec![allowed_repo],
+            gitops_observer_allowed_repos: vec![allowed_repo.clone()],
             gitops_observer_github_api_url: "https://api.github.com".to_string(),
             gitops_observer_active_deadline_seconds: 300,
             gitops_observer_ttl_seconds_after_finished: 3600,
             source_reader_enabled: true,
             source_reader_service_account: "pharness-source-reader".to_string(),
             source_reader_token_secret_name: None,
-            source_reader_allowed_repos: vec![
-                "https://github.com/example/finance-app.git".to_string()
-            ],
+            source_reader_allowed_repos: vec![allowed_repo],
             source_reader_active_deadline_seconds: 600,
             source_reader_ttl_seconds_after_finished: 3600,
             api_url: "http://pharness-api:4777".to_string(),

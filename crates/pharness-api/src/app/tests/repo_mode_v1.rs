@@ -1,12 +1,17 @@
-use super::characterization::test_state;
+use super::super::products::{
+    internal_onboarding_contract_validation_context, internal_onboarding_patch_outcome,
+    InternalOnboardingContractValidationQuery, OnboardingPatchOutcomeRequest,
+};
+use super::characterization::{test_state, test_state_with_git_observer};
 use super::{
     internal_source_delivery_observation_outcome, json, ApproveRepositoryOnboardingProposal,
     CreateChangeSet, CreateProductAggregate, CreateRepoWorkItem, CreateRepositoryContractVersion,
-    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateSession,
-    CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan, CreateWorkspace,
-    GitDeliveryObservationOutcomeRequest, Json, Path, RegisterRepositoryAggregate, RunBudget,
-    RunId, SessionId, State, StoredRepositoryDraft, Value,
+    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
+    CreateSession, CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan,
+    CreateWorkspace, GitDeliveryObservationOutcomeRequest, Json, Path, Query,
+    RegisterRepositoryAggregate, RunBudget, RunId, SessionId, State, StoredRepositoryDraft, Value,
 };
+use sha2::Digest;
 
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEAD_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -16,6 +21,247 @@ struct RepoDeliveryFixture {
     state: super::AppState,
     work_item_id: String,
     intent_id: String,
+}
+
+#[tokio::test]
+async fn existing_canonical_contract_records_no_change_provenance_without_a_source_pr() {
+    let state = test_state_with_git_observer(
+        "/bin/true".into(),
+        "https://github.com/example/no-change.git".into(),
+    )
+    .await;
+    state
+        .store
+        .ensure_bootstrap_organization(&state.repo_mode.organization)
+        .await
+        .unwrap();
+    state
+        .store
+        .create_product(CreateProductAggregate {
+            id: "prod_no_change".into(),
+            organization_id: state.repo_mode.organization.id.clone(),
+            product_key: "no-change".into(),
+            display_name: "No Change".into(),
+            description: "Existing canonical contract fixture".into(),
+            owner_principal: "operator".into(),
+            snapshot_id: "pmodel_no_change_initial".into(),
+            snapshot_json: json!({"schema_version":"pharness.dev/product-model/v1alpha1","repositories":[]}),
+            snapshot_hash: "sha256:no-change-initial".into(),
+            actor: "operator".into(),
+            reason: "create fixture".into(),
+        })
+        .await
+        .unwrap();
+    let registered = state
+        .store
+        .register_repository(RegisterRepositoryAggregate {
+            repository: StoredRepositoryDraft {
+                id: "repo_no_change".into(),
+                provider: "github".into(),
+                external_id: "example/no-change".into(),
+                canonical_url: "https://github.com/example/no-change.git".into(),
+                default_branch: "main".into(),
+                registered_commit: SOURCE_SHA.into(),
+            },
+            binding_id: "rbind_no_change".into(),
+            binding_revision_id: "rbindrev_no_change".into(),
+            onboarding_id: "ronb_no_change".into(),
+            binding_content_hash: "sha256:binding-no-change".into(),
+            evidence_json: json!({"source_commit":SOURCE_SHA}),
+            product_id: "prod_no_change".into(),
+            expected_product_state_version: 1,
+            snapshot_id: "pmodel_no_change_registered".into(),
+            snapshot_json: json!({"schema_version":"pharness.dev/product-model/v1alpha1","repositories":["repo_no_change"]}),
+            snapshot_hash: "sha256:no-change-registered".into(),
+            actor: "operator".into(),
+            reason: "register exact revision".into(),
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .create_repository_discovery("rdisc_no_change", &registered.onboarding.id, SOURCE_SHA)
+        .await
+        .unwrap();
+    state
+        .store
+        .finish_repository_discovery(
+            "rdisc_no_change",
+            SOURCE_SHA,
+            &json!({"schema_version":"pharness.dev/repository-discovery/v1alpha1"}),
+            "sha256:discovery-no-change",
+        )
+        .await
+        .unwrap();
+    let session_id = SessionId::new("ses_no_change");
+    state
+        .store
+        .create_session(CreateSession {
+            id: session_id.clone(),
+            title: "No-change onboarding".into(),
+            cwd: "/workspace".into(),
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .create_run(CreateRun {
+            id: RunId::new("run_no_change"),
+            session_id,
+            user_task: "Propose the existing contract".into(),
+            cwd: "/workspace".into(),
+            max_turns: 16,
+            initial_status: "completed".into(),
+            execution_target_json: json!({}),
+        })
+        .await
+        .unwrap();
+    let onboarding = state
+        .store
+        .get_repository_onboarding(&registered.onboarding.id)
+        .await
+        .unwrap()
+        .unwrap();
+    state
+        .store
+        .start_repository_onboarding_proposer(
+            &onboarding.id,
+            onboarding.state_version,
+            "run_no_change",
+            "sha256:profile-no-change",
+            "operator",
+            "review existing contract",
+        )
+        .await
+        .unwrap();
+    let onboarding = state
+        .store
+        .get_repository_onboarding(&registered.onboarding.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let proposal = state
+        .store
+        .create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
+            id: "rprop_no_change".into(),
+            onboarding_id: onboarding.id.clone(),
+            expected_state_version: onboarding.state_version,
+            proposal: json!({
+                "schema_version":"pharness.dev/repository-onboarding-proposal/v1alpha1",
+                "discovery_id":"rdisc_no_change",
+                "discovery_hash":"sha256:discovery-no-change",
+                "candidate_contract":{
+                    "api_version":"pharness.dev/v1alpha1",
+                    "environment_profile":"python-3.11",
+                    "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":format!("{}", "d".repeat(64))},
+                    "writable_paths":["src/**","tests/**","readme.md"],
+                    "acceptance_commands":[{"name":"unit-tests","command":"python -m unittest discover -s tests -v"}],
+                    "roots":{"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
+                    "agent_network":"denied",
+                    "package_installation":"preparation_only"
+                },
+                "instructions":"Existing reviewed instructions.\n",
+                "service_proposals":[],
+                "binding_proposals":[],
+                "assumptions":[],
+                "conflicts":[],
+                "blockers":[],
+                "readiness_forecast":{}
+            }),
+            content_hash: "sha256:proposal-no-change".into(),
+            discovery_id: "rdisc_no_change".into(),
+            discovery_hash: "sha256:discovery-no-change".into(),
+            actor: "repository-onboarding-proposer".into(),
+            origin: "agent".into(),
+        })
+        .await
+        .unwrap();
+    let onboarding = state
+        .store
+        .get_repository_onboarding(&registered.onboarding.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let approved = state
+        .store
+        .approve_repository_onboarding_proposal(ApproveRepositoryOnboardingProposal {
+            onboarding_id: onboarding.id.clone(),
+            proposal_id: proposal.id,
+            proposal_hash: proposal.content_hash,
+            expected_state_version: onboarding.state_version,
+            actor: "operator".into(),
+            reason: "approve exact existing contract".into(),
+            model_change: None,
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .start_repository_onboarding_patch(
+            &approved.id,
+            approved.state_version,
+            "onbpatch_no_change",
+            "operator",
+            "prove the approved configuration is unchanged",
+        )
+        .await
+        .unwrap();
+
+    let empty_hash = format!("sha256:{:x}", sha2::Sha256::digest([]));
+    let Json(outcome) = internal_onboarding_patch_outcome(
+        State(state.clone()),
+        Path(registered.onboarding.id.clone()),
+        Json(OnboardingPatchOutcomeRequest {
+            status: "unchanged".into(),
+            patch: Some(String::new()),
+            patch_hash: Some(empty_hash),
+            changed_paths: Vec::new(),
+            error_code: None,
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome["onboarding"]["status"], "merge_observed");
+    assert!(outcome["onboarding"]["source_delivery_intent_id"].is_null());
+    let artifact_id = outcome["artifact_id"].as_str().unwrap();
+    let artifact = state
+        .store
+        .get_artifact(artifact_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(artifact.kind, "repository_onboarding_no_change");
+    assert_eq!(artifact.content_json.unwrap()["changed_paths"], json!([]));
+
+    let onboarding = state
+        .store
+        .get_repository_onboarding(&registered.onboarding.id)
+        .await
+        .unwrap()
+        .unwrap();
+    state
+        .store
+        .start_repository_onboarding_contract_validation(
+            &onboarding.id,
+            onboarding.state_version,
+            "onbvalidate_no_change",
+            "operator",
+            "validate the existing canonical contract",
+        )
+        .await
+        .unwrap();
+    let Json(context) = internal_onboarding_contract_validation_context(
+        State(state),
+        Path(registered.onboarding.id),
+        Query(InternalOnboardingContractValidationQuery {
+            execution_id: "onbvalidate_no_change".into(),
+        }),
+    )
+    .await
+    .unwrap();
+    let context = serde_json::to_value(context).unwrap();
+    assert_eq!(context["source_commit"], SOURCE_SHA);
+    assert_eq!(context["proposal_id"], "rprop_no_change");
 }
 
 async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
