@@ -6,6 +6,9 @@ set -euo pipefail
 #
 # Usage: scripts/pharness-build.sh <runtime|ui|python-runner|all> --revision <40-char-sha> [--node <hostname>]
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPOSITORY_ROOT="$(git -C "${SCRIPT_DIR}/.." rev-parse --show-toplevel)"
+
 NAMESPACE="tekton-pipelines"
 KUBE_CONTEXT="${PHARNESS_KUBE_CONTEXT:-lucas_engineering}"
 NODE="${PHARNESS_BUILD_NODE:-ubuntu-lucas-engineering-2}"
@@ -32,6 +35,21 @@ done
   echo "--revision must be a full lowercase 40-character Git SHA" >&2
   exit 1
 }
+
+VERIFICATION_OUTPUT="$(
+  "${SCRIPT_DIR}/pharness-verify-build-revision.sh" \
+    --repo "$REPOSITORY_ROOT" \
+    --remote "${PHARNESS_BUILD_REMOTE:-origin}" \
+    --branch "${PHARNESS_BUILD_BRANCH:-main}" \
+    --revision "$REVISION"
+)"
+printf '%s\n' "$VERIFICATION_OUTPUT"
+VERIFIED_REVISION="$(awk -F= '$1 == "verified_revision" { print $2 }' <<<"$VERIFICATION_OUTPUT")"
+[[ "$VERIFIED_REVISION" == "$REVISION" ]] || {
+  echo "build preflight did not return the requested immutable revision" >&2
+  exit 1
+}
+REVISION="$VERIFIED_REVISION"
 
 trigger() {
   local component="$1" storage="$2" dockerfile="$3"
