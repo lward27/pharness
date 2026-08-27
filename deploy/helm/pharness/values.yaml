@@ -97,6 +97,10 @@ worker:
     serviceAccount: pharness-source-reader
     tokenSecretName: ""
     allowedRepos:
+      - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/finance-frontend.git
+      - https://github.com/lward27/lucas_engineering.git
+      - https://github.com/lward27/scraper_manager.git
       - https://github.com/lward27/yfinance_wrapper.git
     activeDeadlineSeconds: 600
     ttlSecondsAfterFinished: 3600
@@ -107,8 +111,9 @@ worker:
     enabled: true
     serviceAccount: pharness-git-writer
     tokenSecretName: pharness-git-writer-token
-    allowedRepos: 
-      - https://github.com/lward27/yfinance_wrapper.git
+    allowedRepos:
+      - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/scraper_manager.git
     githubApiUrl: https://api.github.com
     authorName: Pharness
     authorEmail: pharness@lucas.engineering
@@ -135,7 +140,8 @@ worker:
     serviceAccount: pharness-git-observer
     tokenSecretName: pharness-git-observer-token
     allowedRepos:
-      - https://github.com/lward27/yfinance_wrapper.git
+      - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/scraper_manager.git
     githubApiUrl: https://api.github.com
     activeDeadlineSeconds: 300
     ttlSecondsAfterFinished: 3600
@@ -176,9 +182,11 @@ worker:
   # roomier node until a storage-aware scheduler/controller is introduced.
   workspaceNodeHostname: ubuntu-lucas-engineering
   maxConcurrentRunJobs: 1
-  # Exact HTTPS repos permitted for Kubernetes coding workspaces. Keep empty
-  # until DNS/egress and the disposable dev target have been reviewed.
+  # Exact HTTPS repositories permitted for Kubernetes coding workspaces.
+  # Product context repositories remain read-only through sourceReader.
   workspaceAllowedRemoteRepos:
+    - https://github.com/lward27/finance_app_database_service.git
+    - https://github.com/lward27/scraper_manager.git
     - https://github.com/lward27/yfinance_wrapper.git
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
@@ -200,6 +208,8 @@ environmentProfiles:
     preparation_strategy: python_hashed_requirements
     service_account: pharness-python-runner
     repository_allowlist:
+      - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/scraper_manager.git
       - https://github.com/lward27/yfinance_wrapper.git
     limits:
       cpu: "2"
