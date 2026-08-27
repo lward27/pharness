@@ -36,16 +36,16 @@ api:
   replicas: 1
   host: pharness-api.lucas.engineering
   dbPath: /data/pharness.db
-  operationalMode: read_only
+  operationalMode: normal
   legacyWorkItemCreationEnabled: false
   databaseGeneration:
-    id: dbgen_legacy_20260826
-    purpose: legacy-safety-generation
-    adoptExisting: true
+    id: dbgen_finance_20260827
+    purpose: clean-finance-product-generation
+    adoptExisting: false
     accepted: false
   persistence:
     create: true
-    claimName: pharness-api-data
+    claimName: pharness-api-data-finance-20260827
     existingClaim: ""
     retain: true
     storageClass: local-path
