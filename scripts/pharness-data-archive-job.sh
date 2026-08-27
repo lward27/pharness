@@ -121,6 +121,27 @@ if [[ -n "$DRY_RUN" ]]; then
   exit 0
 fi
 
-kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" wait \
-  --for=condition=complete "job/${JOB_NAME}" --timeout=1800s
+deadline=$((SECONDS + 1800))
+while (( SECONDS < deadline )); do
+  JOB_SUCCEEDED=""
+  JOB_FAILED=""
+  read -r JOB_SUCCEEDED JOB_FAILED <<<"$(
+    kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" \
+      get "job/${JOB_NAME}" -o jsonpath='{.status.succeeded} {.status.failed}'
+  )"
+  if [[ "$JOB_SUCCEEDED" == "1" ]]; then
+    break
+  fi
+  if [[ -n "$JOB_FAILED" && "$JOB_FAILED" != "0" ]]; then
+    kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" \
+      logs "job/${JOB_NAME}" --container archive || true
+    echo "archive Job ${JOB_NAME} failed" >&2
+    exit 1
+  fi
+  sleep 2
+done
+[[ "$JOB_SUCCEEDED" == "1" ]] || {
+  echo "archive Job ${JOB_NAME} did not complete within 1800 seconds" >&2
+  exit 1
+}
 kubectl --context "$KUBE_CONTEXT" --namespace "$NAMESPACE" logs "job/${JOB_NAME}" --container archive
