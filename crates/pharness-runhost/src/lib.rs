@@ -938,6 +938,11 @@ impl ProjectTools {
             .current_dir(&self.workspace)
             .env("PATH", path_entries.join(":"))
             .kill_on_drop(true);
+        if runtime.is_some_and(|runtime| runtime.kind == "node") {
+            for (key, value) in node_acceptance_environment(&self.workspace) {
+                child.env(key, value);
+            }
+        }
         if match runtime {
             Some(runtime) => runtime.kind == "python",
             None => true,
@@ -982,6 +987,28 @@ impl ProjectTools {
             ))
         }
     }
+}
+
+fn node_acceptance_environment(workspace: &Path) -> Vec<(&'static str, String)> {
+    let runtime_root = workspace.join(".pharness-runtime");
+    vec![
+        (
+            "NPM_CONFIG_CACHE",
+            runtime_root.join("npm-cache").to_string_lossy().to_string(),
+        ),
+        ("NPM_CONFIG_UPDATE_NOTIFIER", "false".into()),
+        ("NPM_CONFIG_AUDIT", "false".into()),
+        ("NPM_CONFIG_FUND", "false".into()),
+        ("NPM_CONFIG_OFFLINE", "true".into()),
+        (
+            "HOME",
+            runtime_root.join("home").to_string_lossy().to_string(),
+        ),
+        (
+            "XDG_CACHE_HOME",
+            runtime_root.join("cache").to_string_lossy().to_string(),
+        ),
+    ]
 }
 
 #[async_trait::async_trait]
@@ -1222,9 +1249,9 @@ impl EventSink for ChannelEventSink {
 #[cfg(test)]
 mod workspace_source_tests {
     use super::{
-        collect_workspace_git_evidence, git_evidence_args, profile_instruction, profile_tool_names,
-        repository_instructions, tool_specs_for_run, ProfileRestrictedTools, ProjectTools, RunSpec,
-        WorkspaceSourceSpec,
+        collect_workspace_git_evidence, git_evidence_args, node_acceptance_environment,
+        profile_instruction, profile_tool_names, repository_instructions, tool_specs_for_run,
+        ProfileRestrictedTools, ProjectTools, RunSpec, WorkspaceSourceSpec,
     };
     use pharness_core::{
         ActionId, AgentAction, RunBudgetConsumption, TaskContract, ToolError, ToolExecutor,
@@ -1235,6 +1262,40 @@ mod workspace_source_tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn node_acceptance_keeps_all_runtime_state_under_pharness_runtime() {
+        let environment = node_acceptance_environment(std::path::Path::new("/workspace"))
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        assert_eq!(
+            environment.get("NPM_CONFIG_CACHE").map(String::as_str),
+            Some("/workspace/.pharness-runtime/npm-cache")
+        );
+        assert_eq!(
+            environment.get("HOME").map(String::as_str),
+            Some("/workspace/.pharness-runtime/home")
+        );
+        assert_eq!(
+            environment.get("XDG_CACHE_HOME").map(String::as_str),
+            Some("/workspace/.pharness-runtime/cache")
+        );
+        assert_eq!(
+            environment
+                .get("NPM_CONFIG_UPDATE_NOTIFIER")
+                .map(String::as_str),
+            Some("false")
+        );
+        assert_eq!(
+            environment.get("NPM_CONFIG_OFFLINE").map(String::as_str),
+            Some("true")
+        );
+        assert!(environment
+            .values()
+            .filter(|value| value.starts_with('/'))
+            .all(|value| value.starts_with("/workspace/.pharness-runtime/")));
+    }
 
     #[derive(Clone)]
     struct AcceptingTools;
