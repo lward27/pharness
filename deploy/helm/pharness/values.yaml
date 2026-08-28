@@ -183,9 +183,11 @@ worker:
   workspaceNodeHostname: ubuntu-lucas-engineering
   maxConcurrentRunJobs: 1
   # Exact HTTPS repositories permitted for Kubernetes coding workspaces.
-  # Product context repositories remain read-only through sourceReader.
+  # Read-only onboarding proposer workspaces use this same transport boundary;
+  # inclusion here does not grant source-writer or EnvironmentProfile access.
   workspaceAllowedRemoteRepos:
     - https://github.com/lward27/finance_app_database_service.git
+    - https://github.com/lward27/finance-frontend.git
     - https://github.com/lward27/scraper_manager.git
     - https://github.com/lward27/yfinance_wrapper.git
   activeDeadlineSeconds: 3600
