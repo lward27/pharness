@@ -134,11 +134,13 @@ pub(in crate::app) fn work_item_gate_scope_matches(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::app) enum WorkItemStatus {
+    Proposed,
     Submitted,
     Planning,
     AwaitingApproval,
     Executing,
     Verifying,
+    WaitingExternal,
     Blocked,
     Completed,
     Failed,
@@ -148,11 +150,13 @@ pub(in crate::app) enum WorkItemStatus {
 impl WorkItemStatus {
     pub(in crate::app) fn parse(value: &str) -> Result<Self, ApiError> {
         match value {
+            "proposed" => Ok(Self::Proposed),
             "submitted" => Ok(Self::Submitted),
             "planning" => Ok(Self::Planning),
             "awaiting_approval" => Ok(Self::AwaitingApproval),
             "executing" => Ok(Self::Executing),
             "verifying" => Ok(Self::Verifying),
+            "waiting_external" => Ok(Self::WaitingExternal),
             "blocked" => Ok(Self::Blocked),
             "completed" => Ok(Self::Completed),
             "failed" => Ok(Self::Failed),
@@ -165,11 +169,13 @@ impl WorkItemStatus {
 
     pub(in crate::app) fn as_str(self) -> &'static str {
         match self {
+            Self::Proposed => "proposed",
             Self::Submitted => "submitted",
             Self::Planning => "planning",
             Self::AwaitingApproval => "awaiting_approval",
             Self::Executing => "executing",
             Self::Verifying => "verifying",
+            Self::WaitingExternal => "waiting_external",
             Self::Blocked => "blocked",
             Self::Completed => "completed",
             Self::Failed => "failed",
@@ -182,6 +188,7 @@ impl WorkItemStatus {
             return Ok(());
         }
         let allowed = match self {
+            Self::Proposed => matches!(target, Self::Planning | Self::Cancelled),
             Self::Submitted => matches!(target, Self::Planning | Self::Cancelled),
             Self::Planning => matches!(
                 target,
@@ -196,6 +203,14 @@ impl WorkItemStatus {
                 Self::Verifying | Self::Blocked | Self::Failed | Self::Cancelled
             ),
             Self::Verifying => matches!(
+                target,
+                Self::Completed
+                    | Self::WaitingExternal
+                    | Self::Blocked
+                    | Self::Failed
+                    | Self::Cancelled
+            ),
+            Self::WaitingExternal => matches!(
                 target,
                 Self::Completed | Self::Blocked | Self::Failed | Self::Cancelled
             ),
@@ -214,6 +229,28 @@ impl WorkItemStatus {
                 target.as_str()
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorkItemStatus;
+
+    #[test]
+    fn repo_mode_nonterminal_statuses_can_be_cancelled() {
+        for status in ["proposed", "waiting_external"] {
+            WorkItemStatus::parse(status)
+                .unwrap()
+                .ensure_can_transition_to(WorkItemStatus::Cancelled)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn repo_mode_waiting_external_can_close_after_observed_merge() {
+        WorkItemStatus::WaitingExternal
+            .ensure_can_transition_to(WorkItemStatus::Completed)
+            .unwrap();
     }
 }
 
