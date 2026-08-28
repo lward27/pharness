@@ -363,6 +363,17 @@ pub(crate) async fn finish_run_from_attempt(
     };
     let result_json = result_json_for_attempt(run, &outcome, approval_id);
 
+    if outcome.status == "cancelled" {
+        let reason = outcome
+            .summary
+            .as_deref()
+            .or(outcome.error.as_deref())
+            .unwrap_or("Run cancelled");
+        store
+            .cancel_pending_budget_extensions_for_run(&run.id, attempt_actor(run), reason)
+            .await?;
+    }
+
     match outcome.status.as_str() {
         "completed" => {
             store

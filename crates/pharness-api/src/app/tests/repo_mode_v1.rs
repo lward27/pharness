@@ -6,12 +6,13 @@ use super::super::products::{
 };
 use super::characterization::{test_state, test_state_with_git_observer};
 use super::{
-    internal_source_delivery_observation_outcome, json, ApproveRepositoryOnboardingProposal,
-    CreateChangeSet, CreateProductAggregate, CreateRepoWorkItem, CreateRepositoryContractVersion,
-    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
-    CreateSession, CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkPlan,
-    CreateWorkspace, GitDeliveryObservationOutcomeRequest, Json, Path, Query,
-    RegisterRepositoryAggregate, RunBudget, RunId, SessionId, State, StoredRepositoryDraft, Value,
+    cancel_run, internal_source_delivery_observation_outcome, json,
+    ApproveRepositoryOnboardingProposal, CreateChangeSet, CreateProductAggregate,
+    CreateRepoWorkItem, CreateRepositoryContractVersion, CreateRepositoryOnboardingProposal,
+    CreateRepositoryReadinessAssessment, CreateRun, CreateSession, CreateSourceDeliveryIntent,
+    CreateStageExecution, CreateWorkPlan, CreateWorkspace, GitDeliveryObservationOutcomeRequest,
+    Json, Path, Query, RegisterRepositoryAggregate, RunBudget, RunId, SessionId, State,
+    StoredRepositoryDraft, Value,
 };
 use sha2::Digest;
 
@@ -1002,6 +1003,146 @@ async fn worker_boundary_failure_seals_repo_stage_and_blocks_for_correction() {
     assert_eq!(
         outcome.outcome["stop_reason"],
         "worker job failed before reporting a durable outcome"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "blocked"
+    );
+}
+
+#[tokio::test]
+async fn cancelling_paused_repo_run_seals_stage_and_cancels_budget_extension() {
+    let fixture = repo_delivery_fixture("cancel_paused_repo_run").await;
+    let run_id = RunId::new("run_cancel_paused_repo_run");
+    let stage_execution_id = "stageexec_cancel_paused_repo_run";
+    let budget = RunBudget::default();
+    let consumption = pharness_core::RunBudgetConsumption {
+        allowed_turns: budget.initial_turns,
+        allowed_tokens: budget.initial_tokens,
+        turns_used: 12,
+        tokens_used: budget.initial_tokens,
+        active_execution_seconds_used: 60,
+        extensions: 0,
+    };
+    fixture
+        .state
+        .store
+        .create_run(CreateRun {
+            id: run_id.clone(),
+            session_id: SessionId::new("ses_cancel_paused_repo_run"),
+            user_task: "cancel a no-progress Builder".into(),
+            cwd: "/workspace".into(),
+            max_turns: budget.initial_turns,
+            initial_status: "queued".into(),
+            execution_target_json: json!({
+                "run_scope": {"work_item_id": fixture.work_item_id},
+                "repo_mode": {
+                    "stage": "implement",
+                    "stage_execution_id": stage_execution_id,
+                },
+            }),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .set_run_budget(&run_id, &budget, &consumption)
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .pause_run_for_budget(
+            &run_id,
+            json!({"status":"budget_extension_required"}),
+            "soft_token_budget_exhausted",
+        )
+        .await
+        .unwrap();
+    let extension = fixture
+        .state
+        .store
+        .create_budget_extension(pharness_store::CreateBudgetExtension {
+            id: "budget_cancel_paused_repo_run".into(),
+            work_item_id: fixture.work_item_id.clone(),
+            run_id: run_id.clone(),
+            state_hash: "cancel-state".into(),
+        })
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_stage_execution(CreateStageExecution {
+            id: stage_execution_id.into(),
+            work_item_id: fixture.work_item_id.clone(),
+            stage_key: "implement".into(),
+            sequence: 1,
+            status: "paused".into(),
+            agent_profile_id: Some("repo-builder".into()),
+            agent_profile_version: Some("v1".into()),
+            agent_profile_hash: Some("sha256:builder".into()),
+            context_pack_id: None,
+            run_id: Some(run_id.clone()),
+            workspace_id: None,
+            input_snapshot: json!({"source_commit": SOURCE_SHA}),
+            input_hash: "sha256:cancel-paused-input".into(),
+        })
+        .await
+        .unwrap();
+
+    let Json(cancelled) = cancel_run(State(fixture.state.clone()), Path(run_id.to_string()))
+        .await
+        .unwrap();
+
+    assert_eq!(cancelled.status, "cancelled");
+    assert!(fixture
+        .state
+        .store
+        .pending_budget_extension_for_run(&run_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_budget_extension(&extension.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "cancelled"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_stage_execution(stage_execution_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "cancelled"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_stage_outcome_for_execution(stage_execution_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "cancelled"
     );
     assert_eq!(
         fixture

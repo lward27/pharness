@@ -1295,7 +1295,36 @@ pub(super) async fn cancel_run(
 ) -> Result<Json<RunResponse>, ApiError> {
     let run_id = RunId::new(run_id);
     state.worker.cancel(&run_id);
-    let run = state.store.cancel_run(&run_id).await?;
+    let current = state
+        .store
+        .get_run(&run_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
+    let run = if current.execution_target_json.get("repo_mode").is_some() {
+        finish_run_from_attempt(
+            &state.store,
+            &current,
+            AttemptOutcome {
+                status: "cancelled".to_string(),
+                turns: current.budget_consumption.turns_used,
+                summary: Some("Repo Mode Run cancelled by operator".to_string()),
+                error: None,
+                approval: None,
+                workspace_evidence: None,
+                budget_extension: None,
+                consumption: current.budget_consumption.clone(),
+            },
+        )
+        .await
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+        state
+            .store
+            .get_run(&run_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?
+    } else {
+        state.store.cancel_run(&run_id).await?
+    };
     let seq = state.store.list_events(&run_id).await?.len() as u64 + 1;
     state
         .store

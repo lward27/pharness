@@ -4979,6 +4979,35 @@ impl SqliteStore {
         row.map(row_to_budget_extension).transpose()
     }
 
+    pub async fn cancel_pending_budget_extensions_for_run(
+        &self,
+        run_id: &RunId,
+        actor: &str,
+        reason: &str,
+    ) -> Result<Vec<StoredBudgetExtension>, StoreError> {
+        let decided_at = now_string();
+        sqlx::query(
+            r#"
+            UPDATE budget_extensions
+            SET status = 'cancelled', approved_at = ?2, approved_by = ?3, approval_reason = ?4
+            WHERE run_id = ?1 AND status = 'pending'
+            "#,
+        )
+        .bind(run_id.as_str())
+        .bind(&decided_at)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(self
+            .list_budget_extensions_for_run(run_id)
+            .await?
+            .into_iter()
+            .filter(|extension| extension.status == "cancelled")
+            .collect())
+    }
+
     pub async fn list_budget_extensions_for_run(
         &self,
         run_id: &RunId,
@@ -7470,6 +7499,28 @@ mod tests {
                 .status,
             "pending"
         );
+
+        let cancelled = store
+            .cancel_pending_budget_extensions_for_run(
+                &run_id,
+                "tester",
+                "operator cancelled the paused run",
+            )
+            .await
+            .unwrap();
+        assert_eq!(cancelled.len(), 1);
+        assert_eq!(cancelled[0].id, second.id);
+        assert_eq!(cancelled[0].status, "cancelled");
+        assert_eq!(cancelled[0].approved_by.as_deref(), Some("tester"));
+        assert_eq!(
+            cancelled[0].approval_reason.as_deref(),
+            Some("operator cancelled the paused run")
+        );
+        assert!(store
+            .pending_budget_extension_for_run(&run_id)
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
