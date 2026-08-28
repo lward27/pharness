@@ -1134,7 +1134,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$GIT_ASKPASS_VALUE" GIT_CONFIG_NOSYSTEM=1 git
                     _ => (self.gitops_observer_available(), &self.config.gitops_observer_service_account, self.config.gitops_observer_token_secret_name.as_deref(), &self.config.gitops_observer_allowed_repos, "pull"),
                 };
                 if !enabled { anyhow::bail!("{capability} is not configured"); }
-                let repo = repos.first().ok_or_else(|| anyhow::anyhow!("{capability} repository allowlist is empty"))?;
+                let repo = match requested_repository {
+                    Some(repository) => {
+                        if !repos.iter().any(|allowed| allowed == repository) {
+                            anyhow::bail!("{capability} repository is not allowlisted");
+                        }
+                        repository
+                    }
+                    None => repos
+                        .first()
+                        .map(String::as_str)
+                        .ok_or_else(|| anyhow::anyhow!("{capability} repository allowlist is empty"))?,
+                };
                 let repo_path = repo.trim_end_matches('/').trim_end_matches(".git").strip_prefix("https://github.com/").ok_or_else(|| anyhow::anyhow!("{capability} repository is not a safe GitHub HTTPS URL"))?;
                 env.push(serde_json::json!({"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"name":secret.expect("availability requires Secret"),"key":"token"}}}));
                 env.push(serde_json::json!({"name":"REPOSITORY","value":repo}));
@@ -1175,7 +1186,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 } else {
                     "curl -fsS -H \"Authorization: Bearer $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" \"$REPOSITORY_API\" -o /tmp/repository.json && grep -Eq \"\\\"$REQUIRED_PERMISSION\\\"[[:space:]]*:[[:space:]]*true\" /tmp/repository.json".to_string()
                 };
-                (service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, service_account), format!("repository_{required_permission}"), Some(repo.clone()), script)
+                (service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, service_account), format!("repository_{required_permission}"), Some(repo.to_string()), script)
             }
             "tekton" => (self.config.tekton_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.tekton_executor_service_account), "create_pipelineruns".to_string(), None, format!("kubectl auth can-i create pipelineruns.tekton.dev -n {} | grep -qx yes", self.config.tekton_allowed_namespaces.first().ok_or_else(|| anyhow::anyhow!("Tekton namespace allowlist is empty"))?)),
             "argo" => (self.config.argo_executor_service_account.clone(), format!("system:serviceaccount:{}:{}", self.config.namespace, self.config.argo_executor_service_account), "get_and_patch_application".to_string(), None, format!("kubectl auth can-i get applications.argoproj.io/{} -n {} | grep -qx yes && kubectl auth can-i patch applications.argoproj.io/{} -n {} | grep -qx yes", self.config.argo_executor_allowed_applications.first().ok_or_else(|| anyhow::anyhow!("Argo Application allowlist is empty"))?, self.config.argo_executor_namespace, self.config.argo_executor_allowed_applications.first().unwrap(), self.config.argo_executor_namespace)),
@@ -4567,6 +4578,44 @@ mod tests {
                     value.starts_with("refs/heads/pharness/capability-preflight-")
                 })
         }));
+    }
+
+    #[tokio::test]
+    async fn source_capability_preflight_honors_the_exact_requested_repository() {
+        let mut dispatcher = test_dispatcher(None).await;
+        let first = "https://github.com/example/first.git".to_string();
+        let second = "https://github.com/example/second.git".to_string();
+        dispatcher.config.git_writer_allowed_repos = vec![first.clone(), second.clone()];
+        dispatcher.config.git_observer_enabled = true;
+        dispatcher.config.git_observer_token_secret_name =
+            Some("pharness-git-observer-token".to_string());
+        dispatcher.config.git_observer_allowed_repos = vec![first, second.clone()];
+
+        for capability in ["source_writer", "source_observer"] {
+            let (_, _, repository, manifest) = dispatcher
+                .capability_preflight_manifest(capability, Some(&second))
+                .unwrap();
+            assert_eq!(repository.as_deref(), Some(second.as_str()));
+            let env = manifest
+                .pointer("/spec/template/spec/containers/0/env")
+                .and_then(serde_json::Value::as_array)
+                .unwrap();
+            assert!(env.iter().any(|entry| {
+                entry["name"] == "REPOSITORY" && entry["value"] == second.as_str()
+            }));
+            assert!(env.iter().any(|entry| {
+                entry["name"] == "REPOSITORY_API"
+                    && entry["value"] == "https://api.github.com/repos/example/second"
+            }));
+        }
+
+        let error = dispatcher
+            .capability_preflight_manifest(
+                "source_writer",
+                Some("https://github.com/example/not-allowed.git"),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("repository is not allowlisted"));
     }
 
     #[tokio::test]
