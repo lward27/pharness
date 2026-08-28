@@ -202,7 +202,7 @@ pub(in crate::app) async fn organization_overview_value(
                 .into_iter()
                 .next()
             {
-                let projection = onboarding_operator_projection(onboarding)?;
+                let projection = onboarding_operator_projection(state, onboarding).await?;
                 let action = projection
                     .get("actions")
                     .and_then(Value::as_array)

@@ -384,7 +384,10 @@ fn dependency_kind(path: &str) -> Option<&'static str> {
         "requirements.lock" | "requirements.txt" => Some("pip_requirements"),
         "pyproject.toml" | "poetry.lock" | "uv.lock" => Some("python_project"),
         "Cargo.toml" | "Cargo.lock" => Some("cargo"),
-        "package.json" | "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock" => Some("node"),
+        "package.json" => Some("node_package_manifest"),
+        "package-lock.json" => Some("npm_package_lock"),
+        "pnpm-lock.yaml" => Some("pnpm_lock"),
+        "yarn.lock" => Some("yarn_lock"),
         "go.mod" | "go.sum" => Some("go"),
         _ => None,
     }

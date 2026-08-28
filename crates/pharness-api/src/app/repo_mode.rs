@@ -3659,6 +3659,9 @@ async fn start_repo_builder(
     )
     .map_err(ApiError::conflict)?
     .clone();
+    contract
+        .validate_for_profile(&environment_profile)
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
     let reused_environment_snapshot = if reuse_prepared_workspace {
         latest_correction_environment_snapshot(state, work_item, workspace, &environment_profile)
             .await?
@@ -4802,6 +4805,18 @@ async fn build_repo_work_item_preflight(
         .transpose()?;
     let mut selected_acceptance = Vec::new();
     if let Some(contract) = &contract {
+        match state.environment_profiles.iter().find(|profile| {
+            profile.active
+                && profile.id == contract.environment_profile
+                && profile.repository_allowlist.contains(&repository.canonical_url)
+        }) {
+            Some(profile) => {
+                if let Err(error) = contract.validate_for_profile(profile) {
+                    blockers.push(json!({"code":"environment_profile_contract_mismatch","summary":error.to_string()}));
+                }
+            }
+            None => blockers.push(json!({"code":"environment_profile_unavailable","summary":"the active RepositoryContract profile is inactive or does not allow this repository"})),
+        }
         for name in &request.acceptance_command_names {
             if let Some(command) = contract.command(name) {
                 selected_acceptance.push(json!({"name":command.name,"command":command.command}));
@@ -5025,6 +5040,9 @@ pub(in crate::app) async fn current_readiness_mismatches(
         mismatches.push("environment_profile_unavailable".into());
         return Ok(mismatches);
     };
+    if contract.validate_for_profile(profile).is_err() {
+        mismatches.push("environment_profile_contract_mismatch".into());
+    }
     let current_digest = profile.image.split_once('@').map(|(_, digest)| digest);
     if assessment.environment_profile_id.as_deref() != Some(profile.id.as_str())
         || assessment.environment_profile_revision.as_deref() != Some(profile.revision.as_str())

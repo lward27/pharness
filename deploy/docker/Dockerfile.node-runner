@@ -1,0 +1,35 @@
+# Node 24 runner for immutable PHarness repository preparation and coding.
+# The final image contains no Docker/Podman client or usable OS package manager
+# and runs as the non-root worker UID on a read-only root filesystem.
+FROM --platform=$BUILDPLATFORM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
+ARG PHARNESS_BUILD_REVISION=unknown
+ARG TARGETARCH
+ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
+WORKDIR /build
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+RUN test "${TARGETARCH}" = "amd64" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup target add x86_64-unknown-linux-gnu
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-worker
+
+FROM node:24-bookworm-slim@sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa
+ARG PHARNESS_BUILD_REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
+      org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
+ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}" \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 pharness \
+    && useradd --uid 65532 --gid 65532 --home-dir /workspace --no-create-home pharness \
+    && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*
+COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-worker /usr/local/bin/pharness-worker
+USER 65532:65532
+WORKDIR /workspace
+ENTRYPOINT ["pharness-worker"]

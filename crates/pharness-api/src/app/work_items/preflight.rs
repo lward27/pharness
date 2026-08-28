@@ -204,10 +204,9 @@ pub(in crate::app) async fn build_work_item_preflight(
         ) {
             match inspect_remote_project_contract(source_repo, commit).await {
                 Ok((contract, hash)) => {
-                    if contract.environment_profile != profile.id {
+                    if let Err(error) = contract.validate_for_profile(profile) {
                         blockers.push(format!(
-                            "repository contract selects {} instead of requested profile {}",
-                            contract.environment_profile, profile.id
+                            "repository contract and environment profile are incompatible: {error}"
                         ));
                     }
                     let declared = contract

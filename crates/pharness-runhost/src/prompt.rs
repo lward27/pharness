@@ -4,7 +4,7 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-25.1";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-28.1";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
@@ -17,7 +17,7 @@ Use patch_file for small existing-file text edits when an exact find/replace pat
 When a tool returns a structured error, inspect it and choose a different safe action; do not repeat the same failed action without new evidence.
 Never probe whether a compiler, interpreter, package manager, container runtime, or other executable exists. Do not use `which`, `command -v`, version probes, or filesystem searches for executables. Run only the repository's direct test or validation command; if an executable is unavailable, the tool will return a structured error that you can report without searching for an alternative installation.
 For coding work, inspect the final Git status or diff after your last edit before calling finish.
-When an EnvironmentSnapshot and RepositoryContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
+When an EnvironmentSnapshot and RepositoryContract are injected, treat them as authoritative and use environment_info if you need those facts again. Do not probe for Python, Node, Docker, package managers, internet access, or operating-system setup. Never install packages during model execution. For a prepared run, execute only named contract acceptance commands through run_acceptance_command. A legacy development run may have no injected contract; in that case use the existing policy-gated tools and run_shell for repository-local tests, but still do not probe the environment, access the network, or install packages.
 Use typed read-only actions for Kubernetes, Argo CD, and Prometheus inspection:
 - kubernetes_get fields: resource, namespace, name, all_namespaces, label_selector.
 - argo_get_app fields: app.
@@ -444,7 +444,7 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                                 "additionalProperties":false,
                                 "required":["kind","path","sha256"],
                                 "properties":{
-                                    "kind":{"type":"string","minLength":1},
+                                    "kind":{"type":"string","enum":["pip_requirements","npm_package_lock"]},
                                     "path":{"type":"string","minLength":1},
                                     "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}
                                 }
@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn worker_prompt_forbids_toolchain_discovery_before_execution() {
-        assert_eq!(SYSTEM_PROMPT_VERSION, "2026-08-25.1");
+        assert_eq!(SYSTEM_PROMPT_VERSION, "2026-08-28.1");
         let prompt = system_prompt();
         for prohibited_probe in ["`which`", "`command -v`", "version probes"] {
             assert!(prompt.contains(prohibited_probe));

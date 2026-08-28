@@ -11,9 +11,9 @@ use anyhow::Context;
 use hmac::{Hmac, Mac};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    discover_repository, AgentAction, AgentEvent, CancellationFlag, EnvironmentSnapshot,
-    ReadOnlyClusterTools, RepositoryContract, RepositoryContractSource,
-    RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits, ToolExecutor,
+    discover_repository, AgentAction, AgentEvent, CancellationFlag, EnvironmentRuntimeSnapshot,
+    EnvironmentSnapshot, PreparationStrategy, ReadOnlyClusterTools, RepositoryContract,
+    RepositoryContractSource, RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
@@ -698,44 +698,11 @@ async fn prepare_repository_readiness(
             serde_json::Value::String(executable_path(executable).await?),
         );
     }
-    let python = required_executables
-        .iter()
-        .find(|name| matches!(name.as_str(), "python" | "python3"))
-        .context("python_executable_missing")?;
-    let python_path = executable_paths
-        .get(python)
-        .and_then(serde_json::Value::as_str)
-        .context("python_executable_missing")?;
-    let runtime_dir = root.join(".pharness-runtime");
-    let venv = runtime_dir.join("venv");
-    tokio::fs::create_dir_all(&runtime_dir).await?;
-    exclude_runtime_from_git(&root).await?;
-    run_checked(
+    let prepared = prepare_declared_runtime(
         &root,
-        python_path,
-        &["-m", "venv", venv.to_string_lossy().as_ref()],
-    )
-    .await?;
-    let venv_python = venv.join("bin/python");
-    run_checked(
-        &root,
-        venv_python.to_string_lossy().as_ref(),
-        &[
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--require-hashes",
-            "--only-binary=:all:",
-            "-r",
-            &loaded.contract.dependency_lock.path,
-        ],
-    )
-    .await?;
-    let python_version = run_output(
-        &root,
-        venv_python.to_string_lossy().as_ref(),
-        &["--version"],
+        &loaded.contract,
+        &executable_paths,
+        configured_preparation_strategy()?,
     )
     .await?;
     let effective_user = run_output(&root, "id", &["-u"]).await?;
@@ -754,8 +721,9 @@ async fn prepare_repository_readiness(
         os: std::env::consts::OS.into(),
         architecture: std::env::consts::ARCH.into(),
         effective_user,
-        python_version,
-        python_path: venv_python.to_string_lossy().to_string(),
+        runtime: Some(prepared.runtime.clone()),
+        python_version: prepared.python_version.clone(),
+        python_path: prepared.python_path.clone(),
         writable_paths: loaded.contract.writable_paths.clone(),
         unavailable_tools,
         agent_network: loaded.contract.agent_network,
@@ -763,23 +731,25 @@ async fn prepare_repository_readiness(
         acceptance_commands: loaded.contract.acceptance_commands.clone(),
         preparation_evidence: serde_json::json!({
             "required_executables":executable_paths,
-            "venv":venv,
-            "dependency_install":"pip --require-hashes --only-binary=:all:",
+            "runtime":prepared.evidence,
             "platform":required_env("PHARNESS_RUNNER_PLATFORM")?,
             "workspace_id":context.workspace_id,
             "contract_version_id":context.contract_version_id,
         }),
     };
-    let venv_bin = venv.join("bin");
     let inherited_path = std::env::var("PATH").unwrap_or_default();
-    let readiness_path = format!("{}:{inherited_path}", venv_bin.to_string_lossy());
+    let readiness_path = effective_runtime_path(&prepared.runtime.path_entries, &inherited_path);
     let mut acceptance_results = Vec::new();
     for command in &loaded.contract.acceptance_commands {
         let output = Command::new("/bin/sh")
             .args(["-c", &command.command])
             .current_dir(&root)
             .env("PATH", &readiness_path)
-            .env("PYTHONPATH", root.join("src"))
+            .envs(acceptance_environment(
+                &root,
+                &loaded.contract,
+                &prepared.runtime,
+            ))
             .output()
             .await
             .context("acceptance_command_structurally_unexecutable")?;
@@ -1601,42 +1571,13 @@ async fn prepare_project_environment(
         let path = executable_path(executable).await?;
         executable_paths.insert(executable.clone(), serde_json::Value::String(path));
     }
-    let python = required_executables
-        .iter()
-        .find(|name| name.as_str() == "python" || name.as_str() == "python3")
-        .context("python runner profile must declare python or python3")?;
-    let python_path = executable_paths
-        .get(python)
-        .and_then(serde_json::Value::as_str)
-        .context("python executable path was not recorded")?;
-    let runtime_dir = cwd.join(".pharness-runtime");
-    let venv = runtime_dir.join("venv");
-    tokio::fs::create_dir_all(&runtime_dir).await?;
-    exclude_runtime_from_git(&cwd).await?;
-    run_checked(
+    let prepared = prepare_declared_runtime(
         &cwd,
-        python_path,
-        &["-m", "venv", venv.to_string_lossy().as_ref()],
+        &contract,
+        &executable_paths,
+        configured_preparation_strategy()?,
     )
     .await?;
-    let venv_python = venv.join("bin/python");
-    run_checked(
-        &cwd,
-        venv_python.to_string_lossy().as_ref(),
-        &[
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--require-hashes",
-            "--only-binary=:all:",
-            "-r",
-            &contract.dependency_lock.path,
-        ],
-    )
-    .await?;
-    let python_version =
-        run_output(&cwd, venv_python.to_string_lossy().as_ref(), &["--version"]).await?;
     let effective_user = run_output(&cwd, "id", &["-u"]).await?;
     let mut unavailable_tools = Vec::new();
     for executable in ["docker", "podman", "apt", "apt-get", "apk"] {
@@ -1653,8 +1594,9 @@ async fn prepare_project_environment(
         os: std::env::consts::OS.to_string(),
         architecture: std::env::consts::ARCH.to_string(),
         effective_user,
-        python_version,
-        python_path: venv_python.to_string_lossy().to_string(),
+        runtime: Some(prepared.runtime.clone()),
+        python_version: prepared.python_version.clone(),
+        python_path: prepared.python_path.clone(),
         writable_paths: contract.writable_paths.clone(),
         unavailable_tools,
         agent_network: contract.agent_network,
@@ -1662,8 +1604,7 @@ async fn prepare_project_environment(
         acceptance_commands: contract.acceptance_commands.clone(),
         preparation_evidence: serde_json::json!({
             "required_executables": executable_paths,
-            "venv": venv,
-            "dependency_install": "pip --require-hashes --only-binary=:all:",
+            "runtime": prepared.evidence,
             "platform": required_env("PHARNESS_RUNNER_PLATFORM")?,
         }),
     };
@@ -1695,6 +1636,203 @@ fn load_preparation_contract(
     RepositoryContract::load(workspace).map_err(Into::into)
 }
 
+struct PreparedRuntime {
+    runtime: EnvironmentRuntimeSnapshot,
+    python_version: Option<String>,
+    python_path: Option<String>,
+    evidence: serde_json::Value,
+}
+
+fn configured_preparation_strategy() -> anyhow::Result<PreparationStrategy> {
+    match required_env("PHARNESS_PREPARATION_STRATEGY")?.as_str() {
+        "python_hashed_requirements" => Ok(PreparationStrategy::PythonHashedRequirements),
+        "node_npm_ci" => Ok(PreparationStrategy::NodeNpmCi),
+        value => anyhow::bail!("unsupported preparation strategy {value}"),
+    }
+}
+
+async fn prepare_declared_runtime(
+    cwd: &std::path::Path,
+    contract: &RepositoryContract,
+    executable_paths: &serde_json::Map<String, serde_json::Value>,
+    strategy: PreparationStrategy,
+) -> anyhow::Result<PreparedRuntime> {
+    let expected_lock = strategy.accepted_dependency_lock_kind();
+    if contract.dependency_lock.kind != expected_lock {
+        anyhow::bail!(
+            "runner strategy requires dependency_lock.kind {expected_lock}, got {}",
+            contract.dependency_lock.kind
+        );
+    }
+    let runtime_dir = cwd.join(".pharness-runtime");
+    tokio::fs::create_dir_all(&runtime_dir).await?;
+    exclude_runtime_from_git(cwd).await?;
+    match strategy {
+        PreparationStrategy::PythonHashedRequirements => {
+            let python_path = ["python", "python3"]
+                .iter()
+                .find_map(|name| {
+                    executable_paths
+                        .get(*name)
+                        .and_then(serde_json::Value::as_str)
+                })
+                .context("python runner profile must declare python or python3")?;
+            let venv = runtime_dir.join("venv");
+            run_checked(
+                cwd,
+                python_path,
+                &["-m", "venv", venv.to_string_lossy().as_ref()],
+            )
+            .await?;
+            let venv_python = venv.join("bin/python");
+            run_checked(
+                cwd,
+                venv_python.to_string_lossy().as_ref(),
+                &[
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    "--require-hashes",
+                    "--only-binary=:all:",
+                    "-r",
+                    &contract.dependency_lock.path,
+                ],
+            )
+            .await?;
+            let version =
+                run_output(cwd, venv_python.to_string_lossy().as_ref(), &["--version"]).await?;
+            let venv_bin = venv.join("bin").to_string_lossy().to_string();
+            Ok(PreparedRuntime {
+                runtime: EnvironmentRuntimeSnapshot {
+                    kind: "python".into(),
+                    executable: venv_python.to_string_lossy().to_string(),
+                    version: version.clone(),
+                    package_manager_executable: Some(format!("{venv_bin}/pip")),
+                    package_manager_version: Some(
+                        run_output(
+                            cwd,
+                            venv_python.to_string_lossy().as_ref(),
+                            &["-m", "pip", "--version"],
+                        )
+                        .await?,
+                    ),
+                    path_entries: vec![venv_bin],
+                },
+                python_version: Some(version),
+                python_path: Some(venv_python.to_string_lossy().to_string()),
+                evidence: serde_json::json!({
+                    "venv":venv,
+                    "dependency_install":"pip --require-hashes --only-binary=:all:",
+                }),
+            })
+        }
+        PreparationStrategy::NodeNpmCi => {
+            let node_path = executable_paths
+                .get("node")
+                .and_then(serde_json::Value::as_str)
+                .context("node runner profile must declare node")?;
+            let npm_path = executable_paths
+                .get("npm")
+                .and_then(serde_json::Value::as_str)
+                .context("node runner profile must declare npm")?;
+            reject_tracked_node_modules(cwd).await?;
+            exclude_node_modules_from_git(cwd).await?;
+            let lock_path = cwd.join(&contract.dependency_lock.path);
+            let install_dir = lock_path
+                .parent()
+                .context("package-lock.json has no repository parent")?;
+            let npm_cache = runtime_dir.join("npm-cache");
+            tokio::fs::create_dir_all(&npm_cache).await?;
+            let npm_cache_value = npm_cache.to_string_lossy().to_string();
+            run_checked_with_env(
+                install_dir,
+                npm_path,
+                &["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+                &[("NPM_CONFIG_CACHE", npm_cache_value.as_str())],
+            )
+            .await?;
+            ensure_tracked_workspace_clean(cwd).await?;
+            let version = run_output(cwd, node_path, &["--version"]).await?;
+            let npm_version = run_output(cwd, npm_path, &["--version"]).await?;
+            let node_bin = install_dir
+                .join("node_modules/.bin")
+                .to_string_lossy()
+                .to_string();
+            Ok(PreparedRuntime {
+                runtime: EnvironmentRuntimeSnapshot {
+                    kind: "node".into(),
+                    executable: node_path.to_string(),
+                    version,
+                    package_manager_executable: Some(npm_path.to_string()),
+                    package_manager_version: Some(npm_version),
+                    path_entries: vec![node_bin],
+                },
+                python_version: None,
+                python_path: None,
+                evidence: serde_json::json!({
+                    "npm_cache":npm_cache,
+                    "dependency_install":"npm ci --ignore-scripts --no-audit --no-fund",
+                    "lifecycle_scripts":"denied",
+                    "tracked_files_unchanged":true,
+                }),
+            })
+        }
+    }
+}
+
+fn effective_runtime_path(entries: &[String], inherited: &str) -> String {
+    let mut parts = entries.to_vec();
+    if !inherited.is_empty() {
+        parts.push(inherited.to_string());
+    }
+    parts.join(":")
+}
+
+fn acceptance_environment(
+    cwd: &std::path::Path,
+    contract: &RepositoryContract,
+    runtime: &EnvironmentRuntimeSnapshot,
+) -> Vec<(String, String)> {
+    if runtime.kind != "python" {
+        return Vec::new();
+    }
+    let python_path = contract
+        .roots
+        .source
+        .iter()
+        .map(|path| cwd.join(path).to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(":");
+    vec![("PYTHONPATH".into(), python_path)]
+}
+
+async fn reject_tracked_node_modules(cwd: &std::path::Path) -> anyhow::Result<()> {
+    let tracked = run_output(
+        cwd,
+        "git",
+        &["ls-files", "node_modules", ":(glob)**/node_modules/**"],
+    )
+    .await?;
+    if !tracked.trim().is_empty() {
+        anyhow::bail!("tracked_node_modules_not_supported");
+    }
+    Ok(())
+}
+
+async fn ensure_tracked_workspace_clean(cwd: &std::path::Path) -> anyhow::Result<()> {
+    let status = run_output(
+        cwd,
+        "git",
+        &["status", "--porcelain", "--untracked-files=no"],
+    )
+    .await?;
+    if !status.trim().is_empty() {
+        anyhow::bail!("preparation_modified_tracked_files");
+    }
+    Ok(())
+}
+
 async fn executable_path(executable: &str) -> anyhow::Result<String> {
     executable_path_optional(executable)
         .await
@@ -1717,6 +1855,28 @@ async fn run_checked(cwd: &std::path::Path, program: &str, args: &[&str]) -> any
     let output = Command::new(program)
         .current_dir(cwd)
         .args(args)
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "{} failed: {}",
+            program,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+async fn run_checked_with_env(
+    cwd: &std::path::Path,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> anyhow::Result<()> {
+    let output = Command::new(program)
+        .current_dir(cwd)
+        .args(args)
+        .envs(env.iter().copied())
         .output()
         .await?;
     if !output.status.success() {
@@ -1771,6 +1931,21 @@ async fn exclude_runtime_from_git(cwd: &std::path::Path) -> anyhow::Result<()> {
             content.push('\n');
         }
         content.push_str("/.pharness-runtime/\n");
+        tokio::fs::write(exclude, content).await?;
+    }
+    Ok(())
+}
+
+async fn exclude_node_modules_from_git(cwd: &std::path::Path) -> anyhow::Result<()> {
+    let exclude = cwd.join(".git/info/exclude");
+    let mut content = tokio::fs::read_to_string(&exclude)
+        .await
+        .unwrap_or_default();
+    if !content.lines().any(|line| line.trim() == "node_modules/") {
+        if !content.ends_with('\n') && !content.is_empty() {
+            content.push('\n');
+        }
+        content.push_str("node_modules/\n");
         tokio::fs::write(exclude, content).await?;
     }
     Ok(())
@@ -4201,15 +4376,19 @@ async fn prepare_workspace(spec: &AttemptSpec) -> anyhow::Result<Option<Provisio
             .await
             .context("durable workspace branch could not be inspected")?;
         validate_resumed_workspace_identity(source, &resolved_commit, &branch)?;
-        if spec.resume.is_none()
-            && spec
-                .run
-                .execution_target_json
-                .get("environment_snapshot")
-                .is_some()
-            && !cwd.join(".pharness-runtime/venv/bin/python").is_file()
-        {
-            anyhow::bail!("prepared workspace is missing its durable Python environment");
+        if spec.resume.is_none() {
+            if let Some(snapshot) = spec.run.execution_target_json.get("environment_snapshot") {
+                let runtime_ready = snapshot
+                    .pointer("/runtime/path_entries/0")
+                    .and_then(serde_json::Value::as_str)
+                    .map(std::path::Path::new)
+                    .is_some_and(std::path::Path::exists)
+                    || snapshot.get("runtime").is_none()
+                        && cwd.join(".pharness-runtime/venv/bin/python").is_file();
+                if !runtime_ready {
+                    anyhow::bail!("prepared workspace is missing its durable runtime environment");
+                }
+            }
         }
         return Ok(None);
     }
@@ -4565,10 +4744,14 @@ mod tests {
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
         github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
-        update_kustomization_image, validate_git_delivery_context,
+        prepare_declared_runtime, update_kustomization_image, validate_git_delivery_context,
         validate_onboarding_patch_changed_paths, validate_resumed_workspace_identity,
         workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext,
         GitDeliveryObservationContext, PipelineRunTerminal,
+    };
+    use pharness_core::{
+        AcceptanceCommand, AgentNetworkPolicy, DependencyLock, PackageInstallationPolicy,
+        PreparationStrategy, ProjectRoots, RepositoryContract,
     };
     use pharness_runhost::WorkspaceSourceSpec;
     use serde_json::json;
@@ -4655,6 +4838,107 @@ package_installation: preparation_only
         assert_eq!(repo_mode_hash, format!("sha256:{legacy_hash}"));
 
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn node_preparation_ignores_lifecycle_scripts_and_keeps_tracked_files_clean() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(format!("pharness-node-prep-{suffix}"));
+        let tools = std::env::temp_dir().join(format!("pharness-node-tools-{suffix}"));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        std::fs::create_dir_all(&tools).unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"fixture","lockfileVersion":3,"packages":{"":{"name":"fixture"},"node_modules/example":{"version":"1.0.0","resolved":"https://registry.npmjs.org/example/-/example-1.0.0.tgz","integrity":"sha512-YWJjZA=="}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"scripts":{"install":"touch install-script-ran"}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("src/index.js"), "export {};\n").unwrap();
+        std::fs::write(root.join("tests/index.test.js"), "// fixture\n").unwrap();
+        let node = tools.join("node");
+        let npm = tools.join("npm");
+        std::fs::write(&node, "#!/bin/sh\necho v24.0.0\n").unwrap();
+        std::fs::write(
+            &npm,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 11.0.0; exit 0; fi\nfound=no\nfor arg in \"$@\"; do [ \"$arg\" = \"--ignore-scripts\" ] && found=yes; done\n[ \"$found\" = yes ] || touch install-script-ran\nmkdir -p node_modules/.bin .pharness-runtime/npm-cache\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&npm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "test@example.invalid"],
+            vec!["config", "user.name", "PHarness test"],
+            vec!["add", "."],
+            vec!["commit", "-m", "fixture"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .output()
+                .unwrap()
+                .status
+                .success());
+        }
+        let contract = RepositoryContract {
+            api_version: "pharness.dev/v1alpha1".into(),
+            environment_profile: "node-24".into(),
+            dependency_lock: DependencyLock {
+                kind: "npm_package_lock".into(),
+                path: "package-lock.json".into(),
+                sha256: "a".repeat(64),
+            },
+            writable_paths: vec!["src/**".into(), "tests/**".into()],
+            acceptance_commands: vec![AcceptanceCommand {
+                name: "test".into(),
+                command: "npm test".into(),
+            }],
+            roots: ProjectRoots {
+                source: vec!["src".into()],
+                tests: vec!["tests".into()],
+                documentation: Vec::new(),
+            },
+            agent_network: AgentNetworkPolicy::Denied,
+            package_installation: PackageInstallationPolicy::PreparationOnly,
+        };
+        let mut executables = serde_json::Map::new();
+        executables.insert("node".into(), json!(node));
+        executables.insert("npm".into(), json!(npm));
+        let prepared = prepare_declared_runtime(
+            &root,
+            &contract,
+            &executables,
+            PreparationStrategy::NodeNpmCi,
+        )
+        .await
+        .unwrap();
+        assert_eq!(prepared.runtime.kind, "node");
+        assert!(!root.join("install-script-ran").exists());
+        assert!(root.join("node_modules/.bin").is_dir());
+        assert!(std::process::Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .current_dir(&root)
+            .output()
+            .unwrap()
+            .stdout
+            .is_empty());
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(tools);
     }
 
     #[tokio::test]

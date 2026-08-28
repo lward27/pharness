@@ -128,6 +128,27 @@ pub struct EnvironmentProfile {
 #[serde(rename_all = "snake_case")]
 pub enum PreparationStrategy {
     PythonHashedRequirements,
+    NodeNpmCi,
+}
+
+impl PreparationStrategy {
+    pub fn runtime_kind(self) -> &'static str {
+        match self {
+            Self::PythonHashedRequirements => "python",
+            Self::NodeNpmCi => "node",
+        }
+    }
+
+    pub fn accepted_dependency_lock_kind(self) -> &'static str {
+        match self {
+            Self::PythonHashedRequirements => "pip_requirements",
+            Self::NodeNpmCi => "npm_package_lock",
+        }
+    }
+
+    pub fn lifecycle_scripts_allowed(self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,14 +169,31 @@ pub struct EnvironmentSnapshot {
     pub os: String,
     pub architecture: String,
     pub effective_user: String,
-    pub python_version: String,
-    pub python_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<EnvironmentRuntimeSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_path: Option<String>,
     pub writable_paths: Vec<String>,
     pub unavailable_tools: Vec<String>,
     pub agent_network: AgentNetworkPolicy,
     pub package_installation: PackageInstallationPolicy,
     pub acceptance_commands: Vec<AcceptanceCommand>,
     pub preparation_evidence: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentRuntimeSnapshot {
+    pub kind: String,
+    pub executable: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_manager_executable: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_manager_version: Option<String>,
+    pub path_entries: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,9 +290,41 @@ impl EnvironmentProfile {
                 "required executables must be non-empty command names".into(),
             ));
         }
+        let required = self
+            .required_executables
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let strategy_executables = match self.preparation_strategy {
+            PreparationStrategy::PythonHashedRequirements => {
+                ["pharness-worker", "git", "python", "pip"]
+            }
+            PreparationStrategy::NodeNpmCi => ["pharness-worker", "git", "node", "npm"],
+        };
+        if strategy_executables
+            .iter()
+            .any(|executable| !required.contains(executable))
+        {
+            return Err(RepositoryContractError::Invalid(format!(
+                "environment profile {} is missing executables required by its preparation strategy",
+                self.id
+            )));
+        }
         if self.service_account.trim().is_empty() {
             return Err(RepositoryContractError::Invalid(
                 "environment profile service account is required".into(),
+            ));
+        }
+        if self.repository_allowlist.is_empty()
+            || self.repository_allowlist.iter().any(|repository| {
+                !repository.starts_with("https://github.com/")
+                    || !repository.ends_with(".git")
+                    || repository.contains(['\'', '"', ' ', '?', '#'])
+            })
+        {
+            return Err(RepositoryContractError::Invalid(
+                "environment profile repository allowlist must contain exact GitHub HTTPS repositories"
+                    .into(),
             ));
         }
         Ok(())
@@ -272,9 +342,12 @@ impl RepositoryContract {
             ));
         }
         validate_identifier(&self.environment_profile, "environment_profile")?;
-        if self.dependency_lock.kind != "pip_requirements" {
+        if !matches!(
+            self.dependency_lock.kind.as_str(),
+            "pip_requirements" | "npm_package_lock"
+        ) {
             return Err(RepositoryContractError::Invalid(
-                "dependency_lock.kind must be pip_requirements".into(),
+                "dependency_lock.kind must be pip_requirements or npm_package_lock".into(),
             ));
         }
         validate_relative_path(&self.dependency_lock.path, false)?;
@@ -312,6 +385,28 @@ impl RepositoryContract {
             return Err(RepositoryContractError::Invalid(
                 "source and test roots are required".into(),
             ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_for_profile(
+        &self,
+        profile: &EnvironmentProfile,
+    ) -> Result<(), RepositoryContractError> {
+        self.validate_candidate()?;
+        profile.validate()?;
+        if self.environment_profile != profile.id {
+            return Err(RepositoryContractError::Invalid(format!(
+                "repository contract selects EnvironmentProfile {} but {} was provided",
+                self.environment_profile, profile.id
+            )));
+        }
+        let expected = profile.preparation_strategy.accepted_dependency_lock_kind();
+        if self.dependency_lock.kind != expected {
+            return Err(RepositoryContractError::Invalid(format!(
+                "EnvironmentProfile {} requires dependency_lock.kind {expected}",
+                profile.id
+            )));
         }
         Ok(())
     }
@@ -407,11 +502,26 @@ impl RepositoryContract {
                 "dependency lock SHA-256 does not match the pinned file".into(),
             ));
         }
-        validate_immutable_pip_lock(&lock_bytes)?;
+        match self.dependency_lock.kind.as_str() {
+            "pip_requirements" => validate_immutable_pip_lock(&lock_bytes)?,
+            "npm_package_lock" => {
+                if !self.dependency_lock.path.ends_with("package-lock.json") {
+                    return Err(RepositoryContractError::Invalid(
+                        "npm_package_lock path must reference package-lock.json".into(),
+                    ));
+                }
+                validate_immutable_npm_lock(&lock_bytes)?;
+            }
+            _ => unreachable!("candidate validation restricts dependency lock kinds"),
+        }
         validate_declared_paths(workspace, &self.writable_paths)?;
-        validate_declared_paths(workspace, &self.roots.source)?;
-        validate_declared_paths(workspace, &self.roots.tests)?;
-        validate_declared_paths(workspace, &self.roots.documentation)?;
+        validate_existing_declared_paths(workspace, &self.roots.source, "source root")?;
+        validate_existing_declared_paths(workspace, &self.roots.tests, "test root")?;
+        validate_existing_declared_paths(
+            workspace,
+            &self.roots.documentation,
+            "documentation root",
+        )?;
         Ok(())
     }
 
@@ -500,6 +610,23 @@ fn validate_declared_paths(
     Ok(())
 }
 
+fn validate_existing_declared_paths(
+    workspace: &Path,
+    values: &[String],
+    label: &str,
+) -> Result<(), RepositoryContractError> {
+    validate_declared_paths(workspace, values)?;
+    for value in values {
+        let path = workspace.join(value);
+        if !path.exists() {
+            return Err(RepositoryContractError::Invalid(format!(
+                "declared {label} does not exist: {value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_immutable_pip_lock(bytes: &[u8]) -> Result<(), RepositoryContractError> {
     let text = std::str::from_utf8(bytes).map_err(|_| {
         RepositoryContractError::Invalid("pip requirements lock must be UTF-8".into())
@@ -564,6 +691,148 @@ fn validate_locked_requirement(requirement: &str) -> Result<(), RepositoryContra
     Ok(())
 }
 
+fn validate_immutable_npm_lock(bytes: &[u8]) -> Result<(), RepositoryContractError> {
+    let lock: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
+        RepositoryContractError::Invalid(format!("package-lock.json is invalid JSON: {error}"))
+    })?;
+    let object = lock.as_object().ok_or_else(|| {
+        RepositoryContractError::Invalid("package-lock.json must contain a JSON object".into())
+    })?;
+    let lockfile_version = object
+        .get("lockfileVersion")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            RepositoryContractError::Invalid(
+                "package-lock.json must declare lockfileVersion 2 or 3".into(),
+            )
+        })?;
+    if !matches!(lockfile_version, 2 | 3) {
+        return Err(RepositoryContractError::Invalid(
+            "package-lock.json must use lockfileVersion 2 or 3".into(),
+        ));
+    }
+    if object.contains_key("workspaces") {
+        return Err(RepositoryContractError::Invalid(
+            "npm workspaces are not supported".into(),
+        ));
+    }
+    let packages = object
+        .get("packages")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| {
+            RepositoryContractError::Invalid(
+                "package-lock.json must contain a packages object".into(),
+            )
+        })?;
+    let root = packages
+        .get("")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| {
+            RepositoryContractError::Invalid(
+                "package-lock.json must contain a root package record".into(),
+            )
+        })?;
+    if root.contains_key("workspaces") {
+        return Err(RepositoryContractError::Invalid(
+            "npm workspaces are not supported".into(),
+        ));
+    }
+    for (path, package) in packages {
+        let package = package.as_object().ok_or_else(|| {
+            RepositoryContractError::Invalid(format!(
+                "package-lock package record {path:?} must be an object"
+            ))
+        })?;
+        validate_npm_dependency_inputs(path, package)?;
+        if path.is_empty() {
+            continue;
+        }
+        if package
+            .get("link")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            return Err(RepositoryContractError::Invalid(format!(
+                "package-lock contains unsupported local link {path:?}"
+            )));
+        }
+        let integrity = package
+            .get("integrity")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| valid_sri(value))
+            .ok_or_else(|| {
+                RepositoryContractError::Invalid(format!(
+                    "package-lock package {path:?} is missing an integrity hash"
+                ))
+            })?;
+        let _ = integrity;
+        let resolved = package
+            .get("resolved")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                RepositoryContractError::Invalid(format!(
+                    "package-lock package {path:?} is missing its resolved registry URL"
+                ))
+            })?;
+        if !resolved.starts_with("https://registry.npmjs.org/") {
+            return Err(RepositoryContractError::Invalid(format!(
+                "package-lock package {path:?} uses a non-approved registry"
+            )));
+        }
+    }
+    if packages.len() <= 1 {
+        return Err(RepositoryContractError::Invalid(
+            "package-lock.json must contain at least one locked package".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_npm_dependency_inputs(
+    path: &str,
+    package: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), RepositoryContractError> {
+    for key in [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+    ] {
+        let Some(dependencies) = package.get(key).and_then(serde_json::Value::as_object) else {
+            continue;
+        };
+        for (name, value) in dependencies {
+            let Some(value) = value.as_str() else {
+                continue;
+            };
+            let lower = value.to_ascii_lowercase();
+            if lower.starts_with("file:")
+                || lower.starts_with("link:")
+                || lower.starts_with("workspace:")
+                || lower.starts_with("git+")
+                || lower.starts_with("github:")
+                || lower.contains("github.com/")
+            {
+                return Err(RepositoryContractError::Invalid(format!(
+                    "package-lock package {path:?} contains unsupported dependency {name:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn valid_sri(value: &str) -> bool {
+    let Some((algorithm, digest)) = value.split_once('-') else {
+        return false;
+    };
+    matches!(algorithm, "sha256" | "sha384" | "sha512")
+        && !digest.is_empty()
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+}
+
 fn validate_relative_path(value: &str, allow_glob: bool) -> Result<(), RepositoryContractError> {
     if value.is_empty() || value.len() > 256 || value.contains('\\') {
         return Err(RepositoryContractError::Invalid(format!(
@@ -610,9 +879,28 @@ fn validate_command(command: &str) -> Result<(), RepositoryContractError> {
             "apt ",
             "apt-get ",
             "apk ",
+            "npm ci",
+            "npm install",
+            "npm i ",
+            "npx ",
+            "pnpm install",
+            "pnpm add",
+            "yarn install",
+            "yarn add",
         ]
         .iter()
         .any(|needle| lower.contains(needle))
+        || ((lower.contains("node -e") || lower.contains("node --eval"))
+            && [
+                "fetch(",
+                "http.get",
+                "https.get",
+                "node:http",
+                "node:https",
+                "net.connect",
+            ]
+            .iter()
+            .any(|needle| lower.contains(needle)))
     {
         return Err(RepositoryContractError::Invalid(format!(
             "acceptance command is not an exact offline command: {command:?}"
@@ -818,6 +1106,120 @@ package_installation: preparation_only
         .is_err());
     }
 
+    #[test]
+    fn validates_npm_lock_v3_and_rejects_unsafe_inputs() {
+        let valid = br#"{
+          "name":"fixture",
+          "lockfileVersion":3,
+          "packages":{
+            "":{"name":"fixture","dependencies":{"left-pad":"^1.3.0"}},
+            "node_modules/left-pad":{
+              "version":"1.3.0",
+              "resolved":"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+              "integrity":"sha512-YWJjZA=="
+            }
+          }
+        }"#;
+        validate_immutable_npm_lock(valid).unwrap();
+        let valid_v2 = br#"{
+          "name":"fixture",
+          "lockfileVersion":2,
+          "packages":{
+            "":{"name":"fixture","dependencies":{"left-pad":"^1.3.0"}},
+            "node_modules/left-pad":{"version":"1.3.0","resolved":"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz","integrity":"sha512-YWJjZA=="}
+          }
+        }"#;
+        validate_immutable_npm_lock(valid_v2).unwrap();
+
+        let missing_integrity = br#"{
+          "lockfileVersion":3,
+          "packages":{"":{},"node_modules/example":{"resolved":"https://registry.npmjs.org/example/-/example-1.0.0.tgz"}}
+        }"#;
+        assert!(validate_immutable_npm_lock(missing_integrity).is_err());
+
+        let local_dependency = br#"{
+          "lockfileVersion":3,
+          "packages":{"":{"dependencies":{"example":"file:../example"}},"node_modules/example":{"resolved":"file:../example","integrity":"sha512-YWJjZA=="}}
+        }"#;
+        assert!(validate_immutable_npm_lock(local_dependency).is_err());
+
+        let workspace = br#"{
+          "lockfileVersion":3,
+          "packages":{"":{"workspaces":["packages/*"]},"node_modules/example":{"resolved":"https://registry.npmjs.org/example/-/example-1.0.0.tgz","integrity":"sha512-YWJjZA=="}}
+        }"#;
+        assert!(validate_immutable_npm_lock(workspace).is_err());
+
+        let git_dependency = br#"{
+          "lockfileVersion":3,
+          "packages":{"":{"dependencies":{"example":"git+https://github.com/example/repo.git"}},"node_modules/example":{"resolved":"git+https://github.com/example/repo.git","integrity":"sha512-YWJjZA=="}}
+        }"#;
+        assert!(validate_immutable_npm_lock(git_dependency).is_err());
+
+        let unapproved_registry = br#"{
+          "lockfileVersion":3,
+          "packages":{"":{},"node_modules/example":{"resolved":"https://packages.example.test/example.tgz","integrity":"sha512-YWJjZA=="}}
+        }"#;
+        assert!(validate_immutable_npm_lock(unapproved_registry).is_err());
+    }
+
+    #[test]
+    fn npm_contract_validation_detects_exact_lock_sha_drift() {
+        let root = fixture();
+        let lock = br#"{"name":"fixture","lockfileVersion":3,"packages":{"":{},"node_modules/example":{"version":"1.0.0","resolved":"https://registry.npmjs.org/example/-/example-1.0.0.tgz","integrity":"sha512-YWJjZA=="}}}"#;
+        std::fs::write(root.join("package-lock.json"), lock).unwrap();
+        let mut contract = RepositoryContract::load(&root).unwrap().0;
+        contract.environment_profile = "node-24".into();
+        contract.dependency_lock = DependencyLock {
+            kind: "npm_package_lock".into(),
+            path: "package-lock.json".into(),
+            sha256: sha256_hex(lock),
+        };
+        contract.validate(&root).unwrap();
+        std::fs::write(root.join("package-lock.json"), b"{}\n").unwrap();
+        assert!(contract.validate(&root).is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn profile_and_dependency_lock_must_be_compatible() {
+        let node = EnvironmentProfile {
+            id: "node-24".into(),
+            active: true,
+            image: format!("registry.example/node@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec![
+                "pharness-worker".into(),
+                "git".into(),
+                "node".into(),
+                "npm".into(),
+            ],
+            preparation_strategy: PreparationStrategy::NodeNpmCi,
+            service_account: "pharness-node-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/frontend.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "2".into(),
+                memory: "2Gi".into(),
+                ephemeral_storage: "4Gi".into(),
+            },
+        };
+        let mut contract = RepositoryContract::load(&fixture()).unwrap().0;
+        contract.environment_profile = "node-24".into();
+        assert!(contract.validate_for_profile(&node).is_err());
+        contract.dependency_lock.kind = "npm_package_lock".into();
+        contract.dependency_lock.path = "package-lock.json".into();
+        contract.validate_for_profile(&node).unwrap();
+    }
+
+    #[test]
+    fn acceptance_commands_deny_package_install_and_node_network_probes() {
+        assert!(validate_command("npm ci").is_err());
+        assert!(validate_command("npx vite build").is_err());
+        assert!(validate_command("node -e \"fetch('https://example.com')\"").is_err());
+        validate_command("npm test").unwrap();
+        validate_command("npm run build").unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn rejects_declared_symlink_escapes() {
@@ -850,10 +1252,17 @@ package_installation: preparation_only
             image: format!("registry.example/pharness-python@sha256:{}", "a".repeat(64)),
             revision: "b".repeat(40),
             platform: "linux/amd64".to_string(),
-            required_executables: vec!["python".to_string(), "git".to_string()],
+            required_executables: vec![
+                "pharness-worker".to_string(),
+                "git".to_string(),
+                "python".to_string(),
+                "pip".to_string(),
+            ],
             preparation_strategy: PreparationStrategy::PythonHashedRequirements,
             service_account: "pharness-python-runner".to_string(),
-            repository_allowlist: vec!["lward27/yfinance_wrapper".to_string()],
+            repository_allowlist: vec![
+                "https://github.com/lward27/yfinance_wrapper.git".to_string()
+            ],
             limits: EnvironmentProfileLimits {
                 cpu: "2".to_string(),
                 memory: "4Gi".to_string(),
