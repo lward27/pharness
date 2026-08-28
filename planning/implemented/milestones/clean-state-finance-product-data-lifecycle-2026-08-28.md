@@ -1,8 +1,12 @@
 # PHarness Clean-State Reset, Finance Product Model, and Data Lifecycle Foundation
 
-Status: approved for implementation
+Status: implemented and accepted on 2026-08-28
 
 Baseline: `57a4d0410b944320419a55333c085042e7977bec`
+
+Accepted release tag: `v5-finance-clean-generation`
+
+Completion evidence: [Finance clean-generation acceptance](../../evidence/smoke-results/finance-clean-generation-acceptance-2026-08-28.md)
 
 ## Objective
 
