@@ -181,7 +181,9 @@ pub(in crate::app) async fn repo_work_item_flow(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
-    let current_run = match work_item.current_run_id.as_ref() {
+    let action_run_id =
+        repo_action_run_id(&metadata, &executions, work_item.current_run_id.as_ref());
+    let current_run = match action_run_id {
         Some(run_id) => state.store.get_run(run_id).await?,
         None => None,
     };
@@ -394,6 +396,23 @@ struct RepoActionInputs<'a> {
     pending_budget_extension: Option<&'a StoredBudgetExtension>,
     current_run: Option<&'a StoredRun>,
     retryable_budget_extension: Option<&'a StoredBudgetExtension>,
+}
+
+fn repo_action_run_id<'a>(
+    metadata: &StoredRepoWorkItemMetadata,
+    executions: &'a [pharness_store::StoredStageExecution],
+    fallback_run_id: Option<&'a RunId>,
+) -> Option<&'a RunId> {
+    metadata
+        .current_stage_execution_id
+        .as_deref()
+        .and_then(|current_execution_id| {
+            executions
+                .iter()
+                .find(|execution| execution.id == current_execution_id)
+                .and_then(|execution| execution.run_id.as_ref())
+        })
+        .or(fallback_run_id)
 }
 
 fn rejected_change_set_precedes_work_plan(
@@ -1264,7 +1283,9 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         .await?;
     let pending_annotation_effects =
         pending_annotation_effects(&annotations, &annotation_decisions);
-    let current_run = match work_item.current_run_id.as_ref() {
+    let action_run_id =
+        repo_action_run_id(&metadata, &executions, work_item.current_run_id.as_ref());
+    let current_run = match action_run_id {
         Some(run_id) => state.store.get_run(run_id).await?,
         None => None,
     };
@@ -6076,6 +6097,20 @@ mod tests {
         assert!(actions[0]
             .external_effect_summary
             .contains("200000 additional tokens"));
+    }
+
+    #[test]
+    fn repo_actions_follow_the_current_stage_run_after_automatic_dispatch() {
+        let fallback_run_id = RunId::new("run_builder");
+        let mut builder = stage_execution("stageexec_builder", "implement", "succeeded", "1");
+        builder.run_id = Some(fallback_run_id.clone());
+        let mut verifier = stage_execution("stageexec_verify", "verify", "queued", "2");
+        verifier.run_id = Some(RunId::new("run_verifier"));
+        let executions = vec![builder, verifier];
+
+        let selected = repo_action_run_id(&metadata(), &executions, Some(&fallback_run_id));
+
+        assert_eq!(selected.map(RunId::as_str), Some("run_verifier"));
     }
 
     #[test]
