@@ -65,20 +65,20 @@ export function RepositoryScreen({ repositoryId, section, operatorName }: { repo
   return <ResourceState status={resource.status} error={resource.error}>
     <SectionHeader eyebrow="Repository" title={repository?.external_id || repositoryId} summary={repository?.canonical_url} action={onboarding ? <LinkButton to={`repository-onboardings/${onboarding.id}`}>Open onboarding</LinkButton> : undefined} />
     <nav className="repo-tabs" aria-label="Repository sections">{repositorySections.map(value => <button type="button" className={section === value ? "is-active" : ""} key={value} onClick={() => navigate(`repositories/${repositoryId}/${value}`)}>{value.replaceAll("-"," ")}</button>)}</nav>
-    {section === "overview" ? <div className="repo-two-columns"><section className="repo-panel"><h2>Immutable registration</h2><FactGrid facts={[{label:"Provider",value:repository?.provider},{label:"Default branch",value:repository?.default_branch},{label:"Registered revision",value:repository?.registered_commit,mono:true},{label:"Repository state version",value:repository?.state_version}]} /><h3>Reviewed Product bindings</h3><RecordList values={(data?.product_bindings || []).map((entry:any) => ({name:entry.product?.display_name,product_id:entry.product?.id,binding:entry.binding?.id,revision:entry.current_revision?.revision,services:entry.current_revision?.service_ids?.length || 0,status:entry.binding?.status}))} empty="This Repository is not bound to a Product." /></section><CapabilityAxes capabilities={data?.capabilities || []} trust={data?.trust_policy || {}} authorization={data?.authorization || {}} onVerified={resource.refresh} /></div> : null}
+    {section === "overview" ? <div className="repo-two-columns"><section className="repo-panel"><h2>Immutable registration</h2><FactGrid facts={[{label:"Provider",value:repository?.provider},{label:"Default branch",value:repository?.default_branch},{label:"Registered revision",value:repository?.registered_commit,mono:true},{label:"Repository state version",value:repository?.state_version}]} /><h3>Reviewed Product bindings</h3><RecordList values={(data?.product_bindings || []).map((entry:any) => ({name:entry.product?.display_name,product_id:entry.product?.id,binding:entry.binding?.id,revision:entry.current_revision?.revision,services:entry.current_revision?.service_ids?.length || 0,status:entry.binding?.status}))} empty="This Repository is not bound to a Product." /></section><CapabilityAxes repositoryId={repositoryId} capabilities={data?.capabilities || []} trust={data?.trust_policy || {}} authorization={data?.authorization || {}} onVerified={resource.refresh} /></div> : null}
     {section === "readiness" ? <Readiness data={data} repositoryId={repositoryId} operatorName={operatorName} onRefresh={resource.refresh} /> : null}
     {section === "work-items" ? <WorkItems items={data?.current_work_items || []} /> : null}
     {section === "history" ? <WorkItems items={data?.historical_work_items || []} /> : null}
   </ResourceState>;
 }
 
-function CapabilityAxes({ capabilities, trust, authorization, onVerified }: any) {
+function CapabilityAxes({ repositoryId, capabilities, trust, authorization, onVerified }: any) {
   const [pending,setPending] = useState("");
   const [error,setError] = useState("");
   const verify = async (capability:string) => {
     setPending(capability); setError("");
     try {
-      await sendJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight`, "POST");
+      await sendJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight?repository_id=${encodeURIComponent(repositoryId)}`, "POST", {});
       onVerified();
     } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setPending(""); }

@@ -98,11 +98,11 @@ use super::source::work_plans::{
 use super::system::{
     capability_preflight_is_statically_unavailable, capability_verification_summary,
     config_effective, environment_profile_readiness_blocker, immutable_git_object_id,
-    immutable_image_digest, protected_target_json, system_readiness, BuildMetadata,
-    ProtectedTargetConfiguration, PROTECTED_ARGO_APPLICATION, PROTECTED_ENVIRONMENT,
-    PROTECTED_GITOPS_REPO, PROTECTED_IMAGE_NAME, PROTECTED_KUSTOMIZATION_PATH, PROTECTED_NAMESPACE,
-    PROTECTED_ROLLBACK_OWNER, PROTECTED_SOURCE_REPO, PROTECTED_WORKLOAD_KIND,
-    PROTECTED_WORKLOAD_NAME,
+    immutable_image_digest, protected_target_json, source_capability_statuses_for_repository,
+    system_readiness, BuildMetadata, ProtectedTargetConfiguration, PROTECTED_ARGO_APPLICATION,
+    PROTECTED_ENVIRONMENT, PROTECTED_GITOPS_REPO, PROTECTED_IMAGE_NAME,
+    PROTECTED_KUSTOMIZATION_PATH, PROTECTED_NAMESPACE, PROTECTED_ROLLBACK_OWNER,
+    PROTECTED_SOURCE_REPO, PROTECTED_WORKLOAD_KIND, PROTECTED_WORKLOAD_NAME,
 };
 use super::work_items::actions::{advance_work_item, execute_work_item_action};
 use super::work_items::attempts::{
@@ -174,15 +174,15 @@ use pharness_core::{
 };
 use pharness_store::{
     ApprovalGateListFilter, ApprovalGateSummaryFilter, ApproveRepositoryOnboardingProposal,
-    CreateApproval, CreateApprovalGate, CreateArtifact, CreateChangeSet, CreateControllerWait,
-    CreateDeploymentIntent, CreateFileChange, CreateGitOpsChangeSet, CreateIncident,
-    CreateObservation, CreatePipelineContract, CreatePipelineIntent, CreateProductAggregate,
-    CreateRelease, CreateRemediationPlan, CreateRepoWorkItem, CreateRepositoryContractVersion,
-    CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
-    CreateSession, CreateSourceDeliveryIntent, CreateStageExecution, CreateWorkItem,
-    CreateWorkPlan, CreateWorkspace, ObservationListFilter, RegisterRepositoryAggregate,
-    SqliteStore, StoredDeploymentContract, StoredGitOpsChangeSet, StoredPipelineContract,
-    StoredPipelineIntent, StoredRelease, StoredRepositoryDraft,
+    CreateApproval, CreateApprovalGate, CreateArtifact, CreateCapabilityVerification,
+    CreateChangeSet, CreateControllerWait, CreateDeploymentIntent, CreateFileChange,
+    CreateGitOpsChangeSet, CreateIncident, CreateObservation, CreatePipelineContract,
+    CreatePipelineIntent, CreateProductAggregate, CreateRelease, CreateRemediationPlan,
+    CreateRepoWorkItem, CreateRepositoryContractVersion, CreateRepositoryOnboardingProposal,
+    CreateRepositoryReadinessAssessment, CreateRun, CreateSession, CreateSourceDeliveryIntent,
+    CreateStageExecution, CreateWorkItem, CreateWorkPlan, CreateWorkspace, ObservationListFilter,
+    RegisterRepositoryAggregate, SqliteStore, StoredDeploymentContract, StoredGitOpsChangeSet,
+    StoredPipelineContract, StoredPipelineIntent, StoredRelease, StoredRepositoryDraft,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};

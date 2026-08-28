@@ -5,15 +5,16 @@ use super::{
     gitops_observation_closed_unmerged, gitops_observation_refreshable, json, list_observations,
     prometheus_inventory_observability_status, release_prometheus_inventory_collected,
     release_prometheus_inventory_summary, release_workload_verification_action, router,
-    system_readiness, unique_suffix, verify_release, AgentAction, AgentEvent, AppState, Arc,
-    BuildMetadata, CapabilityStatusResponse, CreateArtifact, CreateChangeSet,
-    CreateDeploymentContractRequest, CreateDeploymentIntent, CreateIncident, CreateObservation,
-    CreateObservationRequest, CreatePipelineIntent, CreateRelease, CreateRemediationPlan,
-    CreateRun, CreateSession, CreateWorkItem, CreateWorkPlan, EventId, EventKind, Json,
-    KubernetesJobDispatcher, ListObservationsQuery, Path, PathBuf, PermissionsExt,
-    ProtectedTargetConfiguration, Query, ReadOnlyClusterTools, RunDispatcher, RunId, RunScope,
-    SafetyPolicy, SessionId, SqliteStore, State, StatusCode, StoredDeploymentContract, Value,
-    VerifyReleaseRequest, WorkerKubernetesConfig, WorkspaceProvisioner,
+    source_capability_statuses_for_repository, system_readiness, unique_suffix, verify_release,
+    AgentAction, AgentEvent, AppState, Arc, BuildMetadata, CapabilityStatusResponse,
+    CreateArtifact, CreateCapabilityVerification, CreateChangeSet, CreateDeploymentContractRequest,
+    CreateDeploymentIntent, CreateIncident, CreateObservation, CreateObservationRequest,
+    CreatePipelineIntent, CreateRelease, CreateRemediationPlan, CreateRun, CreateSession,
+    CreateWorkItem, CreateWorkPlan, EventId, EventKind, Json, KubernetesJobDispatcher,
+    ListObservationsQuery, Path, PathBuf, PermissionsExt, ProtectedTargetConfiguration, Query,
+    ReadOnlyClusterTools, RunDispatcher, RunId, RunScope, SafetyPolicy, SessionId, SqliteStore,
+    State, StatusCode, StoredDeploymentContract, Value, VerifyReleaseRequest,
+    WorkerKubernetesConfig, WorkspaceProvisioner,
 };
 use crate::app::RepoModeConfiguration;
 
@@ -584,6 +585,60 @@ fn failed_capability_summary_names_only_the_known_check_scope() {
         capability_verification_summary(&outcome),
         "Isolated identity did not verify repository_read for https://github.com/example/repo.git"
     );
+}
+
+#[tokio::test]
+async fn source_capability_posture_is_scoped_to_the_exact_repository() {
+    let allowed_repository = "https://github.com/example/allowed.git".to_string();
+    let state = test_state_with_git_observer("kubectl".into(), allowed_repository.clone()).await;
+
+    let configured = source_capability_statuses_for_repository(&state, &allowed_repository)
+        .await
+        .unwrap();
+    assert!(configured.iter().all(|status| {
+        status.status == "configured_unverified" && status.verified_at.is_none()
+    }));
+
+    let now = crate::app::clock::current_millis();
+    state
+        .store
+        .create_capability_verification(CreateCapabilityVerification {
+            id: "capverify_source_reader_exact".into(),
+            capability: "source_reader".into(),
+            status: "available".into(),
+            summary: format!("verified {allowed_repository}"),
+            principal: Some("system:serviceaccount:pharness:source-reader".into()),
+            repository: Some(allowed_repository.clone()),
+            permission: Some("repository_read".into()),
+            verified_at: now.to_string(),
+            expires_at: (now + 900_000).to_string(),
+        })
+        .await
+        .unwrap();
+
+    let exact = source_capability_statuses_for_repository(&state, &allowed_repository)
+        .await
+        .unwrap();
+    assert_eq!(
+        exact
+            .iter()
+            .find(|status| status.capability == "source_reader")
+            .unwrap()
+            .status,
+        "available"
+    );
+
+    let other = source_capability_statuses_for_repository(
+        &state,
+        "https://github.com/example/not-allowlisted.git",
+    )
+    .await
+    .unwrap();
+    assert!(other.iter().all(|status| {
+        status.status == "unavailable"
+            && status.verified_at.is_none()
+            && status.expires_at.is_none()
+    }));
 }
 
 pub(super) async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyClusterTools) -> AppState {
