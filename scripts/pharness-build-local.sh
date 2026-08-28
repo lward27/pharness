@@ -6,7 +6,7 @@ set -euo pipefail
 # resulting digests must still be reviewed and committed through GitOps.
 #
 # Usage:
-#   scripts/pharness-build-local.sh <runtime|ui|python-runner|all> \
+#   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|all> \
 #     --revision <40-char-sha> [--builder <buildx-builder>] [--preflight-only]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,11 +19,11 @@ PLATFORM="linux/amd64"
 REGISTRY="registry.lucas.engineering"
 
 usage() {
-  echo "Usage: $0 <runtime|ui|python-runner|all> --revision <40-char-sha> [--builder <name>] [--preflight-only]" >&2
+  echo "Usage: $0 <runtime|ui|python-runner|node-runner|all> --revision <40-char-sha> [--builder <name>] [--preflight-only]" >&2
   exit 2
 }
 
-[[ "$TARGET" =~ ^(runtime|ui|python-runner|all)$ ]] || usage
+[[ "$TARGET" =~ ^(runtime|ui|python-runner|node-runner|all)$ ]] || usage
 shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -67,7 +67,7 @@ grep -Eq 'Platforms:.*(^|, | )linux/amd64([, ]|$)' <<<"$BUILDER_INSPECTION" || {
 
 components=()
 case "$TARGET" in
-  all) components=(runtime ui python-runner) ;;
+  all) components=(runtime ui python-runner node-runner) ;;
   *) components=("$TARGET") ;;
 esac
 
@@ -104,6 +104,7 @@ build_component() {
     runtime) dockerfile="deploy/docker/Dockerfile.runtime" ;;
     ui) dockerfile="deploy/docker/Dockerfile.ui" ;;
     python-runner) dockerfile="deploy/docker/Dockerfile.python-runner" ;;
+    node-runner) dockerfile="deploy/docker/Dockerfile.node-runner" ;;
     *) echo "unsupported PHarness component ${component}" >&2; return 1 ;;
   esac
 
