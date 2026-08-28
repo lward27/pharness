@@ -118,6 +118,7 @@ const onboardingSteps = ["Registration", "Discovery", "Proposal", "Review", "Pat
 export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:string; operatorName?:string }) {
   const resource = useResource<any>(`/api/repository-onboardings/${encodeURIComponent(onboardingId)}/flow`, { pollMs:10_000 });
   const [selectedAction, setSelectedAction] = useState<ServerAction | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const flow = resource.data;
   const onboarding = flow?.onboarding;
   const repositoryResource = useResource<any>(onboarding?.repository_id ? `/api/repositories/${encodeURIComponent(onboarding.repository_id)}/overview` : null);
@@ -125,6 +126,7 @@ export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:
   const productIdentity = repositoryResource.data?.product_bindings?.find((entry:any) => entry.product?.id === onboarding?.product_id)?.product;
   const patch = useResource<any>(onboarding?.patch_artifact_id ? `/api/artifacts/${encodeURIComponent(onboarding.patch_artifact_id)}` : null);
   const action = onboarding?.actions?.[0];
+  const refreshOnboarding = action?.id === "refresh_onboarding";
   const activeStep = useMemo(() => {
     const status = onboarding?.status || "registered";
     if (status.includes("discover")) return 1;
@@ -137,12 +139,39 @@ export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:
     return 0;
   }, [onboarding?.status]);
   return <ResourceState status={resource.status} error={resource.error}>
-    <SectionHeader eyebrow="Repository onboarding" title={repositoryIdentity?.external_id || onboarding?.repository_id || onboardingId} summary={`${productIdentity?.display_name ? `${productIdentity.display_name} · ` : ""}Pinned revision ${onboarding?.registered_commit || "unavailable"}`} action={action ? <button className="repo-primary" type="button" disabled={action.status !== "available"} onClick={() => setSelectedAction(action)}>{action.id.replaceAll("_"," ")}</button> : undefined} />
+    <SectionHeader eyebrow="Repository onboarding" title={repositoryIdentity?.external_id || onboarding?.repository_id || onboardingId} summary={`${productIdentity?.display_name ? `${productIdentity.display_name} · ` : ""}Pinned revision ${onboarding?.registered_commit || "unavailable"}`} action={action ? refreshOnboarding ? <button className="repo-primary" type="button" onClick={() => setRefreshing(value => !value)}>{refreshing ? "Close refresh" : "Start fresh onboarding"}</button> : <button className="repo-primary" type="button" disabled={action.status !== "available"} onClick={() => setSelectedAction(action)}>{action.id.replaceAll("_"," ")}</button> : undefined} />
     {action?.status === "blocked" ? <div className="repo-corrective-path" role="status"><WarningCircle size={18}/><div><strong>{action.id.replaceAll("_", " ")}</strong><span>{(action.blockers || []).map((blocker:any) => typeof blocker === "string" ? blocker : blocker.summary || blocker.code).join(" · ")}</span></div></div> : null}
+    {refreshing && refreshOnboarding ? <FreshOnboardingForm onboarding={onboarding} operatorName={operatorName} onCancel={() => setRefreshing(false)} /> : null}
     <ol className="repo-stepper">{onboardingSteps.map((step,index) => <li className={index < activeStep ? "is-complete" : index === activeStep ? "is-current" : ""} key={step}><span>{index < activeStep ? <CheckCircle size={16} weight="fill" /> : index + 1}</span><small>{step}</small></li>)}</ol>
     <div className="repo-two-columns repo-onboarding-grid"><section className="repo-panel"><header><h2>Deterministic discovery</h2><Status value={flow?.discovery?.status || "waiting"} /></header>{flow?.discovery?.inventory_json ? <DiscoverySummary discovery={flow.discovery.inventory_json} /> : <p className="repo-muted">Discovery evidence has not been sealed.</p>}</section><section className="repo-panel"><header><h2>Agent proposal</h2><Status value={flow?.proposal?.status || "waiting"} /></header>{flow?.proposal?.proposal ? <><Proposal proposal={flow.proposal.proposal} /><OnboardingProposalEditor proposal={flow.proposal.proposal} onboarding={onboarding} operatorName={operatorName} onSaved={resource.refresh} /></> : <p className="repo-muted">No proposal revision is available.</p>}</section><section className="repo-panel repo-span-2"><header><h2>Exact onboarding diff</h2><Status value={patch.data ? "available" : onboarding?.patch_execution_id ? "waiting" : "inapplicable"} /></header>{patch.data?.content_text ? <details className="repo-diff-disclosure"><summary><FileText size={17} />Review the exact patch authorized for one source PR</summary><pre className="repo-code repo-diff">{patch.data.content_text}</pre></details> : <p className="repo-muted">The reviewed contract diff appears here after bounded source materialization.</p>}</section><section className="repo-panel"><header><h2>Source delivery</h2><Status value={flow?.source_delivery_intent?.status || "inapplicable"} /></header>{flow?.source_delivery_intent ? <SourceDeliverySummary intent={flow.source_delivery_intent} /> : <p className="repo-muted">No external source effect has been authorized.</p>}</section><section className="repo-panel"><header><h2>Readiness forecast and result</h2><Status value={flow?.readiness?.coding_status || "unavailable"} /></header><ReadinessSummary readiness={flow?.readiness} forecast={flow?.proposal?.proposal?.readiness_forecast} /></section></div>
     {selectedAction ? <ActionDialog action={selectedAction} owner={{kind:"Repository onboarding",id:onboardingId,product:onboarding?.product_id,repository:onboarding?.repository_id,revision:onboarding?.registered_commit}} endpoint={`/api/repository-onboardings/${encodeURIComponent(onboardingId)}/actions/${encodeURIComponent(selectedAction.id)}/execute`} operatorName={operatorName} onClose={() => setSelectedAction(null)} onApplied={resource.refresh} /> : null}
   </ResourceState>;
+}
+
+function FreshOnboardingForm({ onboarding, operatorName, onCancel }: { onboarding:any; operatorName?:string; onCancel:()=>void }) {
+  const [sourceCommit,setSourceCommit] = useState("");
+  const [actor,setActor] = useState(operatorName || "operator");
+  const [reason,setReason] = useState("Refresh onboarding at reviewed prerequisite merge");
+  const [pending,setPending] = useState(false);
+  const [error,setError] = useState("");
+  const validCommit = /^[0-9a-f]{40}$/.test(sourceCommit);
+  const submit = async (event:React.FormEvent) => {
+    event.preventDefault();
+    setPending(true); setError("");
+    try {
+      const fresh = await sendJson(`/api/repositories/${encodeURIComponent(onboarding.repository_id)}/onboardings`, "POST", {product_id:onboarding.product_id,source_commit:sourceCommit,actor,reason});
+      navigate(`repository-onboardings/${fresh.id}`);
+    } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
+    finally { setPending(false); }
+  };
+  return <form className="repo-inline-form" onSubmit={submit}>
+    <label>New full commit SHA<input className="repo-mono" value={sourceCommit} onChange={event => setSourceCommit(event.target.value.trim().toLowerCase())} placeholder="40-character prerequisite merge SHA" /></label>
+    <label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label>
+    <label>Reason<input value={reason} onChange={event => setReason(event.target.value)} /></label>
+    {error ? <div className="repo-error" role="alert">{error}</div> : null}
+    <button className="repo-primary" type="submit" disabled={pending || !validCommit || !actor.trim() || !reason.trim()}>{pending ? "Creating…" : "Create fresh onboarding"}</button>
+    <button type="button" onClick={onCancel}>Cancel</button>
+  </form>;
 }
 
 function Proposal({ proposal }: { proposal:any }) { return <div className="repo-proposal"><div className="repo-proposal-facts"><h3>Controller-bound facts</h3><FactGrid facts={[{label:"Discovery record",value:proposal.discovery_id,mono:true},{label:"Discovery hash",value:proposal.discovery_hash,mono:true}]} /></div><div><h3>Executable contract changes</h3><ContractSummary version={{contract:proposal.candidate_contract,content_hash:"Proposal · not active until merged"}} /></div><div><h3>Product topology suggestions</h3><p className="repo-muted">These suggestions never change Services or Repository bindings when the executable contract is approved. Review them separately in the owning Product topology editor.</p><RecordList values={[...(proposal.service_proposals || []),...(proposal.binding_proposals || [])]} empty="No Service or binding changes proposed." /></div><div><h3>Model guidance and forecast</h3><p className="repo-guidance">{proposal.instructions || "No bounded instructions proposed."}</p><RecordList values={Object.entries(proposal.readiness_forecast || {}).map(([key,value]) => ({key,value}))} empty="No readiness forecast claims." /></div><section className="repo-claim-zone"><h3>Agent assumptions</h3><RecordList values={proposal.assumptions} empty="No assumptions reported." tone="warning" /><h3>Conflicts and unsupported claims</h3><RecordList values={proposal.conflicts} empty="No conflicts reported." tone="warning" /></section><RecordList values={proposal.blockers} empty="No controller blockers." tone="error" /><RawRecord label="Raw proposal revision" value={proposal} /></div>; }

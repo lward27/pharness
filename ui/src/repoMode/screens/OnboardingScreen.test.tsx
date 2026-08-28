@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "./RepositoriesScreen";
 
@@ -43,12 +43,20 @@ describe("Repository onboarding", () => {
       discovery: { status: "completed", inventory_json: { files: [], dependency_candidates: [] } },
       proposal: { status: "proposed", proposal: { assumptions: [], conflicts: [], blockers: [], service_proposals: [], binding_proposals: [] } },
     };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(flow), {status:200,headers:{"content-type":"application/json"}})));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(JSON.stringify(init?.method === "POST" ? {id:"ronb_frontend_fresh"} : flow), {status:200,headers:{"content-type":"application/json"}}));
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<OnboardingScreen onboardingId="ronb_frontend_old" operatorName="lucas" />);
 
-    await waitFor(() => expect(screen.getAllByText("refresh onboarding")).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText("refresh onboarding")).toBeInTheDocument());
     expect(screen.getByText(/python-3.11 accepts pip_requirements/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "approve proposal" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh onboarding" }));
+    fireEvent.change(screen.getByLabelText("New full commit SHA"), {target:{value:"b".repeat(40)}});
+    fireEvent.click(screen.getByRole("button", { name: "Create fresh onboarding" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/repositories/repo_frontend/onboardings",
+      expect.objectContaining({method:"POST",body:JSON.stringify({product_id:"prod_finance",source_commit:"b".repeat(40),actor:"lucas",reason:"Refresh onboarding at reviewed prerequisite merge"})}),
+    ));
   });
 });
