@@ -1,6 +1,9 @@
 use super::clock::current_millis;
 use super::products::{ensure_repo_mode_enabled, onboarding_operator_projection};
-use super::system::{capability_statuses, environment_profile_capability_status};
+use super::system::{
+    capability_statuses, environment_profile_capability_status,
+    source_capability_statuses_for_repository,
+};
 use super::{ApiError, AppState};
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
@@ -586,16 +589,6 @@ async fn repository_catalog(
     state: &AppState,
     product_filter: Option<&str>,
 ) -> Result<Vec<Value>, ApiError> {
-    let capability_posture = capability_statuses(state)
-        .await?
-        .into_iter()
-        .filter(|capability| {
-            matches!(
-                capability.capability.as_str(),
-                "source_reader" | "source_writer" | "source_observer"
-            )
-        })
-        .collect::<Vec<_>>();
     let products = state
         .store
         .list_products(&state.repo_mode.organization.id)
@@ -606,6 +599,8 @@ async fn repository_catalog(
             continue;
         }
         for repository in state.store.list_product_repositories(&product.id).await? {
+            let capability_posture =
+                source_capability_statuses_for_repository(state, &repository.canonical_url).await?;
             let onboarding = state
                 .store
                 .list_repository_onboardings(&repository.id)
@@ -645,7 +640,7 @@ async fn repository_catalog(
                 "coding_readiness":readiness.as_ref().map(|value| value.coding_status.as_str()).unwrap_or("unavailable"),
                 "freshness":freshness,
                 "stale_reasons":stale_reasons,
-                "capability_posture":&capability_posture,
+                "capability_posture":capability_posture,
                 "readiness":readiness,
                 "updated_at":repository.updated_at,
             }));
@@ -806,16 +801,8 @@ async fn repository_overview(
             .and_then(Value::as_str)
             .map(str::to_string)
     });
-    let mut capabilities = capability_statuses(&state)
-        .await?
-        .into_iter()
-        .filter(|capability| {
-            matches!(
-                capability.capability.as_str(),
-                "source_reader" | "source_writer" | "source_observer"
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut capabilities =
+        source_capability_statuses_for_repository(&state, &repository.canonical_url).await?;
     if let Some(profile) = selected_profile {
         if let Some(status) = environment_profile_capability_status(&state, &profile).await? {
             capabilities.push(status);

@@ -8,13 +8,18 @@ use crate::dto::{
     CapabilityStatusResponse, EnvironmentProfileResponse, EnvironmentProfilesResponse,
     SystemReadinessResponse,
 };
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use pharness_store::CreateCapabilityVerification;
 use serde_json::{json, Value};
 
 use super::auth::OperatorIdentity;
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct CapabilityPreflightQuery {
+    repository_id: Option<String>,
+}
 
 pub(super) const PROTECTED_ENVIRONMENT: &str = "production";
 pub(super) const PROTECTED_NAMESPACE: &str = "apps-prod";
@@ -393,6 +398,93 @@ pub(super) async fn capability_statuses(
     Ok(statuses)
 }
 
+pub(super) async fn source_capability_statuses_for_repository(
+    state: &AppState,
+    repository_url: &str,
+) -> Result<Vec<CapabilityStatusResponse>, ApiError> {
+    let worker = state.worker.config_json();
+    let repository_is_allowed = |pointer: &str| {
+        worker
+            .pointer(pointer)
+            .and_then(Value::as_array)
+            .is_some_and(|repositories| {
+                repositories
+                    .iter()
+                    .any(|value| value.as_str() == Some(repository_url))
+            })
+    };
+    let configured_for_repository = |capability: &str| match capability {
+        "source_reader" => {
+            state.worker.source_reader_available()
+                && state.worker.source_reader_allows_repository(repository_url)
+        }
+        "source_writer" => {
+            worker
+                .pointer("/git_writer/available")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                && repository_is_allowed("/git_writer/allowed_repos")
+        }
+        "source_observer" => {
+            worker
+                .pointer("/git_observer/available")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                && repository_is_allowed("/git_observer/allowed_repos")
+        }
+        _ => false,
+    };
+    let now = current_millis();
+    let mut statuses = capability_statuses(state)
+        .await?
+        .into_iter()
+        .filter(|status| {
+            matches!(
+                status.capability.as_str(),
+                "source_reader" | "source_writer" | "source_observer"
+            )
+        })
+        .collect::<Vec<_>>();
+    for status in &mut statuses {
+        status.verified_at = None;
+        status.expires_at = None;
+        if !configured_for_repository(&status.capability) {
+            status.status = "unavailable".into();
+            status.summary = format!(
+                "{} is not configured or allowlisted for {repository_url}",
+                status.capability
+            );
+            continue;
+        }
+        let Some(verification) = state
+            .store
+            .latest_capability_verification_for_repository(&status.capability, repository_url)
+            .await?
+        else {
+            status.status = "configured_unverified".into();
+            status.summary = format!(
+                "{} is configured for {repository_url} but exact repository reachability is unverified",
+                status.capability
+            );
+            continue;
+        };
+        status.verified_at = Some(verification.verified_at.clone());
+        status.expires_at = Some(verification.expires_at.clone());
+        let expires = verification.expires_at.parse::<u128>().unwrap_or_default();
+        if expires <= now {
+            status.status = "stale".into();
+            status.summary = format!(
+                "{} verification for {repository_url} expired; run the isolated preflight again",
+                status.capability
+            );
+        } else {
+            status.status = verification.status;
+            status.summary = verification.summary;
+        }
+    }
+    Ok(statuses)
+}
+
 pub(super) async fn system_readiness(
     State(state): State<AppState>,
 ) -> Result<Json<SystemReadinessResponse>, ApiError> {
@@ -450,6 +542,7 @@ pub(super) async fn system_readiness(
 async fn preflight_system_capability(
     State(state): State<AppState>,
     Path(capability): Path<String>,
+    Query(query): Query<CapabilityPreflightQuery>,
 ) -> Result<Json<CapabilityStatusResponse>, ApiError> {
     let profile = capability
         .strip_prefix("environment_profile:")
@@ -482,11 +575,34 @@ async fn preflight_system_capability(
     if capability_preflight_is_statically_unavailable(&configured) {
         return Ok(Json(configured));
     }
-    let repository = match capability.as_str() {
+    let requested_repository = match query.repository_id.as_deref() {
+        Some(repository_id)
+            if matches!(
+                capability.as_str(),
+                "source_workspace" | "source_reader" | "source_writer" | "source_observer"
+            ) =>
+        {
+            Some(
+                state
+                    .store
+                    .get_repository(repository_id)
+                    .await?
+                    .ok_or_else(|| ApiError::not_found("repository", repository_id))?
+                    .canonical_url,
+            )
+        }
+        Some(_) => {
+            return Err(ApiError::bad_request(
+                "repository_id is valid only for source capability preflights",
+            ));
+        }
+        None => None,
+    };
+    let repository = requested_repository.or_else(|| match capability.as_str() {
         "source_workspace" => state.workspace.allowed_remote_repos().first().cloned(),
         "source_reader" => state.worker.source_reader_allowed_repos().first().cloned(),
         _ => None,
-    };
+    });
     let outcome = match profile {
         Some(profile) => state.worker.verify_environment_profile(profile).await,
         None => {
