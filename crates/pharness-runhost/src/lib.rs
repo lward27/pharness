@@ -702,7 +702,7 @@ fn environment_instructions(run: &RunSpec) -> anyhow::Result<String> {
         .transpose()?
         .ok_or_else(|| anyhow::anyhow!("prepared run has no repository contract"))?;
     Ok(format!(
-        "Environment readiness snapshot and RepositoryContract were verified before turn zero. Treat these as authoritative; do not rediscover Python, Docker, package-manager, operating-system, or network facts and do not request runtime package installation. Agent shell network is denied. Use only declared acceptance commands through the typed acceptance tool.\nEnvironmentSnapshot:\n{}\nRepositoryContract:\n{}",
+        "Environment readiness snapshot and RepositoryContract were verified before turn zero. Treat these as authoritative; do not rediscover runtime, Docker, package-manager, operating-system, or network facts and do not request runtime package installation. Agent shell network is denied. Use only declared acceptance commands through the typed acceptance tool.\nEnvironmentSnapshot:\n{}\nRepositoryContract:\n{}",
         serde_json::to_string_pretty(&snapshot)?,
         serde_json::to_string_pretty(&contract)?,
     ))
@@ -917,22 +917,40 @@ impl ProjectTools {
             });
         }
         let existing_path = std::env::var("PATH").unwrap_or_default();
-        let venv_bin = self.workspace.join(".pharness-runtime/venv/bin");
-        let python_path = contract
-            .roots
-            .source
-            .iter()
-            .map(|root| self.workspace.join(root).to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(":");
+        let runtime = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runtime.as_ref());
+        let mut path_entries = runtime
+            .map(|runtime| runtime.path_entries.clone())
+            .unwrap_or_else(|| {
+                vec![self
+                    .workspace
+                    .join(".pharness-runtime/venv/bin")
+                    .to_string_lossy()
+                    .to_string()]
+            });
+        path_entries.push(existing_path);
         let mut child = Command::new("/bin/sh");
         child
             .arg("-c")
             .arg(&declared.command)
             .current_dir(&self.workspace)
-            .env("PATH", format!("{}:{existing_path}", venv_bin.display()))
-            .env("PYTHONPATH", python_path)
+            .env("PATH", path_entries.join(":"))
             .kill_on_drop(true);
+        if match runtime {
+            Some(runtime) => runtime.kind == "python",
+            None => true,
+        } {
+            let python_path = contract
+                .roots
+                .source
+                .iter()
+                .map(|root| self.workspace.join(root).to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+                .join(":");
+            child.env("PYTHONPATH", python_path);
+        }
         let started = std::time::Instant::now();
         let output = tokio::time::timeout(std::time::Duration::from_secs(600), child.output())
             .await

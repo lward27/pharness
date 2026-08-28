@@ -138,8 +138,13 @@ fn is_environment_setup_or_probe(command: &str) -> bool {
         " python3 -m pip install ",
         " uv pip install ",
         " npm install ",
+        " npm ci ",
+        " npm i ",
+        " npx ",
         " pnpm install ",
+        " pnpm add ",
         " yarn install ",
+        " yarn add ",
         " cargo install ",
         " curl ",
         " wget ",
@@ -159,6 +164,12 @@ fn is_environment_setup_or_probe(command: &str) -> bool {
         " command -v docker ",
         " python --version ",
         " python3 --version ",
+        " node --version ",
+        " npm --version ",
+        " which node ",
+        " which npm ",
+        " command -v node ",
+        " command -v npm ",
     ]
     .iter()
     .any(|needle| padded.contains(needle))
@@ -167,6 +178,12 @@ fn is_environment_setup_or_probe(command: &str) -> bool {
             "import requests",
             "import urllib",
             "import socket",
+            "fetch(",
+            "node:http",
+            "node:https",
+            "http.get(",
+            "https.get(",
+            "net.connect(",
         ]
         .iter()
         .any(|needle| command.contains(needle))
@@ -248,6 +265,9 @@ mod tests {
             "mkdir /tmp/x; pip install pytest",
             "command -v docker",
             "wget https://example.test/tool",
+            "npm ci",
+            "npx eslint .",
+            "node -e \"fetch('https://example.test')\"",
         ] {
             assert_eq!(classify_command(command), CommandClass::EnvironmentSetup);
         }

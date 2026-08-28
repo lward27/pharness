@@ -705,6 +705,10 @@ fn execution_target_for_fixture(root: &Path, fixture: &Fixture) -> Result<serde_
         .arg("--version")
         .output()
         .context("read prepared Python version")?;
+    let version = String::from_utf8_lossy(&python_version.stdout)
+        .trim()
+        .to_string();
+    let executable = python_path.to_string_lossy().to_string();
     let snapshot = EnvironmentSnapshot {
         source_sha,
         manifest_sha256,
@@ -715,10 +719,19 @@ fn execution_target_for_fixture(root: &Path, fixture: &Fixture) -> Result<serde_
         os: "linux".to_string(),
         architecture: "amd64".to_string(),
         effective_user: "pharness-eval".to_string(),
-        python_version: String::from_utf8_lossy(&python_version.stdout)
-            .trim()
-            .to_string(),
-        python_path: python_path.to_string_lossy().to_string(),
+        runtime: Some(pharness_core::EnvironmentRuntimeSnapshot {
+            kind: "python".into(),
+            executable: executable.clone(),
+            version: version.clone(),
+            package_manager_executable: None,
+            package_manager_version: None,
+            path_entries: vec![root
+                .join(".pharness-runtime/venv/bin")
+                .to_string_lossy()
+                .to_string()],
+        }),
+        python_version: Some(version),
+        python_path: Some(executable),
         writable_paths: contract.writable_paths.clone(),
         unavailable_tools: vec!["docker".to_string(), "podman".to_string()],
         agent_network: contract.agent_network,

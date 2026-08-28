@@ -28,7 +28,7 @@ function profileRegistry() {
     image: runnerDigest,
     revision: sourceSha,
     platform: "linux/amd64",
-    required_executables: ["git", "python", "pip"],
+    required_executables: ["pharness-worker", "git", "python", "pip"],
     preparation_strategy: "python_hashed_requirements",
     service_account: "pharness-runner-python",
     repository_allowlist: [canonicalRepositoryUrl],
@@ -272,12 +272,13 @@ test("real UI and controller complete Repo Mode from Product creation through so
       { path: ".pharness/project.yaml", kind: "file", size_bytes: 400, inspected: true, content_sha256: sha256("legacy-contract") },
       { path: "requirements.lock", kind: "file", size_bytes: 200, inspected: true, content_sha256: sha256("locked-dependencies") },
       { path: "src/app.py", kind: "file", size_bytes: 100, inspected: true, content_sha256: sha256("source") },
+      { path: "tests/test_app.py", kind: "file", size_bytes: 100, inspected: true, content_sha256: sha256("tests") },
     ],
     symlinks: [],
     submodules: [],
     contract: { canonical_present: false, canonical_sha256: null, alias_present: true, alias_sha256: sha256("legacy-contract"), status: "alias_only" },
     language_indicators: { python: 3 },
-    dependency_candidates: [{ kind: "python_requirements", path: "requirements.lock", content_sha256: sha256("locked-dependencies") }],
+    dependency_candidates: [{ kind: "pip_requirements", path: "requirements.lock", content_sha256: sha256("locked-dependencies") }],
     command_candidates: [{ command: "python -m unittest discover -s tests -v", source_path: "readme.md", source_line: 10 }],
     root_candidates: ["src", "tests"],
     automation_references: [],
@@ -437,6 +438,7 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await profileVerification.click();
   const profileHttp = await profileResponse;
   const profileBody = await profileHttp.json();
+  if (!profileHttp.ok()) throw new Error(`profile verification returned ${profileHttp.status()}: ${JSON.stringify(profileBody)}`);
   expect(profileBody.status).toBe("available");
   await expect(profileVerification).toHaveCount(0);
   await page.goto(`/#/repositories/${repositoryId}/readiness`);

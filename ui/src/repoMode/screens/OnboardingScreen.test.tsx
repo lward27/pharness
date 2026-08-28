@@ -24,4 +24,31 @@ describe("Repository onboarding", () => {
     expect(rawDiscovery).toBeInTheDocument();
     expect(rawDiscovery).not.toHaveAttribute("open");
   });
+
+  it("shows refresh onboarding instead of approval for an incompatible historical proposal", async () => {
+    const flow = {
+      onboarding: {
+        id: "ronb_frontend_old",
+        repository_id: "repo_frontend",
+        product_id: "prod_finance",
+        registered_commit: "a".repeat(40),
+        status: "proposal_ready",
+        actions: [{
+          id: "refresh_onboarding",
+          status: "blocked",
+          state_hash: "sha256:proposal-state",
+          blockers: [{ code: "profile_lock_mismatch", summary: "python-3.11 accepts pip_requirements, not npm_package_lock" }],
+        }],
+      },
+      discovery: { status: "completed", inventory_json: { files: [], dependency_candidates: [] } },
+      proposal: { status: "proposed", proposal: { assumptions: [], conflicts: [], blockers: [], service_proposals: [], binding_proposals: [] } },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(flow), {status:200,headers:{"content-type":"application/json"}})));
+
+    render(<OnboardingScreen onboardingId="ronb_frontend_old" operatorName="lucas" />);
+
+    await waitFor(() => expect(screen.getAllByText("refresh onboarding")).toHaveLength(2));
+    expect(screen.getByText(/python-3.11 accepts pip_requirements/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "approve proposal" })).not.toBeInTheDocument();
+  });
 });

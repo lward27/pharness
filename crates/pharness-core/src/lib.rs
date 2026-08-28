@@ -30,9 +30,10 @@ pub use policy::{
     PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
 };
 pub use project::{
-    AcceptanceCommand, DependencyLock, EnvironmentProfile, EnvironmentProfileLimits,
-    EnvironmentSnapshot, LoadedRepositoryContract, PackageInstallationPolicy, PreparationStrategy,
-    ProjectRoots, RepositoryContract, RepositoryContractError, RepositoryContractSource, RunBudget,
+    AcceptanceCommand, AgentNetworkPolicy, DependencyLock, EnvironmentProfile,
+    EnvironmentProfileLimits, EnvironmentRuntimeSnapshot, EnvironmentSnapshot,
+    LoadedRepositoryContract, PackageInstallationPolicy, PreparationStrategy, ProjectRoots,
+    RepositoryContract, RepositoryContractError, RepositoryContractSource, RunBudget,
     RunBudgetConsumption, LEGACY_PROJECT_CONTRACT_PATH, MAX_REPOSITORY_CONTRACT_BYTES,
     REPOSITORY_CONTRACT_PATH,
 };

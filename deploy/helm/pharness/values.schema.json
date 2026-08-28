@@ -125,9 +125,9 @@
             "preparationAllowedHosts": {
               "type": "array",
               "minItems": 3,
-              "maxItems": 3,
+              "maxItems": 4,
               "uniqueItems": true,
-              "items": { "enum": ["github.com", "pypi.org", "files.pythonhosted.org"] }
+              "items": { "enum": ["github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org"] }
             },
             "codingAllowedHosts": {
               "type": "array",
@@ -236,7 +236,7 @@
           "contains": { "const": "pharness-worker" },
           "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
         },
-        "preparation_strategy": { "const": "python_hashed_requirements" },
+        "preparation_strategy": { "enum": ["python_hashed_requirements", "node_npm_ci"] },
         "service_account": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
         "repository_allowlist": {
           "type": "array",

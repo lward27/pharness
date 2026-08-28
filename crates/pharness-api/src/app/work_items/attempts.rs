@@ -360,6 +360,11 @@ pub(in crate::app) async fn execute_work_item(
             "production coding requires a validated repository contract",
         ));
     }
+    if let (Some(contract), Some(profile)) = (contract.as_ref(), environment_profile.as_ref()) {
+        contract
+            .validate_for_profile(profile)
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
+    }
     if let Some(contract) = contract.as_ref() {
         create_permission_grant_record(
             &state.store,

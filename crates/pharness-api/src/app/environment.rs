@@ -41,6 +41,17 @@ pub fn profile_response(profile: &EnvironmentProfile) -> EnvironmentProfileRespo
             .ok()
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
             .unwrap_or_else(|| "unknown".to_string()),
+        runtime_kind: profile.preparation_strategy.runtime_kind().to_string(),
+        accepted_dependency_lock_kinds: vec![profile
+            .preparation_strategy
+            .accepted_dependency_lock_kind()
+            .to_string()],
+        lifecycle_scripts: if profile.preparation_strategy.lifecycle_scripts_allowed() {
+            "allowed"
+        } else {
+            "denied"
+        }
+        .to_string(),
         service_account: profile.service_account.clone(),
         repository_allowlist: profile.repository_allowlist.clone(),
         blockers,

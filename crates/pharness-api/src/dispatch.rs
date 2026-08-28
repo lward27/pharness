@@ -9,7 +9,7 @@ use crate::worker::{
     fail_run_from_dispatch, fail_run_from_job_creation, sync_repo_stage_run, LocalWorker,
 };
 use pharness_config::WorkerKubernetesConfig;
-use pharness_core::EnvironmentProfile;
+use pharness_core::{EnvironmentProfile, PreparationStrategy};
 use pharness_store::{
     CreateAuditEvent, PipelineIntentListFilter, SqliteStore, StoredApproval, StoredPipelineIntent,
     StoredRun, UpdatePipelineIntentExecution,
@@ -935,8 +935,18 @@ impl KubernetesJobDispatcher {
             .map(|executable| format!("command -v {executable} >/dev/null"))
             .collect::<Vec<_>>()
             .join(" && ");
+        let repository_checks = profile
+            .repository_allowlist
+            .iter()
+            .map(|repository| format!("git ls-remote --exit-code '{repository}' HEAD >/dev/null"))
+            .collect::<Vec<_>>()
+            .join(" && ");
+        let strategy_check = match profile.preparation_strategy {
+            PreparationStrategy::PythonHashedRequirements => "python -m venv /tmp/profile-venv; /tmp/profile-venv/bin/pip --version >/dev/null; /tmp/profile-venv/bin/python -c \"import urllib.request; urllib.request.urlopen('https://pypi.org/simple/', timeout=15).read(1)\"".to_string(),
+            PreparationStrategy::NodeNpmCi => "node --version >/dev/null; npm --version >/dev/null; npm ping --registry=https://registry.npmjs.org/ --ignore-scripts >/dev/null".to_string(),
+        };
         let script = format!(
-            "set -eu; test \"$(uname -s)\" = Linux; test \"$(uname -m)\" = x86_64; test \"$PHARNESS_BUILD_REVISION\" = \"$EXPECTED_REVISION\"; {executable_checks}; python -m venv /tmp/profile-venv; /tmp/profile-venv/bin/pip --version >/dev/null; git ls-remote --exit-code \"$PROFILE_REPOSITORY\" HEAD >/dev/null; /tmp/profile-venv/bin/python -c \"import urllib.request; urllib.request.urlopen('https://pypi.org/simple/', timeout=15).read(1)\""
+            "set -eu; test \"$(uname -s)\" = Linux; test \"$(uname -m)\" = x86_64; test \"$PHARNESS_BUILD_REVISION\" = \"$EXPECTED_REVISION\"; {executable_checks}; {repository_checks}; {strategy_check}"
         );
         let proxy_url = format!(
             "http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",
@@ -2523,6 +2533,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             serde_json::json!({ "name": "PHARNESS_RUNNER_IMAGE", "value": profile.image }),
             serde_json::json!({ "name": "PHARNESS_RUNNER_REVISION", "value": profile.revision }),
             serde_json::json!({ "name": "PHARNESS_RUNNER_PLATFORM", "value": profile.platform }),
+            serde_json::json!({ "name": "PHARNESS_PREPARATION_STRATEGY", "value": serde_json::to_value(profile.preparation_strategy).ok().and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_else(|| "unknown".into()) }),
             serde_json::json!({ "name": "PHARNESS_REQUIRED_EXECUTABLES_JSON", "value": serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".to_string()) }),
             serde_json::json!({ "name": "HTTPS_PROXY", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
             serde_json::json!({ "name": "https_proxy", "value": format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080", self.config.namespace) }),
@@ -2780,6 +2791,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             serde_json::json!({"name":"PHARNESS_RUNNER_IMAGE","value":profile.image}),
             serde_json::json!({"name":"PHARNESS_RUNNER_REVISION","value":profile.revision}),
             serde_json::json!({"name":"PHARNESS_RUNNER_PLATFORM","value":profile.platform}),
+            serde_json::json!({"name":"PHARNESS_PREPARATION_STRATEGY","value":serde_json::to_value(profile.preparation_strategy).ok().and_then(|value|value.as_str().map(str::to_owned)).unwrap_or_else(||"unknown".into())}),
             serde_json::json!({"name":"PHARNESS_REQUIRED_EXECUTABLES_JSON","value":serde_json::to_string(&profile.required_executables).unwrap_or_else(|_| "[]".into())}),
             serde_json::json!({"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}}),
             serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{}.svc.cluster.local:8080",self.config.namespace)}),
@@ -4255,7 +4267,12 @@ mod tests {
             image: format!("example.test/python@sha256:{}", "a".repeat(64)),
             revision: "b".repeat(40),
             platform: "linux/amd64".to_string(),
-            required_executables: vec!["pharness-worker".to_string(), "python".to_string()],
+            required_executables: vec![
+                "pharness-worker".to_string(),
+                "git".to_string(),
+                "python".to_string(),
+                "pip".to_string(),
+            ],
             preparation_strategy: PreparationStrategy::PythonHashedRequirements,
             service_account: "pharness-python-runner".to_string(),
             repository_allowlist: vec!["https://github.com/example/test.git".to_string()],
@@ -4427,7 +4444,12 @@ mod tests {
             image: format!("example.test/python@sha256:{}", "a".repeat(64)),
             revision: "b".repeat(40),
             platform: "linux/amd64".into(),
-            required_executables: vec!["pharness-worker".into(), "python".into()],
+            required_executables: vec![
+                "pharness-worker".into(),
+                "git".into(),
+                "python".into(),
+                "pip".into(),
+            ],
             preparation_strategy: PreparationStrategy::PythonHashedRequirements,
             service_account: "pharness-python-runner".into(),
             repository_allowlist: vec!["https://github.com/example/test.git".into()],

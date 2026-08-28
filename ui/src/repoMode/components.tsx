@@ -57,6 +57,7 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [requiresRefresh, setRequiresRefresh] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const external = action.effect_class?.includes("external");
   const model = action.effect_class?.includes("model");
@@ -93,7 +94,9 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
     } catch (caught) {
       const value = caught as Error & { status?: number };
       if (value.status === 409) {
-        onClose(); onApplied();
+        setError(value.message);
+        setRequiresRefresh(/stale|changed after/i.test(value.message));
+        onApplied();
         return;
       }
       setError(value.message);
@@ -117,7 +120,7 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
       <label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label>
       <label>Reason<textarea rows={3} value={reason} onChange={event => setReason(event.target.value)} placeholder="Why this action is appropriate now" /></label>
       {error ? <div className="repo-error" role="alert">{error}</div> : null}
-      <footer><button className="repo-primary" type="button" disabled={submitting || action.status === "blocked" || !actor.trim() || !reason.trim()} onClick={submit}>{submitting ? "Applying…" : "Confirm and apply"}</button><button type="button" onClick={onClose}>Cancel</button></footer>
+      <footer><button className="repo-primary" type="button" disabled={submitting || requiresRefresh || action.status === "blocked" || !actor.trim() || !reason.trim()} onClick={submit}>{submitting ? "Applying…" : requiresRefresh ? "Refresh required" : "Confirm and apply"}</button><button type="button" onClick={onClose}>Cancel</button></footer>
     </div>
   </div>;
 }

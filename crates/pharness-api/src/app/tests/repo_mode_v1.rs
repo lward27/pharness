@@ -39,7 +39,12 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
         image: format!("example.test/python@sha256:{}", "a".repeat(64)),
         revision: "b".repeat(40),
         platform: "linux/amd64".into(),
-        required_executables: vec!["python".into()],
+        required_executables: vec![
+            "pharness-worker".into(),
+            "git".into(),
+            "python".into(),
+            "pip".into(),
+        ],
         preparation_strategy: pharness_core::PreparationStrategy::PythonHashedRequirements,
         service_account: "pharness-python-runner".into(),
         repository_allowlist: vec!["https://github.com/example/no-change.git".into()],

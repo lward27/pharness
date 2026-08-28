@@ -78,7 +78,8 @@ function CapabilityAxes({ repositoryId, capabilities, trust, authorization, onVe
   const verify = async (capability:string) => {
     setPending(capability); setError("");
     try {
-      await sendJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight?repository_id=${encodeURIComponent(repositoryId)}`, "POST", {});
+      const repositoryQuery = capability.startsWith("environment_profile:") ? "" : `?repository_id=${encodeURIComponent(repositoryId)}`;
+      await sendJson(`/api/system/capabilities/${encodeURIComponent(capability)}/preflight${repositoryQuery}`, "POST", {});
       onVerified();
     } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setPending(""); }
@@ -137,6 +138,7 @@ export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:
   }, [onboarding?.status]);
   return <ResourceState status={resource.status} error={resource.error}>
     <SectionHeader eyebrow="Repository onboarding" title={repositoryIdentity?.external_id || onboarding?.repository_id || onboardingId} summary={`${productIdentity?.display_name ? `${productIdentity.display_name} · ` : ""}Pinned revision ${onboarding?.registered_commit || "unavailable"}`} action={action ? <button className="repo-primary" type="button" disabled={action.status !== "available"} onClick={() => setSelectedAction(action)}>{action.id.replaceAll("_"," ")}</button> : undefined} />
+    {action?.status === "blocked" ? <div className="repo-corrective-path" role="status"><WarningCircle size={18}/><div><strong>{action.id.replaceAll("_", " ")}</strong><span>{(action.blockers || []).map((blocker:any) => typeof blocker === "string" ? blocker : blocker.summary || blocker.code).join(" · ")}</span></div></div> : null}
     <ol className="repo-stepper">{onboardingSteps.map((step,index) => <li className={index < activeStep ? "is-complete" : index === activeStep ? "is-current" : ""} key={step}><span>{index < activeStep ? <CheckCircle size={16} weight="fill" /> : index + 1}</span><small>{step}</small></li>)}</ol>
     <div className="repo-two-columns repo-onboarding-grid"><section className="repo-panel"><header><h2>Deterministic discovery</h2><Status value={flow?.discovery?.status || "waiting"} /></header>{flow?.discovery?.inventory_json ? <DiscoverySummary discovery={flow.discovery.inventory_json} /> : <p className="repo-muted">Discovery evidence has not been sealed.</p>}</section><section className="repo-panel"><header><h2>Agent proposal</h2><Status value={flow?.proposal?.status || "waiting"} /></header>{flow?.proposal?.proposal ? <><Proposal proposal={flow.proposal.proposal} /><OnboardingProposalEditor proposal={flow.proposal.proposal} onboarding={onboarding} operatorName={operatorName} onSaved={resource.refresh} /></> : <p className="repo-muted">No proposal revision is available.</p>}</section><section className="repo-panel repo-span-2"><header><h2>Exact onboarding diff</h2><Status value={patch.data ? "available" : onboarding?.patch_execution_id ? "waiting" : "inapplicable"} /></header>{patch.data?.content_text ? <details className="repo-diff-disclosure"><summary><FileText size={17} />Review the exact patch authorized for one source PR</summary><pre className="repo-code repo-diff">{patch.data.content_text}</pre></details> : <p className="repo-muted">The reviewed contract diff appears here after bounded source materialization.</p>}</section><section className="repo-panel"><header><h2>Source delivery</h2><Status value={flow?.source_delivery_intent?.status || "inapplicable"} /></header>{flow?.source_delivery_intent ? <SourceDeliverySummary intent={flow.source_delivery_intent} /> : <p className="repo-muted">No external source effect has been authorized.</p>}</section><section className="repo-panel"><header><h2>Readiness forecast and result</h2><Status value={flow?.readiness?.coding_status || "unavailable"} /></header><ReadinessSummary readiness={flow?.readiness} forecast={flow?.proposal?.proposal?.readiness_forecast} /></section></div>
     {selectedAction ? <ActionDialog action={selectedAction} owner={{kind:"Repository onboarding",id:onboardingId,product:onboarding?.product_id,repository:onboarding?.repository_id,revision:onboarding?.registered_commit}} endpoint={`/api/repository-onboardings/${encodeURIComponent(onboardingId)}/actions/${encodeURIComponent(selectedAction.id)}/execute`} operatorName={operatorName} onClose={() => setSelectedAction(null)} onApplied={resource.refresh} /> : null}
@@ -179,7 +181,7 @@ function OnboardingProposalEditor({ proposal,onboarding,operatorName,onSaved }:a
       setEditing(false); onSaved();
     } catch(caught) {
       const value = caught as Error & {status?:number};
-      if(value.status === 409) { setEditing(false); onSaved(); return; }
+      if(value.status === 409) { setError(value.message); onSaved(); return; }
       setError(value.message);
     }
   };

@@ -113,6 +113,7 @@ worker:
     tokenSecretName: pharness-git-writer-token
     allowedRepos:
       - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/finance-frontend.git
       - https://github.com/lward27/scraper_manager.git
     githubApiUrl: https://api.github.com
     authorName: Pharness
@@ -141,6 +142,7 @@ worker:
     tokenSecretName: pharness-git-observer-token
     allowedRepos:
       - https://github.com/lward27/finance_app_database_service.git
+      - https://github.com/lward27/finance-frontend.git
       - https://github.com/lward27/scraper_manager.git
     githubApiUrl: https://api.github.com
     activeDeadlineSeconds: 300
@@ -217,6 +219,24 @@ environmentProfiles:
       cpu: "2"
       memory: 2Gi
       ephemeral_storage: 4Gi
+  - id: node-24
+    active: false
+    image: registry.lucas.engineering/pharness-node-runner@sha256:1111111111111111111111111111111111111111111111111111111111111111
+    revision: "1111111111111111111111111111111111111111"
+    platform: linux/amd64
+    required_executables:
+      - pharness-worker
+      - git
+      - node
+      - npm
+    preparation_strategy: node_npm_ci
+    service_account: pharness-node-runner
+    repository_allowlist:
+      - https://github.com/lward27/finance-frontend.git
+    limits:
+      cpu: "2"
+      memory: 2Gi
+      ephemeral_storage: 4Gi
 
 # A permanently inert, GitOps-managed Pipeline used only by the bounded
 # execution smoke. Keep this enabled only in environments where Tekton is
@@ -276,6 +296,7 @@ networkPolicy:
       - github.com
       - pypi.org
       - files.pythonhosted.org
+      - registry.npmjs.org
     codingAllowedHosts:
       - api.fireworks.ai
 

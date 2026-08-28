@@ -254,7 +254,7 @@ test("AgentRun history pagination remains server-owned", async ({ page }) => {
   expect(offsets).toContain(50);
 });
 
-test("a stale state-hashed action closes, refreshes, and is not retried", async ({ page }) => {
+test("a stale state-hashed action shows the blocker, refreshes, and cannot be retried", async ({ page }) => {
   const active = { ...completedWorkItem, id: "witem_01jactive", status: "awaiting_approval", closed_at: null, closure_reason: null };
   let flowReads = 0;
   let actionCalls = 0;
@@ -274,7 +274,8 @@ test("a stale state-hashed action closes, refreshes, and is not retried", async 
   const dialog = page.getByRole("dialog", { name: /approve work plan/i });
   await dialog.getByLabel("Reason").fill("Reviewed exact WorkPlan revision");
   await dialog.getByRole("button", { name: "Confirm and apply" }).click();
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog.getByRole("alert")).toContainText("stale state hash");
+  await expect(dialog.getByRole("button", { name: "Refresh required" })).toBeDisabled();
   await expect.poll(() => flowReads).toBeGreaterThan(1);
   expect(actionCalls).toBe(1);
 });

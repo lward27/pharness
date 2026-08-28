@@ -114,14 +114,19 @@ function BudgetPanel({ run, operatorSummary }: { run: any; operatorSummary: any 
 function EnvironmentPanel({ preparation, active }: { preparation: any; active: boolean }) {
   if (!preparation?.status) return <section className="attempt-environment-panel is-pending"><div className="attempt-panel-heading"><div><span className="eyebrow">Environment readiness</span><h3>Preparation evidence pending</h3></div><StatusPill tone="pending">Pending</StatusPill></div><p>The model will not start until the isolated runner, immutable source, executables, and dependency preparation have been recorded.</p></section>;
   const snapshot = preparation.environment_snapshot ?? {};
+  const runtime = snapshot.runtime ?? (snapshot.python_path ? { kind:"python", executable:snapshot.python_path, version:snapshot.python_version, path_entries:[String(snapshot.python_path).replace(/\/python$/, "")] } : null);
+  const runtimeVersion = runtime ? runtimeVersionLabel(runtime.kind, runtime.version) : "Runtime pending";
+  const packageManager = runtime?.package_manager_executable ? `${runtime.package_manager_version || "version unavailable"} · ${runtime.package_manager_executable}` : "Not recorded";
   const contract = preparation.project_contract ?? {};
   const logs = Array.isArray(preparation.logs) ? preparation.logs : [];
   return <details className="attempt-environment-panel" open={active}>
-    <summary><div><span className="eyebrow">Environment readiness</span><h3>{statusText(preparation.status, "Not prepared")}</h3><p>{preparation.environment_profile_id ?? "Runner unavailable"} · {snapshot.python_version ?? "Python pending"}</p></div><StatusPill tone={preparation.status === "succeeded" ? "healthy" : preparation.status === "failed" ? "risk" : "pending"}>{statusText(preparation.status)}</StatusPill></summary>
+    <summary><div><span className="eyebrow">Environment readiness</span><h3>{statusText(preparation.status, "Not prepared")}</h3><p>{preparation.environment_profile_id ?? "Runner unavailable"} · {runtimeVersion}</p></div><StatusPill tone={preparation.status === "succeeded" ? "healthy" : preparation.status === "failed" ? "risk" : "pending"}>{statusText(preparation.status)}</StatusPill></summary>
     <div className="environment-fact-grid">
       <ReviewItem label="Pinned source" value={preparation.source_commit ?? "Unavailable"} />
       <ReviewItem label="Runner digest" value={snapshot.runner_image_digest ?? "Pending"} />
-      <ReviewItem label="Python" value={snapshot.python_path ? `${snapshot.python_version} · ${snapshot.python_path}` : "Pending"} />
+      <ReviewItem label="Runtime" value={runtime ? `${runtimeVersion} · ${runtime.executable}` : "Pending"} />
+      <ReviewItem label="Package manager" value={packageManager} />
+      <ReviewItem label="PATH entries" value={runtime?.path_entries?.join(" · ") || "Pending"} />
       <ReviewItem label="Writable paths" value={snapshot.writable_paths?.join(" · ") ?? contract.writable_paths?.join(" · ") ?? "Pending"} />
       <ReviewItem label="Network policy" value={snapshot.agent_network_policy ?? contract.agent_network ?? "Undeclared"} />
       <ReviewItem label="Unavailable tools" value={snapshot.unavailable_tools?.join(" · ") || "None declared"} />
@@ -129,6 +134,12 @@ function EnvironmentPanel({ preparation, active }: { preparation: any; active: b
     {preparation.error ? <p className="api-banner">{preparation.error}</p> : null}
     {logs.length ? <details className="preparation-log"><summary>Preparation log · {logs.length} steps</summary><ol>{logs.map((entry: any, index: number) => <li key={`${entry?.step ?? "step"}-${index}`}><strong>{statusText(entry?.step, `Step ${index + 1}`)}</strong><StatusPill tone={entry?.status === "succeeded" ? "healthy" : entry?.status === "failed" ? "risk" : undefined}>{statusText(entry?.status, "Recorded")}</StatusPill></li>)}</ol></details> : null}
   </details>;
+}
+
+function runtimeVersionLabel(kind: string, version?: string) {
+  const runtimeKind = statusText(kind, "Runtime");
+  if (!version) return `${runtimeKind} version pending`;
+  return version.toLowerCase().startsWith(kind.toLowerCase()) ? version : `${runtimeKind} ${version}`;
 }
 
 function ToolStream({ events }: { events: any[] }) {

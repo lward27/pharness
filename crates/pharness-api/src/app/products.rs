@@ -1209,6 +1209,9 @@ async fn create_repository_readiness_assessment(
                 "RepositoryContract EnvironmentProfile is inactive or does not allow this repository",
             )
         })?;
+    contract
+        .validate_for_profile(&profile)
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
     if !state.worker.source_reader_available()
         || !state
             .worker
@@ -1519,7 +1522,9 @@ async fn create_repository_onboarding(
             reason: request.reason.trim().into(),
         })
         .await?;
-    Ok(Json(onboarding_response(onboarding)?))
+    Ok(Json(
+        onboarding_operator_response(&state, onboarding).await?,
+    ))
 }
 
 async fn get_repository_onboarding(
@@ -1528,7 +1533,9 @@ async fn get_repository_onboarding(
 ) -> Result<Json<RepositoryOnboardingResponse>, ApiError> {
     ensure_repo_mode_enabled(&state)?;
     let onboarding = find_onboarding(&state, &onboarding_id).await?;
-    Ok(Json(onboarding_response(onboarding)?))
+    Ok(Json(
+        onboarding_operator_response(&state, onboarding).await?,
+    ))
 }
 
 async fn get_repository_onboarding_flow(
@@ -1571,7 +1578,7 @@ async fn get_repository_onboarding_flow(
                 .await?
         }
     };
-    let response = onboarding_response(onboarding)?;
+    let response = onboarding_operator_response(&state, onboarding).await?;
     Ok(Json(json!({
         "onboarding": response,
         "discovery": discovery,
@@ -1601,7 +1608,7 @@ async fn put_repository_onboarding_proposal(
         ));
     }
     let onboarding = find_onboarding(&state, &onboarding_id).await?;
-    let preview = onboarding_response(onboarding.clone())?;
+    let preview = onboarding_operator_response(&state, onboarding.clone()).await?;
     if preview.state_hash != request.state_hash {
         return Err(ApiError::conflict(
             "repository onboarding changed after proposal preview; refresh and retry",
@@ -1631,15 +1638,21 @@ async fn put_repository_onboarding_proposal(
     contract
         .validate_candidate()
         .map_err(|error| ApiError::bad_request(error.to_string()))?;
-    if !state
-        .environment_profiles
-        .iter()
-        .any(|profile| profile.active && profile.id == contract.environment_profile)
-    {
-        return Err(ApiError::conflict(
-            "candidate contract selects an unavailable EnvironmentProfile",
-        ));
-    }
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    let inventory = discovery
+        .inventory_json
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("deterministic discovery inventory is unavailable"))?;
+    validate_onboarding_contract_compatibility(
+        &state.environment_profiles,
+        &repository.canonical_url,
+        inventory,
+        &contract,
+    )?;
     validate_onboarding_product_proposals(&state, &onboarding, &request.proposal).await?;
     let proposal_value = serde_json::to_value(&request.proposal)
         .map_err(|error| ApiError::internal(error.to_string()))?;
@@ -1670,7 +1683,7 @@ async fn execute_repository_onboarding_action(
     validate_required(&request.actor, "actor", 200)?;
     validate_required(&request.reason, "reason", 1_000)?;
     let onboarding = find_onboarding(&state, &onboarding_id).await?;
-    let preview = onboarding_response(onboarding.clone())?;
+    let preview = onboarding_operator_response(&state, onboarding.clone()).await?;
     if request.state_hash != preview.state_hash {
         return Err(ApiError::conflict(
             "repository onboarding changed after action preview; refresh and retry",
@@ -1755,6 +1768,33 @@ async fn execute_repository_onboarding_action(
                 serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
                     ApiError::internal(format!("stored onboarding proposal is invalid: {error}"))
                 })?;
+            let contract: pharness_core::RepositoryContract =
+                serde_json::from_value(typed.candidate_contract.clone()).map_err(|error| {
+                    ApiError::conflict(format!("stored candidate contract is invalid: {error}"))
+                })?;
+            let discovery = state
+                .store
+                .get_repository_discovery(&proposal.discovery_id)
+                .await?
+                .filter(|discovery| {
+                    discovery.status == "succeeded"
+                        && discovery.content_hash.as_deref()
+                            == Some(proposal.discovery_hash.as_str())
+                })
+                .ok_or_else(|| ApiError::conflict("proposal discovery is unavailable"))?;
+            let repository = state
+                .store
+                .get_repository(&onboarding.repository_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+            validate_onboarding_contract_compatibility(
+                &state.environment_profiles,
+                &repository.canonical_url,
+                discovery.inventory_json.as_ref().ok_or_else(|| {
+                    ApiError::conflict("proposal discovery inventory is unavailable")
+                })?,
+                &contract,
+            )?;
             validate_onboarding_product_proposals(&state, &onboarding, &typed).await?;
             // Product topology and executable Repository onboarding are separate
             // review boundaries. This switch exists only to finish an explicitly
@@ -1895,7 +1935,7 @@ async fn execute_repository_onboarding_action(
         }
     }
     let updated = find_onboarding(&state, &onboarding_id).await?;
-    Ok(Json(onboarding_response(updated)?))
+    Ok(Json(onboarding_operator_response(&state, updated).await?))
 }
 
 async fn validate_onboarding_product_proposals(
@@ -2467,27 +2507,48 @@ async fn start_repository_onboarding_proposer(
         "blockers":inventory.get("blockers"),
         "limits":inventory.get("limits"),
     });
-    let active_environment_profile_ids = onboarding_environment_profile_ids(
-        state
-            .environment_profiles
-            .iter()
-            .map(|profile| (profile.id.as_str(), profile.active)),
+    let compatible_environment_profiles = onboarding_environment_profile_descriptors(
+        &state.environment_profiles,
+        &repository.canonical_url,
+        inventory,
     );
-    if active_environment_profile_ids.is_empty() {
+    if compatible_environment_profiles.is_empty() {
         return Err(ApiError::conflict(
-            "repository onboarding proposer requires at least one active EnvironmentProfile",
+            "repository onboarding proposer has no compatible active EnvironmentProfile; configure a profile whose repository allowlist and accepted lock kind match discovery, then start a fresh onboarding",
         ));
     }
-    let active_environment_profile_summary = active_environment_profile_ids.join(", ");
+    let active_environment_profile_ids = compatible_environment_profiles
+        .iter()
+        .filter_map(|profile| profile.get("id").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let product = state
+        .store
+        .get_product(&onboarding.product_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("product", &onboarding.product_id))?;
+    let product_snapshot = state
+        .store
+        .get_product_model_snapshot(&product.current_model_snapshot_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::not_found("product_model_snapshot", &product.current_model_snapshot_id)
+        })?;
     let context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "subject":{"kind":"repository_onboarding","id":onboarding.id},
         "intent":"Propose the canonical RepositoryContract and bounded instructions from deterministic discovery and exact read-only repository evidence.",
         "pinned_repository":{"id":repository.id,"url":repository.canonical_url,"default_branch":repository.default_branch,"source_commit":onboarding.registered_commit},
         "discovery":bounded_discovery,
+        "product_model":{
+            "snapshot_id":product_snapshot.id,
+            "content_hash":product_snapshot.content_hash,
+            "model":product_snapshot.model_json,
+            "rule":"Reuse existing Product Services and bindings unless discovery proves a distinct reviewed component; do not invent a duplicate Service for the Repository name."
+        },
         "contract_constraints":{
-            "active_environment_profile_ids":active_environment_profile_ids,
-            "environment_profile_rule":"candidate_contract.environment_profile must exactly equal one listed active EnvironmentProfile ID; generic language names and shortened aliases are invalid",
+            "compatible_environment_profiles":compatible_environment_profiles,
+            "environment_profile_rule":"candidate_contract.environment_profile and dependency_lock.kind must exactly match one compatible descriptor; generic language names, shortened aliases, and unsupported lock kinds are invalid",
         },
         "policies":{"allowed_source_changes":[".pharness/repository.yaml",".pharness/instructions.md","remove .pharness/project.yaml"],"dependency_lock_generation":false,"agent_network":"denied"},
         "remaining_budgets":profile.budget,
@@ -2537,7 +2598,7 @@ async fn start_repository_onboarding_proposer(
             id: run_id.clone(),
             session_id: session_id.clone(),
             user_task: format!(
-                "Submit one bounded Repository onboarding proposal. Treat discovery facts as authoritative, inspect only what is needed, and do not modify the checkout. candidate_contract.environment_profile must exactly equal one of these active IDs: {active_environment_profile_summary}."
+                "Submit one bounded Repository onboarding proposal. Treat discovery and Product-model facts as authoritative, reuse existing Services, inspect only what is needed, and do not modify the checkout. candidate_contract.environment_profile must exactly equal one of these compatible IDs: {active_environment_profile_ids}."
             ),
             cwd: cwd.clone(),
             max_turns: profile.budget.initial_turns,
@@ -2596,6 +2657,7 @@ async fn start_repository_onboarding_proposer(
     Ok(())
 }
 
+#[cfg(test)]
 fn onboarding_environment_profile_ids<'a>(
     profiles: impl IntoIterator<Item = (&'a str, bool)>,
 ) -> Vec<String> {
@@ -2606,6 +2668,113 @@ fn onboarding_environment_profile_ids<'a>(
         .collect::<Vec<_>>();
     active.sort();
     active
+}
+
+fn onboarding_environment_profile_descriptors(
+    profiles: &[pharness_core::EnvironmentProfile],
+    repository: &str,
+    discovery: &Value,
+) -> Vec<Value> {
+    let dependency_candidates = discovery
+        .get("dependency_candidates")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut compatible = profiles
+        .iter()
+        .filter(|profile| {
+            profile.active
+                && profile.validate().is_ok()
+                && profile
+                    .repository_allowlist
+                    .iter()
+                    .any(|allowed| allowed == repository)
+                && dependency_candidates.iter().any(|candidate| {
+                    candidate.get("kind").and_then(Value::as_str)
+                        == Some(profile.preparation_strategy.accepted_dependency_lock_kind())
+                })
+        })
+        .map(|profile| {
+            json!({
+                "id":profile.id,
+                "runtime_kind":profile.preparation_strategy.runtime_kind(),
+                "preparation_strategy":profile.preparation_strategy,
+                "accepted_dependency_lock_kinds":[profile.preparation_strategy.accepted_dependency_lock_kind()],
+                "repository_allowlist":profile.repository_allowlist,
+                "lifecycle_scripts":if profile.preparation_strategy.lifecycle_scripts_allowed() {"allowed"} else {"denied"},
+            })
+        })
+        .collect::<Vec<_>>();
+    compatible.sort_by(|left, right| {
+        left.get("id")
+            .and_then(Value::as_str)
+            .cmp(&right.get("id").and_then(Value::as_str))
+    });
+    compatible
+}
+
+fn validate_onboarding_contract_compatibility(
+    profiles: &[pharness_core::EnvironmentProfile],
+    repository: &str,
+    discovery: &Value,
+    contract: &pharness_core::RepositoryContract,
+) -> Result<(), ApiError> {
+    let profile = profiles
+        .iter()
+        .find(|profile| profile.active && profile.id == contract.environment_profile)
+        .ok_or_else(|| {
+            ApiError::conflict("candidate contract selects an unavailable EnvironmentProfile")
+        })?;
+    contract
+        .validate_for_profile(profile)
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    if !profile
+        .repository_allowlist
+        .iter()
+        .any(|allowed| allowed == repository)
+    {
+        return Err(ApiError::conflict(
+            "candidate EnvironmentProfile does not allow this exact repository",
+        ));
+    }
+    let dependency_matches = discovery
+        .get("dependency_candidates")
+        .and_then(Value::as_array)
+        .is_some_and(|candidates| {
+            candidates.iter().any(|candidate| {
+                candidate.get("path").and_then(Value::as_str)
+                    == Some(contract.dependency_lock.path.as_str())
+                    && candidate.get("kind").and_then(Value::as_str)
+                        == Some(contract.dependency_lock.kind.as_str())
+            })
+        });
+    if !dependency_matches {
+        return Err(ApiError::conflict(
+            "candidate dependency lock does not match deterministic discovery",
+        ));
+    }
+    let files = discovery
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ApiError::conflict("deterministic discovery file inventory is missing"))?;
+    for (label, roots) in [
+        ("source", &contract.roots.source),
+        ("test", &contract.roots.tests),
+    ] {
+        for root in roots {
+            let prefix = format!("{}/", root.trim_end_matches('/'));
+            if !files.iter().any(|file| {
+                file.get("path")
+                    .and_then(Value::as_str)
+                    .is_some_and(|path| path == root || path.starts_with(&prefix))
+            }) {
+                return Err(ApiError::conflict(format!(
+                    "candidate contract declares a {label} root absent from deterministic discovery: {root}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn repository_registration_preflight(
@@ -2883,10 +3052,103 @@ fn onboarding_response(
     })
 }
 
-pub(in crate::app) fn onboarding_operator_projection(
+async fn onboarding_operator_response(
+    state: &AppState,
+    onboarding: StoredRepositoryOnboarding,
+) -> Result<RepositoryOnboardingResponse, ApiError> {
+    let mut response = onboarding_response(onboarding.clone())?;
+    if onboarding.status != "proposal_ready" {
+        return Ok(response);
+    }
+    if let Some(blocker) = onboarding_compatibility_blocker(state, &onboarding).await? {
+        response.actions = vec![RepositoryOnboardingActionResponse {
+            id: "refresh_onboarding".into(),
+            lifecycle_stage: "proposal".into(),
+            resource: json!({
+                "kind":"repository_onboarding",
+                "id":onboarding.id,
+                "product_id":onboarding.product_id,
+                "repository_id":onboarding.repository_id,
+                "source_commit":onboarding.registered_commit,
+            }),
+            status: "blocked".into(),
+            effect_class: "corrective_action".into(),
+            external_effect_summary: "Register the prerequisite merge SHA and start a fresh onboarding; this immutable proposal remains historical evidence".into(),
+            approval_requirements: Vec::new(),
+            expected_result: "A fresh discovery and proposer Run use compatible EnvironmentProfile descriptors".into(),
+            requires_confirmation: false,
+            blockers: vec![blocker],
+            state_hash: response.state_hash.clone(),
+        }];
+    }
+    Ok(response)
+}
+
+async fn onboarding_compatibility_blocker(
+    state: &AppState,
+    onboarding: &StoredRepositoryOnboarding,
+) -> Result<Option<String>, ApiError> {
+    let Some(proposal) = state
+        .store
+        .get_current_repository_onboarding_proposal(&onboarding.id)
+        .await?
+    else {
+        return Ok(Some("onboarding proposal is unavailable".into()));
+    };
+    let typed: pharness_core::RepositoryOnboardingProposal =
+        match serde_json::from_value(proposal.proposal) {
+            Ok(typed) => typed,
+            Err(error) => {
+                return Ok(Some(format!(
+                    "stored onboarding proposal is invalid: {error}"
+                )))
+            }
+        };
+    let contract: pharness_core::RepositoryContract =
+        match serde_json::from_value(typed.candidate_contract) {
+            Ok(contract) => contract,
+            Err(error) => {
+                return Ok(Some(format!(
+                    "stored candidate contract is invalid: {error}"
+                )))
+            }
+        };
+    let Some(discovery) = state
+        .store
+        .get_repository_discovery(&proposal.discovery_id)
+        .await?
+        .filter(|discovery| {
+            discovery.status == "succeeded"
+                && discovery.content_hash.as_deref() == Some(proposal.discovery_hash.as_str())
+        })
+    else {
+        return Ok(Some("proposal discovery is unavailable".into()));
+    };
+    let Some(inventory) = discovery.inventory_json.as_ref() else {
+        return Ok(Some("proposal discovery inventory is unavailable".into()));
+    };
+    let Some(repository) = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+    else {
+        return Ok(Some("onboarding repository is unavailable".into()));
+    };
+    Ok(validate_onboarding_contract_compatibility(
+        &state.environment_profiles,
+        &repository.canonical_url,
+        inventory,
+        &contract,
+    )
+    .err()
+    .map(|error| error.message))
+}
+
+pub(in crate::app) async fn onboarding_operator_projection(
+    state: &AppState,
     onboarding: StoredRepositoryOnboarding,
 ) -> Result<Value, ApiError> {
-    serde_json::to_value(onboarding_response(onboarding)?)
+    serde_json::to_value(onboarding_operator_response(state, onboarding).await?)
         .map_err(|error| ApiError::internal(error.to_string()))
 }
 
@@ -3035,15 +3297,20 @@ async fn validate_and_store_agent_onboarding_proposal(
     contract
         .validate_candidate()
         .map_err(|error| ApiError::conflict(error.to_string()))?;
-    if !state
-        .environment_profiles
-        .iter()
-        .any(|profile| profile.active && profile.id == contract.environment_profile)
-    {
-        return Err(ApiError::conflict(
-            "candidate contract selects no active EnvironmentProfile",
-        ));
-    }
+    let repository = state
+        .store
+        .get_repository(&onboarding.repository_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    validate_onboarding_contract_compatibility(
+        &state.environment_profiles,
+        &repository.canonical_url,
+        discovery
+            .inventory_json
+            .as_ref()
+            .ok_or_else(|| ApiError::conflict("onboarding discovery inventory is unavailable"))?,
+        &contract,
+    )?;
     let value =
         serde_json::to_value(&proposal).map_err(|error| ApiError::internal(error.to_string()))?;
     state
@@ -3214,6 +3481,18 @@ pub(in crate::app) async fn internal_onboarding_patch_context(
         .get_repository(&onboarding.repository_id)
         .await?
         .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+    let contract: pharness_core::RepositoryContract =
+        serde_json::from_value(typed.candidate_contract.clone()).map_err(|error| {
+            ApiError::conflict(format!("approved candidate contract is invalid: {error}"))
+        })?;
+    validate_onboarding_contract_compatibility(
+        &state.environment_profiles,
+        &repository.canonical_url,
+        discovery.inventory_json.as_ref().ok_or_else(|| {
+            ApiError::conflict("approved proposal discovery inventory is unavailable")
+        })?,
+        &contract,
+    )?;
     if !state.worker.source_reader_available()
         || !state
             .worker
@@ -3553,13 +3832,29 @@ pub(in crate::app) async fn internal_onboarding_contract_validation_outcome(
             contract
                 .validate_candidate()
                 .map_err(|error| ApiError::bad_request(error.to_string()))?;
-            if !state
+            let repository = state
+                .store
+                .get_repository(&onboarding.repository_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
+            let profile = state
                 .environment_profiles
                 .iter()
-                .any(|profile| profile.active && profile.id == contract.environment_profile)
+                .find(|profile| profile.active && profile.id == contract.environment_profile)
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                        "validated RepositoryContract selects no active EnvironmentProfile",
+                    )
+                })?;
+            contract
+                .validate_for_profile(profile)
+                .map_err(|error| ApiError::conflict(error.to_string()))?;
+            if !profile
+                .repository_allowlist
+                .contains(&repository.canonical_url)
             {
                 return Err(ApiError::conflict(
-                    "validated RepositoryContract selects no active EnvironmentProfile",
+                    "validated RepositoryContract profile does not allow this repository",
                 ));
             }
             let proposal = state
@@ -3969,6 +4264,9 @@ pub(in crate::app) async fn internal_repository_readiness_outcome(
             serde_json::from_value(contract_value.clone()).map_err(|error| {
                 ApiError::conflict(format!("readiness RepositoryContract is invalid: {error}"))
             })?;
+        contract
+            .validate_for_profile(&profile)
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
         if typed_snapshot.source_sha != resolved
             || typed_snapshot.manifest_sha256 != version.content_hash
             || typed_snapshot.dependency_lock_sha256 != contract.dependency_lock.sha256
@@ -4866,10 +5164,11 @@ pub(super) fn validate_required(value: &str, field: &str, max_len: usize) -> Res
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_key, onboarding_environment_profile_ids, onboarding_patch_paths,
-        parse_github_repository_url, readiness_current_state, validate_binding_scope,
-        validate_repository_binding_scope,
+        normalize_key, onboarding_environment_profile_descriptors,
+        onboarding_environment_profile_ids, onboarding_patch_paths, parse_github_repository_url,
+        readiness_current_state, validate_binding_scope, validate_repository_binding_scope,
     };
+    use pharness_core::{EnvironmentProfile, EnvironmentProfileLimits, PreparationStrategy};
     use serde_json::json;
 
     #[test]
@@ -4956,6 +5255,53 @@ mod tests {
             ]),
             vec!["python-3.11".to_string(), "python-3.12".to_string()]
         );
+    }
+
+    #[test]
+    fn onboarding_descriptors_require_matching_repository_and_discovered_lock() {
+        let profile = EnvironmentProfile {
+            id: "node-24".into(),
+            active: true,
+            image: format!("registry.example/node@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec![
+                "pharness-worker".into(),
+                "git".into(),
+                "node".into(),
+                "npm".into(),
+            ],
+            preparation_strategy: PreparationStrategy::NodeNpmCi,
+            service_account: "pharness-node-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/frontend.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "2".into(),
+                memory: "2Gi".into(),
+                ephemeral_storage: "4Gi".into(),
+            },
+        };
+        let npm_discovery = json!({"dependency_candidates":[{"kind":"npm_package_lock","path":"package-lock.json"}]});
+        let descriptors = onboarding_environment_profile_descriptors(
+            std::slice::from_ref(&profile),
+            "https://github.com/example/frontend.git",
+            &npm_discovery,
+        );
+        assert_eq!(descriptors.len(), 1);
+        assert_eq!(descriptors[0]["runtime_kind"], "node");
+        assert_eq!(descriptors[0]["lifecycle_scripts"], "denied");
+        let pip_discovery = json!({"dependency_candidates":[{"kind":"pip_requirements","path":"requirements.lock"}]});
+        assert!(onboarding_environment_profile_descriptors(
+            std::slice::from_ref(&profile),
+            "https://github.com/example/frontend.git",
+            &pip_discovery,
+        )
+        .is_empty());
+        assert!(onboarding_environment_profile_descriptors(
+            &[profile],
+            "https://github.com/example/other.git",
+            &npm_discovery,
+        )
+        .is_empty());
     }
 
     #[test]
