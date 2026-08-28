@@ -4024,6 +4024,27 @@ fn reusable_correction_environment_snapshot(
     Ok(Some(snapshot))
 }
 
+fn correction_environment_snapshot_for_reuse(
+    snapshot: Option<Value>,
+    source_commit: &str,
+    repository_contract_hash: &str,
+    environment_profile: &pharness_core::EnvironmentProfile,
+) -> Result<Option<Value>, ApiError> {
+    let Some(snapshot) = snapshot else {
+        // A preparation failure can occur after the exact checkout is written
+        // to the durable PVC but before an EnvironmentSnapshot is sealed. A
+        // correction must preserve that workspace and run preparation again;
+        // there is no prior environment provenance that is safe to reuse.
+        return Ok(None);
+    };
+    reusable_correction_environment_snapshot(
+        snapshot,
+        source_commit,
+        repository_contract_hash,
+        environment_profile,
+    )
+}
+
 async fn latest_correction_environment_snapshot(
     state: &AppState,
     work_item: &pharness_store::StoredWorkItem,
@@ -4049,8 +4070,8 @@ async fn latest_correction_environment_snapshot(
         else {
             continue;
         };
-        return reusable_correction_environment_snapshot(
-            snapshot,
+        return correction_environment_snapshot_for_reuse(
+            Some(snapshot),
             work_item.source_commit.as_deref().unwrap_or_default(),
             work_item
                 .repository_contract_hash
@@ -4059,9 +4080,15 @@ async fn latest_correction_environment_snapshot(
             environment_profile,
         );
     }
-    Err(ApiError::conflict(
-        "correction workspace has no sealed prior EnvironmentSnapshot",
-    ))
+    correction_environment_snapshot_for_reuse(
+        None,
+        work_item.source_commit.as_deref().unwrap_or_default(),
+        work_item
+            .repository_contract_hash
+            .as_deref()
+            .unwrap_or_default(),
+        environment_profile,
+    )
 }
 
 fn agent_profile_from_chain(
@@ -6038,6 +6065,22 @@ mod tests {
 
         assert!(reusable_correction_environment_snapshot(
             snapshot,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            &format!("sha256:{}", "b".repeat(64)),
+            &profile,
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    #[test]
+    fn correction_reprepares_when_prior_attempt_has_no_sealed_snapshot() {
+        let revision = "d".repeat(40);
+        let image = format!("registry.example/runner@sha256:{}", "e".repeat(64));
+        let profile = correction_environment_profile(&image, &revision);
+
+        assert!(correction_environment_snapshot_for_reuse(
+            None,
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             &format!("sha256:{}", "b".repeat(64)),
             &profile,
