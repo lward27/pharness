@@ -29,9 +29,9 @@ organization:
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    digest: sha256:161362b1e6482170ea3a880b1fe28c7f4fa5e6fe7ee1a465219264b6065f7c28
+    digest: sha256:7ff7f81d41d17770de484b3e51d8997d5a12b44e11d48d0cf4c604ec36a560e6
     pullPolicy: IfNotPresent
-    revision: 15311bac170871708fcf9e375640e0e69e6a0be7
+    revision: de2bde619c976b3e8378a183829bd9711a43208b
   # SQLite single-writer: keep exactly one API replica.
   replicas: 1
   host: pharness-api.lucas.engineering
@@ -201,8 +201,8 @@ worker:
 environmentProfiles:
   - id: python-3.11
     active: true
-    image: registry.lucas.engineering/pharness-python-runner@sha256:bb090e7615a2bc59e9741616d75b103e95af72d9e11c51684627044079a43de1
-    revision: "15311bac170871708fcf9e375640e0e69e6a0be7"
+    image: registry.lucas.engineering/pharness-python-runner@sha256:e88a35532a5cfcb55d3cfd1bd816452ebb9c732ec43a116b5554740ff2a313d0
+    revision: "de2bde619c976b3e8378a183829bd9711a43208b"
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -221,8 +221,8 @@ environmentProfiles:
       ephemeral_storage: 4Gi
   - id: node-24
     active: true
-    image: registry.lucas.engineering/pharness-node-runner@sha256:3d6b05fc12815643841433158f94cd07bf01cc898e1516a4116c6e901271ba0f
-    revision: "15311bac170871708fcf9e375640e0e69e6a0be7"
+    image: registry.lucas.engineering/pharness-node-runner@sha256:2405c3a22cf973783ad306f01058d867b8313485b98e2c4f1c6a0859185e3627
+    revision: "de2bde619c976b3e8378a183829bd9711a43208b"
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -262,9 +262,9 @@ tektonE2eBuildOutputSmoke:
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    digest: sha256:e6e74350281c3d1f9ec79d7466f9ad4c4ef79db56c1a3d93c7f67baaeea87f4c
+    digest: sha256:fe8af56803b07092a2535d43457c9ff06a96e2061d48c2b4d867beb89429f728
     pullPolicy: IfNotPresent
-    revision: 15311bac170871708fcf9e375640e0e69e6a0be7
+    revision: de2bde619c976b3e8378a183829bd9711a43208b
   replicas: 1
   host: pharness.lucas.engineering
   resources:
