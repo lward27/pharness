@@ -15,9 +15,9 @@ pub struct ContextBudget {
 impl Default for ContextBudget {
     fn default() -> Self {
         Self {
-            max_input_tokens: 65_536,
-            recent_message_tokens: 24_576,
-            max_tool_result_tokens: 8_192,
+            max_input_tokens: 32_768,
+            recent_message_tokens: 8_192,
+            max_tool_result_tokens: 2_048,
             reserved_output_tokens: 4_096,
             characters_per_token: 4,
         }
@@ -243,5 +243,37 @@ mod tests {
             pack.messages.last().map(|message| message.content.as_str()),
             Some(newest.as_str())
         );
+    }
+
+    #[test]
+    fn default_budget_bounds_a_long_coding_transcript() {
+        let mut messages = vec![
+            ModelMessage::system("s".repeat(4_000)),
+            ModelMessage::user("implement the approved change"),
+        ];
+        for index in 0..40 {
+            messages.push(ModelMessage {
+                role: ModelRole::Assistant,
+                content: "reasoning checkpoint ".repeat(50),
+                tool_call_id: None,
+                tool_calls: vec![ModelToolCall {
+                    id: format!("call_{index}"),
+                    name: "write_file".to_string(),
+                    arguments: "{}".to_string(),
+                }],
+            });
+            messages.push(ModelMessage {
+                role: ModelRole::Tool,
+                content: "x".repeat(12_000),
+                tool_call_id: Some(format!("call_{index}")),
+                tool_calls: Vec::new(),
+            });
+        }
+
+        let pack = pack_messages(&messages, &ContextBudget::default()).unwrap();
+
+        assert!(pack.estimated_input_tokens <= 9_300);
+        assert!(pack.compacted_exchanges > 0);
+        assert!(pack.truncated_tool_results > 0);
     }
 }
