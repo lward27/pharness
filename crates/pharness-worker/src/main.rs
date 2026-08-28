@@ -1808,10 +1808,16 @@ fn acceptance_environment(
 }
 
 async fn reject_tracked_node_modules(cwd: &std::path::Path) -> anyhow::Result<()> {
-    let tracked = run_output(
+    let cwd_text = cwd.to_string_lossy();
+    let tracked = workspace_git_stdout(
         cwd,
-        "git",
-        &["ls-files", "node_modules", ":(glob)**/node_modules/**"],
+        &[
+            "-C",
+            &cwd_text,
+            "ls-files",
+            "node_modules",
+            ":(glob)**/node_modules/**",
+        ],
     )
     .await?;
     if !tracked.trim().is_empty() {
@@ -1821,10 +1827,16 @@ async fn reject_tracked_node_modules(cwd: &std::path::Path) -> anyhow::Result<()
 }
 
 async fn ensure_tracked_workspace_clean(cwd: &std::path::Path) -> anyhow::Result<()> {
-    let status = run_output(
+    let cwd_text = cwd.to_string_lossy();
+    let status = workspace_git_stdout(
         cwd,
-        "git",
-        &["status", "--porcelain", "--untracked-files=no"],
+        &[
+            "-C",
+            &cwd_text,
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+        ],
     )
     .await?;
     if !status.trim().is_empty() {
@@ -5167,6 +5179,51 @@ package_installation: preparation_only
                 "main",
             ]
         );
+    }
+
+    #[test]
+    fn workspace_git_reads_succeed_when_git_detects_a_different_workspace_owner() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-safe-directory-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&root)
+            .output()
+            .unwrap()
+            .status
+            .success());
+
+        let unscoped = std::process::Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(!unscoped.status.success());
+
+        let scoped = std::process::Command::new("git")
+            .args(workspace_git_args(
+                &root,
+                &["status", "--porcelain", "--untracked-files=no"],
+            ))
+            .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(
+            scoped.status.success(),
+            "{}",
+            String::from_utf8_lossy(&scoped.stderr)
+        );
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
