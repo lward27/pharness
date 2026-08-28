@@ -73,8 +73,8 @@ api:
 retention:
   scheduledEnabled: true
   intervalSeconds: 86400
-  automaticExecutionEnabled: false
-  previewOnly: true
+  automaticExecutionEnabled: true
+  previewOnly: false
 
 # A separately retained volume for consistent offline database archives. It is
 # tied to the archived generation, not to whichever database generation is
