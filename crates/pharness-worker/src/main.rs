@@ -776,13 +776,23 @@ async fn prepare_repository_readiness(
     let mut acceptance_results = Vec::new();
     for command in &loaded.contract.acceptance_commands {
         let output = Command::new("/bin/sh")
-            .args(["-lc", &command.command])
+            .args(["-c", &command.command])
             .current_dir(&root)
             .env("PATH", &readiness_path)
             .env("PYTHONPATH", root.join("src"))
             .output()
             .await
             .context("acceptance_command_structurally_unexecutable")?;
+        if acceptance_command_is_structurally_unexecutable(
+            &command.command,
+            output.status.code(),
+            &output.stderr,
+        ) {
+            anyhow::bail!(
+                "acceptance_command_structurally_unexecutable:{}",
+                command.name
+            );
+        }
         acceptance_results.push(serde_json::json!({
             "name":command.name,
             "command":command.command,
@@ -809,6 +819,29 @@ async fn prepare_repository_readiness(
             {"step":"acceptance","status":"executed","commands":acceptance_results.len()},
         ],
     }))
+}
+
+fn acceptance_command_is_structurally_unexecutable(
+    command: &str,
+    exit_code: Option<i32>,
+    stderr: &[u8],
+) -> bool {
+    if matches!(exit_code, Some(126 | 127)) {
+        return true;
+    }
+
+    let words = command.split_ascii_whitespace().collect::<Vec<_>>();
+    let Some([python, "-m", module, ..]) = words.get(..) else {
+        return false;
+    };
+    let executable = python.rsplit('/').next().unwrap_or(python);
+    if !matches!(executable, "python" | "python3" | "python3.11") {
+        return false;
+    }
+    let missing_module = format!("No module named {module}");
+    String::from_utf8_lossy(stderr)
+        .lines()
+        .any(|line| line.trim_end().ends_with(&missing_module))
 }
 
 fn bounded_output(bytes: &[u8]) -> String {
@@ -4526,8 +4559,9 @@ fn init_tracing() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowlisted_connect_target, argo_application_terminal, argo_sync_patch_payload,
-        evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
+        acceptance_command_is_structurally_unexecutable, allowlisted_connect_target,
+        argo_application_terminal, argo_sync_patch_payload, evaluate_github_required_checks,
+        fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
         github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
@@ -4548,6 +4582,34 @@ mod tests {
         validate_onboarding_patch_changed_paths(&[]).unwrap();
         validate_onboarding_patch_changed_paths(&[".pharness/repository.yaml".into()]).unwrap();
         assert!(validate_onboarding_patch_changed_paths(&["src/main.rs".into()]).is_err());
+    }
+
+    #[test]
+    fn readiness_classifies_missing_declared_python_module_as_structural() {
+        assert!(acceptance_command_is_structurally_unexecutable(
+            "python -m pytest -q",
+            Some(1),
+            b"/usr/local/bin/python: No module named pytest\n",
+        ));
+        assert!(acceptance_command_is_structurally_unexecutable(
+            "python -m pytest -q",
+            Some(127),
+            b"python: not found\n",
+        ));
+    }
+
+    #[test]
+    fn readiness_keeps_executable_test_failures_as_baseline_failures() {
+        assert!(!acceptance_command_is_structurally_unexecutable(
+            "python -m pytest -q",
+            Some(1),
+            b"E   ModuleNotFoundError: No module named 'application_plugin'\n",
+        ));
+        assert!(!acceptance_command_is_structurally_unexecutable(
+            "python -m pytest -q",
+            Some(1),
+            b"1 failed, 34 passed\n",
+        ));
     }
 
     #[test]
