@@ -217,10 +217,10 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
         ),
         (
             "repo-verifier",
-            12,
-            20,
-            120_000,
-            240_000,
+            24,
+            40,
+            200_000,
+            480_000,
             900,
             vec![
                 "get_evidence",
@@ -243,7 +243,11 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
                     initial_tokens,
                     hard_tokens,
                     active_execution_seconds: seconds,
-                    verification_reserve_turns: if id == "repo-builder" { 8 } else { 0 },
+                    verification_reserve_turns: match id {
+                        "repo-builder" => 8,
+                        "repo-verifier" => 4,
+                        _ => 0,
+                    },
                     ..RunBudget::default()
                 };
                 let material = serde_json::json!({
@@ -291,6 +295,15 @@ mod tests {
             .find(|profile| profile.id == "repo-builder")
             .unwrap();
         assert!(builder.tools.iter().any(|tool| tool == "write_file"));
+        let verifier = first
+            .iter()
+            .find(|profile| profile.id == "repo-verifier")
+            .unwrap();
+        assert_eq!(verifier.budget.initial_turns, 24);
+        assert_eq!(verifier.budget.hard_turns, 40);
+        assert_eq!(verifier.budget.initial_tokens, 200_000);
+        assert_eq!(verifier.budget.hard_tokens, 480_000);
+        assert_eq!(verifier.budget.verification_reserve_turns, 4);
         assert!(first
             .iter()
             .all(|profile| profile.profile_hash.starts_with("sha256:")));
