@@ -3,6 +3,7 @@ use super::clock::current_millis;
 use super::hashing::canonical_material_hash;
 use super::identifiers::{is_git_sha, new_prefixed_id};
 use super::products::ensure_repo_mode_enabled;
+use super::system::capability_verification_summary;
 use super::validation::required_text;
 use super::{ApiError, AppState};
 use crate::dispatch::{SourceDeliveryExecutionRequest, SourceDeliveryObservationRequest};
@@ -19,14 +20,15 @@ use pharness_core::{
     AgentEvent, EventId, EventKind, RunBudgetConsumption, RunId, RunScope, SessionId,
 };
 use pharness_store::{
-    ChangeSetListFilter, CreateAgentContextPack, CreateAuditEvent, CreateEnvironmentPreparation,
-    CreateEvidenceValidation, CreateOperatorAnnotation, CreateOperatorAnnotationDecision,
-    CreateProviderCheckSetObservation, CreateRepoWorkItem, CreateRun, CreateSession,
-    CreateSourceDeliveryIntent, CreateStageChainAuthorization, CreateStageExecution,
-    CreateWorkspace, RunListFilter, SealStageOutcome, StoredBudgetExtension, StoredChangeSet,
-    StoredOperatorAnnotation, StoredOperatorAnnotationDecision, StoredRepoWorkItemMetadata,
-    StoredRun, StoredSourceDeliveryIntent, StoredStageOutcome, UpdateEnvironmentPreparation,
-    UpdateWorkspaceExecution, WorkPlanListFilter, WorkspaceListFilter,
+    ChangeSetListFilter, CreateAgentContextPack, CreateAuditEvent, CreateCapabilityVerification,
+    CreateEnvironmentPreparation, CreateEvidenceValidation, CreateOperatorAnnotation,
+    CreateOperatorAnnotationDecision, CreateProviderCheckSetObservation, CreateRepoWorkItem,
+    CreateRun, CreateSession, CreateSourceDeliveryIntent, CreateStageChainAuthorization,
+    CreateStageExecution, CreateWorkspace, RunListFilter, SealStageOutcome, StoredBudgetExtension,
+    StoredChangeSet, StoredOperatorAnnotation, StoredOperatorAnnotationDecision,
+    StoredRepoWorkItemMetadata, StoredRun, StoredSourceDeliveryIntent, StoredStageOutcome,
+    UpdateEnvironmentPreparation, UpdateWorkspaceExecution, WorkPlanListFilter,
+    WorkspaceListFilter,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -434,6 +436,19 @@ fn rejected_change_set_precedes_work_plan(
             .is_some_and(|revision| revision < work_plan.revision)
 }
 
+fn source_writer_failure_is_retryable(intent: &StoredSourceDeliveryIntent) -> bool {
+    intent.status == "failed"
+        && intent.pull_request.is_none()
+        && matches!(
+            intent.status_reason.as_deref(),
+            Some(
+                "git_push_authentication_failed"
+                    | "git_push_permission_denied"
+                    | "git_push_transport_failed"
+            )
+        )
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct ChangeSetProvenanceRepair<'a> {
     material_builder_run_id: &'a str,
@@ -804,6 +819,27 @@ fn derive_repo_actions(
                     },
                     &state_hash,
                     json!({"source_delivery_intent_id":intent.id,"intent_state_version":intent.state_version,"status":intent.status}),
+                )?),
+                Some(intent) if source_writer_failure_is_retryable(intent) => actions.push(repo_action(
+                    RepoActionSpec {
+                        id: "retry_source_delivery",
+                        lifecycle_stage: "source_delivery",
+                        resource: &intent.id,
+                        status: "ready",
+                        effect_class: "external_source_mutation",
+                        approval_required: true,
+                        summary: "Reverify the exact repository with the isolated source writer, then retry the same immutable SourceDeliveryIntent. The base commit, patch hash, and head branch cannot change.",
+                    },
+                    &state_hash,
+                    json!({
+                        "source_delivery_intent_id":intent.id,
+                        "intent_state_version":intent.state_version,
+                        "status":intent.status,
+                        "failure_reason":intent.status_reason,
+                        "base_commit":intent.base_commit,
+                        "patch_hash":intent.patch_hash,
+                        "head_branch":intent.head_branch,
+                    }),
                 )?),
                 Some(intent) if intent.status == "pull_request_closed" => actions.push(repo_action(
                     RepoActionSpec {
@@ -1694,6 +1730,9 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         "authorize_source_delivery" => {
             authorize_and_dispatch_source_delivery(state, work_item_id, &actor, &reason).await
         }
+        "retry_source_delivery" => {
+            retry_repo_source_delivery(state, work_item_id, &actor, &reason).await
+        }
         "observe_source_delivery" => {
             dispatch_source_delivery_observation(state, work_item_id, &actor, &reason).await
         }
@@ -2439,6 +2478,205 @@ async fn authorize_and_dispatch_source_delivery(
             Ok(json!({"source_delivery_intent":intent,"work_item":item,"status":"dispatch_failed"}))
         }
     }
+}
+
+async fn retry_repo_source_delivery(
+    state: &AppState,
+    work_item_id: &str,
+    actor: &str,
+    reason: &str,
+) -> Result<Value, ApiError> {
+    if !state.worker.supports_remote_workspace() {
+        return Err(ApiError::conflict(
+            "Repo Mode source delivery requires kubernetes_job worker mode",
+        ));
+    }
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let plan = state
+        .store
+        .get_work_plan_by_work_item(work_item_id)
+        .await?
+        .filter(|plan| plan.status == "approved")
+        .ok_or_else(|| ApiError::conflict("approved WorkPlan is required"))?;
+    let change_set = state
+        .store
+        .get_change_set_by_work_plan(&plan.id)
+        .await?
+        .filter(|change_set| change_set.status == "approved")
+        .ok_or_else(|| ApiError::conflict("approved ChangeSet is required"))?;
+    let intent = state
+        .store
+        .get_source_delivery_intent_by_subject("work_item_change_set", &change_set.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent is unavailable"))?;
+    if !source_writer_failure_is_retryable(&intent) {
+        return Err(ApiError::conflict(
+            "source writer failure is not eligible for an in-place retry",
+        ));
+    }
+    if intent.subject_id != change_set.id
+        || intent.source_repo != work_item.source_repo
+        || work_item.source_commit.as_deref() != Some(intent.base_commit.as_str())
+    {
+        return Err(ApiError::conflict(
+            "SourceDeliveryIntent no longer matches the approved WorkItem provenance",
+        ));
+    }
+    let settings = state
+        .worker
+        .git_writer_settings()
+        .ok_or_else(|| ApiError::conflict("Git writer executor is not configured"))?;
+    if !settings
+        .allowed_repos
+        .iter()
+        .any(|allowed| allowed == &intent.source_repo)
+    {
+        return Err(ApiError::conflict(
+            "Repository is not allowlisted for the isolated Git writer",
+        ));
+    }
+    let artifact_id = intent
+        .patch_artifact_id
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent patch artifact is unavailable"))?;
+    let run_id = change_set
+        .run_id
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("ChangeSet has no Builder Run provenance"))?;
+    let patch = state
+        .store
+        .list_artifacts(run_id)
+        .await?
+        .into_iter()
+        .find(|artifact| artifact.id == artifact_id && artifact.kind == "workspace_git_diff")
+        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent patch artifact is unavailable"))?;
+    let diff = patch
+        .content_text
+        .as_deref()
+        .filter(|diff| !diff.is_empty())
+        .ok_or_else(|| ApiError::conflict("SourceDeliveryIntent patch artifact is empty"))?;
+    if format!("sha256:{:x}", Sha256::digest(diff.as_bytes())) != intent.patch_hash {
+        return Err(ApiError::conflict(
+            "SourceDeliveryIntent patch artifact no longer matches its immutable hash",
+        ));
+    }
+
+    let now = current_millis();
+    let outcome = state
+        .worker
+        .verify_capability("source_writer", Some(&intent.source_repo))
+        .await;
+    let (status, summary, principal, repository, permission) = match outcome {
+        Ok(outcome) => {
+            let status = if outcome.available {
+                "available"
+            } else {
+                "unavailable"
+            };
+            (
+                status,
+                capability_verification_summary(&outcome),
+                outcome.principal,
+                outcome.repository,
+                outcome.permission,
+            )
+        }
+        Err(_) => (
+            "unavailable",
+            "Isolated source writer verification could not complete for the exact repository"
+                .to_string(),
+            None,
+            Some(intent.source_repo.clone()),
+            None,
+        ),
+    };
+    let verification = state
+        .store
+        .create_capability_verification(CreateCapabilityVerification {
+            id: new_prefixed_id("capverify"),
+            capability: "source_writer".into(),
+            status: status.into(),
+            summary,
+            principal,
+            repository,
+            permission,
+            verified_at: now.to_string(),
+            expires_at: (now + 15 * 60 * 1_000).to_string(),
+        })
+        .await?;
+    if verification.status != "available"
+        || verification.repository.as_deref() != Some(intent.source_repo.as_str())
+    {
+        return Err(ApiError::conflict(format!(
+            "exact source writer verification failed: {}",
+            verification.summary
+        )));
+    }
+
+    let execution_id = new_prefixed_id("srcexec");
+    let receipt = state
+        .worker
+        .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+            source_delivery_intent_id: intent.id.clone(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+        .map_err(|_| ApiError::conflict("Git writer retry dispatch could not complete"))?;
+    let prior_failure = intent.status_reason.clone();
+    let intent = state
+        .store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "writer_dispatched",
+            Some(&execution_id),
+            None,
+            None,
+            None,
+            None,
+            actor,
+            reason,
+        )
+        .await?;
+    let item = state
+        .store
+        .update_repo_work_item_status(
+            work_item_id,
+            "executing",
+            actor,
+            "isolated Git writer retry dispatched from the unchanged SourceDeliveryIntent",
+            false,
+        )
+        .await?;
+    append_repo_audit(
+        state,
+        work_item_id,
+        "repo.source_delivery.writer_retry_dispatched",
+        actor,
+        reason,
+        json!({
+            "source_delivery_intent_id":intent.id,
+            "execution_id":execution_id,
+            "job_name":receipt.job_name,
+            "capability_verification_id":verification.id,
+            "repository":intent.source_repo,
+            "prior_failure":prior_failure,
+            "base_commit":intent.base_commit,
+            "patch_hash":intent.patch_hash,
+            "head_branch":intent.head_branch,
+        }),
+    )
+    .await?;
+    Ok(json!({
+        "source_delivery_intent":intent,
+        "work_item":item,
+        "capability_verification":verification,
+        "job_name":receipt.job_name,
+    }))
 }
 
 async fn dispatch_source_delivery_observation(
@@ -6814,5 +7052,56 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].id, "replan_work_item");
         assert_eq!(actions[0].status, "ready");
+    }
+
+    #[test]
+    fn failed_source_writer_permission_offers_only_an_exact_intent_retry() {
+        let mut change_set = proposed_change_set();
+        change_set.status = "approved".into();
+        let mut failed = source_delivery_intent("failed");
+        failed.pull_request = None;
+        failed.status_reason = Some("git_push_permission_denied".into());
+
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: Some(&failed),
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "retry_source_delivery");
+        assert_eq!(actions[0].effect_class, "external_source_mutation");
+        assert!(actions[0]
+            .external_effect_summary
+            .contains("same immutable SourceDeliveryIntent"));
+
+        failed.status_reason = Some("git_push_policy_rejected".into());
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (1, 2),
+                work_plan: None,
+                change_set: Some(&change_set),
+                source_delivery_intent: Some(&failed),
+                executions: &[],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: None,
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert!(actions.is_empty());
     }
 }
