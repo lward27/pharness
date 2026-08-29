@@ -247,7 +247,7 @@ pub(super) async fn run(
         policy_id: Some(policy.policy_id.clone()),
         policy_revision: Some(policy.revision.clone()),
         policy_hash: Some(policy.policy_hash.clone()),
-        profile_hash: Some(profile.profile_hash.clone()),
+        profile_hash: Some(binding.agent_profile_hash.clone()),
         prompt_version: SYSTEM_PROMPT_VERSION.into(),
         tool_schema_hash: Some(tool_schema_hash),
         runtime_revision: evaluation_runtime_revision(),
