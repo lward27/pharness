@@ -613,9 +613,9 @@ impl ModelGrantClaims {
         if self.run_id.is_empty()
             || self.stage_execution_id.is_empty()
             || self.selection_id.is_empty()
-            || self.target_hash.len() != 64
-            || self.policy_hash.len() != 64
-            || self.request_body_hash.len() != 64
+            || !is_canonical_sha256(&self.target_hash)
+            || !is_canonical_sha256(&self.policy_hash)
+            || !is_canonical_sha256(&self.request_body_hash)
             || self.nonce.len() < 16
         {
             return Err(ModelGrantError::InvalidClaims);
@@ -635,6 +635,15 @@ impl ModelGrantClaims {
         }
         Ok(())
     }
+}
+
+fn is_canonical_sha256(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hash| {
+        hash.len() == 64
+            && hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
 }
 
 pub fn sign_model_grant(claims: &ModelGrantClaims, key: &[u8]) -> Result<String, ModelGrantError> {
@@ -1004,14 +1013,14 @@ mod tests {
                 target_id: "fireworks".into(),
                 revision: "v1".into(),
             },
-            target_hash: "a".repeat(64),
+            target_hash: format!("sha256:{}", "a".repeat(64)),
             policy: InferencePolicyRef {
                 policy_id: "planner".into(),
                 revision: "v1".into(),
             },
-            policy_hash: "b".repeat(64),
+            policy_hash: format!("sha256:{}", "b".repeat(64)),
             request_sequence: 1,
-            request_body_hash: "c".repeat(64),
+            request_body_hash: format!("sha256:{}", "c".repeat(64)),
             nonce: "nonce_nonce_nonce".into(),
             issued_at_epoch_seconds: 100,
             expires_at_epoch_seconds: 160,
@@ -1027,6 +1036,14 @@ mod tests {
         assert!(matches!(
             verify_model_grant(&tampered, &key, 120),
             Err(ModelGrantError::InvalidSignature | ModelGrantError::MalformedToken)
+        ));
+
+        let mut unprefixed = claims;
+        unprefixed.target_hash = "a".repeat(64);
+        assert!(matches!(
+            sign_model_grant(&unprefixed, &key)
+                .and_then(|token| verify_model_grant(&token, &key, 120)),
+            Err(ModelGrantError::InvalidClaims)
         ));
     }
 
