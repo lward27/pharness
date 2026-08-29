@@ -157,7 +157,7 @@ impl GatewayModelClient {
 
     async fn complete_gateway_stream(
         &self,
-        request: &crate::ChatRequest,
+        request: &serde_json::Value,
         grant: &str,
     ) -> Result<OpenAiStreamAggregate, ProviderError> {
         let url = self
@@ -258,7 +258,7 @@ impl ModelProvider for GatewayModelClient {
                 message: "model-grant response is incomplete".into(),
             });
         }
-        let aggregate = self.complete_gateway_stream(&request, &grant.token).await?;
+        let aggregate = self.complete_gateway_stream(&value, &grant.token).await?;
         aggregate_to_model_turn(aggregate, mode)
     }
 
@@ -297,10 +297,37 @@ fn internal_base_url(input: &str) -> Result<Url, OpenAiCompatibleError> {
 #[cfg(test)]
 mod tests {
     use super::internal_base_url;
+    use pharness_core::canonical_json_sha256;
+    use serde::Serialize;
 
     #[test]
     fn internal_urls_reject_embedded_credentials() {
         assert!(internal_base_url("http://token@pharness-api:4777/").is_err());
         assert!(internal_base_url("http://pharness-api:4777/").is_ok());
+    }
+
+    #[test]
+    fn hashed_gateway_value_is_the_transmitted_value() {
+        #[derive(Serialize)]
+        struct Request {
+            temperature: f32,
+        }
+
+        let request = Request { temperature: 0.1 };
+        let hashed_value = serde_json::to_value(&request).unwrap();
+        let transmitted = serde_json::to_vec(&hashed_value).unwrap();
+        let received: serde_json::Value = serde_json::from_slice(&transmitted).unwrap();
+
+        assert_eq!(
+            canonical_json_sha256(&received).unwrap(),
+            canonical_json_sha256(&hashed_value).unwrap()
+        );
+        assert_ne!(
+            canonical_json_sha256(
+                &serde_json::from_slice(&serde_json::to_vec(&request).unwrap()).unwrap()
+            )
+            .unwrap(),
+            canonical_json_sha256(&hashed_value).unwrap()
+        );
     }
 }
