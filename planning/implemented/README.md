@@ -13,6 +13,7 @@ provenance remain authoritative.
 - [`ui-operator-cockpit-redesign-milestone-2026-08-22.md`](milestones/ui-operator-cockpit-redesign-milestone-2026-08-22.md)
 - [`repo-mode-v1-operator-experience-milestone-2026-08-26.md`](milestones/repo-mode-v1-operator-experience-milestone-2026-08-26.md)
 - [`clean-state-finance-product-data-lifecycle-2026-08-28.md`](milestones/clean-state-finance-product-data-lifecycle-2026-08-28.md)
+- [`node-24-environment-profile-finance-frontend-milestone-2026-08-29.md`](milestones/node-24-environment-profile-finance-frontend-milestone-2026-08-29.md)
 
 ## Agent execution and policy
 
