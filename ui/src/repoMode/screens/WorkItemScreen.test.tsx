@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkItemsScreen, WorkItemScreen } from "./WorkItemsScreen";
 
@@ -72,3 +72,49 @@ describe("Repo Mode WorkItem rollup", () => {
     expect(screen.getByText("Updated", {exact:false}).parentElement).toHaveAttribute("title");
   });
 });
+
+describe("stage inference authorization", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("binds independently qualified Builder, Tester, and Verifier policies", async () => {
+    const requests: Array<{url:string;init?:RequestInit}> = [];
+    const flow = {
+      ...completedFlow,
+      work_item:{...completedFlow.work_item,id:"witem_chain",status:"waiting",closed_at:null,closure_reason:null},
+      action_rail:[{id:"authorize_stage_chain",status:"ready",effect_class:"model_execution",state_hash:"state-chain",external_effect_summary:"Authorize the exact bounded Builder, Tester, and Verifier chain."}],
+      repo_mode:{...completedFlow.repo_mode,effective_stage_outcomes:[],source_delivery_intent:null},
+    };
+    const policy = (stage:string, id:string) => ({policy_id:id,revision:"v1",display_name:id,eligible_stages:[stage],selectable:true,qualified:true,is_default:true});
+    const sharedPolicy = {policy_id:"legacy-policy",revision:"v1",display_name:"legacy-policy",eligible_stages:["implement","test","verify"],selectable:true,qualified:true,is_default:false};
+    vi.stubGlobal("fetch", vi.fn(async (input:RequestInfo | URL, init?:RequestInit) => {
+      const url = String(input); requests.push({url,init});
+      if(url.endsWith("/api/inference-policies")) return json({policies:[policy("implement","builder-policy"),policy("test","tester-policy"),policy("verify","verifier-policy"),sharedPolicy]});
+      return json(flow);
+    }));
+    render(<WorkItemScreen workItemId="witem_chain" section="overview" operatorName="lucas" />);
+    fireEvent.click(await screen.findByRole("button",{name:"authorize stage chain"}));
+    await waitFor(() => expect(screen.getByLabelText("implement policy")).toHaveValue("builder-policy@v1"));
+    expect(screen.getByLabelText("test policy")).toHaveValue("tester-policy@v1");
+    expect(screen.getByLabelText("verify policy")).toHaveValue("verifier-policy@v1");
+    fireEvent.change(screen.getByLabelText("Apply one policy to remaining compatible stages"),{target:{value:"legacy-policy@v1"}});
+    fireEvent.click(screen.getByRole("button",{name:"Apply to compatible stages"}));
+    expect(screen.getByLabelText("implement policy")).toHaveValue("legacy-policy@v1");
+    expect(screen.getByLabelText("test policy")).toHaveValue("legacy-policy@v1");
+    expect(screen.getByLabelText("verify policy")).toHaveValue("legacy-policy@v1");
+    fireEvent.change(screen.getByLabelText("implement policy"),{target:{value:"builder-policy@v1"}});
+    fireEvent.change(screen.getByLabelText("test policy"),{target:{value:"tester-policy@v1"}});
+    fireEvent.change(screen.getByLabelText("verify policy"),{target:{value:"verifier-policy@v1"}});
+    fireEvent.change(screen.getByLabelText("Reason"),{target:{value:"Reviewed the exact stage policies"}});
+    fireEvent.click(screen.getByRole("button",{name:"Confirm and apply"}));
+    await waitFor(() => expect(requests.some(request => request.init?.method === "POST")).toBe(true));
+    const submitted = requests.find(request => request.init?.method === "POST");
+    expect(JSON.parse(String(submitted?.init?.body))).toMatchObject({
+      actor:"lucas",reason:"Reviewed the exact stage policies",state_hash:"state-chain",
+      inference_policies:{implement:{policy_id:"builder-policy",revision:"v1"},test:{policy_id:"tester-policy",revision:"v1"},verify:{policy_id:"verifier-policy",revision:"v1"}},
+    });
+  });
+});
+
+function json(value:any) {
+  return new Response(JSON.stringify(value),{status:200,headers:{"content-type":"application/json"}});
+}

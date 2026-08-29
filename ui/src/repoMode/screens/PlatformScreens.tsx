@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { ClockCounterClockwise, Pulse, Robot, ShieldCheck } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { Brain, ClockCounterClockwise, PlugsConnected, Pulse, Robot, ShieldCheck } from "@phosphor-icons/react";
 import { RunDetailView } from "../../views/RunDetailView";
-import { getJson, query } from "../api";
+import { getJson, query, sendJson } from "../api";
 import { Empty, ResourceState, SectionHeader, Status } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
@@ -49,12 +49,78 @@ export function SettingsScreen({ section,operatorName }: { section:string;operat
   const profiles = useResource<any>("/api/environment-profiles");
   return <ResourceState status={readiness.status} error={readiness.error}>
     <SectionHeader eyebrow="Platform" title="Settings" summary="Revision alignment, immutable digests, capabilities, allowlists, configuration readiness, and data lifecycle. Secret names and values are never exposed." />
-    <nav className="repo-tabs"><button type="button" className={section === "platform" ? "is-active" : ""} onClick={() => navigate("settings/platform")}>Platform</button><button type="button" className={section === "profiles" ? "is-active" : ""} onClick={() => navigate("settings/profiles")}>Environment profiles</button><button type="button" className={section === "capabilities" ? "is-active" : ""} onClick={() => navigate("settings/capabilities")}>Capabilities</button><button type="button" className={section === "data-lifecycle" ? "is-active" : ""} onClick={() => navigate("settings/data-lifecycle")}>Data lifecycle</button></nav>
+    <nav className="repo-tabs"><button type="button" className={section === "platform" ? "is-active" : ""} onClick={() => navigate("settings/platform")}>Platform</button><button type="button" className={section === "profiles" ? "is-active" : ""} onClick={() => navigate("settings/profiles")}>Environment profiles</button><button type="button" className={section === "inference" ? "is-active" : ""} onClick={() => navigate("settings/inference")}>Model inference</button><button type="button" className={section === "capabilities" ? "is-active" : ""} onClick={() => navigate("settings/capabilities")}>Capabilities</button><button type="button" className={section === "data-lifecycle" ? "is-active" : ""} onClick={() => navigate("settings/data-lifecycle")}>Data lifecycle</button></nav>
     {section === "platform" ? <div className="repo-two-columns"><section className="repo-panel"><header><h2>Release alignment</h2><Status value={readiness.data?.platform_versions_match ? "aligned" : "mismatch"} /></header><dl className="repo-bindings"><div><dt>API revision</dt><dd className="repo-mono">{readiness.data?.api_revision}</dd></div><div><dt>UI revision</dt><dd className="repo-mono">{readiness.data?.ui_revision}</dd></div><div><dt>Runtime image</dt><dd className="repo-mono">{readiness.data?.runtime_image_digest}</dd></div><div><dt>UI image</dt><dd className="repo-mono">{readiness.data?.ui_image_digest}</dd></div><div><dt>Database generation</dt><dd className="repo-mono">{readiness.data?.database_generation?.id || "Unavailable"}</dd></div><div><dt>Operational mode</dt><dd><Status value={readiness.data?.operational_mode || "unavailable"}/></dd></div></dl></section><section className="repo-panel"><header><h2>Feature cutover</h2><ShieldCheck size={21} /></header><dl className="repo-bindings"><div><dt>Repo Mode controller</dt><dd><Status value={config.data?.features?.repo_mode_v1?.enabled ? "enabled" : "disabled"} /></dd></div><div><dt>Repo Mode UI</dt><dd><Status value={config.data?.features?.repo_mode_v1?.ui_enabled ? "enabled" : "disabled"} /></dd></div><div><dt>Legacy WorkItem creation</dt><dd><Status value={readiness.data?.legacy_work_item_creation_enabled ? "enabled" : "disabled"}/></dd></div><div><dt>Workspace allowlist</dt><dd>{config.data?.workspace?.allowed_repo_count || 0} Repositories</dd></div></dl></section></div> : null}
     {section === "profiles" ? <div className="repo-card-grid repo-three">{(profiles.data?.profiles || []).map((profile:any) => <article className="repo-resource-card" key={profile.id}><header><Robot size={21} /><Status value={profile.status} /></header><h2>{profile.id}</h2><p>{profile.platform} · {profile.runtime_kind || "runtime unavailable"} · {profile.preparation_strategy}</p><dl><div><dt>Image</dt><dd className="repo-mono">{profile.image}</dd></div><div><dt>Revision</dt><dd className="repo-mono">{profile.revision}</dd></div><div><dt>Accepted lock</dt><dd>{profile.accepted_dependency_lock_kinds?.join(" · ") || "Unavailable"}</dd></div><div><dt>Lifecycle scripts</dt><dd>{profile.lifecycle_scripts || "Unavailable"}</dd></div><div><dt>Executables</dt><dd>{profile.required_executables?.join(" · ")}</dd></div></dl></article>)}</div> : null}
+    {section === "inference" ? <InferenceSettings operatorName={operatorName} readiness={readiness.data?.inference} /> : null}
     {section === "capabilities" ? <section className="repo-panel"><div className="repo-list">{(readiness.data?.capabilities || []).map((capability:any) => <div className="repo-list-row" key={capability.capability}><div><strong>{capability.capability}</strong><span>{capability.summary}</span><small>{capability.verified_at ? `Verified ${capability.verified_at}` : "No fresh isolated verification"}</small></div><Status value={capability.status} /></div>)}</div><h3>Repository allowlists</h3><pre className="repo-code">{JSON.stringify(readiness.data?.repository_allowlists || {},null,2)}</pre></section> : null}
     {section === "data-lifecycle" ? <DataLifecycleScreen operatorName={operatorName}/> : null}
   </ResourceState>;
+}
+
+function InferenceSettings({ operatorName, readiness }: { operatorName:string; readiness:any }) {
+  const targets = useResource<any>("/api/inference-targets", { pollMs:30_000 });
+  const policies = useResource<any>("/api/inference-policies", { pollMs:30_000 });
+  const [actor,setActor] = useState(operatorName || "operator");
+  const [reason,setReason] = useState("Verify inference target protocol and isolated connectivity");
+  const [pending,setPending] = useState("");
+  const [error,setError] = useState("");
+  const [qualificationPolicy,setQualificationPolicy] = useState<any>(null);
+  const verify = async (target:any) => {
+    setPending(`${target.target_id}@${target.revision}`); setError("");
+    try {
+      await sendJson(`/api/inference-targets/${encodeURIComponent(target.target_id)}/revisions/${encodeURIComponent(target.revision)}/preflight`,"POST",{actor:actor.trim(),reason:reason.trim(),config_hash:targets.data?.registry_hash});
+      await targets.refresh();
+    } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
+    finally { setPending(""); }
+  };
+  const gateway = targets.data?.gateway || readiness || {};
+  return <div className="repo-two-columns">
+    <section className="repo-panel repo-span-2"><header><div><span className="repo-eyebrow">Credential boundary</span><h2>Model Gateway</h2></div><Status value={gateway.status || "unavailable"} /></header><dl className="repo-bindings"><div><dt>Routing mode</dt><dd>{targets.data?.gateway_enabled ? "Gateway for new bound Runs" : "Direct Fireworks rollback path"}</dd></div><div><dt>Registry alignment</dt><dd><Status value={gateway.registry_aligned ? "aligned" : targets.data?.gateway_enabled ? "mismatch" : "disabled"} /></dd></div><div><dt>API registry hash</dt><dd className="repo-mono">{gateway.api_registry_hash || targets.data?.registry_hash || "Unavailable"}</dd></div><div><dt>Gateway registry hash</dt><dd className="repo-mono">{gateway.gateway_registry_hash || "Unavailable"}</dd></div><div><dt>Direct rollback path</dt><dd><Status value={gateway.direct_fireworks_enabled ? "available" : "disabled"} /></dd></div><div><dt>Credential posture</dt><dd>Upstream credentials are mounted only in the gateway.</dd></div></dl>{gateway.blocker ? <div className="repo-warning" role="status">{gateway.blocker}</div> : null}</section>
+    <section className="repo-panel repo-span-2"><header><div><span className="repo-eyebrow">Protocol compatibility</span><h2>Inference targets</h2></div><PlugsConnected size={21} /></header><div className="repo-inference-actions"><label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label><label>Verification reason<input value={reason} onChange={event => setReason(event.target.value)} /></label></div>{error ? <div className="repo-error" role="alert">{error}</div> : null}<ResourceState status={targets.status} error={targets.error}><div className="repo-card-grid repo-three">{(targets.data?.targets || []).map((target:any) => { const verificationStatus = inferenceVerificationStatus(target); return <article className="repo-resource-card" key={`${target.target_id}@${target.revision}`}><header><Brain size={21} /><Status value={target.selectable ? verificationStatus : "unavailable"} /></header><h2>{target.display_name}</h2><p>{target.backend_kind} · {target.upstream_model}</p><dl><div><dt>Revision</dt><dd>{target.revision}</dd></div><div><dt>Stages</dt><dd>{target.allowed_stages?.join(" · ")}</dd></div><div><dt>Transport</dt><dd>{target.transport?.scheme?.toUpperCase()} · {target.transport?.private_network ? "private network" : "exact-host proxy"}</dd></div><div><dt>Authentication</dt><dd>{target.authentication_configured ? "Gateway binding configured" : "Explicit no-auth target"}</dd></div><div><dt>Limits</dt><dd>{target.context_limit_tokens?.toLocaleString()} context · {target.output_limit_tokens?.toLocaleString()} output</dd></div><div><dt>Config hash</dt><dd className="repo-mono">{target.config_hash}</dd></div></dl>{target.latest_verification?.sanitized_failure ? <div className="repo-error">{target.latest_verification.sanitized_failure}</div> : null}{!target.selectable ? <div className="repo-warning">Disabled in GitOps. Verification does not make this target selectable.</div> : null}<button className="repo-primary" type="button" disabled={Boolean(pending) || !actor.trim() || !reason.trim() || !targets.data?.gateway_enabled} onClick={() => verify(target)}>{pending === `${target.target_id}@${target.revision}` ? "Verifying…" : "Verify target"}</button></article>; })}</div></ResourceState></section>
+    <section className="repo-panel repo-span-2"><header><div><span className="repo-eyebrow">Qualified stage behavior</span><h2>Stage inference policies</h2></div><Status value="GitOps managed" /></header><ResourceState status={policies.status} error={policies.error}><div className="repo-card-grid repo-three">{(policies.data?.policies || []).map((policy:any) => { const activeEvaluation = ["queued","running"].includes(policy.latest_evaluation?.status); return <article className="repo-resource-card" key={`${policy.policy_id}@${policy.revision}`}><header><Brain size={21} /><Status value={policy.qualified ? policy.is_default ? "default" : "qualified" : activeEvaluation ? policy.latest_evaluation.status : "blocked"} /></header><h2>{policy.display_name}</h2><p>{policy.eligible_stages?.join(" · ")} · {policy.target?.target_id}</p><dl><div><dt>Reasoning</dt><dd>{policy.reasoning?.effort || "provider default"} · {policy.reasoning?.context_mode || "provider default"}</dd></div><div><dt>Temperature</dt><dd>{policy.temperature ?? "omitted"}</dd></div><div><dt>Output cap</dt><dd>{policy.maximum_output_tokens?.toLocaleString()}</dd></div><div><dt>Profiles</dt><dd>{policy.eligible_profiles?.join(" · ")}</dd></div><div><dt>Qualification</dt><dd>{policy.latest_qualification ? `${policy.latest_qualification.verdict} · ${policy.latest_qualification.suite_id}` : policy.qualification_status?.replaceAll("_"," ")}</dd></div>{policy.latest_evaluation ? <div><dt>Latest evaluation</dt><dd>{policy.latest_evaluation.status} · <span className="repo-mono">{policy.latest_evaluation.id}</span></dd></div> : null}<div><dt>Policy hash</dt><dd className="repo-mono">{policy.policy_hash}</dd></div></dl>{!policy.qualified ? <><div className="repo-warning">Not selectable until its exact stage qualification suite passes. Promotion to the default remains a separate GitOps change.</div><button type="button" disabled={!policy.qualification_contract} onClick={() => setQualificationPolicy(policy)}>{activeEvaluation ? "View qualification" : "Run qualification"}</button></> : null}</article>; })}</div></ResourceState></section>
+    {qualificationPolicy ? <QualificationDialog policy={qualificationPolicy} registryHash={policies.data?.registry_hash} operatorName={actor} onClose={() => setQualificationPolicy(null)} onRecorded={async () => { setQualificationPolicy(null); await policies.refresh(); }} /> : null}
+  </div>;
+}
+
+function QualificationDialog({policy,registryHash,operatorName,onClose,onRecorded}:any) {
+  const [actor,setActor] = useState(operatorName || "operator");
+  const [reason,setReason] = useState(`Run controlled qualification for ${policy.display_name}`);
+  const [pending,setPending] = useState(false);
+  const [error,setError] = useState("");
+  const [evaluation,setEvaluation] = useState<any>(["queued","running"].includes(policy.latest_evaluation?.status) ? policy.latest_evaluation : null);
+  const onRecordedRef = useRef(onRecorded);
+  useEffect(() => { onRecordedRef.current = onRecorded; },[onRecorded]);
+  useEffect(() => {
+    if(!evaluation?.id || !["queued","running"].includes(evaluation.status)) return;
+    let active = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await getJson(`/api/inference-evaluations/${encodeURIComponent(evaluation.id)}`);
+        if(!active) return;
+        setEvaluation(latest);
+        if(latest.status === "completed") { window.clearInterval(timer); await onRecordedRef.current(); }
+        if(latest.status === "failed") window.clearInterval(timer);
+      } catch(caught) { if(active) setError(caught instanceof Error ? caught.message : String(caught)); }
+    },3000);
+    return () => { active = false; window.clearInterval(timer); };
+  },[evaluation?.id,evaluation?.status]);
+  const record = async (event:React.FormEvent) => {
+    event.preventDefault(); setPending(true); setError("");
+    try {
+      const started = await sendJson(`/api/inference-policies/${encodeURIComponent(policy.policy_id)}/revisions/${encodeURIComponent(policy.revision)}/qualifications`,"POST",{actor:actor.trim(),reason:reason.trim(),config_hash:registryHash,attempts:2});
+      setEvaluation(started);
+    } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
+    finally { setPending(false); }
+  };
+  return <div className="repo-dialog-backdrop" role="presentation"><form className="repo-dialog" role="dialog" aria-modal="true" aria-labelledby="qualification-title" onSubmit={record}><header><div><span className="repo-eyebrow">Controlled gateway evaluation</span><h2 id="qualification-title">{policy.display_name}</h2></div><Status value={evaluation?.status || "review required"} /></header><p>PHarness will dispatch the exact two-attempt suite in an isolated Job. The evaluator receives only its worker identity; upstream model credentials remain in the gateway.</p><dl className="repo-bindings"><div><dt>Suite</dt><dd>{policy.qualification_contract?.suite_id}</dd></div><div><dt>AgentProfile</dt><dd>{policy.qualification_contract?.agent_profile_id}</dd></div><div><dt>Policy</dt><dd className="repo-mono">{policy.policy_hash}</dd></div>{evaluation?.id ? <div><dt>Evaluation</dt><dd className="repo-mono">{evaluation.id}</dd></div> : null}{evaluation?.job_name ? <div><dt>Job</dt><dd className="repo-mono">{evaluation.job_name}</dd></div> : null}</dl>{!evaluation ? <><label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label><label>Reason<input value={reason} onChange={event => setReason(event.target.value)} /></label></> : null}{evaluation?.failure ? <div className="repo-error" role="alert">{evaluation.failure}</div> : null}{error ? <div className="repo-error" role="alert">{error}</div> : null}<footer>{!evaluation ? <button className="repo-primary" type="submit" disabled={pending || !actor.trim() || !reason.trim()}>{pending ? "Dispatching…" : "Run two-attempt qualification"}</button> : <span className="repo-muted" role="status">{evaluation.status === "running" ? "Evaluation is running through the model gateway." : `Evaluation ${evaluation.status}.`}</span>}<button type="button" onClick={onClose}>Close</button></footer></form></div>;
+}
+
+function inferenceVerificationStatus(target:any) {
+  const value = target.latest_verification;
+  if(!value) return "configured_unverified";
+  if(Number(value.expires_at || 0) <= Math.floor(Date.now()/1000)) return "stale";
+  return value.status === "passed" ? "available" : "failed";
 }
 
 export function CompatibilityScreen({ root, id, nestedId }: { root:string; id?:string; nestedId?:string }) {

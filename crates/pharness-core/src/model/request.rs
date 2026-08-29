@@ -1,5 +1,5 @@
 use super::ToolSpec;
-use crate::{RunId, SessionId};
+use crate::{ReasoningReplay, ReasoningRequestPolicy, RunId, SessionId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -11,6 +11,8 @@ pub struct ModelRequest {
     pub mode: ToolProtocolMode,
     pub temperature: f32,
     pub max_tokens: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<ReasoningRequestPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,6 +22,8 @@ pub struct ModelMessage {
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_calls: Vec<ModelToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<ReasoningReplay>,
 }
 
 impl ModelMessage {
@@ -29,6 +33,7 @@ impl ModelMessage {
             content: content.into(),
             tool_call_id: None,
             tool_calls: Vec::new(),
+            reasoning: None,
         }
     }
 
@@ -38,6 +43,7 @@ impl ModelMessage {
             content: content.into(),
             tool_call_id: None,
             tool_calls: Vec::new(),
+            reasoning: None,
         }
     }
 }

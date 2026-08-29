@@ -265,6 +265,7 @@ mod tests {
             role: pharness_core::ModelRole::Assistant,
             content: String::new(),
             tool_call_id: None,
+            reasoning: None,
             tool_calls: vec![pharness_core::ModelToolCall {
                 id: "call_list".to_string(),
                 name: "list_dir".to_string(),

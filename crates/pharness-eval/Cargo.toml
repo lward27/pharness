@@ -14,9 +14,12 @@ clap.workspace = true
 pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }
+pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
+reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+url.workspace = true

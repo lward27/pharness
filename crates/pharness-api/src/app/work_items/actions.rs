@@ -64,6 +64,7 @@ pub(in crate::app) async fn execute_work_item_action(
             actor,
             request.reason,
             request.state_hash,
+            request.inference_policies,
         )
         .await?;
         return Ok(Json(value));

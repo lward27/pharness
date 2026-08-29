@@ -1,0 +1,128 @@
+{{- if .Values.inferenceGateway.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pharness-model-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharness-inference-registry
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+data:
+  registry.json: |-
+{{ .Files.Get "files/inference-registry.json" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharness-model-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: pharness-model-gateway
+    app.kubernetes.io/part-of: pharness
+spec:
+  replicas: {{ .Values.inferenceGateway.replicas }}
+  selector:
+    matchLabels:
+      app: pharness-model-gateway
+  template:
+    metadata:
+      labels:
+        app: pharness-model-gateway
+        app.kubernetes.io/part-of: pharness
+    spec:
+      serviceAccountName: pharness-model-gateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: "{{ .Values.inferenceGateway.image.repository }}@{{ .Values.inferenceGateway.image.digest }}"
+          imagePullPolicy: {{ .Values.inferenceGateway.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 4780
+          env:
+            - name: PHARNESS_MODEL_GATEWAY_BIND
+              value: "0.0.0.0:4780"
+            - name: PHARNESS_INFERENCE_REGISTRY_FILE
+              value: /etc/pharness/inference/registry.json
+            - name: PHARNESS_MODEL_GRANT_HMAC_FILE
+              value: /var/run/secrets/pharness-grant/key
+            - name: PHARNESS_INFERENCE_CREDENTIAL_FILES
+              value: '{"fireworks-api-key":"/var/run/secrets/inference/fireworks-api-key"}'
+            - name: HTTPS_PROXY
+              value: "http://pharness-coding-egress-proxy.{{ .Release.Namespace }}.svc.cluster.local:8080"
+            - name: https_proxy
+              value: "http://pharness-coding-egress-proxy.{{ .Release.Namespace }}.svc.cluster.local:8080"
+          volumeMounts:
+            - name: registry
+              mountPath: /etc/pharness/inference
+              readOnly: true
+            - name: grant-key
+              mountPath: /var/run/secrets/pharness-grant
+              readOnly: true
+            - name: fireworks-key
+              mountPath: /var/run/secrets/inference
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          resources:
+{{ toYaml .Values.inferenceGateway.resources | indent 12 }}
+      volumes:
+        - name: registry
+          configMap:
+            name: pharness-inference-registry
+        - name: grant-key
+          secret:
+            secretName: {{ .Values.inferenceGateway.grantSecretName }}
+            items:
+              - key: {{ .Values.inferenceGateway.grantSecretKey }}
+                path: key
+        - name: fireworks-key
+          secret:
+            secretName: {{ .Values.inferenceGateway.fireworksCredential.secretName }}
+            items:
+              - key: {{ .Values.inferenceGateway.fireworksCredential.secretKey }}
+                path: fireworks-api-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-model-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: pharness-model-gateway
+    app.kubernetes.io/part-of: pharness
+spec:
+  selector:
+    app: pharness-model-gateway
+  ports:
+    - name: http
+      port: 4780
+      targetPort: http
+{{- end }}

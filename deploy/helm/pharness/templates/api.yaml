@@ -151,6 +151,16 @@ spec:
               value: /tmp
             - name: PHARNESS_WORKER_MODE
               value: kubernetes_job
+            - name: PHARNESS_INFERENCE_GATEWAY_ENABLED
+              value: {{ .Values.inferenceGateway.enabled | quote }}
+            - name: PHARNESS_INFERENCE_GATEWAY_URL
+              value: "http://pharness-model-gateway.{{ .Release.Namespace }}.svc.cluster.local:4780/v1/"
+            - name: PHARNESS_DIRECT_FIREWORKS_ENABLED
+              value: {{ .Values.inferenceGateway.directFireworksEnabled | quote }}
+            - name: PHARNESS_MODEL_GRANT_SIGNER_ENABLED
+              value: "true"
+            - name: PHARNESS_INFERENCE_REGISTRY_JSON
+              value: {{ .Files.Get "files/inference-registry.json" | quote }}
             - name: PHARNESS_WORKER_K8S_NAMESPACE
               value: {{ .Release.Namespace | quote }}
             - name: PHARNESS_WORKER_K8S_IMAGE
@@ -340,6 +350,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.api.fireworksSecretName }}
                   key: api-key
+            {{- if .Values.inferenceGateway.enabled }}
+            - name: PHARNESS_MODEL_GRANT_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.inferenceGateway.grantSecretName }}
+                  key: {{ .Values.inferenceGateway.grantSecretKey }}
+            {{- end }}
             - name: PHARNESS_WORKER_TOKEN
               valueFrom:
                 secretKeyRef:

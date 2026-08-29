@@ -104,7 +104,7 @@ impl LocalWorker {
     fn spawn_task(&self, run: StoredRun, cwd: PathBuf, approval: Option<StoredApproval>) {
         let store = self.store.clone();
         let host = AttemptHost {
-            provider: self.provider.clone(),
+            provider: Arc::new(self.provider.clone()),
             cluster_tools: self.cluster_tools.clone(),
             default_policy: self.default_policy.clone(),
             context_budget: self.context_budget.clone(),
@@ -194,6 +194,7 @@ pub(crate) async fn attempt_spec_for_run(
                 .cloned()
                 .and_then(|value| serde_json::from_value(value).ok()),
             budget_consumption: run.budget_consumption.clone(),
+            inference: None,
         },
         event_seq_start,
         resume,

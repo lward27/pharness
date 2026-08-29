@@ -13,8 +13,10 @@ hmac.workspace = true
 pharness-config = { path = "../pharness-config" }
 pharness-core = { path = "../pharness-core" }
 pharness-fireworks = { path = "../pharness-fireworks" }
+pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
 reqwest.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true

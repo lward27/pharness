@@ -511,6 +511,18 @@ pub(super) async fn system_readiness(
             .iter()
             .filter_map(environment_profile_readiness_blocker),
     );
+    let inference = super::inference::gateway_readiness(&state).await;
+    if state.inference.enabled
+        && inference.get("registry_aligned").and_then(Value::as_bool) != Some(true)
+    {
+        blockers.push(format!(
+            "model_gateway: {}",
+            inference
+                .get("blocker")
+                .and_then(Value::as_str)
+                .unwrap_or("gateway readiness is unavailable")
+        ));
+    }
     Ok(Json(SystemReadinessResponse {
         api_revision: state.build.api_revision.clone(),
         ui_revision: state.build.ui_revision.clone(),
@@ -535,6 +547,7 @@ pub(super) async fn system_readiness(
         }),
         targets: protected_target_json(),
         environment_profiles,
+        inference,
         blockers,
     }))
 }

@@ -30,6 +30,7 @@ mod execution_checks;
 mod gitops;
 mod hashing;
 mod identifiers;
+mod inference;
 mod internal;
 mod json_values;
 mod operator;
@@ -126,8 +127,10 @@ pub struct AppState {
     protected_target: ProtectedTargetConfiguration,
     environment_profiles: Arc<Vec<pharness_core::EnvironmentProfile>>,
     repo_mode: RepoModeConfiguration,
+    inference: Arc<pharness_config::InferenceGatewayConfig>,
 }
 
+#[cfg(test)]
 pub fn router(
     store: Arc<SqliteStore>,
     worker: RunDispatcher,
@@ -136,6 +139,29 @@ pub fn router(
     worker_token: Option<String>,
     operator_tokens: Vec<(String, String)>,
     workspace: WorkspaceProvisioner,
+) -> Router {
+    router_with_inference(
+        store,
+        worker,
+        cluster_tools,
+        policy,
+        worker_token,
+        operator_tokens,
+        workspace,
+        pharness_config::InferenceGatewayConfig::legacy_default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn router_with_inference(
+    store: Arc<SqliteStore>,
+    worker: RunDispatcher,
+    cluster_tools: ReadOnlyClusterTools,
+    policy: SafetyPolicy,
+    worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
+    workspace: WorkspaceProvisioner,
+    inference: pharness_config::InferenceGatewayConfig,
 ) -> Router {
     let state = AppState {
         store,
@@ -149,12 +175,14 @@ pub fn router(
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(environment::load_environment_profiles()),
         repo_mode: RepoModeConfiguration::from_env(),
+        inference: Arc::new(inference),
     };
     data_lifecycle::spawn_retention_scheduler(state.clone());
 
     let operator_routes = Router::new()
         .merge(runs::router())
         .merge(system::router())
+        .merge(inference::router())
         .merge(data_lifecycle::router())
         .merge(evidence::router())
         .merge(work_items::router())

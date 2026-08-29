@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["features", "organization", "api", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget", "retention", "archivePersistence"],
+  "required": ["features", "organization", "api", "inferenceGateway", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget", "retention", "archivePersistence"],
   "properties": {
     "features": {
       "type": "object",
@@ -68,6 +68,29 @@
           "additionalProperties": false
         }
       }
+    },
+    "inferenceGateway": {
+      "type": "object",
+      "required": ["enabled", "directFireworksEnabled", "image", "replicas", "grantSecretName", "grantSecretKey", "fireworksCredential", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "directFireworksEnabled": { "type": "boolean" },
+        "image": { "$ref": "#/$defs/immutableImage" },
+        "replicas": { "const": 1 },
+        "grantSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "grantSecretKey": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,253}$" },
+        "fireworksCredential": {
+          "type": "object",
+          "required": ["secretName", "secretKey"],
+          "properties": {
+            "secretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+            "secretKey": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,253}$" }
+          },
+          "additionalProperties": false
+        },
+        "resources": { "type": "object" }
+      },
+      "additionalProperties": false
     },
     "retention": {
       "type": "object",

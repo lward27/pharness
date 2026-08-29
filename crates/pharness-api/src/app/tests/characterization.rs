@@ -345,6 +345,7 @@ pub(super) async fn test_state() -> AppState {
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
         repo_mode: RepoModeConfiguration::test_enabled(),
+        inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
     }
 }
 
@@ -657,6 +658,7 @@ pub(super) async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyCluster
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
         repo_mode: RepoModeConfiguration::test_enabled(),
+        inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
     }
 }
 
@@ -752,6 +754,7 @@ pub(super) async fn test_state_with_git_observer(
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),
         repo_mode: RepoModeConfiguration::test_enabled(),
+        inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
     }
 }
 

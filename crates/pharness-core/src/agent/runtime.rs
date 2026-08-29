@@ -3,9 +3,9 @@ use super::{CancellationFlag, RunStatus};
 use crate::project::{RunBudget, RunBudgetConsumption};
 use crate::{
     AgentAction, AgentEvent, EventId, EventKind, EventSink, ModelMessage, ModelProvider,
-    ModelRequest, NoopToolExecutor, PolicyDecision, RiskLevel, RunId, RunScope, SafetyPolicy,
-    SessionId, ToolError, ToolErrorDisposition, ToolExecutor, ToolProtocolMode, ToolResult,
-    ToolSpec,
+    ModelRequest, NoopToolExecutor, PolicyDecision, ResolvedInferenceBinding, RiskLevel, RunId,
+    RunScope, SafetyPolicy, SessionId, ToolError, ToolErrorDisposition, ToolExecutor,
+    ToolProtocolMode, ToolResult, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -310,6 +310,7 @@ where
                     "truncated_tool_results": packed.truncated_tool_results,
                     "context_budget": config.context_budget.max_input_tokens,
                     "repository_instruction_files": config.repository_instruction_files,
+                    "inference": inference_event_metadata(config.inference_binding.as_ref()),
                 }),
             );
 
@@ -358,6 +359,10 @@ where
                 mode: config.tool_protocol,
                 temperature: config.temperature,
                 max_tokens: config.max_tokens,
+                reasoning: config
+                    .inference_binding
+                    .as_ref()
+                    .map(|binding| binding.policy.reasoning.clone()),
             };
 
             let turn = match self.provider.complete_action(request).await {
@@ -397,6 +402,16 @@ where
                     "prompt_tokens": turn.usage.map(|usage| usage.prompt_tokens),
                     "completion_tokens": turn.usage.map(|usage| usage.completion_tokens),
                     "total_tokens": turn.usage.map(|usage| usage.total_tokens),
+                    "reasoning_tokens": turn.usage.map(|usage| usage.reasoning_tokens),
+                    "cached_tokens": turn.usage.map(|usage| usage.cached_tokens),
+                    "cost_microusd": turn.usage.and_then(|usage| usage.cost_microusd),
+                    "normalized_cost": turn.usage.and_then(|usage| usage.cost_microusd).map(|value| value as f64 / 1_000_000.0),
+                    "model":turn.metadata.as_ref().and_then(|metadata| metadata.model.as_deref()),
+                    "provider":turn.metadata.as_ref().and_then(|metadata| metadata.provider.as_deref()),
+                    "backend":turn.metadata.as_ref().and_then(|metadata| metadata.backend.as_deref()),
+                    "finish_reason":turn.metadata.as_ref().and_then(|metadata| metadata.native_finish_reason.as_deref()),
+                    "latency_ms":turn.metadata.as_ref().map(|metadata| metadata.latency_ms),
+                    "inference":inference_event_metadata(config.inference_binding.as_ref()),
                 }),
             );
 
@@ -407,6 +422,7 @@ where
                     content: turn.assistant_message.clone().unwrap_or_default(),
                     tool_call_id: None,
                     tool_calls: assistant_tool_calls.clone(),
+                    reasoning: turn.reasoning.clone(),
                 });
             } else if turn.assistant_message.is_some()
                 && !matches!(&turn.action, AgentAction::Respond { .. })
@@ -420,6 +436,7 @@ where
                     content: message,
                     tool_call_id: None,
                     tool_calls: Vec::new(),
+                    reasoning: turn.reasoning.clone(),
                 });
             }
 
@@ -590,6 +607,7 @@ where
                         content: message,
                         tool_call_id: None,
                         tool_calls: Vec::new(),
+                        reasoning: None,
                     });
                 }
                 tool_action => {
@@ -935,6 +953,7 @@ fn tool_message(
         }),
         tool_call_id,
         tool_calls: Vec::new(),
+        reasoning: None,
     }
 }
 
@@ -1086,6 +1105,7 @@ pub struct RunConfig {
     pub event_seq_start: u64,
     pub run_budget: Option<RunBudget>,
     pub budget_consumption: RunBudgetConsumption,
+    pub inference_binding: Option<ResolvedInferenceBinding>,
 }
 
 impl RunConfig {
@@ -1108,8 +1128,29 @@ impl RunConfig {
             event_seq_start: 0,
             run_budget: None,
             budget_consumption: RunBudgetConsumption::default(),
+            inference_binding: None,
         }
     }
+}
+
+fn inference_event_metadata(binding: Option<&ResolvedInferenceBinding>) -> serde_json::Value {
+    binding.map_or(serde_json::Value::Null, |binding| {
+        serde_json::json!({
+            "target_id":binding.target.target_id,
+            "target_revision":binding.target.revision,
+            "target_hash":binding.target.config_hash,
+            "backend_kind":binding.target.backend_kind,
+            "model":binding.target.upstream_model,
+            "policy_id":binding.policy.policy_id,
+            "policy_revision":binding.policy.revision,
+            "policy_hash":binding.policy.policy_hash,
+            "reasoning":binding.policy.reasoning,
+            "temperature":binding.policy.temperature(),
+            "maximum_output_tokens":binding.policy.max_output_tokens,
+            "context_assembly_limit":binding.policy.max_input_tokens,
+            "binding_hash":binding.binding_hash,
+        })
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1407,6 +1448,8 @@ mod tests {
             assistant_tool_calls: Vec::new(),
             action,
             usage: None,
+            reasoning: None,
+            metadata: None,
         })
     }
 

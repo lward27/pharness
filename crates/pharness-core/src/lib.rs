@@ -4,6 +4,7 @@ pub mod agent;
 pub mod events;
 pub mod execution;
 pub mod ids;
+pub mod inference;
 pub mod model;
 pub mod policy;
 pub mod project;
@@ -20,10 +21,20 @@ pub use agent::{
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
 pub use ids::{ActionId, ArtifactId, EventId, RunId, SessionId, ToolCallId};
+pub use inference::{
+    inference_qualification_suite_hash, sign_model_grant, verify_model_grant, InferenceBackendKind,
+    InferenceCapabilities, InferenceConfigError, InferencePolicyRef, InferenceRegistry,
+    InferenceStage, InferenceTargetRef, InferenceTargetRevision, InferenceTransportPolicy,
+    ModelGrantClaims, ModelGrantError, OpenRouterRoutePolicy, ReasoningContextMode,
+    ReasoningEffort, ReasoningReplay, ReasoningRequestPolicy, ResolvedInferenceBinding,
+    StageInferencePolicyRevision, INFERENCE_POLICY_SCHEMA, INFERENCE_QUALIFICATION_SUITE_SCHEMA,
+    INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA, MODEL_GRANT_SCHEMA,
+    RESOLVED_INFERENCE_BINDING_SCHEMA,
+};
 pub use model::{
     ActionParseError, AgentAction, ApprovalKind, ModelCapabilities, ModelMessage, ModelProvider,
-    ModelRequest, ModelRole, ModelToolCall, ModelTurn, ProviderError, TextPatch, TokenUsage,
-    ToolProtocolMode, ToolSpec,
+    ModelRequest, ModelResponseMetadata, ModelRole, ModelToolCall, ModelTurn, ProviderError,
+    TextPatch, TokenUsage, ToolProtocolMode, ToolSpec,
 };
 pub use policy::{
     classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,

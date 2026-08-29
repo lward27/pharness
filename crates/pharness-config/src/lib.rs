@@ -1,7 +1,13 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{bail, Context};
-use pharness_core::{ContextBudget, PolicyMode, ReadOnlyClusterTools, SafetyPolicy};
+use pharness_core::{
+    ContextBudget, InferenceBackendKind, InferenceCapabilities, InferencePolicyRef,
+    InferenceRegistry, InferenceStage, InferenceTargetRef, InferenceTargetRevision,
+    InferenceTransportPolicy, PolicyMode, ReadOnlyClusterTools, ReasoningContextMode,
+    ReasoningEffort, ReasoningRequestPolicy, SafetyPolicy, StageInferencePolicyRevision,
+    ToolProtocolMode, INFERENCE_POLICY_SCHEMA, INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA,
+};
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -47,6 +53,8 @@ const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_ARGO_EXECUTOR_ACTIVE_DEADLINE_SECONDS: u64 = 600;
 const DEFAULT_ARGO_EXECUTOR_TTL_SECONDS: u64 = 3_600;
 const DEFAULT_CLUSTER_MAX_OUTPUT_BYTES: usize = 512 * 1024;
+const DEFAULT_INFERENCE_GATEWAY_URL: &str = "http://pharness-model-gateway:4780/v1";
+const DEFAULT_MODEL_GRANT_HMAC_KEY_ENV: &str = "PHARNESS_MODEL_GRANT_HMAC_KEY";
 
 #[derive(Clone)]
 pub struct ApiRuntimeConfig {
@@ -56,6 +64,33 @@ pub struct ApiRuntimeConfig {
     pub cluster: ClusterConfig,
     pub policy: SafetyPolicy,
     pub worker: WorkerConfig,
+    pub inference: InferenceGatewayConfig,
+}
+
+#[derive(Clone)]
+pub struct InferenceGatewayConfig {
+    pub enabled: bool,
+    pub gateway_url: String,
+    pub direct_fireworks_enabled: bool,
+    pub grant_signing_enabled: bool,
+    pub grant_hmac_key_env: String,
+    pub grant_hmac_key: Option<SecretString>,
+    pub registry: InferenceRegistry,
+}
+
+impl InferenceGatewayConfig {
+    pub fn legacy_default() -> Self {
+        Self {
+            enabled: false,
+            gateway_url: DEFAULT_INFERENCE_GATEWAY_URL.to_string(),
+            direct_fireworks_enabled: true,
+            grant_signing_enabled: true,
+            grant_hmac_key_env: DEFAULT_MODEL_GRANT_HMAC_KEY_ENV.to_string(),
+            grant_hmac_key: None,
+            registry: default_inference_registry()
+                .expect("compiled legacy inference registry must be valid"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -264,11 +299,17 @@ impl ApiRuntimeConfig {
         reject_invalid_git_observer(&config.worker.kubernetes)?;
         reject_invalid_gitops_observer(&config.worker.kubernetes)?;
         reject_invalid_source_reader(&config.worker.kubernetes)?;
+        config.inference.registry.finalize_hashes()?;
+        config.resolve_api_key(env);
+        if config.inference.enabled
+            && config.inference.grant_signing_enabled
+            && config.inference.grant_hmac_key.is_none()
+        {
+            bail!("enabled inference gateway requires its model-grant HMAC key");
+        }
         if config.worker.mode == WorkerMode::KubernetesJob {
             reject_mutable_worker_image(&config.worker.kubernetes.image)?;
         }
-        config.resolve_api_key(env);
-
         Ok(config)
     }
 
@@ -380,6 +421,7 @@ impl ApiRuntimeConfig {
                     ttl_seconds_after_finished: DEFAULT_WORKER_K8S_TTL_SECONDS,
                 },
             },
+            inference: InferenceGatewayConfig::legacy_default(),
         })
     }
 
@@ -429,6 +471,28 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = model.context_max_tool_result_tokens {
                 self.model.context_budget.max_tool_result_tokens = value;
+            }
+        }
+
+        if let Some(inference) = file.inference {
+            if let Some(value) = inference.enabled {
+                self.inference.enabled = value;
+            }
+            if let Some(value) = inference.gateway_url {
+                self.inference.gateway_url = value;
+            }
+            if let Some(value) = inference.direct_fireworks_enabled {
+                self.inference.direct_fireworks_enabled = value;
+            }
+            if let Some(value) = inference.grant_signing_enabled {
+                self.inference.grant_signing_enabled = value;
+            }
+            if let Some(value) = inference.grant_hmac_key_env {
+                self.inference.grant_hmac_key_env = value;
+            }
+            if let Some(value) = inference.registry_json {
+                self.inference.registry = serde_json::from_str(&value)
+                    .context("inference.registry_json must contain a valid registry")?;
             }
         }
 
@@ -759,6 +823,27 @@ impl ApiRuntimeConfig {
         if let Some(value) = env.get("PHARNESS_FIREWORKS_API_KEY_ENV") {
             self.model.api_key_env = value.clone();
         }
+        if let Some(value) = env.get("PHARNESS_INFERENCE_GATEWAY_ENABLED") {
+            self.inference.enabled = parse_bool(value, "PHARNESS_INFERENCE_GATEWAY_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_INFERENCE_GATEWAY_URL") {
+            self.inference.gateway_url = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_DIRECT_FIREWORKS_ENABLED") {
+            self.inference.direct_fireworks_enabled =
+                parse_bool(value, "PHARNESS_DIRECT_FIREWORKS_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_MODEL_GRANT_SIGNER_ENABLED") {
+            self.inference.grant_signing_enabled =
+                parse_bool(value, "PHARNESS_MODEL_GRANT_SIGNER_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_MODEL_GRANT_HMAC_KEY_ENV") {
+            self.inference.grant_hmac_key_env = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_INFERENCE_REGISTRY_JSON") {
+            self.inference.registry = serde_json::from_str(value)
+                .context("PHARNESS_INFERENCE_REGISTRY_JSON must contain a valid registry")?;
+        }
         if let Some(value) = env.get("PHARNESS_KUBECTL_BIN") {
             self.cluster.kubectl_bin = value.clone();
         }
@@ -1065,7 +1150,184 @@ impl ApiRuntimeConfig {
             .or_else(|| env.get(&self.model.api_key_env))
             .cloned()
             .map(SecretString::new);
+        self.inference.grant_hmac_key = env
+            .get(&self.inference.grant_hmac_key_env)
+            .cloned()
+            .filter(|value| value.len() >= 32)
+            .map(SecretString::new);
     }
+}
+
+fn default_inference_registry() -> anyhow::Result<InferenceRegistry> {
+    let mut target = InferenceTargetRevision {
+        schema_version: INFERENCE_TARGET_SCHEMA.into(),
+        target_id: "fireworks-kimi-k2p6".into(),
+        revision: "v1".into(),
+        display_name: "Fireworks Kimi K2.6".into(),
+        backend_kind: InferenceBackendKind::Fireworks,
+        protocol: "openai_chat_completions_v1".into(),
+        upstream_base_url: DEFAULT_FIREWORKS_BASE_URL.into(),
+        upstream_model: DEFAULT_FIREWORKS_MODEL.into(),
+        authentication_binding: Some("fireworks-api-key".into()),
+        transport: InferenceTransportPolicy::default(),
+        capabilities: InferenceCapabilities {
+            native_tools: true,
+            streaming: true,
+            json_schema: true,
+            stream_options: true,
+            reasoning_efforts: vec![
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+            ],
+            reasoning_context_modes: vec![
+                ReasoningContextMode::CurrentTurn,
+                ReasoningContextMode::AllTurns,
+            ],
+        },
+        context_limit_tokens: 262_144,
+        output_limit_tokens: 16_384,
+        allowed_stages: vec![
+            InferenceStage::Onboarding,
+            InferenceStage::Plan,
+            InferenceStage::Implement,
+            InferenceStage::Test,
+            InferenceStage::Verify,
+        ],
+        selectable: true,
+        openrouter: None,
+        config_hash: String::new(),
+    };
+    target.config_hash = target.computed_hash()?;
+    let mut policy = StageInferencePolicyRevision {
+        schema_version: INFERENCE_POLICY_SCHEMA.into(),
+        policy_id: "fireworks-legacy-v1".into(),
+        revision: "v1".into(),
+        display_name: "Fireworks legacy behavior".into(),
+        eligible_profiles: vec![
+            "repository-onboarding-proposer".into(),
+            "repo-planner".into(),
+            "repo-builder".into(),
+            "repo-tester".into(),
+            "repo-verifier".into(),
+        ],
+        eligible_stages: target.allowed_stages.clone(),
+        target: InferenceTargetRef {
+            target_id: target.target_id.clone(),
+            revision: target.revision.clone(),
+        },
+        target_hash: target.config_hash.clone(),
+        reasoning: ReasoningRequestPolicy::default(),
+        temperature_milli: Some(100),
+        max_output_tokens: 4_096,
+        max_input_tokens: ContextBudget::default().max_input_tokens,
+        tool_protocol: ToolProtocolMode::NativeTools,
+        transport_max_attempts: 3,
+        selectable: true,
+        policy_hash: String::new(),
+    };
+    policy.policy_hash = policy.computed_hash()?;
+    let policy_ref = InferencePolicyRef {
+        policy_id: policy.policy_id.clone(),
+        revision: policy.revision.clone(),
+    };
+    let defaults = target
+        .allowed_stages
+        .iter()
+        .copied()
+        .map(|stage| (stage, policy_ref.clone()))
+        .collect();
+    let candidates = [
+        (
+            "onboarding-kimi-k2p6-medium-v1",
+            "Onboarding Kimi K2.6 medium",
+            "repository-onboarding-proposer",
+            InferenceStage::Onboarding,
+            ReasoningEffort::Medium,
+            100,
+            4_096,
+        ),
+        (
+            "planner-kimi-k2p6-high-v1",
+            "Planner Kimi K2.6 high",
+            "repo-planner",
+            InferenceStage::Plan,
+            ReasoningEffort::High,
+            100,
+            8_192,
+        ),
+        (
+            "builder-kimi-k2p6-medium-v1",
+            "Builder Kimi K2.6 medium",
+            "repo-builder",
+            InferenceStage::Implement,
+            ReasoningEffort::Medium,
+            100,
+            8_192,
+        ),
+        (
+            "tester-kimi-k2p6-low-v1",
+            "Tester Kimi K2.6 low",
+            "repo-tester",
+            InferenceStage::Test,
+            ReasoningEffort::Low,
+            0,
+            4_096,
+        ),
+        (
+            "verifier-kimi-k2p6-high-v1",
+            "Verifier Kimi K2.6 high",
+            "repo-verifier",
+            InferenceStage::Verify,
+            ReasoningEffort::High,
+            0,
+            8_192,
+        ),
+    ]
+    .into_iter()
+    .map(
+        |(id, display_name, profile, stage, effort, temperature_milli, output)| {
+            let mut candidate = StageInferencePolicyRevision {
+                schema_version: INFERENCE_POLICY_SCHEMA.into(),
+                policy_id: id.into(),
+                revision: "v1".into(),
+                display_name: display_name.into(),
+                eligible_profiles: vec![profile.into()],
+                eligible_stages: vec![stage],
+                target: InferenceTargetRef {
+                    target_id: target.target_id.clone(),
+                    revision: target.revision.clone(),
+                },
+                target_hash: target.config_hash.clone(),
+                reasoning: ReasoningRequestPolicy {
+                    effort: Some(effort),
+                    context_mode: ReasoningContextMode::CurrentTurn,
+                    expose_replay: true,
+                },
+                temperature_milli: Some(temperature_milli),
+                max_output_tokens: output,
+                max_input_tokens: ContextBudget::default().max_input_tokens,
+                tool_protocol: ToolProtocolMode::NativeTools,
+                transport_max_attempts: 3,
+                selectable: false,
+                policy_hash: String::new(),
+            };
+            candidate.policy_hash = candidate.computed_hash()?;
+            Ok::<_, serde_json::Error>(candidate)
+        },
+    )
+    .collect::<Result<Vec<_>, _>>()?;
+    let mut policies = vec![policy];
+    policies.extend(candidates);
+    let mut registry = InferenceRegistry {
+        schema_version: INFERENCE_REGISTRY_SCHEMA.into(),
+        targets: vec![target],
+        policies,
+        defaults,
+        config_hash: String::new(),
+    };
+    registry.config_hash = registry.computed_hash()?;
+    Ok(registry)
 }
 
 fn reject_invalid_context_budget(budget: &ContextBudget) -> anyhow::Result<()> {
@@ -1087,9 +1349,21 @@ struct FileConfig {
     api: Option<FileApiConfig>,
     storage: Option<FileStorageConfig>,
     model: Option<FileModelConfig>,
+    inference: Option<FileInferenceConfig>,
     cluster: Option<FileClusterConfig>,
     policy: Option<FilePolicyConfig>,
     worker: Option<FileWorkerConfig>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct FileInferenceConfig {
+    enabled: Option<bool>,
+    gateway_url: Option<String>,
+    direct_fireworks_enabled: Option<bool>,
+    grant_signing_enabled: Option<bool>,
+    grant_hmac_key_env: Option<String>,
+    registry_json: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

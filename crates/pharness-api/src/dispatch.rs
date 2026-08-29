@@ -38,6 +38,7 @@ const REPOSITORY_DISCOVERY_JOB_NAME_VALUE: &str = "pharness-repository-discovery
 const ONBOARDING_PATCH_JOB_NAME_VALUE: &str = "pharness-onboarding-patch";
 const ONBOARDING_VALIDATION_JOB_NAME_VALUE: &str = "pharness-onboarding-validation";
 const REPOSITORY_READINESS_JOB_NAME_VALUE: &str = "pharness-repository-readiness";
+const INFERENCE_EVALUATION_JOB_NAME_VALUE: &str = "pharness-inference-evaluation";
 // K3s's selector-backed NetworkPolicy rules converge asynchronously after a
 // Pod receives its IP. Short-lived Jobs otherwise race the policy controller
 // and fail their first API or proxy connection before the rule includes them.
@@ -210,6 +211,17 @@ pub struct RepositoryReadinessExecutionRequest {
 
 #[derive(Debug, Clone)]
 pub struct RepositoryReadinessExecutionReceipt {
+    pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct InferenceEvaluationExecutionRequest {
+    pub evaluation_id: String,
+    pub gateway_url: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct InferenceEvaluationExecutionReceipt {
     pub job_name: String,
 }
 
@@ -535,6 +547,23 @@ impl RunDispatcher {
             }
             Self::Local(_) => {
                 anyhow::bail!("repository readiness is unavailable in local worker mode")
+            }
+        }
+    }
+
+    pub async fn dispatch_inference_evaluation(
+        &self,
+        request: InferenceEvaluationExecutionRequest,
+    ) -> anyhow::Result<InferenceEvaluationExecutionReceipt> {
+        match self {
+            Self::Kubernetes(dispatcher) => {
+                dispatcher.create_inference_evaluation_job(&request).await
+            }
+            Self::Disabled => {
+                anyhow::bail!("inference qualification requires kubernetes_job worker mode")
+            }
+            Self::Local(_) => {
+                anyhow::bail!("inference qualification is unavailable in local worker mode")
             }
         }
     }
@@ -1394,6 +1423,17 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
         tracing::info!(preparation_id=%request.preparation_id, job=%job_name, profile=%request.profile.id, "created repository coding-readiness job");
         Ok(RepositoryReadinessExecutionReceipt { job_name })
+    }
+
+    async fn create_inference_evaluation_job(
+        &self,
+        request: &InferenceEvaluationExecutionRequest,
+    ) -> anyhow::Result<InferenceEvaluationExecutionReceipt> {
+        let manifest = self.inference_evaluation_job_manifest(request);
+        let job_name = inference_evaluation_job_name(&request.evaluation_id);
+        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        tracing::info!(evaluation_id=%request.evaluation_id, job=%job_name, "created isolated inference qualification job");
+        Ok(InferenceEvaluationExecutionReceipt { job_name })
     }
 
     async fn ensure_workspace_claim(&self, run: &StoredRun) -> anyhow::Result<()> {
@@ -2322,6 +2362,11 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             .min(remaining_active_seconds);
         let active_deadline_seconds =
             active_execution_deadline_seconds.saturating_add(NETWORK_POLICY_STABILIZATION_SECONDS);
+        let gateway_bound = run
+            .execution_target_json
+            .pointer("/inference/mode")
+            .and_then(serde_json::Value::as_str)
+            == Some("gateway");
         let mut env = vec![
             serde_json::json!({ "name": "PHARNESS_API_URL", "value": self.config.api_url }),
             serde_json::json!({ "name": "PHARNESS_RUN_ID", "value": run.id.as_str() }),
@@ -2349,7 +2394,9 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                     }
                 }
             }),
-            serde_json::json!({
+        ];
+        if !gateway_bound {
+            env.push(serde_json::json!({
                 "name": "FIREWORKS_API_KEY",
                 "valueFrom": {
                     "secretKeyRef": {
@@ -2357,8 +2404,8 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                         "key": "api-key",
                     }
                 }
-            }),
-        ];
+            }));
+        }
         if let Some(approval) = approval {
             env.push(serde_json::json!({
                 "name": "PHARNESS_APPROVAL_ID",
@@ -2389,6 +2436,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                         "labels": {
                             "app": "pharness-runner",
                             "agentic.lucas.engineering/phase": "coding",
+                            "agentic.lucas.engineering/inference-mode": if gateway_bound { "gateway" } else { "direct-fireworks" },
                             JOB_NAME_LABEL: JOB_NAME_VALUE,
                             RUN_ID_LABEL: job_label_value(run.id.as_str()),
                         },
@@ -2824,6 +2872,75 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         })
     }
 
+    fn inference_evaluation_job_manifest(
+        &self,
+        request: &InferenceEvaluationExecutionRequest,
+    ) -> serde_json::Value {
+        let job_name = inference_evaluation_job_name(&request.evaluation_id);
+        serde_json::json!({
+            "apiVersion":"batch/v1",
+            "kind":"Job",
+            "metadata":{
+                "name":job_name,
+                "namespace":self.config.namespace,
+                "labels":{
+                    JOB_NAME_LABEL:INFERENCE_EVALUATION_JOB_NAME_VALUE,
+                    "pharness.lucas.engineering/inference-evaluation-id":job_label_value(&request.evaluation_id),
+                },
+            },
+            "spec":{
+                "backoffLimit":0,
+                "activeDeadlineSeconds":7200 + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "ttlSecondsAfterFinished":self.config.ttl_seconds_after_finished,
+                "template":{
+                    "metadata":{"labels":{
+                        "app":"pharness-inference-evaluator",
+                        "agentic.lucas.engineering/phase":"inference-evaluation",
+                        JOB_NAME_LABEL:INFERENCE_EVALUATION_JOB_NAME_VALUE,
+                    }},
+                    "spec":{
+                        "serviceAccountName":self.config.service_account,
+                        "restartPolicy":"Never",
+                        "automountServiceAccountToken":false,
+                        "securityContext":{
+                            "runAsNonRoot":true,
+                            "runAsUser":65532,
+                            "runAsGroup":65532,
+                            "fsGroup":65532,
+                            "seccompProfile":{"type":"RuntimeDefault"},
+                        },
+                        "initContainers":[network_policy_stabilization_container(&self.config.image)],
+                        "containers":[{
+                            "name":"evaluate",
+                            "image":self.config.image,
+                            "imagePullPolicy":"IfNotPresent",
+                            "command":["pharness-eval"],
+                            "args":["execute-qualification","--evaluation-id",request.evaluation_id],
+                            "env":[
+                                {"name":"PHARNESS_API_URL","value":self.config.api_url},
+                                {"name":"PHARNESS_INFERENCE_GATEWAY_URL","value":request.gateway_url},
+                                {"name":"PHARNESS_INFERENCE_GATEWAY_ENABLED","value":"true"},
+                                {"name":"PHARNESS_INFERENCE_REGISTRY_JSON","valueFrom":{"configMapKeyRef":{"name":"pharness-inference-registry","key":"registry.json"}}},
+                                {"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}},
+                                {"name":"HOME","value":"/work"},
+                                {"name":"TMPDIR","value":"/tmp"},
+                                {"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"},
+                                {"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}
+                            ],
+                            "volumeMounts":[{"name":"work","mountPath":"/work"},{"name":"tmp","mountPath":"/tmp"}],
+                            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
+                            "resources":{
+                                "requests":{"cpu":"250m","memory":"512Mi","ephemeral-storage":"1Gi"},
+                                "limits":{"cpu":"2","memory":"2Gi","ephemeral-storage":"4Gi"}
+                            }
+                        }],
+                        "volumes":[{"name":"work","emptyDir":{"sizeLimit":"4Gi"}},{"name":"tmp","emptyDir":{"sizeLimit":"1Gi"}}]
+                    }
+                }
+            }
+        })
+    }
+
     /// Reconcile worker and executor jobs that stopped without reporting a
     /// durable outcome. The API remains the only SQLite writer.
     fn spawn_reaper(self: Arc<Self>) {
@@ -2840,7 +2957,63 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
     async fn reap_once(&self) -> anyhow::Result<()> {
         self.reap_run_jobs().await?;
         self.reap_onboarding_jobs().await?;
+        self.reap_inference_evaluation_jobs().await?;
         self.reap_tekton_executor_jobs().await
+    }
+
+    async fn reap_inference_evaluation_jobs(&self) -> anyhow::Result<()> {
+        let evaluations = self.store.list_active_inference_evaluations().await?;
+        for evaluation in evaluations {
+            let Some(job_name) = evaluation.job_name.as_deref() else {
+                continue;
+            };
+            let output = tokio::process::Command::new(&self.kubectl_bin)
+                .args([
+                    "get",
+                    "job",
+                    job_name,
+                    "-n",
+                    &self.config.namespace,
+                    "--ignore-not-found=true",
+                    "-o",
+                    "json",
+                ])
+                .output()
+                .await?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "kubectl get inference evaluation Job failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            if output.stdout.is_empty() {
+                continue;
+            }
+            let job: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+            let terminal = executor_job_terminal_state(&job);
+            if terminal == ExecutorJobTerminalState::Active {
+                continue;
+            }
+            let refreshed = self.store.get_inference_evaluation(&evaluation.id).await?;
+            if refreshed
+                .as_ref()
+                .is_some_and(|value| value.status == "completed")
+            {
+                continue;
+            }
+            let reason = match terminal {
+                ExecutorJobTerminalState::Succeeded => {
+                    "inference evaluation Job completed without a durable report"
+                }
+                ExecutorJobTerminalState::Failed => "inference evaluation Job failed",
+                ExecutorJobTerminalState::Active => unreachable!(),
+            };
+            self.store
+                .fail_inference_evaluation(&evaluation.id, reason)
+                .await?;
+            tracing::warn!(evaluation_id=%evaluation.id, job=%job_name, %reason, "sealed missing inference evaluation outcome");
+        }
+        Ok(())
     }
 
     async fn reap_onboarding_jobs(&self) -> anyhow::Result<()> {
@@ -3829,6 +4002,14 @@ fn repository_readiness_job_name(preparation_id: &str) -> String {
     )
 }
 
+fn inference_evaluation_job_name(evaluation_id: &str) -> String {
+    let digest = Sha256::digest(evaluation_id.as_bytes());
+    format!(
+        "pharness-inference-eval-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5]
+    )
+}
+
 fn tekton_executor_job_name(execution_id: &str) -> String {
     let digest = Sha256::digest(execution_id.as_bytes());
     let suffix = digest
@@ -3934,7 +4115,8 @@ mod tests {
         job_name, onboarding_proposer_id, run_label_to_run_id, workspace_claim_name,
         workspace_claim_name_for_run, ArgoSyncExecutionRequest, ChainedRunCapacity,
         ExecutorJobTerminalState, GitDeliveryExecutionRequest, GitDeliveryObservationRequest,
-        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest, KubernetesJobDispatcher,
+        GitOpsDeliveryExecutionRequest, GitOpsDeliveryObservationRequest,
+        InferenceEvaluationExecutionRequest, KubernetesJobDispatcher,
         OnboardingContractValidationRequest, OnboardingPatchRequest, RepositoryDiscoveryRequest,
         RepositoryReadinessExecutionRequest, NETWORK_POLICY_STABILIZATION_SECONDS, RUN_ID_LABEL,
     };
@@ -3952,6 +4134,40 @@ mod tests {
         let label = job_label_value(run_id);
         assert_eq!(label, "run-1781521948426738000");
         assert_eq!(run_label_to_run_id(&label), run_id);
+    }
+
+    #[tokio::test]
+    async fn inference_evaluation_manifest_has_only_internal_worker_identity() {
+        let dispatcher = test_dispatcher(None).await;
+        let manifest =
+            dispatcher.inference_evaluation_job_manifest(&InferenceEvaluationExecutionRequest {
+                evaluation_id: "infeval_test".into(),
+                gateway_url: "http://pharness-model-gateway:4780/v1/".into(),
+            });
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/command/0"),
+            Some(&json!("pharness-eval"))
+        );
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+        for forbidden in [
+            "FIREWORKS_API_KEY",
+            "OPENROUTER_API_KEY",
+            "PHARNESS_MODEL_GRANT_HMAC_KEY",
+            "PHARNESS_GIT_WRITER_TOKEN",
+            "PHARNESS_SOURCE_READER_TOKEN",
+        ] {
+            assert!(env.iter().all(|entry| entry["name"] != forbidden));
+        }
     }
 
     #[test]
@@ -4926,6 +5142,33 @@ mod tests {
             base_url: "https://example.test/v1".to_string(),
             worker_env: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn gateway_bound_coding_job_has_no_upstream_provider_credential() {
+        let dispatcher = test_dispatcher(None).await;
+        let mut run = test_run();
+        run.execution_target_json = json!({
+            "inference": {
+                "mode": "gateway",
+                "selection_id": "infsel_test",
+            }
+        });
+        let manifest = dispatcher.job_manifest(&run, None);
+        let env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(env.iter().all(|entry| entry["name"] != "FIREWORKS_API_KEY"));
+        assert!(env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1inference-mode"
+            ),
+            Some(&json!("gateway"))
+        );
     }
 
     fn test_run() -> StoredRun {

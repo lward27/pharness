@@ -17,11 +17,11 @@ pub use prompt::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
 use pharness_core::{
     AgentEvent, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag,
     CompositeToolExecutor, ContextBudget, EnvironmentSnapshot, EventSink, LocalReadOnlyFsTools,
-    LocalShellTools, ModelMessage, ReadOnlyClusterTools, RecoveryPolicy, RepositoryContract,
-    RepositoryInstruction, RunBudget, RunBudgetConsumption, RunConfig, RunOutcome, RunScope,
-    RunStatus, SafetyPolicy, TaskContract, ToolError, ToolExecutor, ToolProtocolMode, ToolResult,
+    LocalShellTools, ModelMessage, ModelProvider, ReadOnlyClusterTools, RecoveryPolicy,
+    RepositoryContract, RepositoryInstruction, ResolvedInferenceBinding, RunBudget,
+    RunBudgetConsumption, RunConfig, RunOutcome, RunScope, RunStatus, SafetyPolicy, TaskContract,
+    ToolError, ToolExecutor, ToolProtocolMode, ToolResult,
 };
-use pharness_fireworks::FireworksClient;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -48,6 +48,16 @@ pub struct RunSpec {
     pub run_budget: Option<RunBudget>,
     #[serde(default)]
     pub budget_consumption: RunBudgetConsumption,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inference: Option<RunInferenceSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunInferenceSpec {
+    pub selection_id: String,
+    pub stage_execution_id: String,
+    pub binding: ResolvedInferenceBinding,
+    pub next_request_sequence: u32,
 }
 
 /// Typed remote source checkout contract for one workspace attempt.
@@ -192,7 +202,7 @@ pub trait AttemptBackend: Send + Sync + 'static {
 /// Provider and tool wiring shared by every attempt in one worker process.
 #[derive(Clone)]
 pub struct AttemptHost {
-    pub provider: FireworksClient,
+    pub provider: Arc<dyn ModelProvider>,
     pub cluster_tools: ReadOnlyClusterTools,
     pub default_policy: SafetyPolicy,
     pub context_budget: ContextBudget,
@@ -329,7 +339,7 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
     }
     let profile_constraint = match id {
         "repository-onboarding-proposer" => {
-            "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids. Generic language names and shortened aliases are invalid."
+            "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one id from AgentContext.contract_constraints.compatible_environment_profiles and its dependency_lock.kind must match that descriptor's accepted_dependency_lock_kinds. Generic language names and shortened aliases are invalid."
         }
         "repo-verifier" => {
             "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final eight turns for submit_verification and finish, and submit the typed verdict before the soft turn boundary."
@@ -529,6 +539,24 @@ pub async fn execute_attempt<B: AttemptBackend>(
             max_identical_failures: budget.identical_failures,
         })
         .unwrap_or_default();
+    let tool_protocol = spec
+        .run
+        .inference
+        .as_ref()
+        .map(|inference| inference.binding.policy.tool_protocol)
+        .unwrap_or(ToolProtocolMode::NativeTools);
+    let temperature = spec
+        .run
+        .inference
+        .as_ref()
+        .and_then(|inference| inference.binding.policy.temperature())
+        .unwrap_or(0.1);
+    let maximum_output_tokens = spec
+        .run
+        .inference
+        .as_ref()
+        .map(|inference| inference.binding.policy.max_output_tokens)
+        .unwrap_or(4096);
     let outcome = match (&spec.resume, &spec.budget_resume) {
         (None, None) => {
             let (repository_instruction_content, repository_instruction_files) =
@@ -548,9 +576,9 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 run_id,
                 messages,
                 tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
-                tool_protocol: ToolProtocolMode::NativeTools,
-                temperature: 0.1,
-                max_tokens: 4096,
+                tool_protocol,
+                temperature,
+                max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
                 context_budget: host.context_budget.clone(),
                 recovery_policy: recovery_policy.clone(),
@@ -561,6 +589,11 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 event_seq_start: spec.event_seq_start,
                 run_budget: spec.run.run_budget.clone(),
                 budget_consumption: spec.run.budget_consumption.clone(),
+                inference_binding: spec
+                    .run
+                    .inference
+                    .as_ref()
+                    .map(|value| value.binding.clone()),
             };
             runtime.run(config, cancellation).await
         }
@@ -578,9 +611,9 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 run_id,
                 messages: Vec::new(),
                 tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
-                tool_protocol: ToolProtocolMode::NativeTools,
-                temperature: 0.1,
-                max_tokens: 4096,
+                tool_protocol,
+                temperature,
+                max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
                 context_budget: host.context_budget.clone(),
                 recovery_policy: recovery_policy.clone(),
@@ -591,6 +624,11 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 event_seq_start: spec.event_seq_start,
                 run_budget: spec.run.run_budget.clone(),
                 budget_consumption: spec.run.budget_consumption.clone(),
+                inference_binding: spec
+                    .run
+                    .inference
+                    .as_ref()
+                    .map(|value| value.binding.clone()),
             };
             runtime
                 .resume_after_approval(config, cancellation, approved)
@@ -608,9 +646,9 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 run_id,
                 messages: Vec::new(),
                 tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
-                tool_protocol: ToolProtocolMode::NativeTools,
-                temperature: 0.1,
-                max_tokens: 4096,
+                tool_protocol,
+                temperature,
+                max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
                 context_budget: host.context_budget.clone(),
                 recovery_policy,
@@ -621,6 +659,11 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 event_seq_start: spec.event_seq_start,
                 run_budget: spec.run.run_budget.clone(),
                 budget_consumption: spec.run.budget_consumption.clone(),
+                inference_binding: spec
+                    .run
+                    .inference
+                    .as_ref()
+                    .map(|value| value.binding.clone()),
             };
             runtime
                 .resume_after_budget(config, cancellation, resume)
@@ -937,10 +980,13 @@ impl ProjectTools {
         path_entries.push(existing_path);
         let mut child = Command::new("/bin/sh");
         child
+            .env_clear()
             .arg("-c")
             .arg(&declared.command)
             .current_dir(&self.workspace)
             .env("PATH", path_entries.join(":"))
+            .env("HOME", self.workspace.join(".pharness-runtime/home"))
+            .env("LANG", "C.UTF-8")
             .kill_on_drop(true);
         if runtime.is_some_and(|runtime| runtime.kind == "node") {
             for (key, value) in node_acceptance_environment(&self.workspace) {
@@ -1332,6 +1378,7 @@ mod workspace_source_tests {
             task_contract: TaskContract::default(),
             run_budget: None,
             budget_consumption: RunBudgetConsumption::default(),
+            inference: None,
         }
     }
 
@@ -1488,14 +1535,19 @@ mod workspace_source_tests {
             "subject":{"kind":"repository_onboarding","id":"ronb_test"},
             "discovery":{"id":"rdisc_test","hash":format!("sha256:{}", "a".repeat(64))},
             "contract_constraints":{
-                "active_environment_profile_ids":["python-3.11"],
+                "compatible_environment_profiles":[{
+                    "id":"python-3.11",
+                    "runtime_kind":"python",
+                    "preparation_strategy":"python_hashed_requirements",
+                    "accepted_dependency_lock_kinds":["pip_requirements"],
+                }],
             },
         });
 
         let instruction = profile_instruction(&run).unwrap().unwrap();
         assert!(instruction.contains("repository_onboarding stage"));
         assert!(instruction.contains(
-            "candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids"
+            "candidate_contract.environment_profile must exactly copy one id from AgentContext.contract_constraints.compatible_environment_profiles"
         ));
         assert!(instruction.contains("python-3.11"));
 

@@ -176,12 +176,14 @@ mod tests {
                     name: "read_file".to_string(),
                     arguments: "{}".to_string(),
                 }],
+                reasoning: None,
             });
             messages.push(ModelMessage {
                 role: ModelRole::Tool,
                 content: "x".repeat(200),
                 tool_call_id: Some(format!("call_{index}")),
                 tool_calls: Vec::new(),
+                reasoning: None,
             });
         }
         let pack = pack_messages(
@@ -216,12 +218,14 @@ mod tests {
                 content: "x".repeat(80),
                 tool_call_id: None,
                 tool_calls: Vec::new(),
+                reasoning: None,
             },
             ModelMessage {
                 role: ModelRole::Assistant,
                 content: "y".repeat(80),
                 tool_call_id: None,
                 tool_calls: Vec::new(),
+                reasoning: None,
             },
         ];
         let pack = pack_messages(
@@ -261,12 +265,14 @@ mod tests {
                     name: "write_file".to_string(),
                     arguments: "{}".to_string(),
                 }],
+                reasoning: None,
             });
             messages.push(ModelMessage {
                 role: ModelRole::Tool,
                 content: "x".repeat(12_000),
                 tool_call_id: Some(format!("call_{index}")),
                 tool_calls: Vec::new(),
+                reasoning: None,
             });
         }
 

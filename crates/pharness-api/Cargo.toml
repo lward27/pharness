@@ -22,6 +22,7 @@ hmac.workspace = true
 pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }
+pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
 pharness-store = { path = "../pharness-store" }
 reqwest.workspace = true

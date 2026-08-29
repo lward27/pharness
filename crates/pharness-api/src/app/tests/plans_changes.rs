@@ -39,6 +39,7 @@ async fn transitions_and_revisions_stale_work_plan_gates() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -239,6 +240,7 @@ async fn transitions_and_revisions_stale_work_plan_gates() {
                 change_set_id: None,
                 production_impacting: false,
             }),
+            inference_policy: None,
         }),
     )
     .await
@@ -363,6 +365,7 @@ async fn creates_transitions_and_revisions_stale_change_set_gates() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1242,6 +1245,7 @@ async fn creates_transitions_and_revisions_stale_change_set_gates() {
                 change_set_id: Some(change_set_id.clone()),
                 production_impacting: false,
             }),
+            inference_policy: None,
         }),
     )
     .await
@@ -2245,6 +2249,7 @@ async fn denial_decides_pending_approval_and_blocks_run() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await

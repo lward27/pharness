@@ -1386,6 +1386,7 @@ pub(in crate::app) async fn execute_repo_work_item_action(
     actor: String,
     reason: String,
     state_hash: String,
+    inference_policies: Option<crate::dto::StageChainInferencePolicyRequest>,
 ) -> Result<Value, ApiError> {
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
@@ -1638,7 +1639,15 @@ pub(in crate::app) async fn execute_repo_work_item_action(
             Ok(json!({"work_plan":plan,"work_item":item}))
         }
         "authorize_stage_chain" => {
-            authorize_repo_stage_chain(state, work_item_id, &actor, &reason, None).await
+            authorize_repo_stage_chain(
+                state,
+                work_item_id,
+                &actor,
+                &reason,
+                None,
+                inference_policies.as_ref(),
+            )
+            .await
         }
         "approve_budget_extension" => {
             let extension = pending_budget_extension.ok_or_else(|| {
@@ -2049,7 +2058,7 @@ async fn apply_repo_stage_correction(
         .into_iter()
         .find(|workspace| workspace.resolved_commit == work_item.source_commit)
         .ok_or_else(|| ApiError::conflict("preserved correction workspace is unavailable"))?;
-    authorize_repo_stage_chain(state, work_item_id, actor, reason, Some(workspace)).await
+    authorize_repo_stage_chain(state, work_item_id, actor, reason, Some(workspace), None).await
 }
 
 async fn retry_repo_followup_stage_startup(
@@ -3858,7 +3867,7 @@ async fn start_repo_planner(
         .and_then(Value::as_str)
         .unwrap_or("unconfigured")
         .to_string();
-    let profile =
+    let mut profile =
         pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
             .into_iter()
             .find(|profile| profile.id == "repo-planner")
@@ -3912,6 +3921,29 @@ async fn start_repo_planner(
         branch: Some(work_item.source_ref.clone()),
         ..RunScope::default()
     };
+    let (inference_marker, resolved_profile) = if state.inference.enabled {
+        let selection =
+            super::inference::latest_planned_selection(state, "work_item", work_item_id, "plan")
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                        "Planner inference selection was not pinned at WorkItem creation",
+                    )
+                })?;
+        (
+            super::inference::execution_marker_for_selection(state, &selection),
+            Some((
+                selection.resolved_binding.agent_profile_hash.clone(),
+                selection.resolved_binding.target.upstream_model.clone(),
+            )),
+        )
+    } else {
+        (super::inference::execution_marker(state, None), None)
+    };
+    if let Some((profile_hash, model)) = resolved_profile {
+        profile.profile_hash = profile_hash;
+        profile.model = model;
+    }
     let run = state
         .store
         .create_run(CreateRun {
@@ -3926,6 +3958,7 @@ async fn start_repo_planner(
             initial_status: "queued".into(),
             execution_target_json: json!({
                 "kind":state.worker.execution_target_kind(),
+                "inference":inference_marker,
                 "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id},
                 "agent_profile":profile,
                 "agent_context":context,
@@ -4020,6 +4053,7 @@ async fn authorize_repo_stage_chain(
     actor: &str,
     reason: &str,
     reuse_workspace: Option<pharness_store::StoredWorkspace>,
+    inference_policies: Option<&crate::dto::StageChainInferencePolicyRequest>,
 ) -> Result<Value, ApiError> {
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -4102,6 +4136,49 @@ async fn authorize_repo_stage_chain(
             "compiled Repo Mode stage chain is incomplete",
         ));
     }
+    let chain_state_hash = repo_work_item_state_hash(&metadata)?;
+    let mut planned_inference = Vec::new();
+    if state.inference.enabled {
+        for (profile_id, stage, requested) in [
+            (
+                "repo-builder",
+                pharness_core::InferenceStage::Implement,
+                inference_policies.and_then(|value| value.implement.as_ref()),
+            ),
+            (
+                "repo-tester",
+                pharness_core::InferenceStage::Test,
+                inference_policies.and_then(|value| value.test.as_ref()),
+            ),
+            (
+                "repo-verifier",
+                pharness_core::InferenceStage::Verify,
+                inference_policies.and_then(|value| value.verify.as_ref()),
+            ),
+        ] {
+            let profile = profiles
+                .iter()
+                .find(|profile| profile.id == profile_id)
+                .ok_or_else(|| ApiError::internal("stage-chain AgentProfile is unavailable"))?;
+            planned_inference.push(
+                super::inference::create_planned_selection(
+                    state,
+                    super::inference::PlannedSelectionRequest {
+                        subject_kind: "work_item",
+                        subject_id: work_item_id,
+                        stage,
+                        profile: &serde_json::to_value(profile)
+                            .map_err(|error| ApiError::internal(error.to_string()))?,
+                        requested,
+                        actor,
+                        reason,
+                        state_hash: &chain_state_hash,
+                    },
+                )
+                .await?,
+            );
+        }
+    }
     let authorization = state
         .store
         .create_stage_chain_authorization(CreateStageChainAuthorization {
@@ -4126,7 +4203,7 @@ async fn authorize_repo_stage_chain(
                 "repo-tester":profiles.iter().find(|profile| profile.id == "repo-tester").map(|profile| &profile.budget),
                 "repo-verifier":profiles.iter().find(|profile| profile.id == "repo-verifier").map(|profile| &profile.budget),
             }),
-            state_hash: repo_work_item_state_hash(&metadata)?,
+            state_hash: chain_state_hash,
             created_by: actor.into(),
             creation_reason: reason.into(),
             expires_at: (current_millis() + 4 * 60 * 60 * 1_000).to_string(),
@@ -4150,6 +4227,7 @@ async fn authorize_repo_stage_chain(
             "stage_chain_authorization":authorization,
             "workspace":workspace,
             "builder":started,
+            "inference_selections":planned_inference,
         })),
         Err(error) => {
             state
@@ -4182,7 +4260,7 @@ async fn start_repo_builder(
             "model execution worker is unavailable",
         ));
     }
-    let profile = agent_profile_from_chain(&authorization.profile_chain, "repo-builder")
+    let mut profile = agent_profile_from_chain(&authorization.profile_chain, "repo-builder")
         .ok_or_else(|| ApiError::conflict("chain authorization has no repo-builder profile"))?;
     let environment_profile = super::environment::select_profile(
         &state.environment_profiles,
@@ -4324,8 +4402,32 @@ async fn start_repo_builder(
     .await?;
     let mut policy = super::policy::run_policy(&state.policy, None);
     policy.permission_grants = super::approvals::active_permission_grants(&state.store).await?;
+    let (inference_marker, resolved_profile) = if state.inference.enabled {
+        let selection = super::inference::latest_planned_selection(
+            state,
+            "work_item",
+            &work_item.id,
+            "implement",
+        )
+        .await?
+        .ok_or_else(|| ApiError::conflict("Builder inference selection is unavailable"))?;
+        (
+            super::inference::execution_marker_for_selection(state, &selection),
+            Some((
+                selection.resolved_binding.agent_profile_hash.clone(),
+                selection.resolved_binding.target.upstream_model.clone(),
+            )),
+        )
+    } else {
+        (super::inference::execution_marker(state, None), None)
+    };
+    if let Some((profile_hash, model)) = resolved_profile {
+        profile.profile_hash = profile_hash;
+        profile.model = model;
+    }
     let mut execution_target = json!({
         "kind":"kubernetes_workspace",
+        "inference":inference_marker,
         "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"implement","context_pack_id":context_pack_id,"chain_authorization_id":authorization.id},
         "agent_profile":profile,
         "agent_context":context,
@@ -4781,8 +4883,8 @@ async fn start_repo_followup_stage(
         "verify" => "repo-verifier",
         _ => return Err(ApiError::internal("unsupported Repo Mode follow-up stage")),
     };
-    let profile =
-        agent_profile_from_chain(&authorization.profile_chain, profile_id).ok_or_else(|| {
+    let mut profile = agent_profile_from_chain(&authorization.profile_chain, profile_id)
+        .ok_or_else(|| {
             ApiError::conflict(format!("chain authorization has no {profile_id} profile"))
         })?;
     let runner_profile = completed_run
@@ -4878,6 +4980,27 @@ async fn start_repo_followup_stage(
         production_impacting: false,
         ..RunScope::default()
     };
+    let (inference_marker, resolved_profile) = if state.inference.enabled {
+        let selection =
+            super::inference::latest_planned_selection(state, "work_item", work_item_id, stage)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict(format!("{stage} inference selection is unavailable"))
+                })?;
+        (
+            super::inference::execution_marker_for_selection(state, &selection),
+            Some((
+                selection.resolved_binding.agent_profile_hash.clone(),
+                selection.resolved_binding.target.upstream_model.clone(),
+            )),
+        )
+    } else {
+        (super::inference::execution_marker(state, None), None)
+    };
+    if let Some((profile_hash, model)) = resolved_profile {
+        profile.profile_hash = profile_hash;
+        profile.model = model;
+    }
     let run = state
         .store
         .create_run(CreateRun {
@@ -4894,6 +5017,7 @@ async fn start_repo_followup_stage(
             initial_status: "queued".into(),
             execution_target_json: json!({
                 "kind":"kubernetes_workspace",
+                "inference":inference_marker,
                 "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
                 "agent_profile":profile,
                 "agent_context":context,
@@ -5044,6 +5168,8 @@ struct RepoWorkItemPreflightRequest {
     builder_budget: Option<pharness_core::RunBudget>,
     #[serde(default)]
     max_attempts: Option<u32>,
+    #[serde(default)]
+    planner_inference_policy: Option<pharness_core::InferencePolicyRef>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -5060,6 +5186,8 @@ struct CreateRepoWorkItemRequest {
     builder_budget: Option<pharness_core::RunBudget>,
     #[serde(default)]
     max_attempts: Option<u32>,
+    #[serde(default)]
+    planner_inference_policy: Option<pharness_core::InferencePolicyRef>,
     preflight_hash: String,
     actor: String,
     reason: String,
@@ -5081,6 +5209,7 @@ struct RepoWorkItemPreflightResponse {
     context_repositories: Vec<Value>,
     builder_budget: pharness_core::RunBudget,
     max_attempts: u32,
+    planner_inference: Value,
     readiness_assessment_id: Option<String>,
     blockers: Vec<Value>,
     warnings: Vec<Value>,
@@ -5122,6 +5251,7 @@ async fn create_repo_work_item(
         context_repositories: request.context_repositories,
         builder_budget: request.builder_budget,
         max_attempts: request.max_attempts,
+        planner_inference_policy: request.planner_inference_policy,
     };
     let preflight = build_repo_work_item_preflight(&state, &product_id, &preflight_request).await?;
     if request.preflight_hash != preflight.preflight_hash {
@@ -5187,6 +5317,39 @@ async fn create_repo_work_item(
             actor: actor.clone(),
         })
         .await?;
+    let planner_profile = pharness_core::compiled_agent_profiles(
+        state
+            .worker
+            .config_json()
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("unconfigured"),
+        pharness_runhost::SYSTEM_PROMPT_VERSION,
+    )
+    .into_iter()
+    .find(|profile| profile.id == "repo-planner")
+    .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+    let planner_selection = if state.inference.enabled {
+        Some(
+            super::inference::create_planned_selection(
+                &state,
+                super::inference::PlannedSelectionRequest {
+                    subject_kind: "work_item",
+                    subject_id: &work_item_id,
+                    stage: pharness_core::InferenceStage::Plan,
+                    profile: &serde_json::to_value(&planner_profile)
+                        .map_err(|error| ApiError::internal(error.to_string()))?,
+                    requested: preflight_request.planner_inference_policy.as_ref(),
+                    actor: &actor,
+                    reason: &reason,
+                    state_hash: &preflight.preflight_hash,
+                },
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
 
     let discover_execution_id = new_prefixed_id("stageexec");
     let readiness_id = preflight
@@ -5272,6 +5435,7 @@ async fn create_repo_work_item(
         "state_hash": repo_work_item_state_hash(&metadata)?,
         "discover_execution": execution,
         "discover_outcome": outcome,
+        "planner_inference_selection":planner_selection,
     })))
 }
 
@@ -5419,6 +5583,30 @@ async fn build_repo_work_item_preflight(
             "Repo Mode max_attempts must be between one and three",
         ));
     }
+    let planner_profile = pharness_core::compiled_agent_profiles(
+        state
+            .worker
+            .config_json()
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("unconfigured"),
+        pharness_runhost::SYSTEM_PROMPT_VERSION,
+    )
+    .into_iter()
+    .find(|profile| profile.id == "repo-planner")
+    .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+    let planner_inference = if state.inference.enabled {
+        super::inference::preview_selection(
+            state,
+            pharness_core::InferenceStage::Plan,
+            &serde_json::to_value(&planner_profile)
+                .map_err(|error| ApiError::internal(error.to_string()))?,
+            request.planner_inference_policy.as_ref(),
+        )
+        .await?
+    } else {
+        json!({"mode":"direct_fireworks","policy":{"policy_id":"fireworks-legacy-v1","revision":"v1"}})
+    };
     let mut context_repositories = Vec::new();
     let mut context_ids = std::collections::BTreeSet::new();
     for context in &request.context_repositories {
@@ -5533,6 +5721,7 @@ async fn build_repo_work_item_preflight(
         "context_repositories":context_repositories,
         "builder_budget":budget,
         "max_attempts":max_attempts,
+        "planner_inference":planner_inference,
         "readiness_assessment_id":readiness.as_ref().map(|assessment| &assessment.id),
         "readiness_input_hash":readiness.as_ref().map(|assessment| &assessment.input_hash),
         "blockers":blockers,
@@ -5558,6 +5747,7 @@ async fn build_repo_work_item_preflight(
         context_repositories,
         builder_budget: budget,
         max_attempts,
+        planner_inference,
         readiness_assessment_id: readiness.map(|assessment| assessment.id),
         blockers,
         warnings,

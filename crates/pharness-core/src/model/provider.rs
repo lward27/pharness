@@ -1,6 +1,7 @@
 use super::{ModelCapabilities, ModelRequest, ModelTurn};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[async_trait]
@@ -8,6 +9,20 @@ pub trait ModelProvider: Send + Sync {
     async fn complete_action(&self, request: ModelRequest) -> Result<ModelTurn, ProviderError>;
 
     fn capabilities(&self) -> ModelCapabilities;
+}
+
+#[async_trait]
+impl<T> ModelProvider for Arc<T>
+where
+    T: ModelProvider + ?Sized,
+{
+    async fn complete_action(&self, request: ModelRequest) -> Result<ModelTurn, ProviderError> {
+        (**self).complete_action(request).await
+    }
+
+    fn capabilities(&self) -> ModelCapabilities {
+        (**self).capabilities()
+    }
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq, Serialize, Deserialize)]

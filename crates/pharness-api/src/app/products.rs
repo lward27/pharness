@@ -222,6 +222,8 @@ fn default_active_status() -> String {
 struct RepositoryRegistrationPreflightRequest {
     repository_url: String,
     source_commit: String,
+    #[serde(default)]
+    proposer_inference_policy: Option<pharness_core::InferencePolicyRef>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,6 +231,8 @@ struct RegisterRepositoryRequest {
     repository_url: String,
     source_commit: String,
     preflight_hash: String,
+    #[serde(default)]
+    proposer_inference_policy: Option<pharness_core::InferencePolicyRef>,
     actor: String,
     reason: String,
 }
@@ -237,6 +241,8 @@ struct RegisterRepositoryRequest {
 struct CreateRepositoryOnboardingRequest {
     product_id: String,
     source_commit: String,
+    #[serde(default)]
+    proposer_inference_policy: Option<pharness_core::InferencePolicyRef>,
     actor: String,
     reason: String,
 }
@@ -404,6 +410,7 @@ struct RepositoryRegistrationPreflightResponse {
     default_branch: String,
     source_commit: String,
     commit_verified: bool,
+    proposer_inference: Option<Value>,
     already_registered_globally: bool,
     already_bound_to_product: bool,
     predicted_mutations: Vec<String>,
@@ -964,6 +971,7 @@ async fn register_repository(
     let preflight_request = RepositoryRegistrationPreflightRequest {
         repository_url: request.repository_url,
         source_commit: request.source_commit,
+        proposer_inference_policy: request.proposer_inference_policy.clone(),
     };
     let preflight = repository_registration_preflight(&state, &product, &preflight_request).await?;
     if preflight.preflight_hash != request.preflight_hash {
@@ -1031,6 +1039,8 @@ async fn register_repository(
         &binding_id,
         &binding_revision_id,
     );
+    let actor = request.actor.trim().to_string();
+    let reason = request.reason.trim().to_string();
     let aggregate = state
         .store
         .register_repository(RegisterRepositoryAggregate {
@@ -1045,10 +1055,40 @@ async fn register_repository(
             snapshot_id,
             snapshot_hash: canonical_material_hash(&model)?,
             snapshot_json: model,
-            actor: request.actor.trim().into(),
-            reason: request.reason.trim().into(),
+            actor: actor.clone(),
+            reason: reason.clone(),
         })
         .await?;
+    if state.inference.enabled {
+        let profile = pharness_core::compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+            pharness_runhost::SYSTEM_PROMPT_VERSION,
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repository-onboarding-proposer")
+        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        let onboarding_state_hash = onboarding_response(aggregate.onboarding.clone())?.state_hash;
+        super::inference::create_planned_selection(
+            &state,
+            super::inference::PlannedSelectionRequest {
+                subject_kind: "repository_onboarding",
+                subject_id: &aggregate.onboarding.id,
+                stage: pharness_core::InferenceStage::Onboarding,
+                profile: &serde_json::to_value(profile)
+                    .map_err(|error| ApiError::internal(error.to_string()))?,
+                requested: request.proposer_inference_policy.as_ref(),
+                actor: &actor,
+                reason: &reason,
+                state_hash: &onboarding_state_hash,
+            },
+        )
+        .await?;
+    }
     Ok(Json(registered_repository_response(aggregate)))
 }
 
@@ -1509,6 +1549,8 @@ async fn create_repository_onboarding(
     // Reverify the immutable provider object before creating durable onboarding state.
     let external_id = github_external_id(&repository.canonical_url);
     let _ = resolve_public_github_repository(&external_id, &request.source_commit).await?;
+    let actor = request.actor.trim().to_string();
+    let reason = request.reason.trim().to_string();
     let onboarding = state
         .store
         .create_repository_onboarding(CreateRepositoryOnboarding {
@@ -1518,10 +1560,39 @@ async fn create_repository_onboarding(
             binding_id: binding.id,
             onboarding_kind: "refresh".into(),
             registered_commit: request.source_commit.to_ascii_lowercase(),
-            actor: request.actor.trim().into(),
-            reason: request.reason.trim().into(),
+            actor: actor.clone(),
+            reason: reason.clone(),
         })
         .await?;
+    if state.inference.enabled {
+        let profile = pharness_core::compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+            pharness_runhost::SYSTEM_PROMPT_VERSION,
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repository-onboarding-proposer")
+        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        super::inference::create_planned_selection(
+            &state,
+            super::inference::PlannedSelectionRequest {
+                subject_kind: "repository_onboarding",
+                subject_id: &onboarding.id,
+                stage: pharness_core::InferenceStage::Onboarding,
+                profile: &serde_json::to_value(profile)
+                    .map_err(|error| ApiError::internal(error.to_string()))?,
+                requested: request.proposer_inference_policy.as_ref(),
+                actor: &actor,
+                reason: &reason,
+                state_hash: &onboarding_response(onboarding.clone())?.state_hash,
+            },
+        )
+        .await?;
+    }
     Ok(Json(
         onboarding_operator_response(&state, onboarding).await?,
     ))
@@ -2486,7 +2557,7 @@ async fn start_repository_onboarding_proposer(
         .and_then(Value::as_str)
         .unwrap_or("unconfigured")
         .to_string();
-    let profile =
+    let mut profile =
         pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
             .into_iter()
             .find(|profile| profile.id == "repository-onboarding-proposer")
@@ -2592,6 +2663,31 @@ async fn start_repository_onboarding_proposer(
         branch: Some(branch),
         ..RunScope::default()
     };
+    let (inference_marker, resolved_profile) = if state.inference.enabled {
+        let selection = super::inference::latest_planned_selection(
+            state,
+            "repository_onboarding",
+            &onboarding.id,
+            "onboarding",
+        )
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict("Onboarding inference selection was not pinned at creation")
+        })?;
+        (
+            super::inference::execution_marker_for_selection(state, &selection),
+            Some((
+                selection.resolved_binding.agent_profile_hash.clone(),
+                selection.resolved_binding.target.upstream_model.clone(),
+            )),
+        )
+    } else {
+        (super::inference::execution_marker(state, None), None)
+    };
+    if let Some((profile_hash, model)) = resolved_profile {
+        profile.profile_hash = profile_hash;
+        profile.model = model;
+    }
     let run = state
         .store
         .create_run(CreateRun {
@@ -2605,6 +2701,7 @@ async fn start_repository_onboarding_proposer(
             initial_status: "queued".into(),
             execution_target_json: json!({
                 "kind":state.worker.execution_target_kind(),
+                "inference":inference_marker,
                 "onboarding":{"onboarding_id":onboarding.id,"discovery_id":discovery.id,"discovery_hash":discovery_hash},
                 "agent_profile":profile,
                 "agent_context":context,
@@ -2816,6 +2913,32 @@ async fn repository_registration_preflight(
     } else {
         Vec::new()
     };
+    let proposer_inference = if state.inference.enabled {
+        let profile = pharness_core::compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+            pharness_runhost::SYSTEM_PROMPT_VERSION,
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repository-onboarding-proposer")
+        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        Some(
+            super::inference::preview_selection(
+                state,
+                pharness_core::InferenceStage::Onboarding,
+                &serde_json::to_value(profile)
+                    .map_err(|error| ApiError::internal(error.to_string()))?,
+                request.proposer_inference_policy.as_ref(),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
     let material = json!({
         "schema_version": "pharness.dev/repository-registration-preflight/v1alpha1",
         "product_id": product.id,
@@ -2828,6 +2951,7 @@ async fn repository_registration_preflight(
         "default_branch": provider.default_branch,
         "source_commit": request.source_commit.to_ascii_lowercase(),
         "commit_verified": true,
+        "proposer_inference":proposer_inference,
         "already_registered_globally": existing.is_some(),
         "already_bound_to_product": binding.is_some(),
         "predicted_mutations": predicted_mutations,
@@ -2843,6 +2967,7 @@ async fn repository_registration_preflight(
         default_branch: provider.default_branch,
         source_commit: request.source_commit.to_ascii_lowercase(),
         commit_verified: true,
+        proposer_inference,
         already_registered_globally: existing.is_some(),
         already_bound_to_product: binding.is_some(),
         predicted_mutations,

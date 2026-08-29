@@ -6,24 +6,24 @@ set -euo pipefail
 # resulting digests must still be reviewed and committed through GitOps.
 #
 # Usage:
-#   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|all> \
+#   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|model-gateway|all> \
 #     --revision <40-char-sha> [--builder <buildx-builder>] [--preflight-only]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(git -C "${SCRIPT_DIR}/.." rev-parse --show-toplevel)"
 TARGET="${1:-}"
 REVISION=""
-BUILDER="${PHARNESS_BUILDX_BUILDER:-rancher-desktop}"
+BUILDER="${PHARNESS_BUILDX_BUILDER:-lucas-desktop}"
 PREFLIGHT_ONLY=false
 PLATFORM="linux/amd64"
 REGISTRY="registry.lucas.engineering"
 
 usage() {
-  echo "Usage: $0 <runtime|ui|python-runner|node-runner|all> --revision <40-char-sha> [--builder <name>] [--preflight-only]" >&2
+  echo "Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|all> --revision <40-char-sha> [--builder lucas-desktop] [--preflight-only]" >&2
   exit 2
 }
 
-[[ "$TARGET" =~ ^(runtime|ui|python-runner|node-runner|all)$ ]] || usage
+[[ "$TARGET" =~ ^(runtime|ui|python-runner|node-runner|model-gateway|all)$ ]] || usage
 shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +40,10 @@ done
 }
 [[ "$BUILDER" =~ ^[A-Za-z0-9._-]+$ ]] || {
   echo "--builder must be a normalized Docker buildx builder name" >&2
+  exit 1
+}
+[[ "$BUILDER" == "lucas-desktop" ]] || {
+  echo "PHarness release builds are pinned to the dedicated lucas-desktop builder; no automatic fallback is permitted" >&2
   exit 1
 }
 
@@ -67,7 +71,7 @@ grep -Eq 'Platforms:.*(^|, | )linux/amd64([, ]|$)' <<<"$BUILDER_INSPECTION" || {
 
 components=()
 case "$TARGET" in
-  all) components=(runtime ui python-runner node-runner) ;;
+  all) components=(runtime ui python-runner node-runner model-gateway) ;;
   *) components=("$TARGET") ;;
 esac
 
@@ -105,6 +109,7 @@ build_component() {
     ui) dockerfile="deploy/docker/Dockerfile.ui" ;;
     python-runner) dockerfile="deploy/docker/Dockerfile.python-runner" ;;
     node-runner) dockerfile="deploy/docker/Dockerfile.node-runner" ;;
+    model-gateway) dockerfile="deploy/docker/Dockerfile.model-gateway" ;;
     *) echo "unsupported PHarness component ${component}" >&2; return 1 ;;
   esac
 
