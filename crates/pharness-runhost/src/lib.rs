@@ -327,10 +327,14 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
     if serialized_context.len() / 4 > 16_000 {
         anyhow::bail!("agent_profile AgentContext exceeds the 16,000-token limit");
     }
-    let profile_constraint = if id == "repository-onboarding-proposer" {
-        "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids. Generic language names and shortened aliases are invalid."
-    } else {
-        ""
+    let profile_constraint = match id {
+        "repository-onboarding-proposer" => {
+            "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids. Generic language names and shortened aliases are invalid."
+        }
+        "repo-verifier" => {
+            "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final four turns for submit_verification and finish, and submit the typed verdict before the soft turn boundary."
+        }
+        _ => "",
     };
     Ok(Some(format!(
         "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success.{profile_constraint}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
@@ -1349,6 +1353,33 @@ mod workspace_source_tests {
                 "submit_work_plan".to_string(),
             ])
         );
+    }
+
+    #[test]
+    fn verifier_profile_preserves_submission_turns_and_avoids_redundant_reads() {
+        let mut run = profile_run(&[
+            "get_evidence",
+            "read_file",
+            "git_diff",
+            "git_status",
+            "submit_verification",
+            "finish",
+        ]);
+        run.execution_target_json["repo_mode"]["stage"] = serde_json::json!("verify");
+        run.execution_target_json["agent_profile"]["id"] = serde_json::json!("repo-verifier");
+        run.execution_target_json["agent_context"] = serde_json::json!({
+            "schema_version": pharness_core::AGENT_CONTEXT_SCHEMA,
+            "current_intent": {"title": "verify a bounded change"},
+            "evidence_catalog": [],
+        });
+
+        let instruction = profile_instruction(&run).unwrap().unwrap();
+        assert!(
+            instruction.contains("begin with the sealed Test outcome, Git diff, and Git status")
+        );
+        assert!(instruction.contains("do not reread a path"));
+        assert!(instruction.contains("Preserve the final four turns"));
+        assert!(instruction.contains("submit the typed verdict before the soft turn boundary"));
     }
 
     #[tokio::test]
