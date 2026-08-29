@@ -4,7 +4,7 @@ use pharness_core::{CapabilityKind, ToolSpec};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
-pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-29.2";
+pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-29.3";
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn worker_prompt_forbids_toolchain_discovery_before_execution() {
-        assert_eq!(SYSTEM_PROMPT_VERSION, "2026-08-29.2");
+        assert_eq!(SYSTEM_PROMPT_VERSION, "2026-08-29.3");
         let prompt = system_prompt();
         for prohibited_probe in ["`which`", "`command -v`", "version probes"] {
             assert!(prompt.contains(prohibited_probe));

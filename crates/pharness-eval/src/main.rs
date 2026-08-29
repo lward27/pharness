@@ -3,16 +3,20 @@ use async_trait::async_trait;
 use clap::{Parser, Subcommand, ValueEnum};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
+    canonical_json_sha256, compiled_agent_profiles, inference_qualification_suite_hash,
     AgentAction, AgentEvent, AgentRuntime, CancellationFlag, CompositeToolExecutor,
     EnvironmentSnapshot, EventKind, InMemoryEventSink, LocalReadOnlyFsTools, LocalShellTools,
     ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProviderError, RepositoryContract,
-    RunConfig, SafetyPolicy, TaskContract, TaskKind,
+    ResolvedInferenceBinding, RunConfig, SafetyPolicy, TaskContract, TaskKind,
+    RESOLVED_INFERENCE_BINDING_SCHEMA,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
+use pharness_openai_compatible::{GatewayClientConfig, GatewayModelClient};
 use pharness_runhost::{
-    execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, RunSpec,
-    SYSTEM_PROMPT_VERSION,
+    execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, RunInferenceSpec,
+    RunSpec, SYSTEM_PROMPT_VERSION,
 };
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
@@ -20,6 +24,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+
+mod stage_suites;
 
 #[derive(Parser)]
 #[command(
@@ -42,13 +48,23 @@ enum Command {
         #[arg(long, default_value_t = 2)]
         attempts: u32,
         #[arg(long)]
+        policy: Option<String>,
+        #[arg(long)]
         output: Option<PathBuf>,
+        #[arg(long)]
+        evaluation_id: Option<String>,
+    },
+    ExecuteQualification {
+        #[arg(long)]
+        evaluation_id: String,
     },
     Compare {
         #[arg(long)]
         baseline: PathBuf,
         #[arg(long)]
         candidate: PathBuf,
+        #[arg(long, value_enum, default_value_t = ComparisonKind::Regression)]
+        kind: ComparisonKind,
     },
 }
 
@@ -56,25 +72,69 @@ enum Command {
 enum Provider {
     Replay,
     Fireworks,
+    Gateway,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GatewayEvaluationContext {
+    evaluation_id: String,
+    suite_id: String,
+    suite_hash: String,
+    attempts: u32,
+    agent_profile_id: String,
+    agent_profile_hash: String,
+    runtime_revision: String,
+    selection_id: String,
+    stage_execution_id: String,
+    resolved_binding: ResolvedInferenceBinding,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+enum ComparisonKind {
+    Regression,
+    Policy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct EvalReport {
+pub(crate) struct EvalReport {
+    #[serde(default = "eval_report_schema")]
+    schema_version: String,
     version: u32,
     suite: String,
+    #[serde(default)]
+    suite_hash: String,
     fixture_revision: String,
     provider: String,
     model: String,
+    #[serde(default)]
+    target_id: Option<String>,
+    #[serde(default)]
+    target_revision: Option<String>,
+    #[serde(default)]
+    target_hash: Option<String>,
+    #[serde(default)]
+    policy_id: Option<String>,
+    #[serde(default)]
+    policy_revision: Option<String>,
+    #[serde(default)]
+    policy_hash: Option<String>,
+    #[serde(default)]
+    profile_hash: Option<String>,
     prompt_version: String,
+    #[serde(default)]
+    tool_schema_hash: Option<String>,
     runtime_revision: String,
     temperature_milli: u16,
     max_tokens: u32,
     max_turns: u32,
     attempts: u32,
+    #[serde(default)]
+    resolved_settings: serde_json::Value,
     results: Vec<EvalResult>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct EvalResult {
+pub(crate) struct EvalResult {
     fixture: String,
     attempt: u32,
     passed: bool,
@@ -85,6 +145,16 @@ struct EvalResult {
     approval_pauses: u32,
     duration_ms: u128,
     estimated_input_tokens: u64,
+    #[serde(default)]
+    actual_prompt_tokens: u64,
+    #[serde(default)]
+    actual_completion_tokens: u64,
+    #[serde(default)]
+    reasoning_tokens: u64,
+    #[serde(default)]
+    cached_tokens: u64,
+    #[serde(default)]
+    normalized_cost: Option<f64>,
     compacted_exchanges: u32,
     context_budget_failures: u32,
     #[serde(default)]
@@ -169,10 +239,53 @@ const EVAL_MAX_TURNS: u32 = 24;
 // navigation rather than a single unbounded native read.
 const LARGE_FILE_FILLER_LINES: usize = 9_000;
 
+fn eval_report_schema() -> String {
+    "pharness.dev/inference-evaluation/v1alpha1".into()
+}
+
+pub(crate) fn evaluation_runtime_revision() -> String {
+    std::env::var("PHARNESS_BUILD_REVISION")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| option_env!("PHARNESS_BUILD_REVISION").map(str::to_string))
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+}
+
+struct BuilderReportMetadata {
+    profile_hash: String,
+    tool_schema_hash: String,
+}
+
+fn builder_report_metadata(model: &str) -> Result<BuilderReportMetadata> {
+    let profile = compiled_agent_profiles(model, SYSTEM_PROMPT_VERSION)
+        .into_iter()
+        .find(|profile| profile.id == "repo-builder")
+        .context("compiled repo-builder AgentProfile is missing")?;
+    let tool_schema_hash = canonical_json_sha256(&serde_json::json!({
+        "profile_id":profile.id,
+        "profile_version":profile.version,
+        "tools":profile.tools,
+    }))?;
+    Ok(BuilderReportMetadata {
+        profile_hash: profile.profile_hash,
+        tool_schema_hash,
+    })
+}
+
+fn coding_suite_hash() -> Result<String> {
+    inference_qualification_suite_hash("coding-v1").map_err(anyhow::Error::msg)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::List => {
+            println!("onboarding-v1\tRepository onboarding proposer qualification");
+            println!("planner-v1\tRepo Mode Planner qualification");
+            println!("tester-v1\tRepo Mode Tester qualification");
+            println!("verifier-v1\tRepo Mode Verifier qualification");
+            println!("coding-v1\tRepo Mode Builder matched coding evaluation");
             for fixture in FIXTURES {
                 println!("{}\t{}", fixture.id, fixture.task);
             }
@@ -181,14 +294,32 @@ async fn main() -> Result<()> {
             suite,
             provider,
             attempts,
+            policy,
             output,
+            evaluation_id,
         } => {
-            if suite != "coding-v1" {
-                bail!("unsupported suite {suite:?}; expected coding-v1");
-            }
-            let report = match provider {
-                Provider::Replay => replay_suite(attempts).await?,
-                Provider::Fireworks => fireworks_suite(attempts).await?,
+            let report = if suite == "coding-v1" {
+                match provider {
+                    Provider::Replay => replay_suite(attempts).await?,
+                    Provider::Fireworks => fireworks_suite(attempts, policy.as_deref()).await?,
+                    Provider::Gateway => {
+                        gateway_coding_suite(
+                            attempts,
+                            policy.as_deref(),
+                            required_evaluation_id(evaluation_id.as_deref())?,
+                        )
+                        .await?
+                    }
+                }
+            } else {
+                stage_suites::run(
+                    &suite,
+                    provider,
+                    attempts,
+                    policy.as_deref(),
+                    evaluation_id.as_deref(),
+                )
+                .await?
             };
             let json = serde_json::to_string_pretty(&report)?;
             if let Some(path) = output {
@@ -196,24 +327,74 @@ async fn main() -> Result<()> {
             }
             println!("{json}");
         }
+        Command::ExecuteQualification { evaluation_id } => {
+            let context = fetch_gateway_evaluation_context(&evaluation_id).await?;
+            if context.evaluation_id != evaluation_id {
+                bail!("inference evaluation context identity mismatch");
+            }
+            let report = if context.suite_id == "coding-v1" {
+                gateway_coding_suite(
+                    context.attempts,
+                    Some(&context.resolved_binding.policy.policy_id),
+                    &evaluation_id,
+                )
+                .await?
+            } else {
+                stage_suites::run(
+                    &context.suite_id,
+                    Provider::Gateway,
+                    context.attempts,
+                    Some(&context.resolved_binding.policy.policy_id),
+                    Some(&evaluation_id),
+                )
+                .await?
+            };
+            let evidence = qualification_evidence(&report);
+            post_gateway_evaluation_outcome(&evaluation_id, &evidence).await?;
+            println!("{}", serde_json::to_string_pretty(&evidence)?);
+        }
         Command::Compare {
             baseline,
             candidate,
+            kind,
         } => {
             let baseline: EvalReport = serde_json::from_str(&fs::read_to_string(&baseline)?)?;
             let candidate: EvalReport = serde_json::from_str(&fs::read_to_string(&candidate)?)?;
-            if baseline.suite != candidate.suite
+            let common_mismatch = baseline.suite != candidate.suite
                 || baseline.fixture_revision != candidate.fixture_revision
-                || baseline.provider != candidate.provider
-                || baseline.model != candidate.model
+                || (!baseline.suite_hash.is_empty()
+                    && !candidate.suite_hash.is_empty()
+                    && baseline.suite_hash != candidate.suite_hash)
                 || baseline.prompt_version != candidate.prompt_version
+                || baseline.max_turns != candidate.max_turns
+                || baseline.attempts != candidate.attempts;
+            let regression_mismatch = baseline.provider != candidate.provider
+                || baseline.model != candidate.model
+                || baseline.target_id != candidate.target_id
+                || baseline.target_revision != candidate.target_revision
+                || baseline.target_hash != candidate.target_hash
+                || baseline.policy_id != candidate.policy_id
+                || baseline.policy_revision != candidate.policy_revision
+                || baseline.policy_hash != candidate.policy_hash
                 || baseline.temperature_milli != candidate.temperature_milli
                 || baseline.max_tokens != candidate.max_tokens
-                || baseline.max_turns != candidate.max_turns
-                || baseline.attempts != candidate.attempts
+                || baseline.resolved_settings != candidate.resolved_settings;
+            let controlled_policy_mismatch = baseline.provider != candidate.provider
+                || baseline.model != candidate.model
+                || baseline.target_id != candidate.target_id
+                || baseline.target_revision != candidate.target_revision
+                || baseline.target_hash != candidate.target_hash
+                || baseline.profile_hash != candidate.profile_hash
+                || baseline.tool_schema_hash != candidate.tool_schema_hash;
+            if common_mismatch
+                || match kind {
+                    ComparisonKind::Regression => regression_mismatch,
+                    ComparisonKind::Policy => controlled_policy_mismatch,
+                }
             {
                 bail!(
-                    "baseline and candidate must use the same suite, fixture revision, provider, model, prompt version, temperature, token cap, turn cap, and attempt count"
+                    "baseline and candidate do not satisfy the controlled {:?} comparison contract",
+                    kind
                 );
             }
             let baseline_passes = baseline
@@ -237,13 +418,223 @@ async fn main() -> Result<()> {
                 .iter()
                 .filter(|result| result.fixture == "python-environment-ready")
                 .all(|result| result.environment_probe_actions == 0);
+            let (stage_gate_passed, stage_gate_details) = qualification_gate(&candidate);
+            let gate_passed = if candidate.suite == "coding-v1" {
+                candidate_passes >= baseline_passes
+                    && candidate_safe
+                    && candidate_context_failures <= baseline_context_failures
+                    && candidate_python_probe_free
+            } else {
+                stage_gate_passed
+            };
             println!(
                 "{}",
-                serde_json::json!({ "baseline_passes": baseline_passes, "candidate_passes": candidate_passes, "additional_passes": candidate_passes - baseline_passes, "candidate_safe": candidate_safe, "baseline_context_failures": baseline_context_failures, "candidate_context_failures": candidate_context_failures, "candidate_python_probe_free": candidate_python_probe_free, "gate_passed": candidate_passes - baseline_passes >= 4 && candidate_safe && candidate_context_failures <= baseline_context_failures && candidate_python_probe_free })
+                serde_json::json!({
+                    "schema_version":eval_report_schema(),
+                    "suite_id":candidate.suite,
+                    "suite_hash":candidate.suite_hash,
+                    "runtime_revision":candidate.runtime_revision,
+                    "target_hash":candidate.target_hash,
+                    "policy_hash":candidate.policy_hash,
+                    "profile_hash":candidate.profile_hash,
+                    "attempts":candidate.attempts,
+                    "comparison_kind":kind,
+                    "baseline_policy":baseline.policy_id,
+                    "candidate_policy":candidate.policy_id,
+                    "baseline_passes":baseline_passes,
+                    "candidate_passes":candidate_passes,
+                    "pass_delta":candidate_passes - baseline_passes,
+                    "candidate_safe":candidate_safe,
+                    "baseline_context_failures":baseline_context_failures,
+                    "candidate_context_failures":candidate_context_failures,
+                    "candidate_python_probe_free":candidate_python_probe_free,
+                    "stage_gate":stage_gate_details,
+                    "gate_passed":gate_passed
+                })
             );
         }
     }
     Ok(())
+}
+
+fn required_evaluation_id(value: Option<&str>) -> Result<&str> {
+    value.context("--evaluation-id is required for gateway evaluation")
+}
+
+async fn fetch_gateway_evaluation_context(evaluation_id: &str) -> Result<GatewayEvaluationContext> {
+    let api_url = internal_env_url("PHARNESS_API_URL")?;
+    let worker_token = std::env::var("PHARNESS_WORKER_TOKEN")
+        .context("PHARNESS_WORKER_TOKEN is required for gateway evaluation")?;
+    let url = api_url.join(&format!(
+        "api/internal/inference-evaluations/{evaluation_id}/context"
+    ))?;
+    let response = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?
+        .get(url)
+        .bearer_auth(worker_token)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(response.json().await?)
+}
+
+fn validate_gateway_context(context: &GatewayEvaluationContext) -> Result<()> {
+    context.resolved_binding.validate()?;
+    if context.runtime_revision != evaluation_runtime_revision()
+        || context.resolved_binding.binding_hash.is_empty()
+        || context.agent_profile_hash.is_empty()
+        || context.selection_id != format!("evaluation:{}", context.evaluation_id)
+        || context.stage_execution_id != format!("evaluation:{}", context.evaluation_id)
+    {
+        bail!("gateway evaluation context is stale or incomplete");
+    }
+    Ok(())
+}
+
+fn gateway_client(context: &GatewayEvaluationContext) -> Result<GatewayModelClient> {
+    validate_gateway_context(context)?;
+    let api_url = internal_env_url("PHARNESS_API_URL")?;
+    let gateway_url = internal_env_url("PHARNESS_INFERENCE_GATEWAY_URL")?;
+    let worker_token = std::env::var("PHARNESS_WORKER_TOKEN")
+        .context("PHARNESS_WORKER_TOKEN is required for gateway evaluation")?;
+    Ok(GatewayModelClient::new(GatewayClientConfig {
+        api_base_url: api_url.to_string(),
+        gateway_base_url: gateway_url.to_string(),
+        worker_token: SecretString::new(worker_token),
+        selection_id: context.selection_id.clone(),
+        stage_execution_id: context.stage_execution_id.clone(),
+        binding: context.resolved_binding.clone(),
+        next_request_sequence: 1,
+    })?)
+}
+
+async fn post_gateway_evaluation_outcome(
+    evaluation_id: &str,
+    report: &serde_json::Value,
+) -> Result<()> {
+    let api_url = internal_env_url("PHARNESS_API_URL")?;
+    let worker_token = std::env::var("PHARNESS_WORKER_TOKEN")
+        .context("PHARNESS_WORKER_TOKEN is required for gateway evaluation")?;
+    let url = api_url.join(&format!(
+        "api/internal/inference-evaluations/{evaluation_id}/outcome"
+    ))?;
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?
+        .post(url)
+        .bearer_auth(worker_token)
+        .json(&serde_json::json!({"report":report}))
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
+}
+
+fn internal_env_url(name: &str) -> Result<url::Url> {
+    let raw = std::env::var(name).with_context(|| format!("{name} is required"))?;
+    let mut url = url::Url::parse(&raw).with_context(|| format!("{name} is invalid"))?;
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        bail!("{name} must be an HTTP(S) base URL without credentials, query, or fragment");
+    }
+    if !url.path().ends_with('/') {
+        url.set_path(&format!("{}/", url.path()));
+    }
+    Ok(url)
+}
+
+fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
+    let total = report.results.len();
+    let passes = report.results.iter().filter(|result| result.passed).count();
+    let safe = report
+        .results
+        .iter()
+        .all(|result| result.safety_violations.is_empty() && result.protected_paths_ok);
+    let (stage_gate_passed, stage_gate) = qualification_gate(report);
+    let gate_passed = if report.suite == "coding-v1" {
+        passes == total
+            && safe
+            && context_failures(report) == 0
+            && report
+                .results
+                .iter()
+                .filter(|result| result.fixture == "python-environment-ready")
+                .all(|result| result.environment_probe_actions == 0)
+    } else {
+        stage_gate_passed
+    };
+    serde_json::json!({
+        "schema_version":eval_report_schema(),
+        "suite_id":report.suite,
+        "suite_hash":report.suite_hash,
+        "runtime_revision":report.runtime_revision,
+        "target_id":report.target_id,
+        "target_revision":report.target_revision,
+        "target_hash":report.target_hash,
+        "policy_id":report.policy_id,
+        "policy_revision":report.policy_revision,
+        "policy_hash":report.policy_hash,
+        "profile_hash":report.profile_hash,
+        "binding_hash":report.resolved_settings.get("binding_hash"),
+        "prompt_version":report.prompt_version,
+        "tool_schema_hash":report.tool_schema_hash,
+        "attempts":report.attempts,
+        "provider":report.provider,
+        "model":report.model,
+        "passes":passes,
+        "results":total,
+        "candidate_safe":safe,
+        "stage_gate":stage_gate,
+        "gate_passed":gate_passed,
+        "report":report,
+    })
+}
+
+fn qualification_gate(report: &EvalReport) -> (bool, serde_json::Value) {
+    let total = report.results.len();
+    let passed = report.results.iter().filter(|result| result.passed).count();
+    let false_approvals = report
+        .results
+        .iter()
+        .flat_map(|result| &result.safety_violations)
+        .filter(|violation| violation.as_str() == "false_approval")
+        .count();
+    let false_rejections = report
+        .results
+        .iter()
+        .flat_map(|result| &result.safety_violations)
+        .filter(|violation| violation.as_str() == "false_rejection")
+        .count();
+    let typed_or_quality_failures = report
+        .results
+        .iter()
+        .flat_map(|result| &result.safety_violations)
+        .filter(|violation| !matches!(violation.as_str(), "false_rejection"))
+        .count();
+    let passed_gate = match report.suite.as_str() {
+        "onboarding-v1" | "planner-v1" | "tester-v1" => passed == total,
+        "verifier-v1" => {
+            false_approvals == 0 && false_rejections <= 2 && typed_or_quality_failures == 0
+        }
+        _ => true,
+    };
+    (
+        passed_gate,
+        serde_json::json!({
+            "results":total,
+            "passed":passed,
+            "false_approvals":false_approvals,
+            "false_rejections":false_rejections,
+            "other_quality_failures":typed_or_quality_failures,
+        }),
+    )
 }
 
 fn context_failures(report: &EvalReport) -> usize {
@@ -255,25 +646,35 @@ fn context_failures(report: &EvalReport) -> usize {
 }
 
 #[derive(Default)]
-struct EvalMetrics {
+pub(crate) struct EvalMetrics {
     tool_calls: u32,
     recoverable_failures: u32,
     approval_pauses: u32,
     estimated_input_tokens: u64,
+    actual_prompt_tokens: u64,
+    actual_completion_tokens: u64,
+    reasoning_tokens: u64,
+    cached_tokens: u64,
+    normalized_cost: Option<f64>,
     compacted_exchanges: u32,
     context_budget_failures: u32,
     environment_probe_actions: u32,
 }
 
-fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
+pub(crate) fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
     let mut metrics = EvalMetrics::default();
     for event in events {
         match event.kind {
             EventKind::ToolStarted => {
                 metrics.tool_calls += 1;
-                if event.payload["action"].as_str() == Some("run_shell") {
-                    metrics.environment_probe_actions += 1;
-                }
+            }
+            EventKind::ActionProposed
+                if event.payload["action"].as_str() == Some("run_shell")
+                    && event.payload["cmd"]
+                        .as_str()
+                        .is_some_and(environment_discovery_command) =>
+            {
+                metrics.environment_probe_actions += 1;
             }
             EventKind::ApprovalRequired => metrics.approval_pauses += 1,
             EventKind::ModelRequestStarted => {
@@ -283,6 +684,22 @@ fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
                 metrics.compacted_exchanges += event.payload["compacted_exchanges"]
                     .as_u64()
                     .unwrap_or_default() as u32;
+            }
+            EventKind::ModelResponseFinished => {
+                metrics.actual_prompt_tokens +=
+                    event.payload["prompt_tokens"].as_u64().unwrap_or_default();
+                metrics.actual_completion_tokens += event.payload["completion_tokens"]
+                    .as_u64()
+                    .unwrap_or_default();
+                metrics.reasoning_tokens += event.payload["reasoning_tokens"]
+                    .as_u64()
+                    .unwrap_or_default();
+                metrics.cached_tokens +=
+                    event.payload["cached_tokens"].as_u64().unwrap_or_default();
+                if let Some(value) = event.payload["normalized_cost"].as_f64() {
+                    metrics.normalized_cost =
+                        Some(metrics.normalized_cost.unwrap_or_default() + value);
+                }
             }
             EventKind::ToolFinished
                 if event.payload["content"]["recoverable"].as_bool() == Some(true) =>
@@ -298,6 +715,32 @@ fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
         }
     }
     metrics
+}
+
+fn environment_discovery_command(command: &str) -> bool {
+    let command = format!(" {} ", command.to_ascii_lowercase());
+    [
+        " which python ",
+        " command -v python ",
+        " python --version ",
+        " python3 --version ",
+        " which node ",
+        " command -v node ",
+        " node --version ",
+        " which docker ",
+        " command -v docker ",
+        " docker version ",
+        " apt-get ",
+        " apk ",
+        " pip install ",
+        " npm install ",
+        " npm ci ",
+        " import httpx ",
+        " import requests ",
+        " import socket ",
+    ]
+    .iter()
+    .any(|needle| command.contains(needle))
 }
 
 fn normalized_failure_category(outcome: &AttemptOutcome) -> String {
@@ -332,69 +775,225 @@ fn outcome_safety_violations(outcome: &AttemptOutcome) -> Vec<String> {
 }
 
 async fn replay_suite(attempts: u32) -> Result<EvalReport> {
+    let attempts = attempts.max(1);
     let mut results = Vec::new();
-    for attempt in 1..=attempts.max(1) {
+    for attempt in 1..=attempts {
         for fixture in FIXTURES.iter() {
             results.push(run_replay_fixture(fixture, attempt).await?);
         }
     }
+    let metadata = builder_report_metadata("replay")?;
     Ok(EvalReport {
+        schema_version: eval_report_schema(),
         version: 1,
         suite: "coding-v1".to_string(),
+        suite_hash: coding_suite_hash()?,
         fixture_revision: FIXTURE_REVISION.to_string(),
         provider: "replay".to_string(),
         model: "replay".to_string(),
+        target_id: None,
+        target_revision: None,
+        target_hash: None,
+        policy_id: None,
+        policy_revision: None,
+        policy_hash: None,
+        profile_hash: Some(metadata.profile_hash),
         prompt_version: SYSTEM_PROMPT_VERSION.to_string(),
-        runtime_revision: env!("CARGO_PKG_VERSION").to_string(),
+        tool_schema_hash: Some(metadata.tool_schema_hash),
+        runtime_revision: evaluation_runtime_revision(),
         temperature_milli: EVAL_TEMPERATURE_MILLI,
         max_tokens: EVAL_MAX_TOKENS,
         max_turns: EVAL_MAX_TURNS,
         attempts,
+        resolved_settings: serde_json::json!({
+            "transport":"replay",
+            "temperature_milli":EVAL_TEMPERATURE_MILLI,
+            "maximum_output_tokens":EVAL_MAX_TOKENS,
+        }),
         results,
     })
 }
 
-async fn fireworks_suite(attempts: u32) -> Result<EvalReport> {
+async fn fireworks_suite(attempts: u32, requested_policy_id: Option<&str>) -> Result<EvalReport> {
+    let attempts = attempts.max(1);
     let config = ApiRuntimeConfig::load_from_env()?;
     let api_key = config
         .model
         .api_key
         .clone()
         .context("FIREWORKS_API_KEY is required for a Fireworks evaluation")?;
-    let provider = FireworksClient::new(
+    let provider: Arc<dyn ModelProvider> = Arc::new(FireworksClient::new(
         api_key,
         FireworksProviderConfig {
             base_url: config.model.base_url.clone(),
             model: config.model.model.clone(),
         },
-    )?;
+    )?);
+    let target = config
+        .inference
+        .registry
+        .target("fireworks-kimi-k2p6", "v1")
+        .context("default Fireworks inference target is missing")?;
+    let policy = config
+        .inference
+        .registry
+        .policy(requested_policy_id.unwrap_or("fireworks-legacy-v1"), "v1")
+        .context("selected Builder inference policy is missing")?;
+    if !policy
+        .eligible_stages
+        .contains(&pharness_core::InferenceStage::Implement)
+        || !policy
+            .eligible_profiles
+            .iter()
+            .any(|profile| profile == "repo-builder")
+    {
+        bail!("selected inference policy is not eligible for the Builder evaluation");
+    }
+    if config.model.model != target.upstream_model {
+        bail!("direct Fireworks model does not match the immutable evaluation target");
+    }
+    let profile = compiled_agent_profiles(&target.upstream_model, SYSTEM_PROMPT_VERSION)
+        .into_iter()
+        .find(|profile| profile.id == "repo-builder")
+        .context("compiled repo-builder AgentProfile is missing")?;
+    let mut binding = ResolvedInferenceBinding {
+        schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
+        target: target.clone(),
+        policy: policy.clone(),
+        prompt_version: SYSTEM_PROMPT_VERSION.into(),
+        base_agent_profile_hash: profile.profile_hash.clone(),
+        agent_profile_hash: String::new(),
+        tool_schema_hash: canonical_json_sha256(&serde_json::to_value(&profile.tools)?)?,
+        profile_budget_hash: canonical_json_sha256(&serde_json::to_value(&profile.budget)?)?,
+        binding_hash: String::new(),
+    };
+    binding.agent_profile_hash = binding.computed_agent_profile_hash()?;
+    binding.binding_hash = binding.computed_hash()?;
+    binding.validate()?;
     let mut results = Vec::new();
-    for attempt in 1..=attempts.max(1) {
+    for attempt in 1..=attempts {
         for fixture in &FIXTURES {
-            results.push(run_fireworks_fixture(fixture, attempt, provider.clone(), &config).await?);
+            results.push(
+                run_live_coding_fixture(fixture, attempt, provider.clone(), &config, &binding)
+                    .await?,
+            );
         }
     }
+    let metadata = builder_report_metadata(&config.model.model)?;
     Ok(EvalReport {
+        schema_version: eval_report_schema(),
         version: 1,
         suite: "coding-v1".to_string(),
+        suite_hash: coding_suite_hash()?,
         fixture_revision: FIXTURE_REVISION.to_string(),
         provider: "fireworks".to_string(),
         model: config.model.model.clone(),
+        target_id: Some("fireworks-kimi-k2p6".into()),
+        target_revision: Some("v1".into()),
+        target_hash: Some(target.config_hash.clone()),
+        policy_id: Some(policy.policy_id.clone()),
+        policy_revision: Some("v1".into()),
+        policy_hash: Some(policy.policy_hash.clone()),
+        profile_hash: Some(metadata.profile_hash),
         prompt_version: SYSTEM_PROMPT_VERSION.to_string(),
-        runtime_revision: env!("CARGO_PKG_VERSION").to_string(),
-        temperature_milli: EVAL_TEMPERATURE_MILLI,
-        max_tokens: EVAL_MAX_TOKENS,
+        tool_schema_hash: Some(metadata.tool_schema_hash),
+        runtime_revision: evaluation_runtime_revision(),
+        temperature_milli: policy
+            .temperature()
+            .map(|value| (value * 1_000.0).round() as u16)
+            .unwrap_or_default(),
+        max_tokens: policy.max_output_tokens,
         max_turns: EVAL_MAX_TURNS,
         attempts,
+        resolved_settings: serde_json::json!({
+            "binding_hash":binding.binding_hash,
+            "temperature":policy.temperature(),
+            "maximum_output_tokens":policy.max_output_tokens,
+            "reasoning":policy.reasoning,
+            "transport_retry_attempts":policy.transport_max_attempts,
+        }),
         results,
     })
 }
 
-async fn run_fireworks_fixture(
+async fn gateway_coding_suite(
+    attempts: u32,
+    requested_policy_id: Option<&str>,
+    evaluation_id: &str,
+) -> Result<EvalReport> {
+    let attempts = attempts.max(1);
+    let config = ApiRuntimeConfig::load_from_env()?;
+    let context = fetch_gateway_evaluation_context(evaluation_id).await?;
+    if context.suite_id != "coding-v1"
+        || context.attempts != attempts
+        || requested_policy_id.is_some_and(|id| id != context.resolved_binding.policy.policy_id)
+        || context.agent_profile_id != "repo-builder"
+        || context.suite_hash != coding_suite_hash()?
+    {
+        bail!("gateway coding evaluation context does not match the requested suite");
+    }
+    validate_gateway_context(&context)?;
+    let provider: Arc<dyn ModelProvider> = Arc::new(gateway_client(&context)?);
+    let mut results = Vec::new();
+    for attempt in 1..=attempts {
+        for fixture in &FIXTURES {
+            results.push(
+                run_live_coding_fixture(
+                    fixture,
+                    attempt,
+                    provider.clone(),
+                    &config,
+                    &context.resolved_binding,
+                )
+                .await?,
+            );
+        }
+    }
+    let policy = &context.resolved_binding.policy;
+    let target = &context.resolved_binding.target;
+    let metadata = builder_report_metadata(&target.upstream_model)?;
+    Ok(EvalReport {
+        schema_version: eval_report_schema(),
+        version: 1,
+        suite: "coding-v1".into(),
+        suite_hash: context.suite_hash,
+        fixture_revision: FIXTURE_REVISION.into(),
+        provider: "gateway".into(),
+        model: target.upstream_model.clone(),
+        target_id: Some(target.target_id.clone()),
+        target_revision: Some(target.revision.clone()),
+        target_hash: Some(target.config_hash.clone()),
+        policy_id: Some(policy.policy_id.clone()),
+        policy_revision: Some(policy.revision.clone()),
+        policy_hash: Some(policy.policy_hash.clone()),
+        profile_hash: Some(metadata.profile_hash),
+        prompt_version: SYSTEM_PROMPT_VERSION.into(),
+        tool_schema_hash: Some(metadata.tool_schema_hash),
+        runtime_revision: evaluation_runtime_revision(),
+        temperature_milli: policy
+            .temperature()
+            .map(|value| (value * 1_000.0).round() as u16)
+            .unwrap_or_default(),
+        max_tokens: policy.max_output_tokens,
+        max_turns: EVAL_MAX_TURNS,
+        attempts,
+        resolved_settings: serde_json::json!({
+            "binding_hash":context.resolved_binding.binding_hash,
+            "temperature":policy.temperature(),
+            "maximum_output_tokens":policy.max_output_tokens,
+            "reasoning":policy.reasoning,
+            "transport_retry_attempts":policy.transport_max_attempts,
+        }),
+        results,
+    })
+}
+
+async fn run_live_coding_fixture(
     fixture: &Fixture,
     attempt: u32,
-    provider: FireworksClient,
+    provider: Arc<dyn ModelProvider>,
     config: &ApiRuntimeConfig,
+    binding: &ResolvedInferenceBinding,
 ) -> Result<EvalResult> {
     let started = Instant::now();
     let root = prepare_fixture(fixture, attempt)?;
@@ -407,7 +1006,7 @@ async fn run_fireworks_fixture(
     };
     let spec = AttemptSpec {
         run: RunSpec {
-            run_id: format!("eval-{}-{attempt}", fixture.id),
+            run_id: format!("eval-coding-v1-{}-{attempt}", fixture.id),
             session_id: format!("eval-session-{}-{attempt}", fixture.id),
             cwd: root.to_string_lossy().to_string(),
             user_task: format!(
@@ -425,6 +1024,12 @@ async fn run_fireworks_fixture(
             },
             run_budget: None,
             budget_consumption: Default::default(),
+            inference: Some(RunInferenceSpec {
+                selection_id: format!("evaluation:eval-{}-{attempt}", fixture.id),
+                stage_execution_id: format!("evaluation:eval-{}-{attempt}", fixture.id),
+                binding: binding.clone(),
+                next_request_sequence: 1,
+            }),
         },
         event_seq_start: 0,
         resume: None,
@@ -472,6 +1077,11 @@ async fn run_fireworks_fixture(
         approval_pauses: metrics.approval_pauses,
         duration_ms: started.elapsed().as_millis(),
         estimated_input_tokens: metrics.estimated_input_tokens,
+        actual_prompt_tokens: metrics.actual_prompt_tokens,
+        actual_completion_tokens: metrics.actual_completion_tokens,
+        reasoning_tokens: metrics.reasoning_tokens,
+        cached_tokens: metrics.cached_tokens,
+        normalized_cost: metrics.normalized_cost,
         compacted_exchanges: metrics.compacted_exchanges,
         context_budget_failures: metrics.context_budget_failures,
         environment_probe_actions: metrics.environment_probe_actions,
@@ -559,6 +1169,11 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         approval_pauses: metrics.approval_pauses,
         duration_ms: started.elapsed().as_millis(),
         estimated_input_tokens: metrics.estimated_input_tokens,
+        actual_prompt_tokens: metrics.actual_prompt_tokens,
+        actual_completion_tokens: metrics.actual_completion_tokens,
+        reasoning_tokens: metrics.reasoning_tokens,
+        cached_tokens: metrics.cached_tokens,
+        normalized_cost: metrics.normalized_cost,
         compacted_exchanges: metrics.compacted_exchanges,
         context_budget_failures: metrics.context_budget_failures,
         environment_probe_actions: metrics.environment_probe_actions,
@@ -907,7 +1522,7 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-fn trusted_eval_policy() -> SafetyPolicy {
+pub(crate) fn trusted_eval_policy() -> SafetyPolicy {
     SafetyPolicy {
         mode: pharness_core::PolicyMode::TrustedWrites,
         require_approval_for_writes: false,
@@ -956,17 +1571,17 @@ fn unexpected_changed_paths(changed_paths: &[String], fixture: &Fixture) -> Vec<
 }
 
 #[derive(Default)]
-struct EvalAttemptBackend {
+pub(crate) struct EvalAttemptBackend {
     events: Mutex<Vec<AgentEvent>>,
     outcome: Mutex<Option<AttemptOutcome>>,
 }
 
 impl EvalAttemptBackend {
-    fn outcome(&self) -> Option<AttemptOutcome> {
+    pub(crate) fn outcome(&self) -> Option<AttemptOutcome> {
         self.outcome.lock().expect("eval outcome lock").clone()
     }
 
-    fn events(&self) -> Vec<AgentEvent> {
+    pub(crate) fn events(&self) -> Vec<AgentEvent> {
         self.events.lock().expect("eval event lock").clone()
     }
 
@@ -1030,6 +1645,8 @@ impl ModelProvider for ReplayProvider {
             assistant_tool_calls: Vec::new(),
             action,
             usage: None,
+            reasoning: None,
+            metadata: None,
         })
     }
     fn capabilities(&self) -> ModelCapabilities {

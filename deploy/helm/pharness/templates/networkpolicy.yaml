@@ -94,13 +94,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: pharness-runner-coding-egress
+  name: pharness-runner-coding-egress-direct-fireworks
   namespace: {{ .Release.Namespace }}
 spec:
   podSelector:
     matchLabels:
       app: pharness-runner
       agentic.lucas.engineering/phase: coding
+      agentic.lucas.engineering/inference-mode: direct-fireworks
   policyTypes: ["Egress"]
   egress:
     - to:
@@ -126,6 +127,133 @@ spec:
               agentic.lucas.engineering/phase: coding
       ports:
         - { protocol: TCP, port: 8080 }
+{{- if .Values.inferenceGateway.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pharness-runner-coding-egress-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: pharness-runner
+      agentic.lucas.engineering/phase: coding
+      agentic.lucas.engineering/inference-mode: gateway
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pharness-api
+      ports:
+        - { protocol: TCP, port: 4777 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pharness-model-gateway
+      ports:
+        - { protocol: TCP, port: 4780 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pharness-model-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: pharness-model-gateway
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pharness-api
+        - podSelector:
+            matchLabels:
+              app: pharness-runner
+              agentic.lucas.engineering/inference-mode: gateway
+        - podSelector:
+            matchLabels:
+              app: pharness-inference-evaluator
+      ports:
+        - { protocol: TCP, port: 4780 }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pharness-egress-proxy
+              agentic.lucas.engineering/phase: coding
+      ports:
+        - { protocol: TCP, port: 8080 }
+    {{- $inferenceRegistry := .Files.Get "files/inference-registry.json" | fromJson }}
+    {{- range $target := $inferenceRegistry.targets }}
+    {{- if and $target.selectable $target.transport.allow_insecure_private_http $target.transport.private_cidr $target.transport.private_port }}
+    - to:
+        - ipBlock:
+            cidr: {{ $target.transport.private_cidr | quote }}
+      ports:
+        - { protocol: TCP, port: {{ $target.transport.private_port }} }
+    {{- end }}
+    {{- end }}
+{{- end }}
+{{- if and .Values.networkPolicy.enabled .Values.inferenceGateway.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pharness-inference-evaluator-egress
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: pharness-inference-evaluator
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pharness-api
+      ports:
+        - { protocol: TCP, port: 4777 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pharness-model-gateway
+      ports:
+        - { protocol: TCP, port: 4780 }
+{{- end }}
 {{- if .Values.worker.sourceReader.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -212,6 +340,14 @@ spec:
           podSelector:
             matchLabels:
               app: pharness-source-reader
+        {{- if .Values.inferenceGateway.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app: pharness-model-gateway
+        {{- end }}
       ports:
         - { protocol: TCP, port: 8080 }
   egress:

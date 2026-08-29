@@ -321,6 +321,9 @@ fn aggregate_to_model_turn(
         prompt_tokens: usage.prompt_tokens,
         completion_tokens: usage.completion_tokens,
         total_tokens: usage.total_tokens,
+        reasoning_tokens: 0,
+        cached_tokens: 0,
+        cost_microusd: None,
     });
     Ok(ModelTurn {
         raw_provider_id: aggregate.raw_provider_id,
@@ -328,6 +331,8 @@ fn aggregate_to_model_turn(
         assistant_tool_calls,
         action,
         usage,
+        reasoning: None,
+        metadata: None,
     })
 }
 

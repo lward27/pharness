@@ -16,9 +16,11 @@ use pharness_core::{
     RepositoryContractSource, RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits, ToolExecutor,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
+use pharness_openai_compatible::{GatewayClientConfig, GatewayModelClient};
 use pharness_runhost::{
     execute_attempt, AttemptBackend, AttemptHost, AttemptOutcome, AttemptSpec, WorkspaceSourceSpec,
 };
+use secrecy::SecretString;
 use serde::de::DeserializeOwned;
 use serde_yaml::Value as YamlValue;
 use sha2::{Digest, Sha256};
@@ -292,25 +294,6 @@ async fn main() -> anyhow::Result<()> {
 
     let env = WorkerEnv::from_env()?;
     let config = ApiRuntimeConfig::load_from_env()?;
-    let api_key = config
-        .model
-        .api_key
-        .clone()
-        .context("FIREWORKS_API_KEY is required for the worker attempt")?;
-    let provider = FireworksClient::new(
-        api_key,
-        FireworksProviderConfig {
-            base_url: config.model.base_url.clone(),
-            model: config.model.model.clone(),
-        },
-    )?;
-    let host = AttemptHost {
-        provider,
-        cluster_tools: config.cluster_tools(),
-        default_policy: config.policy.clone(),
-        context_budget: config.model.context_budget.clone(),
-    };
-
     let backend = Arc::new(HttpAttemptBackend::new(
         env.api_url.clone(),
         env.run_id.clone(),
@@ -320,6 +303,50 @@ async fn main() -> anyhow::Result<()> {
     let mut spec = fetch_attempt_spec_with_retry(&backend, env.approval_id.as_deref())
         .await
         .context("failed to fetch attempt context from api")?;
+    let provider: Arc<dyn pharness_core::ModelProvider> = match &spec.run.inference {
+        Some(inference) => {
+            if !config.inference.enabled {
+                anyhow::bail!("Run is gateway-bound but this worker has gateway mode disabled");
+            }
+            Arc::new(GatewayModelClient::new(GatewayClientConfig {
+                api_base_url: env.api_url.clone(),
+                gateway_base_url: config.inference.gateway_url.clone(),
+                worker_token: SecretString::new(env.worker_token.clone()),
+                selection_id: inference.selection_id.clone(),
+                stage_execution_id: inference.stage_execution_id.clone(),
+                binding: inference.binding.clone(),
+                next_request_sequence: inference.next_request_sequence,
+            })?)
+        }
+        None => {
+            if !config.inference.direct_fireworks_enabled {
+                anyhow::bail!("Run has no gateway binding and direct Fireworks mode is disabled");
+            }
+            let api_key = config
+                .model
+                .api_key
+                .clone()
+                .context("FIREWORKS_API_KEY is required for a direct worker attempt")?;
+            Arc::new(FireworksClient::new(
+                api_key,
+                FireworksProviderConfig {
+                    base_url: config.model.base_url.clone(),
+                    model: config.model.model.clone(),
+                },
+            )?)
+        }
+    };
+    let mut context_budget = config.model.context_budget.clone();
+    if let Some(inference) = &spec.run.inference {
+        context_budget.max_input_tokens = inference.binding.policy.max_input_tokens;
+        context_budget.reserved_output_tokens = inference.binding.policy.max_output_tokens;
+    }
+    let host = AttemptHost {
+        provider,
+        cluster_tools: config.cluster_tools(),
+        default_policy: config.policy.clone(),
+        context_budget,
+    };
 
     let provisioned = match prepare_workspace(&spec).await {
         Ok(provisioned) => provisioned,

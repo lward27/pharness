@@ -70,6 +70,30 @@ api:
       cpu: 1000m
       memory: 1Gi
 
+inferenceGateway:
+  enabled: false
+  directFireworksEnabled: true
+  image:
+    repository: registry.lucas.engineering/pharness-model-gateway
+    # Disabled until the post-merge release commit pins the gateway built from
+    # the same source revision as API, UI, and both runners.
+    digest: sha256:28cfcfeed04e61c1940fc701a3ac8998da80989dff4fedd666f8b2ca58743f07
+    pullPolicy: IfNotPresent
+    revision: 1c4b43478423bd835119c08501afab4de24967f8
+  replicas: 1
+  grantSecretName: pharness-model-grant
+  grantSecretKey: key
+  fireworksCredential:
+    secretName: pharness-fireworks
+    secretKey: api-key
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
 retention:
   scheduledEnabled: true
   intervalSeconds: 86400

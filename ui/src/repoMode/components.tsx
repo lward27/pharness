@@ -52,7 +52,7 @@ export type ServerAction = {
   state_hash: string;
 };
 
-export function ActionDialog({ action, owner, endpoint, operatorName, onClose, onApplied }: { action: ServerAction; owner: { kind: string; id: string; product?: string; repository?: string; revision?: string }; endpoint: string; operatorName?: string; onClose: () => void; onApplied: () => void }) {
+export function ActionDialog({ action, owner, endpoint, operatorName, onClose, onApplied, requestFields, details }: { action: ServerAction; owner: { kind: string; id: string; product?: string; repository?: string; revision?: string }; endpoint: string; operatorName?: string; onClose: () => void; onApplied: () => void; requestFields?:Record<string,unknown>; details?:ReactNode }) {
   const [actor, setActor] = useState(operatorName || "operator");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -89,7 +89,7 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
   const submit = async () => {
     setSubmitting(true); setError("");
     try {
-      await sendJson(endpoint, "POST", { actor: actor.trim(), reason: reason.trim(), state_hash: action.state_hash });
+      await sendJson(endpoint, "POST", { actor: actor.trim(), reason: reason.trim(), state_hash: action.state_hash, ...requestFields });
       onApplied(); onClose();
     } catch (caught) {
       const value = caught as Error & { status?: number };
@@ -117,6 +117,7 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
         <div><dt>Expected result</dt><dd>{action.expected_result || "A new durable controller state is recorded."}</dd></div>
       </dl>
       {action.blockers?.length ? <div className="repo-blockers"><strong>Blocked</strong>{action.blockers.map((blocker, index) => <p key={index}>{typeof blocker === "string" ? blocker : blocker.summary || blocker.code}</p>)}</div> : null}
+      {details}
       <label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label>
       <label>Reason<textarea rows={3} value={reason} onChange={event => setReason(event.target.value)} placeholder="Why this action is appropriate now" /></label>
       {error ? <div className="repo-error" role="alert">{error}</div> : null}

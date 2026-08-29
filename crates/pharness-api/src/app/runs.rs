@@ -366,9 +366,10 @@ pub(super) async fn internal_attempt_context(
     };
 
     let cwd = std::path::PathBuf::from(&run.cwd);
-    let spec = attempt_spec_for_run(&state.store, &run, &cwd, approval.as_ref())
+    let mut spec = attempt_spec_for_run(&state.store, &run, &cwd, approval.as_ref())
         .await
         .map_err(|error| ApiError::internal(error.to_string()))?;
+    spec.run.inference = super::inference::ensure_run_inference_selection(&state, &run).await?;
     if let Some(source) = &spec.run.workspace_source {
         state
             .workspace
@@ -599,6 +600,11 @@ pub(super) async fn create_run_for_actor(
     let max_turns = request.max_turns.unwrap_or(40);
     let run_scope = request.scope.unwrap_or_default();
     let run_scope_json = run_scope.to_optional_json();
+    if request.inference_policy.is_some() && !state.inference.enabled {
+        return Err(ApiError::conflict(
+            "standalone inference policy overrides require the model gateway",
+        ));
+    }
     let mut policy = run_policy(&state.policy, request.policy_mode);
     policy.permission_grants = active_permission_grants(&state.store).await?;
 
@@ -622,6 +628,7 @@ pub(super) async fn create_run_for_actor(
             initial_status: "queued".to_string(),
             execution_target_json: json!({
                 "kind": state.worker.execution_target_kind(),
+                "inference":super::inference::execution_marker(&state, request.inference_policy.as_ref()),
                 "policy": &policy,
                 "run_scope": &run_scope_json,
             }),
@@ -882,6 +889,9 @@ pub(super) async fn get_run_operator_summary(
     let mut actual_prompt_tokens = 0_u64;
     let mut actual_completion_tokens = 0_u64;
     let mut actual_total_tokens = 0_u64;
+    let mut actual_reasoning_tokens = 0_u64;
+    let mut cached_tokens = 0_u64;
+    let mut normalized_cost = None;
     let mut compactions = 0_u64;
     let mut truncated_tool_results = 0_u64;
     let mut tools_started = 0;
@@ -934,6 +944,19 @@ pub(super) async fn get_run_operator_summary(
                     .get("total_tokens")
                     .and_then(Value::as_u64)
                     .unwrap_or(0);
+                actual_reasoning_tokens += event
+                    .payload
+                    .get("reasoning_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                cached_tokens += event
+                    .payload
+                    .get("cached_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                if let Some(value) = event.payload.get("normalized_cost").and_then(Value::as_f64) {
+                    normalized_cost = Some(normalized_cost.unwrap_or(0.0) + value);
+                }
             }
             EventKind::ActionProposed => {
                 awaiting_test_result = None;
@@ -1053,6 +1076,13 @@ pub(super) async fn get_run_operator_summary(
         actual_prompt_tokens,
         actual_completion_tokens,
         actual_total_tokens,
+        actual_reasoning_tokens,
+        cached_tokens,
+        normalized_cost,
+        inference_binding: run
+            .execution_target_json
+            .pointer("/inference/resolved")
+            .cloned(),
         compactions,
         truncated_tool_results,
         tools_started,

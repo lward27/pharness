@@ -33,24 +33,26 @@ export function RepositoriesScreen({ operatorName }: { operatorName?: string }) 
 }
 
 function RepositoryRegistration({ products, operatorName, onCancel }: { products:any[]; operatorName?:string; onCancel:()=>void }) {
-  const [form, setForm] = useState({ product_id:products[0]?.id || "", repository_url:"", source_commit:"", actor:operatorName || "operator", reason:"Register Repository for Repo Mode" });
+  const proposerPolicies = useResource<any>("/api/inference-policies?stage=onboarding");
+  const [form, setForm] = useState<any>({ product_id:products[0]?.id || "", repository_url:"", source_commit:"", proposer_inference_policy:undefined, actor:operatorName || "operator", reason:"Register Repository for Repo Mode" });
   const [preflight, setPreflight] = useState<any>(null);
   const [error, setError] = useState("");
   const submit = async () => {
     setError("");
     try {
       if (!preflight) {
-        setPreflight(await sendJson(`/api/products/${encodeURIComponent(form.product_id)}/repositories/preflight`, "POST", { repository_url:form.repository_url, source_commit:form.source_commit }));
+        setPreflight(await sendJson(`/api/products/${encodeURIComponent(form.product_id)}/repositories/preflight`, "POST", { repository_url:form.repository_url, source_commit:form.source_commit, proposer_inference_policy:form.proposer_inference_policy }));
       } else {
-        const repository = await sendJson(`/api/products/${encodeURIComponent(form.product_id)}/repositories`, "POST", { repository_url:form.repository_url, source_commit:form.source_commit, preflight_hash:preflight.preflight_hash, actor:form.actor, reason:form.reason });
+        const repository = await sendJson(`/api/products/${encodeURIComponent(form.product_id)}/repositories`, "POST", { repository_url:form.repository_url, source_commit:form.source_commit, preflight_hash:preflight.preflight_hash, proposer_inference_policy:form.proposer_inference_policy, actor:form.actor, reason:form.reason });
         navigate(`repository-onboardings/${repository.onboarding_id}`);
       }
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); setPreflight(null); }
   };
   return <section className="repo-registration repo-panel"><header><div><span className="repo-eyebrow">Immutable registration</span><h2>{preflight ? "Review registration" : "Register Repository"}</h2></div></header>
     <div className="repo-form-grid"><label>Product<select value={form.product_id} disabled={Boolean(preflight)} onChange={event => setForm(value => ({...value,product_id:event.target.value}))}>{products.map(product => <option value={product.id} key={product.id}>{product.display_name}</option>)}</select></label><label>GitHub HTTPS URL<input value={form.repository_url} disabled={Boolean(preflight)} onChange={event => setForm(value => ({...value,repository_url:event.target.value}))} placeholder="https://github.com/owner/repository" /></label><label className="repo-span-2">Full commit SHA<input className="repo-mono" value={form.source_commit} disabled={Boolean(preflight)} onChange={event => setForm(value => ({...value,source_commit:event.target.value}))} /></label></div>
+    {!preflight ? <details className="repo-raw-record"><summary>Advanced onboarding inference override</summary><label>Proposer policy<select value={policyRefValue(form.proposer_inference_policy)} onChange={event => setForm((value:any) => ({...value,proposer_inference_policy:parsePolicyRef(event.target.value)}))}><option value="">Qualified stage default</option>{qualifiedPolicies(proposerPolicies.data).map((policy:any) => <option key={`${policy.policy_id}@${policy.revision}`} value={`${policy.policy_id}@${policy.revision}`}>{policy.display_name}{policy.is_default ? " · default" : ""}</option>)}</select></label>{proposerPolicies.error ? <div className="repo-error" role="alert">{proposerPolicies.error}</div> : null}</details> : null}
     {preflight ? <div className="repo-preflight"><h3>Server preflight</h3><dl><div><dt>Canonical Repository</dt><dd>{preflight.canonical_url}</dd></div><div><dt>Default branch</dt><dd>{preflight.default_branch}</dd></div><div><dt>Immutable revision</dt><dd className="repo-mono">{preflight.source_commit}</dd></div><div><dt>Provider commit</dt><dd><Status value={preflight.commit_verified ? "verified" : "blocked"} /></dd></div></dl>{preflight.predicted_mutations?.map((item:string) => <p key={item}><CheckCircle size={16} />{item.replaceAll("_"," ")}</p>)}{preflight.blockers?.map((item:string) => <p className="repo-error" key={item}>{item}</p>)}</div> : null}
-    {preflight ? <div className="repo-form-grid"><label>Operator<input value={form.actor} onChange={event => setForm(value => ({...value,actor:event.target.value}))} /></label><label>Reason<input value={form.reason} onChange={event => setForm(value => ({...value,reason:event.target.value}))} /></label></div> : null}
+    {preflight ? <><div className="repo-preflight"><h3>Resolved proposer inference</h3><p>{preflight.proposer_inference?.display_name || "Direct Fireworks rollback path"}</p><small className="repo-mono">{preflight.proposer_inference?.binding_hash}</small></div><div className="repo-form-grid"><label>Operator<input value={form.actor} onChange={event => setForm((value:any) => ({...value,actor:event.target.value}))} /></label><label>Reason<input value={form.reason} onChange={event => setForm((value:any) => ({...value,reason:event.target.value}))} /></label></div></> : null}
     {error ? <div className="repo-error" role="alert">{error}</div> : null}<footer><button className="repo-primary" type="button" disabled={!form.product_id || !form.repository_url || form.source_commit.length !== 40 || Boolean(preflight?.blockers?.length)} onClick={submit}>{preflight ? "Confirm registration" : "Run preflight"}</button><button type="button" onClick={preflight ? () => setPreflight(null) : onCancel}>{preflight ? "Edit" : "Cancel"}</button></footer>
   </section>;
 }
@@ -149,7 +151,9 @@ export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:
 }
 
 function FreshOnboardingForm({ onboarding, operatorName, onCancel }: { onboarding:any; operatorName?:string; onCancel:()=>void }) {
+  const proposerPolicies = useResource<any>("/api/inference-policies?stage=onboarding");
   const [sourceCommit,setSourceCommit] = useState("");
+  const [proposerInferencePolicy,setProposerInferencePolicy] = useState<any>(undefined);
   const [actor,setActor] = useState(operatorName || "operator");
   const [reason,setReason] = useState("Refresh onboarding at reviewed prerequisite merge");
   const [pending,setPending] = useState(false);
@@ -159,13 +163,14 @@ function FreshOnboardingForm({ onboarding, operatorName, onCancel }: { onboardin
     event.preventDefault();
     setPending(true); setError("");
     try {
-      const fresh = await sendJson(`/api/repositories/${encodeURIComponent(onboarding.repository_id)}/onboardings`, "POST", {product_id:onboarding.product_id,source_commit:sourceCommit,actor,reason});
+      const fresh = await sendJson(`/api/repositories/${encodeURIComponent(onboarding.repository_id)}/onboardings`, "POST", {product_id:onboarding.product_id,source_commit:sourceCommit,proposer_inference_policy:proposerInferencePolicy,actor,reason});
       navigate(`repository-onboardings/${fresh.id}`);
     } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setPending(false); }
   };
   return <form className="repo-inline-form" onSubmit={submit}>
     <label>New full commit SHA<input className="repo-mono" value={sourceCommit} onChange={event => setSourceCommit(event.target.value.trim().toLowerCase())} placeholder="40-character prerequisite merge SHA" /></label>
+    <details className="repo-raw-record repo-span-2"><summary>Advanced onboarding inference override</summary><label>Proposer policy<select value={policyRefValue(proposerInferencePolicy)} onChange={event => setProposerInferencePolicy(parsePolicyRef(event.target.value))}><option value="">Qualified stage default</option>{qualifiedPolicies(proposerPolicies.data).map((policy:any) => <option key={`${policy.policy_id}@${policy.revision}`} value={`${policy.policy_id}@${policy.revision}`}>{policy.display_name}{policy.is_default ? " · default" : ""}</option>)}</select></label>{proposerPolicies.error ? <div className="repo-error" role="alert">{proposerPolicies.error}</div> : null}</details>
     <label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label>
     <label>Reason<input value={reason} onChange={event => setReason(event.target.value)} /></label>
     {error ? <div className="repo-error" role="alert">{error}</div> : null}
@@ -173,6 +178,10 @@ function FreshOnboardingForm({ onboarding, operatorName, onCancel }: { onboardin
     <button type="button" onClick={onCancel}>Cancel</button>
   </form>;
 }
+
+function qualifiedPolicies(data:any) { return (data?.policies || []).filter((policy:any) => policy.selectable && policy.qualified); }
+function policyRefValue(value:any) { return value?.policy_id && value?.revision ? `${value.policy_id}@${value.revision}` : ""; }
+function parsePolicyRef(value:string) { if(!value) return undefined; const separator = value.lastIndexOf("@"); return {policy_id:value.slice(0,separator),revision:value.slice(separator+1)}; }
 
 function Proposal({ proposal }: { proposal:any }) { return <div className="repo-proposal"><div className="repo-proposal-facts"><h3>Controller-bound facts</h3><FactGrid facts={[{label:"Discovery record",value:proposal.discovery_id,mono:true},{label:"Discovery hash",value:proposal.discovery_hash,mono:true}]} /></div><div><h3>Executable contract changes</h3><ContractSummary version={{contract:proposal.candidate_contract,content_hash:"Proposal · not active until merged"}} /></div><div><h3>Product topology suggestions</h3><p className="repo-muted">These suggestions never change Services or Repository bindings when the executable contract is approved. Review them separately in the owning Product topology editor.</p><RecordList values={[...(proposal.service_proposals || []),...(proposal.binding_proposals || [])]} empty="No Service or binding changes proposed." /></div><div><h3>Model guidance and forecast</h3><p className="repo-guidance">{proposal.instructions || "No bounded instructions proposed."}</p><RecordList values={Object.entries(proposal.readiness_forecast || {}).map(([key,value]) => ({key,value}))} empty="No readiness forecast claims." /></div><section className="repo-claim-zone"><h3>Agent assumptions</h3><RecordList values={proposal.assumptions} empty="No assumptions reported." tone="warning" /><h3>Conflicts and unsupported claims</h3><RecordList values={proposal.conflicts} empty="No conflicts reported." tone="warning" /></section><RecordList values={proposal.blockers} empty="No controller blockers." tone="error" /><RawRecord label="Raw proposal revision" value={proposal} /></div>; }
 
@@ -207,7 +216,8 @@ function OnboardingProposalEditor({ proposal,onboarding,operatorName,onSaved }:a
       const parsedMappings = JSON.parse(mappings);
       const parsedReview = JSON.parse(review);
       await sendJson(`/api/repository-onboardings/${encodeURIComponent(onboarding.id)}/proposal`,"PUT",{proposal:{...proposal,instructions,candidate_contract:JSON.parse(contract),service_proposals:parsedMappings.service_proposals || [],binding_proposals:parsedMappings.binding_proposals || [],assumptions:parsedReview.assumptions || [],conflicts:parsedReview.conflicts || [],blockers:parsedReview.blockers || [],readiness_forecast:parsedReview.readiness_forecast || {}},actor,reason,state_hash:onboarding.state_hash});
-      setEditing(false); onSaved();
+      await onSaved();
+      setEditing(false);
     } catch(caught) {
       const value = caught as Error & {status?:number};
       if(value.status === 409) { setError(value.message); onSaved(); return; }

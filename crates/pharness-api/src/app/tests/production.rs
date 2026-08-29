@@ -2201,6 +2201,7 @@ async fn rollback_writer_and_observer_stay_bound_to_the_captured_digest_and_manu
             actor: Some("lucas".to_string()),
             reason: "approve exact rollback writer".to_string(),
             state_hash: format!("{:x}", Sha256::digest(prepared.to_string().as_bytes())),
+            inference_policies: None,
         }),
     )
     .await
@@ -2231,6 +2232,7 @@ async fn rollback_writer_and_observer_stay_bound_to_the_captured_digest_and_manu
                 "{:x}",
                 Sha256::digest(writer_approved.to_string().as_bytes())
             ),
+            inference_policies: None,
         }),
     )
     .await

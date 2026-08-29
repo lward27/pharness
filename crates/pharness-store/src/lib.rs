@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod data_lifecycle;
+mod inference;
 mod models;
 mod onboarding;
 mod product;
@@ -69,4 +70,11 @@ pub use data_lifecycle::{
     DatabaseGeneration, DeleteArchiveRecord, EvidenceValidationReference, StoredArchiveRecord,
     StoredRetentionHold, StoredRetentionPreview, StoredRetentionReceipt, StoredRunSummaryRecord,
     RETENTION_POLICY_VERSION,
+};
+pub use inference::{
+    CreateInferenceEvaluation, CreateInferenceEvaluationGrantIssuance,
+    CreateInferencePolicyQualification, CreateInferenceTargetVerification,
+    CreateModelGrantIssuance, CreateStageInferenceSelection, StoredInferenceEvaluation,
+    StoredInferencePolicyQualification, StoredInferenceTargetVerification,
+    StoredStageInferenceSelection,
 };

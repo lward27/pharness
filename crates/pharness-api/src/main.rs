@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             "operator token auth enabled"
         );
     }
-    let app = app::router(
+    let app = app::router_with_inference(
         store,
         dispatcher,
         cluster_tools,
@@ -143,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
             config.storage.workspace_allowed_repos.clone(),
             config.storage.workspace_allowed_remote_repos.clone(),
         ),
+        config.inference.clone(),
     );
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
@@ -156,6 +157,27 @@ async fn main() -> anyhow::Result<()> {
 /// attempts see the same provider, cluster-tool, and policy settings.
 fn worker_job_env(config: &ApiRuntimeConfig) -> Vec<(String, String)> {
     let mut env = vec![
+        (
+            "PHARNESS_INFERENCE_GATEWAY_ENABLED".to_string(),
+            config.inference.enabled.to_string(),
+        ),
+        (
+            "PHARNESS_INFERENCE_GATEWAY_URL".to_string(),
+            config.inference.gateway_url.clone(),
+        ),
+        (
+            "PHARNESS_DIRECT_FIREWORKS_ENABLED".to_string(),
+            config.inference.direct_fireworks_enabled.to_string(),
+        ),
+        (
+            "PHARNESS_MODEL_GRANT_SIGNER_ENABLED".to_string(),
+            "false".to_string(),
+        ),
+        (
+            "PHARNESS_INFERENCE_REGISTRY_JSON".to_string(),
+            serde_json::to_string(&config.inference.registry)
+                .expect("validated inference registry must serialize"),
+        ),
         (
             "PHARNESS_FIREWORKS_MODEL".to_string(),
             config.model.model.clone(),

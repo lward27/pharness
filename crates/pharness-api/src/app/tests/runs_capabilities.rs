@@ -43,6 +43,7 @@ async fn creates_gets_lists_events_and_cancels_run() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -110,6 +111,7 @@ async fn authenticated_run_creation_persists_and_filters_creator() {
             max_turns: Some(4),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -159,6 +161,7 @@ async fn operator_run_groups_cover_all_matching_pages() {
                 max_turns: Some(1),
                 policy_mode: None,
                 scope: None,
+                inference_policy: None,
             }),
         )
         .await
@@ -210,6 +213,7 @@ async fn create_run_persists_requested_policy_mode() {
             max_turns: Some(12),
             policy_mode: Some(PolicyMode::TrustedWrites),
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -249,6 +253,7 @@ async fn create_run_normalizes_empty_run_scope() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -289,6 +294,7 @@ async fn create_run_persists_run_scope_metadata() {
             max_turns: Some(12),
             policy_mode: None,
             scope: Some(scope.clone()),
+            inference_policy: None,
         }),
     )
     .await
@@ -406,6 +412,7 @@ async fn create_run_snapshots_active_permission_grants() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1165,6 +1172,7 @@ async fn lists_pending_approvals() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1308,6 +1316,7 @@ async fn gets_and_denies_approval_by_id() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1409,6 +1418,7 @@ async fn approval_by_id_refuses_non_current_pending_approval() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1469,6 +1479,7 @@ async fn creates_sdlc_root_chain_and_audits_each_record() {
             max_turns: Some(1),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1737,6 +1748,7 @@ async fn returns_run_diff() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1775,6 +1787,7 @@ async fn returns_run_artifacts_and_single_artifact() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1819,6 +1832,7 @@ async fn returns_run_observations_and_single_observation() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await
@@ -1900,6 +1914,7 @@ async fn returns_filtered_incidents_and_single_incident() {
             max_turns: Some(12),
             policy_mode: None,
             scope: None,
+            inference_policy: None,
         }),
     )
     .await

@@ -5,6 +5,8 @@ members = [
     "crates/pharness-config",
     "crates/pharness-core",
     "crates/pharness-fireworks",
+    "crates/pharness-model-gateway",
+    "crates/pharness-openai-compatible",
     "crates/pharness-runhost",
     "crates/pharness-store",
     "crates/pharness-worker",
@@ -22,6 +24,7 @@ version = "0.1.0"
 [workspace.dependencies]
 anyhow = "1"
 async-trait = "0.1"
+base64 = "0.22"
 axum = "0.7"
 camino = { version = "1.1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive", "env"] }

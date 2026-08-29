@@ -181,6 +181,12 @@ function ReliabilityPanel({ operatorSummary, run }: { operatorSummary: any; run:
   </div></section>;
 }
 
+function InferencePanel({ run, operatorSummary }: { run:any; operatorSummary:any }) {
+  const binding = run?.inference_binding ?? operatorSummary?.inference_binding;
+  if(!binding) return <section className="attempt-environment-panel"><div className="attempt-panel-heading"><div><span className="eyebrow">Inference provenance</span><h3>Legacy direct provider binding</h3></div><StatusPill>Historical</StatusPill></div><p>This Run predates immutable stage inference selections; PHarness does not invent target or policy provenance.</p></section>;
+  return <section className="attempt-environment-panel"><div className="attempt-panel-heading"><div><span className="eyebrow">Inference provenance</span><h3>{binding.policy_id}@{binding.policy_revision}</h3></div><StatusPill tone="healthy">Pinned</StatusPill></div><div className="environment-fact-grid"><ReviewItem label="Provider / model" value={`${binding.backend_kind} · ${binding.model}`} /><ReviewItem label="Target revision" value={`${binding.target_id}@${binding.target_revision}`} /><ReviewItem label="Reasoning" value={`${binding.reasoning?.effort || "provider default"} · ${binding.reasoning?.context_mode || "provider default"}`} /><ReviewItem label="Temperature / output" value={`${binding.temperature ?? "omitted"} · ${binding.maximum_output_tokens?.toLocaleString() || "unavailable"} tokens`} /><ReviewItem label="Binding hash" value={binding.binding_hash} /><ReviewItem label="Qualification policy" value={binding.policy_hash} /></div></section>;
+}
+
 function RunArtifacts({ artifacts }: { artifacts: any[] }) {
   if (!artifacts.length) return null;
   return <details className="attempt-artifacts" open><summary>Additional durable artifacts <strong>{artifacts.length}</strong></summary><div className="artifact-grid">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><span>{artifact.kind}</span><strong>{artifact.label}</strong><small>{artifact.mime_type ?? artifact.path ?? compactId(artifact.id)}</small><p>{artifactSummary(artifact)}</p></div>)}</div></details>;
@@ -302,6 +308,7 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
     {run?.status === "budget_extension_required" ? <section className="attempt-boundary-banner is-budget"><Warning size={22} /><div><span className="eyebrow">Budget boundary</span><h3>Workspace retained for in-place extension</h3><p>The run transcript and workspace remain intact. Review the current WorkItem action to authorize only the server-derived extension.</p></div></section> : null}
     {pendingApprovals.length ? <section className="attempt-boundary-banner attempt-inline-approval"><Warning size={22} /><div><span className="eyebrow">Inline tool approval</span><h3>Model action is paused for review</h3><p>Pending approval {pendingApprovals.join(", ")}. The exact action remains durable and execution resumes only after this decision.</p><label>Decision reason<textarea rows={2} value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} /></label><div className="inline-approval-actions"><button className="primary-action" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("approve")}>Approve and resume</button><button className="deny" type="button" disabled={!approvalReason.trim()} onClick={() => decideApproval("deny")}>Deny</button></div></div></section> : null}
 
+    <InferencePanel run={run} operatorSummary={operatorSummary} />
     <BudgetPanel run={run} operatorSummary={operatorSummary} />
     {!compacted ? <EnvironmentPanel preparation={preparation} active={run?.status === "preparing" || preparation?.status === "failed"} /> : null}
 

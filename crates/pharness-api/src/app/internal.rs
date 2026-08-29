@@ -12,6 +12,7 @@ use super::gitops::delivery::{
     internal_gitops_delivery_outcome as internal_standard_gitops_delivery_outcome,
     InternalGitOpsDeliveryQuery,
 };
+use super::inference;
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
 use super::products::{
     internal_onboarding_contract_validation_context,
@@ -144,6 +145,7 @@ pub(in crate::app) async fn internal_gitops_delivery_observation_outcome(
 
 pub(super) fn router(state: AppState) -> Router<AppState> {
     runs::internal_router()
+        .merge(inference::internal_router())
         .route(
             "/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome",
             post(internal_pipeline_intent_execution_outcome),

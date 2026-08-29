@@ -1268,6 +1268,7 @@ async fn zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence() {
         "operator".into(),
         "recover startup that failed before preparation".into(),
         action.state_hash.clone(),
+        None,
     )
     .await
     .unwrap();
