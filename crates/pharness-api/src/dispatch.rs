@@ -2921,6 +2921,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                                 {"name":"PHARNESS_INFERENCE_GATEWAY_URL","value":request.gateway_url},
                                 {"name":"PHARNESS_INFERENCE_GATEWAY_ENABLED","value":"true"},
                                 {"name":"PHARNESS_MODEL_GRANT_SIGNER_ENABLED","value":"false"},
+                                {"name":"PHARNESS_EVAL_ARTIFACT_DIR","value":"/work/artifacts"},
                                 {"name":"PHARNESS_INFERENCE_REGISTRY_JSON","valueFrom":{"configMapKeyRef":{"name":"pharness-inference-registry","key":"registry.json"}}},
                                 {"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}},
                                 {"name":"HOME","value":"/work"},
@@ -4169,6 +4170,9 @@ mod tests {
             .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
         assert!(env.iter().any(|entry| {
             entry["name"] == "PHARNESS_MODEL_GRANT_SIGNER_ENABLED" && entry["value"] == "false"
+        }));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "PHARNESS_EVAL_ARTIFACT_DIR" && entry["value"] == "/work/artifacts"
         }));
         for forbidden in [
             "FIREWORKS_API_KEY",

@@ -262,11 +262,7 @@ fn builder_report_metadata(model: &str) -> Result<BuilderReportMetadata> {
         .into_iter()
         .find(|profile| profile.id == "repo-builder")
         .context("compiled repo-builder AgentProfile is missing")?;
-    let tool_schema_hash = canonical_json_sha256(&serde_json::json!({
-        "profile_id":profile.id,
-        "profile_version":profile.version,
-        "tools":profile.tools,
-    }))?;
+    let tool_schema_hash = canonical_json_sha256(&serde_json::to_value(&profile.tools)?)?;
     Ok(BuilderReportMetadata {
         profile_hash: profile.profile_hash,
         tool_schema_hash,
@@ -520,7 +516,7 @@ async fn post_gateway_evaluation_outcome(
     let url = api_url.join(&format!(
         "api/internal/inference-evaluations/{evaluation_id}/outcome"
     ))?;
-    reqwest::Client::builder()
+    let response = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none())
         .build()?
@@ -528,8 +524,13 @@ async fn post_gateway_evaluation_outcome(
         .bearer_auth(worker_token)
         .json(&serde_json::json!({"report":report}))
         .send()
-        .await?
-        .error_for_status()?;
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        let bounded = body.chars().take(1000).collect::<String>();
+        bail!("inference evaluation outcome was rejected with {status}: {bounded}");
+    }
     Ok(())
 }
 
@@ -894,7 +895,7 @@ async fn fireworks_suite(attempts: u32, requested_policy_id: Option<&str>) -> Re
         policy_id: Some(policy.policy_id.clone()),
         policy_revision: Some("v1".into()),
         policy_hash: Some(policy.policy_hash.clone()),
-        profile_hash: Some(metadata.profile_hash),
+        profile_hash: Some(binding.agent_profile_hash.clone()),
         prompt_version: SYSTEM_PROMPT_VERSION.to_string(),
         tool_schema_hash: Some(metadata.tool_schema_hash),
         runtime_revision: evaluation_runtime_revision(),
@@ -966,7 +967,7 @@ async fn gateway_coding_suite(
         policy_id: Some(policy.policy_id.clone()),
         policy_revision: Some(policy.revision.clone()),
         policy_hash: Some(policy.policy_hash.clone()),
-        profile_hash: Some(metadata.profile_hash),
+        profile_hash: Some(context.resolved_binding.agent_profile_hash.clone()),
         prompt_version: SYSTEM_PROMPT_VERSION.into(),
         tool_schema_hash: Some(metadata.tool_schema_hash),
         runtime_revision: evaluation_runtime_revision(),
@@ -1660,7 +1661,9 @@ impl ModelProvider for ReplayProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::{replay_suite, unexpected_changed_paths, FIXTURES};
+    use super::{builder_report_metadata, replay_suite, unexpected_changed_paths, FIXTURES};
+    use pharness_core::{canonical_json_sha256, compiled_agent_profiles};
+    use pharness_runhost::SYSTEM_PROMPT_VERSION;
 
     #[test]
     fn coding_v1_replay_trajectories_pass_independent_acceptance_checks() {
@@ -1684,6 +1687,21 @@ mod tests {
                 &FIXTURES[0],
             ),
             vec!["unexpected_path:README.md"]
+        );
+    }
+
+    #[test]
+    fn builder_report_tool_hash_matches_the_resolved_profile_contract() {
+        let model = "accounts/fireworks/models/kimi-k2p6";
+        let profile = compiled_agent_profiles(model, SYSTEM_PROMPT_VERSION)
+            .into_iter()
+            .find(|profile| profile.id == "repo-builder")
+            .unwrap();
+        let expected =
+            canonical_json_sha256(&serde_json::to_value(&profile.tools).unwrap()).unwrap();
+        assert_eq!(
+            builder_report_metadata(model).unwrap().tool_schema_hash,
+            expected
         );
     }
 }
