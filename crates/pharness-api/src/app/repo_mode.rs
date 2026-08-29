@@ -632,6 +632,38 @@ fn derive_repo_actions(
             }),
         )?]);
     }
+    if let Some((run, execution)) =
+        recoverable_repo_followup_stage_startup(metadata, current_run, executions, chain)
+    {
+        let summary = if execution.stage_key == pharness_core::RepoStageKey::Test.as_str() {
+            "Retry the zero-turn Tester startup on the preserved workspace from the sealed Implement outcome. This does not consume another WorkItem attempt."
+        } else {
+            "Retry the zero-turn Verifier startup on the preserved workspace from the sealed Test outcome. This does not consume another WorkItem attempt."
+        };
+        return Ok(vec![repo_action(
+            RepoActionSpec {
+                id: "retry_stage_startup",
+                lifecycle_stage: &execution.stage_key,
+                resource: &execution.id,
+                status: "ready",
+                effect_class: "model_execution",
+                approval_required: true,
+                summary,
+            },
+            &state_hash,
+            json!({
+                "run_id":run.id,
+                "run_status":run.status,
+                "run_error":run.error,
+                "budget_consumption":run.budget_consumption,
+                "stage_execution_id":execution.id,
+                "failed_stage":execution.stage_key,
+                "attempt_count":attempt_count,
+                "max_attempts":max_attempts,
+                "attempt_budget_consumed":false,
+            }),
+        )?]);
+    }
     let plan_execution = executions
         .iter()
         .rev()
@@ -974,6 +1006,58 @@ fn recoverable_repo_stage_startup<'a>(
             .pointer("/repo_mode/stage")
             .and_then(Value::as_str)
             != Some(pharness_core::RepoStageKey::Implement.as_str())
+    {
+        return None;
+    }
+    Some((run, execution))
+}
+
+fn recoverable_repo_followup_stage_startup<'a>(
+    metadata: &StoredRepoWorkItemMetadata,
+    current_run: Option<&'a StoredRun>,
+    executions: &'a [pharness_store::StoredStageExecution],
+    chain: Option<&pharness_store::StoredStageChainAuthorization>,
+) -> Option<(&'a StoredRun, &'a pharness_store::StoredStageExecution)> {
+    let run = current_run?;
+    let worker_boundary_error = run.error.as_deref().or_else(|| {
+        run.result_json
+            .as_ref()
+            .and_then(|result| result.get("error"))
+            .and_then(Value::as_str)
+    }) == Some("worker job failed before reporting a durable outcome");
+    if chain.is_some()
+        || run.status != "failed"
+        || !worker_boundary_error
+        || run.budget_consumption.turns_used != 0
+        || run.budget_consumption.tokens_used != 0
+    {
+        return None;
+    }
+    let execution = executions.iter().rev().find(|execution| {
+        matches!(execution.stage_key.as_str(), "test" | "verify")
+            && execution.status == "failed"
+            && execution.run_id.as_ref() == Some(&run.id)
+            && execution.workspace_id.is_some()
+    })?;
+    if metadata.current_stage_execution_id.as_deref() != Some(execution.id.as_str())
+        || run
+            .execution_target_json
+            .pointer("/repo_mode/stage_execution_id")
+            .and_then(Value::as_str)
+            != Some(execution.id.as_str())
+        || run
+            .execution_target_json
+            .pointer("/repo_mode/stage")
+            .and_then(Value::as_str)
+            != Some(execution.stage_key.as_str())
+        || run
+            .execution_target_json
+            .pointer("/repo_mode/chain_authorization_id")
+            .and_then(Value::as_str)
+            != execution
+                .input_snapshot
+                .get("chain_authorization_id")
+                .and_then(Value::as_str)
     {
         return None;
     }
@@ -1419,6 +1503,19 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 "stage_execution":execution,
                 "attempt_budget_restored":true,
             }))
+        }
+        "retry_stage_startup" => {
+            let (run, execution) = recoverable_repo_followup_stage_startup(
+                &metadata,
+                current_run.as_ref(),
+                &executions,
+                chain.as_ref(),
+            )
+            .ok_or_else(|| {
+                ApiError::conflict("Repo Mode follow-up stage startup is no longer recoverable")
+            })?;
+            retry_repo_followup_stage_startup(state, work_item_id, run, execution, &actor, &reason)
+                .await
         }
         "apply_annotation_effect" => {
             let annotation = pending_annotation_effects
@@ -1897,6 +1994,186 @@ async fn apply_repo_stage_correction(
         .find(|workspace| workspace.resolved_commit == work_item.source_commit)
         .ok_or_else(|| ApiError::conflict("preserved correction workspace is unavailable"))?;
     authorize_repo_stage_chain(state, work_item_id, actor, reason, Some(workspace)).await
+}
+
+async fn retry_repo_followup_stage_startup(
+    state: &AppState,
+    work_item_id: &str,
+    failed_run: &StoredRun,
+    failed_execution: &pharness_store::StoredStageExecution,
+    actor: &str,
+    reason: &str,
+) -> Result<Value, ApiError> {
+    let upstream_stage = match failed_execution.stage_key.as_str() {
+        "test" => "implement",
+        "verify" => "test",
+        _ => {
+            return Err(ApiError::conflict(
+                "only zero-turn Tester or Verifier startup is recoverable",
+            ))
+        }
+    };
+    let prior_chain_id = failed_run
+        .execution_target_json
+        .pointer("/repo_mode/chain_authorization_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ApiError::conflict("failed stage has no chain authorization"))?;
+    let prior_chain = state
+        .store
+        .get_stage_chain_authorization(prior_chain_id)
+        .await?
+        .filter(|authorization| {
+            authorization.work_item_id == work_item_id
+                && authorization.id
+                    == failed_execution
+                        .input_snapshot
+                        .get("chain_authorization_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+        })
+        .ok_or_else(|| {
+            ApiError::conflict("failed stage chain authorization provenance is unavailable")
+        })?;
+    if prior_chain.status == "active" {
+        return Err(ApiError::conflict(
+            "failed stage chain authorization is still active",
+        ));
+    }
+    let metadata = repo_metadata(state, work_item_id).await?;
+    if metadata.current_stage_execution_id.as_deref() != Some(failed_execution.id.as_str()) {
+        return Err(ApiError::conflict(
+            "failed stage is no longer the current WorkItem boundary",
+        ));
+    }
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let plan = state
+        .store
+        .get_work_plan_by_work_item(work_item_id)
+        .await?
+        .filter(|plan| {
+            plan.status == "approved"
+                && plan.id == prior_chain.work_plan_id
+                && plan.revision == prior_chain.work_plan_revision
+        })
+        .ok_or_else(|| ApiError::conflict("approved WorkPlan is no longer current"))?;
+    if prior_chain.product_model_snapshot_id != metadata.product_model_snapshot_id
+        || prior_chain.product_model_snapshot_hash != metadata.product_model_snapshot_hash
+        || prior_chain.repository_id != metadata.repository_id
+        || work_item.source_commit.as_deref() != Some(prior_chain.source_commit.as_str())
+        || failed_execution.workspace_id.as_deref() != Some(prior_chain.workspace_id.as_str())
+    {
+        return Err(ApiError::conflict(
+            "failed stage authorization no longer matches the pinned WorkItem state",
+        ));
+    }
+    let upstream_outcome = state
+        .store
+        .list_effective_stage_outcomes(work_item_id)
+        .await?
+        .into_iter()
+        .find(|outcome| outcome.stage_key == upstream_stage && outcome.status == "succeeded")
+        .ok_or_else(|| {
+            ApiError::conflict(format!(
+                "a sealed successful {upstream_stage} outcome is required"
+            ))
+        })?;
+    let upstream_execution = state
+        .store
+        .get_stage_execution(&upstream_outcome.stage_execution_id)
+        .await?
+        .filter(|execution| {
+            execution.work_item_id == work_item_id
+                && execution.stage_key == upstream_stage
+                && execution.status == "succeeded"
+                && execution.workspace_id.as_deref() == Some(prior_chain.workspace_id.as_str())
+        })
+        .ok_or_else(|| ApiError::conflict("sealed upstream StageExecution is unavailable"))?;
+    let upstream_run_id = upstream_execution
+        .run_id
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("sealed upstream AgentRun is unavailable"))?;
+    let upstream_run = state
+        .store
+        .get_run(upstream_run_id)
+        .await?
+        .filter(|run| run.status == "completed")
+        .ok_or_else(|| ApiError::conflict("sealed upstream AgentRun is not completed"))?;
+    let authorization = state
+        .store
+        .create_stage_chain_authorization(CreateStageChainAuthorization {
+            id: new_prefixed_id("chain"),
+            work_item_id: work_item_id.into(),
+            work_plan_id: plan.id,
+            work_plan_revision: plan.revision,
+            product_model_snapshot_id: prior_chain.product_model_snapshot_id,
+            product_model_snapshot_hash: prior_chain.product_model_snapshot_hash,
+            repository_id: prior_chain.repository_id,
+            source_commit: prior_chain.source_commit,
+            workspace_id: prior_chain.workspace_id,
+            writable_paths: prior_chain.writable_paths,
+            profile_chain: prior_chain.profile_chain,
+            budget_chain: prior_chain.budget_chain,
+            state_hash: repo_work_item_state_hash(&metadata)?,
+            created_by: actor.into(),
+            creation_reason: reason.into(),
+            expires_at: (current_millis() + 4 * 60 * 60 * 1_000).to_string(),
+        })
+        .await?;
+    let started =
+        match start_repo_followup_stage(state, &upstream_run, failed_execution.stage_key.as_str())
+            .await
+        {
+            Ok(started) => started,
+            Err(error) => {
+                state
+                    .store
+                    .revoke_stage_chain_authorization(
+                        &authorization.id,
+                        "explicit follow-up stage startup retry could not be dispatched",
+                    )
+                    .await?;
+                return Err(error);
+            }
+        };
+    let work_item = state
+        .store
+        .update_repo_work_item_status(
+            work_item_id,
+            "executing",
+            actor,
+            "operator retried a zero-turn follow-up stage startup failure",
+            false,
+        )
+        .await?;
+    append_repo_audit(
+        state,
+        work_item_id,
+        "repo.followup_stage_startup.retried",
+        actor,
+        reason,
+        json!({
+            "failed_run_id":failed_run.id,
+            "failed_stage_execution_id":failed_execution.id,
+            "stage":failed_execution.stage_key,
+            "upstream_stage_execution_id":upstream_execution.id,
+            "upstream_outcome_id":upstream_outcome.id,
+            "replacement_chain_authorization_id":authorization.id,
+            "attempt_budget_consumed":false,
+            "model_turns_previously_consumed":0,
+            "workspace_preserved":true,
+        }),
+    )
+    .await?;
+    Ok(json!({
+        "work_item":work_item,
+        "stage_chain_authorization":authorization,
+        "retry":started,
+        "attempt_budget_consumed":false,
+    }))
 }
 
 async fn apply_repo_replan(
@@ -6033,6 +6310,98 @@ mod tests {
         assert!(actions
             .iter()
             .all(|action| action.id != "recover_stage_startup"));
+    }
+
+    #[test]
+    fn zero_turn_followup_startup_failure_retries_without_an_attempt_budget() {
+        let run_id = RunId::new("run_tester_startup_recovery");
+        let mut execution =
+            stage_execution("stageexec_tester_startup_recovery", "test", "failed", "4");
+        execution.run_id = Some(run_id.clone());
+        execution.input_snapshot = json!({"chain_authorization_id":"chain_failed"});
+        let mut metadata = metadata();
+        metadata.current_stage_execution_id = Some(execution.id.clone());
+        let run = StoredRun {
+            id: run_id,
+            session_id: SessionId::new("ses_tester_startup_recovery"),
+            cwd: "/workspace".into(),
+            status: "failed".into(),
+            user_task: "run the bounded Tester".into(),
+            max_turns: 8,
+            started_at: "4".into(),
+            finished_at: Some("5".into()),
+            cancel_requested_at: None,
+            error: Some("worker job failed before reporting a durable outcome".into()),
+            result_json: Some(json!({
+                "status":"failed",
+                "turns":0,
+                "error":"worker job failed before reporting a durable outcome",
+            })),
+            execution_target_json: json!({
+                "kind":"kubernetes_workspace",
+                "repo_mode":{
+                    "stage":"test",
+                    "stage_execution_id":execution.id,
+                    "chain_authorization_id":"chain_failed",
+                },
+            }),
+            origin: "controller".into(),
+            created_by: Some("controller:repo-mode".into()),
+            run_budget: pharness_core::RunBudget::default(),
+            budget_consumption: RunBudgetConsumption {
+                allowed_turns: 8,
+                allowed_tokens: 80_000,
+                ..RunBudgetConsumption::default()
+            },
+            stop_reason: Some("worker job failed before reporting a durable outcome".into()),
+            retention_state: "retained".into(),
+            sealed_summary: None,
+        };
+        let actions = derive_repo_actions(
+            &metadata,
+            RepoActionInputs {
+                attempts: (3, 3),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &[execution.clone()],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: Some(&run),
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "retry_stage_startup");
+        assert_eq!(actions[0].status, "ready");
+        assert_eq!(actions[0].effect_class, "model_execution");
+        assert!(actions[0]
+            .external_effect_summary
+            .contains("does not consume another WorkItem attempt"));
+
+        let mut consumed = run;
+        consumed.budget_consumption.turns_used = 1;
+        let actions = derive_repo_actions(
+            &metadata,
+            RepoActionInputs {
+                attempts: (3, 3),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &[execution],
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: None,
+                current_run: Some(&consumed),
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+        assert!(actions
+            .iter()
+            .all(|action| action.id != "retry_stage_startup"));
     }
 
     #[test]
