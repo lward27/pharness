@@ -10,6 +10,19 @@ PHarness release baseline: `bbe5c613958881b6237c5173d0dd7458eed7669c`
 
 Product: `Finance` (`prod_01a043699d65721193e7e75d38654a2d`)
 
+## Campaign progress
+
+- Completed: 1 of 6 WorkItems.
+- FRC-1 closed successfully on 2026-08-29 at yfinance merge
+  `12ff05dab47778dd2344970001c4218c1825db96`.
+- The live run exposed one PHarness platform defect: a pre-PR Git writer
+  permission failure had no safe retry action. The guarded retry was released
+  from PHarness source `10bd21113083336bcf284cac8551c280cb3c350e`
+  through release commit `426afddf2758dcba44e1ba93afe3a29132491c29`.
+- Next eligible slice: FRC-2, pinned to the exact FRC-1 merge revision above.
+- Running evidence ledger:
+  [finance-metadata-reliability-campaign-2026-08-29.md](../evidence/smoke-results/finance-metadata-reliability-campaign-2026-08-29.md).
+
 ## Objective
 
 Use six real, single-repository Repo Mode WorkItems to add Market, Sector, and
