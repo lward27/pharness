@@ -77,6 +77,27 @@ struct CompletionState {
     rejected_finishes: u32,
 }
 
+fn tools_for_turn(
+    tools: &[ToolSpec],
+    remaining_turns: u32,
+    verification_reserve_turns: u32,
+) -> (Vec<ToolSpec>, bool) {
+    let verifier_final_reserve = verification_reserve_turns > 0
+        && remaining_turns <= verification_reserve_turns
+        && tools.iter().any(|tool| tool.name == "submit_verification");
+    if !verifier_final_reserve {
+        return (tools.to_vec(), false);
+    }
+    (
+        tools
+            .iter()
+            .filter(|tool| matches!(tool.name.as_str(), "submit_verification" | "finish"))
+            .cloned()
+            .collect(),
+        true,
+    )
+}
+
 pub struct AgentRuntime<P, E, T = NoopToolExecutor> {
     provider: P,
     event_sink: E,
@@ -293,23 +314,47 @@ where
             );
 
             let mut request_messages = messages.clone();
+            let remaining_turns = config
+                .budget_consumption
+                .allowed_turns
+                .saturating_sub(turn_index);
+            let (turn_tools, verifier_final_reserve) = config
+                .run_budget
+                .as_ref()
+                .map(|budget| {
+                    tools_for_turn(
+                        &config.tools,
+                        remaining_turns,
+                        budget.verification_reserve_turns,
+                    )
+                })
+                .unwrap_or_else(|| (config.tools.clone(), false));
             if let Some(budget) = &config.run_budget {
                 request_messages.insert(
                     1.min(request_messages.len()),
                     ModelMessage::system(format!(
                         "Execution budget: {} turns and {} tokens remain; {} seconds of active time were configured. Reserve the final {} turns for declared acceptance commands, Git status/diff, and completion evidence.",
-                        config.budget_consumption.allowed_turns.saturating_sub(turn_index),
+                        remaining_turns,
                         config.budget_consumption.allowed_tokens.saturating_sub(tokens_used),
                         budget.active_execution_seconds.saturating_sub(config.budget_consumption.active_execution_seconds_used),
                         budget.verification_reserve_turns,
                     )),
                 );
             }
+            if verifier_final_reserve {
+                request_messages.insert(
+                    1.min(request_messages.len()),
+                    ModelMessage::system(
+                        "FINAL VERIFIER RESERVE: evidence collection is closed. Submit the typed verification verdict now from the sealed Tester outcome and evidence already inspected, then finish. Only submit_verification and finish are authorized in these remaining turns."
+                            .to_string(),
+                    ),
+                );
+            }
             let request = ModelRequest {
                 session_id: config.session_id.clone(),
                 run_id: config.run_id.clone(),
                 messages: request_messages,
-                tools: config.tools.clone(),
+                tools: turn_tools,
                 mode: config.tool_protocol,
                 temperature: config.temperature,
                 max_tokens: config.max_tokens,
@@ -386,6 +431,34 @@ where
                     |error| serde_json::json!({ "serialization_error": error.to_string() }),
                 ),
             );
+
+            if verifier_final_reserve
+                && !matches!(
+                    &turn.action,
+                    AgentAction::SubmitVerification { .. } | AgentAction::Finish { .. }
+                )
+            {
+                let result = ToolResult::error(
+                    "verifier final reserve accepts only submit_verification or finish",
+                    serde_json::json!({
+                        "error_kind": "verifier_final_reserve",
+                        "remaining_turns": remaining_turns,
+                        "allowed_actions": ["submit_verification", "finish"],
+                    }),
+                );
+                self.emit(
+                    &config,
+                    &mut seq,
+                    EventKind::ToolFinished,
+                    serde_json::to_value(&result).unwrap_or_default(),
+                );
+                messages.push(tool_message(
+                    &result,
+                    Some(turn.action.id().to_string()),
+                    Some(&turn.action),
+                ));
+                continue;
+            }
 
             match turn.action {
                 AgentAction::Finish {
@@ -1181,8 +1254,8 @@ fn consumption_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
-        recoverable_error_result, resume_runtime_state, tool_message, AgentRuntime, ApprovedAction,
-        BudgetResume, RecoveryState, RunConfig,
+        recoverable_error_result, resume_runtime_state, tool_message, tools_for_turn, AgentRuntime,
+        ApprovedAction, BudgetResume, RecoveryState, RunConfig,
     };
     use crate::{
         AgentAction, ApprovalKind, CancellationFlag, CapabilityKind, ContextBudget, EventKind,
@@ -1190,13 +1263,48 @@ mod tests {
         ModelRequest, ModelTurn, NoopToolExecutor, PermissionGrant, PermissionGrantPolicy,
         PermissionGrantScope, PolicyMode, ProviderError, RiskLevel, RunBudget,
         RunBudgetConsumption, RunScope, RunStatus, SafetyPolicy, TaskContract, TaskKind, ToolError,
-        ToolExecutor, ToolResult,
+        ToolExecutor, ToolResult, ToolSpec,
     };
     use async_trait::async_trait;
     use camino::Utf8PathBuf;
     use std::collections::VecDeque;
     use std::fs;
     use std::sync::Mutex;
+
+    #[test]
+    fn verifier_final_reserve_exposes_only_submission_and_finish_tools() {
+        let tools = [
+            "get_evidence",
+            "read_file",
+            "git_diff",
+            "submit_verification",
+            "finish",
+        ]
+        .into_iter()
+        .map(|name| {
+            ToolSpec::new(
+                name,
+                format!("{name} tool"),
+                serde_json::json!({"type":"object"}),
+                CapabilityKind::AgentControl,
+            )
+        })
+        .collect::<Vec<_>>();
+
+        let (normal_tools, reserve_active) = tools_for_turn(&tools, 5, 4);
+        assert!(!reserve_active);
+        assert_eq!(normal_tools, tools);
+
+        let (reserve_tools, reserve_active) = tools_for_turn(&tools, 4, 4);
+        assert!(reserve_active);
+        assert_eq!(
+            reserve_tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["submit_verification", "finish"]
+        );
+    }
 
     #[test]
     fn resumable_transcript_restores_recovery_and_completion_state() {

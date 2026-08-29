@@ -245,7 +245,7 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
                     active_execution_seconds: seconds,
                     verification_reserve_turns: match id {
                         "repo-builder" => 8,
-                        "repo-verifier" => 4,
+                        "repo-verifier" => 8,
                         _ => 0,
                     },
                     ..RunBudget::default()
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(verifier.budget.hard_turns, 40);
         assert_eq!(verifier.budget.initial_tokens, 200_000);
         assert_eq!(verifier.budget.hard_tokens, 480_000);
-        assert_eq!(verifier.budget.verification_reserve_turns, 4);
+        assert_eq!(verifier.budget.verification_reserve_turns, 8);
         assert!(first
             .iter()
             .all(|profile| profile.profile_hash.starts_with("sha256:")));

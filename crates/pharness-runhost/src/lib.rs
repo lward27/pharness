@@ -332,7 +332,7 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
             "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one ID from AgentContext.contract_constraints.active_environment_profile_ids. Generic language names and shortened aliases are invalid."
         }
         "repo-verifier" => {
-            "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final four turns for submit_verification and finish, and submit the typed verdict before the soft turn boundary."
+            "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final eight turns for submit_verification and finish, and submit the typed verdict before the soft turn boundary."
         }
         _ => "",
     };
@@ -1378,7 +1378,7 @@ mod workspace_source_tests {
             instruction.contains("begin with the sealed Test outcome, Git diff, and Git status")
         );
         assert!(instruction.contains("do not reread a path"));
-        assert!(instruction.contains("Preserve the final four turns"));
+        assert!(instruction.contains("Preserve the final eight turns"));
         assert!(instruction.contains("submit the typed verdict before the soft turn boundary"));
     }
 
