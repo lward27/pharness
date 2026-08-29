@@ -18,6 +18,7 @@ behavior.
 - [`tekton-live-smoke-2026-08-02.md`](smoke-results/tekton-live-smoke-2026-08-02.md)
 - [`repo-mode-v1-operator-experience-release-2026-08-26.md`](smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md)
 - [`finance-clean-generation-acceptance-2026-08-28.md`](smoke-results/finance-clean-generation-acceptance-2026-08-28.md)
+- [`node-24-finance-frontend-source-smoke-2026-08-29.md`](smoke-results/node-24-finance-frontend-source-smoke-2026-08-29.md)
 
 The durable yfinance release characterization identifiers are also frozen in
 the

@@ -568,6 +568,23 @@ fn derive_repo_actions(
     }
     let state_hash = repo_work_item_state_hash(metadata)?;
     if let Some(extension) = pending_budget_extension {
+        let (turn_increment, token_increment) = current_run
+            .filter(|run| run.id == extension.run_id)
+            .map(|run| {
+                (
+                    extension.turn_increment.min(
+                        run.run_budget
+                            .hard_turns
+                            .saturating_sub(run.budget_consumption.allowed_turns),
+                    ),
+                    extension.token_increment.min(
+                        run.run_budget
+                            .hard_tokens
+                            .saturating_sub(run.budget_consumption.allowed_tokens),
+                    ),
+                )
+            })
+            .unwrap_or((extension.turn_increment, extension.token_increment));
         return Ok(vec![WorkItemActionResponse {
             id: "approve_budget_extension".into(),
             lifecycle_stage: "implement".into(),
@@ -579,7 +596,7 @@ fn derive_repo_actions(
             approval_requirements: vec!["budget_extension".into()],
             external_effect_summary: format!(
                 "Resume the current Repo Mode stage on its preserved workspace with exactly {} additional turns and {} additional tokens.",
-                extension.turn_increment, extension.token_increment
+                turn_increment, token_increment
             ),
             state_hash: extension.state_hash.clone(),
         }]);
@@ -6527,6 +6544,77 @@ mod tests {
         assert!(actions[0]
             .external_effect_summary
             .contains("200000 additional tokens"));
+    }
+
+    #[test]
+    fn pending_budget_extension_describes_only_remaining_hard_limit_headroom() {
+        let executions = vec![stage_execution(
+            "stageexec_current",
+            "implement",
+            "paused",
+            "3",
+        )];
+        let run_id = RunId::new("run_current");
+        let extension = StoredBudgetExtension {
+            id: "budgetext_capped".into(),
+            work_item_id: "witem_repo".into(),
+            run_id: run_id.clone(),
+            status: "pending".into(),
+            turn_increment: 20,
+            token_increment: 200_000,
+            state_hash: "sha256:capped-extension-state".into(),
+            requested_at: "4".into(),
+            approved_at: None,
+            approved_by: None,
+            approval_reason: None,
+        };
+        let run = StoredRun {
+            id: run_id,
+            session_id: SessionId::new("session_current"),
+            cwd: "/workspace".into(),
+            status: "budget_extension_required".into(),
+            user_task: "finish within the hard budget".into(),
+            max_turns: 95,
+            started_at: "1".into(),
+            finished_at: None,
+            cancel_requested_at: None,
+            error: None,
+            result_json: None,
+            execution_target_json: json!({"kind":"kubernetes_workspace"}),
+            origin: "controller".into(),
+            created_by: Some("controller:repo-mode".into()),
+            run_budget: pharness_core::RunBudget::default(),
+            budget_consumption: RunBudgetConsumption {
+                allowed_turns: 95,
+                allowed_tokens: 900_000,
+                ..RunBudgetConsumption::default()
+            },
+            stop_reason: Some("budget extension required".into()),
+            retention_state: "retained".into(),
+            sealed_summary: None,
+        };
+
+        let actions = derive_repo_actions(
+            &metadata(),
+            RepoActionInputs {
+                attempts: (2, 2),
+                work_plan: None,
+                change_set: None,
+                source_delivery_intent: None,
+                executions: &executions,
+                chain: None,
+                pending_annotation_effects: &[],
+                pending_budget_extension: Some(&extension),
+                current_run: Some(&run),
+                retryable_budget_extension: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(actions.len(), 1);
+        assert!(actions[0]
+            .external_effect_summary
+            .contains("exactly 5 additional turns and 100000 additional tokens"));
     }
 
     #[test]
