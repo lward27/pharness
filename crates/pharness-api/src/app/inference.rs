@@ -821,7 +821,7 @@ pub(super) async fn gateway_readiness(state: &AppState) -> Value {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| format!("gateway client failed: {error}"))?
-            .get(base.join("readyz").map_err(|error| error.to_string())?)
+            .get(gateway_readiness_url(&base))
             .timeout(Duration::from_secs(5))
             .send()
             .await
@@ -1453,7 +1453,7 @@ async fn verify_target_protocol(
         .build()
         .map_err(|error| format!("gateway client failed: {error}"))?;
     let ready: Value = client
-        .get(base.join("readyz").map_err(|error| error.to_string())?)
+        .get(gateway_readiness_url(&base))
         .send()
         .await
         .map_err(|error| format!("gateway readiness failed: {error}"))?
@@ -1710,6 +1710,14 @@ fn is_hex_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+fn gateway_readiness_url(base: &url::Url) -> url::Url {
+    let mut readiness = base.clone();
+    readiness.set_path("/readyz");
+    readiness.set_query(None);
+    readiness.set_fragment(None);
+    readiness
+}
+
 #[cfg(test)]
 fn is_prefixed_sha256(value: &str) -> bool {
     value.strip_prefix("sha256:").is_some_and(is_hex_sha256)
@@ -1744,6 +1752,15 @@ mod tests {
         assert!(is_hex_sha256(&"a".repeat(64)));
         assert!(!is_hex_sha256("sha256:abc"));
         assert!(is_prefixed_sha256(&format!("sha256:{}", "b".repeat(64))));
+    }
+
+    #[test]
+    fn gateway_readiness_uses_the_control_plane_root() {
+        let base = url::Url::parse("http://pharness-model-gateway:4780/v1/").unwrap();
+        assert_eq!(
+            gateway_readiness_url(&base).as_str(),
+            "http://pharness-model-gateway:4780/readyz"
+        );
     }
 
     #[test]
