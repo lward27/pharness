@@ -1728,6 +1728,7 @@ async fn prepare_declared_runtime(
             })
         }
         PreparationStrategy::NodeNpmCi => {
+            let tracked_workspace_state_before = tracked_workspace_state(cwd).await?;
             let node_path = executable_paths
                 .get("node")
                 .and_then(serde_json::Value::as_str)
@@ -1752,7 +1753,7 @@ async fn prepare_declared_runtime(
                 &[("NPM_CONFIG_CACHE", npm_cache_value.as_str())],
             )
             .await?;
-            ensure_tracked_workspace_clean(cwd).await?;
+            ensure_tracked_workspace_unchanged(cwd, &tracked_workspace_state_before).await?;
             let version = run_output(cwd, node_path, &["--version"]).await?;
             let npm_version = run_output(cwd, npm_path, &["--version"]).await?;
             let node_bin = install_dir
@@ -1826,20 +1827,40 @@ async fn reject_tracked_node_modules(cwd: &std::path::Path) -> anyhow::Result<()
     Ok(())
 }
 
-async fn ensure_tracked_workspace_clean(cwd: &std::path::Path) -> anyhow::Result<()> {
+async fn tracked_workspace_state(cwd: &std::path::Path) -> anyhow::Result<String> {
     let cwd_text = cwd.to_string_lossy();
-    let status = workspace_git_stdout(
+    let staged = workspace_git_stdout(
         cwd,
         &[
             "-C",
             &cwd_text,
-            "status",
-            "--porcelain",
-            "--untracked-files=no",
+            "diff",
+            "--cached",
+            "--binary",
+            "--no-ext-diff",
+            "--",
         ],
     )
     .await?;
-    if !status.trim().is_empty() {
+    let unstaged = workspace_git_stdout(
+        cwd,
+        &["-C", &cwd_text, "diff", "--binary", "--no-ext-diff", "--"],
+    )
+    .await?;
+    Ok(format!(
+        "staged:{}\n{}unstaged:{}\n{}",
+        staged.len(),
+        staged,
+        unstaged.len(),
+        unstaged
+    ))
+}
+
+async fn ensure_tracked_workspace_unchanged(
+    cwd: &std::path::Path,
+    expected: &str,
+) -> anyhow::Result<()> {
+    if tracked_workspace_state(cwd).await? != expected {
         anyhow::bail!("preparation_modified_tracked_files");
     }
     Ok(())
@@ -4751,15 +4772,15 @@ fn init_tracing() -> anyhow::Result<()> {
 mod tests {
     use super::{
         acceptance_command_is_structurally_unexecutable, allowlisted_connect_target,
-        argo_application_terminal, argo_sync_patch_payload, evaluate_github_required_checks,
-        fetch_internal_context, git_delivery_command_error_code,
+        argo_application_terminal, argo_sync_patch_payload, ensure_tracked_workspace_unchanged,
+        evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
         github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
         parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
-        prepare_declared_runtime, update_kustomization_image, validate_git_delivery_context,
-        validate_onboarding_patch_changed_paths, validate_resumed_workspace_identity,
-        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext,
-        GitDeliveryObservationContext, PipelineRunTerminal,
+        prepare_declared_runtime, tracked_workspace_state, update_kustomization_image,
+        validate_git_delivery_context, validate_onboarding_patch_changed_paths,
+        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
+        GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
     };
     use pharness_core::{
         AcceptanceCommand, AgentNetworkPolicy, DependencyLock, PackageInstallationPolicy,
@@ -4850,6 +4871,62 @@ package_installation: preparation_only
         assert_eq!(repo_mode_hash, format!("sha256:{legacy_hash}"));
 
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn tracked_workspace_state_preserves_existing_diff_and_detects_new_mutation() {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(format!("pharness-node-state-{suffix}"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("source.js"), "export const value = 'base';\n").unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "test@example.invalid"],
+            vec!["config", "user.name", "PHarness test"],
+            vec!["add", "."],
+            vec!["commit", "-m", "fixture"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .output()
+                .unwrap()
+                .status
+                .success());
+        }
+
+        let builder_change = "export const value = 'builder';\n";
+        std::fs::write(root.join("source.js"), builder_change).unwrap();
+        let before = tracked_workspace_state(&root).await.unwrap();
+        ensure_tracked_workspace_unchanged(&root, &before)
+            .await
+            .unwrap();
+
+        std::fs::write(
+            root.join("source.js"),
+            "export const value = 'preparation';\n",
+        )
+        .unwrap();
+        let error = ensure_tracked_workspace_unchanged(&root, &before)
+            .await
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("preparation_modified_tracked_files"));
+
+        std::fs::write(root.join("source.js"), builder_change).unwrap();
+        ensure_tracked_workspace_unchanged(&root, &before)
+            .await
+            .unwrap();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[cfg(unix)]
