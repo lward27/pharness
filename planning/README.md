@@ -6,10 +6,10 @@ PHarness documentation is organized by purpose and lifecycle so an agent can
 distinguish current work from shipped behavior and historical context before it
 acts.
 
-The current stable release baseline is the Repo Mode V1 operator-experience
-GitOps commit `7c27b6e29905a17c8aeb7eb63ee386646738fc04`. Its compiled source revision is
-`069ce56078da1081c01570844e792bda8a95c9ee`; immutable artifact provenance is
-recorded in the completed milestone and dated release evidence.
+The current stable release baseline is GitOps commit
+`bbe5c613958881b6237c5173d0dd7458eed7669c`. Its compiled source revision is
+`78fb3eb77cf082a9385a0bca1c4c2b06ed618f18`; immutable artifact provenance is
+recorded in the completed Node milestone and dated release evidence.
 
 ## Start here
 
@@ -26,11 +26,11 @@ recorded in the completed milestone and dated release evidence.
 
 ## Current work
 
-No implementation milestone is currently active. The most recently completed
-product milestone is the
-[`Repo Mode V1 operator experience`](implemented/milestones/repo-mode-v1-operator-experience-milestone-2026-08-26.md).
-Add the next approved milestone under [`active/`](active/README.md) before
-implementation begins.
+The active milestone is the
+[`Finance Metadata Reliability Campaign`](active/PHarness-Finance-Metadata-Reliability-Campaign.md).
+It deliberately keeps every change single-repository while recording the
+backend-to-frontend merge order and pinned context needed to inform a later
+DeliveryPlan design.
 
 The approved
 [`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md) and
