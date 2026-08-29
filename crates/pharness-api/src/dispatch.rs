@@ -2989,6 +2989,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 );
             }
             if output.stdout.is_empty() {
+                let refreshed = self.store.get_inference_evaluation(&evaluation.id).await?;
+                if !refreshed
+                    .as_ref()
+                    .is_some_and(|value| matches!(value.status.as_str(), "queued" | "running"))
+                {
+                    continue;
+                }
+                let reason = "inference evaluation Job is missing before a durable outcome";
+                self.store
+                    .fail_inference_evaluation(&evaluation.id, reason)
+                    .await?;
+                tracing::warn!(evaluation_id=%evaluation.id, job=%job_name, %reason, "sealed missing inference evaluation Job");
                 continue;
             }
             let job: serde_json::Value = serde_json::from_slice(&output.stdout)?;

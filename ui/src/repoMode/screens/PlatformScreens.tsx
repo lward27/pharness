@@ -87,6 +87,7 @@ function QualificationDialog({policy,registryHash,operatorName,onClose,onRecorde
   const [actor,setActor] = useState(operatorName || "operator");
   const [reason,setReason] = useState(`Run controlled qualification for ${policy.display_name}`);
   const [pending,setPending] = useState(false);
+  const pendingRef = useRef(false);
   const [error,setError] = useState("");
   const [evaluation,setEvaluation] = useState<any>(["queued","running"].includes(policy.latest_evaluation?.status) ? policy.latest_evaluation : null);
   const onRecordedRef = useRef(onRecorded);
@@ -106,12 +107,15 @@ function QualificationDialog({policy,registryHash,operatorName,onClose,onRecorde
     return () => { active = false; window.clearInterval(timer); };
   },[evaluation?.id,evaluation?.status]);
   const record = async (event:React.FormEvent) => {
-    event.preventDefault(); setPending(true); setError("");
+    event.preventDefault();
+    if(pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true); setError("");
     try {
       const started = await sendJson(`/api/inference-policies/${encodeURIComponent(policy.policy_id)}/revisions/${encodeURIComponent(policy.revision)}/qualifications`,"POST",{actor:actor.trim(),reason:reason.trim(),config_hash:registryHash,attempts:2});
       setEvaluation(started);
     } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
-    finally { setPending(false); }
+    finally { pendingRef.current = false; setPending(false); }
   };
   return <div className="repo-dialog-backdrop" role="presentation"><form className="repo-dialog" role="dialog" aria-modal="true" aria-labelledby="qualification-title" onSubmit={record}><header><div><span className="repo-eyebrow">Controlled gateway evaluation</span><h2 id="qualification-title">{policy.display_name}</h2></div><Status value={evaluation?.status || "review required"} /></header><p>PHarness will dispatch the exact two-attempt suite in an isolated Job. The evaluator receives only its worker identity; upstream model credentials remain in the gateway.</p><dl className="repo-bindings"><div><dt>Suite</dt><dd>{policy.qualification_contract?.suite_id}</dd></div><div><dt>AgentProfile</dt><dd>{policy.qualification_contract?.agent_profile_id}</dd></div><div><dt>Policy</dt><dd className="repo-mono">{policy.policy_hash}</dd></div>{evaluation?.id ? <div><dt>Evaluation</dt><dd className="repo-mono">{evaluation.id}</dd></div> : null}{evaluation?.job_name ? <div><dt>Job</dt><dd className="repo-mono">{evaluation.job_name}</dd></div> : null}</dl>{!evaluation ? <><label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label><label>Reason<input value={reason} onChange={event => setReason(event.target.value)} /></label></> : null}{evaluation?.failure ? <div className="repo-error" role="alert">{evaluation.failure}</div> : null}{error ? <div className="repo-error" role="alert">{error}</div> : null}<footer>{!evaluation ? <button className="repo-primary" type="submit" disabled={pending || !actor.trim() || !reason.trim()}>{pending ? "Dispatching…" : "Run two-attempt qualification"}</button> : <span className="repo-muted" role="status">{evaluation.status === "running" ? "Evaluation is running through the model gateway." : `Evaluation ${evaluation.status}.`}</span>}<button type="button" onClick={onClose}>Close</button></footer></form></div>;
 }

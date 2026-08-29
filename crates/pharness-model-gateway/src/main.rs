@@ -290,6 +290,9 @@ fn apply_backend_policy(
                 },
                 exclude: false,
             });
+            for message in &mut request.messages {
+                message.reasoning_content = None;
+            }
         }
         InferenceBackendKind::Fireworks => {
             request.reasoning_effort = effort;
@@ -300,6 +303,13 @@ fn apply_backend_policy(
             };
             request.reasoning = None;
             request.provider = None;
+            for message in &mut request.messages {
+                // Fireworks replays interleaved reasoning only through the
+                // assistant message `reasoning_content` field. Strip the
+                // OpenRouter variants even if a caller supplied them.
+                message.reasoning = None;
+                message.reasoning_details = None;
+            }
         }
         InferenceBackendKind::LmStudio
         | InferenceBackendKind::LlamaCpp
@@ -308,6 +318,9 @@ fn apply_backend_policy(
             request.reasoning = None;
             request.reasoning_history = None;
             request.reasoning_effort = effort;
+            for message in &mut request.messages {
+                message.reasoning = None;
+            }
         }
     }
     Ok(())
@@ -619,6 +632,19 @@ mod tests {
         policy
     }
 
+    fn fireworks_target() -> InferenceTargetRevision {
+        let mut target = target();
+        target.target_id = "fireworks-test".into();
+        target.display_name = "Fireworks test".into();
+        target.backend_kind = InferenceBackendKind::Fireworks;
+        target.upstream_base_url = "https://api.fireworks.ai/inference/v1".into();
+        target.authentication_binding = Some("fireworks-token".into());
+        target.openrouter = None;
+        target.config_hash = String::new();
+        target.config_hash = target.computed_hash().unwrap();
+        target
+    }
+
     #[test]
     fn backend_translation_overwrites_openrouter_routing() {
         let target = target();
@@ -631,6 +657,33 @@ mod tests {
         assert_eq!(provider.only, vec!["deepinfra/turbo"]);
         assert!(!provider.allow_fallbacks);
         assert!(provider.require_parameters);
+    }
+
+    #[test]
+    fn backend_translation_strips_non_fireworks_reasoning_fields() {
+        let target = fireworks_target();
+        let policy = policy(&target);
+        let mut request: ChatRequest = serde_json::from_value(serde_json::json!({
+            "model":"fireworks-test@v1",
+            "messages":[{
+                "role":"assistant",
+                "content":"",
+                "reasoning_content":"keep this",
+                "reasoning":"reject this",
+                "reasoning_details":{"type":"reasoning.encrypted","data":"reject this too"}
+            }],
+            "tools":[{"type":"function","function":{"name":"finish","description":"finish","parameters":{"type":"object"}}}],
+            "tool_choice":"required",
+            "parallel_tool_calls":false,
+            "stream":true,
+            "temperature":0.1,
+            "max_tokens":8192
+        })).unwrap();
+        apply_backend_policy(&mut request, &target, &policy).unwrap();
+        let value = serde_json::to_value(request).unwrap();
+        assert_eq!(value["messages"][0]["reasoning_content"], "keep this");
+        assert!(value["messages"][0].get("reasoning").is_none());
+        assert!(value["messages"][0].get("reasoning_details").is_none());
     }
 
     #[test]

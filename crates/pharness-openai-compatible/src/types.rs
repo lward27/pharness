@@ -86,7 +86,7 @@ pub fn build_chat_request(
         messages: request
             .messages
             .into_iter()
-            .map(ChatMessage::from)
+            .map(|message| ChatMessage::from_model_message(backend, message))
             .collect(),
         tools: if mode == ToolProtocolMode::NativeTools {
             request.tools.into_iter().map(ChatTool::from).collect()
@@ -154,12 +154,29 @@ pub struct ChatMessage {
     pub reasoning_details: Option<serde_json::Value>,
 }
 
-impl From<ModelMessage> for ChatMessage {
-    fn from(message: ModelMessage) -> Self {
-        let (reasoning_content, reasoning, reasoning_details) = match message.reasoning {
-            Some(ReasoningReplay::Text(value)) => (Some(value.clone()), Some(value), None),
-            Some(ReasoningReplay::Structured(value)) => (None, None, Some(value)),
-            None => (None, None, None),
+impl ChatMessage {
+    fn from_model_message(backend: InferenceBackendKind, message: ModelMessage) -> Self {
+        // Reasoning replay is part of the provider wire protocol, not a
+        // portable Chat Completions message field. In particular, Fireworks
+        // requires assistant reasoning to be replayed as `reasoning_content`,
+        // while OpenRouter uses `reasoning`/`reasoning_details`. Emitting both
+        // text fields makes the second tool turn invalid for Fireworks.
+        let (reasoning_content, reasoning, reasoning_details) = match (backend, message.reasoning) {
+            (InferenceBackendKind::Openrouter, Some(ReasoningReplay::Text(value))) => {
+                (None, Some(value), None)
+            }
+            (InferenceBackendKind::Openrouter, Some(ReasoningReplay::Structured(value))) => {
+                (None, None, Some(value))
+            }
+            (InferenceBackendKind::Fireworks, Some(ReasoningReplay::Text(value))) => {
+                (Some(value), None, None)
+            }
+            (InferenceBackendKind::Fireworks, Some(ReasoningReplay::Structured(_))) => {
+                (None, None, None)
+            }
+            (_, Some(ReasoningReplay::Text(value))) => (Some(value), None, None),
+            (_, Some(ReasoningReplay::Structured(value))) => (None, None, Some(value)),
+            (_, None) => (None, None, None),
         };
         Self {
             role: match message.role {
@@ -399,10 +416,22 @@ mod tests {
 
     #[test]
     fn maps_fireworks_reasoning_history() {
+        let mut model_request = request();
+        model_request.messages.push(ModelMessage {
+            role: ModelRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: vec![pharness_core::ModelToolCall {
+                id: "call-one".into(),
+                name: "submit_work_plan".into(),
+                arguments: "{}".into(),
+            }],
+            reasoning: Some(ReasoningReplay::Text("private replay state".into())),
+        });
         let wire = build_chat_request(
             InferenceBackendKind::Fireworks,
             "model",
-            request(),
+            model_request,
             &policy(),
             true,
             None,
@@ -411,5 +440,34 @@ mod tests {
         assert_eq!(value["reasoning_effort"], "high");
         assert_eq!(value["reasoning_history"], "interleaved");
         assert!(value.get("reasoning").is_none());
+        assert_eq!(
+            value["messages"][1]["reasoning_content"],
+            "private replay state"
+        );
+        assert!(value["messages"][1].get("reasoning").is_none());
+        assert!(value["messages"][1].get("reasoning_details").is_none());
+    }
+
+    #[test]
+    fn maps_openrouter_reasoning_without_fireworks_field() {
+        let mut model_request = request();
+        model_request.messages.push(ModelMessage {
+            role: ModelRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+            reasoning: Some(ReasoningReplay::Text("opaque replay state".into())),
+        });
+        let value = serde_json::to_value(build_chat_request(
+            InferenceBackendKind::Openrouter,
+            "model",
+            model_request,
+            &policy(),
+            true,
+            Some("deepinfra/turbo"),
+        ))
+        .unwrap();
+        assert_eq!(value["messages"][1]["reasoning"], "opaque replay state");
+        assert!(value["messages"][1].get("reasoning_content").is_none());
     }
 }
