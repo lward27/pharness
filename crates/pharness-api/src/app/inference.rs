@@ -1238,7 +1238,7 @@ async fn issue_model_grant(
     if !state.inference.enabled {
         return Err(ApiError::unavailable("model gateway is disabled"));
     }
-    if request.request_sequence == 0 || !is_hex_sha256(&request.request_body_hash) {
+    if request.request_sequence == 0 || !is_prefixed_sha256(&request.request_body_hash) {
         return Err(ApiError::bad_request(
             "model-grant request sequence or body hash is invalid",
         ));
@@ -1549,7 +1549,7 @@ async fn verify_target_protocol(
                     .map_err(|error| error.to_string())?,
             )
             .bearer_auth(token)
-            .json(&wire)
+            .json(&value)
             .send(),
     )
     .await
@@ -1718,7 +1718,6 @@ fn gateway_readiness_url(base: &url::Url) -> url::Url {
     readiness
 }
 
-#[cfg(test)]
 fn is_prefixed_sha256(value: &str) -> bool {
     value.strip_prefix("sha256:").is_some_and(is_hex_sha256)
 }
