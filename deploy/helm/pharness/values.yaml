@@ -81,7 +81,7 @@ inferenceGateway:
     pullPolicy: IfNotPresent
     revision: b3314811f20228caa8471b24d3b183e8e510dd98
   replicas: 1
-  grantSecretName: pharness-model-grant
+  grantSecretName: pharness-model-grant-v2
   grantSecretKey: key
   fireworksCredential:
     secretName: pharness-fireworks
