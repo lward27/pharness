@@ -6,7 +6,7 @@ set -euo pipefail
 # resulting digests must still be reviewed and committed through GitOps.
 #
 # Usage:
-#   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|model-gateway|all> \
+#   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|all> \
 #     --revision <40-char-sha> [--builder <buildx-builder>] [--preflight-only]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,11 +19,11 @@ PLATFORM="linux/amd64"
 REGISTRY="registry.lucas.engineering"
 
 usage() {
-  echo "Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|all> --revision <40-char-sha> [--builder lucas-desktop] [--preflight-only]" >&2
+  echo "Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|all> --revision <40-char-sha> [--builder lucas-desktop] [--preflight-only]" >&2
   exit 2
 }
 
-[[ "$TARGET" =~ ^(runtime|ui|python-runner|node-runner|model-gateway|all)$ ]] || usage
+[[ "$TARGET" =~ ^(runtime|ui|python-runner|node-runner|model-gateway|eval-runner|all)$ ]] || usage
 shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -71,7 +71,7 @@ grep -Eq 'Platforms:.*(^|, | )linux/amd64([, ]|$)' <<<"$BUILDER_INSPECTION" || {
 
 components=()
 case "$TARGET" in
-  all) components=(runtime ui python-runner node-runner model-gateway) ;;
+  all) components=(runtime ui python-runner node-runner model-gateway eval-runner) ;;
   *) components=("$TARGET") ;;
 esac
 
@@ -110,6 +110,7 @@ build_component() {
     python-runner) dockerfile="deploy/docker/Dockerfile.python-runner" ;;
     node-runner) dockerfile="deploy/docker/Dockerfile.node-runner" ;;
     model-gateway) dockerfile="deploy/docker/Dockerfile.model-gateway" ;;
+    eval-runner) dockerfile="deploy/docker/Dockerfile.eval-runner" ;;
     *) echo "unsupported PHarness component ${component}" >&2; return 1 ;;
   esac
 

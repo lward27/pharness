@@ -25,6 +25,7 @@ const DEFAULT_ARGOCD_NAMESPACE: &str = "argocd";
 const DEFAULT_CLUSTER_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_WORKER_K8S_NAMESPACE: &str = "pharness";
 const DEFAULT_WORKER_K8S_IMAGE: &str = "registry.lucas.engineering/pharness-runtime:latest";
+const DEFAULT_INFERENCE_EVALUATION_IMAGE: &str = "";
 const DEFAULT_WORKER_K8S_SERVICE_ACCOUNT: &str = "pharness-worker";
 const DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-tekton-runner";
 const DEFAULT_ARGO_EXECUTOR_SERVICE_ACCOUNT: &str = "pharness-argo-runner";
@@ -132,6 +133,11 @@ impl std::str::FromStr for WorkerMode {
 pub struct WorkerKubernetesConfig {
     pub namespace: String,
     pub image: String,
+    /// Dedicated immutable image for live inference qualification. Unlike the
+    /// API runtime, it contains the Rust and Python toolchains needed by the
+    /// matched Builder fixtures, but it still receives only the internal
+    /// worker identity and obtains single-use model grants from the API.
+    pub inference_evaluation_image: String,
     pub service_account: String,
     pub tekton_executor_service_account: String,
     pub tekton_allowed_namespaces: Vec<String>,
@@ -301,6 +307,16 @@ impl ApiRuntimeConfig {
         reject_invalid_source_reader(&config.worker.kubernetes)?;
         config.inference.registry.finalize_hashes()?;
         config.resolve_api_key(env);
+        if config
+            .worker
+            .kubernetes
+            .inference_evaluation_image
+            .trim()
+            .is_empty()
+        {
+            config.worker.kubernetes.inference_evaluation_image =
+                config.worker.kubernetes.image.clone();
+        }
         if config.inference.enabled
             && config.inference.grant_signing_enabled
             && config.inference.grant_hmac_key.is_none()
@@ -308,7 +324,11 @@ impl ApiRuntimeConfig {
             bail!("enabled inference gateway requires its model-grant HMAC key");
         }
         if config.worker.mode == WorkerMode::KubernetesJob {
-            reject_mutable_worker_image(&config.worker.kubernetes.image)?;
+            reject_mutable_image("worker.kubernetes.image", &config.worker.kubernetes.image)?;
+            reject_mutable_image(
+                "worker.kubernetes.inference_evaluation_image",
+                &config.worker.kubernetes.inference_evaluation_image,
+            )?;
         }
         Ok(config)
     }
@@ -347,6 +367,7 @@ impl ApiRuntimeConfig {
                 kubernetes: WorkerKubernetesConfig {
                     namespace: DEFAULT_WORKER_K8S_NAMESPACE.to_string(),
                     image: DEFAULT_WORKER_K8S_IMAGE.to_string(),
+                    inference_evaluation_image: DEFAULT_INFERENCE_EVALUATION_IMAGE.to_string(),
                     service_account: DEFAULT_WORKER_K8S_SERVICE_ACCOUNT.to_string(),
                     tekton_executor_service_account: DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT
                         .to_string(),
@@ -532,6 +553,9 @@ impl ApiRuntimeConfig {
                 }
                 if let Some(value) = kubernetes.image {
                     self.worker.kubernetes.image = value;
+                }
+                if let Some(value) = kubernetes.inference_evaluation_image {
+                    self.worker.kubernetes.inference_evaluation_image = value;
                 }
                 if let Some(value) = kubernetes.service_account {
                     self.worker.kubernetes.service_account = value;
@@ -876,6 +900,9 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_IMAGE") {
             self.worker.kubernetes.image = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_INFERENCE_EVALUATION_IMAGE") {
+            self.worker.kubernetes.inference_evaluation_image = value.clone();
         }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_SERVICE_ACCOUNT") {
             self.worker.kubernetes.service_account = value.clone();
@@ -1378,6 +1405,7 @@ struct FileWorkerConfig {
 struct FileWorkerKubernetesConfig {
     namespace: Option<String>,
     image: Option<String>,
+    inference_evaluation_image: Option<String>,
     service_account: Option<String>,
     tekton_executor_service_account: Option<String>,
     tekton_allowed_namespaces: Option<Vec<String>>,
@@ -1842,15 +1870,15 @@ fn reject_invalid_source_reader(config: &WorkerKubernetesConfig) -> anyhow::Resu
     Ok(())
 }
 
-fn reject_mutable_worker_image(image: &str) -> anyhow::Result<()> {
+fn reject_mutable_image(label: &str, image: &str) -> anyhow::Result<()> {
     let Some((repository, digest)) = image.rsplit_once("@sha256:") else {
-        bail!("worker.kubernetes.image must be pinned as repository@sha256:digest");
+        bail!("{label} must be pinned as repository@sha256:digest");
     };
     if repository.trim().is_empty()
         || digest.len() != 64
         || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
     {
-        bail!("worker.kubernetes.image has an invalid immutable sha256 digest");
+        bail!("{label} has an invalid immutable sha256 digest");
     }
     Ok(())
 }
@@ -2242,6 +2270,72 @@ max_concurrent_run_jobs = 0
         assert!(error.to_string().contains("max_concurrent_run_jobs"));
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_mutable_inference_evaluation_image_for_kubernetes_workers() {
+        let digest = "0".repeat(64);
+        let path = write_temp_config(&format!(
+            r#"
+[worker]
+mode = "kubernetes_job"
+
+[worker.kubernetes]
+image = "registry.example/pharness-runtime@sha256:{digest}"
+inference_evaluation_image = "registry.example/pharness-eval-runner:latest"
+"#
+        ));
+
+        let error = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new())
+            .err()
+            .unwrap();
+
+        assert!(error
+            .to_string()
+            .contains("worker.kubernetes.inference_evaluation_image must be pinned"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn omitted_inference_evaluation_image_inherits_the_pinned_worker_image() {
+        let digest = "1".repeat(64);
+        let image = format!("registry.example/pharness-runtime@sha256:{digest}");
+        let path = write_temp_config(&format!(
+            r#"
+[worker]
+mode = "kubernetes_job"
+
+[worker.kubernetes]
+image = "{image}"
+"#
+        ));
+
+        let config = ApiRuntimeConfig::from_sources(Some(&path), &BTreeMap::new()).unwrap();
+
+        assert_eq!(config.worker.kubernetes.inference_evaluation_image, image);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn gateway_clients_can_disable_model_grant_signing_without_the_hmac_key() {
+        let env = BTreeMap::from([
+            (
+                "PHARNESS_INFERENCE_GATEWAY_ENABLED".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "PHARNESS_MODEL_GRANT_SIGNER_ENABLED".to_string(),
+                "false".to_string(),
+            ),
+        ]);
+
+        let config = ApiRuntimeConfig::from_sources(None, &env).unwrap();
+
+        assert!(config.inference.enabled);
+        assert!(!config.inference.grant_signing_enabled);
+        assert!(config.inference.grant_hmac_key.is_none());
     }
 
     #[test]

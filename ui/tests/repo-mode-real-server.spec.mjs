@@ -327,6 +327,8 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await page.getByRole("button", { name: "Edit proposal revision" }).click();
   await page.getByLabel("Repository instructions").fill("Read the reviewed RepositoryContract and bounded instructions before planning.");
   await page.getByRole("button", { name: "Save new proposal revision" }).click();
+  await expect(page.getByRole("button", { name: "Close proposal editor" })).toHaveCount(0);
+  await page.reload();
   await expect(page.getByRole("button", { name: "approve proposal" })).toBeVisible();
 
   await confirmAction(page, "approve proposal", "Approve the exact revised onboarding proposal");

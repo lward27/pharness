@@ -1,0 +1,37 @@
+# Isolated live-evaluation image. It deliberately carries the Rust and Python
+# toolchains required by the matched Builder fixtures, while upstream model
+# credentials remain absent: the evaluator authenticates to the API with the
+# worker identity and receives one single-use model grant per request.
+FROM --platform=$BUILDPLATFORM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
+ARG PHARNESS_BUILD_REVISION=unknown
+ARG TARGETARCH
+ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
+WORKDIR /build
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+RUN test "${TARGETARCH}" = "amd64" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup target add x86_64-unknown-linux-gnu
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval
+
+FROM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97
+ARG PHARNESS_BUILD_REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
+      org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
+ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}" \
+    CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_NET_OFFLINE=true
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 pharness \
+    && useradd --uid 65532 --gid 65532 --home-dir /work --create-home pharness \
+    && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*
+COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
+USER 65532:65532
+WORKDIR /work
+ENTRYPOINT ["pharness-eval"]
