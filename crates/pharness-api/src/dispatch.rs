@@ -2912,7 +2912,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                         "initContainers":[network_policy_stabilization_container(&self.config.image)],
                         "containers":[{
                             "name":"evaluate",
-                            "image":self.config.image,
+                            "image":self.config.inference_evaluation_image,
                             "imagePullPolicy":"IfNotPresent",
                             "command":["pharness-eval"],
                             "args":["execute-qualification","--evaluation-id",request.evaluation_id],
@@ -2920,6 +2920,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                                 {"name":"PHARNESS_API_URL","value":self.config.api_url},
                                 {"name":"PHARNESS_INFERENCE_GATEWAY_URL","value":request.gateway_url},
                                 {"name":"PHARNESS_INFERENCE_GATEWAY_ENABLED","value":"true"},
+                                {"name":"PHARNESS_MODEL_GRANT_SIGNER_ENABLED","value":"false"},
                                 {"name":"PHARNESS_INFERENCE_REGISTRY_JSON","valueFrom":{"configMapKeyRef":{"name":"pharness-inference-registry","key":"registry.json"}}},
                                 {"name":"PHARNESS_WORKER_TOKEN","valueFrom":{"secretKeyRef":{"name":self.config.worker_token_secret_name,"key":"token"}}},
                                 {"name":"HOME","value":"/work"},
@@ -4152,6 +4153,13 @@ mod tests {
             manifest.pointer("/spec/template/spec/containers/0/command/0"),
             Some(&json!("pharness-eval"))
         );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/image"),
+            Some(&json!(dispatcher
+                .config
+                .inference_evaluation_image
+                .as_str()))
+        );
         let env = manifest
             .pointer("/spec/template/spec/containers/0/env")
             .and_then(serde_json::Value::as_array)
@@ -4159,6 +4167,9 @@ mod tests {
         assert!(env
             .iter()
             .any(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN"));
+        assert!(env.iter().any(|entry| {
+            entry["name"] == "PHARNESS_MODEL_GRANT_SIGNER_ENABLED" && entry["value"] == "false"
+        }));
         for forbidden in [
             "FIREWORKS_API_KEY",
             "OPENROUTER_API_KEY",
@@ -5072,6 +5083,7 @@ mod tests {
             config: WorkerKubernetesConfig {
                 namespace: "pharness".to_string(),
                 image: "example.test/pharness:latest".to_string(),
+                inference_evaluation_image: "example.test/pharness-eval:latest".to_string(),
                 service_account: "pharness-worker".to_string(),
                 tekton_executor_service_account: "pharness-tekton-runner".to_string(),
                 tekton_allowed_namespaces: Vec::new(),

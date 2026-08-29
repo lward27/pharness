@@ -75,8 +75,6 @@ inferenceGateway:
   directFireworksEnabled: true
   image:
     repository: registry.lucas.engineering/pharness-model-gateway
-    # Disabled until the post-merge release commit pins the gateway built from
-    # the same source revision as API, UI, and both runners.
     digest: sha256:ebbd76bc43d4fc033f1d6eac2e0ab52b1bdfa6968fade9d55c3213869062a2c5
     pullPolicy: IfNotPresent
     revision: 8d771b60903f22d268cdef0518e3d4edd3b7ddb7
@@ -93,6 +91,17 @@ inferenceGateway:
     limits:
       cpu: 500m
       memory: 256Mi
+
+# Purpose-built qualification image. The source implementation commit keeps
+# the current runtime reference as a non-functional compatibility pin; the
+# separate release commit replaces it with pharness-eval-runner built from the
+# exact merged source revision before any qualification is dispatched.
+inferenceEvaluation:
+  image:
+    repository: registry.lucas.engineering/pharness-runtime
+    digest: sha256:9f6b5185dc79e6936f8e52b933916d7c4c6292d33d9069c79d3840d581ac1895
+    pullPolicy: IfNotPresent
+    revision: 8d771b60903f22d268cdef0518e3d4edd3b7ddb7
 
 retention:
   scheduledEnabled: true
