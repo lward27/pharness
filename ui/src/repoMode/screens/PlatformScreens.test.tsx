@@ -68,11 +68,14 @@ describe("Environment profile settings", () => {
     ));
 
     fireEvent.click(screen.getByRole("button",{name:"Run qualification"}));
-    fireEvent.click(screen.getByRole("button",{name:"Run two-attempt qualification"}));
+    const qualificationButton = screen.getByRole("button",{name:"Run two-attempt qualification"});
+    fireEvent.click(qualificationButton);
+    fireEvent.click(qualificationButton);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/inference-policies/planner-kimi-k2p6-high-v1/revisions/v1/qualifications",
       expect.objectContaining({method:"POST",body:JSON.stringify({actor:"lucas",reason:"Run controlled qualification for Planner Kimi K2.6 high",config_hash:"registry-one",attempts:2})}),
     ));
+    expect(fetchMock.mock.calls.filter(([input,init]) => String(input).includes("/qualifications") && (init as RequestInit | undefined)?.method === "POST")).toHaveLength(1);
     expect(await screen.findByText("infeval-one")).toBeInTheDocument();
   });
 });

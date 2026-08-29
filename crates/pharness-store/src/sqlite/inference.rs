@@ -19,15 +19,20 @@ impl SqliteStore {
             .map_err(|error| StoreError::Conflict(error.to_string()))?;
         let now = now_string();
         let binding = &evaluation.resolved_binding;
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             INSERT INTO inference_evaluations (
               id, status, suite_id, suite_hash, attempts, agent_profile_id,
               agent_profile_hash, target_id, target_revision, target_hash, policy_id,
               policy_revision, policy_hash, resolved_binding_json, binding_hash,
               runtime_revision, actor, reason, config_hash, created_at
-            ) VALUES (?1, 'queued', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                      ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            )
+            SELECT ?1, 'queued', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                   ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
+            WHERE NOT EXISTS (
+              SELECT 1 FROM inference_evaluations
+              WHERE status IN ('queued', 'running')
+            )
             "#,
         )
         .bind(&evaluation.id)
@@ -51,6 +56,18 @@ impl SqliteStore {
         .bind(&now)
         .execute(&self.pool)
         .await?;
+        if result.rows_affected() != 1 {
+            let active = self
+                .list_active_inference_evaluations()
+                .await?
+                .into_iter()
+                .next()
+                .map(|evaluation| format!(" ({})", evaluation.id))
+                .unwrap_or_default();
+            return Err(StoreError::Conflict(format!(
+                "another inference qualification is already queued or running{active}"
+            )));
+        }
         self.get_inference_evaluation(&evaluation.id)
             .await?
             .ok_or_else(|| StoreError::NotFound {
@@ -644,7 +661,121 @@ fn row_to_evaluation(
 mod tests {
     use super::*;
     use crate::{CreateRun, CreateSession};
-    use pharness_core::{RunId, SessionId};
+    use pharness_core::{
+        InferenceBackendKind, InferenceCapabilities, InferenceStage, InferenceTargetRef,
+        InferenceTargetRevision, InferenceTransportPolicy, ReasoningContextMode, ReasoningEffort,
+        ReasoningRequestPolicy, ResolvedInferenceBinding, RunId, SessionId,
+        StageInferencePolicyRevision, ToolProtocolMode, INFERENCE_POLICY_SCHEMA,
+        INFERENCE_TARGET_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA,
+    };
+
+    fn evaluation(id: &str) -> CreateInferenceEvaluation {
+        let mut target = InferenceTargetRevision {
+            schema_version: INFERENCE_TARGET_SCHEMA.into(),
+            target_id: "target".into(),
+            revision: "v1".into(),
+            display_name: "Target".into(),
+            backend_kind: InferenceBackendKind::Fireworks,
+            protocol: "openai_chat_completions_v1".into(),
+            upstream_base_url: "https://api.fireworks.ai/inference/v1".into(),
+            upstream_model: "accounts/example/models/model".into(),
+            authentication_binding: Some("credential-binding".into()),
+            transport: InferenceTransportPolicy::default(),
+            capabilities: InferenceCapabilities {
+                native_tools: true,
+                streaming: true,
+                json_schema: true,
+                stream_options: true,
+                reasoning_efforts: vec![ReasoningEffort::Medium],
+                reasoning_context_modes: vec![ReasoningContextMode::CurrentTurn],
+            },
+            context_limit_tokens: 32_768,
+            output_limit_tokens: 8_192,
+            allowed_stages: vec![InferenceStage::Plan],
+            selectable: true,
+            openrouter: None,
+            config_hash: String::new(),
+        };
+        target.config_hash = target.computed_hash().unwrap();
+        let mut policy = StageInferencePolicyRevision {
+            schema_version: INFERENCE_POLICY_SCHEMA.into(),
+            policy_id: "planner-policy".into(),
+            revision: "v1".into(),
+            display_name: "Planner policy".into(),
+            eligible_profiles: vec!["repo-planner".into()],
+            eligible_stages: vec![InferenceStage::Plan],
+            target: InferenceTargetRef {
+                target_id: target.target_id.clone(),
+                revision: target.revision.clone(),
+            },
+            target_hash: target.config_hash.clone(),
+            reasoning: ReasoningRequestPolicy {
+                effort: Some(ReasoningEffort::Medium),
+                context_mode: ReasoningContextMode::CurrentTurn,
+                expose_replay: true,
+            },
+            temperature_milli: Some(100),
+            max_output_tokens: 8_192,
+            max_input_tokens: 16_000,
+            tool_protocol: ToolProtocolMode::NativeTools,
+            transport_max_attempts: 3,
+            selectable: true,
+            policy_hash: String::new(),
+        };
+        policy.policy_hash = policy.computed_hash().unwrap();
+        let mut binding = ResolvedInferenceBinding {
+            schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
+            target,
+            policy,
+            prompt_version: "prompt-v1".into(),
+            base_agent_profile_hash: format!("sha256:{}", "a".repeat(64)),
+            agent_profile_hash: String::new(),
+            tool_schema_hash: "tool-schema-hash".into(),
+            profile_budget_hash: "budget-hash".into(),
+            binding_hash: String::new(),
+        };
+        binding.agent_profile_hash = binding.computed_agent_profile_hash().unwrap();
+        binding.binding_hash = binding.computed_hash().unwrap();
+        CreateInferenceEvaluation {
+            id: id.into(),
+            suite_id: "planner-v1".into(),
+            suite_hash: "suite-hash".into(),
+            attempts: 2,
+            agent_profile_id: "repo-planner".into(),
+            agent_profile_hash: binding.agent_profile_hash.clone(),
+            resolved_binding: binding,
+            runtime_revision: "runtime-sha".into(),
+            actor: "operator".into(),
+            reason: "test qualification single flight".into(),
+            config_hash: "registry-hash".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn inference_evaluations_are_globally_single_flight() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let first = store
+            .create_inference_evaluation(evaluation("infeval_first"))
+            .await
+            .unwrap();
+        assert_eq!(first.status, "queued");
+        assert!(matches!(
+            store
+                .create_inference_evaluation(evaluation("infeval_duplicate"))
+                .await,
+            Err(StoreError::Conflict(message))
+                if message.contains("already queued or running (infeval_first)")
+        ));
+        store
+            .fail_inference_evaluation(&first.id, "test terminal state")
+            .await
+            .unwrap();
+        let next = store
+            .create_inference_evaluation(evaluation("infeval_next"))
+            .await
+            .unwrap();
+        assert_eq!(next.status, "queued");
+    }
 
     #[tokio::test]
     async fn inference_provenance_rows_are_append_only() {
