@@ -71,7 +71,7 @@ api:
       memory: 1Gi
 
 inferenceGateway:
-  enabled: false
+  enabled: true
   directFireworksEnabled: true
   image:
     repository: registry.lucas.engineering/pharness-model-gateway
