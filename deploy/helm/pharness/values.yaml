@@ -115,6 +115,7 @@ worker:
       - https://github.com/lward27/finance_app_database_service.git
       - https://github.com/lward27/finance-frontend.git
       - https://github.com/lward27/scraper_manager.git
+      - https://github.com/lward27/yfinance_wrapper.git
     githubApiUrl: https://api.github.com
     authorName: Pharness
     authorEmail: pharness@lucas.engineering
@@ -144,6 +145,7 @@ worker:
       - https://github.com/lward27/finance_app_database_service.git
       - https://github.com/lward27/finance-frontend.git
       - https://github.com/lward27/scraper_manager.git
+      - https://github.com/lward27/yfinance_wrapper.git
     githubApiUrl: https://api.github.com
     activeDeadlineSeconds: 300
     ttlSecondsAfterFinished: 3600
