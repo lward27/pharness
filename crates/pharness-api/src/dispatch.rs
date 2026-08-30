@@ -2896,6 +2896,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                     "metadata":{"labels":{
                         "app":"pharness-inference-evaluator",
                         "agentic.lucas.engineering/phase":"inference-evaluation",
+                        "agentic.lucas.engineering/inference-mode":"gateway",
                         JOB_NAME_LABEL:INFERENCE_EVALUATION_JOB_NAME_VALUE,
                     }},
                     "spec":{
@@ -4172,6 +4173,12 @@ mod tests {
                 .config
                 .inference_evaluation_image
                 .as_str()))
+        );
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1inference-mode"
+            ),
+            Some(&json!("gateway"))
         );
         let env = manifest
             .pointer("/spec/template/spec/containers/0/env")
