@@ -12,6 +12,21 @@ use thiserror::Error;
 use tokio::time::{sleep, timeout, Duration};
 use url::Url;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OpenAiCompatibleTransportOptions {
+    pub https_proxy_url: Option<String>,
+    pub no_proxy: Option<String>,
+}
+
+impl OpenAiCompatibleTransportOptions {
+    pub fn from_environment() -> Self {
+        Self {
+            https_proxy_url: first_nonempty_environment_value(&["HTTPS_PROXY", "https_proxy"]),
+            no_proxy: first_nonempty_environment_value(&["NO_PROXY", "no_proxy"]),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenAiCompatibleClient {
     http: reqwest::Client,
@@ -28,6 +43,20 @@ impl OpenAiCompatibleClient {
         policy: StageInferencePolicyRevision,
         credential: Option<SecretString>,
     ) -> Result<Self, OpenAiCompatibleError> {
+        Self::new_with_transport(
+            target,
+            policy,
+            credential,
+            OpenAiCompatibleTransportOptions::default(),
+        )
+    }
+
+    pub fn new_with_transport(
+        target: InferenceTargetRevision,
+        policy: StageInferencePolicyRevision,
+        credential: Option<SecretString>,
+        transport_options: OpenAiCompatibleTransportOptions,
+    ) -> Result<Self, OpenAiCompatibleError> {
         target
             .validate()
             .map_err(|error| OpenAiCompatibleError::InvalidConfiguration(error.to_string()))?;
@@ -41,11 +70,22 @@ impl OpenAiCompatibleClient {
             max_attempts: policy.transport_max_attempts,
             ..RetryPolicy::default()
         };
-        let http = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder()
+            .no_proxy()
             .connect_timeout(Duration::from_secs(
                 target.transport.connect_timeout_seconds,
             ))
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(reqwest::redirect::Policy::none());
+        if let Some(proxy_url) = transport_options.https_proxy_url.as_deref() {
+            let proxy_url = parse_proxy_url(proxy_url)?;
+            let mut proxy = reqwest::Proxy::https(proxy_url.as_str())
+                .map_err(OpenAiCompatibleError::ProxyConfiguration)?;
+            if let Some(no_proxy) = transport_options.no_proxy.as_deref() {
+                proxy = proxy.no_proxy(reqwest::NoProxy::from_string(no_proxy));
+            }
+            builder = builder.proxy(proxy);
+        }
+        let http = builder
             .build()
             .map_err(OpenAiCompatibleError::ClientBuild)?;
         let base_url = parse_base_url(&target.upstream_base_url)?;
@@ -301,6 +341,29 @@ fn parse_base_url(input: &str) -> Result<Url, OpenAiCompatibleError> {
     Ok(url)
 }
 
+fn parse_proxy_url(input: &str) -> Result<Url, OpenAiCompatibleError> {
+    let url = Url::parse(input).map_err(|_| OpenAiCompatibleError::InvalidProxyConfiguration)?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.path(), "" | "/")
+    {
+        return Err(OpenAiCompatibleError::InvalidProxyConfiguration);
+    }
+    Ok(url)
+}
+
+fn first_nonempty_environment_value(names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+    })
+}
+
 async fn status_error(response: reqwest::Response) -> OpenAiCompatibleError {
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
@@ -319,6 +382,10 @@ pub enum OpenAiCompatibleError {
     CredentialBindingMismatch,
     #[error("failed to build OpenAI-compatible HTTP client: {0}")]
     ClientBuild(reqwest::Error),
+    #[error("OpenAI-compatible proxy URL must be an HTTP(S) origin without credentials, path, query, or fragment")]
+    InvalidProxyConfiguration,
+    #[error("failed to configure the OpenAI-compatible HTTPS proxy: {0}")]
+    ProxyConfiguration(reqwest::Error),
     #[error("invalid OpenAI-compatible base URL {input:?}: {source}")]
     InvalidBaseUrl {
         input: String,
@@ -435,7 +502,78 @@ fn summarize_error_body(body: &str) -> String {
 mod tests {
     use super::*;
     use crate::{AccumulatedToolCall, OpenAiStreamAggregate};
-    use pharness_core::ToolProtocolMode;
+    use pharness_core::{
+        InferenceBackendKind, InferenceCapabilities, InferenceStage, InferenceTargetRef,
+        InferenceTransportPolicy, ReasoningRequestPolicy, StageInferencePolicyRevision,
+        ToolProtocolMode, INFERENCE_POLICY_SCHEMA, INFERENCE_TARGET_SCHEMA,
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    fn test_target() -> InferenceTargetRevision {
+        let mut target = InferenceTargetRevision {
+            schema_version: INFERENCE_TARGET_SCHEMA.into(),
+            target_id: "test-target".into(),
+            revision: "v1".into(),
+            display_name: "Test target".into(),
+            backend_kind: InferenceBackendKind::OpenaiCompatible,
+            protocol: "openai_chat_completions_v1".into(),
+            upstream_base_url: "https://models.example.test/v1".into(),
+            upstream_model: "test-model".into(),
+            authentication_binding: None,
+            transport: InferenceTransportPolicy {
+                connect_timeout_seconds: 1,
+                first_response_timeout_seconds: 1,
+                stream_idle_timeout_seconds: 1,
+                max_attempts: 1,
+                allow_insecure_private_http: false,
+                private_cidr: None,
+                private_port: None,
+            },
+            capabilities: InferenceCapabilities {
+                native_tools: true,
+                streaming: true,
+                json_schema: true,
+                stream_options: true,
+                reasoning_efforts: Vec::new(),
+                reasoning_context_modes: Vec::new(),
+            },
+            context_limit_tokens: 32_768,
+            output_limit_tokens: 8_192,
+            allowed_stages: vec![InferenceStage::Implement],
+            selectable: true,
+            openrouter: None,
+            config_hash: String::new(),
+        };
+        target.config_hash = target.computed_hash().unwrap();
+        target
+    }
+
+    fn test_policy(target: &InferenceTargetRevision) -> StageInferencePolicyRevision {
+        let mut policy = StageInferencePolicyRevision {
+            schema_version: INFERENCE_POLICY_SCHEMA.into(),
+            policy_id: "test-policy".into(),
+            revision: "v1".into(),
+            display_name: "Test policy".into(),
+            eligible_profiles: vec!["repo-builder".into()],
+            eligible_stages: vec![InferenceStage::Implement],
+            target: InferenceTargetRef {
+                target_id: target.target_id.clone(),
+                revision: target.revision.clone(),
+            },
+            target_hash: target.config_hash.clone(),
+            reasoning: ReasoningRequestPolicy::default(),
+            temperature_milli: Some(100),
+            max_output_tokens: 4_096,
+            max_input_tokens: 16_000,
+            tool_protocol: ToolProtocolMode::NativeTools,
+            transport_max_attempts: 1,
+            selectable: true,
+            policy_hash: String::new(),
+        };
+        policy.policy_hash = policy.computed_hash().unwrap();
+        policy
+    }
 
     #[test]
     fn rejects_multiple_actions_in_one_turn() {
@@ -460,5 +598,44 @@ mod tests {
         };
         let error = aggregate_to_model_turn(aggregate, ToolProtocolMode::NativeTools).unwrap_err();
         assert!(matches!(error, ProviderError::MalformedResponse { .. }));
+    }
+
+    #[test]
+    fn rejects_proxy_urls_with_credentials_or_paths() {
+        assert!(parse_proxy_url("http://user:pass@proxy.example.test:8080").is_err());
+        assert!(parse_proxy_url("http://proxy.example.test:8080/connect").is_err());
+        assert!(parse_proxy_url("http://proxy.example.test:8080").is_ok());
+    }
+
+    #[tokio::test]
+    async fn routes_https_requests_through_the_explicit_connect_proxy() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let proxy = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 2_048];
+            let bytes = stream.read(&mut request).await.unwrap();
+            stream
+                .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                .await
+                .unwrap();
+            String::from_utf8_lossy(&request[..bytes]).into_owned()
+        });
+        let target = test_target();
+        let policy = test_policy(&target);
+        let client = OpenAiCompatibleClient::new_with_transport(
+            target,
+            policy,
+            None,
+            OpenAiCompatibleTransportOptions {
+                https_proxy_url: Some(format!("http://{address}")),
+                no_proxy: None,
+            },
+        )
+        .unwrap();
+
+        assert!(client.list_models().await.is_err());
+        let request = proxy.await.unwrap();
+        assert!(request.starts_with("CONNECT models.example.test:443 HTTP/1.1\r\n"));
     }
 }
