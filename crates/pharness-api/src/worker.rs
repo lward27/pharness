@@ -1301,11 +1301,16 @@ async fn seal_repo_plan_stage(
         .get_work_item(&execution.work_item_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Repo Mode WorkItem no longer exists"))?;
+    let selected_acceptance_names = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?
+        .acceptance_command_names;
     let events = store.list_events(&run.id).await?;
     let submitted = structured_submission_from_events(&events, "work_plan");
     let (status, stop_reason, plan, agent_claims) = if outcome.status == "completed" {
         match submitted {
-            Some(document) => match validate_repo_work_plan(&document) {
+            Some(document) => match validate_work_plan(&document, &selected_acceptance_names) {
                 Ok((title, summary, risk_level)) => {
                     let plan = if let Some(existing) = store
                         .get_work_plan_by_work_item(&execution.work_item_id)
@@ -1493,8 +1498,9 @@ pub(crate) fn structured_submission_from_events(
     })
 }
 
-fn validate_repo_work_plan(
+fn validate_work_plan(
     document: &serde_json::Value,
+    selected_acceptance_names: &[String],
 ) -> Result<(String, String, String), String> {
     let object = document
         .as_object()
@@ -1522,6 +1528,52 @@ fn validate_repo_work_plan(
         })
     }) {
         return Err("every WorkPlan step requires a title and description".into());
+    }
+    let allowed_acceptance = selected_acceptance_names
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut covered_acceptance = std::collections::BTreeSet::new();
+    for step in steps {
+        let step = step
+            .as_object()
+            .ok_or_else(|| "every WorkPlan step must be an object".to_string())?;
+        let Some(names) = step.get("acceptance_names") else {
+            continue;
+        };
+        let names = names
+            .as_array()
+            .filter(|names| names.len() <= 50)
+            .ok_or_else(|| "WorkPlan step acceptance_names must be a bounded array".to_string())?;
+        let mut step_names = std::collections::BTreeSet::new();
+        for name in names {
+            let name = name
+                .as_str()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    "WorkPlan step acceptance_names must contain non-empty strings".to_string()
+                })?;
+            if !allowed_acceptance.contains(name) {
+                return Err(format!(
+                    "WorkPlan step references undeclared acceptance command {name}"
+                ));
+            }
+            if !step_names.insert(name) {
+                return Err(format!("WorkPlan step repeats acceptance command {name}"));
+            }
+            covered_acceptance.insert(name);
+        }
+    }
+    let missing_acceptance = allowed_acceptance
+        .difference(&covered_acceptance)
+        .copied()
+        .collect::<Vec<_>>();
+    if !missing_acceptance.is_empty() {
+        return Err(format!(
+            "WorkPlan submission does not cover selected acceptance commands: {}",
+            missing_acceptance.join(", ")
+        ));
     }
     let title = object
         .get("title")
@@ -2726,7 +2778,7 @@ mod tests {
         create_repo_change_set, file_change_from_event, finish_run_from_attempt,
         grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
         persist_workspace_evidence, remediation_plan_from_incident, result_json_for_attempt,
-        structured_submission_from_events, validate_repo_work_plan, validate_workspace_evidence,
+        structured_submission_from_events, validate_work_plan, validate_workspace_evidence,
         workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
@@ -3080,14 +3132,36 @@ mod tests {
             "title":"Validation change",
             "summary":"Add a pure validator and tests",
             "risk_level":"medium",
-            "steps":[{"title":"Implement","description":"Add the validator"}]
+            "steps":[{"title":"Implement","description":"Add the validator","acceptance_names":["unit"]}]
         });
-        assert!(validate_repo_work_plan(&valid).is_ok());
+        assert!(validate_work_plan(&valid, &["unit".into()]).is_ok());
+
+        let undeclared = serde_json::json!({
+            "title":"Validation change",
+            "summary":"Add a pure validator and tests",
+            "risk_level":"medium",
+            "steps":[{"title":"Inspect","description":"Inspect the repository","acceptance_names":["discover"]},{"title":"Implement","description":"Add the validator","acceptance_names":["unit"]}]
+        });
+        assert_eq!(
+            validate_work_plan(&undeclared, &["unit".into()]).unwrap_err(),
+            "WorkPlan step references undeclared acceptance command discover"
+        );
+
+        let incomplete = serde_json::json!({
+            "title":"Validation change",
+            "summary":"Add a pure validator and tests",
+            "risk_level":"medium",
+            "steps":[{"title":"Implement","description":"Add the validator","acceptance_names":["unit"]}]
+        });
+        assert_eq!(
+            validate_work_plan(&incomplete, &["unit".into(), "compile".into()]).unwrap_err(),
+            "WorkPlan submission does not cover selected acceptance commands: compile"
+        );
         let invalid = serde_json::json!({
             "summary":"Missing actionable descriptions",
             "steps":[{}]
         });
-        assert!(validate_repo_work_plan(&invalid).is_err());
+        assert!(validate_work_plan(&invalid, &["unit".into()]).is_err());
     }
 
     #[test]
