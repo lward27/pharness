@@ -34,6 +34,8 @@ spec:
       app: pharness-model-gateway
   template:
     metadata:
+      annotations:
+        checksum/inference-registry: {{ .Files.Get "files/inference-registry.json" | sha256sum | quote }}
       labels:
         app: pharness-model-gateway
         app.kubernetes.io/part-of: pharness
