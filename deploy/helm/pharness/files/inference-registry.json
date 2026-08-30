@@ -249,8 +249,8 @@
     "onboarding": {"policy_id": "fireworks-legacy-v1", "revision": "v1"},
     "plan": {"policy_id": "fireworks-legacy-v1", "revision": "v1"},
     "implement": {"policy_id": "fireworks-legacy-v1", "revision": "v1"},
-    "test": {"policy_id": "fireworks-legacy-v1", "revision": "v1"},
-    "verify": {"policy_id": "fireworks-legacy-v1", "revision": "v1"}
+    "test": {"policy_id": "tester-kimi-k2p6-low-v1", "revision": "v1"},
+    "verify": {"policy_id": "verifier-kimi-k2p6-high-v1", "revision": "v1"}
   },
   "config_hash": ""
 }
