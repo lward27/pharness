@@ -94,6 +94,11 @@ struct GatewayEvaluationContext {
 enum ComparisonKind {
     Regression,
     Policy,
+    Transport,
+}
+
+fn is_direct_to_gateway_transport_pair(baseline: &str, candidate: &str) -> bool {
+    matches!((baseline, candidate), ("fireworks", "gateway"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,10 +389,25 @@ async fn main() -> Result<()> {
                 || baseline.target_hash != candidate.target_hash
                 || baseline.profile_hash != candidate.profile_hash
                 || baseline.tool_schema_hash != candidate.tool_schema_hash;
+            let controlled_transport_mismatch =
+                !is_direct_to_gateway_transport_pair(&baseline.provider, &candidate.provider)
+                    || baseline.model != candidate.model
+                    || baseline.target_id != candidate.target_id
+                    || baseline.target_revision != candidate.target_revision
+                    || baseline.target_hash != candidate.target_hash
+                    || baseline.policy_id != candidate.policy_id
+                    || baseline.policy_revision != candidate.policy_revision
+                    || baseline.policy_hash != candidate.policy_hash
+                    || baseline.temperature_milli != candidate.temperature_milli
+                    || baseline.max_tokens != candidate.max_tokens
+                    || baseline.resolved_settings != candidate.resolved_settings
+                    || baseline.profile_hash != candidate.profile_hash
+                    || baseline.tool_schema_hash != candidate.tool_schema_hash;
             if common_mismatch
                 || match kind {
                     ComparisonKind::Regression => regression_mismatch,
                     ComparisonKind::Policy => controlled_policy_mismatch,
+                    ComparisonKind::Transport => controlled_transport_mismatch,
                 }
             {
                 bail!(
@@ -1711,7 +1731,10 @@ impl ModelProvider for ReplayProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::{builder_report_metadata, replay_suite, unexpected_changed_paths, FIXTURES};
+    use super::{
+        builder_report_metadata, is_direct_to_gateway_transport_pair, replay_suite,
+        unexpected_changed_paths, FIXTURES,
+    };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
 
@@ -1753,5 +1776,16 @@ mod tests {
             builder_report_metadata(model).unwrap().tool_schema_hash,
             expected
         );
+    }
+
+    #[test]
+    fn transport_comparison_requires_direct_fireworks_as_the_gateway_baseline() {
+        assert!(is_direct_to_gateway_transport_pair("fireworks", "gateway"));
+        assert!(!is_direct_to_gateway_transport_pair("gateway", "fireworks"));
+        assert!(!is_direct_to_gateway_transport_pair(
+            "fireworks",
+            "fireworks"
+        ));
+        assert!(!is_direct_to_gateway_transport_pair("gateway", "gateway"));
     }
 }
