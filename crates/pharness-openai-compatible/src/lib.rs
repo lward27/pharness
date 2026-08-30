@@ -6,7 +6,8 @@ mod stream;
 mod types;
 
 pub use client::{
-    aggregate_to_model_turn, OpenAiCompatibleClient, OpenAiCompatibleError, RetryPolicy,
+    aggregate_to_model_turn, OpenAiCompatibleClient, OpenAiCompatibleError,
+    OpenAiCompatibleTransportOptions, RetryPolicy,
 };
 pub use gateway::{GatewayClientConfig, GatewayModelClient};
 pub use stream::{AccumulatedToolCall, OpenAiStreamAggregate, SseDecoder, ToolCallAccumulator};

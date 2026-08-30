@@ -164,6 +164,8 @@ pub(crate) struct EvalResult {
     acceptance_ok: bool,
     safety_violations: Vec<String>,
     failure_category: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stop_reason_code: Option<String>,
 }
 
 struct Fixture {
@@ -757,6 +759,46 @@ fn normalized_failure_category(outcome: &AttemptOutcome) -> String {
     }
 }
 
+fn normalized_stop_reason_code(outcome: &AttemptOutcome) -> Option<String> {
+    let error = outcome.error.as_deref()?;
+    let normalized = error.to_ascii_lowercase();
+    let code = if normalized.contains("credential presence") {
+        "provider_credential_binding_mismatch"
+    } else if normalized.contains("proxy url")
+        || normalized.contains("configure the openai-compatible https proxy")
+    {
+        "provider_proxy_configuration_failed"
+    } else if normalized.contains("compatibility configuration is invalid")
+        || normalized.contains("invalid openai-compatible configuration")
+    {
+        "provider_configuration_failed"
+    } else if normalized.contains("first response timed out") {
+        "provider_first_response_timeout"
+    } else if normalized.contains("stream was idle") {
+        "provider_stream_idle_timeout"
+    } else if normalized.contains("request failed") && normalized.contains("connect") {
+        "provider_connect_failed"
+    } else if normalized.contains("request failed") {
+        "provider_request_failed"
+    } else if normalized.contains("multiple tool calls") {
+        "provider_multiple_tools"
+    } else if normalized.contains("usable action") || normalized.contains("invalid action payload")
+    {
+        "provider_action_invalid"
+    } else if normalized.contains("malformed response") {
+        "provider_response_malformed"
+    } else if normalized.contains("context_budget_exceeded") {
+        "context_budget_exceeded"
+    } else if normalized.contains("tool_recovery_exhausted") {
+        "tool_recovery_exhausted"
+    } else if normalized.contains("completion_evidence_exhausted") {
+        "completion_evidence_exhausted"
+    } else {
+        "runtime_error"
+    };
+    Some(code.to_string())
+}
+
 fn outcome_safety_violations(outcome: &AttemptOutcome) -> Vec<String> {
     let Some(error) = outcome.error.as_deref() else {
         return Vec::new();
@@ -1067,6 +1109,9 @@ async fn run_live_coding_fixture(
         && safety_violations.is_empty();
     persist_artifact(&root, fixture, attempt)?;
     let failure_category = (!passed).then(|| normalized_failure_category(&outcome));
+    let stop_reason_code = (!passed)
+        .then(|| normalized_stop_reason_code(&outcome))
+        .flatten();
     Ok(EvalResult {
         fixture: fixture.id.to_string(),
         attempt,
@@ -1091,6 +1136,7 @@ async fn run_live_coding_fixture(
         acceptance_ok,
         safety_violations,
         failure_category,
+        stop_reason_code,
     })
 }
 
@@ -1159,6 +1205,9 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         consumption: outcome.consumption.clone(),
     };
     let failure_category = (!passed).then(|| normalized_failure_category(&replay_outcome));
+    let stop_reason_code = (!passed)
+        .then(|| normalized_stop_reason_code(&replay_outcome))
+        .flatten();
     Ok(EvalResult {
         fixture: fixture.id.to_string(),
         attempt,
@@ -1187,6 +1236,7 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
             safety_violations
         },
         failure_category,
+        stop_reason_code,
     })
 }
 

@@ -11,7 +11,7 @@ use pharness_core::{
     StageInferencePolicyRevision, TokenUsage, ToolProtocolMode, INFERENCE_POLICY_SCHEMA,
     INFERENCE_TARGET_SCHEMA,
 };
-use pharness_openai_compatible::OpenAiCompatibleClient;
+use pharness_openai_compatible::{OpenAiCompatibleClient, OpenAiCompatibleTransportOptions};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::time::{sleep, Duration};
@@ -240,8 +240,13 @@ impl FireworksClient {
         policy.policy_hash = policy
             .computed_hash()
             .map_err(compatibility_configuration_error)?;
-        OpenAiCompatibleClient::new(target, policy, Some(self.api_key.clone()))
-            .map_err(ProviderError::from)
+        OpenAiCompatibleClient::new_with_transport(
+            target,
+            policy,
+            Some(self.api_key.clone()),
+            OpenAiCompatibleTransportOptions::from_environment(),
+        )
+        .map_err(ProviderError::from)
     }
 }
 

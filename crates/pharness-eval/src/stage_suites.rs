@@ -1,7 +1,7 @@
 use super::{
     evaluation_runtime_revision, fetch_gateway_evaluation_context, gateway_client,
-    metrics_from_events, required_evaluation_id, trusted_eval_policy, validate_gateway_context,
-    EvalAttemptBackend, EvalReport, EvalResult, Provider,
+    metrics_from_events, normalized_stop_reason_code, required_evaluation_id, trusted_eval_policy,
+    validate_gateway_context, EvalAttemptBackend, EvalReport, EvalResult, Provider,
 };
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -377,6 +377,9 @@ async fn run_fixture(
                 .clone()
                 .unwrap_or_else(|| "stage_qualification_mismatch".into())
         }),
+        stop_reason_code: (!passed)
+            .then(|| normalized_stop_reason_code(&outcome))
+            .flatten(),
     })
 }
 
