@@ -348,6 +348,18 @@ spec:
             matchLabels:
               app: pharness-model-gateway
         {{- end }}
+        {{- if .Values.inferenceGateway.directFireworksEnabled }}
+        # The matched rollback-transport evaluation uses the direct client but
+        # still exits only through the coding CONNECT proxy. Keep this class
+        # separate from gateway evaluators so it cannot reach the gateway or
+        # inherit normal runner authorization.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app: pharness-direct-inference-evaluator
+        {{- end }}
       ports:
         - { protocol: TCP, port: 8080 }
   egress:
