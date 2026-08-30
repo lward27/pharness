@@ -1336,6 +1336,7 @@ dependencies = [
  "async-trait",
  "futures",
  "pharness-core",
+ "pharness-openai-compatible",
  "reqwest",
  "secrecy",
  "serde",

@@ -5,9 +5,13 @@ use crate::{
 use async_trait::async_trait;
 use futures::StreamExt;
 use pharness_core::{
-    AgentAction, ModelCapabilities, ModelProvider, ModelRequest, ModelToolCall, ModelTurn,
-    ProviderError, TokenUsage, ToolProtocolMode,
+    AgentAction, InferenceBackendKind, InferenceCapabilities, InferenceStage, InferenceTargetRef,
+    InferenceTargetRevision, InferenceTransportPolicy, ModelCapabilities, ModelProvider,
+    ModelRequest, ModelToolCall, ModelTurn, ProviderError, ReasoningContextMode, ReasoningEffort,
+    StageInferencePolicyRevision, TokenUsage, ToolProtocolMode, INFERENCE_POLICY_SCHEMA,
+    INFERENCE_TARGET_SCHEMA,
 };
+use pharness_openai_compatible::OpenAiCompatibleClient;
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::time::{sleep, Duration};
@@ -138,29 +142,13 @@ impl FireworksClient {
 #[async_trait]
 impl ModelProvider for FireworksClient {
     async fn complete_action(&self, request: ModelRequest) -> Result<ModelTurn, ProviderError> {
-        let mode = request.mode;
-        let fireworks_request = match mode {
-            ToolProtocolMode::NativeTools => FireworksChatRequest::native_tools(
-                self.model.clone(),
-                request.messages,
-                request.tools,
-                request.temperature,
-                request.max_tokens,
-            ),
-            ToolProtocolMode::JsonAction => FireworksChatRequest::json_action(
-                self.model.clone(),
-                request.messages,
-                request.temperature,
-                request.max_tokens,
-            ),
-        };
-
-        let aggregate = self
-            .complete_streaming(fireworks_request)
-            .await
-            .map_err(ProviderError::from)?;
-
-        aggregate_to_model_turn(aggregate, mode)
+        // Direct Fireworks is the rollback transport for gateway-bound Runs,
+        // so it must share the exact provider-neutral request/replay adapter.
+        // Keep the legacy request helpers above for API compatibility while
+        // routing ModelProvider execution through the qualified Fireworks
+        // backend implementation.
+        let client = self.compatibility_client(&request)?;
+        client.complete_action(request).await
     }
 
     fn capabilities(&self) -> ModelCapabilities {
@@ -169,6 +157,97 @@ impl ModelProvider for FireworksClient {
             streaming: true,
             json_schema_response_format: true,
         }
+    }
+}
+
+impl FireworksClient {
+    fn compatibility_client(
+        &self,
+        request: &ModelRequest,
+    ) -> Result<OpenAiCompatibleClient, ProviderError> {
+        let mut target = InferenceTargetRevision {
+            schema_version: INFERENCE_TARGET_SCHEMA.into(),
+            target_id: "fireworks-direct-compatibility".into(),
+            revision: "v1".into(),
+            display_name: "Fireworks direct compatibility".into(),
+            backend_kind: InferenceBackendKind::Fireworks,
+            protocol: "openai_chat_completions_v1".into(),
+            upstream_base_url: self.base_url.to_string(),
+            upstream_model: self.model.clone(),
+            authentication_binding: Some("fireworks-api-key".into()),
+            transport: InferenceTransportPolicy::default(),
+            capabilities: InferenceCapabilities {
+                native_tools: true,
+                streaming: true,
+                json_schema: true,
+                stream_options: true,
+                reasoning_efforts: vec![
+                    ReasoningEffort::Low,
+                    ReasoningEffort::Medium,
+                    ReasoningEffort::High,
+                ],
+                reasoning_context_modes: vec![
+                    ReasoningContextMode::CurrentTurn,
+                    ReasoningContextMode::AllTurns,
+                ],
+            },
+            context_limit_tokens: 262_144,
+            output_limit_tokens: 16_384,
+            allowed_stages: vec![
+                InferenceStage::Onboarding,
+                InferenceStage::Plan,
+                InferenceStage::Implement,
+                InferenceStage::Test,
+                InferenceStage::Verify,
+            ],
+            selectable: true,
+            openrouter: None,
+            config_hash: String::new(),
+        };
+        target.config_hash = target
+            .computed_hash()
+            .map_err(compatibility_configuration_error)?;
+        let temperature_milli = (request.temperature * 1_000.0).round();
+        if !temperature_milli.is_finite()
+            || temperature_milli < 0.0
+            || temperature_milli > f32::from(u16::MAX)
+        {
+            return Err(compatibility_configuration_error(
+                "direct Fireworks temperature is outside the supported range",
+            ));
+        }
+        let mut policy = StageInferencePolicyRevision {
+            schema_version: INFERENCE_POLICY_SCHEMA.into(),
+            policy_id: "fireworks-direct-compatibility".into(),
+            revision: "v1".into(),
+            display_name: "Fireworks direct compatibility".into(),
+            eligible_profiles: vec!["direct-fireworks".into()],
+            eligible_stages: vec![InferenceStage::Implement],
+            target: InferenceTargetRef {
+                target_id: target.target_id.clone(),
+                revision: target.revision.clone(),
+            },
+            target_hash: target.config_hash.clone(),
+            reasoning: request.reasoning.clone().unwrap_or_default(),
+            temperature_milli: Some(temperature_milli as u16),
+            max_output_tokens: request.max_tokens,
+            max_input_tokens: target.context_limit_tokens,
+            tool_protocol: request.mode,
+            transport_max_attempts: target.transport.max_attempts,
+            selectable: true,
+            policy_hash: String::new(),
+        };
+        policy.policy_hash = policy
+            .computed_hash()
+            .map_err(compatibility_configuration_error)?;
+        OpenAiCompatibleClient::new(target, policy, Some(self.api_key.clone()))
+            .map_err(ProviderError::from)
+    }
+}
+
+fn compatibility_configuration_error(error: impl std::fmt::Display) -> ProviderError {
+    ProviderError::MalformedResponse {
+        message: format!("direct Fireworks compatibility configuration is invalid: {error}"),
     }
 }
 
@@ -270,6 +349,7 @@ impl Default for RetryPolicy {
     }
 }
 
+#[allow(dead_code)] // Retained for compatibility-focused parser tests until the legacy wire types are removed.
 fn aggregate_to_model_turn(
     aggregate: FireworksStreamAggregate,
     mode: ToolProtocolMode,
@@ -386,7 +466,11 @@ mod tests {
         FireworksProviderConfig,
     };
     use crate::{AccumulatedToolCall, FireworksStreamAggregate};
-    use pharness_core::{AgentAction, ProviderError, ToolProtocolMode};
+    use pharness_core::{
+        AgentAction, CapabilityKind, ModelMessage, ModelRequest, ModelRole, ModelToolCall,
+        ProviderError, ReasoningContextMode, ReasoningEffort, ReasoningReplay,
+        ReasoningRequestPolicy, RunId, SessionId, ToolProtocolMode, ToolSpec,
+    };
     use secrecy::SecretString;
 
     #[test]
@@ -418,6 +502,58 @@ mod tests {
             client.chat_completions_url().as_str(),
             "https://example.test/custom/v1/chat/completions"
         );
+    }
+
+    #[test]
+    fn direct_compatibility_uses_fireworks_reasoning_and_replay_fields() {
+        let client = FireworksClient::new(
+            SecretString::new("test".to_string()),
+            FireworksProviderConfig::new("accounts/fireworks/models/kimi-k2p6"),
+        )
+        .unwrap();
+        let request = ModelRequest {
+            session_id: SessionId::new("session"),
+            run_id: RunId::new("run"),
+            messages: vec![ModelMessage {
+                role: ModelRole::Assistant,
+                content: String::new(),
+                tool_call_id: None,
+                tool_calls: vec![ModelToolCall {
+                    id: "call-one".into(),
+                    name: "finish".into(),
+                    arguments: "{}".into(),
+                }],
+                reasoning: Some(ReasoningReplay::Text("opaque replay state".into())),
+            }],
+            tools: vec![ToolSpec::new(
+                "finish",
+                "Finish the run",
+                serde_json::json!({"type":"object"}),
+                CapabilityKind::AgentControl,
+            )],
+            mode: ToolProtocolMode::NativeTools,
+            temperature: 0.1,
+            max_tokens: 8_192,
+            reasoning: Some(ReasoningRequestPolicy {
+                effort: Some(ReasoningEffort::Medium),
+                context_mode: ReasoningContextMode::CurrentTurn,
+                expose_replay: true,
+            }),
+        };
+
+        let wire = client
+            .compatibility_client(&request)
+            .unwrap()
+            .wire_request(request);
+        let value = serde_json::to_value(wire).unwrap();
+        assert_eq!(value["reasoning_effort"], "medium");
+        assert_eq!(value["reasoning_history"], "interleaved");
+        assert_eq!(
+            value["messages"][0]["reasoning_content"],
+            "opaque replay state"
+        );
+        assert!(value["messages"][0].get("reasoning").is_none());
+        assert!(value["messages"][0].get("reasoning_details").is_none());
     }
 
     #[test]
