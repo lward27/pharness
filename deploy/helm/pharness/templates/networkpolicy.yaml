@@ -187,6 +187,7 @@ spec:
         - podSelector:
             matchLabels:
               app: pharness-inference-evaluator
+              agentic.lucas.engineering/inference-mode: gateway
       ports:
         - { protocol: TCP, port: 4780 }
   egress:
@@ -229,6 +230,7 @@ spec:
   podSelector:
     matchLabels:
       app: pharness-inference-evaluator
+      agentic.lucas.engineering/inference-mode: gateway
   policyTypes: ["Egress"]
   egress:
     - to:
@@ -349,16 +351,16 @@ spec:
               app: pharness-model-gateway
         {{- end }}
         {{- if .Values.inferenceGateway.directFireworksEnabled }}
-        # The matched rollback-transport evaluation uses the direct client but
-        # still exits only through the coding CONNECT proxy. Keep this class
-        # separate from gateway evaluators so it cannot reach the gateway or
-        # inherit normal runner authorization.
+        # The matched rollback-transport evaluation uses the normal evaluator
+        # identity with an exact transport label. It exits only through the
+        # coding CONNECT proxy and cannot match the gateway evaluator policy.
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Release.Namespace }}
           podSelector:
             matchLabels:
-              app: pharness-direct-inference-evaluator
+              app: pharness-inference-evaluator
+              agentic.lucas.engineering/inference-mode: direct-fireworks
         {{- end }}
       ports:
         - { protocol: TCP, port: 8080 }

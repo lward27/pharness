@@ -89,7 +89,7 @@ grep -Fq "registry.lucas.engineering/pharness-python-runner@${PYTHON_RUNNER_DIGE
 grep -Fq "registry.lucas.engineering/pharness-node-runner@${NODE_RUNNER_DIGEST}" "$RENDERED"
 grep -Fq "registry.lucas.engineering/pharness-model-gateway@${MODEL_GATEWAY_DIGEST}" "$RENDERED"
 grep -Fq "registry.lucas.engineering/pharness-eval-runner@${EVAL_RUNNER_DIGEST}" "$RENDERED"
-grep -Fq "app: pharness-direct-inference-evaluator" "$RENDERED"
+grep -Fq "agentic.lucas.engineering/inference-mode: direct-fireworks" "$RENDERED"
 RUNNER_PROFILE="$(grep -A3 -F -- "- id: python-3.11" "$VALUES_FILE")"
 grep -Fq "active: true" <<<"$RUNNER_PROFILE"
 grep -Fq "image: registry.lucas.engineering/pharness-python-runner@${PYTHON_RUNNER_DIGEST}" <<<"$RUNNER_PROFILE"
