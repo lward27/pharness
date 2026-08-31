@@ -44,6 +44,13 @@ RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
 USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/pharness-codex-host"]
 
+# Execute the Linux/AMD64 binaries inside BuildKit before exporting the native
+# bundle. The packaging command commonly runs from macOS, where directly
+# executing the exported ELF files would fail even though the bundle is valid.
+FROM runtime AS bundle-verification
+RUN test "$(pharness-codex-host --version)" = "pharness-codex-host 0.1.0" \
+    && codex --version | grep -F 'codex-cli 0.150.1' >/dev/null
+
 FROM scratch AS bundle
 ARG PHARNESS_BUILD_REVISION=unknown
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /pharness-codex-host/bin/pharness-codex-host
