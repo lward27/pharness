@@ -138,6 +138,10 @@ pub struct WorkerKubernetesConfig {
     /// matched Builder fixtures, but it still receives only the internal
     /// worker identity and obtains single-use model grants from the API.
     pub inference_evaluation_image: String,
+    /// Optional dedicated hostname for large inference qualification Jobs.
+    /// Keeping these ephemeral, toolchain-heavy Jobs off the SQLite/PVC node
+    /// prevents image pulls and fixture workspaces from evicting the API.
+    pub inference_evaluation_node_hostname: Option<String>,
     pub service_account: String,
     pub tekton_executor_service_account: String,
     pub tekton_allowed_namespaces: Vec<String>,
@@ -368,6 +372,7 @@ impl ApiRuntimeConfig {
                     namespace: DEFAULT_WORKER_K8S_NAMESPACE.to_string(),
                     image: DEFAULT_WORKER_K8S_IMAGE.to_string(),
                     inference_evaluation_image: DEFAULT_INFERENCE_EVALUATION_IMAGE.to_string(),
+                    inference_evaluation_node_hostname: None,
                     service_account: DEFAULT_WORKER_K8S_SERVICE_ACCOUNT.to_string(),
                     tekton_executor_service_account: DEFAULT_TEKTON_EXECUTOR_SERVICE_ACCOUNT
                         .to_string(),
@@ -556,6 +561,10 @@ impl ApiRuntimeConfig {
                 }
                 if let Some(value) = kubernetes.inference_evaluation_image {
                     self.worker.kubernetes.inference_evaluation_image = value;
+                }
+                if let Some(value) = kubernetes.inference_evaluation_node_hostname {
+                    self.worker.kubernetes.inference_evaluation_node_hostname =
+                        blank_to_none(value);
                 }
                 if let Some(value) = kubernetes.service_account {
                     self.worker.kubernetes.service_account = value;
@@ -903,6 +912,10 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_INFERENCE_EVALUATION_IMAGE") {
             self.worker.kubernetes.inference_evaluation_image = value.clone();
+        }
+        if let Some(value) = env.get("PHARNESS_INFERENCE_EVALUATION_NODE_HOSTNAME") {
+            self.worker.kubernetes.inference_evaluation_node_hostname =
+                blank_to_none(value.clone());
         }
         if let Some(value) = env.get("PHARNESS_WORKER_K8S_SERVICE_ACCOUNT") {
             self.worker.kubernetes.service_account = value.clone();
@@ -1412,6 +1425,7 @@ struct FileWorkerKubernetesConfig {
     namespace: Option<String>,
     image: Option<String>,
     inference_evaluation_image: Option<String>,
+    inference_evaluation_node_hostname: Option<String>,
     service_account: Option<String>,
     tekton_executor_service_account: Option<String>,
     tekton_allowed_namespaces: Option<Vec<String>>,
@@ -1984,6 +1998,7 @@ tool_max_output_bytes = 3333
 
 [worker.kubernetes]
 tekton_executor_poll_seconds = 9
+inference_evaluation_node_hostname = "evaluation-a"
 workspace_size_limit = "3Gi"
 workspace_storage_class = "local-path"
 workspace_ephemeral_storage_request = "1500Mi"
@@ -2045,6 +2060,14 @@ deny_secret_access = true
         assert_eq!(config.cluster.timeout_ms, 2222);
         assert_eq!(config.cluster.max_output_bytes, 3333);
         assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 9);
+        assert_eq!(
+            config
+                .worker
+                .kubernetes
+                .inference_evaluation_node_hostname
+                .as_deref(),
+            Some("evaluation-a")
+        );
         assert_eq!(config.worker.kubernetes.workspace_size_limit, "3Gi");
         assert_eq!(
             config.worker.kubernetes.workspace_storage_class.as_deref(),
@@ -2139,6 +2162,10 @@ registry_aliases = ["file.registry=public.registry"]
             "5Gi".to_string(),
         );
         env.insert(
+            "PHARNESS_INFERENCE_EVALUATION_NODE_HOSTNAME".to_string(),
+            "evaluation-b".to_string(),
+        );
+        env.insert(
             "PHARNESS_WORKER_K8S_WORKSPACE_EPHEMERAL_STORAGE_REQUEST".to_string(),
             "3Gi".to_string(),
         );
@@ -2202,6 +2229,14 @@ registry_aliases = ["file.registry=public.registry"]
         );
         assert_eq!(config.worker.kubernetes.tekton_executor_poll_seconds, 11);
         assert_eq!(config.worker.kubernetes.workspace_size_limit, "5Gi");
+        assert_eq!(
+            config
+                .worker
+                .kubernetes
+                .inference_evaluation_node_hostname
+                .as_deref(),
+            Some("evaluation-b")
+        );
         assert_eq!(
             config.worker.kubernetes.workspace_ephemeral_storage_request,
             "3Gi"

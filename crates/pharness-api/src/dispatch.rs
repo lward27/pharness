@@ -805,6 +805,22 @@ fn network_policy_stabilization_container(image: &str) -> serde_json::Value {
     })
 }
 
+fn required_node_affinity(hostname: &str) -> serde_json::Value {
+    serde_json::json!({
+        "nodeAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+                "nodeSelectorTerms": [{
+                    "matchExpressions": [{
+                        "key": "kubernetes.io/hostname",
+                        "operator": "In",
+                        "values": [hostname],
+                    }],
+                }],
+            },
+        },
+    })
+}
+
 impl KubernetesJobDispatcher {
     pub fn new(
         store: Arc<SqliteStore>,
@@ -2877,7 +2893,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         request: &InferenceEvaluationExecutionRequest,
     ) -> serde_json::Value {
         let job_name = inference_evaluation_job_name(&request.evaluation_id);
-        serde_json::json!({
+        let mut manifest = serde_json::json!({
             "apiVersion":"batch/v1",
             "kind":"Job",
             "metadata":{
@@ -2941,7 +2957,11 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                     }
                 }
             }
-        })
+        });
+        if let Some(hostname) = self.config.inference_evaluation_node_hostname.as_deref() {
+            manifest["spec"]["template"]["spec"]["affinity"] = required_node_affinity(hostname);
+        }
+        manifest
     }
 
     /// Reconcile worker and executor jobs that stopped without reporting a
@@ -4153,7 +4173,9 @@ mod tests {
 
     #[tokio::test]
     async fn inference_evaluation_manifest_has_only_internal_worker_identity() {
-        let dispatcher = test_dispatcher(None).await;
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.inference_evaluation_node_hostname =
+            Some("evaluation-worker".to_string());
         let manifest =
             dispatcher.inference_evaluation_job_manifest(&InferenceEvaluationExecutionRequest {
                 evaluation_id: "infeval_test".into(),
@@ -4193,6 +4215,10 @@ mod tests {
         assert!(env.iter().any(|entry| {
             entry["name"] == "PHARNESS_EVAL_ARTIFACT_DIR" && entry["value"] == "/work/artifacts"
         }));
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values/0"),
+            Some(&json!("evaluation-worker"))
+        );
         for forbidden in [
             "FIREWORKS_API_KEY",
             "OPENROUTER_API_KEY",
@@ -5107,6 +5133,7 @@ mod tests {
                 namespace: "pharness".to_string(),
                 image: "example.test/pharness:latest".to_string(),
                 inference_evaluation_image: "example.test/pharness-eval:latest".to_string(),
+                inference_evaluation_node_hostname: None,
                 service_account: "pharness-worker".to_string(),
                 tekton_executor_service_account: "pharness-tekton-runner".to_string(),
                 tekton_allowed_namespaces: Vec::new(),

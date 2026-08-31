@@ -20,21 +20,36 @@ RUN test "${TARGETARCH}" = "amd64" \
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
 RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval
 
-FROM rust:1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97
+FROM rust:1-slim-bookworm@sha256:1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157 AS rust-runtime
+
+# The frozen coding suite exercises Rust, Python, and Node repositories. Keep
+# all three toolchains in this purpose-built evaluator image while avoiding the
+# full build-essential Rust base that previously enlarged nodefs pressure.
+FROM node:24-bookworm-slim@sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}" \
-    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:${PATH} \
+    CARGO_HOME=/work/.cargo \
     RUSTUP_HOME=/usr/local/rustup \
     CARGO_NET_OFFLINE=true
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+    && apt-get install -y --no-install-recommends ca-certificates gcc git libc6-dev python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 pharness \
     && useradd --uid 65532 --gid 65532 --home-dir /work --create-home pharness \
     && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*
+COPY --from=rust-runtime /usr/local/cargo /usr/local/cargo
+COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
 USER 65532:65532
 WORKDIR /work
+RUN test "$(id -u)" = "65532" \
+    && cargo --version \
+    && rustc --version \
+    && python3 --version \
+    && node --version \
+    && npm --version \
+    && git --version
 ENTRYPOINT ["pharness-eval"]

@@ -71,9 +71,11 @@ api:
     requests:
       cpu: 100m
       memory: 256Mi
+      ephemeral-storage: 128Mi
     limits:
       cpu: 1000m
       memory: 1Gi
+      ephemeral-storage: 1Gi
 
 inferenceGateway:
   enabled: true
@@ -93,15 +95,20 @@ inferenceGateway:
     requests:
       cpu: 50m
       memory: 64Mi
+      ephemeral-storage: 64Mi
     limits:
       cpu: 500m
       memory: 256Mi
+      ephemeral-storage: 512Mi
 
 # Purpose-built qualification image. The source implementation commit keeps
 # the current runtime reference as a non-functional compatibility pin; the
 # separate release commit replaces it with pharness-eval-runner built from the
 # exact merged source revision before any qualification is dispatched.
 inferenceEvaluation:
+  # Qualification images carry offline Rust/Python/Node fixtures. Keep their
+  # image pulls and bounded 4 GiB workspaces off the local-path SQLite node.
+  nodeHostname: ubuntu-lucas-engineering-2
   image:
     repository: registry.lucas.engineering/pharness-eval-runner
     digest: sha256:b5eea5cf6c5a2ddabf1b330277eb79f9bbaa4b1b197f173a0c1bd02883840ec3
@@ -311,9 +318,11 @@ ui:
     requests:
       cpu: 25m
       memory: 64Mi
+      ephemeral-storage: 32Mi
     limits:
       cpu: 250m
       memory: 256Mi
+      ephemeral-storage: 256Mi
 
 ingress:
   enabled: true
