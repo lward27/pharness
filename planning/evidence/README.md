@@ -11,6 +11,7 @@ behavior.
 ## Coding evaluations
 
 - [`pharness-coding-eval-candidate-2026-08-14.md`](evaluations/pharness-coding-eval-candidate-2026-08-14.md)
+- [`coding-reliability-v22-release-and-replay-2026-08-31.md`](evaluations/coding-reliability-v22-release-and-replay-2026-08-31.md)
 
 ## Live smoke results
 

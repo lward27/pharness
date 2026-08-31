@@ -4,6 +4,16 @@ Status: active
 Baseline: `07b47b91e0c3eca4d18bde112e0549d12587b98a`
 Priority: correctness of produced code before further platform expansion
 
+## Current acceptance status (2026-08-31)
+
+V2.2 implementation `1423a404d6e28fdcda48e8601332f509677c87a9` is
+deployed through release pin `1a1f57191932a8a1eee3a3904f42e8e4a8d4b5e1`
+with the feature disabled. Deterministic coding, repair, and stage replay suites
+all pass from the exact evaluator image. Provider-backed qualification and the
+disposable repair WorkItem remain incomplete because Fireworks is returning
+account-level `PRECONDITION_FAILED`. See the
+[dated evidence record](../evidence/evaluations/coding-reliability-v22-release-and-replay-2026-08-31.md).
+
 ## Objective
 
 Make PHarness reliably produce, test, repair, and verify repository changes before investing further in security, audit, approval, Connected Mode, or deployment features. The inference gateway is treated as transport infrastructure, not proof of coding quality.
