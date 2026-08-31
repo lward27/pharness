@@ -920,6 +920,9 @@ fn environment_discovery_command(command: &str) -> bool {
         " which node ",
         " command -v node ",
         " node --version ",
+        " rustc --version ",
+        " cargo --version ",
+        " rustup ",
         " which docker ",
         " command -v docker ",
         " docker version ",
@@ -941,6 +944,9 @@ fn normalized_failure_category(
     events: &[AgentEvent],
     acceptance_ok: bool,
 ) -> String {
+    if outcome.status == "budget_extension_required" {
+        return "soft_budget_exhaustion".to_string();
+    }
     if let Some(category) = events.iter().rev().find_map(|event| {
         (event.kind == EventKind::RunFailed)
             .then(|| event.payload.get("stop_category")?.as_str())
@@ -1008,6 +1014,9 @@ fn normalized_stop_reason_code(outcome: &AttemptOutcome, events: &[AgentEvent]) 
             .flatten()
     }) {
         return Some(category.to_string());
+    }
+    if outcome.status == "budget_extension_required" {
+        return Some("soft_budget_exhaustion".to_string());
     }
     let error = outcome.error.as_deref()?;
     let normalized = error.to_ascii_lowercase();
@@ -2211,8 +2220,20 @@ mod tests {
                     "args":["-m", "unittest"]
                 }),
             },
+            AgentEvent {
+                event_id: "event-4".into(),
+                session_id: "session-1".into(),
+                run_id: "run-1".into(),
+                seq: 4,
+                kind: EventKind::ActionProposed,
+                payload: serde_json::json!({
+                    "action":"run_workspace_command",
+                    "executable":"rustc",
+                    "args":["--version"]
+                }),
+            },
         ];
 
-        assert_eq!(metrics_from_events(&events).environment_probe_actions, 2);
+        assert_eq!(metrics_from_events(&events).environment_probe_actions, 3);
     }
 }

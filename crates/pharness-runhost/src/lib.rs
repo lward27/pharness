@@ -1350,6 +1350,7 @@ fn secret_shaped_path(path: &str) -> bool {
 struct ProjectTools {
     workspace: PathBuf,
     canonical_workspace: PathBuf,
+    workspace_files: LocalReadOnlyFsTools,
     contract: Option<RepositoryContract>,
     snapshot: Option<EnvironmentSnapshot>,
     selected_acceptance_commands: Vec<String>,
@@ -1407,6 +1408,7 @@ impl ProjectTools {
         Ok(Self {
             workspace: workspace.to_path_buf(),
             canonical_workspace: workspace.canonicalize()?,
+            workspace_files: LocalReadOnlyFsTools::new(workspace)?,
             contract,
             snapshot,
             selected_acceptance_commands,
@@ -1446,6 +1448,11 @@ impl ProjectTools {
     }
 
     async fn run_acceptance(&self, name: &str) -> Result<ToolResult, ToolError> {
+        tokio::fs::create_dir_all(self.workspace.join(".pharness-runtime/home"))
+            .await
+            .map_err(|error| ToolError::Io {
+                message: error.to_string(),
+            })?;
         let contract = self
             .contract
             .as_ref()
@@ -1495,6 +1502,12 @@ impl ProjectTools {
             for (key, value) in node_acceptance_environment(&self.workspace) {
                 child.env(key, value);
             }
+        }
+        if runtime.is_some_and(|runtime| runtime.kind == "rust") {
+            child.env("CARGO_NET_OFFLINE", "true").env(
+                "CARGO_TARGET_DIR",
+                self.workspace.join(".pharness-runtime/cargo-target"),
+            );
         }
         if match runtime {
             Some(runtime) => runtime.kind == "python",
@@ -1620,6 +1633,11 @@ impl ProjectTools {
         cwd: Option<&camino::Utf8Path>,
         timeout_ms: Option<u64>,
     ) -> Result<ToolResult, ToolError> {
+        tokio::fs::create_dir_all(self.workspace.join(".pharness-runtime/home"))
+            .await
+            .map_err(|error| ToolError::Io {
+                message: error.to_string(),
+            })?;
         validate_workspace_command(executable, args)?;
         let runtime = self
             .snapshot
@@ -1664,7 +1682,10 @@ impl ProjectTools {
             command.env("PYTHONPATH", python_path);
         }
         if executable == "cargo" {
-            command.env("CARGO_NET_OFFLINE", "true");
+            command.env("CARGO_NET_OFFLINE", "true").env(
+                "CARGO_TARGET_DIR",
+                self.workspace.join(".pharness-runtime/cargo-target"),
+            );
         }
         let timeout_ms = timeout_ms.unwrap_or(120_000).clamp(100, 120_000);
         let started = std::time::Instant::now();
@@ -2019,6 +2040,13 @@ impl ToolExecutor for ProjectTools {
                     serde_json::json!({ "path": path }),
                 ))
             }
+            pharness_core::AgentAction::WriteFile { path, .. }
+            | pharness_core::AgentAction::PatchFile { path, .. }
+                if self.contract.is_some() =>
+            {
+                let _ = self.writable_path(path)?;
+                self.workspace_files.execute(action).await
+            }
             pharness_core::AgentAction::ApplyPatch {
                 patch,
                 preimage_sha256,
@@ -2249,7 +2277,7 @@ mod workspace_source_tests {
         collect_workspace_git_evidence, constrained_tool_schema_hash, git_evidence_args,
         node_acceptance_environment, profile_instruction, profile_tool_names,
         repository_instructions, tool_specs_for_run, validate_workspace_command,
-        ProfileRestrictedTools, ProjectTools, RunSpec, WorkspaceSourceSpec,
+        LocalReadOnlyFsTools, ProfileRestrictedTools, ProjectTools, RunSpec, WorkspaceSourceSpec,
     };
     use pharness_core::{
         AcceptanceCommand, ActionId, AgentAction, AgentNetworkPolicy, DependencyLock,
@@ -2267,6 +2295,7 @@ mod workspace_source_tests {
         ProjectTools {
             workspace: root.to_path_buf(),
             canonical_workspace: root.canonicalize().unwrap(),
+            workspace_files: LocalReadOnlyFsTools::new(root).unwrap(),
             contract: Some(RepositoryContract {
                 api_version: "pharness.dev/v1alpha1".into(),
                 environment_profile: "test".into(),
@@ -2418,6 +2447,42 @@ mod workspace_source_tests {
             std::fs::read_to_string(root.join("src/one.txt")).unwrap(),
             "ONE\n"
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn repository_contract_paths_are_enforced_by_the_workspace_executor() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-contract-write-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        let tools = project_tools(&root, &["src/**"]);
+
+        let allowed = AgentAction::WriteFile {
+            id: ActionId::new("write_allowed"),
+            reason: "write declared source".into(),
+            path: camino::Utf8PathBuf::from("src/lib.rs"),
+            content: "pub fn ready() {}\n".into(),
+        };
+        tools.execute(&allowed).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
+            "pub fn ready() {}\n"
+        );
+
+        let denied = AgentAction::WriteFile {
+            id: ActionId::new("write_denied"),
+            reason: "attempt undeclared toolchain override".into(),
+            path: camino::Utf8PathBuf::from("rust-toolchain.toml"),
+            content: "[toolchain]\nchannel = \"stable\"\n".into(),
+        };
+        assert!(matches!(
+            tools.execute(&denied).await,
+            Err(ToolError::OutsideWorkspace { path }) if path == "rust-toolchain.toml"
+        ));
+        assert!(!root.join("rust-toolchain.toml").exists());
         let _ = std::fs::remove_dir_all(root);
     }
 

@@ -23,8 +23,8 @@ pub fn inference_qualification_suite_hash(suite_id: &str) -> Result<String, Stri
         "onboarding-v2" | "planner-v2" | "test-diagnosis-v2" | "verifier-v2" => {
             "stage-qualification-v2.0"
         }
-        "coding-v2" => "coding-reliability-v2.0",
-        "repair-v2" => "repair-reliability-v2.0",
+        "coding-v2" => "coding-reliability-v2.1",
+        "repair-v2" => "repair-reliability-v2.1",
         _ => {
             return Err(format!(
                 "unsupported inference qualification suite {suite_id:?}"
