@@ -115,7 +115,11 @@ impl GatewayModelClient {
                 message: format!("invalid internal model-grant endpoint: {error}"),
             })?;
         let response = timeout(
-            Duration::from_secs(10),
+            // Grant issuance is an internal SQLite-backed control-plane write.
+            // Give it enough headroom to outlive a short single-writer busy
+            // window; an ambiguous timeout is deliberately not retried because
+            // the grant sequence is single-use.
+            Duration::from_secs(30),
             self.http
                 .post(url)
                 .bearer_auth(self.worker_token.expose_secret())

@@ -6,7 +6,10 @@ use sha2::{Digest, Sha256};
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
 pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-29.3";
-pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-08-31.2";
+pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-08-31.3";
+pub const WORKSPACE_COMMAND_EXECUTABLES: [&str; 7] = [
+    "cargo", "rustc", "python", "python3", "pytest", "node", "npm",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagePromptPack {
@@ -55,13 +58,13 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
             prompt_id: "repo-builder-v2",
             revision,
             stage: pharness_core::InferenceStage::Implement,
-            content: r#"Localize the task from the plan and repository map. Read nearby implementation and tests before editing. Make the smallest coherent patch within writable paths, preferring atomic apply_patch with the complete-file sha256 returned by read_file as each preimage hash. Use run_workspace_command only for bounded offline inspection or focused checks. Run focused checks, then every declared acceptance command, then inspect final Git diff and status. Preserve unrelated code. Submit implementation only after evidence is complete; submit_implementation is terminal and replaces legacy finish."#,
+            content: r#"Localize the task from the plan and repository map. Before editing, translate every intent clause into a compact behavior checklist and inspect the nearby implementation, callers, and tests needed to verify it. Make the smallest coherent patch within writable paths, preferring atomic apply_patch with the complete-file sha256 returned by read_file as each preimage hash. Repository inspection uses list_dir, read_file, and search_files; never use run_workspace_command to discover executables, inspect operating-system paths, or create toolchain override files. run_workspace_command accepts only the executable names enumerated by its schema and is only for bounded offline focused checks. Verify every behavior-checklist item directly instead of treating passing public tests as sufficient. Run focused checks, then every declared acceptance command, then inspect final Git diff and status. Preserve unrelated code. Submit implementation only after evidence is complete; submit_implementation is terminal and replaces legacy finish."#,
         }),
         "repo-repair" => Some(StagePromptPack {
             prompt_id: "repo-repair-v2",
             revision,
             stage: pharness_core::InferenceStage::Implement,
-            content: r#"Consume the exact deterministic Test or Verifier findings and correction lineage. Preserve correct existing work. Inspect only the failing area, make one targeted repair within the original WorkPlan and writable scope, using the complete-file sha256 returned by read_file for atomic apply_patch preimages. Rerun the relevant focused check and all acceptance commands, then inspect final Git diff and status. Do not broaden scope or rewrite correct work. Submit the repaired implementation; submit_implementation is terminal and replaces legacy finish."#,
+            content: r#"Consume the exact deterministic Test or Verifier findings and correction lineage. Preserve correct existing work. Convert each finding into one explicit repair check, inspect only the failing area, and make one targeted repair within the original WorkPlan and writable scope, using the complete-file sha256 returned by read_file for atomic apply_patch preimages. Repository inspection uses list_dir, read_file, and search_files; never inspect operating-system paths or create toolchain override files. run_workspace_command accepts only the executable names enumerated by its schema. Verify every repair check directly, rerun the relevant focused check and all acceptance commands, then inspect final Git diff and status. Do not broaden scope or rewrite correct work. Submit the repaired implementation; submit_implementation is terminal and replaces legacy finish."#,
         }),
         "repo-test-diagnoser" => Some(StagePromptPack {
             prompt_id: "repo-test-diagnoser-v2",
@@ -297,14 +300,14 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "run_workspace_command",
-            "Run one bounded offline inspection, focused test, lint, compile, or build command as an argv vector. Package installation, network access, shell composition, and Git mutation are denied.",
+            "Run one bounded offline focused test, lint, compile, or build command as an argv vector using only an enumerated runner executable. Use list_dir, read_file, and search_files for repository inspection. Package installation, environment discovery, operating-system inspection, network access, shell composition, and Git mutation are denied.",
             serde_json::json!({
                 "type":"object",
                 "additionalProperties":false,
                 "required":["reason","executable","args"],
                 "properties":{
                     "reason":{"type":"string"},
-                    "executable":{"type":"string","minLength":1,"maxLength":256},
+                    "executable":{"type":"string","enum":WORKSPACE_COMMAND_EXECUTABLES},
                     "args":{"type":"array","items":{"type":"string","maxLength":4096},"maxItems":128},
                     "cwd":{"type":["string","null"]},
                     "timeout_ms":{"type":["integer","null"],"minimum":100,"maximum":120000}
@@ -769,7 +772,9 @@ fn verification_submission_schema() -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
+    use super::{
+        system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION, WORKSPACE_COMMAND_EXECUTABLES,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -834,6 +839,19 @@ mod tests {
             .unwrap()
             .iter()
             .any(|value| value == "preimage_sha256"));
+    }
+
+    #[test]
+    fn workspace_command_schema_exposes_only_verified_runner_executables() {
+        let command = worker_tool_specs()
+            .into_iter()
+            .find(|tool| tool.name == "run_workspace_command")
+            .unwrap();
+        assert_eq!(
+            command.parameters_schema["properties"]["executable"]["enum"],
+            serde_json::json!(WORKSPACE_COMMAND_EXECUTABLES)
+        );
+        assert!(command.description.contains("environment discovery"));
     }
 
     #[test]

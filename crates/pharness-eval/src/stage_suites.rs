@@ -563,6 +563,7 @@ async fn run_fixture(
         failure_error_kind,
         failure_detail,
         action_trace,
+        failure_diff: None,
     })
 }
 

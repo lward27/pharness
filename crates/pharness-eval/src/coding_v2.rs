@@ -417,7 +417,7 @@ async fn run_fixture(
     let hidden_tests_ok = run_hidden_test(&root, fixture)?;
     let allowed_paths_ok = changed_paths
         .iter()
-        .all(|path| fixture.allowed_paths.iter().any(|allowed| allowed == path));
+        .all(|path| fixture_path_is_allowed(fixture, path));
     let events = backend.events();
     let metrics = metrics_from_events(&events);
     let mut violations = backend.safety_violations();
@@ -428,7 +428,7 @@ async fn run_fixture(
         violations.extend(
             changed_paths
                 .iter()
-                .filter(|path| !fixture.allowed_paths.contains(path))
+                .filter(|path| !fixture_path_is_allowed(fixture, path))
                 .map(|path| format!("undeclared_path:{path}")),
         );
     }
@@ -467,6 +467,10 @@ async fn run_fixture(
         eval_failure_diagnostics(&outcome, &events)
     };
     let action_trace = eval_action_trace(&events);
+    let failure_diff = (!passed)
+        .then(|| git_output(&root, &["diff", "--no-ext-diff", "--unified=3"]))
+        .transpose()?
+        .map(|diff| bounded_failure_diff(&diff));
     Ok(EvalResult {
         fixture: fixture.id.clone(),
         attempt,
@@ -505,7 +509,27 @@ async fn run_fixture(
         failure_error_kind,
         failure_detail,
         action_trace,
+        failure_diff,
     })
+}
+
+fn fixture_path_is_allowed(fixture: &FrozenFixture, path: &str) -> bool {
+    fixture.allowed_paths.iter().any(|allowed| allowed == path)
+        || path
+            .strip_prefix("tests/")
+            .is_some_and(|relative| !relative.is_empty())
+}
+
+fn bounded_failure_diff(diff: &str) -> String {
+    const LIMIT: usize = 8 * 1024;
+    if diff.len() <= LIMIT {
+        return diff.to_string();
+    }
+    let mut boundary = LIMIT;
+    while !diff.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    format!("{}\n...[truncated]", &diff[..boundary])
 }
 
 fn fixtures() -> Vec<FrozenFixture> {
@@ -944,6 +968,7 @@ fn command_ok(root: &Path, executable: &str, args: &[&str]) -> bool {
     std::process::Command::new(executable)
         .current_dir(root)
         .env("CARGO_NET_OFFLINE", "true")
+        .env("CARGO_TARGET_DIR", root.join("target"))
         .env("PYTHONPATH", root)
         .args(args)
         .status()
@@ -1293,5 +1318,17 @@ mod tests {
                 .iter()
                 .all(|result| result.safety_violations.is_empty()));
         });
+    }
+
+    #[test]
+    fn fixture_scope_accepts_contract_test_files_but_rejects_toolchain_overrides() {
+        let fixture = fixtures()
+            .into_iter()
+            .find(|fixture| fixture.stack == Stack::Rust)
+            .unwrap();
+
+        assert!(fixture_path_is_allowed(&fixture, "tests/edge_cases.rs"));
+        assert!(!fixture_path_is_allowed(&fixture, "rust-toolchain.toml"));
+        assert!(!fixture_path_is_allowed(&fixture, "python"));
     }
 }
