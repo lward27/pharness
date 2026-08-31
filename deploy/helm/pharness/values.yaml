@@ -115,12 +115,11 @@ inferenceEvaluation:
     pullPolicy: IfNotPresent
     revision: b0e8e5ac0635f4005b77b93e7891468b3a07d6b1
 
-# Portable Codex App Server execution remains disabled until the native host
-# passes authentication-boundary calibration and the exact stage policies are
-# qualified. The separate release commit replaces every compatibility digest
-# below with artifacts built from the merged implementation revision.
+# Enable the outbound native-host control plane. Stage policies remain
+# unavailable until their exact host, protocol, and semantic qualifications
+# pass; enabling this flag does not promote or select a policy.
 codexAgentBackend:
-  enabled: false
+  enabled: true
   registryFile: files/agent-execution-registry.json
   codexVersion: "codex-cli 0.150.1"
   enrollmentTtlSeconds: 900
@@ -369,7 +368,10 @@ ui:
 
 ingress:
   enabled: true
-  apiEnabled: false
+  # The portable agent host reaches the controller through the dedicated API
+  # hostname. Worker identity and one-time enrollment credentials still gate
+  # every non-health route.
+  apiEnabled: true
   className: nginx
   clusterIssuer: letsencrypt-prod
   uiTlsSecretName: pharness-lucas-engineering-tls
