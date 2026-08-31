@@ -497,6 +497,15 @@ pub(crate) async fn sync_repo_stage_run(
     match stage {
         "plan" => seal_repo_plan_stage(store, run, &execution, outcome).await,
         "implement" => seal_repo_implement_stage(store, run, &execution, outcome).await,
+        "test"
+            if run
+                .execution_target_json
+                .pointer("/repo_mode/test_diagnosis")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true) =>
+        {
+            seal_repo_test_diagnosis_stage(store, run, &execution, outcome).await
+        }
         "test" => seal_repo_test_stage(store, run, &execution, outcome).await,
         "verify" => seal_repo_verify_stage(store, run, &execution, outcome).await,
         _ => {
@@ -514,6 +523,205 @@ pub(crate) async fn sync_repo_stage_run(
             )
             .await
         }
+    }
+}
+
+async fn seal_repo_test_diagnosis_stage(
+    store: &SqliteStore,
+    run: &StoredRun,
+    execution: &pharness_store::StoredStageExecution,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let failed_outcome_id = run
+        .execution_target_json
+        .pointer("/repo_mode/diagnosis_of_outcome_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("Test diagnosis has no failed-outcome binding"))?;
+    let failed_outcome = store
+        .get_stage_outcome(failed_outcome_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("diagnosed Test outcome no longer exists"))?;
+    if failed_outcome.work_item_id != execution.work_item_id
+        || failed_outcome.stage_key != "test"
+        || failed_outcome.status != "failed"
+    {
+        anyhow::bail!("Test diagnosis target is not the exact failed Test outcome");
+    }
+    let events = store.list_events(&run.id).await?;
+    let submission = structured_submission_from_events(&events, "test_diagnosis");
+    let catalog_ids = run
+        .execution_target_json
+        .pointer("/agent_context/evidence_catalog")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("id").and_then(serde_json::Value::as_str))
+        .collect::<Vec<_>>();
+    let validation = validate_test_diagnosis_submission(
+        submission.as_ref(),
+        &catalog_ids,
+        outcome.status == "completed",
+    );
+    let submission_valid = validation.valid;
+    let repairable = validation.repairable;
+    let failure_kind = validation.failure_kind.as_deref();
+    let status = if repairable {
+        "succeeded"
+    } else if submission_valid {
+        "blocked"
+    } else if outcome.status == "cancelled" {
+        "cancelled"
+    } else {
+        "failed"
+    };
+    let stop_reason = match status {
+        "succeeded" => "Test Diagnoser produced an evidence-bound repairable diagnosis",
+        "blocked" => "Test diagnosis classified the failure as structural or unknown",
+        "cancelled" => "Test diagnosis was cancelled",
+        _ => "Test Diagnoser did not produce a controller-valid typed diagnosis",
+    };
+    let metadata = store
+        .get_repo_work_item_metadata(&execution.work_item_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let document = pharness_core::StageOutcomeDocument {
+        schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
+        work_item_id: execution.work_item_id.clone(),
+        stage_execution_id: execution.id.clone(),
+        stage: pharness_core::RepoStageKey::Test,
+        origin: "agent".into(),
+        status: match status {
+            "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
+            "blocked" => pharness_core::StageTerminalStatus::Blocked,
+            "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
+            _ => pharness_core::StageTerminalStatus::Failed,
+        },
+        objective: serde_json::json!({
+            "kind":"diagnose_deterministic_test_failure",
+            "auxiliary":true,
+            "diagnosis_of_outcome_id":failed_outcome.id,
+            "diagnosis_of_content_hash":failed_outcome.content_hash,
+        }),
+        pinned_inputs: execution.input_snapshot.clone(),
+        verified_facts: vec![serde_json::json!({
+            "typed_submission_valid":submission_valid,
+            "failure_kind":failure_kind,
+            "repairable":repairable,
+        })],
+        agent_claims: submission.clone().into_iter().collect(),
+        outputs: submission.into_iter().collect(),
+        acceptance: Vec::new(),
+        decisions: vec![serde_json::json!({
+            "kind":"controller_test_diagnosis_validation",
+            "status":status,
+        })],
+        authorizations: execution
+            .input_snapshot
+            .get("chain_authorization_id")
+            .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
+            .unwrap_or_default(),
+        contradictions: if submission_valid {
+            Vec::new()
+        } else {
+            vec![serde_json::json!({"kind":"invalid_test_diagnosis"})]
+        },
+        risks: Vec::new(),
+        unavailable_capabilities: if submission_valid && !repairable {
+            vec![serde_json::json!({"kind":"non_repairable_failure"})]
+        } else {
+            Vec::new()
+        },
+        recommendations: if repairable {
+            vec![serde_json::json!({"next":"dispatch_single_bounded_repair"})]
+        } else {
+            vec![serde_json::json!({"next":"operator_correction"})]
+        },
+        stop_reason: stop_reason.into(),
+        sealed_state_version: metadata.state_version,
+    };
+    let value = serde_json::to_value(document)?;
+    store
+        .seal_stage_outcome(SealStageOutcome {
+            id: repo_resource_id("stageout"),
+            stage_execution_id: execution.id.clone(),
+            work_item_id: execution.work_item_id.clone(),
+            stage_key: execution.stage_key.clone(),
+            status: status.into(),
+            content_hash: pharness_core::canonical_json_sha256(&value)?,
+            outcome: value,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            effective: false,
+            actor: "controller".into(),
+            reason: "validate optional typed Test diagnosis".into(),
+        })
+        .await?;
+    store
+        .update_repo_work_item_status(
+            &execution.work_item_id,
+            if repairable { "executing" } else { "blocked" },
+            "controller",
+            stop_reason,
+            false,
+        )
+        .await?;
+    if !repairable {
+        revoke_repo_chain_for_run(store, run, stop_reason).await?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TestDiagnosisValidation {
+    valid: bool,
+    repairable: bool,
+    failure_kind: Option<String>,
+}
+
+fn validate_test_diagnosis_submission(
+    submission: Option<&serde_json::Value>,
+    catalog_ids: &[&str],
+    run_completed: bool,
+) -> TestDiagnosisValidation {
+    let failure_kind = submission
+        .and_then(|document| document.get("failure_kind"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let evidence_refs = submission
+        .and_then(|document| document.get("evidence_refs"))
+        .and_then(serde_json::Value::as_array);
+    let valid = run_completed
+        && submission
+            .and_then(|document| document.get("summary"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|summary| !summary.trim().is_empty())
+        && failure_kind.as_deref().is_some_and(|kind| {
+            matches!(
+                kind,
+                "compilation"
+                    | "assertion"
+                    | "lint"
+                    | "semantic_test"
+                    | "structural_environment"
+                    | "unknown"
+            )
+        })
+        && evidence_refs.is_some_and(|refs| {
+            !refs.is_empty()
+                && refs.iter().all(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(|id| catalog_ids.contains(&id))
+                })
+        });
+    let repairable = valid
+        && failure_kind.as_deref().is_some_and(|kind| {
+            matches!(kind, "compilation" | "assertion" | "lint" | "semantic_test")
+        });
+    TestDiagnosisValidation {
+        valid,
+        repairable,
+        failure_kind,
     }
 }
 
@@ -648,10 +856,31 @@ async fn seal_repo_test_stage(
             .as_object()
             .is_some_and(|object| !object.is_empty())
     });
+    let deterministic_test = run
+        .execution_target_json
+        .pointer("/repo_mode/deterministic_test")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true);
     let passed = outcome.status == "completed"
         && !selected_commands.is_empty()
         && exact_results
-        && submission_valid;
+        && (deterministic_test || submission_valid);
+    let implement_count = store
+        .list_stage_executions(&execution.work_item_id)
+        .await?
+        .iter()
+        .filter(|candidate| candidate.stage_key == "implement")
+        .count();
+    let correction_available = deterministic_test
+        && !passed
+        && implement_count == 1
+        && results.len() == selected_commands.len()
+        && results.iter().all(|result| {
+            result
+                .get("exit_code")
+                .and_then(serde_json::Value::as_i64)
+                .is_some_and(|code| !matches!(code, 126 | 127))
+        });
     let status = if passed {
         "succeeded"
     } else if outcome.status == "cancelled" {
@@ -671,6 +900,7 @@ async fn seal_repo_test_stage(
         "results":results,
         "all_selected_commands_passed":exact_results,
         "typed_submission_present":submission_valid,
+        "origin":if deterministic_test {"controller"} else {"agent"},
         "declared_contract_commands":contract.acceptance_commands,
     });
     let validation = serde_json::json!({
@@ -717,7 +947,13 @@ async fn seal_repo_test_stage(
     store
         .update_repo_work_item_status(
             &execution.work_item_id,
-            if passed { "verifying" } else { "blocked" },
+            if passed {
+                "verifying"
+            } else if correction_available {
+                "executing"
+            } else {
+                "blocked"
+            },
             "controller",
             &stop_reason,
             false,
@@ -732,6 +968,12 @@ async fn seal_repo_test_stage(
         work_item_id: execution.work_item_id.clone(),
         stage_execution_id: execution.id.clone(),
         stage: pharness_core::RepoStageKey::Test,
+        origin: if deterministic_test {
+            "controller"
+        } else {
+            "agent"
+        }
+        .into(),
         status: if passed {
             pharness_core::StageTerminalStatus::Succeeded
         } else if status == "cancelled" {
@@ -739,7 +981,10 @@ async fn seal_repo_test_stage(
         } else {
             pharness_core::StageTerminalStatus::Failed
         },
-        objective: serde_json::json!({"kind":"execute_declared_acceptance"}),
+        objective: serde_json::json!({
+            "kind":"execute_declared_acceptance",
+            "origin":if deterministic_test {"controller"} else {"agent"},
+        }),
         pinned_inputs: execution.input_snapshot.clone(),
         verified_facts: vec![facts],
         agent_claims: submission.into_iter().collect(),
@@ -762,6 +1007,11 @@ async fn seal_repo_test_stage(
         unavailable_capabilities: Vec::new(),
         recommendations: if passed {
             vec![serde_json::json!({"next":"dispatch_verifier"})]
+        } else if correction_available {
+            vec![serde_json::json!({
+                "next":"dispatch_single_bounded_repair",
+                "max_internal_corrections":1,
+            })]
         } else {
             vec![serde_json::json!({"next":"correct_or_replan"})]
         },
@@ -780,11 +1030,12 @@ async fn seal_repo_test_stage(
             outcome: value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: "validate exact declared acceptance evidence".into(),
         })
         .await?;
-    if !passed {
+    if !passed && !correction_available {
         revoke_repo_chain_for_run(store, run, &stop_reason).await?;
     }
     Ok(())
@@ -812,6 +1063,23 @@ async fn seal_repo_verify_stage(
     });
     let passed =
         outcome.status == "completed" && decision == Some("approved") && upstream_succeeded;
+    let implement_count = store
+        .list_stage_executions(&execution.work_item_id)
+        .await?
+        .iter()
+        .filter(|candidate| candidate.stage_key == "implement")
+        .count();
+    let reliability_v2 = run
+        .execution_target_json
+        .pointer("/agent_profile/version")
+        .and_then(serde_json::Value::as_str)
+        == Some("v2");
+    let correction_available = reliability_v2
+        && !passed
+        && outcome.status == "completed"
+        && decision.is_some_and(|value| value != "approved")
+        && upstream_succeeded
+        && implement_count == 1;
     let status = if passed {
         "succeeded"
     } else if outcome.status == "cancelled" {
@@ -871,6 +1139,7 @@ async fn seal_repo_verify_stage(
         work_item_id: execution.work_item_id.clone(),
         stage_execution_id: execution.id.clone(),
         stage: pharness_core::RepoStageKey::Verify,
+        origin: "agent".into(),
         status: if passed {
             pharness_core::StageTerminalStatus::Succeeded
         } else if status == "cancelled" {
@@ -901,6 +1170,11 @@ async fn seal_repo_verify_stage(
         unavailable_capabilities: Vec::new(),
         recommendations: if passed {
             vec![serde_json::json!({"next":"review_change_set"})]
+        } else if correction_available {
+            vec![serde_json::json!({
+                "next":"dispatch_single_bounded_repair",
+                "max_internal_corrections":1,
+            })]
         } else {
             vec![serde_json::json!({"next":"correct_or_replan"})]
         },
@@ -919,6 +1193,7 @@ async fn seal_repo_verify_stage(
             outcome: value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: "validate typed Verifier result against sealed evidence".into(),
         })
@@ -931,6 +1206,8 @@ async fn seal_repo_verify_stage(
             &execution.work_item_id,
             if passed {
                 "awaiting_approval"
+            } else if correction_available {
+                "executing"
             } else {
                 "blocked"
             },
@@ -939,7 +1216,9 @@ async fn seal_repo_verify_stage(
             false,
         )
         .await?;
-    revoke_repo_chain_for_run(store, run, "Verifier reached a terminal outcome").await?;
+    if passed || !correction_available {
+        revoke_repo_chain_for_run(store, run, "Verifier reached a terminal outcome").await?;
+    }
     Ok(())
 }
 
@@ -1216,6 +1495,7 @@ async fn seal_repo_implement_stage(
         work_item_id: execution.work_item_id.clone(),
         stage_execution_id: execution.id.clone(),
         stage: pharness_core::RepoStageKey::Implement,
+        origin: "agent".into(),
         status: match status {
             "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
             "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
@@ -1266,6 +1546,7 @@ async fn seal_repo_implement_stage(
             outcome: value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: "validate Builder workspace evidence".into(),
         })
@@ -1425,6 +1706,7 @@ async fn seal_repo_plan_stage(
         work_item_id: execution.work_item_id.clone(),
         stage_execution_id: execution.id.clone(),
         stage: pharness_core::RepoStageKey::Plan,
+        origin: "agent".into(),
         status: match status {
             "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
             "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
@@ -1468,6 +1750,7 @@ async fn seal_repo_plan_stage(
             outcome: value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: "validate typed Planner result".into(),
         })
@@ -1614,6 +1897,7 @@ async fn seal_unimplemented_repo_stage(
         "work_item_id":execution.work_item_id,
         "stage_execution_id":execution.id,
         "stage":execution.stage_key,
+        "origin":if execution.agent_profile_id.is_some() {"agent"} else {"controller"},
         "status":status,
         "objective":{},
         "pinned_inputs":execution.input_snapshot,
@@ -1642,6 +1926,7 @@ async fn seal_unimplemented_repo_stage(
             outcome: value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: stop_reason.into(),
         })
@@ -2179,6 +2464,30 @@ fn artifact_from_event(event: &AgentEvent) -> Option<CreateArtifact> {
     }
 
     let content = event.payload.get("content")?;
+    if content
+        .get("workspace_command")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+    {
+        let artifact_content = content.get("artifact_content")?.clone();
+        return Some(CreateArtifact {
+            id: format!("art_{}_workspace_command", event.event_id.as_str()),
+            session_id: event.session_id.clone(),
+            run_id: Some(event.run_id.clone()),
+            kind: "workspace_command_output".into(),
+            label: format!(
+                "Workspace command output: {}",
+                content
+                    .get("executable")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown")
+            ),
+            mime_type: Some("application/json".into()),
+            path: None,
+            content_text: None,
+            content_json: Some(artifact_content),
+        });
+    }
     let source = content.get("source")?.as_str()?;
     if !matches!(
         source,
@@ -2778,8 +3087,8 @@ mod tests {
         create_repo_change_set, file_change_from_event, finish_run_from_attempt,
         grant_used_audit_event_from_event, incident_from_observation, observation_from_event,
         persist_workspace_evidence, remediation_plan_from_incident, result_json_for_attempt,
-        structured_submission_from_events, validate_work_plan, validate_workspace_evidence,
-        workspace_source_for_run,
+        structured_submission_from_events, validate_test_diagnosis_submission, validate_work_plan,
+        validate_workspace_evidence, workspace_source_for_run,
     };
     use pharness_core::{AgentEvent, EventId, EventKind, RunId, SessionId};
     use pharness_runhost::{AttemptOutcome, WorkspaceGitEvidence, WorkspaceSourceSpec};
@@ -2788,6 +3097,36 @@ mod tests {
         CreateWorkPlan, CreateWorkspace, SealStageOutcome, SqliteStore, StoredChangeSet,
         StoredIncident, StoredObservation, StoredRemediationPlan, StoredRun, StoredWorkPlan,
     };
+
+    #[test]
+    fn test_diagnosis_requires_allowlisted_evidence_and_never_repairs_structural_failures() {
+        let repairable = serde_json::json!({
+            "summary":"assertion failed for an edge case",
+            "failure_kind":"assertion",
+            "evidence_refs":["evidence_test"],
+            "repair_recommendations":["handle the empty value"],
+        });
+        let accepted =
+            validate_test_diagnosis_submission(Some(&repairable), &["evidence_test"], true);
+        assert!(accepted.valid);
+        assert!(accepted.repairable);
+
+        let structural = serde_json::json!({
+            "summary":"required executable is unavailable",
+            "failure_kind":"structural_environment",
+            "evidence_refs":["evidence_test"],
+            "repair_recommendations":[],
+        });
+        let blocked =
+            validate_test_diagnosis_submission(Some(&structural), &["evidence_test"], true);
+        assert!(blocked.valid);
+        assert!(!blocked.repairable);
+
+        let unbound =
+            validate_test_diagnosis_submission(Some(&repairable), &["different_evidence"], true);
+        assert!(!unbound.valid);
+        assert!(!unbound.repairable);
+    }
 
     #[test]
     fn rejected_change_set_can_only_advance_to_a_newer_work_plan_revision() {
@@ -3005,6 +3344,7 @@ mod tests {
                 outcome: serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA}),
                 state_version: 1,
                 supersedes_outcome_id: None,
+                effective: true,
                 actor: "controller".into(),
                 reason: "test".into(),
             })
@@ -3021,6 +3361,7 @@ mod tests {
                 outcome: serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA}),
                 state_version: 1,
                 supersedes_outcome_id: None,
+                effective: true,
                 actor: "controller".into(),
                 reason: "test".into(),
             })
@@ -3697,6 +4038,45 @@ mod tests {
             artifact.content_json.unwrap()["response"]["data"]["result_count"],
             33
         );
+    }
+
+    #[test]
+    fn extracts_full_workspace_command_output_as_a_durable_artifact() {
+        let event = AgentEvent {
+            event_id: EventId::new("evt_run_test_workspace_command"),
+            session_id: SessionId::new("ses_test"),
+            run_id: RunId::new("run_test"),
+            seq: 12,
+            kind: EventKind::ToolFinished,
+            payload: serde_json::json!({
+                "status": "ok",
+                "summary": "workspace command passed",
+                "content": {
+                    "workspace_command": true,
+                    "executable": "python",
+                    "stdout": "bounded",
+                    "stdout_sha256": "sha256:abc",
+                    "artifact_content": {
+                        "stdout": "full stdout",
+                        "stderr": "full stderr",
+                        "stdout_bytes": 11,
+                        "stderr_bytes": 11,
+                        "stdout_truncated": false,
+                        "stderr_truncated": false
+                    }
+                }
+            }),
+        };
+
+        let artifact = artifact_from_event(&event).unwrap();
+
+        assert_eq!(
+            artifact.id,
+            "art_evt_run_test_workspace_command_workspace_command"
+        );
+        assert_eq!(artifact.kind, "workspace_command_output");
+        assert_eq!(artifact.label, "Workspace command output: python");
+        assert_eq!(artifact.content_json.unwrap()["stdout"], "full stdout");
     }
 
     #[test]

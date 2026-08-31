@@ -176,6 +176,65 @@ pub(in crate::app) async fn repo_work_item_flow(
         .store
         .active_stage_chain_authorization(work_item_id)
         .await?;
+    let inference_selections = state
+        .store
+        .list_stage_inference_selections("work_item", work_item_id)
+        .await?;
+    let inference_selection_views = inference_selections
+        .iter()
+        .map(|selection| {
+            json!({
+                "id":selection.id,
+                "stage_key":selection.stage_key,
+                "stage_execution_id":selection.stage_execution_id,
+                "run_id":selection.run_id,
+                "supersedes_selection_id":selection.supersedes_selection_id,
+                "created_at":selection.created_at,
+                "binding":super::inference::sanitized_binding(&selection.resolved_binding),
+            })
+        })
+        .collect::<Vec<_>>();
+    let correction_lineage = executions
+        .iter()
+        .filter_map(|execution| {
+            let correction_of = execution.input_snapshot.get("correction_of");
+            let diagnosis_of = execution.input_snapshot.get("diagnosis_of");
+            if correction_of.is_none() && diagnosis_of.is_none() {
+                return None;
+            }
+            Some(json!({
+                "stage_execution_id":execution.id,
+                "stage_key":execution.stage_key,
+                "run_id":execution.run_id,
+                "profile_id":execution.agent_profile_id,
+                "correction_of":correction_of,
+                "diagnosis_of":diagnosis_of,
+            }))
+        })
+        .collect::<Vec<_>>();
+    let internal_corrections_used = executions
+        .iter()
+        .filter(|execution| execution.stage_key == "implement")
+        .count()
+        .saturating_sub(1);
+    let deterministic_test = chain
+        .as_ref()
+        .and_then(|authorization| {
+            authorization
+                .budget_chain
+                .get("deterministic_test")
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(state.repo_mode.coding_reliability_v2_enabled);
+    let max_internal_corrections = chain
+        .as_ref()
+        .and_then(|authorization| {
+            authorization
+                .budget_chain
+                .get("max_internal_corrections")
+                .and_then(Value::as_u64)
+        })
+        .unwrap_or(u64::from(state.repo_mode.coding_reliability_v2_enabled));
     let annotations = state.store.list_operator_annotations(work_item_id).await?;
     let annotation_decisions = state
         .store
@@ -367,6 +426,14 @@ pub(in crate::app) async fn repo_work_item_flow(
             "repository_contract_version_id":metadata.repository_contract_version_id,
             "change_set":change_set,
             "source_delivery_intent":source_delivery_intent,
+            "coding_reliability":{
+                "enabled":state.repo_mode.coding_reliability_v2_enabled,
+                "deterministic_test":deterministic_test,
+                "max_internal_corrections":max_internal_corrections,
+                "internal_corrections_used":internal_corrections_used,
+                "correction_lineage":correction_lineage,
+                "inference_selections":inference_selection_views,
+            },
             "safe_advance":safe_advance,
         })),
     })
@@ -2188,22 +2255,26 @@ async fn retry_repo_followup_stage_startup(
             expires_at: (current_millis() + 4 * 60 * 60 * 1_000).to_string(),
         })
         .await?;
-    let started =
-        match start_repo_followup_stage(state, &upstream_run, failed_execution.stage_key.as_str())
-            .await
-        {
-            Ok(started) => started,
-            Err(error) => {
-                state
-                    .store
-                    .revoke_stage_chain_authorization(
-                        &authorization.id,
-                        "explicit follow-up stage startup retry could not be dispatched",
-                    )
-                    .await?;
-                return Err(error);
-            }
-        };
+    let started = match start_repo_followup_stage(
+        state,
+        &upstream_run,
+        failed_execution.stage_key.as_str(),
+        None,
+    )
+    .await
+    {
+        Ok(started) => started,
+        Err(error) => {
+            state
+                .store
+                .revoke_stage_chain_authorization(
+                    &authorization.id,
+                    "explicit follow-up stage startup retry could not be dispatched",
+                )
+                .await?;
+            return Err(error);
+        }
+    };
     let work_item = state
         .store
         .update_repo_work_item_status(
@@ -3715,6 +3786,7 @@ async fn seal_source_delivery_closure(
             outcome,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller:repo-mode".into(),
             reason: stop_reason.into(),
         })
@@ -3793,6 +3865,7 @@ pub(in crate::app) async fn seal_repo_inapplicable_tail(
             work_item_id: work_item_id.into(),
             stage_execution_id: execution.id.clone(),
             stage,
+            origin: "controller".into(),
             status: pharness_core::StageTerminalStatus::Inapplicable,
             objective: json!({"kind":"repo_mode_source_only_boundary"}),
             pinned_inputs: input,
@@ -3829,6 +3902,7 @@ pub(in crate::app) async fn seal_repo_inapplicable_tail(
                 outcome: value,
                 state_version: metadata.state_version,
                 supersedes_outcome_id: None,
+                effective: true,
                 actor: "controller:repo-mode".into(),
                 reason: "Repo Mode V1 source-only lifecycle boundary".into(),
             })
@@ -3867,11 +3941,11 @@ async fn start_repo_planner(
         .and_then(Value::as_str)
         .unwrap_or("unconfigured")
         .to_string();
-    let mut profile =
-        pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
-            .into_iter()
-            .find(|profile| profile.id == "repo-planner")
-            .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+    let mut profile = state
+        .compiled_agent_profiles(&model)
+        .into_iter()
+        .find(|profile| profile.id == "repo-planner")
+        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
     let stage_execution_id = new_prefixed_id("stageexec");
     let context_pack_id = new_prefixed_id("context");
     let run_id = RunId::new(new_prefixed_id("run"));
@@ -4121,17 +4195,26 @@ async fn authorize_repo_stage_chain(
         .and_then(Value::as_str)
         .unwrap_or("unconfigured")
         .to_string();
-    let profiles =
-        pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
-            .into_iter()
-            .filter(|profile| {
+    let reliability_v2 = state.repo_mode.coding_reliability_v2_enabled;
+    let profiles = state
+        .compiled_agent_profiles(&model)
+        .into_iter()
+        .filter(|profile| {
+            if reliability_v2 {
+                matches!(
+                    profile.id.as_str(),
+                    "repo-builder" | "repo-repair" | "repo-test-diagnoser" | "repo-verifier"
+                )
+            } else {
                 matches!(
                     profile.id.as_str(),
                     "repo-builder" | "repo-tester" | "repo-verifier"
                 )
-            })
-            .collect::<Vec<_>>();
-    if profiles.len() != 3 {
+            }
+        })
+        .collect::<Vec<_>>();
+    let expected_profiles = if reliability_v2 { 4 } else { 3 };
+    if profiles.len() != expected_profiles {
         return Err(ApiError::internal(
             "compiled Repo Mode stage chain is incomplete",
         ));
@@ -4139,23 +4222,43 @@ async fn authorize_repo_stage_chain(
     let chain_state_hash = repo_work_item_state_hash(&metadata)?;
     let mut planned_inference = Vec::new();
     if state.inference.enabled {
-        for (profile_id, stage, requested) in [
-            (
-                "repo-builder",
+        let mut requested_stages = vec![(
+            "repo-builder",
+            pharness_core::InferenceStage::Implement,
+            inference_policies.and_then(|value| value.implement.as_ref()),
+        )];
+        if reliability_v2 {
+            requested_stages.push((
+                "repo-repair",
                 pharness_core::InferenceStage::Implement,
-                inference_policies.and_then(|value| value.implement.as_ref()),
-            ),
-            (
-                "repo-tester",
-                pharness_core::InferenceStage::Test,
-                inference_policies.and_then(|value| value.test.as_ref()),
-            ),
-            (
-                "repo-verifier",
-                pharness_core::InferenceStage::Verify,
-                inference_policies.and_then(|value| value.verify.as_ref()),
-            ),
-        ] {
+                inference_policies.and_then(|value| value.repair.as_ref()),
+            ));
+            let diagnosis = inference_policies
+                .and_then(|value| value.test_diagnosis.as_ref())
+                .or_else(|| inference_policies.and_then(|value| value.test.as_ref()));
+            if diagnosis.is_some() {
+                requested_stages.push((
+                    "repo-test-diagnoser",
+                    pharness_core::InferenceStage::Test,
+                    diagnosis,
+                ));
+            }
+        } else {
+            requested_stages.insert(
+                1,
+                (
+                    "repo-tester",
+                    pharness_core::InferenceStage::Test,
+                    inference_policies.and_then(|value| value.test.as_ref()),
+                ),
+            );
+        }
+        requested_stages.push((
+            "repo-verifier",
+            pharness_core::InferenceStage::Verify,
+            inference_policies.and_then(|value| value.verify.as_ref()),
+        ));
+        for (profile_id, stage, requested) in requested_stages {
             let profile = profiles
                 .iter()
                 .find(|profile| profile.id == profile_id)
@@ -4199,9 +4302,17 @@ async fn authorize_repo_stage_chain(
             profile_chain: serde_json::to_value(&profiles)
                 .map_err(|error| ApiError::internal(error.to_string()))?,
             budget_chain: json!({
+                "coding_reliability_v2":reliability_v2,
+                "deterministic_test":reliability_v2,
+                "max_internal_corrections":if reliability_v2 {1} else {0},
+                "internal_corrections_used":0,
                 "repo-builder":work_item.run_budget,
                 "repo-tester":profiles.iter().find(|profile| profile.id == "repo-tester").map(|profile| &profile.budget),
+                "repo-repair":profiles.iter().find(|profile| profile.id == "repo-repair").map(|profile| &profile.budget),
+                "repo-test-diagnoser":profiles.iter().find(|profile| profile.id == "repo-test-diagnoser").map(|profile| &profile.budget),
                 "repo-verifier":profiles.iter().find(|profile| profile.id == "repo-verifier").map(|profile| &profile.budget),
+                "requested_repair_policy":inference_policies.and_then(|value| value.repair.as_ref()),
+                "requested_test_diagnosis_policy":inference_policies.and_then(|value| value.test_diagnosis.as_ref()).or_else(|| inference_policies.and_then(|value| value.test.as_ref())),
             }),
             state_hash: chain_state_hash,
             created_by: actor.into(),
@@ -4220,6 +4331,8 @@ async fn authorize_repo_stage_chain(
         actor,
         reason,
         reusing_prepared_workspace,
+        "repo-builder",
+        None,
     )
     .await
     {
@@ -4254,14 +4367,25 @@ async fn start_repo_builder(
     actor: &str,
     reason: &str,
     reuse_prepared_workspace: bool,
+    builder_profile_id: &str,
+    correction_of: Option<&pharness_store::StoredStageOutcome>,
 ) -> Result<Value, ApiError> {
     if !state.worker.enabled() {
         return Err(ApiError::unavailable(
             "model execution worker is unavailable",
         ));
     }
-    let mut profile = agent_profile_from_chain(&authorization.profile_chain, "repo-builder")
-        .ok_or_else(|| ApiError::conflict("chain authorization has no repo-builder profile"))?;
+    let mut profile = agent_profile_from_chain(&authorization.profile_chain, builder_profile_id)
+        .ok_or_else(|| {
+            ApiError::conflict(format!(
+                "chain authorization has no {builder_profile_id} profile"
+            ))
+        })?;
+    let effective_budget = if builder_profile_id == "repo-builder" {
+        work_item.run_budget.clone()
+    } else {
+        profile.budget.clone()
+    };
     let environment_profile = super::environment::select_profile(
         &state.environment_profiles,
         &contract.environment_profile,
@@ -4339,7 +4463,14 @@ async fn start_repo_builder(
         "pinned_context_repositories":metadata.context_repositories,
         "approved_work_plan":{"snapshot":plan_snapshot,"hash":plan_hash},
         "upstream_outcomes":outcomes.iter().map(|outcome| json!({"id":outcome.id,"stage":outcome.stage_key,"status":outcome.status,"hash":outcome.content_hash})).collect::<Vec<_>>(),
-        "remaining_budgets":work_item.run_budget,
+        "remaining_budgets":effective_budget,
+        "correction":correction_of.map(|outcome| json!({
+            "outcome_id":outcome.id,
+            "stage":outcome.stage_key,
+            "status":outcome.status,
+            "content_hash":outcome.content_hash,
+            "findings":outcome.outcome,
+        })),
         "policies":{"source_only":true,"manual_merge":true,"agent_network":"denied","package_installation":"preparation_only"},
         "grants":[{"kind":"stage_chain","id":authorization.id,"expires_at":authorization.expires_at,"workspace_id":workspace.id,"writable_paths":contract.writable_paths}],
         "contradictions":annotation_contradictions(&annotations),
@@ -4384,7 +4515,7 @@ async fn start_repo_builder(
             scope: json!({
                 "environment":state.policy.environment,
                 "capability_kinds":["filesystem"],
-                "actions":["write_file","patch_file","create_directory"],
+                "actions":["write_file","patch_file","apply_patch","create_directory"],
                 "max_risk":"medium",
                 "repos":[work_item.source_repo],
                 "branches":[branch],
@@ -4403,14 +4534,19 @@ async fn start_repo_builder(
     let mut policy = super::policy::run_policy(&state.policy, None);
     policy.permission_grants = super::approvals::active_permission_grants(&state.store).await?;
     let (inference_marker, resolved_profile) = if state.inference.enabled {
-        let selection = super::inference::latest_planned_selection(
+        let selection = super::inference::latest_planned_selection_for_profile(
             state,
             "work_item",
             &work_item.id,
             "implement",
+            builder_profile_id,
         )
         .await?
-        .ok_or_else(|| ApiError::conflict("Builder inference selection is unavailable"))?;
+        .ok_or_else(|| {
+            ApiError::conflict(format!(
+                "{builder_profile_id} inference selection is unavailable"
+            ))
+        })?;
         (
             super::inference::execution_marker_for_selection(state, &selection),
             Some((
@@ -4436,7 +4572,7 @@ async fn start_repo_builder(
         "run_scope":scope.to_optional_json(),
         "workspace":{"base_commit":source_commit,"branch":branch},
         "workspace_source":source,
-        "run_budget":work_item.run_budget,
+        "run_budget":effective_budget,
         "environment_profile_id":work_item.environment_profile_id,
         "repository_contract":work_item.repository_contract_json,
         "selected_acceptance_commands":work_item.acceptance_criteria,
@@ -4450,12 +4586,19 @@ async fn start_repo_builder(
         .create_run(CreateRun {
             id: run_id.clone(),
             session_id: session_id.clone(),
-            user_task: format!(
-                "Implement the approved WorkPlan for this exact Repo Mode intent: {}",
-                work_item.intent
-            ),
+            user_task: if builder_profile_id == "repo-repair" {
+                format!(
+                    "Repair the existing implementation using the exact sealed failure findings for this Repo Mode intent: {}",
+                    work_item.intent
+                )
+            } else {
+                format!(
+                    "Implement the approved WorkPlan for this exact Repo Mode intent: {}",
+                    work_item.intent
+                )
+            },
             cwd: cwd.clone(),
-            max_turns: work_item.run_budget.initial_turns,
+            max_turns: effective_budget.initial_turns,
             initial_status: if reuse_prepared_environment {
                 "queued".into()
             } else {
@@ -4468,10 +4611,10 @@ async fn start_repo_builder(
         .store
         .set_run_budget(
             &run.id,
-            &work_item.run_budget,
+            &effective_budget,
             &RunBudgetConsumption {
-                allowed_turns: work_item.run_budget.initial_turns,
-                allowed_tokens: work_item.run_budget.initial_tokens,
+                allowed_turns: effective_budget.initial_turns,
+                allowed_tokens: effective_budget.initial_tokens,
                 ..RunBudgetConsumption::default()
             },
         )
@@ -4492,6 +4635,7 @@ async fn start_repo_builder(
         "work_plan_id":plan.id,
         "work_plan_revision":plan.revision,
         "work_plan_hash":plan_hash,
+        "correction_of":correction_of.map(|outcome| json!({"outcome_id":outcome.id,"content_hash":outcome.content_hash,"stage":outcome.stage_key})),
         "source_commit":source_commit,
         "workspace_id":workspace.id,
     });
@@ -4569,15 +4713,27 @@ async fn start_repo_builder(
             },
         )
         .await?;
-    state
-        .store
-        .start_work_item_attempt(
-            &work_item.id,
-            &run.id,
-            Some(actor.into()),
-            Some(reason.into()),
-        )
-        .await?;
+    if correction_of.is_some() {
+        state
+            .store
+            .start_work_item_internal_correction(
+                &work_item.id,
+                &run.id,
+                Some(actor.into()),
+                Some(reason.into()),
+            )
+            .await?;
+    } else {
+        state
+            .store
+            .start_work_item_attempt(
+                &work_item.id,
+                &run.id,
+                Some(actor.into()),
+                Some(reason.into()),
+            )
+            .await?;
+    }
     if reuse_prepared_environment {
         state.worker.spawn_run(run.clone(), cwd);
         return Ok(json!({
@@ -4765,18 +4921,198 @@ pub(in crate::app) async fn continue_repo_stage_chain(
         .get_stage_outcome_for_execution(execution_id)
         .await?
         .ok_or_else(|| ApiError::conflict("completed Repo Mode Run has no sealed outcome"))?;
+    if completed_run
+        .execution_target_json
+        .pointer("/repo_mode/test_diagnosis")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        if outcome.status != "succeeded" {
+            return Ok(None);
+        }
+        let failed_outcome_id = completed_run
+            .execution_target_json
+            .pointer("/repo_mode/diagnosis_of_outcome_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::conflict("Test diagnosis has no failed-outcome binding"))?;
+        let failed_outcome = state
+            .store
+            .get_stage_outcome(failed_outcome_id)
+            .await?
+            .ok_or_else(|| ApiError::conflict("diagnosed Test outcome is unavailable"))?;
+        return start_repo_automatic_repair(state, completed_run, &failed_outcome)
+            .await
+            .map(Some);
+    }
     if outcome.status != "succeeded" {
+        if state.repo_mode.coding_reliability_v2_enabled
+            && matches!(stage, "test" | "verify")
+            && repairable_repo_stage_failure(state, completed_run, &outcome).await?
+        {
+            if stage == "test"
+                && state.inference.enabled
+                && super::inference::latest_planned_selection_for_profile(
+                    state,
+                    "work_item",
+                    &outcome.work_item_id,
+                    "test",
+                    "repo-test-diagnoser",
+                )
+                .await?
+                .is_some()
+            {
+                return start_repo_followup_stage(state, completed_run, "test", Some(&outcome))
+                    .await
+                    .map(Some);
+            }
+            return start_repo_automatic_repair(state, completed_run, &outcome)
+                .await
+                .map(Some);
+        }
         return Ok(None);
     }
     match stage {
-        "implement" => start_repo_followup_stage(state, completed_run, "test")
+        "implement" => start_repo_followup_stage(state, completed_run, "test", None)
             .await
             .map(Some),
-        "test" => start_repo_followup_stage(state, completed_run, "verify")
+        "test" => start_repo_followup_stage(state, completed_run, "verify", None)
             .await
             .map(Some),
         _ => Ok(None),
     }
+}
+
+async fn repairable_repo_stage_failure(
+    state: &AppState,
+    run: &pharness_store::StoredRun,
+    outcome: &pharness_store::StoredStageOutcome,
+) -> Result<bool, ApiError> {
+    let executions = state
+        .store
+        .list_stage_executions(&outcome.work_item_id)
+        .await?;
+    let implement_count = executions
+        .iter()
+        .filter(|execution| execution.stage_key == "implement")
+        .count();
+    if implement_count != 1 {
+        return Ok(false);
+    }
+    match outcome.stage_key.as_str() {
+        "test" => {
+            if run
+                .execution_target_json
+                .pointer("/repo_mode/deterministic_test")
+                .and_then(Value::as_bool)
+                != Some(true)
+            {
+                return Ok(false);
+            }
+            let results = state
+                .store
+                .list_events(&run.id)
+                .await?
+                .into_iter()
+                .filter(|event| {
+                    event.kind == EventKind::ToolFinished
+                        && event
+                            .payload
+                            .pointer("/content/acceptance_command")
+                            .and_then(Value::as_bool)
+                            == Some(true)
+                })
+                .collect::<Vec<_>>();
+            Ok(!results.is_empty()
+                && results.iter().all(|event| {
+                    event
+                        .payload
+                        .pointer("/content/exit_code")
+                        .and_then(Value::as_i64)
+                        .is_some_and(|code| !matches!(code, 126 | 127))
+                })
+                && results.iter().any(|event| {
+                    event
+                        .payload
+                        .pointer("/content/exit_code")
+                        .and_then(Value::as_i64)
+                        != Some(0)
+                }))
+        }
+        "verify" => Ok(run.status == "completed"
+            && outcome
+                .outcome
+                .pointer("/verified_facts/0/typed_decision")
+                .and_then(Value::as_str)
+                .is_some_and(|decision| decision != "approved")),
+        _ => Ok(false),
+    }
+}
+
+async fn start_repo_automatic_repair(
+    state: &AppState,
+    completed_run: &pharness_store::StoredRun,
+    failed_outcome: &pharness_store::StoredStageOutcome,
+) -> Result<Value, ApiError> {
+    let work_item_id = &failed_outcome.work_item_id;
+    let metadata = repo_metadata(state, work_item_id).await?;
+    let work_item = state
+        .store
+        .get_work_item(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    let plan = state
+        .store
+        .get_work_plan_by_work_item(work_item_id)
+        .await?
+        .filter(|plan| plan.status == "approved")
+        .ok_or_else(|| ApiError::conflict("approved WorkPlan is no longer current"))?;
+    let authorization = state
+        .store
+        .active_stage_chain_authorization(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("stage-chain authorization is unavailable"))?;
+    let workspace = state
+        .store
+        .get_workspace(&authorization.workspace_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("workspace", &authorization.workspace_id))?;
+    let contract: pharness_core::RepositoryContract = serde_json::from_value(
+        work_item
+            .repository_contract_json
+            .clone()
+            .ok_or_else(|| ApiError::conflict("RepositoryContract is unavailable"))?,
+    )
+    .map_err(|error| ApiError::internal(error.to_string()))?;
+    append_repo_audit(
+        state,
+        work_item_id,
+        "repo.stage_chain.automatic_repair_started",
+        "controller:repo-mode",
+        "one bounded repair execution after a repairable deterministic finding",
+        json!({
+            "trigger_run_id":completed_run.id,
+            "failed_outcome_id":failed_outcome.id,
+            "failed_stage_execution_id":failed_outcome.stage_execution_id,
+            "failed_stage":failed_outcome.stage_key,
+            "max_internal_corrections":1,
+        }),
+    )
+    .await?;
+    start_repo_builder(
+        state,
+        &metadata,
+        &work_item,
+        &plan,
+        &workspace,
+        &authorization,
+        &contract,
+        "controller:repo-mode",
+        "automatic bounded repair from sealed stage findings",
+        true,
+        "repo-repair",
+        Some(failed_outcome),
+    )
+    .await
 }
 
 pub(in crate::app) async fn record_repo_chain_continuation_failure(
@@ -4828,6 +5164,7 @@ async fn start_repo_followup_stage(
     state: &AppState,
     completed_run: &pharness_store::StoredRun,
     stage: &str,
+    diagnosis_of: Option<&pharness_store::StoredStageOutcome>,
 ) -> Result<Value, ApiError> {
     let work_item_id = completed_run
         .execution_target_json
@@ -4878,15 +5215,48 @@ async fn start_repo_followup_stage(
         .get_workspace(&authorization.workspace_id)
         .await?
         .ok_or_else(|| ApiError::not_found("workspace", &authorization.workspace_id))?;
-    let profile_id = match stage {
-        "test" => "repo-tester",
-        "verify" => "repo-verifier",
+    let test_diagnosis = diagnosis_of.is_some();
+    let deterministic_test =
+        state.repo_mode.coding_reliability_v2_enabled && stage == "test" && !test_diagnosis;
+    let profile_id = match (stage, test_diagnosis) {
+        ("test", true) => "repo-test-diagnoser",
+        ("test", false) if deterministic_test => "controller-deterministic-test",
+        ("test", false) => "repo-tester",
+        ("verify", false) => "repo-verifier",
         _ => return Err(ApiError::internal("unsupported Repo Mode follow-up stage")),
     };
-    let mut profile = agent_profile_from_chain(&authorization.profile_chain, profile_id)
-        .ok_or_else(|| {
+    let mut profile = if deterministic_test {
+        let budget = pharness_core::RunBudget {
+            initial_turns: 1,
+            hard_turns: 1,
+            initial_tokens: 1,
+            hard_tokens: 1,
+            active_execution_seconds: 900,
+            recoverable_tool_errors: 0,
+            identical_failures: 1,
+            verification_reserve_turns: 0,
+        };
+        let material = json!({
+            "id":profile_id,
+            "version":"v2",
+            "origin":"controller",
+            "deterministic_test":true,
+            "budget":budget,
+        });
+        pharness_core::AgentProfile {
+            id: profile_id.into(),
+            version: "v2".into(),
+            profile_hash: canonical_material_hash(&material)?,
+            prompt_version: "controller-deterministic-v1".into(),
+            model: "none".into(),
+            tools: Vec::new(),
+            budget,
+        }
+    } else {
+        agent_profile_from_chain(&authorization.profile_chain, profile_id).ok_or_else(|| {
             ApiError::conflict(format!("chain authorization has no {profile_id} profile"))
-        })?;
+        })?
+    };
     let runner_profile = completed_run
         .execution_target_json
         .get("runner_profile")
@@ -4932,8 +5302,14 @@ async fn start_repo_followup_stage(
         "pinned_repository":{"repository_id":metadata.repository_id,"source_commit":authorization.source_commit,"contract_version_id":metadata.repository_contract_version_id},
         "pinned_context_repositories":metadata.context_repositories,
         "effective_upstream_outcomes":outcomes.iter().map(|outcome| json!({"id":outcome.id,"stage":outcome.stage_key,"status":outcome.status,"hash":outcome.content_hash})).collect::<Vec<_>>(),
+        "diagnosis_of":diagnosis_of.map(|outcome| json!({
+            "outcome_id":outcome.id,
+            "stage_execution_id":outcome.stage_execution_id,
+            "content_hash":outcome.content_hash,
+            "findings":outcome.outcome,
+        })),
         "remaining_budgets":profile.budget,
-        "policies":{"source_only":true,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
+        "policies":{"source_only":true,"workspace_access":if deterministic_test {"ephemeral_copy"} else {"read_only"},"deterministic_test":deterministic_test,"test_diagnosis":test_diagnosis},
         "grants":[{"kind":"stage_chain","id":authorization.id,"expires_at":authorization.expires_at}],
         "contradictions":contradictions,
         "risks":outcomes.iter().flat_map(|outcome| outcome.outcome.get("risks").and_then(Value::as_array).cloned().unwrap_or_default()).collect::<Vec<_>>(),
@@ -4980,13 +5356,20 @@ async fn start_repo_followup_stage(
         production_impacting: false,
         ..RunScope::default()
     };
-    let (inference_marker, resolved_profile) = if state.inference.enabled {
-        let selection =
-            super::inference::latest_planned_selection(state, "work_item", work_item_id, stage)
-                .await?
-                .ok_or_else(|| {
-                    ApiError::conflict(format!("{stage} inference selection is unavailable"))
-                })?;
+    let (inference_marker, resolved_profile) = if deterministic_test {
+        (super::inference::execution_marker(state, None), None)
+    } else if state.inference.enabled {
+        let selection = super::inference::latest_planned_selection_for_profile(
+            state,
+            "work_item",
+            work_item_id,
+            stage,
+            profile_id,
+        )
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict(format!("{profile_id} inference selection is unavailable"))
+        })?;
         (
             super::inference::execution_marker_for_selection(state, &selection),
             Some((
@@ -5006,7 +5389,11 @@ async fn start_repo_followup_stage(
         .create_run(CreateRun {
             id: run_id.clone(),
             session_id: session_id.clone(),
-            user_task: if stage == "test" {
+            user_task: if test_diagnosis {
+                "Diagnose the exact controller-recorded deterministic Test failure without modifying source; submit a typed diagnosis."
+            } else if deterministic_test {
+                "Controller-owned deterministic Test execution."
+            } else if stage == "test" {
                 "Execute every selected RepositoryContract acceptance command, report exact evidence, and submit the typed Test outcome."
             } else {
                 "Verify the approved plan, Builder diff, changed paths, and Test evidence; submit the typed verification decision."
@@ -5018,7 +5405,7 @@ async fn start_repo_followup_stage(
             execution_target_json: json!({
                 "kind":"kubernetes_workspace",
                 "inference":inference_marker,
-                "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if stage == "test" {"ephemeral_copy"} else {"read_only"}},
+                "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if deterministic_test {"ephemeral_copy"} else {"read_only"},"deterministic_test":deterministic_test,"test_diagnosis":test_diagnosis,"diagnosis_of_outcome_id":diagnosis_of.map(|outcome| outcome.id.as_str())},
                 "agent_profile":profile,
                 "agent_context":context,
                 "agent_evidence_payloads":evidence.payloads,
@@ -5061,6 +5448,7 @@ async fn start_repo_followup_stage(
         "source_commit":authorization.source_commit,
         "workspace_id":workspace.id,
         "upstream_outcome_hashes":outcomes.iter().map(|outcome| &outcome.content_hash).collect::<Vec<_>>(),
+        "diagnosis_of":diagnosis_of.map(|outcome| json!({"outcome_id":outcome.id,"content_hash":outcome.content_hash})),
     });
     let sequence = state
         .store
@@ -5078,9 +5466,9 @@ async fn start_repo_followup_stage(
             stage_key: stage.into(),
             sequence,
             status: "queued".into(),
-            agent_profile_id: Some(profile.id.clone()),
-            agent_profile_version: Some(profile.version.clone()),
-            agent_profile_hash: Some(profile.profile_hash.clone()),
+            agent_profile_id: (!deterministic_test).then(|| profile.id.clone()),
+            agent_profile_version: (!deterministic_test).then(|| profile.version.clone()),
+            agent_profile_hash: (!deterministic_test).then(|| profile.profile_hash.clone()),
             context_pack_id: None,
             run_id: Some(run.id.clone()),
             workspace_id: Some(workspace.id.clone()),
@@ -5109,7 +5497,11 @@ async fn start_repo_followup_stage(
                 resolved_commit: Some(authorization.source_commit.clone()),
                 branch: workspace.branch.clone(),
                 actor: Some("controller:repo-mode".into()),
-                reason: Some(format!("automatic authorized {stage} dispatch")),
+                reason: Some(if test_diagnosis {
+                    "automatic authorized test-diagnosis dispatch".into()
+                } else {
+                    format!("automatic authorized {stage} dispatch")
+                }),
             },
         )
         .await?;
@@ -5121,7 +5513,7 @@ async fn start_repo_followup_stage(
             run_id: run.id.clone(),
             seq: 1,
             kind: EventKind::RunQueued,
-            payload: json!({"source":"repo_mode_controller","stage":stage,"stage_execution_id":execution.id,"chain_authorization_id":authorization.id}),
+            payload: json!({"source":"repo_mode_controller","stage":stage,"test_diagnosis":test_diagnosis,"stage_execution_id":execution.id,"chain_authorization_id":authorization.id}),
         })
         .await?;
     state
@@ -5317,18 +5709,18 @@ async fn create_repo_work_item(
             actor: actor.clone(),
         })
         .await?;
-    let planner_profile = pharness_core::compiled_agent_profiles(
-        state
-            .worker
-            .config_json()
-            .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or("unconfigured"),
-        pharness_runhost::SYSTEM_PROMPT_VERSION,
-    )
-    .into_iter()
-    .find(|profile| profile.id == "repo-planner")
-    .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+    let planner_profile = state
+        .compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repo-planner")
+        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
     let planner_selection = if state.inference.enabled {
         Some(
             super::inference::create_planned_selection(
@@ -5389,6 +5781,7 @@ async fn create_repo_work_item(
         work_item_id: work_item_id.clone(),
         stage_execution_id: execution.id.clone(),
         stage: pharness_core::RepoStageKey::Discover,
+        origin: "controller".into(),
         status: pharness_core::StageTerminalStatus::Succeeded,
         objective: json!({"kind":"seal_current_repository_readiness"}),
         pinned_inputs: discover_inputs,
@@ -5424,6 +5817,7 @@ async fn create_repo_work_item(
             outcome: outcome_value,
             state_version: metadata.state_version,
             supersedes_outcome_id: None,
+            effective: true,
             actor: "controller".into(),
             reason: "validated current readiness evidence".into(),
         })
@@ -5583,18 +5977,18 @@ async fn build_repo_work_item_preflight(
             "Repo Mode max_attempts must be between one and three",
         ));
     }
-    let planner_profile = pharness_core::compiled_agent_profiles(
-        state
-            .worker
-            .config_json()
-            .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or("unconfigured"),
-        pharness_runhost::SYSTEM_PROMPT_VERSION,
-    )
-    .into_iter()
-    .find(|profile| profile.id == "repo-planner")
-    .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+    let planner_profile = state
+        .compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repo-planner")
+        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
     let planner_inference = if state.inference.enabled {
         super::inference::preview_selection(
             state,
@@ -6282,6 +6676,7 @@ mod tests {
             stage_key: stage_key.into(),
             sequence: 1,
             status: status.into(),
+            origin: "controller".into(),
             agent_profile_id: None,
             agent_profile_version: None,
             agent_profile_hash: None,
@@ -6304,6 +6699,7 @@ mod tests {
             work_item_id: "witem_repo".into(),
             stage_key: stage_key.into(),
             status: "succeeded".into(),
+            origin: "agent".into(),
             schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
             outcome: json!({}),
             content_hash: format!("sha256:{id}"),

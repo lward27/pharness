@@ -14,9 +14,10 @@ pub mod resources;
 pub mod tools;
 
 pub use agent::{
-    pack_messages, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag, ContextBudget,
-    ContextError, ContextPack, PendingApproval, PendingBudgetExtension, RecoveryPolicy,
-    RepositoryInstruction, RunConfig, RunOutcome, RunStatus, TaskContract, TaskKind,
+    estimate_request_tokens, pack_messages, AgentRuntime, ApprovedAction, BudgetResume,
+    CancellationFlag, ContextBudget, ContextError, ContextPack, PendingApproval,
+    PendingBudgetExtension, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome,
+    RunStatus, TaskContract, TaskKind,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
@@ -27,14 +28,14 @@ pub use inference::{
     InferenceStage, InferenceTargetRef, InferenceTargetRevision, InferenceTransportPolicy,
     ModelGrantClaims, ModelGrantError, OpenRouterRoutePolicy, ReasoningContextMode,
     ReasoningEffort, ReasoningReplay, ReasoningRequestPolicy, ResolvedInferenceBinding,
-    StageInferencePolicyRevision, INFERENCE_POLICY_SCHEMA, INFERENCE_QUALIFICATION_SUITE_SCHEMA,
-    INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA, MODEL_GRANT_SCHEMA,
-    RESOLVED_INFERENCE_BINDING_SCHEMA,
+    StageInferencePolicyRevision, StagePromptRevision, INFERENCE_POLICY_SCHEMA,
+    INFERENCE_QUALIFICATION_SUITE_SCHEMA, INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA,
+    MODEL_GRANT_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA, STAGE_PROMPT_SCHEMA,
 };
 pub use model::{
     ActionParseError, AgentAction, ApprovalKind, ModelCapabilities, ModelMessage, ModelProvider,
     ModelRequest, ModelResponseMetadata, ModelRole, ModelToolCall, ModelTurn, ProviderError,
-    TextPatch, TokenUsage, ToolProtocolMode, ToolSpec,
+    ProviderProtocolErrorKind, TextPatch, TokenUsage, ToolChoiceMode, ToolProtocolMode, ToolSpec,
 };
 pub use policy::{
     classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
@@ -51,10 +52,10 @@ pub use project::{
 #[allow(deprecated)]
 pub use project::{ProjectContract, ProjectContractError};
 pub use repo_mode::{
-    canonical_json_sha256, compiled_agent_profiles, AgentProfile, RepoStageKey,
-    RepositoryBindingProposal, RepositoryOnboardingProposal, RepositoryServiceProposal,
-    StageOutcomeDocument, StageTerminalStatus, AGENT_CONTEXT_SCHEMA, EVIDENCE_VALIDATION_SCHEMA,
-    ONBOARDING_PROPOSAL_SCHEMA, STAGE_OUTCOME_SCHEMA,
+    canonical_json_sha256, compiled_agent_profiles, compiled_reliability_v2_agent_profiles,
+    AgentProfile, RepoStageKey, RepositoryBindingProposal, RepositoryOnboardingProposal,
+    RepositoryServiceProposal, StageOutcomeDocument, StageTerminalStatus, AGENT_CONTEXT_SCHEMA,
+    EVIDENCE_VALIDATION_SCHEMA, ONBOARDING_PROPOSAL_SCHEMA, STAGE_OUTCOME_SCHEMA,
 };
 pub use repository::{
     discover_repository, DiscoveredCandidate, DiscoveredCommandCandidate, DiscoveredContractState,

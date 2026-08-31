@@ -5,11 +5,12 @@ An agent should not infer additional active work from the roadmap or archive.
 
 ## Current milestone
 
-The active implementation and live-characterization milestone is the
-[`Finance Metadata Reliability Campaign`](PHarness-Finance-Metadata-Reliability-Campaign.md).
-It uses six sequential, single-repository Repo Mode WorkItems to add Market,
-Sector, and Industry capabilities while capturing correction, context, source
-delivery, and explicit merge-order evidence.
+The active implementation and qualification milestone is
+[`Coding Reliability and Alternative-Model Qualification`](PHarness-Coding-Reliability-and-Alternative-Model-Qualification.md).
+It makes deterministic coding quality the release gate before further platform
+expansion. The [`Finance Metadata Reliability Campaign`](PHarness-Finance-Metadata-Reliability-Campaign.md)
+is paused after FRC-1 and resumes at FRC-2 only after the frozen offline coding
+benchmark and disposable repair smoke pass.
 
 Before another implementation begins, add one approved milestone here with its exact
 baseline, scope, behavioral invariants, acceptance gates, rollout boundary, and

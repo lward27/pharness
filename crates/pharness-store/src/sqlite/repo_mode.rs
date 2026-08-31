@@ -371,28 +371,30 @@ impl SqliteStore {
         .bind(&now)
         .execute(&mut *tx)
         .await?;
-        sqlx::query(
-            r#"
-            INSERT INTO effective_stage_outcomes (
-              work_item_id, stage_key, outcome_id, state_version, changed_by, change_reason, changed_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            ON CONFLICT(work_item_id, stage_key) DO UPDATE SET
-              outcome_id = excluded.outcome_id,
-              state_version = excluded.state_version,
-              changed_by = excluded.changed_by,
-              change_reason = excluded.change_reason,
-              changed_at = excluded.changed_at
-            "#,
-        )
-        .bind(&outcome.work_item_id)
-        .bind(&outcome.stage_key)
-        .bind(&outcome.id)
-        .bind(outcome.state_version as i64)
-        .bind(&outcome.actor)
-        .bind(&outcome.reason)
-        .bind(&now)
-        .execute(&mut *tx)
-        .await?;
+        if outcome.effective {
+            sqlx::query(
+                r#"
+                INSERT INTO effective_stage_outcomes (
+                  work_item_id, stage_key, outcome_id, state_version, changed_by, change_reason, changed_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ON CONFLICT(work_item_id, stage_key) DO UPDATE SET
+                  outcome_id = excluded.outcome_id,
+                  state_version = excluded.state_version,
+                  changed_by = excluded.changed_by,
+                  change_reason = excluded.change_reason,
+                  changed_at = excluded.changed_at
+                "#,
+            )
+            .bind(&outcome.work_item_id)
+            .bind(&outcome.stage_key)
+            .bind(&outcome.id)
+            .bind(outcome.state_version as i64)
+            .bind(&outcome.actor)
+            .bind(&outcome.reason)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        }
         sqlx::query(
             "UPDATE stage_executions SET status = ?2, stop_reason = json_extract(?3, '$.stop_reason'), finished_at = ?4 WHERE id = ?1 AND finished_at IS NULL",
         )
@@ -1110,13 +1112,20 @@ fn row_to_source_delivery_intent(
 fn row_to_stage_execution(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredStageExecution, StoreError> {
+    let agent_profile_id: Option<String> = row.try_get("agent_profile_id")?;
+    let origin = if agent_profile_id.is_some() {
+        "agent"
+    } else {
+        "controller"
+    };
     Ok(StoredStageExecution {
         id: row.try_get("id")?,
         work_item_id: row.try_get("work_item_id")?,
         stage_key: row.try_get("stage_key")?,
         sequence: row.try_get::<i64, _>("sequence")? as u64,
         status: row.try_get("status")?,
-        agent_profile_id: row.try_get("agent_profile_id")?,
+        origin: origin.into(),
+        agent_profile_id,
         agent_profile_version: row.try_get("agent_profile_version")?,
         agent_profile_hash: row.try_get("agent_profile_hash")?,
         context_pack_id: row.try_get("context_pack_id")?,
@@ -1132,14 +1141,22 @@ fn row_to_stage_execution(
 }
 
 fn row_to_stage_outcome(row: sqlx::sqlite::SqliteRow) -> Result<StoredStageOutcome, StoreError> {
+    let outcome: serde_json::Value =
+        serde_json::from_str(&row.try_get::<String, _>("outcome_json")?)?;
+    let origin = outcome
+        .get("origin")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("agent")
+        .to_string();
     Ok(StoredStageOutcome {
         id: row.try_get("id")?,
         stage_execution_id: row.try_get("stage_execution_id")?,
         work_item_id: row.try_get("work_item_id")?,
         stage_key: row.try_get("stage_key")?,
         status: row.try_get("status")?,
+        origin,
         schema_version: row.try_get("schema_version")?,
-        outcome: serde_json::from_str(&row.try_get::<String, _>("outcome_json")?)?,
+        outcome,
         content_hash: row.try_get("content_hash")?,
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         supersedes_outcome_id: row.try_get("supersedes_outcome_id")?,
@@ -1380,6 +1397,7 @@ mod tests {
                 content_hash: "sha256:outcome".into(),
                 state_version: 2,
                 supersedes_outcome_id: None,
+                effective: true,
                 actor: "controller".into(),
                 reason: "validated evidence".into(),
             })
@@ -1393,6 +1411,48 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(effective, "stageout_one");
+        let auxiliary_execution = store
+            .create_stage_execution(CreateStageExecution {
+                id: "stageexec_auxiliary".into(),
+                work_item_id: "witem_repo".into(),
+                stage_key: "discover".into(),
+                sequence: 2,
+                status: "running".into(),
+                agent_profile_id: Some("diagnoser".into()),
+                agent_profile_version: Some("v2".into()),
+                agent_profile_hash: Some("sha256:diagnoser".into()),
+                context_pack_id: None,
+                run_id: None,
+                workspace_id: None,
+                input_snapshot: json!({"diagnosis_of":"stageout_one"}),
+                input_hash: "sha256:input-auxiliary".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .seal_stage_outcome(SealStageOutcome {
+                id: "stageout_auxiliary".into(),
+                stage_execution_id: auxiliary_execution.id,
+                work_item_id: "witem_repo".into(),
+                stage_key: "discover".into(),
+                status: "succeeded".into(),
+                outcome: json!({"origin":"agent","stop_reason":"diagnosis only"}),
+                content_hash: "sha256:outcome-auxiliary".into(),
+                state_version: 2,
+                supersedes_outcome_id: None,
+                effective: false,
+                actor: "controller".into(),
+                reason: "retain diagnosis without replacing effective outcome".into(),
+            })
+            .await
+            .unwrap();
+        let effective_after_auxiliary: String = sqlx::query_scalar(
+            "SELECT outcome_id FROM effective_stage_outcomes WHERE work_item_id = 'witem_repo' AND stage_key = 'discover'",
+        )
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(effective_after_auxiliary, "stageout_one");
         let update =
             sqlx::query("UPDATE stage_outcomes SET status = 'failed' WHERE id = 'stageout_one'")
                 .execute(&store.pool)
@@ -1407,7 +1467,7 @@ mod tests {
                 id: "stageexec_two".into(),
                 work_item_id: "witem_repo".into(),
                 stage_key: "discover".into(),
-                sequence: 2,
+                sequence: 3,
                 status: "running".into(),
                 agent_profile_id: None,
                 agent_profile_version: None,
@@ -1431,6 +1491,7 @@ mod tests {
                 content_hash: "sha256:outcome-two".into(),
                 state_version: 3,
                 supersedes_outcome_id: Some("stageout_one".into()),
+                effective: true,
                 actor: "controller".into(),
                 reason: "validated refreshed evidence".into(),
             })
@@ -1442,7 +1503,7 @@ mod tests {
                 .iter()
                 .map(|outcome| outcome.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["stageout_one", "stageout_two"]
+            vec!["stageout_one", "stageout_auxiliary", "stageout_two"]
         );
         let effective = store
             .list_effective_stage_outcomes("witem_repo")

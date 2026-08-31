@@ -7,8 +7,9 @@ use futures::StreamExt;
 use pharness_core::{
     canonical_json_sha256, inference_qualification_suite_hash, sign_model_grant, CapabilityKind,
     InferencePolicyRef, InferenceStage, InferenceTargetRef, ModelGrantClaims, ModelMessage,
-    ModelRequest, ResolvedInferenceBinding, RunId, SessionId, ToolProtocolMode, ToolSpec,
-    MODEL_GRANT_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA,
+    ModelRequest, ModelRole, ModelToolCall, ReasoningReplay, ResolvedInferenceBinding, RunId,
+    SessionId, StageInferencePolicyRevision, ToolProtocolMode, ToolSpec, MODEL_GRANT_SCHEMA,
+    RESOLVED_INFERENCE_BINDING_SCHEMA,
 };
 use pharness_openai_compatible::{
     build_chat_request, OpenAiStreamAggregate, SseDecoder, StreamChunk,
@@ -189,6 +190,56 @@ async fn create_run_selection(
             ));
         }
         verify_binding_is_configured(state, &planned.resolved_binding)?;
+        let profile = run
+            .execution_target_json
+            .get("agent_profile")
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("Run AgentProfile is unavailable"))?;
+        let profile_id = profile
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::conflict("Run AgentProfile ID is unavailable"))?;
+        let compiled_profile = state
+            .compiled_agent_profiles(&planned.resolved_binding.target.upstream_model)
+            .into_iter()
+            .find(|candidate| candidate.id == profile_id)
+            .ok_or_else(|| ApiError::conflict("Run AgentProfile is unavailable"))?;
+        let base_agent_profile_hash = profile
+            .get("base_profile_hash")
+            .and_then(Value::as_str)
+            .unwrap_or(&compiled_profile.profile_hash);
+        let budget = profile
+            .get("budget")
+            .cloned()
+            .or_else(|| run.execution_target_json.get("run_budget").cloned())
+            .unwrap_or(Value::Null);
+        let (acceptance_names, evidence_ids) = dynamic_tool_constraints(&run.execution_target_json);
+        let requested = InferencePolicyRef {
+            policy_id: planned.policy_id.clone(),
+            revision: planned.policy_revision.clone(),
+        };
+        let tools = profile_tools(&profile);
+        let exact_binding = resolve_binding(
+            state,
+            ResolveBindingRequest {
+                stage,
+                profile_id,
+                base_agent_profile_hash,
+                tools: &tools,
+                budget: &budget,
+                acceptance_names: &acceptance_names,
+                evidence_ids: &evidence_ids,
+                requested: Some(&requested),
+            },
+        )
+        .await?;
+        if exact_binding.policy.policy_hash != planned.policy_hash
+            || exact_binding.target.config_hash != planned.target_hash
+        {
+            return Err(ApiError::conflict(
+                "planned inference policy changed before Run binding",
+            ));
+        }
         let stage_execution_id = run
             .execution_target_json
             .pointer("/repo_mode/stage_execution_id")
@@ -201,8 +252,8 @@ async fn create_run_selection(
                 subject_kind: planned.subject_kind,
                 subject_id: planned.subject_id,
                 stage_key: planned.stage_key,
-                effective_settings: planned.effective_settings,
-                resolved_binding: planned.resolved_binding,
+                effective_settings: effective_settings(&exact_binding),
+                resolved_binding: exact_binding,
                 actor: "controller".into(),
                 reason: "bound planned inference selection to queued Run".into(),
                 state_hash: canonical_json_sha256(&run.execution_target_json).map_err(|error| {
@@ -220,18 +271,18 @@ async fn create_run_selection(
         .pointer("/agent_profile/id")
         .and_then(Value::as_str)
         .unwrap_or("repo-builder");
-    let compiled_profile = pharness_core::compiled_agent_profiles(
-        state
-            .worker
-            .config_json()
-            .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or("unconfigured"),
-        SYSTEM_PROMPT_VERSION,
-    )
-    .into_iter()
-    .find(|profile| profile.id == profile_id)
-    .ok_or_else(|| ApiError::conflict("Run AgentProfile is unavailable"))?;
+    let compiled_profile = state
+        .compiled_agent_profiles(
+            state
+                .worker
+                .config_json()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or("unconfigured"),
+        )
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| ApiError::conflict("Run AgentProfile is unavailable"))?;
     let profile = run
         .execution_target_json
         .get("agent_profile")
@@ -257,14 +308,19 @@ async fn create_run_selection(
         .map(serde_json::from_value::<InferencePolicyRef>)
         .transpose()
         .map_err(|error| ApiError::conflict(format!("Run inference policy is invalid: {error}")))?;
+    let (acceptance_names, evidence_ids) = dynamic_tool_constraints(&run.execution_target_json);
     let binding = resolve_binding(
         state,
-        stage,
-        profile_id,
-        base_agent_profile_hash,
-        &tools,
-        &budget,
-        requested.as_ref(),
+        ResolveBindingRequest {
+            stage,
+            profile_id,
+            base_agent_profile_hash,
+            tools: &tools,
+            budget: &budget,
+            acceptance_names: &acceptance_names,
+            evidence_ids: &evidence_ids,
+            requested: requested.as_ref(),
+        },
     )
     .await?;
     let stage_execution_id = run
@@ -342,12 +398,16 @@ pub(super) async fn create_planned_selection(
         .unwrap_or(Value::Null);
     let binding = resolve_binding(
         state,
-        request.stage,
-        profile_id,
-        base_agent_profile_hash,
-        &tools,
-        &budget,
-        request.requested,
+        ResolveBindingRequest {
+            stage: request.stage,
+            profile_id,
+            base_agent_profile_hash,
+            tools: &tools,
+            budget: &budget,
+            acceptance_names: &[],
+            evidence_ids: &[],
+            requested: request.requested,
+        },
     )
     .await?;
     let stage_key = inference_stage_key(request.stage);
@@ -389,14 +449,20 @@ pub(super) async fn preview_selection(
         .get("profile_hash")
         .and_then(Value::as_str)
         .ok_or_else(|| ApiError::internal("AgentProfile hash is unavailable"))?;
+    let tools = profile_tools(profile);
+    let budget = profile.get("budget").cloned().unwrap_or(Value::Null);
     let binding = resolve_binding(
         state,
-        stage,
-        profile_id,
-        base_agent_profile_hash,
-        &profile_tools(profile),
-        &profile.get("budget").cloned().unwrap_or(Value::Null),
-        requested,
+        ResolveBindingRequest {
+            stage,
+            profile_id,
+            base_agent_profile_hash,
+            tools: &tools,
+            budget: &budget,
+            acceptance_names: &[],
+            evidence_ids: &[],
+            requested,
+        },
     )
     .await?;
     Ok(json!({
@@ -435,7 +501,7 @@ pub(super) fn execution_marker_for_selection(
     })
 }
 
-fn sanitized_binding(binding: &ResolvedInferenceBinding) -> Value {
+pub(super) fn sanitized_binding(binding: &ResolvedInferenceBinding) -> Value {
     json!({
         "backend_kind":binding.target.backend_kind,
         "model":binding.target.upstream_model,
@@ -451,7 +517,10 @@ fn sanitized_binding(binding: &ResolvedInferenceBinding) -> Value {
         "context_assembly_limit":binding.policy.max_input_tokens,
         "transport_retry_attempts":binding.policy.transport_max_attempts,
         "prompt_version":binding.prompt_version,
+        "stage_prompt":binding.stage_prompt,
         "tool_schema_hash":binding.tool_schema_hash,
+        "context_policy_hash":binding.context_policy_hash,
+        "protocol_calibration_hash":binding.protocol_calibration_hash,
         "profile_budget_hash":binding.profile_budget_hash,
         "base_agent_profile_hash":binding.base_agent_profile_hash,
         "agent_profile_hash":binding.agent_profile_hash,
@@ -473,28 +542,72 @@ pub(super) async fn latest_planned_selection(
         .rfind(|selection| selection.run_id.is_none() && selection.stage_key == stage_key))
 }
 
+/// Return the exact planned binding for one profile when several V2 profiles
+/// share a lifecycle stage (for example primary Builder and Repair both use
+/// `implement`). The immutable stage-prompt ID is part of the binding and is
+/// therefore safe to use as the discriminator.
+pub(super) async fn latest_planned_selection_for_profile(
+    state: &AppState,
+    subject_kind: &str,
+    subject_id: &str,
+    stage_key: &str,
+    profile_id: &str,
+) -> Result<Option<pharness_store::StoredStageInferenceSelection>, ApiError> {
+    let expected_prompt_id = pharness_runhost::stage_prompt_for_profile(profile_id)
+        .map(|prompt| prompt.prompt_id.to_string());
+    Ok(state
+        .store
+        .list_stage_inference_selections(subject_kind, subject_id)
+        .await?
+        .into_iter()
+        .rfind(|selection| {
+            selection.run_id.is_none()
+                && selection.stage_key == stage_key
+                && selection
+                    .resolved_binding
+                    .stage_prompt
+                    .as_ref()
+                    .map(|prompt| prompt.prompt_id.as_str())
+                    == expected_prompt_id.as_deref()
+        }))
+}
+
+struct ResolveBindingRequest<'a> {
+    stage: InferenceStage,
+    profile_id: &'a str,
+    base_agent_profile_hash: &'a str,
+    tools: &'a Value,
+    budget: &'a Value,
+    acceptance_names: &'a [String],
+    evidence_ids: &'a [String],
+    requested: Option<&'a InferencePolicyRef>,
+}
+
 async fn resolve_binding(
     state: &AppState,
-    stage: InferenceStage,
-    profile_id: &str,
-    base_agent_profile_hash: &str,
-    tools: &Value,
-    budget: &Value,
-    requested: Option<&InferencePolicyRef>,
+    request: ResolveBindingRequest<'_>,
 ) -> Result<ResolvedInferenceBinding, ApiError> {
-    let policy_ref = match requested {
-        Some(value) => value,
-        None => state
-            .inference
-            .registry
-            .defaults
-            .get(&stage)
-            .ok_or_else(|| {
-                ApiError::unavailable(
-                    "no qualified default inference policy is configured for this stage",
-                )
-            })?,
-    };
+    let policy_ref = request.requested.cloned().or_else(|| {
+        state
+            .repo_mode
+            .coding_reliability_v2_enabled
+            .then(|| reliability_v2_default_policy(request.profile_id))
+            .flatten()
+    });
+    let policy_ref = policy_ref
+        .or_else(|| {
+            state
+                .inference
+                .registry
+                .defaults
+                .get(&request.stage)
+                .cloned()
+        })
+        .ok_or_else(|| {
+            ApiError::unavailable(
+                "no qualified default inference policy is configured for this stage",
+            )
+        })?;
     let policy = state
         .inference
         .registry
@@ -502,14 +615,15 @@ async fn resolve_binding(
         .ok_or_else(|| ApiError::conflict("selected inference policy revision is unavailable"))?
         .clone();
     if !policy.selectable
-        || !policy.eligible_stages.contains(&stage)
+        || !policy.eligible_stages.contains(&request.stage)
         || !policy
             .eligible_profiles
             .iter()
-            .any(|value| value == profile_id)
+            .any(|value| value == request.profile_id)
     {
         return Err(ApiError::conflict(format!(
-            "selected inference policy is not active for AgentProfile {profile_id}"
+            "selected inference policy is not active for AgentProfile {}",
+            request.profile_id
         )));
     }
     if policy.policy_id != "fireworks-legacy-v1" {
@@ -536,22 +650,73 @@ async fn resolve_binding(
         .target(&policy.target.target_id, &policy.target.revision)
         .ok_or_else(|| ApiError::conflict("selected inference target revision is unavailable"))?
         .clone();
-    if !target.selectable || !target.allowed_stages.contains(&stage) {
+    if !target.selectable || !target.allowed_stages.contains(&request.stage) {
         return Err(ApiError::conflict(
             "selected inference target is not active for this stage",
         ));
     }
+    let reliability_v2 = state.repo_mode.coding_reliability_v2_enabled;
+    let stage_prompt = reliability_v2
+        .then(|| pharness_runhost::stage_prompt_for_profile(request.profile_id))
+        .flatten()
+        .map(|prompt| prompt.revision_record());
+    let tool_schema_hash = if reliability_v2 {
+        let names =
+            serde_json::from_value::<Vec<String>>(request.tools.clone()).map_err(|error| {
+                ApiError::internal(format!("failed to decode profile tools: {error}"))
+            })?;
+        pharness_runhost::constrained_tool_schema_hash(
+            &names,
+            request.acceptance_names,
+            request.evidence_ids,
+        )
+        .map_err(|error| ApiError::internal(format!("failed to hash V2 tool schemas: {error}")))?
+    } else {
+        canonical_json_sha256(request.tools)
+            .map_err(|error| ApiError::internal(format!("failed to hash profile tools: {error}")))?
+    };
+    let context_policy_hash = if reliability_v2 {
+        canonical_json_sha256(&json!({
+            "schema_version":"pharness.dev/repo-context-policy/v2",
+            "stage":request.stage,
+            "max_input_tokens":policy.max_input_tokens,
+            "max_output_tokens":policy.max_output_tokens,
+            "controller_execution_ledger":true,
+            "deterministic_checkpoints":true,
+        }))
+        .map_err(|error| ApiError::internal(error.to_string()))?
+    } else {
+        String::new()
+    };
+    let protocol_calibration_hash = if reliability_v2 {
+        canonical_json_sha256(&json!({
+            "schema_version":"pharness.dev/protocol-contract/v2",
+            "target_hash":target.config_hash,
+            "policy_hash":policy.policy_hash,
+            "tool_choice":policy.tool_choice,
+            "tool_protocol":policy.tool_protocol,
+            "parallel_tool_calls":false,
+        }))
+        .map_err(|error| ApiError::internal(error.to_string()))?
+    } else {
+        String::new()
+    };
     let mut binding = ResolvedInferenceBinding {
         schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
         target,
         policy,
-        prompt_version: SYSTEM_PROMPT_VERSION.into(),
-        base_agent_profile_hash: base_agent_profile_hash.into(),
+        prompt_version: if reliability_v2 {
+            pharness_runhost::RELIABILITY_V2_PROMPT_BUNDLE_VERSION.into()
+        } else {
+            SYSTEM_PROMPT_VERSION.into()
+        },
+        stage_prompt,
+        base_agent_profile_hash: request.base_agent_profile_hash.into(),
         agent_profile_hash: String::new(),
-        tool_schema_hash: canonical_json_sha256(tools).map_err(|error| {
-            ApiError::internal(format!("failed to hash profile tools: {error}"))
-        })?,
-        profile_budget_hash: canonical_json_sha256(budget).map_err(|error| {
+        tool_schema_hash,
+        context_policy_hash,
+        protocol_calibration_hash,
+        profile_budget_hash: canonical_json_sha256(request.budget).map_err(|error| {
             ApiError::internal(format!("failed to hash profile budget: {error}"))
         })?,
         binding_hash: String::new(),
@@ -566,6 +731,56 @@ async fn resolve_binding(
         ApiError::internal(format!("resolved inference binding is invalid: {error}"))
     })?;
     Ok(binding)
+}
+
+fn dynamic_tool_constraints(execution_target: &Value) -> (Vec<String>, Vec<String>) {
+    let selected_commands = execution_target
+        .get("selected_acceptance_commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
+    let acceptance_names = execution_target
+        .get("repository_contract")
+        .and_then(|contract| contract.get("acceptance_commands"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|command| {
+            command
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(|command| selected_commands.contains(&command))
+        })
+        .filter_map(|command| command.get("name").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let evidence_ids = execution_target
+        .pointer("/agent_context/evidence_catalog")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("id").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    (acceptance_names, evidence_ids)
+}
+
+fn reliability_v2_default_policy(profile_id: &str) -> Option<InferencePolicyRef> {
+    let policy_id = match profile_id {
+        "repository-onboarding-proposer" => "onboarding-minimax-m3-v2",
+        "repo-planner" => "planner-kimi-k3-v2",
+        "repo-builder" => "builder-kimi-k2p7-code-v2",
+        "repo-repair" => "repair-kimi-k3-v2",
+        "repo-test-diagnoser" => "test-diagnosis-nemotron-v2",
+        "repo-verifier" => "verifier-glm-5p3-v2",
+        _ => return None,
+    };
+    Some(InferencePolicyRef {
+        policy_id: policy_id.into(),
+        revision: "v1".into(),
+    })
 }
 
 fn verify_binding_is_configured(
@@ -606,7 +821,12 @@ fn effective_settings(binding: &ResolvedInferenceBinding) -> Value {
         "maximum_output_tokens":binding.policy.max_output_tokens,
         "context_assembly_limit":binding.policy.max_input_tokens,
         "tool_protocol":binding.policy.tool_protocol,
+        "tool_choice":binding.policy.tool_choice,
         "transport_retry_attempts":binding.policy.transport_max_attempts,
+        "stage_prompt":binding.stage_prompt,
+        "tool_schema_hash":binding.tool_schema_hash,
+        "context_policy_hash":binding.context_policy_hash,
+        "protocol_calibration_hash":binding.protocol_calibration_hash,
         "base_agent_profile_hash":binding.base_agent_profile_hash,
         "agent_profile_hash":binding.agent_profile_hash,
     })
@@ -725,27 +945,23 @@ async fn list_policies(
             None => true,
         })
     {
-        let qualification_contract = policy
-            .eligible_stages
-            .iter()
-            .find_map(|stage| qualification_contract_for_stage(*stage).ok())
-            .and_then(|(suite_id, profile_id)| {
-                let target = state
-                    .inference
-                    .registry
-                    .target(&policy.target.target_id, &policy.target.revision)?;
-                let profile = pharness_core::compiled_agent_profiles(
-                    &target.upstream_model,
-                    SYSTEM_PROMPT_VERSION,
-                )
-                .into_iter()
-                .find(|profile| profile.id == profile_id)?;
-                Some(json!({
-                    "suite_id":suite_id,
-                    "agent_profile_id":profile.id,
-                    "agent_profile_hash":profile.profile_hash,
-                }))
-            });
+        let qualification_contract =
+            qualification_contract_for_policy(policy)
+                .ok()
+                .and_then(|(suite_id, profile_id)| {
+                    let target = state
+                        .inference
+                        .registry
+                        .target(&policy.target.target_id, &policy.target.revision)?;
+                    let profile = qualification_profiles(policy, &target.upstream_model)
+                        .into_iter()
+                        .find(|profile| profile.id == profile_id)?;
+                    Some(json!({
+                        "suite_id":suite_id,
+                        "agent_profile_id":profile.id,
+                        "agent_profile_hash":profile.profile_hash,
+                    }))
+                });
         let latest_qualification = state
             .store
             .list_inference_policy_qualifications(&policy.policy_id, &policy.revision)
@@ -766,6 +982,18 @@ async fn list_policies(
                 })
         });
         let is_legacy_baseline = policy.policy_id == "fireworks-legacy-v1";
+        let reliability_v2_default_for_profiles = policy
+            .eligible_profiles
+            .iter()
+            .filter(|profile_id| {
+                reliability_v2_default_policy(profile_id)
+                    .as_ref()
+                    .is_some_and(|default| {
+                        default.policy_id == policy.policy_id && default.revision == policy.revision
+                    })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         let qualified = is_legacy_baseline
             || latest_qualification.as_ref().is_some_and(|value| {
                 value.verdict == "passed"
@@ -785,9 +1013,11 @@ async fn list_policies(
                 "maximum_output_tokens":policy.max_output_tokens,
                 "context_assembly_limit":policy.max_input_tokens,
                 "tool_protocol":policy.tool_protocol,
+                "tool_choice":policy.tool_choice,
                 "transport_retry_attempts":policy.transport_max_attempts,
                 "selectable":policy.selectable,
                 "is_default":is_default,
+                "reliability_v2_default_for_profiles":reliability_v2_default_for_profiles,
                 "policy_hash":policy.policy_hash,
                 "qualified":qualified,
                 "qualification_status":if is_legacy_baseline { "accepted_legacy_baseline" } else if qualified { "passed" } else { "not_qualified" },
@@ -890,18 +1120,34 @@ async fn preflight_target(
     let verification_id = new_prefixed_id("inferverify");
     let now = epoch_seconds();
     let result = verify_target_protocol(&state, &verification_id, &target, &policy).await;
-    let (status, reachability, model_visible, streaming_compatible, tool_compatible, failure) =
-        match result {
-            Ok(()) => ("passed", "reachable", true, true, true, None),
-            Err(message) => (
-                "failed",
-                "unavailable",
-                false,
-                false,
-                false,
-                Some(sanitize_failure(&message)),
-            ),
-        };
+    let (
+        status,
+        reachability,
+        model_visible,
+        streaming_compatible,
+        tool_compatible,
+        calibration,
+        failure,
+    ) = match result {
+        Ok(calibration) => (
+            "passed",
+            "reachable",
+            true,
+            true,
+            true,
+            Some(calibration),
+            None,
+        ),
+        Err(message) => (
+            "failed",
+            "unavailable",
+            false,
+            false,
+            false,
+            None,
+            Some(sanitize_failure(&message)),
+        ),
+    };
     let verification = state
         .store
         .create_inference_target_verification(CreateInferenceTargetVerification {
@@ -919,6 +1165,7 @@ async fn preflight_target(
                 "streaming":streaming_compatible,
                 "native_tools":tool_compatible,
                 "registry_hash":state.inference.registry.config_hash,
+                "protocol_calibration":calibration,
             }),
             sanitized_failure: failure,
             actor: request.actor,
@@ -984,13 +1231,12 @@ async fn create_policy_qualification(
             "only active non-legacy candidate policies may be qualified",
         ));
     }
+    let (suite_id, expected_profile_id) = qualification_contract_for_policy(policy)?;
     let stage = policy
         .eligible_stages
-        .iter()
+        .first()
         .copied()
-        .find(|stage| qualification_contract_for_stage(*stage).is_ok())
         .ok_or_else(|| ApiError::conflict("policy has no supported qualification stage"))?;
-    let (suite_id, expected_profile_id) = qualification_contract_for_stage(stage)?;
     if !policy.eligible_stages.contains(&stage)
         || !policy
             .eligible_profiles
@@ -1001,11 +1247,10 @@ async fn create_policy_qualification(
             "qualification suite, stage, profile, and policy eligibility do not match",
         ));
     }
-    let profile =
-        pharness_core::compiled_agent_profiles(&target.upstream_model, SYSTEM_PROMPT_VERSION)
-            .into_iter()
-            .find(|profile| profile.id == expected_profile_id)
-            .ok_or_else(|| ApiError::internal("compiled qualification AgentProfile is missing"))?;
+    let profile = qualification_profiles(policy, &target.upstream_model)
+        .into_iter()
+        .find(|profile| profile.id == expected_profile_id)
+        .ok_or_else(|| ApiError::internal("compiled qualification AgentProfile is missing"))?;
     let suite_hash = inference_qualification_suite_hash(suite_id).map_err(|error| {
         ApiError::internal(format!("failed to hash qualification suite: {error}"))
     })?;
@@ -1020,6 +1265,16 @@ async fn create_policy_qualification(
                 && verification.model_visible
                 && verification.streaming_compatible
                 && verification.tool_compatible
+                && verification
+                    .observed_capabilities
+                    .pointer("/protocol_calibration/passed")
+                    .and_then(Value::as_u64)
+                    == Some(30)
+                && verification
+                    .observed_capabilities
+                    .pointer("/protocol_calibration/required")
+                    .and_then(Value::as_u64)
+                    == Some(30)
                 && verification
                     .expires_at
                     .parse::<u64>()
@@ -1037,16 +1292,69 @@ async fn create_policy_qualification(
     let budget = serde_json::to_value(&profile.budget).map_err(|error| {
         ApiError::internal(format!("failed to serialize profile budget: {error}"))
     })?;
+    let reliability_v2 = policy.policy_id.ends_with("-v2");
+    let stage_prompt = reliability_v2
+        .then(|| pharness_runhost::stage_prompt_for_profile(&profile.id))
+        .flatten()
+        .map(|prompt| prompt.revision_record());
+    let tool_schema_hash = if reliability_v2 {
+        let (acceptance_names, evidence_ids) = qualification_tool_constraints(suite_id);
+        pharness_runhost::constrained_tool_schema_hash(
+            &profile.tools,
+            &acceptance_names,
+            &evidence_ids,
+        )
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "failed to hash qualification tool schemas: {error}"
+            ))
+        })?
+    } else {
+        canonical_json_sha256(&tools).map_err(|error| {
+            ApiError::internal(format!("failed to hash qualification tools: {error}"))
+        })?
+    };
+    let context_policy_hash = if reliability_v2 {
+        canonical_json_sha256(&json!({
+            "schema_version":"pharness.dev/repo-context-policy/v2",
+            "stage":stage,
+            "max_input_tokens":policy.max_input_tokens,
+            "max_output_tokens":policy.max_output_tokens,
+            "controller_execution_ledger":true,
+            "deterministic_checkpoints":true,
+        }))
+        .map_err(|error| ApiError::internal(error.to_string()))?
+    } else {
+        String::new()
+    };
+    let protocol_calibration_hash = if reliability_v2 {
+        canonical_json_sha256(&json!({
+            "schema_version":"pharness.dev/protocol-contract/v2",
+            "target_hash":target.config_hash,
+            "policy_hash":policy.policy_hash,
+            "tool_choice":policy.tool_choice,
+            "tool_protocol":policy.tool_protocol,
+            "parallel_tool_calls":false,
+        }))
+        .map_err(|error| ApiError::internal(error.to_string()))?
+    } else {
+        String::new()
+    };
     let mut binding = ResolvedInferenceBinding {
         schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
         target: target.clone(),
         policy: policy.clone(),
-        prompt_version: SYSTEM_PROMPT_VERSION.into(),
+        prompt_version: if reliability_v2 {
+            pharness_runhost::RELIABILITY_V2_PROMPT_BUNDLE_VERSION.into()
+        } else {
+            SYSTEM_PROMPT_VERSION.into()
+        },
+        stage_prompt,
         base_agent_profile_hash: profile.profile_hash.clone(),
         agent_profile_hash: String::new(),
-        tool_schema_hash: canonical_json_sha256(&tools).map_err(|error| {
-            ApiError::internal(format!("failed to hash qualification tools: {error}"))
-        })?,
+        tool_schema_hash,
+        context_policy_hash,
+        protocol_calibration_hash,
         profile_budget_hash: canonical_json_sha256(&budget).map_err(|error| {
             ApiError::internal(format!("failed to hash qualification budget: {error}"))
         })?,
@@ -1104,6 +1412,16 @@ async fn create_policy_qualification(
         .mark_inference_evaluation_running(&evaluation_id, &receipt.job_name)
         .await?;
     Ok(Json(running))
+}
+
+fn qualification_tool_constraints(suite_id: &str) -> (Vec<String>, Vec<String>) {
+    match suite_id {
+        "coding-v2" | "repair-v2" => (vec!["unit".into()], Vec::new()),
+        "planner-v2" | "test-diagnosis-v2" | "verifier-v2" => {
+            (Vec::new(), vec!["fixture_evidence".into()])
+        }
+        _ => (Vec::new(), Vec::new()),
+    }
 }
 
 fn qualification_from_evaluation(
@@ -1431,12 +1749,32 @@ async fn issue_evaluation_model_grant(
     }))
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct ProtocolCalibrationReport {
+    schema_version: &'static str,
+    calibration_hash: String,
+    passed: u32,
+    required: u32,
+    cases: Vec<ProtocolCalibrationCase>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProtocolCalibrationCase {
+    case: &'static str,
+    attempt: u32,
+    tool_name: String,
+    arguments_valid: bool,
+    usage_observed: bool,
+    reasoning_observed: bool,
+    finish_reason: Option<String>,
+}
+
 async fn verify_target_protocol(
     state: &AppState,
     verification_id: &str,
     target: &pharness_core::InferenceTargetRevision,
     policy: &pharness_core::StageInferencePolicyRevision,
-) -> Result<(), String> {
+) -> Result<ProtocolCalibrationReport, String> {
     if !state.inference.enabled {
         return Err("model gateway is disabled".into());
     }
@@ -1485,24 +1823,218 @@ async fn verify_target_protocol(
     }) {
         return Err("configured target alias is not visible through the gateway".into());
     }
-    let request = ModelRequest {
-        session_id: SessionId::new(format!("verify_{verification_id}")),
-        run_id: RunId::new(format!("verify_{verification_id}")),
-        messages: vec![
-            ModelMessage::system("Call verification_complete exactly once."),
-            ModelMessage::user("Verify native streaming tool compatibility."),
-        ],
-        tools: vec![ToolSpec::new(
-            "verification_complete",
-            "Complete the protocol verification.",
-            json!({"type":"object","properties":{},"additionalProperties":false}),
-            CapabilityKind::AgentControl,
-        )],
-        mode: ToolProtocolMode::NativeTools,
-        temperature: policy.temperature().unwrap_or(0.0),
-        max_tokens: policy.max_output_tokens.min(256),
-        reasoning: Some(policy.reasoning.clone()),
-    };
+    let cases = [
+        "single_tool_call",
+        "multi_turn_continuation",
+        "tool_failure_recovery",
+        "long_terminal_submission",
+        "reasoning_replay",
+        "missing_action_correction",
+        "malformed_arguments_correction",
+        "multiple_actions_correction",
+        "streaming_usage",
+        "provider_error_recovery",
+    ];
+    let mut results = Vec::with_capacity(30);
+    for attempt in 1..=3 {
+        for (index, case) in cases.iter().enumerate() {
+            let marker = format!("{case}-{attempt}");
+            let request = ModelRequest {
+                session_id: SessionId::new(format!("verify_{verification_id}_{index}_{attempt}")),
+                run_id: RunId::new(format!("verify_{verification_id}_{index}_{attempt}")),
+                messages: protocol_calibration_messages(case, &marker),
+                tools: vec![ToolSpec::new(
+                    "verification_complete",
+                    format!("Complete protocol case {case}. Return marker exactly as supplied."),
+                    json!({
+                        "type":"object",
+                        "properties":{"marker":{"type":"string","enum":[marker]}},
+                        "required":["marker"],
+                        "additionalProperties":false,
+                    }),
+                    CapabilityKind::AgentControl,
+                )],
+                mode: ToolProtocolMode::NativeTools,
+                tool_choice: policy.tool_choice,
+                temperature: policy.temperature().unwrap_or(0.0),
+                max_tokens: policy.max_output_tokens.min(512),
+                reasoning: Some(policy.reasoning.clone()),
+            };
+            results.push(
+                execute_protocol_calibration_case(
+                    &client,
+                    &base,
+                    key.expose_secret().as_bytes(),
+                    verification_id,
+                    target,
+                    policy,
+                    case,
+                    attempt,
+                    u32::try_from(index + 1).unwrap_or(u32::MAX),
+                    &marker,
+                    request,
+                )
+                .await?,
+            );
+        }
+    }
+    let required = u32::try_from(cases.len() * 3).unwrap_or(u32::MAX);
+    let passed = u32::try_from(results.len()).unwrap_or(u32::MAX);
+    let calibration_hash = canonical_json_sha256(&json!({
+        "schema_version":"pharness.dev/inference-protocol-calibration/v1alpha1",
+        "target_hash":target.config_hash,
+        "policy_hash":policy.policy_hash,
+        "cases":results,
+    }))
+    .map_err(|error| error.to_string())?;
+    Ok(ProtocolCalibrationReport {
+        schema_version: "pharness.dev/inference-protocol-calibration/v1alpha1",
+        calibration_hash,
+        passed,
+        required,
+        cases: results,
+    })
+}
+
+fn protocol_calibration_messages(case: &str, marker: &str) -> Vec<ModelMessage> {
+    let mut messages = vec![ModelMessage::system(format!(
+        "This is protocol calibration case {case}. Call verification_complete exactly once with marker {marker}. Do not answer with prose."
+    ))];
+    match case {
+        "multi_turn_continuation" => {
+            messages.push(ModelMessage {
+                role: ModelRole::Assistant,
+                content: String::new(),
+                tool_call_id: None,
+                tool_calls: vec![ModelToolCall {
+                    id: "prior_read".into(),
+                    name: "verification_complete".into(),
+                    arguments: format!(r#"{{"marker":"prior-{marker}"}}"#),
+                }],
+                reasoning: None,
+            });
+            messages.push(ModelMessage {
+                role: ModelRole::Tool,
+                content: r#"{"status":"ok","content":{"prior":true}}"#.into(),
+                tool_call_id: Some("prior_read".into()),
+                tool_calls: Vec::new(),
+                reasoning: None,
+            });
+        }
+        "tool_failure_recovery" => {
+            messages.push(protocol_history_tool_call(
+                "prior_failed",
+                format!(r#"{{"marker":"prior-{marker}"}}"#),
+            ));
+            messages.push(protocol_history_tool_result(
+                "prior_failed",
+                r#"{"status":"error","error":{"kind":"recoverable"}}"#,
+            ));
+        }
+        "long_terminal_submission" => messages.push(ModelMessage::user(format!(
+            "Bounded terminal payload context follows. Ignore its repeated padding and call the required tool. {}",
+            "context ".repeat(512)
+        ))),
+        "reasoning_replay" => messages.push(ModelMessage {
+            role: ModelRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+            reasoning: Some(ReasoningReplay::Text(
+                "Opaque prior reasoning state retained for continuation.".into(),
+            )),
+        }),
+        "missing_action_correction" => messages.push(ModelMessage {
+            role: ModelRole::Assistant,
+            content: "I omitted the required action.".into(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+            reasoning: None,
+        }),
+        "malformed_arguments_correction" => {
+            messages.push(protocol_history_tool_call("prior_malformed", "{".into()));
+            messages.push(protocol_history_tool_result(
+                "prior_malformed",
+                r#"{"status":"error","error":{"kind":"malformed_arguments"}}"#,
+            ));
+        }
+        "multiple_actions_correction" => {
+            messages.push(ModelMessage {
+                role: ModelRole::Assistant,
+                content: String::new(),
+                tool_call_id: None,
+                tool_calls: vec![
+                    ModelToolCall {
+                        id: "prior_multiple_1".into(),
+                        name: "verification_complete".into(),
+                        arguments: format!(r#"{{"marker":"prior-1-{marker}"}}"#),
+                    },
+                    ModelToolCall {
+                        id: "prior_multiple_2".into(),
+                        name: "verification_complete".into(),
+                        arguments: format!(r#"{{"marker":"prior-2-{marker}"}}"#),
+                    },
+                ],
+                reasoning: None,
+            });
+            messages.push(protocol_history_tool_result(
+                "prior_multiple_1",
+                r#"{"status":"error","error":{"kind":"multiple_actions"}}"#,
+            ));
+            messages.push(protocol_history_tool_result(
+                "prior_multiple_2",
+                r#"{"status":"error","error":{"kind":"multiple_actions"}}"#,
+            ));
+        }
+        "provider_error_recovery" => messages.push(ModelMessage::user(
+            "A prior transport attempt failed before usable stream data. This is a fresh request; complete the required action.",
+        )),
+        _ => {}
+    }
+    messages.push(ModelMessage::user(format!(
+        "Complete {case} now with marker {marker}."
+    )));
+    messages
+}
+
+fn protocol_history_tool_call(id: &str, arguments: String) -> ModelMessage {
+    ModelMessage {
+        role: ModelRole::Assistant,
+        content: String::new(),
+        tool_call_id: None,
+        tool_calls: vec![ModelToolCall {
+            id: id.into(),
+            name: "verification_complete".into(),
+            arguments,
+        }],
+        reasoning: None,
+    }
+}
+
+fn protocol_history_tool_result(id: &str, content: &str) -> ModelMessage {
+    ModelMessage {
+        role: ModelRole::Tool,
+        content: content.into(),
+        tool_call_id: Some(id.into()),
+        tool_calls: Vec::new(),
+        reasoning: None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_protocol_calibration_case(
+    client: &reqwest::Client,
+    base: &url::Url,
+    signing_key: &[u8],
+    verification_id: &str,
+    target: &pharness_core::InferenceTargetRevision,
+    policy: &pharness_core::StageInferencePolicyRevision,
+    case: &'static str,
+    attempt: u32,
+    case_index: u32,
+    marker: &str,
+    request: ModelRequest,
+) -> Result<ProtocolCalibrationCase, String> {
     let mut wire = build_chat_request(
         target.backend_kind,
         format!("{}@{}", target.target_id, target.revision),
@@ -1514,15 +2046,15 @@ async fn verify_target_protocol(
             .as_ref()
             .map(|route| route.provider_slug.as_str()),
     );
-    wire.max_tokens = policy.max_output_tokens;
+    wire.max_tokens = policy.max_output_tokens.min(512);
     let value = serde_json::to_value(&wire).map_err(|error| error.to_string())?;
     let request_body_hash = canonical_json_sha256(&value).map_err(|error| error.to_string())?;
     let now = epoch_seconds();
     let claims = ModelGrantClaims {
         schema_version: MODEL_GRANT_SCHEMA.into(),
-        run_id: format!("verify_{verification_id}"),
-        stage_execution_id: format!("verify_{verification_id}"),
-        selection_id: format!("verify_{verification_id}"),
+        run_id: format!("verify_{verification_id}_{case_index}_{attempt}"),
+        stage_execution_id: format!("verify_{verification_id}_{case_index}_{attempt}"),
+        selection_id: format!("verify_{verification_id}_{case_index}_{attempt}"),
         target: InferenceTargetRef {
             target_id: target.target_id.clone(),
             revision: target.revision.clone(),
@@ -1533,14 +2065,13 @@ async fn verify_target_protocol(
             revision: policy.revision.clone(),
         },
         policy_hash: policy.policy_hash.clone(),
-        request_sequence: 1,
+        request_sequence: (attempt - 1).saturating_mul(10).saturating_add(case_index),
         request_body_hash,
         nonce: uuid::Uuid::now_v7().simple().to_string(),
         issued_at_epoch_seconds: now,
         expires_at_epoch_seconds: now.saturating_add(60),
     };
-    let token = sign_model_grant(&claims, key.expose_secret().as_bytes())
-        .map_err(|error| error.to_string())?;
+    let token = sign_model_grant(&claims, signing_key).map_err(|error| error.to_string())?;
     let response = timeout(
         Duration::from_secs(target.transport.first_response_timeout_seconds),
         client
@@ -1592,9 +2123,33 @@ async fn verify_target_protocol(
         || aggregate.tool_calls.len() != 1
         || aggregate.tool_calls[0].name.as_deref() != Some("verification_complete")
     {
-        return Err("provider did not return exactly one expected native tool call".into());
+        return Err(format!(
+            "protocol case {case} attempt {attempt} did not return exactly one expected native tool call"
+        ));
     }
-    Ok(())
+    let arguments: Value =
+        serde_json::from_str(&aggregate.tool_calls[0].arguments).map_err(|error| {
+            format!("protocol case {case} attempt {attempt} returned malformed arguments: {error}")
+        })?;
+    if arguments.get("marker").and_then(Value::as_str) != Some(marker) {
+        return Err(format!(
+            "protocol case {case} attempt {attempt} did not preserve the required marker"
+        ));
+    }
+    if case == "streaming_usage" && aggregate.usage.is_none() {
+        return Err(format!(
+            "protocol case {case} attempt {attempt} did not return streaming usage"
+        ));
+    }
+    Ok(ProtocolCalibrationCase {
+        case,
+        attempt,
+        tool_name: "verification_complete".into(),
+        arguments_valid: true,
+        usage_observed: aggregate.usage.is_some(),
+        reasoning_observed: aggregate.reasoning_replay().is_some(),
+        finish_reason: aggregate.metadata.native_finish_reason,
+    })
 }
 
 fn validate_configuration_action(
@@ -1642,21 +2197,58 @@ fn qualification_suite_contract(
         "coding-v1" => Ok((InferenceStage::Implement, "repo-builder")),
         "tester-v1" => Ok((InferenceStage::Test, "repo-tester")),
         "verifier-v1" => Ok((InferenceStage::Verify, "repo-verifier")),
+        "onboarding-v2" => Ok((InferenceStage::Onboarding, "repository-onboarding-proposer")),
+        "planner-v2" => Ok((InferenceStage::Plan, "repo-planner")),
+        "coding-v2" => Ok((InferenceStage::Implement, "repo-builder")),
+        "repair-v2" => Ok((InferenceStage::Implement, "repo-repair")),
+        "test-diagnosis-v2" => Ok((InferenceStage::Test, "repo-test-diagnoser")),
+        "verifier-v2" => Ok((InferenceStage::Verify, "repo-verifier")),
         _ => Err(ApiError::bad_request(
             "unsupported stage inference qualification suite",
         )),
     }
 }
 
-fn qualification_contract_for_stage(
-    stage: InferenceStage,
+fn qualification_contract_for_policy(
+    policy: &StageInferencePolicyRevision,
 ) -> Result<(&'static str, &'static str), ApiError> {
-    match stage {
-        InferenceStage::Onboarding => Ok(("onboarding-v1", "repository-onboarding-proposer")),
-        InferenceStage::Plan => Ok(("planner-v1", "repo-planner")),
-        InferenceStage::Implement => Ok(("coding-v1", "repo-builder")),
-        InferenceStage::Test => Ok(("tester-v1", "repo-tester")),
-        InferenceStage::Verify => Ok(("verifier-v1", "repo-verifier")),
+    let v2 = policy.policy_id.ends_with("-v2");
+    let profile = policy
+        .eligible_profiles
+        .iter()
+        .find_map(|profile| match (v2, profile.as_str()) {
+            (true, "repository-onboarding-proposer") => {
+                Some(("onboarding-v2", "repository-onboarding-proposer"))
+            }
+            (true, "repo-planner") => Some(("planner-v2", "repo-planner")),
+            (true, "repo-builder") => Some(("coding-v2", "repo-builder")),
+            (true, "repo-repair") => Some(("repair-v2", "repo-repair")),
+            (true, "repo-test-diagnoser") => Some(("test-diagnosis-v2", "repo-test-diagnoser")),
+            (true, "repo-verifier") => Some(("verifier-v2", "repo-verifier")),
+            (false, "repository-onboarding-proposer") => {
+                Some(("onboarding-v1", "repository-onboarding-proposer"))
+            }
+            (false, "repo-planner") => Some(("planner-v1", "repo-planner")),
+            (false, "repo-builder") => Some(("coding-v1", "repo-builder")),
+            (false, "repo-tester") => Some(("tester-v1", "repo-tester")),
+            (false, "repo-verifier") => Some(("verifier-v1", "repo-verifier")),
+            _ => None,
+        })
+        .ok_or_else(|| ApiError::conflict("policy has no supported qualification profile"))?;
+    Ok(profile)
+}
+
+fn qualification_profiles(
+    policy: &StageInferencePolicyRevision,
+    model: &str,
+) -> Vec<pharness_core::AgentProfile> {
+    if policy.policy_id.ends_with("-v2") {
+        pharness_core::compiled_reliability_v2_agent_profiles(
+            model,
+            pharness_runhost::RELIABILITY_V2_PROMPT_BUNDLE_VERSION,
+        )
+    } else {
+        pharness_core::compiled_agent_profiles(model, SYSTEM_PROMPT_VERSION)
     }
 }
 
@@ -1840,6 +2432,104 @@ mod tests {
             qualification_suite_contract("coding-v1").unwrap(),
             (InferenceStage::Implement, "repo-builder")
         );
+        assert_eq!(
+            qualification_suite_contract("coding-v2").unwrap(),
+            (InferenceStage::Implement, "repo-builder")
+        );
+        assert_eq!(
+            qualification_suite_contract("repair-v2").unwrap(),
+            (InferenceStage::Implement, "repo-repair")
+        );
+        assert_eq!(
+            qualification_suite_contract("test-diagnosis-v2").unwrap(),
+            (InferenceStage::Test, "repo-test-diagnoser")
+        );
         assert!(qualification_suite_contract("release-v1").is_err());
+    }
+
+    #[test]
+    fn protocol_calibration_history_is_tool_call_complete_and_correction_bounded() {
+        let cases = [
+            "single_tool_call",
+            "multi_turn_continuation",
+            "tool_failure_recovery",
+            "long_terminal_submission",
+            "reasoning_replay",
+            "missing_action_correction",
+            "malformed_arguments_correction",
+            "multiple_actions_correction",
+            "streaming_usage",
+            "provider_error_recovery",
+        ];
+        for case in cases {
+            let messages = protocol_calibration_messages(case, "exact-marker");
+            assert_eq!(
+                messages.last().map(|message| message.role),
+                Some(ModelRole::User),
+                "{case} must end with an unambiguous user request"
+            );
+            let calls = messages
+                .iter()
+                .flat_map(|message| message.tool_calls.iter().map(|call| call.id.as_str()))
+                .collect::<Vec<_>>();
+            for result in messages
+                .iter()
+                .filter(|message| message.role == ModelRole::Tool)
+            {
+                assert!(
+                    result
+                        .tool_call_id
+                        .as_deref()
+                        .is_some_and(|id| calls.contains(&id)),
+                    "{case} contains an orphaned tool result"
+                );
+            }
+            assert!(
+                messages.len() <= 6,
+                "{case} correction history is unbounded"
+            );
+        }
+    }
+
+    #[test]
+    fn run_tool_constraints_derive_names_not_arbitrary_commands() {
+        let target = json!({
+            "selected_acceptance_commands":["python -m unittest"],
+            "repository_contract":{
+                "acceptance_commands":[
+                    {"name":"unit","command":"python -m unittest"},
+                    {"name":"compile","command":"python -m compileall src"}
+                ]
+            },
+            "agent_context":{
+                "evidence_catalog":[{"id":"evidence_plan"},{"id":"evidence_diff"}]
+            }
+        });
+        let (acceptance, evidence) = dynamic_tool_constraints(&target);
+        assert_eq!(acceptance, vec!["unit"]);
+        assert_eq!(evidence, vec!["evidence_plan", "evidence_diff"]);
+    }
+
+    #[test]
+    fn qualification_tool_constraints_match_the_frozen_fixture_interfaces() {
+        assert_eq!(
+            qualification_tool_constraints("coding-v2"),
+            (vec!["unit".into()], Vec::new())
+        );
+        assert_eq!(
+            qualification_tool_constraints("repair-v2"),
+            (vec!["unit".into()], Vec::new())
+        );
+        for suite in ["planner-v2", "test-diagnosis-v2", "verifier-v2"] {
+            assert_eq!(
+                qualification_tool_constraints(suite),
+                (Vec::new(), vec!["fixture_evidence".into()]),
+                "{suite} must bind the same evidence catalog used by its evaluator"
+            );
+        }
+        assert_eq!(
+            qualification_tool_constraints("onboarding-v2"),
+            (Vec::new(), Vec::new())
+        );
     }
 }

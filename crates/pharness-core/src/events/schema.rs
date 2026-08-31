@@ -30,6 +30,8 @@ pub enum EventKind {
     ModelRequestStarted,
     #[serde(rename = "model.response_finished")]
     ModelResponseFinished,
+    #[serde(rename = "model.protocol_correction")]
+    ModelProtocolCorrection,
     #[serde(rename = "action.proposed")]
     ActionProposed,
     #[serde(rename = "policy.evaluated")]
@@ -55,6 +57,7 @@ impl EventKind {
             Self::RunFinished => "run.finished",
             Self::ModelRequestStarted => "model.request_started",
             Self::ModelResponseFinished => "model.response_finished",
+            Self::ModelProtocolCorrection => "model.protocol_correction",
             Self::ActionProposed => "action.proposed",
             Self::PolicyEvaluated => "policy.evaluated",
             Self::ApprovalRequired => "approval.required",

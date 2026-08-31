@@ -6,7 +6,7 @@ describe("Run retention presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("labels compacted raw payload as intentional expiry and preserves the sealed summary", async () => {
-    const inference = {backend_kind:"fireworks",model:"accounts/fireworks/models/kimi-k2p6",target_id:"fireworks-kimi-k2p6",target_revision:"v1",policy_id:"planner-kimi-k2p6-high-v1",policy_revision:"v1",reasoning:{effort:"high",context_mode:"current_turn"},temperature:0.1,maximum_output_tokens:8192,binding_hash:"binding-hash",policy_hash:"policy-hash"};
+    const inference = {backend_kind:"fireworks",model:"accounts/fireworks/models/kimi-k2p6",target_id:"fireworks-kimi-k2p6",target_revision:"v1",policy_id:"planner-kimi-k2p6-high-v1",policy_revision:"v1",stage_prompt:{prompt_id:"repo-planner-v2",revision:"v2",content_hash:"prompt-hash"},tool_schema_hash:"tool-schema-hash",context_policy_hash:"context-policy-hash",protocol_calibration_hash:"protocol-calibration-hash",reasoning:{effort:"high",context_mode:"current_turn"},temperature:0.1,maximum_output_tokens:8192,binding_hash:"binding-hash",policy_hash:"policy-hash"};
     const summary = {
       run_id:"run_compacted",turns:12,recoverable_failures:1,retries:1,estimated_context_tokens:1200,
       actual_prompt_tokens:1000,actual_completion_tokens:200,actual_total_tokens:1200,compactions:1,
@@ -14,7 +14,7 @@ describe("Run retention presentation", () => {
       diff_reference:"/api/runs/run_compacted/diff",test_commands:["python -m unittest"],
       test_results:[{command:"python -m unittest",passed:true}],acceptance_evidence:[{command:"python -m unittest",passed:true}],
       pending_approvals:[],environment_discovery_turns:0,approval_count:2,approval_wait_ms:2000,
-      preparation_duration_ms:500,budget_extensions:0,stop_reason:"completed",actual_reasoning_tokens:50,cached_tokens:100,normalized_cost:0.002,inference_binding:inference,
+      preparation_duration_ms:500,budget_extensions:0,protocol_corrections:1,stop_category:"completed",stop_reason:"completed",actual_reasoning_tokens:50,cached_tokens:100,normalized_cost:0.002,inference_binding:inference,
     };
     vi.stubGlobal("fetch", vi.fn(async (input:RequestInfo | URL) => {
       const url = String(input);
@@ -35,6 +35,11 @@ describe("Run retention presentation", () => {
     expect(screen.getByRole("heading",{name:"planner-kimi-k2p6-high-v1@v1"})).toBeInTheDocument();
     expect(screen.getByText("fireworks · accounts/fireworks/models/kimi-k2p6")).toBeInTheDocument();
     expect(screen.getByText("high · current_turn")).toBeInTheDocument();
+    expect(screen.getByText("repo-planner-v2@v2")).toBeInTheDocument();
+    expect(screen.getByText("tool-schema-hash")).toBeInTheDocument();
+    expect(screen.getByText("context-policy-hash")).toBeInTheDocument();
+    expect(screen.getByText("protocol-calibration-hash")).toBeInTheDocument();
+    expect(screen.getByText("1/2")).toBeInTheDocument();
   });
 });
 

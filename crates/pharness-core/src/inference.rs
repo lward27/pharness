@@ -1,4 +1,4 @@
-use crate::{canonical_json_sha256, ToolProtocolMode};
+use crate::{canonical_json_sha256, ToolChoiceMode, ToolProtocolMode};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
@@ -14,11 +14,17 @@ pub const RESOLVED_INFERENCE_BINDING_SCHEMA: &str =
     "pharness.dev/resolved-inference-binding/v1alpha1";
 pub const INFERENCE_QUALIFICATION_SUITE_SCHEMA: &str =
     "pharness.dev/inference-qualification-suite/v1alpha1";
+pub const STAGE_PROMPT_SCHEMA: &str = "pharness.dev/stage-prompt/v1alpha1";
 
 pub fn inference_qualification_suite_hash(suite_id: &str) -> Result<String, String> {
     let fixture_revision = match suite_id {
         "onboarding-v1" | "planner-v1" | "tester-v1" | "verifier-v1" => "stage-qualification-v1.0",
         "coding-v1" => "coding-v1.7",
+        "onboarding-v2" | "planner-v2" | "test-diagnosis-v2" | "verifier-v2" => {
+            "stage-qualification-v2.0"
+        }
+        "coding-v2" => "coding-reliability-v2.0",
+        "repair-v2" => "repair-reliability-v2.0",
         _ => {
             return Err(format!(
                 "unsupported inference qualification suite {suite_id:?}"
@@ -102,6 +108,10 @@ pub enum ReasoningContextMode {
     AllTurns,
 }
 
+fn tool_choice_is_required(value: &ToolChoiceMode) -> bool {
+    *value == ToolChoiceMode::Required
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReasoningRequestPolicy {
@@ -143,6 +153,34 @@ pub struct InferenceCapabilities {
     pub reasoning_efforts: Vec<ReasoningEffort>,
     #[serde(default)]
     pub reasoning_context_modes: Vec<ReasoningContextMode>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_choice_modes: Vec<ToolChoiceMode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StagePromptRevision {
+    pub schema_version: String,
+    pub prompt_id: String,
+    pub revision: String,
+    pub stage: InferenceStage,
+    pub content_hash: String,
+}
+
+impl StagePromptRevision {
+    pub fn validate(&self) -> Result<(), InferenceConfigError> {
+        if self.schema_version != STAGE_PROMPT_SCHEMA {
+            return Err(InferenceConfigError::UnsupportedSchema(
+                self.schema_version.clone(),
+            ));
+        }
+        validate_identifier("prompt_id", &self.prompt_id)?;
+        validate_identifier("revision", &self.revision)?;
+        if !is_canonical_sha256(&self.content_hash) {
+            return Err(InferenceConfigError::InvalidPromptHash);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -336,6 +374,8 @@ pub struct StageInferencePolicyRevision {
     pub max_output_tokens: u32,
     pub max_input_tokens: u32,
     pub tool_protocol: ToolProtocolMode,
+    #[serde(default, skip_serializing_if = "tool_choice_is_required")]
+    pub tool_choice: ToolChoiceMode,
     pub transport_max_attempts: u32,
     #[serde(default)]
     pub selectable: bool,
@@ -412,6 +452,15 @@ impl StageInferencePolicyRevision {
         if self.tool_protocol == ToolProtocolMode::NativeTools && !target.capabilities.native_tools
         {
             return Err(InferenceConfigError::NativeToolsUnavailable);
+        }
+        if self.tool_protocol == ToolProtocolMode::NativeTools
+            && !target.capabilities.tool_choice_modes.is_empty()
+            && !target
+                .capabilities
+                .tool_choice_modes
+                .contains(&self.tool_choice)
+        {
+            return Err(InferenceConfigError::UnsupportedToolChoice);
         }
         let expected = self
             .computed_hash()
@@ -574,7 +623,13 @@ pub struct ResolvedInferenceBinding {
     pub target: InferenceTargetRevision,
     pub policy: StageInferencePolicyRevision,
     pub prompt_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_prompt: Option<StagePromptRevision>,
     pub tool_schema_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub context_policy_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub protocol_calibration_hash: String,
     pub profile_budget_hash: String,
     pub base_agent_profile_hash: String,
     pub agent_profile_hash: String,
@@ -712,15 +767,26 @@ pub enum ModelGrantError {
 
 impl ResolvedInferenceBinding {
     pub fn computed_agent_profile_hash(&self) -> Result<String, serde_json::Error> {
-        canonical_json_sha256(&serde_json::json!({
+        let mut material = serde_json::json!({
             "base_agent_profile_hash":self.base_agent_profile_hash,
             "target_hash":self.target.config_hash,
             "policy_hash":self.policy.policy_hash,
             "prompt_version":self.prompt_version,
             "tool_schema_hash":self.tool_schema_hash,
             "profile_budget_hash":self.profile_budget_hash,
-        }))
-        .map(|hash| format!("sha256:{hash}"))
+        });
+        if let Some(prompt) = &self.stage_prompt {
+            material["stage_prompt"] = serde_json::to_value(prompt)?;
+        }
+        if !self.context_policy_hash.is_empty() {
+            material["context_policy_hash"] =
+                serde_json::Value::String(self.context_policy_hash.clone());
+        }
+        if !self.protocol_calibration_hash.is_empty() {
+            material["protocol_calibration_hash"] =
+                serde_json::Value::String(self.protocol_calibration_hash.clone());
+        }
+        canonical_json_sha256(&material).map(|hash| format!("sha256:{hash}"))
     }
 
     pub fn computed_hash(&self) -> Result<String, serde_json::Error> {
@@ -737,6 +803,17 @@ impl ResolvedInferenceBinding {
         }
         self.target.validate()?;
         self.policy.validate_for_target(&self.target)?;
+        if let Some(prompt) = &self.stage_prompt {
+            prompt.validate()?;
+            if !self.policy.eligible_stages.contains(&prompt.stage) {
+                return Err(InferenceConfigError::StagePromptMismatch);
+            }
+        }
+        for hash in [&self.context_policy_hash, &self.protocol_calibration_hash] {
+            if !hash.is_empty() && !is_canonical_sha256(hash) {
+                return Err(InferenceConfigError::InvalidPromptHash);
+            }
+        }
         if self.base_agent_profile_hash.len() != 71
             || !self.base_agent_profile_hash.starts_with("sha256:")
             || self.agent_profile_hash
@@ -799,6 +876,12 @@ pub enum InferenceConfigError {
     UnsupportedReasoningContext,
     #[error("native tools are unavailable for this inference target")]
     NativeToolsUnavailable,
+    #[error("inference target does not support the requested tool-choice mode")]
+    UnsupportedToolChoice,
+    #[error("stage prompt hash or context/protocol hash is invalid")]
+    InvalidPromptHash,
+    #[error("stage prompt does not match the policy's eligible stage")]
+    StagePromptMismatch,
     #[error("resolved inference binding does not match its AgentProfile hash")]
     AgentProfileHashMismatch,
     #[error("inference registry contains a duplicate immutable revision")]
@@ -943,6 +1026,7 @@ mod tests {
                 stream_options: false,
                 reasoning_efforts: vec![ReasoningEffort::Low],
                 reasoning_context_modes: vec![ReasoningContextMode::CurrentTurn],
+                tool_choice_modes: vec![ToolChoiceMode::Auto, ToolChoiceMode::Required],
             },
             context_limit_tokens: 32_768,
             output_limit_tokens: 4_096,
@@ -1079,6 +1163,7 @@ mod tests {
             max_output_tokens: 4_096,
             max_input_tokens: 16_000,
             tool_protocol: ToolProtocolMode::NativeTools,
+            tool_choice: ToolChoiceMode::Required,
             transport_max_attempts: 3,
             selectable: true,
             policy_hash: String::new(),
@@ -1089,9 +1174,12 @@ mod tests {
             target,
             policy,
             prompt_version: "repo-test-v1".into(),
+            stage_prompt: None,
             base_agent_profile_hash: format!("sha256:{}", "a".repeat(64)),
             agent_profile_hash: String::new(),
             tool_schema_hash: "tools".into(),
+            context_policy_hash: String::new(),
+            protocol_calibration_hash: String::new(),
             profile_budget_hash: "budget".into(),
             binding_hash: String::new(),
         };

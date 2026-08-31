@@ -186,11 +186,15 @@ pub struct RunOperatorSummaryResponse {
     pub acceptance_evidence: Vec<serde_json::Value>,
     pub pending_approvals: Vec<String>,
     pub environment_discovery_turns: u32,
+    #[serde(default)]
+    pub protocol_corrections: u32,
     pub approval_count: u32,
     pub approval_wait_ms: u64,
     pub preparation_duration_ms: Option<u64>,
     pub budget_extensions: u32,
     pub stop_reason: Option<String>,
+    #[serde(default)]
+    pub stop_category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -957,7 +961,11 @@ pub struct StageChainInferencePolicyRequest {
     #[serde(default)]
     pub implement: Option<pharness_core::InferencePolicyRef>,
     #[serde(default)]
+    pub repair: Option<pharness_core::InferencePolicyRef>,
+    #[serde(default)]
     pub test: Option<pharness_core::InferencePolicyRef>,
+    #[serde(default)]
+    pub test_diagnosis: Option<pharness_core::InferencePolicyRef>,
     #[serde(default)]
     pub verify: Option<pharness_core::InferencePolicyRef>,
 }

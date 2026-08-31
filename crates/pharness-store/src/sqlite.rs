@@ -1865,6 +1865,41 @@ impl SqliteStore {
             })
     }
 
+    /// Attach a controller-authorized internal repair Run without consuming a
+    /// new operator attempt. The one-repair limit is enforced from immutable
+    /// StageExecution lineage by the Repo Mode controller.
+    pub async fn start_work_item_internal_correction(
+        &self,
+        work_item_id: &str,
+        run_id: &RunId,
+        actor: Option<String>,
+        reason: Option<String>,
+    ) -> Result<StoredWorkItem, StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            UPDATE work_items
+            SET status = 'executing', current_run_id = ?2,
+                updated_at = ?3, status_changed_at = ?3, status_changed_by = ?4,
+                status_reason = ?5
+            WHERE id = ?1
+            "#,
+        )
+        .bind(work_item_id)
+        .bind(run_id.as_str())
+        .bind(now)
+        .bind(actor)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        self.get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "work_item".to_string(),
+                id: work_item_id.to_string(),
+            })
+    }
+
     pub async fn refund_unstarted_work_item_attempt(
         &self,
         work_item_id: &str,

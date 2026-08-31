@@ -7,9 +7,9 @@ use futures::StreamExt;
 use pharness_core::{
     AgentAction, InferenceBackendKind, InferenceCapabilities, InferenceStage, InferenceTargetRef,
     InferenceTargetRevision, InferenceTransportPolicy, ModelCapabilities, ModelProvider,
-    ModelRequest, ModelToolCall, ModelTurn, ProviderError, ReasoningContextMode, ReasoningEffort,
-    StageInferencePolicyRevision, TokenUsage, ToolProtocolMode, INFERENCE_POLICY_SCHEMA,
-    INFERENCE_TARGET_SCHEMA,
+    ModelRequest, ModelToolCall, ModelTurn, ProviderError, ProviderProtocolErrorKind,
+    ReasoningContextMode, ReasoningEffort, StageInferencePolicyRevision, TokenUsage,
+    ToolProtocolMode, INFERENCE_POLICY_SCHEMA, INFERENCE_TARGET_SCHEMA,
 };
 use pharness_openai_compatible::{OpenAiCompatibleClient, OpenAiCompatibleTransportOptions};
 use secrecy::{ExposeSecret, SecretString};
@@ -190,6 +190,10 @@ impl FireworksClient {
                     ReasoningContextMode::CurrentTurn,
                     ReasoningContextMode::AllTurns,
                 ],
+                tool_choice_modes: vec![
+                    pharness_core::ToolChoiceMode::Auto,
+                    pharness_core::ToolChoiceMode::Required,
+                ],
             },
             context_limit_tokens: 262_144,
             output_limit_tokens: 16_384,
@@ -233,6 +237,7 @@ impl FireworksClient {
             max_output_tokens: request.max_tokens,
             max_input_tokens: target.context_limit_tokens,
             tool_protocol: request.mode,
+            tool_choice: request.tool_choice,
             transport_max_attempts: target.transport.max_attempts,
             selectable: true,
             policy_hash: String::new(),
@@ -324,13 +329,23 @@ impl From<FireworksClientError> for ProviderError {
                 message: format!("HTTP {status}: {}", summarize_error_body(&body)),
                 retryable,
             },
+            FireworksClientError::MissingAction => ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MissingAction,
+                message: error.to_string(),
+            },
+            FireworksClientError::MultipleToolCalls => ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MultipleActions,
+                message: error.to_string(),
+            },
+            FireworksClientError::MissingToolName | FireworksClientError::InvalidAction(_) => {
+                ProviderError::Protocol {
+                    category: ProviderProtocolErrorKind::MalformedArguments,
+                    message: error.to_string(),
+                }
+            }
             FireworksClientError::InvalidBaseUrl { .. }
             | FireworksClientError::StreamUtf8(_)
-            | FireworksClientError::StreamJson(_)
-            | FireworksClientError::MissingAction
-            | FireworksClientError::MultipleToolCalls
-            | FireworksClientError::MissingToolName
-            | FireworksClientError::InvalidAction(_) => ProviderError::MalformedResponse {
+            | FireworksClientError::StreamJson(_) => ProviderError::MalformedResponse {
                 message: error.to_string(),
             },
         }
@@ -537,6 +552,7 @@ mod tests {
                 CapabilityKind::AgentControl,
             )],
             mode: ToolProtocolMode::NativeTools,
+            tool_choice: pharness_core::ToolChoiceMode::Required,
             temperature: 0.1,
             max_tokens: 8_192,
             reasoning: Some(ReasoningRequestPolicy {

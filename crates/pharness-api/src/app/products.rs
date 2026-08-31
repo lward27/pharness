@@ -578,8 +578,7 @@ async fn list_agent_profiles(State(state): State<AppState>) -> Result<Json<Value
         .get("model")
         .and_then(Value::as_str)
         .unwrap_or("unconfigured");
-    let profiles =
-        pharness_core::compiled_agent_profiles(model, pharness_runhost::SYSTEM_PROMPT_VERSION);
+    let profiles = state.compiled_agent_profiles(model);
     Ok(Json(
         json!({"agent_profiles": profiles, "count": profiles.len()}),
     ))
@@ -1060,18 +1059,20 @@ async fn register_repository(
         })
         .await?;
     if state.inference.enabled {
-        let profile = pharness_core::compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
-            pharness_runhost::SYSTEM_PROMPT_VERSION,
-        )
-        .into_iter()
-        .find(|profile| profile.id == "repository-onboarding-proposer")
-        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        let profile = state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repository-onboarding-proposer")
+            .ok_or_else(|| {
+                ApiError::internal("compiled onboarding proposer profile is unavailable")
+            })?;
         let onboarding_state_hash = onboarding_response(aggregate.onboarding.clone())?.state_hash;
         super::inference::create_planned_selection(
             &state,
@@ -1565,18 +1566,20 @@ async fn create_repository_onboarding(
         })
         .await?;
     if state.inference.enabled {
-        let profile = pharness_core::compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
-            pharness_runhost::SYSTEM_PROMPT_VERSION,
-        )
-        .into_iter()
-        .find(|profile| profile.id == "repository-onboarding-proposer")
-        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        let profile = state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repository-onboarding-proposer")
+            .ok_or_else(|| {
+                ApiError::internal("compiled onboarding proposer profile is unavailable")
+            })?;
         super::inference::create_planned_selection(
             &state,
             super::inference::PlannedSelectionRequest {
@@ -2557,13 +2560,11 @@ async fn start_repository_onboarding_proposer(
         .and_then(Value::as_str)
         .unwrap_or("unconfigured")
         .to_string();
-    let mut profile =
-        pharness_core::compiled_agent_profiles(&model, pharness_runhost::SYSTEM_PROMPT_VERSION)
-            .into_iter()
-            .find(|profile| profile.id == "repository-onboarding-proposer")
-            .ok_or_else(|| {
-                ApiError::internal("compiled onboarding proposer profile is unavailable")
-            })?;
+    let mut profile = state
+        .compiled_agent_profiles(&model)
+        .into_iter()
+        .find(|profile| profile.id == "repository-onboarding-proposer")
+        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
     let bounded_discovery = json!({
         "id":discovery.id,
         "hash":discovery_hash,
@@ -2914,18 +2915,20 @@ async fn repository_registration_preflight(
         Vec::new()
     };
     let proposer_inference = if state.inference.enabled {
-        let profile = pharness_core::compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
-            pharness_runhost::SYSTEM_PROMPT_VERSION,
-        )
-        .into_iter()
-        .find(|profile| profile.id == "repository-onboarding-proposer")
-        .ok_or_else(|| ApiError::internal("compiled onboarding proposer profile is unavailable"))?;
+        let profile = state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repository-onboarding-proposer")
+            .ok_or_else(|| {
+                ApiError::internal("compiled onboarding proposer profile is unavailable")
+            })?;
         Some(
             super::inference::preview_selection(
                 state,

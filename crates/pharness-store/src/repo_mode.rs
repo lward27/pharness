@@ -68,6 +68,9 @@ pub struct StoredStageExecution {
     pub stage_key: String,
     pub sequence: u64,
     pub status: String,
+    /// Derived from whether the execution has a model-backed AgentProfile.
+    /// This is a read-model field and does not duplicate durable state.
+    pub origin: String,
     pub agent_profile_id: Option<String>,
     pub agent_profile_version: Option<String>,
     pub agent_profile_hash: Option<String>,
@@ -93,6 +96,9 @@ pub struct SealStageOutcome {
     pub content_hash: String,
     pub state_version: u64,
     pub supersedes_outcome_id: Option<String>,
+    /// Auxiliary diagnostic outcomes remain immutable history without
+    /// replacing the effective lifecycle-stage outcome.
+    pub effective: bool,
     pub actor: String,
     pub reason: String,
 }
@@ -104,6 +110,9 @@ pub struct StoredStageOutcome {
     pub work_item_id: String,
     pub stage_key: String,
     pub status: String,
+    /// Copied from the sealed immutable outcome document. Historical outcomes
+    /// that predate explicit origin are reported as `agent`.
+    pub origin: String,
     pub schema_version: String,
     pub outcome: serde_json::Value,
     pub content_hash: String,

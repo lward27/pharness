@@ -12,7 +12,10 @@ mod preview;
 mod prompt;
 
 pub use preview::approval_preview_for_action;
-pub use prompt::{system_prompt, worker_tool_specs, SYSTEM_PROMPT_VERSION};
+pub use prompt::{
+    repo_system_prompt, stage_prompt_for_profile, system_prompt, tool_schema_hash_for_profile,
+    worker_tool_specs, RELIABILITY_V2_PROMPT_BUNDLE_VERSION, SYSTEM_PROMPT_VERSION,
+};
 
 use pharness_core::{
     AgentEvent, AgentRuntime, ApprovedAction, BudgetResume, CancellationFlag,
@@ -23,9 +26,12 @@ use pharness_core::{
     ToolError, ToolExecutor, ToolProtocolMode, ToolResult,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -290,8 +296,102 @@ fn tool_specs_for_run(
     if filtered.is_empty() {
         anyhow::bail!("agent_profile exposes no tools");
     }
-    let _ = run;
-    Ok(filtered)
+    let selected_commands = run
+        .execution_target_json
+        .get("selected_acceptance_commands")
+        .cloned()
+        .map(serde_json::from_value::<Vec<String>>)
+        .transpose()?
+        .unwrap_or_default();
+    let contract = run
+        .execution_target_json
+        .get("repository_contract")
+        .filter(|value| !value.is_null())
+        .cloned()
+        .map(serde_json::from_value::<RepositoryContract>)
+        .transpose()?;
+    let acceptance_names = contract
+        .as_ref()
+        .map(|contract| {
+            contract
+                .acceptance_commands
+                .iter()
+                .filter(|command| selected_commands.contains(&command.command))
+                .map(|command| command.name.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let evidence_ids = run
+        .execution_target_json
+        .pointer("/agent_context/evidence_catalog")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("id").and_then(serde_json::Value::as_str))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    constrain_tool_specs(filtered, &acceptance_names, &evidence_ids)
+}
+
+fn constrain_tool_specs(
+    mut specs: Vec<pharness_core::ToolSpec>,
+    acceptance_names: &[String],
+    evidence_ids: &[String],
+) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
+    for spec in &mut specs {
+        match spec.name.as_str() {
+            "run_acceptance_command" if !acceptance_names.is_empty() => {
+                spec.parameters_schema["properties"]["name"]["enum"] =
+                    serde_json::json!(acceptance_names);
+            }
+            "submit_implementation" if !acceptance_names.is_empty() => {
+                spec.parameters_schema["properties"]["implementation"]["properties"]
+                    ["acceptance_names"]["items"]["enum"] = serde_json::json!(acceptance_names);
+            }
+            "get_evidence" if !evidence_ids.is_empty() => {
+                spec.parameters_schema["properties"]["evidence_id"]["enum"] =
+                    serde_json::json!(evidence_ids);
+            }
+            _ => {}
+        }
+    }
+    Ok(specs)
+}
+
+/// Hash the exact per-Run tool interface after controller-derived enum
+/// constraints are applied. This is the value bound into reliability-v2
+/// inference selections; a static profile allowlist is not sufficient because
+/// acceptance names and evidence IDs are part of the executable interface.
+pub fn constrained_tool_schema_hash(
+    tool_names: &[String],
+    acceptance_names: &[String],
+    evidence_ids: &[String],
+) -> anyhow::Result<String> {
+    let allowed = tool_names.iter().cloned().collect::<BTreeSet<_>>();
+    if allowed.len() != tool_names.len() || allowed.is_empty() {
+        anyhow::bail!("tool allowlist is empty or contains duplicates");
+    }
+    let available = worker_tool_specs();
+    let known = available
+        .iter()
+        .map(|spec| spec.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let unknown = allowed
+        .iter()
+        .filter(|name| !known.contains(name.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown.is_empty() {
+        anyhow::bail!("profile requests unsupported tools: {}", unknown.join(", "));
+    }
+    let selected = available
+        .into_iter()
+        .filter(|spec| allowed.contains(&spec.name))
+        .collect::<Vec<_>>();
+    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids)?;
+    Ok(pharness_core::canonical_json_sha256(
+        &serde_json::to_value(constrained)?,
+    )?)
 }
 
 fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
@@ -302,6 +402,8 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         .get("id")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow::anyhow!("agent_profile has no id"))?;
+    let is_reliability_v2 =
+        profile.get("version").and_then(serde_json::Value::as_str) == Some("v2");
     // The stage is controller-owned execution state, not mutable profile
     // configuration. Legacy payloads may still carry it on the profile.
     let stage = profile
@@ -341,14 +443,29 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         "repository-onboarding-proposer" => {
             "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one id from AgentContext.contract_constraints.compatible_environment_profiles and its dependency_lock.kind must match that descriptor's accepted_dependency_lock_kinds. Generic language names and shortened aliases are invalid."
         }
+        "repo-verifier" if is_reliability_v2 => {
+            "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final eight turns for the terminal submit_verification action and submit the typed verdict before the soft turn boundary."
+        }
         "repo-verifier" => {
             "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final eight turns for submit_verification and finish, and submit the typed verdict before the soft turn boundary."
         }
         _ => "",
     };
+    let completion_instruction = if is_reliability_v2 {
+        "The typed stage submission is terminal; do not call finish after it."
+    } else {
+        "Submit the required typed stage document, then call finish."
+    };
     Ok(Some(format!(
-        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, retrieve only allowlisted evidence, submit the required typed stage document, then call finish. You cannot authorize the next stage or declare controller success.{profile_constraint}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, and retrieve only allowlisted evidence. {completion_instruction} You cannot authorize the next stage or declare controller success.{profile_constraint}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
     )))
+}
+
+fn reliability_v2_profile_id(run: &RunSpec) -> Option<&str> {
+    let profile = run.execution_target_json.get("agent_profile")?;
+    (profile.get("version").and_then(serde_json::Value::as_str) == Some("v2"))
+        .then(|| profile.get("id").and_then(serde_json::Value::as_str))
+        .flatten()
 }
 
 pub fn run_status_str(status: RunStatus) -> &'static str {
@@ -478,6 +595,157 @@ fn repository_instructions(cwd: &Path) -> anyhow::Result<(String, Vec<Repository
     }
 }
 
+fn deterministic_repository_map(cwd: &Path, run: &RunSpec) -> anyhow::Result<String> {
+    let head = std::process::Command::new("git")
+        .args(["-C", cwd.to_string_lossy().as_ref(), "rev-parse", "HEAD"])
+        .output()?;
+    if !head.status.success() {
+        anyhow::bail!("failed to resolve repository map source SHA");
+    }
+    let source_sha = String::from_utf8(head.stdout)?.trim().to_ascii_lowercase();
+    if let Some(expected) = run
+        .workspace_source
+        .as_ref()
+        .and_then(|source| source.source_commit.as_deref())
+    {
+        if !source_sha.eq_ignore_ascii_case(expected) {
+            anyhow::bail!("repository map checkout SHA does not match the pinned source");
+        }
+    }
+    let tracked = std::process::Command::new("git")
+        .args(["-C", cwd.to_string_lossy().as_ref(), "ls-files", "-z"])
+        .output()?;
+    if !tracked.status.success() {
+        anyhow::bail!("failed to enumerate tracked paths for repository map");
+    }
+    let mut paths = tracked
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|bytes| !bytes.is_empty())
+        .map(|bytes| String::from_utf8(bytes.to_vec()))
+        .collect::<Result<Vec<_>, _>>()?;
+    paths.sort();
+    if paths.len() > 20_000 {
+        anyhow::bail!("repository map exceeds the 20,000 tracked-path limit");
+    }
+    let contract = run
+        .execution_target_json
+        .get("repository_contract")
+        .filter(|value| !value.is_null())
+        .cloned()
+        .map(serde_json::from_value::<RepositoryContract>)
+        .transpose()?;
+    let mut manifests = Vec::new();
+    let mut tests = Vec::new();
+    let mut documentation = Vec::new();
+    let mut symbols = Vec::new();
+    let mut inspected_bytes = 0usize;
+    for path in &paths {
+        if secret_shaped_path(path) {
+            continue;
+        }
+        let filename = path.rsplit('/').next().unwrap_or(path);
+        if matches!(
+            filename,
+            "Cargo.toml"
+                | "Cargo.lock"
+                | "package.json"
+                | "package-lock.json"
+                | "pyproject.toml"
+                | "requirements.txt"
+                | "requirements.lock"
+        ) {
+            manifests.push(path.clone());
+        }
+        if contract.as_ref().is_some_and(|contract| {
+            contract
+                .roots
+                .tests
+                .iter()
+                .any(|root| path == root || path.starts_with(&format!("{root}/")))
+        }) || filename.contains("test")
+        {
+            tests.push(path.clone());
+        }
+        if contract.as_ref().is_some_and(|contract| {
+            contract
+                .roots
+                .documentation
+                .iter()
+                .any(|root| path == root || path.starts_with(&format!("{root}/")))
+        }) || matches!(
+            filename.to_ascii_lowercase().as_str(),
+            "readme.md" | "agents.md"
+        ) {
+            documentation.push(path.clone());
+        }
+        if symbols.len() >= 2_000 || inspected_bytes >= 4 * 1024 * 1024 {
+            continue;
+        }
+        let inspectable = matches!(
+            Path::new(path).extension().and_then(|value| value.to_str()),
+            Some("rs" | "py" | "js" | "jsx" | "ts" | "tsx")
+        );
+        if !inspectable {
+            continue;
+        }
+        let bytes = std::fs::read(cwd.join(path))?;
+        if bytes.len() > 128 * 1024 || inspected_bytes.saturating_add(bytes.len()) > 4 * 1024 * 1024
+        {
+            continue;
+        }
+        let Ok(content) = std::str::from_utf8(&bytes) else {
+            continue;
+        };
+        inspected_bytes += bytes.len();
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            let (kind, name) = if let Some(rest) = trimmed.strip_prefix("fn ") {
+                ("function", rest.split(['(', '<', ' ']).next())
+            } else if let Some(rest) = trimmed.strip_prefix("pub fn ") {
+                ("function", rest.split(['(', '<', ' ']).next())
+            } else if let Some(rest) = trimmed.strip_prefix("def ") {
+                ("function", rest.split(['(', ' ']).next())
+            } else if let Some(rest) = trimmed.strip_prefix("class ") {
+                ("class", rest.split(['(', ':', ' ']).next())
+            } else if let Some(rest) = trimmed.strip_prefix("export function ") {
+                ("function", rest.split(['(', ' ']).next())
+            } else if let Some(rest) = trimmed.strip_prefix("export const ") {
+                ("export", rest.split(['=', ' ', ':']).next())
+            } else {
+                continue;
+            };
+            if let Some(name) = name.filter(|name| !name.is_empty()) {
+                symbols.push(serde_json::json!({
+                    "path":path,
+                    "line":index + 1,
+                    "kind":kind,
+                    "name":name,
+                }));
+                if symbols.len() >= 2_000 {
+                    break;
+                }
+            }
+        }
+    }
+    let mut map = serde_json::json!({
+        "schema_version":"pharness.dev/repository-map/v1alpha1",
+        "source_sha":source_sha,
+        "tracked_paths":paths,
+        "manifests":manifests,
+        "test_files":tests,
+        "documentation_files":documentation,
+        "contract_roots":contract.as_ref().map(|contract| &contract.roots),
+        "symbols":symbols,
+        "limits":{"tracked_paths":20_000,"symbols":2_000,"inspected_text_bytes":4 * 1024 * 1024},
+    });
+    map["content_hash"] = serde_json::Value::String(pharness_core::canonical_json_sha256(&map)?);
+    Ok(format!(
+        "Controller deterministic repository map (authoritative at turn zero):\n{}",
+        serde_json::to_string(&map)?
+    ))
+}
+
 fn truncate_utf8(value: &str, max_bytes: usize) -> String {
     if value.len() <= max_bytes {
         return value.to_string();
@@ -509,6 +777,17 @@ pub async fn execute_attempt<B: AttemptBackend>(
     }
     backend.mark_running().await?;
 
+    if spec
+        .run
+        .execution_target_json
+        .pointer("/repo_mode/deterministic_test")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+    {
+        return execute_deterministic_test(backend, &spec.run, spec.event_seq_start, cancellation)
+            .await;
+    }
+
     let (sender, receiver) = mpsc::unbounded_channel();
     let event_writer = tokio::spawn(forward_events(backend.clone(), receiver));
     let sink = ChannelEventSink { sender };
@@ -522,6 +801,21 @@ pub async fn execute_attempt<B: AttemptBackend>(
         ),
     );
     let allowed_tools = profile_tool_names(&spec.run)?;
+    let run_tool_specs = tool_specs_for_run(&spec.run, allowed_tools.as_ref())?;
+    if reliability_v2_profile_id(&spec.run).is_some() {
+        let binding = spec
+            .run
+            .inference
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("reliability-v2 Run has no inference binding"))?;
+        let actual_tool_schema_hash =
+            pharness_core::canonical_json_sha256(&serde_json::to_value(&run_tool_specs)?)?;
+        if actual_tool_schema_hash != binding.binding.tool_schema_hash {
+            anyhow::bail!(
+                "resolved inference binding tool schema does not match the exact Run tool interface"
+            );
+        }
+    }
     let tools = ProfileRestrictedTools::new(tools, allowed_tools.clone());
     let runtime = AgentRuntime::with_tools(host.provider, sink, tools);
 
@@ -545,6 +839,12 @@ pub async fn execute_attempt<B: AttemptBackend>(
         .as_ref()
         .map(|inference| inference.binding.policy.tool_protocol)
         .unwrap_or(ToolProtocolMode::NativeTools);
+    let tool_choice = spec
+        .run
+        .inference
+        .as_ref()
+        .map(|inference| inference.binding.policy.tool_choice)
+        .unwrap_or(pharness_core::ToolChoiceMode::Required);
     let temperature = spec
         .run
         .inference
@@ -557,16 +857,52 @@ pub async fn execute_attempt<B: AttemptBackend>(
         .as_ref()
         .map(|inference| inference.binding.policy.max_output_tokens)
         .unwrap_or(4096);
+    let context_budget = context_budget_for_run(&host.context_budget, spec.run.inference.as_ref());
     let outcome = match (&spec.resume, &spec.budget_resume) {
         (None, None) => {
             let (repository_instruction_content, repository_instruction_files) =
                 repository_instructions(&cwd)?;
             let environment_content = environment_instructions(&spec.run)?;
+            let reliability_profile = reliability_v2_profile_id(&spec.run);
             let mut messages = vec![
-                ModelMessage::system(system_prompt()),
+                ModelMessage::system(if reliability_profile.is_some() {
+                    repo_system_prompt()
+                } else {
+                    system_prompt()
+                }),
                 ModelMessage::system(repository_instruction_content),
                 ModelMessage::system(environment_content),
             ];
+            if let Some(profile_id) = reliability_profile {
+                messages.push(ModelMessage::system(deterministic_repository_map(
+                    &cwd, &spec.run,
+                )?));
+                let stage_prompt = stage_prompt_for_profile(profile_id).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "reliability-v2 AgentProfile {profile_id} has no immutable stage prompt"
+                    )
+                })?;
+                let revision = stage_prompt.revision_record();
+                if let Some(expected) = spec
+                    .run
+                    .inference
+                    .as_ref()
+                    .and_then(|inference| inference.binding.stage_prompt.as_ref())
+                {
+                    if expected != &revision {
+                        anyhow::bail!(
+                            "resolved inference binding stage prompt does not match the runtime prompt"
+                        );
+                    }
+                }
+                messages.push(ModelMessage::system(format!(
+                    "Stage prompt {}@{} ({}):\n{}",
+                    stage_prompt.prompt_id,
+                    stage_prompt.revision,
+                    revision.content_hash,
+                    stage_prompt.content
+                )));
+            }
             if let Some(instruction) = profile_instruction(&spec.run)? {
                 messages.push(ModelMessage::system(instruction));
             }
@@ -575,12 +911,13 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 session_id,
                 run_id,
                 messages,
-                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
+                tools: run_tool_specs.clone(),
                 tool_protocol,
+                tool_choice,
                 temperature,
                 max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
-                context_budget: host.context_budget.clone(),
+                context_budget: context_budget.clone(),
                 recovery_policy: recovery_policy.clone(),
                 task_contract: spec.run.task_contract.clone(),
                 repository_instruction_files,
@@ -610,12 +947,13 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 session_id,
                 run_id,
                 messages: Vec::new(),
-                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
+                tools: run_tool_specs.clone(),
                 tool_protocol,
+                tool_choice,
                 temperature,
                 max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
-                context_budget: host.context_budget.clone(),
+                context_budget: context_budget.clone(),
                 recovery_policy: recovery_policy.clone(),
                 task_contract: spec.run.task_contract.clone(),
                 repository_instruction_files: Vec::new(),
@@ -645,12 +983,13 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 session_id,
                 run_id,
                 messages: Vec::new(),
-                tools: tool_specs_for_run(&spec.run, allowed_tools.as_ref())?,
+                tools: run_tool_specs,
                 tool_protocol,
+                tool_choice,
                 temperature,
                 max_tokens: maximum_output_tokens,
                 max_turns: spec.run.max_turns,
-                context_budget: host.context_budget.clone(),
+                context_budget,
                 recovery_policy,
                 task_contract: spec.run.task_contract.clone(),
                 repository_instruction_files: Vec::new(),
@@ -680,6 +1019,170 @@ pub async fn execute_attempt<B: AttemptBackend>(
     backend
         .finish(attempt_outcome(&spec.run, outcome).await?)
         .await
+}
+
+fn context_budget_for_run(
+    host_default: &ContextBudget,
+    inference: Option<&RunInferenceSpec>,
+) -> ContextBudget {
+    let Some(inference) = inference else {
+        return host_default.clone();
+    };
+    let max_input_tokens = inference.binding.policy.max_input_tokens;
+    let reserved_output_tokens = inference.binding.policy.max_output_tokens;
+    let usable_input = max_input_tokens.saturating_sub(reserved_output_tokens);
+    ContextBudget {
+        max_input_tokens,
+        reserved_output_tokens,
+        // Keep a deterministic margin for immutable intent, repository map,
+        // tool schemas, and the execution ledger before retaining history.
+        recent_message_tokens: usable_input.saturating_sub(8_192).max(8_192),
+        max_tool_result_tokens: host_default.max_tool_result_tokens.max(4_096),
+        characters_per_token: host_default.characters_per_token,
+    }
+}
+
+async fn execute_deterministic_test<B: AttemptBackend>(
+    backend: Arc<B>,
+    run: &RunSpec,
+    event_seq_start: u64,
+    cancellation: CancellationFlag,
+) -> anyhow::Result<()> {
+    let started = std::time::Instant::now();
+    let project = ProjectTools::for_run(Path::new(&run.cwd), run)?;
+    let contract = project
+        .contract
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("deterministic Test requires a RepositoryContract"))?;
+    let selected = contract
+        .acceptance_commands
+        .iter()
+        .filter(|command| {
+            project
+                .selected_acceptance_commands
+                .iter()
+                .any(|selected| selected == &command.command)
+        })
+        .map(|command| command.name.clone())
+        .collect::<Vec<_>>();
+    if selected.is_empty() || selected.len() != project.selected_acceptance_commands.len() {
+        anyhow::bail!(
+            "deterministic Test selection does not exactly match declared acceptance commands"
+        );
+    }
+
+    let session_id = pharness_core::SessionId::new(run.session_id.clone());
+    let run_id = pharness_core::RunId::new(run.run_id.clone());
+    let mut sequence = event_seq_start;
+    let mut passed = true;
+    for name in selected {
+        if cancellation.is_cancelled() {
+            return backend
+                .finish(AttemptOutcome {
+                    status: "cancelled".into(),
+                    turns: 0,
+                    summary: Some("deterministic Test cancelled".into()),
+                    error: Some("cancelled".into()),
+                    approval: None,
+                    workspace_evidence: None,
+                    budget_extension: None,
+                    consumption: RunBudgetConsumption {
+                        active_execution_seconds_used: started.elapsed().as_secs(),
+                        ..RunBudgetConsumption::default()
+                    },
+                })
+                .await;
+        }
+        sequence += 1;
+        backend
+            .ingest_event(&AgentEvent {
+                event_id: pharness_core::EventId::new(format!(
+                    "evt_{}_deterministic_{sequence}",
+                    run.run_id
+                )),
+                session_id: session_id.clone(),
+                run_id: run_id.clone(),
+                seq: sequence,
+                kind: pharness_core::EventKind::ToolStarted,
+                payload: serde_json::json!({
+                    "action":"run_acceptance_command",
+                    "name":name,
+                    "origin":"controller",
+                }),
+            })
+            .await?;
+        let result = match project.run_acceptance(&name).await {
+            Ok(result) => result,
+            Err(error) => ToolResult::error(
+                "deterministic acceptance command could not execute",
+                serde_json::json!({
+                    "acceptance_command":true,
+                    "name":name,
+                    "error_kind":error.kind_name(),
+                    "message":error.to_string(),
+                }),
+            ),
+        };
+        passed &= result.status == pharness_core::ToolResultStatus::Ok
+            && result
+                .content
+                .get("exit_code")
+                .and_then(serde_json::Value::as_i64)
+                == Some(0);
+        sequence += 1;
+        backend
+            .ingest_event(&AgentEvent {
+                event_id: pharness_core::EventId::new(format!(
+                    "evt_{}_deterministic_{sequence}",
+                    run.run_id
+                )),
+                session_id: session_id.clone(),
+                run_id: run_id.clone(),
+                seq: sequence,
+                kind: pharness_core::EventKind::ToolFinished,
+                payload: serde_json::to_value(&result)?,
+            })
+            .await?;
+    }
+    sequence += 1;
+    backend
+        .ingest_event(&AgentEvent {
+            event_id: pharness_core::EventId::new(format!(
+                "evt_{}_deterministic_{sequence}",
+                run.run_id
+            )),
+            session_id,
+            run_id,
+            seq: sequence,
+            kind: pharness_core::EventKind::RunFinished,
+            payload: serde_json::json!({
+                "success":passed,
+                "origin":"controller",
+                "stop_category":if passed {"acceptance_passed"} else {"acceptance_failure"},
+            }),
+        })
+        .await?;
+
+    let outcome = RunOutcome {
+        // The controller seals the Test StageOutcome from exact command
+        // events. A failing command is a completed deterministic execution,
+        // not a model-runtime failure.
+        status: RunStatus::Completed,
+        turns: 0,
+        summary: Some(if passed {
+            "all deterministic acceptance commands passed".into()
+        } else {
+            "one or more deterministic acceptance commands failed".into()
+        }),
+        error: None,
+        approval: None,
+        budget_pause: None,
+        consumption: RunBudgetConsumption {
+            active_execution_seconds_used: started.elapsed().as_secs(),
+            ..RunBudgetConsumption::default()
+        },
+    };
+    backend.finish(attempt_outcome(run, outcome).await?).await
 }
 
 async fn attempt_outcome(run: &RunSpec, outcome: RunOutcome) -> anyhow::Result<AttemptOutcome> {
@@ -1037,6 +1540,423 @@ impl ProjectTools {
             ))
         }
     }
+
+    async fn apply_unified_patch(
+        &self,
+        patch: &str,
+        preimage_sha256: &BTreeMap<String, String>,
+    ) -> Result<ToolResult, ToolError> {
+        if patch.is_empty() || patch.len() > 256 * 1024 || patch.contains('\0') {
+            return Err(ToolError::InvalidArguments {
+                message: "unified patch must contain between one byte and 256 KiB".into(),
+            });
+        }
+        let paths = unified_diff_paths(patch)?;
+        for path in &paths {
+            let utf8 = camino::Utf8Path::new(path);
+            let _ = self.writable_path(utf8)?;
+            if self.workspace.join(path).is_file() && !preimage_sha256.contains_key(path) {
+                return Err(ToolError::InvalidArguments {
+                    message: format!("patch requires a preimage SHA-256 for existing path {path}"),
+                });
+            }
+        }
+        for (path, expected) in preimage_sha256 {
+            if !paths.iter().any(|candidate| candidate == path)
+                || !expected.strip_prefix("sha256:").is_some_and(|hash| {
+                    hash.len() == 64
+                        && hash
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                })
+            {
+                return Err(ToolError::InvalidArguments {
+                    message: format!("invalid patch preimage binding for {path}"),
+                });
+            }
+            let bytes = tokio::fs::read(self.workspace.join(path))
+                .await
+                .map_err(|error| ToolError::Io {
+                    message: error.to_string(),
+                })?;
+            let actual = format!("sha256:{:x}", Sha256::digest(&bytes));
+            if &actual != expected {
+                return Err(ToolError::InvalidArguments {
+                    message: format!("patch preimage changed for {path}"),
+                });
+            }
+        }
+        run_git_apply(&self.workspace, patch, true).await?;
+        run_git_apply(&self.workspace, patch, false).await?;
+        let mut after_sha256 = BTreeMap::new();
+        for path in &paths {
+            let target = self.workspace.join(path);
+            let hash = match tokio::fs::read(&target).await {
+                Ok(bytes) => Some(format!("sha256:{:x}", Sha256::digest(bytes))),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    return Err(ToolError::Io {
+                        message: error.to_string(),
+                    })
+                }
+            };
+            after_sha256.insert(path.clone(), hash);
+        }
+        Ok(ToolResult::ok(
+            format!("atomically applied patch to {} path(s)", paths.len()),
+            serde_json::json!({
+                "diff":"changed",
+                "changed_paths":paths,
+                "after_sha256":after_sha256,
+                "patch_sha256":format!("sha256:{:x}", Sha256::digest(patch.as_bytes())),
+            }),
+        ))
+    }
+
+    async fn run_workspace_command(
+        &self,
+        executable: &str,
+        args: &[String],
+        cwd: Option<&camino::Utf8Path>,
+        timeout_ms: Option<u64>,
+    ) -> Result<ToolResult, ToolError> {
+        validate_workspace_command(executable, args)?;
+        let runtime = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runtime.as_ref())
+            .ok_or_else(|| ToolError::UnsupportedAction {
+                action: "run_workspace_command".into(),
+            })?;
+        let executable_path = resolve_workspace_executable(runtime, executable)?;
+        let command_cwd = resolve_command_cwd(&self.workspace, &self.canonical_workspace, cwd)?;
+        let existing_path = std::env::var("PATH").unwrap_or_default();
+        let mut path_entries = runtime.path_entries.clone();
+        path_entries.push(existing_path);
+        let mut command = Command::new(&executable_path);
+        command
+            .args(args)
+            .current_dir(&command_cwd)
+            .env_clear()
+            .env("PATH", path_entries.join(":"))
+            .env("HOME", self.workspace.join(".pharness-runtime/home"))
+            .env("LANG", "C.UTF-8")
+            .kill_on_drop(true);
+        if runtime.kind == "node" {
+            for (key, value) in node_acceptance_environment(&self.workspace) {
+                command.env(key, value);
+            }
+        }
+        if runtime.kind == "python" {
+            let python_path = self
+                .contract
+                .as_ref()
+                .map(|contract| {
+                    contract
+                        .roots
+                        .source
+                        .iter()
+                        .map(|root| self.workspace.join(root).to_string_lossy().to_string())
+                        .collect::<Vec<_>>()
+                        .join(":")
+                })
+                .unwrap_or_default();
+            command.env("PYTHONPATH", python_path);
+        }
+        if executable == "cargo" {
+            command.env("CARGO_NET_OFFLINE", "true");
+        }
+        let timeout_ms = timeout_ms.unwrap_or(120_000).clamp(100, 120_000);
+        let started = std::time::Instant::now();
+        let output = tokio::time::timeout(
+            std::time::Duration::from_millis(timeout_ms),
+            command.output(),
+        )
+        .await
+        .map_err(|_| ToolError::TimedOut {
+            command: format!("{executable} {}", args.join(" ")),
+            timeout_ms,
+        })?
+        .map_err(|error| ToolError::Io {
+            message: error.to_string(),
+        })?;
+        let content = serde_json::json!({
+            "workspace_command":true,
+            "executable":executable,
+            "args":args,
+            "cwd":cwd.map(camino::Utf8Path::as_str).unwrap_or("."),
+            "exit_code":output.status.code(),
+            "stdout":bounded_output(&output.stdout),
+            "stderr":bounded_output(&output.stderr),
+            "stdout_sha256":format!("sha256:{:x}",Sha256::digest(&output.stdout)),
+            "stderr_sha256":format!("sha256:{:x}",Sha256::digest(&output.stderr)),
+            "artifact_content":{
+                "stdout":bounded_artifact_output(&output.stdout),
+                "stderr":bounded_artifact_output(&output.stderr),
+                "stdout_bytes":output.stdout.len(),
+                "stderr_bytes":output.stderr.len(),
+                "artifact_limit_bytes":2 * 1024 * 1024,
+                "stdout_truncated":output.stdout.len() > 2 * 1024 * 1024,
+                "stderr_truncated":output.stderr.len() > 2 * 1024 * 1024,
+            },
+            "duration_ms":started.elapsed().as_millis(),
+        });
+        if output.status.success() {
+            Ok(ToolResult::ok("workspace command passed", content))
+        } else {
+            Ok(ToolResult::error("workspace command failed", content))
+        }
+    }
+}
+
+fn unified_diff_paths(patch: &str) -> Result<Vec<String>, ToolError> {
+    let mut paths = Vec::new();
+    let mut header_paths = Vec::new();
+    for line in patch.lines().filter(|line| line.starts_with("diff --git ")) {
+        let mut parts = line.split_whitespace();
+        let _ = parts.next();
+        let _ = parts.next();
+        let old = parts.next().unwrap_or_default();
+        let new = parts.next().unwrap_or_default();
+        if parts.next().is_some()
+            || !old.starts_with("a/")
+            || !new.starts_with("b/")
+            || old[2..] != new[2..]
+        {
+            return Err(ToolError::InvalidArguments {
+                message: "patch contains an unsupported or renamed path".into(),
+            });
+        }
+        let path = new[2..].to_string();
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    for line in patch.lines() {
+        let candidate = line
+            .strip_prefix("--- a/")
+            .or_else(|| line.strip_prefix("+++ b/"));
+        if let Some(path) = candidate {
+            let path = path.split('\t').next().unwrap_or(path).to_string();
+            if !header_paths.contains(&path) {
+                header_paths.push(path);
+            }
+        }
+    }
+    if paths.is_empty() || paths.len() > 200 {
+        return Err(ToolError::InvalidArguments {
+            message: "patch must contain between one and 200 standard diff paths".into(),
+        });
+    }
+    if header_paths.iter().any(|path| !paths.contains(path))
+        || paths.iter().any(|path| !header_paths.contains(path))
+    {
+        return Err(ToolError::InvalidArguments {
+            message: "patch file headers do not exactly match its declared diff paths".into(),
+        });
+    }
+    Ok(paths)
+}
+
+async fn run_git_apply(workspace: &Path, patch: &str, check_only: bool) -> Result<(), ToolError> {
+    let mut command = Command::new("git");
+    command
+        .arg("-c")
+        .arg(format!("safe.directory={}", workspace.display()))
+        .arg("-C")
+        .arg(workspace)
+        .arg("apply")
+        .arg("--whitespace=nowarn");
+    if check_only {
+        command.arg("--check");
+    }
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| ToolError::Io {
+            message: error.to_string(),
+        })?;
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| ToolError::Io {
+            message: "git apply stdin is unavailable".into(),
+        })?
+        .write_all(patch.as_bytes())
+        .await
+        .map_err(|error| ToolError::Io {
+            message: error.to_string(),
+        })?;
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|error| ToolError::Io {
+            message: error.to_string(),
+        })?;
+    if !output.status.success() {
+        return Err(ToolError::InvalidArguments {
+            message: format!(
+                "patch {} failed: {}",
+                if check_only {
+                    "validation"
+                } else {
+                    "application"
+                },
+                bounded_output(&output.stderr)
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn resolve_command_cwd(
+    workspace: &Path,
+    canonical_workspace: &Path,
+    cwd: Option<&camino::Utf8Path>,
+) -> Result<PathBuf, ToolError> {
+    let relative = cwd.map(camino::Utf8Path::as_str).unwrap_or(".");
+    if relative.starts_with('/')
+        || relative
+            .split('/')
+            .any(|part| part == ".." || part.is_empty())
+        || secret_shaped_project_path(relative)
+    {
+        return Err(ToolError::OutsideWorkspace {
+            path: relative.into(),
+        });
+    }
+    let path = workspace.join(relative);
+    let canonical = path.canonicalize().map_err(|error| ToolError::Io {
+        message: error.to_string(),
+    })?;
+    if !canonical.starts_with(canonical_workspace) {
+        return Err(ToolError::OutsideWorkspace {
+            path: relative.into(),
+        });
+    }
+    Ok(canonical)
+}
+
+fn resolve_workspace_executable(
+    runtime: &pharness_core::EnvironmentRuntimeSnapshot,
+    requested: &str,
+) -> Result<String, ToolError> {
+    let runtime_name = Path::new(&runtime.executable)
+        .file_name()
+        .and_then(|value| value.to_str());
+    let package_manager_name = runtime
+        .package_manager_executable
+        .as_deref()
+        .and_then(|value| Path::new(value).file_name())
+        .and_then(|value| value.to_str());
+    let allowed = runtime_name == Some(requested)
+        || package_manager_name == Some(requested)
+        || matches!(
+            (runtime.kind.as_str(), requested),
+            ("python", "python")
+                | ("python", "python3")
+                | ("python", "pytest")
+                | ("node", "node")
+                | ("node", "npm")
+                | ("rust", "cargo")
+                | ("rust", "rustc")
+        );
+    if !allowed || requested.contains('/') {
+        return Err(ToolError::UnsupportedAction {
+            action: format!("run_workspace_command:{requested}"),
+        });
+    }
+    if runtime_name == Some(requested) {
+        Ok(runtime.executable.clone())
+    } else if package_manager_name == Some(requested) {
+        Ok(runtime
+            .package_manager_executable
+            .clone()
+            .expect("package manager name was present"))
+    } else {
+        Ok(requested.to_string())
+    }
+}
+
+fn validate_workspace_command(executable: &str, args: &[String]) -> Result<(), ToolError> {
+    if executable.is_empty()
+        || executable.len() > 256
+        || args.len() > 128
+        || args.iter().any(|arg| {
+            arg.len() > 4096
+                || arg.contains('\0')
+                || arg.contains('\n')
+                || [";", "&&", "||", "`", "$(`", ">", "<"]
+                    .iter()
+                    .any(|token| arg.contains(token))
+        })
+    {
+        return Err(ToolError::InvalidArguments {
+            message: "workspace command contains shell composition or exceeds its bounds".into(),
+        });
+    }
+    let denied = match executable {
+        "pip" | "pip3" => true,
+        "npm" => args.first().is_some_and(|arg| {
+            matches!(
+                arg.as_str(),
+                "ci" | "install"
+                    | "i"
+                    | "add"
+                    | "update"
+                    | "uninstall"
+                    | "publish"
+                    | "exec"
+                    | "init"
+                    | "login"
+                    | "logout"
+                    | "owner"
+                    | "token"
+            )
+        }),
+        "python" | "python3" => {
+            args.windows(2)
+                .any(|pair| pair[0] == "-m" && matches!(pair[1].as_str(), "pip" | "ensurepip"))
+                || contains_inline_program(args)
+        }
+        "node" => contains_inline_program(args),
+        "cargo" => args.first().is_some_and(|arg| {
+            matches!(
+                arg.as_str(),
+                "add"
+                    | "fetch"
+                    | "install"
+                    | "login"
+                    | "logout"
+                    | "owner"
+                    | "publish"
+                    | "remove"
+                    | "search"
+                    | "update"
+                    | "vendor"
+                    | "yank"
+            )
+        }),
+        _ => false,
+    };
+    if denied {
+        return Err(ToolError::UnsupportedAction {
+            action: format!("run_workspace_command:{executable}:package_or_network"),
+        });
+    }
+    Ok(())
+}
+
+fn contains_inline_program(args: &[String]) -> bool {
+    // Inline programs are not a useful inspection boundary: they can write
+    // arbitrary files or construct a network client without a recognizable
+    // command token. Repository reads belong to the typed list/read/search
+    // tools; executable repository tests belong here.
+    args.iter()
+        .any(|arg| matches!(arg.as_str(), "-c" | "-e" | "--eval" | "--input-type"))
 }
 
 fn node_acceptance_environment(workspace: &Path) -> Vec<(&'static str, String)> {
@@ -1099,8 +2019,23 @@ impl ToolExecutor for ProjectTools {
                     serde_json::json!({ "path": path }),
                 ))
             }
+            pharness_core::AgentAction::ApplyPatch {
+                patch,
+                preimage_sha256,
+                ..
+            } => self.apply_unified_patch(patch, preimage_sha256).await,
             pharness_core::AgentAction::RunAcceptanceCommand { name, .. } => {
                 self.run_acceptance(name).await
+            }
+            pharness_core::AgentAction::RunWorkspaceCommand {
+                executable,
+                args,
+                cwd,
+                timeout_ms,
+                ..
+            } => {
+                self.run_workspace_command(executable, args, cwd.as_deref(), *timeout_ms)
+                    .await
             }
             pharness_core::AgentAction::GetEvidence { evidence_id, .. } => {
                 let catalog_entry = self
@@ -1167,8 +2102,14 @@ impl ToolExecutor for ProjectTools {
             pharness_core::AgentAction::SubmitWorkPlan { work_plan, .. } => {
                 structured_submission("work_plan", work_plan)
             }
+            pharness_core::AgentAction::SubmitImplementation { implementation, .. } => {
+                structured_submission("implementation", implementation)
+            }
             pharness_core::AgentAction::SubmitTestOutcome { outcome, .. } => {
                 structured_submission("test_outcome", outcome)
+            }
+            pharness_core::AgentAction::SubmitTestDiagnosis { diagnosis, .. } => {
+                structured_submission("test_diagnosis", diagnosis)
             }
             pharness_core::AgentAction::SubmitVerification { verification, .. } => {
                 structured_submission("verification", verification)
@@ -1274,6 +2215,12 @@ fn bounded_output(bytes: &[u8]) -> String {
     format!("{}...[truncated]", &text[..end])
 }
 
+fn bounded_artifact_output(bytes: &[u8]) -> String {
+    const MAX: usize = 2 * 1024 * 1024;
+    let bytes = &bytes[..bytes.len().min(MAX)];
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
 async fn forward_events<B: AttemptBackend>(
     backend: Arc<B>,
     mut receiver: mpsc::UnboundedReceiver<AgentEvent>,
@@ -1299,12 +2246,15 @@ impl EventSink for ChannelEventSink {
 #[cfg(test)]
 mod workspace_source_tests {
     use super::{
-        collect_workspace_git_evidence, git_evidence_args, node_acceptance_environment,
-        profile_instruction, profile_tool_names, repository_instructions, tool_specs_for_run,
+        collect_workspace_git_evidence, constrained_tool_schema_hash, git_evidence_args,
+        node_acceptance_environment, profile_instruction, profile_tool_names,
+        repository_instructions, tool_specs_for_run, validate_workspace_command,
         ProfileRestrictedTools, ProjectTools, RunSpec, WorkspaceSourceSpec,
     };
     use pharness_core::{
-        ActionId, AgentAction, RunBudgetConsumption, TaskContract, ToolError, ToolExecutor,
+        AcceptanceCommand, ActionId, AgentAction, AgentNetworkPolicy, DependencyLock,
+        EnvironmentRuntimeSnapshot, EnvironmentSnapshot, PackageInstallationPolicy, ProjectRoots,
+        RepositoryContract, RunBudgetConsumption, TaskContract, ToolError, ToolExecutor,
         ToolResult,
     };
     use std::collections::BTreeSet;
@@ -1312,6 +2262,72 @@ mod workspace_source_tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn project_tools(root: &std::path::Path, writable_paths: &[&str]) -> ProjectTools {
+        ProjectTools {
+            workspace: root.to_path_buf(),
+            canonical_workspace: root.canonicalize().unwrap(),
+            contract: Some(RepositoryContract {
+                api_version: "pharness.dev/v1alpha1".into(),
+                environment_profile: "test".into(),
+                dependency_lock: DependencyLock {
+                    kind: "pip_requirements".into(),
+                    path: "requirements.lock".into(),
+                    sha256: "a".repeat(64),
+                },
+                writable_paths: writable_paths.iter().map(|value| (*value).into()).collect(),
+                acceptance_commands: vec![AcceptanceCommand {
+                    name: "unit".into(),
+                    command: "echo test".into(),
+                }],
+                roots: ProjectRoots {
+                    source: vec!["src".into()],
+                    tests: vec!["tests".into()],
+                    documentation: vec!["README.md".into()],
+                },
+                agent_network: AgentNetworkPolicy::Denied,
+                package_installation: PackageInstallationPolicy::PreparationOnly,
+            }),
+            snapshot: Some(EnvironmentSnapshot {
+                source_sha: "a".repeat(40),
+                manifest_sha256: "b".repeat(64),
+                dependency_lock_sha256: "a".repeat(64),
+                runner_image_digest: format!("sha256:{}", "c".repeat(64)),
+                runner_revision: "d".repeat(40),
+                os: "linux".into(),
+                architecture: "amd64".into(),
+                effective_user: "65532".into(),
+                runtime: Some(EnvironmentRuntimeSnapshot {
+                    kind: "test".into(),
+                    executable: "/bin/echo".into(),
+                    version: "test".into(),
+                    package_manager_executable: None,
+                    package_manager_version: None,
+                    path_entries: vec!["/bin".into()],
+                }),
+                python_version: None,
+                python_path: None,
+                writable_paths: writable_paths.iter().map(|value| (*value).into()).collect(),
+                unavailable_tools: Vec::new(),
+                agent_network: AgentNetworkPolicy::Denied,
+                package_installation: PackageInstallationPolicy::PreparationOnly,
+                acceptance_commands: vec![AcceptanceCommand {
+                    name: "unit".into(),
+                    command: "echo test".into(),
+                }],
+                preparation_evidence: serde_json::json!({}),
+            }),
+            selected_acceptance_commands: vec!["echo test".into()],
+            evidence_catalog: Vec::new(),
+            evidence_payloads: Vec::new(),
+            onboarding_discovery: None,
+        }
+    }
+
+    fn sha256(value: &[u8]) -> String {
+        use sha2::{Digest, Sha256};
+        format!("sha256:{:x}", Sha256::digest(value))
+    }
 
     #[test]
     fn node_acceptance_keeps_all_runtime_state_under_pharness_runtime() {
@@ -1345,6 +2361,119 @@ mod workspace_source_tests {
             .values()
             .filter(|value| value.starts_with('/'))
             .all(|value| value.starts_with("/workspace/.pharness-runtime/")));
+    }
+
+    #[tokio::test]
+    async fn atomic_patch_requires_preimages_and_never_partially_applies() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-atomic-patch-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/one.txt"), "one\n").unwrap();
+        std::fs::write(root.join("src/two.txt"), "two\n").unwrap();
+        let tools = project_tools(&root, &["src/**"]);
+        let valid_patch = "diff --git a/src/one.txt b/src/one.txt\n--- a/src/one.txt\n+++ b/src/one.txt\n@@ -1 +1 @@\n-one\n+ONE\n";
+
+        assert!(matches!(
+            tools.apply_unified_patch(valid_patch, &std::collections::BTreeMap::new()).await,
+            Err(ToolError::InvalidArguments { message }) if message.contains("preimage")
+        ));
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/one.txt")).unwrap(),
+            "one\n"
+        );
+
+        let invalid_second_hunk = "diff --git a/src/one.txt b/src/one.txt\n--- a/src/one.txt\n+++ b/src/one.txt\n@@ -1 +1 @@\n-one\n+ONE\ndiff --git a/src/two.txt b/src/two.txt\n--- a/src/two.txt\n+++ b/src/two.txt\n@@ -1 +1 @@\n-missing\n+TWO\n";
+        let hashes = std::collections::BTreeMap::from([
+            ("src/one.txt".into(), sha256(b"one\n")),
+            ("src/two.txt".into(), sha256(b"two\n")),
+        ]);
+        assert!(tools
+            .apply_unified_patch(invalid_second_hunk, &hashes)
+            .await
+            .is_err());
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/one.txt")).unwrap(),
+            "one\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/two.txt")).unwrap(),
+            "two\n"
+        );
+
+        let result = tools
+            .apply_unified_patch(
+                valid_patch,
+                &std::collections::BTreeMap::from([("src/one.txt".into(), sha256(b"one\n"))]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            result.content["changed_paths"],
+            serde_json::json!(["src/one.txt"])
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/one.txt")).unwrap(),
+            "ONE\n"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn workspace_command_rejects_package_network_and_shell_composition() {
+        assert!(validate_workspace_command("npm", &["install".into()]).is_err());
+        assert!(validate_workspace_command("pip", &["list".into()]).is_err());
+        assert!(validate_workspace_command("pip3", &["--version".into()]).is_err());
+        assert!(validate_workspace_command(
+            "python",
+            &[
+                "-c".into(),
+                "print('even non-network inline programs are denied')".into()
+            ]
+        )
+        .is_err());
+        assert!(validate_workspace_command(
+            "node",
+            &["--eval".into(), "console.log('denied')".into()]
+        )
+        .is_err());
+        assert!(validate_workspace_command("cargo", &["vendor".into()]).is_err());
+        assert!(
+            validate_workspace_command("python", &["-m".into(), "pytest && id".into()]).is_err()
+        );
+        assert!(validate_workspace_command("python", &["-m".into(), "pytest".into()]).is_ok());
+    }
+
+    #[tokio::test]
+    async fn workspace_command_executes_only_the_snapshot_runtime() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-workspace-command-{}-{}",
+            std::process::id(),
+            NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let tools = project_tools(&root, &["src/**"]);
+        let result = tools
+            .run_workspace_command("echo", &["bounded".into()], None, Some(5_000))
+            .await
+            .unwrap();
+        assert_eq!(result.content["stdout"], "bounded\n");
+        assert_eq!(result.content["artifact_content"]["stdout"], "bounded\n");
+        assert_eq!(result.content["artifact_content"]["stdout_bytes"], 8);
+        assert_eq!(
+            result.content["artifact_content"]["stdout_truncated"],
+            false
+        );
+        assert!(result.content["stdout_sha256"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("sha256:")));
+        assert!(matches!(
+            tools.run_workspace_command("curl", &[], None, None).await,
+            Err(ToolError::UnsupportedAction { .. })
+        ));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[derive(Clone)]
@@ -1403,6 +2532,97 @@ mod workspace_source_tests {
     }
 
     #[test]
+    fn reliability_v2_tool_hash_binds_exact_acceptance_and_evidence_ids() {
+        let tool_names = vec![
+            "get_evidence".to_string(),
+            "run_acceptance_command".to_string(),
+            "submit_implementation".to_string(),
+        ];
+        let acceptance_names = vec!["unit".to_string(), "compile".to_string()];
+        let evidence_ids = vec!["evidence_contract".to_string()];
+        let expected =
+            constrained_tool_schema_hash(&tool_names, &acceptance_names, &evidence_ids).unwrap();
+
+        assert_ne!(
+            expected,
+            constrained_tool_schema_hash(&tool_names, &["different".to_string()], &evidence_ids,)
+                .unwrap()
+        );
+        assert_ne!(
+            expected,
+            constrained_tool_schema_hash(
+                &tool_names,
+                &acceptance_names,
+                &["evidence_diff".to_string()],
+            )
+            .unwrap()
+        );
+
+        let mut run = profile_run(&[
+            "get_evidence",
+            "run_acceptance_command",
+            "submit_implementation",
+        ]);
+        run.execution_target_json["selected_acceptance_commands"] =
+            serde_json::json!(["python -m unittest", "python -m compileall src"]);
+        run.execution_target_json["repository_contract"] =
+            serde_json::to_value(RepositoryContract {
+                api_version: "pharness.dev/v1alpha1".into(),
+                environment_profile: "python-3.11".into(),
+                dependency_lock: DependencyLock {
+                    kind: "pip_requirements".into(),
+                    path: "requirements.lock".into(),
+                    sha256: "a".repeat(64),
+                },
+                writable_paths: vec!["src/**".into(), "tests/**".into()],
+                acceptance_commands: vec![
+                    AcceptanceCommand {
+                        name: "unit".into(),
+                        command: "python -m unittest".into(),
+                    },
+                    AcceptanceCommand {
+                        name: "compile".into(),
+                        command: "python -m compileall src".into(),
+                    },
+                ],
+                roots: ProjectRoots {
+                    source: vec!["src".into()],
+                    tests: vec!["tests".into()],
+                    documentation: vec!["README.md".into()],
+                },
+                agent_network: AgentNetworkPolicy::Denied,
+                package_installation: PackageInstallationPolicy::PreparationOnly,
+            })
+            .unwrap();
+        run.execution_target_json["agent_context"] = serde_json::json!({
+            "evidence_catalog": [{"id": "evidence_contract"}],
+        });
+        let allowed = profile_tool_names(&run).unwrap().unwrap();
+        let actual_specs = tool_specs_for_run(&run, Some(&allowed)).unwrap();
+        let actual =
+            pharness_core::canonical_json_sha256(&serde_json::to_value(&actual_specs).unwrap())
+                .unwrap();
+
+        assert_eq!(actual, expected);
+        let acceptance = actual_specs
+            .iter()
+            .find(|tool| tool.name == "run_acceptance_command")
+            .unwrap();
+        assert_eq!(
+            acceptance.parameters_schema["properties"]["name"]["enum"],
+            serde_json::json!(["unit", "compile"])
+        );
+        let evidence = actual_specs
+            .iter()
+            .find(|tool| tool.name == "get_evidence")
+            .unwrap();
+        assert_eq!(
+            evidence.parameters_schema["properties"]["evidence_id"]["enum"],
+            serde_json::json!(["evidence_contract"])
+        );
+    }
+
+    #[test]
     fn verifier_profile_preserves_submission_turns_and_avoids_redundant_reads() {
         let mut run = profile_run(&[
             "get_evidence",
@@ -1427,6 +2647,30 @@ mod workspace_source_tests {
         assert!(instruction.contains("do not reread a path"));
         assert!(instruction.contains("Preserve the final eight turns"));
         assert!(instruction.contains("submit the typed verdict before the soft turn boundary"));
+    }
+
+    #[test]
+    fn reliability_v2_verifier_uses_terminal_submission_without_finish() {
+        let mut run = profile_run(&[
+            "get_evidence",
+            "read_file",
+            "git_diff",
+            "git_status",
+            "submit_verification",
+        ]);
+        run.execution_target_json["repo_mode"]["stage"] = serde_json::json!("verify");
+        run.execution_target_json["agent_profile"]["id"] = serde_json::json!("repo-verifier");
+        run.execution_target_json["agent_profile"]["version"] = serde_json::json!("v2");
+        run.execution_target_json["agent_context"] = serde_json::json!({
+            "schema_version": pharness_core::AGENT_CONTEXT_SCHEMA,
+            "current_intent": {"title": "verify a bounded change"},
+            "evidence_catalog": [],
+        });
+
+        let instruction = profile_instruction(&run).unwrap().unwrap();
+        assert!(instruction.contains("terminal submit_verification"));
+        assert!(instruction.contains("do not call finish after it"));
+        assert!(!instruction.contains("submit_verification and finish"));
     }
 
     #[tokio::test]

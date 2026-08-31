@@ -901,6 +901,8 @@ pub(super) async fn get_run_operator_summary(
     let mut test_results = Vec::new();
     let mut awaiting_test_result: Option<String> = None;
     let mut environment_discovery_turns = 0;
+    let mut protocol_corrections = 0;
+    let mut stop_category = None;
     for event in &events {
         match event.kind {
             EventKind::ModelRequestStarted => {
@@ -958,6 +960,9 @@ pub(super) async fn get_run_operator_summary(
                     normalized_cost = Some(normalized_cost.unwrap_or(0.0) + value);
                 }
             }
+            EventKind::ModelProtocolCorrection => {
+                protocol_corrections += 1;
+            }
             EventKind::ActionProposed => {
                 awaiting_test_result = None;
                 if event.payload.get("action").and_then(Value::as_str) == Some("run_shell") {
@@ -1013,6 +1018,11 @@ pub(super) async fn get_run_operator_summary(
                         "passed": !failed,
                         "result": event.payload,
                     }));
+                }
+            }
+            EventKind::RunFailed => {
+                if let Some(category) = event.payload.get("stop_category").and_then(Value::as_str) {
+                    stop_category = Some(category.to_string());
                 }
             }
             _ => {}
@@ -1095,11 +1105,13 @@ pub(super) async fn get_run_operator_summary(
         acceptance_evidence,
         pending_approvals,
         environment_discovery_turns,
+        protocol_corrections,
         approval_count: approvals.len() as u32,
         approval_wait_ms,
         preparation_duration_ms,
         budget_extensions,
         stop_reason: run.stop_reason,
+        stop_category,
     }))
 }
 

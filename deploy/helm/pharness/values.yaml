@@ -8,6 +8,11 @@ features:
     # Full operator-experience cutover. Keep disabled until the complete
     # repository onboarding and Repo Mode WorkItem journey passes.
     uiEnabled: true
+  codingReliabilityV2:
+    # Enables immutable V2 stage prompts, terminal typed submissions,
+    # controller-owned deterministic Test, and one bounded repair execution
+    # for future Repo Mode WorkItems only.
+    enabled: false
 
 organization:
   id: org_lucas_engineering

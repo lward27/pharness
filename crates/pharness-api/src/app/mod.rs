@@ -58,6 +58,7 @@ use system::{BuildMetadata, ProtectedTargetConfiguration};
 struct RepoModeConfiguration {
     enabled: bool,
     ui_enabled: bool,
+    coding_reliability_v2_enabled: bool,
     legacy_work_item_creation_enabled: bool,
     organization: pharness_store::BootstrapOrganization,
 }
@@ -79,9 +80,15 @@ impl RepoModeConfiguration {
                 .ok()
                 .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
                 .unwrap_or(false);
+        let coding_reliability_v2_enabled = std::env::var("PHARNESS_CODING_RELIABILITY_V2_ENABLED")
+            .ok()
+            .is_some_and(|value| {
+                matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+            });
         Self {
             enabled,
             ui_enabled,
+            coding_reliability_v2_enabled,
             legacy_work_item_creation_enabled,
             organization: pharness_store::BootstrapOrganization {
                 id: std::env::var("PHARNESS_ORGANIZATION_ID")
@@ -99,12 +106,26 @@ impl RepoModeConfiguration {
         Self {
             enabled: true,
             ui_enabled: true,
+            coding_reliability_v2_enabled: true,
             legacy_work_item_creation_enabled: true,
             organization: pharness_store::BootstrapOrganization {
                 id: "org_test".into(),
                 organization_key: "test".into(),
                 display_name: "PHarness Test".into(),
             },
+        }
+    }
+}
+
+impl AppState {
+    fn compiled_agent_profiles(&self, model: &str) -> Vec<pharness_core::AgentProfile> {
+        if self.repo_mode.coding_reliability_v2_enabled {
+            pharness_core::compiled_reliability_v2_agent_profiles(
+                model,
+                pharness_runhost::RELIABILITY_V2_PROMPT_BUNDLE_VERSION,
+            )
+        } else {
+            pharness_core::compiled_agent_profiles(model, pharness_runhost::SYSTEM_PROMPT_VERSION)
         }
     }
 }

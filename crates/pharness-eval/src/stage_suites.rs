@@ -7,14 +7,16 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
-    canonical_json_sha256, compiled_agent_profiles, inference_qualification_suite_hash,
-    AgentAction, AgentEvent, CancellationFlag, ModelCapabilities, ModelProvider, ModelRequest,
-    ModelTurn, ProviderError, ResolvedInferenceBinding, TaskContract, TaskKind,
-    RESOLVED_INFERENCE_BINDING_SCHEMA,
+    canonical_json_sha256, compiled_agent_profiles, compiled_reliability_v2_agent_profiles,
+    inference_qualification_suite_hash, AgentAction, AgentEvent, CancellationFlag,
+    ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProviderError,
+    ResolvedInferenceBinding, TaskContract, TaskKind, RESOLVED_INFERENCE_BINDING_SCHEMA,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
 use pharness_runhost::{
-    execute_attempt, AttemptHost, AttemptSpec, RunInferenceSpec, RunSpec, SYSTEM_PROMPT_VERSION,
+    constrained_tool_schema_hash, execute_attempt, stage_prompt_for_profile, AttemptHost,
+    AttemptSpec, RunInferenceSpec, RunSpec, RELIABILITY_V2_PROMPT_BUNDLE_VERSION,
+    SYSTEM_PROMPT_VERSION,
 };
 use serde_json::{json, Value};
 use std::collections::VecDeque;
@@ -27,66 +29,104 @@ const STAGE_FIXTURE_REVISION: &str = "stage-qualification-v1.0";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SuiteKind {
-    Onboarding,
-    Planner,
-    Tester,
-    Verifier,
+    OnboardingV1,
+    PlannerV1,
+    TesterV1,
+    VerifierV1,
+    OnboardingV2,
+    PlannerV2,
+    TestDiagnosisV2,
+    VerifierV2,
 }
 
 impl SuiteKind {
     fn parse(value: &str) -> Result<Self> {
         match value {
-            "onboarding-v1" => Ok(Self::Onboarding),
-            "planner-v1" => Ok(Self::Planner),
-            "tester-v1" => Ok(Self::Tester),
-            "verifier-v1" => Ok(Self::Verifier),
+            "onboarding-v1" => Ok(Self::OnboardingV1),
+            "planner-v1" => Ok(Self::PlannerV1),
+            "tester-v1" => Ok(Self::TesterV1),
+            "verifier-v1" => Ok(Self::VerifierV1),
+            "onboarding-v2" => Ok(Self::OnboardingV2),
+            "planner-v2" => Ok(Self::PlannerV2),
+            "test-diagnosis-v2" => Ok(Self::TestDiagnosisV2),
+            "verifier-v2" => Ok(Self::VerifierV2),
             _ => bail!("unsupported stage qualification suite {value:?}"),
         }
     }
 
     fn suite_id(self) -> &'static str {
         match self {
-            Self::Onboarding => "onboarding-v1",
-            Self::Planner => "planner-v1",
-            Self::Tester => "tester-v1",
-            Self::Verifier => "verifier-v1",
+            Self::OnboardingV1 => "onboarding-v1",
+            Self::PlannerV1 => "planner-v1",
+            Self::TesterV1 => "tester-v1",
+            Self::VerifierV1 => "verifier-v1",
+            Self::OnboardingV2 => "onboarding-v2",
+            Self::PlannerV2 => "planner-v2",
+            Self::TestDiagnosisV2 => "test-diagnosis-v2",
+            Self::VerifierV2 => "verifier-v2",
         }
     }
 
     fn profile_id(self) -> &'static str {
         match self {
-            Self::Onboarding => "repository-onboarding-proposer",
-            Self::Planner => "repo-planner",
-            Self::Tester => "repo-tester",
-            Self::Verifier => "repo-verifier",
+            Self::OnboardingV1 | Self::OnboardingV2 => "repository-onboarding-proposer",
+            Self::PlannerV1 | Self::PlannerV2 => "repo-planner",
+            Self::TesterV1 => "repo-tester",
+            Self::TestDiagnosisV2 => "repo-test-diagnoser",
+            Self::VerifierV1 | Self::VerifierV2 => "repo-verifier",
         }
     }
 
     fn stage_key(self) -> &'static str {
         match self {
-            Self::Onboarding => "repository_onboarding",
-            Self::Planner => "plan",
-            Self::Tester => "test",
-            Self::Verifier => "verify",
+            Self::OnboardingV1 | Self::OnboardingV2 => "repository_onboarding",
+            Self::PlannerV1 | Self::PlannerV2 => "plan",
+            Self::TesterV1 | Self::TestDiagnosisV2 => "test",
+            Self::VerifierV1 | Self::VerifierV2 => "verify",
         }
     }
 
     fn policy_id(self) -> &'static str {
         match self {
-            Self::Onboarding => "onboarding-kimi-k2p6-medium-v1",
-            Self::Planner => "planner-kimi-k2p6-high-v1",
-            Self::Tester => "tester-kimi-k2p6-low-v1",
-            Self::Verifier => "verifier-kimi-k2p6-high-v1",
+            Self::OnboardingV1 => "onboarding-kimi-k2p6-medium-v1",
+            Self::PlannerV1 => "planner-kimi-k2p6-high-v1",
+            Self::TesterV1 => "tester-kimi-k2p6-low-v1",
+            Self::VerifierV1 => "verifier-kimi-k2p6-high-v1",
+            Self::OnboardingV2 => "onboarding-minimax-m3-v2",
+            Self::PlannerV2 => "planner-kimi-k3-v2",
+            Self::TestDiagnosisV2 => "test-diagnosis-nemotron-v2",
+            Self::VerifierV2 => "verifier-glm-5p3-v2",
         }
     }
 
     fn submission_kind(self) -> &'static str {
         match self {
-            Self::Onboarding => "repository_onboarding_proposal",
-            Self::Planner => "work_plan",
-            Self::Tester => "test_outcome",
-            Self::Verifier => "verification",
+            Self::OnboardingV1 | Self::OnboardingV2 => "repository_onboarding_proposal",
+            Self::PlannerV1 | Self::PlannerV2 => "work_plan",
+            Self::TesterV1 => "test_outcome",
+            Self::TestDiagnosisV2 => "test_diagnosis",
+            Self::VerifierV1 | Self::VerifierV2 => "verification",
         }
+    }
+
+    fn is_v2(self) -> bool {
+        matches!(
+            self,
+            Self::OnboardingV2 | Self::PlannerV2 | Self::TestDiagnosisV2 | Self::VerifierV2
+        )
+    }
+
+    fn inference_stage(self) -> pharness_core::InferenceStage {
+        match self {
+            Self::OnboardingV1 | Self::OnboardingV2 => pharness_core::InferenceStage::Onboarding,
+            Self::PlannerV1 | Self::PlannerV2 => pharness_core::InferenceStage::Plan,
+            Self::TesterV1 | Self::TestDiagnosisV2 => pharness_core::InferenceStage::Test,
+            Self::VerifierV1 | Self::VerifierV2 => pharness_core::InferenceStage::Verify,
+        }
+    }
+
+    fn is_onboarding(self) -> bool {
+        matches!(self, Self::OnboardingV1 | Self::OnboardingV2)
     }
 }
 
@@ -119,13 +159,10 @@ pub(super) async fn run(
             context.resolved_binding.target.clone(),
             context.resolved_binding.policy.clone(),
         ),
+        None if matches!(provider, Provider::Replay) && suite.is_v2() => {
+            replay_v2_target_policy(suite)?
+        }
         None => {
-            let target = config
-                .inference
-                .registry
-                .target("fireworks-kimi-k2p6", "v1")
-                .context("default Fireworks inference target is missing")?
-                .clone();
             let policy = config
                 .inference
                 .registry
@@ -140,38 +177,90 @@ pub(super) async fn run(
                     )
                 })?
                 .clone();
+            let target = config
+                .inference
+                .registry
+                .target(&policy.target.target_id, &policy.target.revision)
+                .context("selected stage policy target is missing")?
+                .clone();
             (target, policy)
         }
     };
     if requested_policy_id.is_some_and(|id| id != policy.policy_id) {
         bail!("gateway stage evaluation policy does not match the requested policy");
     }
-    if !policy.eligible_stages.contains(&match suite {
-        SuiteKind::Onboarding => pharness_core::InferenceStage::Onboarding,
-        SuiteKind::Planner => pharness_core::InferenceStage::Plan,
-        SuiteKind::Tester => pharness_core::InferenceStage::Test,
-        SuiteKind::Verifier => pharness_core::InferenceStage::Verify,
-    }) || !policy
-        .eligible_profiles
-        .iter()
-        .any(|profile| profile == suite.profile_id())
+    if !policy.eligible_stages.contains(&suite.inference_stage())
+        || !policy
+            .eligible_profiles
+            .iter()
+            .any(|profile| profile == suite.profile_id())
     {
         bail!("selected policy is not eligible for this stage qualification suite");
     }
-    let profile = compiled_agent_profiles(&target.upstream_model, SYSTEM_PROMPT_VERSION)
+    let profiles = if suite.is_v2() {
+        compiled_reliability_v2_agent_profiles(
+            &target.upstream_model,
+            RELIABILITY_V2_PROMPT_BUNDLE_VERSION,
+        )
+    } else {
+        compiled_agent_profiles(&target.upstream_model, SYSTEM_PROMPT_VERSION)
+    };
+    let profile = profiles
         .into_iter()
         .find(|profile| profile.id == suite.profile_id())
         .context("compiled qualification AgentProfile is missing")?;
-    let tool_schema_hash = canonical_json_sha256(&serde_json::to_value(&profile.tools)?)?;
+    let tool_schema_hash = if suite.is_v2() {
+        let evidence_ids = if suite.is_onboarding() {
+            Vec::new()
+        } else {
+            vec!["fixture_evidence".to_string()]
+        };
+        constrained_tool_schema_hash(&profile.tools, &[], &evidence_ids)?
+    } else {
+        canonical_json_sha256(&serde_json::to_value(&profile.tools)?)?
+    };
     let profile_budget_hash = canonical_json_sha256(&serde_json::to_value(&profile.budget)?)?;
     let mut binding = ResolvedInferenceBinding {
         schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
         target: target.clone(),
         policy: policy.clone(),
-        prompt_version: SYSTEM_PROMPT_VERSION.into(),
+        prompt_version: if suite.is_v2() {
+            RELIABILITY_V2_PROMPT_BUNDLE_VERSION.into()
+        } else {
+            SYSTEM_PROMPT_VERSION.into()
+        },
+        stage_prompt: suite
+            .is_v2()
+            .then(|| stage_prompt_for_profile(&profile.id))
+            .flatten()
+            .map(|prompt| prompt.revision_record()),
         base_agent_profile_hash: profile.profile_hash.clone(),
         agent_profile_hash: String::new(),
         tool_schema_hash: tool_schema_hash.clone(),
+        context_policy_hash: if suite.is_v2() {
+            canonical_json_sha256(&json!({
+                "schema_version":"pharness.dev/repo-context-policy/v2",
+                "stage":suite.inference_stage(),
+                "max_input_tokens":policy.max_input_tokens,
+                "max_output_tokens":policy.max_output_tokens,
+                "controller_execution_ledger":true,
+                "deterministic_checkpoints":true,
+            }))?
+        } else {
+            String::new()
+        },
+        protocol_calibration_hash: if suite.is_v2() {
+            canonical_json_sha256(&json!({
+                "schema_version":"pharness.dev/protocol-contract/v2",
+                "target_hash":target.config_hash,
+                "policy_hash":policy.policy_hash,
+                "tool_choice":policy.tool_choice,
+                "tool_protocol":policy.tool_protocol,
+                "parallel_tool_calls":false,
+            }))?
+        } else {
+            String::new()
+        },
         profile_budget_hash,
         binding_hash: String::new(),
     };
@@ -248,7 +337,7 @@ pub(super) async fn run(
         policy_revision: Some(policy.revision.clone()),
         policy_hash: Some(policy.policy_hash.clone()),
         profile_hash: Some(binding.agent_profile_hash.clone()),
-        prompt_version: SYSTEM_PROMPT_VERSION.into(),
+        prompt_version: binding.prompt_version.clone(),
         tool_schema_hash: Some(tool_schema_hash),
         runtime_revision: evaluation_runtime_revision(),
         temperature_milli: policy
@@ -269,6 +358,82 @@ pub(super) async fn run(
         }),
         results,
     })
+}
+
+fn replay_v2_target_policy(
+    suite: SuiteKind,
+) -> Result<(
+    pharness_core::InferenceTargetRevision,
+    pharness_core::StageInferencePolicyRevision,
+)> {
+    let mut target = pharness_core::InferenceTargetRevision {
+        schema_version: pharness_core::INFERENCE_TARGET_SCHEMA.into(),
+        target_id: "stage-replay-v2".into(),
+        revision: "v1".into(),
+        display_name: "Stage replay V2".into(),
+        backend_kind: pharness_core::InferenceBackendKind::OpenaiCompatible,
+        protocol: "openai_chat_completions_v1".into(),
+        upstream_base_url: "https://example.invalid/v1".into(),
+        upstream_model: "stage-replay-v2".into(),
+        authentication_binding: None,
+        transport: pharness_core::InferenceTransportPolicy::default(),
+        capabilities: pharness_core::InferenceCapabilities {
+            native_tools: true,
+            streaming: true,
+            json_schema: false,
+            stream_options: true,
+            reasoning_efforts: vec![
+                pharness_core::ReasoningEffort::Low,
+                pharness_core::ReasoningEffort::Medium,
+                pharness_core::ReasoningEffort::High,
+            ],
+            reasoning_context_modes: vec![pharness_core::ReasoningContextMode::CurrentTurn],
+            tool_choice_modes: vec![pharness_core::ToolChoiceMode::Auto],
+        },
+        context_limit_tokens: 131_072,
+        output_limit_tokens: 16_384,
+        allowed_stages: vec![suite.inference_stage()],
+        selectable: true,
+        openrouter: None,
+        config_hash: String::new(),
+    };
+    target.config_hash = target.computed_hash()?;
+    let output = match suite {
+        SuiteKind::TestDiagnosisV2 => 4_096,
+        _ => 8_192,
+    };
+    let mut policy = pharness_core::StageInferencePolicyRevision {
+        schema_version: pharness_core::INFERENCE_POLICY_SCHEMA.into(),
+        policy_id: suite.policy_id().into(),
+        revision: "v1".into(),
+        display_name: format!("{} replay", suite.policy_id()),
+        eligible_profiles: vec![suite.profile_id().into()],
+        eligible_stages: vec![suite.inference_stage()],
+        target: pharness_core::InferenceTargetRef {
+            target_id: target.target_id.clone(),
+            revision: target.revision.clone(),
+        },
+        target_hash: target.config_hash.clone(),
+        reasoning: pharness_core::ReasoningRequestPolicy {
+            effort: Some(pharness_core::ReasoningEffort::Medium),
+            context_mode: pharness_core::ReasoningContextMode::CurrentTurn,
+            expose_replay: true,
+        },
+        temperature_milli: Some(if suite == SuiteKind::VerifierV2 {
+            0
+        } else {
+            100
+        }),
+        max_output_tokens: output,
+        max_input_tokens: 65_536,
+        tool_protocol: pharness_core::ToolProtocolMode::NativeTools,
+        tool_choice: pharness_core::ToolChoiceMode::Auto,
+        transport_max_attempts: 1,
+        selectable: true,
+        policy_hash: String::new(),
+    };
+    policy.policy_hash = policy.computed_hash()?;
+    Ok((target, policy))
 }
 
 async fn run_fixture(
@@ -351,7 +516,14 @@ async fn run_fixture(
     Ok(EvalResult {
         fixture: fixture.id.clone(),
         attempt,
+        stack: None,
+        source_sha: None,
+        workspace_hash: None,
         passed,
+        first_pass: passed,
+        post_repair_passed: passed,
+        correction_used: false,
+        hidden_tests_ok: acceptance_ok,
         status: outcome.status.clone(),
         turns: outcome.turns,
         tool_calls: metrics.tool_calls,
@@ -412,10 +584,10 @@ fn execution_target(
             "payload":evidence_payload,
         }],
     });
-    if suite == SuiteKind::Onboarding {
+    if suite.is_onboarding() {
         target["onboarding"] = json!({"onboarding_id":fixture.id});
     }
-    if suite == SuiteKind::Tester {
+    if suite == SuiteKind::TesterV1 {
         let contract = qualification_contract();
         target["repository_contract"] = contract.clone();
         target["selected_acceptance_commands"] = json!(contract["acceptance_commands"]
@@ -430,10 +602,14 @@ fn execution_target(
 
 fn fixtures(suite: SuiteKind) -> Result<Vec<StageFixture>> {
     match suite {
-        SuiteKind::Onboarding => onboarding_fixtures(),
-        SuiteKind::Planner => planner_fixtures(),
-        SuiteKind::Tester => tester_fixtures(),
-        SuiteKind::Verifier => verifier_fixtures(),
+        SuiteKind::OnboardingV1 => Ok(onboarding_fixtures()?.into_iter().take(8).collect()),
+        SuiteKind::OnboardingV2 => onboarding_fixtures(),
+        SuiteKind::PlannerV1 => Ok(planner_fixtures()?.into_iter().take(8).collect()),
+        SuiteKind::PlannerV2 => planner_fixtures(),
+        SuiteKind::TesterV1 => tester_fixtures(),
+        SuiteKind::TestDiagnosisV2 => test_diagnosis_fixtures(),
+        SuiteKind::VerifierV1 => Ok(verifier_fixtures()?.into_iter().take(10).collect()),
+        SuiteKind::VerifierV2 => verifier_fixtures(),
     }
 }
 
@@ -486,6 +662,30 @@ fn onboarding_fixtures() -> Result<Vec<StageFixture>> {
             "python-3.11",
             "discovery_contradiction",
             "Language indicators and command sources disagree",
+        ),
+        (
+            "local-dependency",
+            "node-24",
+            "mutable_dependency_input",
+            "The npm lock contains a local file dependency",
+        ),
+        (
+            "mutable-git-dependency",
+            "node-24",
+            "mutable_dependency_input",
+            "The npm lock contains a mutable Git dependency",
+        ),
+        (
+            "existing-service-mapping",
+            "node-24",
+            "",
+            "The reviewed finance-web Service must be reused without duplication",
+        ),
+        (
+            "instruction-override",
+            "python-3.11",
+            "instruction_contract_override",
+            "Repository prose attempts to override the executable contract",
         ),
     ];
     cases
@@ -545,6 +745,26 @@ fn planner_fixtures() -> Result<Vec<StageFixture>> {
             vec!["compile"],
             "documentation_required",
         ),
+        (
+            "misleading-nearby-code",
+            vec!["unit", "compile"],
+            "misleading_nearby_code",
+        ),
+        (
+            "stale-context-revision",
+            vec!["unit"],
+            "context_revision_stale",
+        ),
+        (
+            "multiple-intent-clauses",
+            vec!["unit", "compile"],
+            "intent_clause_coverage",
+        ),
+        (
+            "path-intersection",
+            vec!["unit"],
+            "writable_path_intersection",
+        ),
     ];
     Ok(cases.into_iter().map(|(id,acceptance,marker)| StageFixture {
         id:id.into(),
@@ -573,6 +793,43 @@ fn tester_fixtures() -> Result<Vec<StageFixture>> {
         evidence:json!({"expected_failure":has_failure}),
         expected:json!({"acceptance":["unit","compile"],"has_failure":has_failure}),
     }).collect())
+}
+
+fn test_diagnosis_fixtures() -> Result<Vec<StageFixture>> {
+    let cases = [
+        ("assertion-failure", "assertion_failure"),
+        ("compile-failure", "compile_failure"),
+        ("lint-failure", "lint_failure"),
+        ("semantic-hidden-failure", "semantic_test_failure"),
+        ("preexisting-failure", "preexisting_failure"),
+        ("wrong-test-selection", "acceptance_evidence_mismatch"),
+        ("timeout", "tool_timeout"),
+        ("missing-executable", "environment_failure"),
+        ("contract-mismatch", "contract_failure"),
+        ("single-localized-failure", "localized_repair"),
+        ("multiple-related-failures", "coherent_repair"),
+        ("passing-control", "no_failure"),
+    ];
+    Ok(cases
+        .into_iter()
+        .map(|(id, classification)| StageFixture {
+            id: id.into(),
+            task: format!(
+                "Diagnose the controller-recorded deterministic Test result as {classification}. Do not modify source and submit one typed diagnosis."
+            ),
+            context: json!({
+                "effective_upstream_outcomes":[{"stage":"test","status":if classification == "no_failure" {"succeeded"} else {"failed"}}],
+                "correction_allowance":1,
+            }),
+            evidence: json!({
+                "classification":classification,
+                "command":"declared-acceptance",
+                "exit_code":if classification == "no_failure" {0} else {1},
+                "bounded_output":format!("fixture {classification}"),
+            }),
+            expected: json!({"classification":classification}),
+        })
+        .collect())
 }
 
 fn verifier_fixtures() -> Result<Vec<StageFixture>> {
@@ -607,6 +864,44 @@ fn verifier_fixtures() -> Result<Vec<StageFixture>> {
         ),
         ("valid-implementation-a", "approved", "evidence_consistent"),
         ("valid-implementation-b", "approved", "evidence_consistent"),
+        ("wrong-query-parameter", "rejected", "wrong_query_parameter"),
+        ("missing-null-handling", "rejected", "missing_null_handling"),
+        (
+            "partial-call-site-update",
+            "rejected",
+            "partial_call_site_update",
+        ),
+        (
+            "acceptance-name-mismatch",
+            "rejected",
+            "acceptance_name_mismatch",
+        ),
+        ("hidden-test-failure", "rejected", "hidden_test_failure"),
+        (
+            "changed-protected-path",
+            "rejected",
+            "protected_path_changed",
+        ),
+        (
+            "unresolved-baseline-failure",
+            "rejected",
+            "baseline_failure_unresolved",
+        ),
+        (
+            "unsafe-string-rendering",
+            "rejected",
+            "unsafe_string_rendering",
+        ),
+        ("incorrect-error-code", "rejected", "incorrect_error_code"),
+        ("missing-doc-update", "rejected", "documentation_missing"),
+        (
+            "unapproved-context-head",
+            "rejected",
+            "context_head_unapproved",
+        ),
+        ("valid-implementation-c", "approved", "evidence_consistent"),
+        ("valid-implementation-d", "approved", "evidence_consistent"),
+        ("valid-implementation-e", "approved", "evidence_consistent"),
     ];
     Ok(cases.into_iter().map(|(id,decision,marker)| StageFixture {
         id:id.into(),
@@ -619,7 +914,7 @@ fn verifier_fixtures() -> Result<Vec<StageFixture>> {
 
 fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentAction>> {
     let mut actions = Vec::new();
-    if suite != SuiteKind::Onboarding {
+    if !suite.is_onboarding() {
         actions.push(AgentAction::GetEvidence {
             id: "act_evidence".into(),
             reason: "retrieve controller-bound qualification evidence".into(),
@@ -627,7 +922,7 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
         });
     }
     match suite {
-        SuiteKind::Onboarding => actions.push(AgentAction::SubmitOnboardingProposal {
+        SuiteKind::OnboardingV1 | SuiteKind::OnboardingV2 => actions.push(AgentAction::SubmitOnboardingProposal {
             id:"act_submit".into(), reason:"submit exact discovery synthesis".into(),
             proposal:json!({
                 "schema_version":pharness_core::ONBOARDING_PROPOSAL_SCHEMA,
@@ -640,7 +935,7 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
                 "readiness_forecast":{"coding":"requires controller validation"},
             }),
         }),
-        SuiteKind::Planner => actions.push(AgentAction::SubmitWorkPlan {
+        SuiteKind::PlannerV1 | SuiteKind::PlannerV2 => actions.push(AgentAction::SubmitWorkPlan {
             id:"act_submit".into(), reason:"submit bounded plan".into(),
             work_plan:json!({
                 "title":"Bounded qualification plan","summary":format!("Resolve {}",fixture.expected["marker"].as_str().unwrap_or_default()),"risk_level":"medium",
@@ -648,7 +943,7 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
                 "assumptions":[],"risks":[],
             }),
         }),
-        SuiteKind::Tester => {
+        SuiteKind::TesterV1 => {
             actions.push(AgentAction::RunAcceptanceCommand {id:"act_unit".into(),reason:"run unit acceptance".into(),name:"unit".into()});
             actions.push(AgentAction::RunAcceptanceCommand {id:"act_compile".into(),reason:"run compile acceptance".into(),name:"compile".into()});
             actions.push(AgentAction::SubmitTestOutcome {
@@ -656,7 +951,18 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
                 outcome:json!({"summary":if fixture.expected["has_failure"].as_bool()==Some(true) {"One or more declared acceptance commands failed"} else {"Both declared acceptance commands passed"},"acceptance_names":["unit","compile"],"claims":[],"risks":[]}),
             });
         }
-        SuiteKind::Verifier => actions.push(AgentAction::SubmitVerification {
+        SuiteKind::TestDiagnosisV2 => actions.push(AgentAction::SubmitTestDiagnosis {
+            id:"act_submit".into(),
+            reason:"submit evidence-bound deterministic Test diagnosis".into(),
+            diagnosis:json!({
+                "classification":fixture.expected["classification"],
+                "summary":format!("Controller evidence classifies this as {}", fixture.expected["classification"].as_str().unwrap_or_default()),
+                "evidence_refs":["fixture_evidence"],
+                "repairable":!matches!(fixture.expected["classification"].as_str(), Some("environment_failure" | "contract_failure" | "no_failure")),
+                "recommended_scope":"Preserve correct work and repair only the evidenced failure.",
+            }),
+        }),
+        SuiteKind::VerifierV1 | SuiteKind::VerifierV2 => actions.push(AgentAction::SubmitVerification {
             id:"act_submit".into(),reason:"submit evidence-bound verdict".into(),
             verification:json!({"decision":fixture.expected["decision"],"summary":format!("Evidence records {}",fixture.expected["marker"].as_str().unwrap_or_default()),"evidence_refs":["fixture_evidence"],"contradictions":if fixture.expected["decision"] == "rejected" {json!([fixture.expected["marker"].clone()])} else {json!([])},"risks":[]}),
         }),
@@ -683,7 +989,7 @@ fn validate_submission(
     };
     let encoded = document.to_string().to_ascii_lowercase();
     match suite {
-        SuiteKind::Onboarding => {
+        SuiteKind::OnboardingV1 | SuiteKind::OnboardingV2 => {
             let profile = fixture.expected["profile"].as_str().unwrap_or_default();
             let blocker = fixture.expected["blocker"].as_str().unwrap_or_default();
             let profile_ok = document["candidate_contract"]["environment_profile"] == profile;
@@ -696,7 +1002,7 @@ fn validate_submission(
             }
             profile_ok && blocker_ok
         }
-        SuiteKind::Planner => {
+        SuiteKind::PlannerV1 | SuiteKind::PlannerV2 => {
             let marker = fixture.expected["marker"].as_str().unwrap_or_default();
             let coverage = fixture.expected["acceptance"]
                 .as_array()
@@ -719,7 +1025,7 @@ fn validate_submission(
             }
             coverage && encoded.contains(marker) && boundary
         }
-        SuiteKind::Tester => {
+        SuiteKind::TesterV1 => {
             let acceptance_names_ok = ["unit", "compile"].into_iter().all(|name| {
                 document["acceptance_names"]
                     .as_array()
@@ -755,7 +1061,23 @@ fn validate_submission(
             }
             acceptance_names_ok && exact_commands && outcome_honest
         }
-        SuiteKind::Verifier => {
+        SuiteKind::TestDiagnosisV2 => {
+            let classification = fixture.expected["classification"]
+                .as_str()
+                .unwrap_or_default();
+            let classified = document["classification"] == classification;
+            let evidence_ok = document["evidence_refs"]
+                .as_array()
+                .is_some_and(|values| values.iter().any(|value| value == "fixture_evidence"));
+            if !classified {
+                violations.push("test_failure_misclassified".into());
+            }
+            if !evidence_ok {
+                violations.push("test_diagnosis_evidence_missing".into());
+            }
+            classified && evidence_ok
+        }
+        SuiteKind::VerifierV1 | SuiteKind::VerifierV2 => {
             let expected_decision = fixture.expected["decision"].as_str().unwrap_or_default();
             let marker = fixture.expected["marker"].as_str().unwrap_or_default();
             let decision_ok = document["decision"] == expected_decision;
@@ -943,7 +1265,16 @@ mod tests {
 
     #[tokio::test]
     async fn every_stage_qualification_replay_fixture_passes() {
-        for suite in ["onboarding-v1", "planner-v1", "tester-v1", "verifier-v1"] {
+        for suite in [
+            "onboarding-v1",
+            "planner-v1",
+            "tester-v1",
+            "verifier-v1",
+            "onboarding-v2",
+            "planner-v2",
+            "test-diagnosis-v2",
+            "verifier-v2",
+        ] {
             let report = run(suite, Provider::Replay, 1, None, None).await.unwrap();
             assert!(
                 report.results.iter().all(|result| result.passed),

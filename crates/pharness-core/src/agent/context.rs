@@ -1,5 +1,7 @@
-use crate::{ModelMessage, ModelRole, ToolResult};
+use crate::{ModelMessage, ModelRole, ToolResult, ToolSpec};
 use serde::{Deserialize, Serialize};
+
+const CHECKPOINT_PREFIX: &str = "Controller checkpoint:\n";
 
 /// Conservative, provider-independent input budget. The approximation is
 /// intentionally simple so workers do not need a model-specific tokenizer.
@@ -75,15 +77,26 @@ pub fn pack_messages(
     if mandatory_tokens > effective_input_budget {
         return Err(ContextError::MandatoryContextExceedsBudget);
     }
-    let retained_history_budget = mandatory_tokens
-        .saturating_add(budget.recent_message_tokens)
-        .min(effective_input_budget);
-    while estimate_tokens(&packed, budget) > retained_history_budget {
+    let mut checkpoint_entries = Vec::new();
+    while estimate_tokens(&packed[mandatory_end..], budget) > budget.recent_message_tokens
+        || estimate_tokens_with_checkpoint(&packed, &checkpoint_entries, budget)
+            > effective_input_budget
+    {
         let Some((start, end)) = oldest_exchange_range(&packed, mandatory_end) else {
             return Err(ContextError::MandatoryContextExceedsBudget);
         };
+        checkpoint_entries.push(checkpoint_entry(&packed[start..end]));
         packed.drain(start..end);
         compacted_exchanges += 1;
+    }
+    if !checkpoint_entries.is_empty() {
+        packed.insert(
+            mandatory_end,
+            ModelMessage::system(format!(
+                "{CHECKPOINT_PREFIX}{}",
+                checkpoint_entries.join("\n")
+            )),
+        );
     }
     Ok(ContextPack {
         estimated_input_tokens: estimate_tokens(&packed, budget),
@@ -104,9 +117,85 @@ pub fn estimate_tokens(messages: &[ModelMessage], budget: &ContextBudget) -> u32
                     .iter()
                     .map(|call| call.arguments.len() + call.name.len() + call.id.len())
                     .sum::<usize>()
+                + message
+                    .reasoning
+                    .as_ref()
+                    .and_then(|reasoning| serde_json::to_string(reasoning).ok())
+                    .map_or(0, |encoded| encoded.len())
         })
         .sum::<usize>();
     characters.div_ceil(budget.characters_per_token.max(1) as usize) as u32
+}
+
+pub fn estimate_request_tokens(
+    messages: &[ModelMessage],
+    tools: &[ToolSpec],
+    budget: &ContextBudget,
+) -> u32 {
+    let tool_characters = serde_json::to_string(tools).map_or(0, |encoded| encoded.len());
+    estimate_tokens(messages, budget).saturating_add(
+        tool_characters.div_ceil(budget.characters_per_token.max(1) as usize) as u32,
+    )
+}
+
+fn estimate_tokens_with_checkpoint(
+    messages: &[ModelMessage],
+    entries: &[String],
+    budget: &ContextBudget,
+) -> u32 {
+    let checkpoint = if entries.is_empty() {
+        0
+    } else {
+        CHECKPOINT_PREFIX.len()
+            + entries.iter().map(String::len).sum::<usize>()
+            + entries.len().saturating_sub(1)
+    };
+    estimate_tokens(messages, budget)
+        .saturating_add(checkpoint.div_ceil(budget.characters_per_token.max(1) as usize) as u32)
+}
+
+fn checkpoint_entry(messages: &[ModelMessage]) -> String {
+    let mut details = Vec::new();
+    for message in messages {
+        if message.role == ModelRole::Assistant {
+            for call in &message.tool_calls {
+                details.push(format!("tool={}", call.name));
+            }
+        }
+        if message.role == ModelRole::Tool {
+            if let Ok(result) = serde_json::from_str::<ToolResult>(&message.content) {
+                let action = result
+                    .content
+                    .get("action")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                let path = result
+                    .content
+                    .get("path")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("");
+                let exit = result
+                    .content
+                    .get("exit_code")
+                    .map(ToString::to_string)
+                    .unwrap_or_default();
+                details.push(format!(
+                    "result={:?} action={action} path={path} exit={exit}",
+                    result.status
+                ));
+            }
+        }
+    }
+    let mut entry = details.join(" ");
+    if entry.is_empty() {
+        entry = "exchange_without_tool_evidence".into();
+    }
+    let mut boundary = entry.len().min(512);
+    while !entry.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    entry.truncate(boundary);
+    entry
 }
 
 fn oldest_exchange_range(
