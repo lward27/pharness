@@ -33,6 +33,7 @@ use std::time::Instant;
 
 const FIXTURE_REVISION: &str = "coding-reliability-v2.1";
 const STACK_CASES: usize = 8;
+const CONSECUTIVE_PROVIDER_FAILURE_ABORT: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stack {
@@ -169,16 +170,35 @@ pub(super) async fn run(
     };
     let fixtures = fixtures();
     let mut results = Vec::new();
-    for attempt in 1..=attempts {
+    let mut infrastructure_abort = None;
+    'evaluation: for attempt in 1..=attempts {
+        let mut consecutive_provider_failures = 0usize;
         for fixture in &fixtures {
             let root = prepare_workspace(fixture, attempt, suite_id)?;
             let model: Arc<dyn ModelProvider> = match &shared_provider {
                 Some(provider) => provider.clone(),
                 None => Arc::new(ReplayProvider::new(replay_actions(&root, fixture)?)),
             };
-            results.push(
-                run_fixture(suite_id, fixture, attempt, root, model, &fixture_context).await?,
-            );
+            let result =
+                run_fixture(suite_id, fixture, attempt, root, model, &fixture_context).await?;
+            if result.failure_category.as_deref() == Some("provider_rejection_or_transport_failure")
+            {
+                consecutive_provider_failures += 1;
+            } else {
+                consecutive_provider_failures = 0;
+            }
+            let fixture_id = result.fixture.clone();
+            results.push(result);
+            if consecutive_provider_failures >= CONSECUTIVE_PROVIDER_FAILURE_ABORT {
+                infrastructure_abort = Some(json!({
+                    "reason":"consecutive_provider_rejection_or_transport_failure",
+                    "attempt":attempt,
+                    "after_fixture":fixture_id,
+                    "consecutive_failures":consecutive_provider_failures,
+                    "remaining_cases_not_scored":true,
+                }));
+                break 'evaluation;
+            }
         }
     }
     let suite_hash = inference_qualification_suite_hash(suite_id).map_err(anyhow::Error::msg)?;
@@ -216,6 +236,7 @@ pub(super) async fn run(
             "reasoning":policy.reasoning,
             "context_policy_hash":binding.context_policy_hash,
             "protocol_calibration_hash":binding.protocol_calibration_hash,
+            "infrastructure_abort":infrastructure_abort,
             "frozen_tasks":fixtures.iter().map(|fixture| &fixture.id).collect::<Vec<_>>(),
             "gate":if suite_id == "coding-v2" {
                 json!({"first_pass_minimum":21,"per_stack_first_pass_minimum":6,"requires_repair_suite":true})
@@ -639,6 +660,15 @@ fn prepare_python(root: &Path, case: usize) -> Result<()> {
         root.join("requirements.lock"),
         "typing-extensions==4.15.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000\n",
     )?;
+    let venv = root.join(".pharness-runtime/venv");
+    let status = std::process::Command::new("python3")
+        .args(["-m", "venv"])
+        .arg(&venv)
+        .status()
+        .context("failed to create the frozen Python evaluation environment")?;
+    if !status.success() || !venv.join("bin/python").is_file() {
+        bail!("frozen Python evaluation environment is unavailable");
+    }
     Ok(())
 }
 
@@ -732,10 +762,13 @@ fn environment_snapshot(
         Stack::Python => ("python3", None),
         Stack::Node => ("node", Some("npm")),
     };
-    let runtime = if stack == Stack::Rust {
-        rustup_toolchain_executable(runtime_name)?
-    } else {
-        find_executable(runtime_name)?
+    let runtime = match stack {
+        Stack::Rust => rustup_toolchain_executable(runtime_name)?,
+        Stack::Python => root
+            .join(".pharness-runtime/venv/bin/python")
+            .to_string_lossy()
+            .to_string(),
+        Stack::Node => find_executable(runtime_name)?,
     };
     let manager = if stack == Stack::Rust {
         package_manager
@@ -1354,7 +1387,24 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(report.results.len(), 24);
-            assert!(report.results.iter().all(|result| result.passed));
+            let failures = report
+                .results
+                .iter()
+                .filter(|result| !result.passed)
+                .map(|result| {
+                    format!(
+                        "{}: category={:?}, detail={:?}, changed_paths={:?}, acceptance_ok={}, hidden_tests_ok={}, protected_paths_ok={}",
+                        result.fixture,
+                        result.failure_category,
+                        result.failure_detail,
+                        result.changed_paths,
+                        result.acceptance_ok,
+                        result.hidden_tests_ok,
+                        result.protected_paths_ok,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert!(failures.is_empty(), "{failures:#?}");
             assert!(report.results.iter().all(|result| result.hidden_tests_ok));
             assert!(report
                 .results

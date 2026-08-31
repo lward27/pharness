@@ -8,6 +8,7 @@ use crate::{
     ToolExecutor, ToolProtocolMode, ToolResult, ToolResultStatus, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,7 +74,9 @@ struct RecoveryState {
 struct CompletionState {
     changed: bool,
     mutation_seen: bool,
-    git_inspected_after_mutation: bool,
+    git_status_after_mutation: bool,
+    git_diff_after_mutation: bool,
+    acceptance_passed_after_mutation: BTreeSet<String>,
     rejected_finishes: u32,
 }
 
@@ -314,6 +317,15 @@ where
                     )
                 })
                 .unwrap_or_else(|| (config.tools.clone(), false));
+            let builder_submission_only = builder_submission_ready(&config, &completion);
+            let turn_tools = if builder_submission_only {
+                turn_tools
+                    .into_iter()
+                    .filter(|tool| tool.name == "submit_implementation")
+                    .collect()
+            } else {
+                turn_tools
+            };
             let verifier_finish_allowed = turn_tools.iter().any(|tool| tool.name == "finish");
             if let Some(budget) = &config.run_budget {
                 request_messages.insert(
@@ -337,6 +349,15 @@ where
                         "FINAL VERIFIER RESERVE: evidence collection is closed. Submit the terminal typed verification verdict now from the sealed Test outcome and evidence already inspected. Only submit_verification is authorized in these remaining turns."
                             .to_string()
                     }),
+                );
+            }
+            if builder_submission_only {
+                request_messages.insert(
+                    1.min(request_messages.len()),
+                    ModelMessage::system(
+                        "BUILDER SUBMISSION BOUNDARY: every selected acceptance command passed after the final mutation, and final Git status and diff were inspected. Evidence collection is closed. Submit the terminal typed implementation record now; only submit_implementation is authorized. Do not run another focused command or inspect more files."
+                            .to_string(),
+                    ),
                 );
             }
             if config
@@ -565,6 +586,78 @@ where
                     Some(&turn.action),
                 ));
                 continue;
+            }
+
+            if builder_submission_only
+                && !matches!(&turn.action, AgentAction::SubmitImplementation { .. })
+            {
+                let result = ToolResult::error(
+                    "builder evidence is complete; only submit_implementation is authorized",
+                    serde_json::json!({
+                        "action": turn.action.kind_name(),
+                        "error_kind": "builder_submission_required",
+                        "executed": false,
+                        "allowed_actions": ["submit_implementation"],
+                    }),
+                );
+                self.emit(
+                    &config,
+                    &mut seq,
+                    EventKind::ToolFinished,
+                    serde_json::to_value(&result).unwrap_or_default(),
+                );
+                messages.push(tool_message(
+                    &result,
+                    Some(turn.action.id().to_string()),
+                    Some(&turn.action),
+                ));
+                if protocol_corrections < 2 {
+                    protocol_corrections += 1;
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::ModelProtocolCorrection,
+                        serde_json::json!({
+                            "category":"invalid_action",
+                            "action":turn.action.kind_name(),
+                            "turn":turn_index,
+                            "correction":protocol_corrections,
+                            "maximum_corrections":2,
+                            "required_action":"submit_implementation",
+                        }),
+                    );
+                    messages.push(protocol_correction_message(
+                        "invalid_action",
+                        "builder evidence is sealed; submit_implementation is the only action exposed in the current request",
+                        protocol_corrections,
+                    ));
+                    continue;
+                }
+                let error = "protocol_correction_exhausted:builder_submission_required";
+                self.emit(
+                    &config,
+                    &mut seq,
+                    EventKind::RunFailed,
+                    serde_json::json!({
+                        "error":error,
+                        "stop_category":"invalid_action",
+                        "turn":turn_index,
+                        "action":turn.action.kind_name(),
+                        "required_action":"submit_implementation",
+                        "protocol_corrections":protocol_corrections,
+                    }),
+                );
+                return RunOutcome::failed(turn_index + 1, error).with_consumption(
+                    consumption_snapshot(
+                        &config,
+                        turn_index + 1,
+                        tokens_used,
+                        config
+                            .budget_consumption
+                            .active_execution_seconds_used
+                            .saturating_add(active_started.elapsed().as_secs()),
+                    ),
+                );
             }
 
             match turn.action {
@@ -991,15 +1084,17 @@ where
                                         tool_action,
                                         AgentAction::SubmitImplementation { .. }
                                     ) {
-                                        if let Some(reason) = completion_failure_reason(
-                                            &config.task_contract,
-                                            &completion,
-                                        ) {
+                                        if let Some(reason) =
+                                            implementation_submission_failure_reason(
+                                                &config,
+                                                &completion,
+                                            )
+                                        {
                                             let result = ToolResult::error(
                                                 "implementation submission rejected: completion evidence is incomplete",
                                                 serde_json::json!({
                                                     "error_kind": "completion_evidence_missing",
-                                                    "reason": reason,
+                                                    "reason": &reason,
                                                 }),
                                             );
                                             self.emit(
@@ -1029,7 +1124,7 @@ where
                                                 );
                                                 messages.push(protocol_correction_message(
                                                     "missing_completion_evidence",
-                                                    reason,
+                                                    &reason,
                                                     protocol_corrections,
                                                 ));
                                                 continue;
@@ -1526,18 +1621,36 @@ fn resume_runtime_state(messages: &[ModelMessage]) -> (RecoveryState, Completion
                 .and_then(serde_json::Value::as_str)
                 .map(ToOwned::to_owned);
         }
+        let action = content.get("action").and_then(serde_json::Value::as_str);
         if result.get("status").and_then(serde_json::Value::as_str) != Some("ok") {
+            if action == Some("run_acceptance_command") {
+                if let Some(name) = content.get("name").and_then(serde_json::Value::as_str) {
+                    completion.acceptance_passed_after_mutation.remove(name);
+                }
+            }
             continue;
         }
-        match content.get("action").and_then(serde_json::Value::as_str) {
+        match action {
             Some("write_file" | "patch_file" | "apply_patch") => {
                 completion.mutation_seen = true;
                 completion.changed |=
                     content.get("diff").and_then(serde_json::Value::as_str) != Some("unchanged");
-                completion.git_inspected_after_mutation = false;
+                completion.git_status_after_mutation = false;
+                completion.git_diff_after_mutation = false;
+                completion.acceptance_passed_after_mutation.clear();
             }
-            Some("git_status" | "git_diff") if completion.mutation_seen => {
-                completion.git_inspected_after_mutation = true;
+            Some("git_status") if completion.mutation_seen => {
+                completion.git_status_after_mutation = true;
+            }
+            Some("git_diff") if completion.mutation_seen => {
+                completion.git_diff_after_mutation = true;
+            }
+            Some("run_acceptance_command") if completion.mutation_seen => {
+                if let Some(name) = content.get("name").and_then(serde_json::Value::as_str) {
+                    completion
+                        .acceptance_passed_after_mutation
+                        .insert(name.to_string());
+                }
             }
             _ => {}
         }
@@ -1546,6 +1659,14 @@ fn resume_runtime_state(messages: &[ModelMessage]) -> (RecoveryState, Completion
 }
 
 fn update_completion_state(state: &mut CompletionState, action: &AgentAction, result: &ToolResult) {
+    if let AgentAction::RunAcceptanceCommand { name, .. } = action {
+        if state.mutation_seen && result.status == crate::ToolResultStatus::Ok {
+            state.acceptance_passed_after_mutation.insert(name.clone());
+        } else {
+            state.acceptance_passed_after_mutation.remove(name);
+        }
+        return;
+    }
     if result.status != crate::ToolResultStatus::Ok {
         return;
     }
@@ -1559,13 +1680,99 @@ fn update_completion_state(state: &mut CompletionState, action: &AgentAction, re
                 .get("diff")
                 .and_then(serde_json::Value::as_str)
                 != Some("unchanged");
-            state.git_inspected_after_mutation = false;
+            state.git_status_after_mutation = false;
+            state.git_diff_after_mutation = false;
+            state.acceptance_passed_after_mutation.clear();
         }
-        AgentAction::GitStatus { .. } | AgentAction::GitDiff { .. } if state.mutation_seen => {
-            state.git_inspected_after_mutation = true;
+        AgentAction::GitStatus { .. } if state.mutation_seen => {
+            state.git_status_after_mutation = true;
+        }
+        AgentAction::GitDiff { .. } if state.mutation_seen => {
+            state.git_diff_after_mutation = true;
         }
         _ => {}
     }
+}
+
+fn required_acceptance_names(tools: &[ToolSpec]) -> BTreeSet<String> {
+    tools
+        .iter()
+        .find(|tool| tool.name == "run_acceptance_command")
+        .and_then(|tool| {
+            tool.parameters_schema
+                .pointer("/properties/name/enum")
+                .and_then(serde_json::Value::as_array)
+        })
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_string)
+        .collect()
+}
+
+fn builder_submission_ready(config: &RunConfig, state: &CompletionState) -> bool {
+    let is_builder = config
+        .inference_binding
+        .as_ref()
+        .and_then(|binding| binding.stage_prompt.as_ref())
+        .is_some_and(|prompt| {
+            matches!(
+                prompt.prompt_id.as_str(),
+                "repo-builder-v2" | "repo-repair-v2"
+            )
+        });
+    if !is_builder
+        || completion_failure_reason(&config.task_contract, state).is_some()
+        || !state.git_status_after_mutation
+        || !state.git_diff_after_mutation
+    {
+        return false;
+    }
+    let required = required_acceptance_names(&config.tools);
+    !required.is_empty()
+        && required
+            .iter()
+            .all(|name| state.acceptance_passed_after_mutation.contains(name))
+}
+
+fn implementation_submission_failure_reason(
+    config: &RunConfig,
+    state: &CompletionState,
+) -> Option<String> {
+    if let Some(reason) = completion_failure_reason(&config.task_contract, state) {
+        return Some(reason.to_string());
+    }
+    let is_builder = config
+        .inference_binding
+        .as_ref()
+        .and_then(|binding| binding.stage_prompt.as_ref())
+        .is_some_and(|prompt| {
+            matches!(
+                prompt.prompt_id.as_str(),
+                "repo-builder-v2" | "repo-repair-v2"
+            )
+        });
+    if !is_builder {
+        return None;
+    }
+    if config.task_contract.require_post_change_diff
+        && (!state.git_status_after_mutation || !state.git_diff_after_mutation)
+    {
+        return Some(
+            "inspect both git status and git diff after the final mutation before success".into(),
+        );
+    }
+    let required = required_acceptance_names(&config.tools);
+    let missing = required
+        .difference(&state.acceptance_passed_after_mutation)
+        .cloned()
+        .collect::<Vec<_>>();
+    (!missing.is_empty()).then(|| {
+        format!(
+            "run every selected acceptance command after the final mutation; missing: {}",
+            missing.join(", ")
+        )
+    })
 }
 
 fn terminal_submission_kind(action: &AgentAction) -> Option<&'static str> {
@@ -1676,7 +1883,10 @@ fn completion_failure_reason(
     if contract.require_workspace_change && !state.changed {
         return Some("a meaningful workspace change is required before success");
     }
-    if contract.require_post_change_diff && !state.git_inspected_after_mutation {
+    if contract.require_post_change_diff
+        && !state.git_status_after_mutation
+        && !state.git_diff_after_mutation
+    {
         return Some("inspect git status or git diff after the final mutation before success");
     }
     None
@@ -1899,6 +2109,7 @@ fn consumption_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
+        builder_submission_ready, implementation_submission_failure_reason,
         recoverable_error_result, resume_runtime_state, tool_message, tools_for_turn, AgentRuntime,
         ApprovedAction, BudgetResume, RecoveryState, RunConfig,
     };
@@ -1918,7 +2129,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use std::collections::VecDeque;
     use std::fs;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn verifier_final_reserve_exposes_only_submission_and_finish_tools() {
@@ -2007,6 +2218,11 @@ mod tests {
             id: "act_status".into(),
             reason: "capture evidence".to_string(),
         };
+        let diff = AgentAction::GitDiff {
+            id: "act_diff".into(),
+            reason: "capture final diff".to_string(),
+            pathspec: None,
+        };
         let failed = AgentAction::RunShell {
             id: "act_failed".into(),
             reason: "run bounded command".to_string(),
@@ -2037,6 +2253,11 @@ mod tests {
                 Some(&status),
             ),
             tool_message(
+                &ToolResult::ok("diff evidence", serde_json::json!({})),
+                Some(diff.id().to_string()),
+                Some(&diff),
+            ),
+            tool_message(
                 &recoverable_error_result(&failed, &error, &recovery),
                 Some(failed.id().to_string()),
                 Some(&failed),
@@ -2052,7 +2273,8 @@ mod tests {
         );
         assert!(restored_completion.changed);
         assert!(restored_completion.mutation_seen);
-        assert!(restored_completion.git_inspected_after_mutation);
+        assert!(restored_completion.git_status_after_mutation);
+        assert!(restored_completion.git_diff_after_mutation);
     }
 
     struct FakeProvider {
@@ -2063,6 +2285,49 @@ mod tests {
         fn new(turns: impl IntoIterator<Item = Result<ModelTurn, ProviderError>>) -> Self {
             Self {
                 turns: Mutex::new(turns.into_iter().collect()),
+            }
+        }
+    }
+
+    struct RequestCapturingProvider {
+        turns: Mutex<VecDeque<Result<ModelTurn, ProviderError>>>,
+        requests: Arc<Mutex<Vec<ModelRequest>>>,
+    }
+
+    impl RequestCapturingProvider {
+        fn new(
+            turns: impl IntoIterator<Item = Result<ModelTurn, ProviderError>>,
+        ) -> (Self, Arc<Mutex<Vec<ModelRequest>>>) {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            (
+                Self {
+                    turns: Mutex::new(turns.into_iter().collect()),
+                    requests: requests.clone(),
+                },
+                requests,
+            )
+        }
+    }
+
+    #[async_trait]
+    impl ModelProvider for RequestCapturingProvider {
+        async fn complete_action(&self, request: ModelRequest) -> Result<ModelTurn, ProviderError> {
+            self.requests
+                .lock()
+                .expect("request capture mutex should not be poisoned")
+                .push(request);
+            self.turns
+                .lock()
+                .expect("capturing provider mutex should not be poisoned")
+                .pop_front()
+                .expect("capturing provider should have a queued turn")
+        }
+
+        fn capabilities(&self) -> ModelCapabilities {
+            ModelCapabilities {
+                native_tool_calling: true,
+                streaming: false,
+                json_schema_response_format: true,
             }
         }
     }
@@ -2205,6 +2470,152 @@ mod tests {
             agent_profile_hash: "sha256:profile".into(),
             binding_hash: "sha256:binding".into(),
         });
+    }
+
+    fn enable_reliability_v2_builder(config: &mut RunConfig) {
+        enable_reliability_v2(config);
+        let binding = config.inference_binding.as_mut().unwrap();
+        binding.stage_prompt.as_mut().unwrap().prompt_id = "repo-builder-v2".into();
+        binding.stage_prompt.as_mut().unwrap().stage = InferenceStage::Implement;
+        binding.policy.eligible_stages = vec![InferenceStage::Implement];
+        binding.policy.eligible_profiles = vec!["repo-builder".into()];
+        binding.target.allowed_stages = vec![InferenceStage::Implement];
+    }
+
+    #[test]
+    fn builder_submission_boundary_requires_acceptance_status_and_diff_after_mutation() {
+        let mut config = RunConfig::local_test("builder boundary");
+        enable_reliability_v2_builder(&mut config);
+        config.task_contract = TaskContract {
+            kind: TaskKind::Coding,
+            acceptance_criteria: vec!["unit".into()],
+            require_workspace_change: true,
+            require_post_change_diff: true,
+        };
+        config.tools = vec![ToolSpec::new(
+            "run_acceptance_command",
+            "run declared acceptance",
+            serde_json::json!({
+                "type":"object",
+                "properties":{"name":{"type":"string","enum":["unit"]}}
+            }),
+            CapabilityKind::AgentControl,
+        )];
+        let mut state = super::CompletionState {
+            changed: true,
+            mutation_seen: true,
+            git_status_after_mutation: true,
+            git_diff_after_mutation: true,
+            ..Default::default()
+        };
+
+        assert!(!builder_submission_ready(&config, &state));
+        assert!(implementation_submission_failure_reason(&config, &state)
+            .is_some_and(|reason| reason.contains("missing: unit")));
+        state.acceptance_passed_after_mutation.insert("unit".into());
+        assert!(builder_submission_ready(&config, &state));
+        assert!(implementation_submission_failure_reason(&config, &state).is_none());
+        state.git_diff_after_mutation = false;
+        assert!(!builder_submission_ready(&config, &state));
+        assert!(implementation_submission_failure_reason(&config, &state)
+            .is_some_and(|reason| reason.contains("both git status and git diff")));
+    }
+
+    #[tokio::test]
+    async fn builder_submission_boundary_exposes_only_terminal_submission() {
+        let actions = [
+            AgentAction::ApplyPatch {
+                id: "act_patch".into(),
+                reason: "apply the bounded change".into(),
+                patch: "diff --git a/src/lib.rs b/src/lib.rs".into(),
+                preimage_sha256: Default::default(),
+            },
+            AgentAction::RunAcceptanceCommand {
+                id: "act_acceptance".into(),
+                reason: "run final acceptance".into(),
+                name: "unit".into(),
+            },
+            AgentAction::GitStatus {
+                id: "act_status".into(),
+                reason: "inspect final status".into(),
+            },
+            AgentAction::GitDiff {
+                id: "act_diff".into(),
+                reason: "inspect final diff".into(),
+                pathspec: None,
+            },
+            AgentAction::SubmitImplementation {
+                id: "act_submit".into(),
+                reason: "submit sealed evidence".into(),
+                implementation: serde_json::json!({
+                    "summary":"implemented",
+                    "changed_paths":["src/lib.rs"],
+                    "acceptance_names":["unit"],
+                    "risks":[],
+                }),
+            },
+        ];
+        let (provider, requests) = RequestCapturingProvider::new(actions.map(model_turn));
+        let runtime =
+            AgentRuntime::with_tools(provider, InMemoryEventSink::default(), AcceptingExecutor);
+        let mut config = RunConfig::local_test("builder terminal boundary");
+        enable_reliability_v2_builder(&mut config);
+        config.task_contract = TaskContract {
+            kind: TaskKind::Coding,
+            acceptance_criteria: vec!["unit".into()],
+            require_workspace_change: true,
+            require_post_change_diff: true,
+        };
+        config.policy = SafetyPolicy {
+            mode: PolicyMode::TrustedWrites,
+            require_approval_for_writes: false,
+            ..SafetyPolicy::default()
+        };
+        config.tools = [
+            "apply_patch",
+            "run_acceptance_command",
+            "git_status",
+            "git_diff",
+            "submit_implementation",
+        ]
+        .into_iter()
+        .map(|name| {
+            let parameters = if name == "run_acceptance_command" {
+                serde_json::json!({
+                    "type":"object",
+                    "properties":{"name":{"type":"string","enum":["unit"]}}
+                })
+            } else {
+                serde_json::json!({"type":"object"})
+            };
+            ToolSpec::new(
+                name,
+                format!("{name} tool"),
+                parameters,
+                CapabilityKind::AgentControl,
+            )
+        })
+        .collect();
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+        assert_eq!(outcome.status, RunStatus::Completed);
+
+        let requests = requests
+            .lock()
+            .expect("request capture mutex should not be poisoned");
+        assert_eq!(requests.len(), 5);
+        assert_eq!(
+            requests[4]
+                .tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["submit_implementation"]
+        );
+        assert!(requests[4].messages.iter().any(|message| {
+            message.role == crate::ModelRole::System
+                && message.content.contains("BUILDER SUBMISSION BOUNDARY")
+        }));
     }
 
     fn submitted_plan(id: &str) -> AgentAction {
