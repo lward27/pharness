@@ -1857,7 +1857,10 @@ async fn verify_target_protocol(
                 mode: ToolProtocolMode::NativeTools,
                 tool_choice: policy.tool_choice,
                 temperature: policy.temperature().unwrap_or(0.0),
-                max_tokens: policy.max_output_tokens.min(512),
+                // The gateway validates generation controls against the exact
+                // immutable policy revision. Calibration must therefore send
+                // the policy cap even though the expected tool payload is tiny.
+                max_tokens: policy.max_output_tokens,
                 reasoning: Some(policy.reasoning.clone()),
             };
             results.push(
@@ -2035,7 +2038,7 @@ async fn execute_protocol_calibration_case(
     marker: &str,
     request: ModelRequest,
 ) -> Result<ProtocolCalibrationCase, String> {
-    let mut wire = build_chat_request(
+    let wire = build_chat_request(
         target.backend_kind,
         format!("{}@{}", target.target_id, target.revision),
         request,
@@ -2046,7 +2049,7 @@ async fn execute_protocol_calibration_case(
             .as_ref()
             .map(|route| route.provider_slug.as_str()),
     );
-    wire.max_tokens = policy.max_output_tokens.min(512);
+    validate_protocol_calibration_generation(policy, wire.max_tokens, wire.temperature)?;
     let value = serde_json::to_value(&wire).map_err(|error| error.to_string())?;
     let request_body_hash = canonical_json_sha256(&value).map_err(|error| error.to_string())?;
     let now = epoch_seconds();
@@ -2150,6 +2153,19 @@ async fn execute_protocol_calibration_case(
         reasoning_observed: aggregate.reasoning_replay().is_some(),
         finish_reason: aggregate.metadata.native_finish_reason,
     })
+}
+
+fn validate_protocol_calibration_generation(
+    policy: &StageInferencePolicyRevision,
+    max_tokens: u32,
+    temperature: Option<f32>,
+) -> Result<(), String> {
+    if max_tokens != policy.max_output_tokens || temperature != policy.temperature() {
+        return Err(
+            "protocol calibration request does not match its immutable generation policy".into(),
+        );
+    }
+    Ok(())
 }
 
 fn validate_configuration_action(
@@ -2489,6 +2505,24 @@ mod tests {
                 "{case} correction history is unbounded"
             );
         }
+    }
+
+    #[test]
+    fn protocol_calibration_preserves_exact_generation_policy() {
+        let registry = pharness_config::InferenceGatewayConfig::legacy_default().registry;
+        let policy = &registry.policies[0];
+        assert!(validate_protocol_calibration_generation(
+            policy,
+            policy.max_output_tokens,
+            policy.temperature(),
+        )
+        .is_ok());
+        assert!(validate_protocol_calibration_generation(
+            policy,
+            policy.max_output_tokens.saturating_sub(1),
+            policy.temperature(),
+        )
+        .is_err());
     }
 
     #[test]
