@@ -35,6 +35,12 @@ if [[ -n "$(git -C "$REPOSITORY_ROOT" status --porcelain=v1 --untracked-files=al
   exit 1
 fi
 
+CHECKOUT_REVISION="$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)"
+[[ "$CHECKOUT_REVISION" == "$REQUESTED_REVISION" ]] || {
+  echo "requested revision does not equal the build worktree HEAD" >&2
+  exit 1
+}
+
 BRANCH_REF="refs/heads/${BRANCH_NAME}"
 git -C "$REPOSITORY_ROOT" fetch --quiet --no-tags "$REMOTE_NAME" "$BRANCH_REF"
 FETCHED_REVISION="$(git -C "$REPOSITORY_ROOT" rev-parse FETCH_HEAD)"
