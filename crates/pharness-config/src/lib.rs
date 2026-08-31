@@ -2,11 +2,12 @@
 
 use anyhow::{bail, Context};
 use pharness_core::{
-    ContextBudget, InferenceBackendKind, InferenceCapabilities, InferencePolicyRef,
-    InferenceRegistry, InferenceStage, InferenceTargetRef, InferenceTargetRevision,
-    InferenceTransportPolicy, PolicyMode, ReadOnlyClusterTools, ReasoningContextMode,
-    ReasoningEffort, ReasoningRequestPolicy, SafetyPolicy, StageInferencePolicyRevision,
-    ToolProtocolMode, INFERENCE_POLICY_SCHEMA, INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA,
+    AgentExecutionRegistry, ContextBudget, InferenceBackendKind, InferenceCapabilities,
+    InferencePolicyRef, InferenceRegistry, InferenceStage, InferenceTargetRef,
+    InferenceTargetRevision, InferenceTransportPolicy, PolicyMode, ReadOnlyClusterTools,
+    ReasoningContextMode, ReasoningEffort, ReasoningRequestPolicy, SafetyPolicy,
+    StageInferencePolicyRevision, ToolProtocolMode, AGENT_EXECUTION_REGISTRY_SCHEMA,
+    INFERENCE_POLICY_SCHEMA, INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA,
 };
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -66,6 +67,37 @@ pub struct ApiRuntimeConfig {
     pub policy: SafetyPolicy,
     pub worker: WorkerConfig,
     pub inference: InferenceGatewayConfig,
+    pub agent_execution: AgentExecutionBackendConfig,
+}
+
+#[derive(Clone)]
+pub struct AgentExecutionBackendConfig {
+    pub enabled: bool,
+    pub registry: AgentExecutionRegistry,
+    pub enrollment_ttl_seconds: u64,
+    pub capability_ttl_seconds: u64,
+    pub lease_ttl_seconds: u64,
+}
+
+impl AgentExecutionBackendConfig {
+    pub fn disabled_default() -> Self {
+        let mut registry = AgentExecutionRegistry {
+            schema_version: AGENT_EXECUTION_REGISTRY_SCHEMA.into(),
+            policies: Vec::new(),
+            defaults: BTreeMap::new(),
+            config_hash: String::new(),
+        };
+        registry
+            .finalize_hashes()
+            .expect("empty agent-execution registry must be valid");
+        Self {
+            enabled: false,
+            registry,
+            enrollment_ttl_seconds: 900,
+            capability_ttl_seconds: 900,
+            lease_ttl_seconds: 45,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -310,6 +342,16 @@ impl ApiRuntimeConfig {
         reject_invalid_gitops_observer(&config.worker.kubernetes)?;
         reject_invalid_source_reader(&config.worker.kubernetes)?;
         config.inference.registry.finalize_hashes()?;
+        config.agent_execution.registry.finalize_hashes()?;
+        if config.agent_execution.enabled && config.agent_execution.registry.policies.is_empty() {
+            bail!("enabled Codex agent backend requires at least one agent execution policy");
+        }
+        if config.agent_execution.enrollment_ttl_seconds == 0
+            || config.agent_execution.capability_ttl_seconds == 0
+            || config.agent_execution.lease_ttl_seconds == 0
+        {
+            bail!("agent execution enrollment, capability, and lease TTLs must be positive");
+        }
         config.resolve_api_key(env);
         if config
             .worker
@@ -448,6 +490,7 @@ impl ApiRuntimeConfig {
                 },
             },
             inference: InferenceGatewayConfig::legacy_default(),
+            agent_execution: AgentExecutionBackendConfig::disabled_default(),
         })
     }
 
@@ -519,6 +562,25 @@ impl ApiRuntimeConfig {
             if let Some(value) = inference.registry_json {
                 self.inference.registry = serde_json::from_str(&value)
                     .context("inference.registry_json must contain a valid registry")?;
+            }
+        }
+
+        if let Some(agent_execution) = file.agent_execution {
+            if let Some(value) = agent_execution.enabled {
+                self.agent_execution.enabled = value;
+            }
+            if let Some(value) = agent_execution.registry_json {
+                self.agent_execution.registry = serde_json::from_str(&value)
+                    .context("agent_execution.registry_json must contain a valid registry")?;
+            }
+            if let Some(value) = agent_execution.enrollment_ttl_seconds {
+                self.agent_execution.enrollment_ttl_seconds = value;
+            }
+            if let Some(value) = agent_execution.capability_ttl_seconds {
+                self.agent_execution.capability_ttl_seconds = value;
+            }
+            if let Some(value) = agent_execution.lease_ttl_seconds {
+                self.agent_execution.lease_ttl_seconds = value;
             }
         }
 
@@ -876,6 +938,26 @@ impl ApiRuntimeConfig {
         if let Some(value) = env.get("PHARNESS_INFERENCE_REGISTRY_JSON") {
             self.inference.registry = serde_json::from_str(value)
                 .context("PHARNESS_INFERENCE_REGISTRY_JSON must contain a valid registry")?;
+        }
+        if let Some(value) = env.get("PHARNESS_CODEX_AGENT_BACKEND_ENABLED") {
+            self.agent_execution.enabled =
+                parse_bool(value, "PHARNESS_CODEX_AGENT_BACKEND_ENABLED")?;
+        }
+        if let Some(value) = env.get("PHARNESS_AGENT_EXECUTION_REGISTRY_JSON") {
+            self.agent_execution.registry = serde_json::from_str(value)
+                .context("PHARNESS_AGENT_EXECUTION_REGISTRY_JSON must contain a valid registry")?;
+        }
+        if let Some(value) = env.get("PHARNESS_AGENT_HOST_ENROLLMENT_TTL_SECONDS") {
+            self.agent_execution.enrollment_ttl_seconds =
+                parse_u64(value, "PHARNESS_AGENT_HOST_ENROLLMENT_TTL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_AGENT_HOST_CAPABILITY_TTL_SECONDS") {
+            self.agent_execution.capability_ttl_seconds =
+                parse_u64(value, "PHARNESS_AGENT_HOST_CAPABILITY_TTL_SECONDS")?;
+        }
+        if let Some(value) = env.get("PHARNESS_AGENT_LEASE_TTL_SECONDS") {
+            self.agent_execution.lease_ttl_seconds =
+                parse_u64(value, "PHARNESS_AGENT_LEASE_TTL_SECONDS")?;
         }
         if let Some(value) = env.get("PHARNESS_KUBECTL_BIN") {
             self.cluster.kubectl_bin = value.clone();
@@ -1396,9 +1478,20 @@ struct FileConfig {
     storage: Option<FileStorageConfig>,
     model: Option<FileModelConfig>,
     inference: Option<FileInferenceConfig>,
+    agent_execution: Option<FileAgentExecutionConfig>,
     cluster: Option<FileClusterConfig>,
     policy: Option<FilePolicyConfig>,
     worker: Option<FileWorkerConfig>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct FileAgentExecutionConfig {
+    enabled: Option<bool>,
+    registry_json: Option<String>,
+    enrollment_ttl_seconds: Option<u64>,
+    capability_ttl_seconds: Option<u64>,
+    lease_ttl_seconds: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]

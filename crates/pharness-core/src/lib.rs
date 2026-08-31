@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod agent;
+pub mod agent_execution;
 pub mod events;
 pub mod execution;
 pub mod ids;
@@ -18,6 +19,13 @@ pub use agent::{
     CancellationFlag, ContextBudget, ContextError, ContextPack, PendingApproval,
     PendingBudgetExtension, RecoveryPolicy, RepositoryInstruction, RunConfig, RunOutcome,
     RunStatus, TaskContract, TaskKind,
+};
+pub use agent_execution::{
+    AgentAuthenticationClass, AgentExecutionConfigError, AgentExecutionPolicyRef,
+    AgentExecutionPolicyRevision, AgentExecutionRegistry, AgentHostLifecycleState,
+    AgentSandboxPolicy, ResolvedAgentExecutionBinding, StageExecutionDriver,
+    AGENT_EXECUTION_POLICY_SCHEMA, AGENT_EXECUTION_REGISTRY_SCHEMA,
+    RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};

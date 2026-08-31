@@ -1,0 +1,151 @@
+{
+  "schema_version": "pharness.dev/agent-execution-registry/v1alpha1",
+  "policies": [
+    {
+      "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+      "policy_id": "codex-planner-gpt56-sol-v1",
+      "revision": "r1",
+      "display_name": "Codex Planner GPT-5.6 Sol High",
+      "driver": "codex_app_server",
+      "eligible_stages": [
+        "plan"
+      ],
+      "runner_images": {
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:95b103dcafe6bb3c0545c2c21c4f73546a03899f19d748aa07abcc2e20569da2",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:8789c0e0a18c04656a85f3236540eef6e56cf5c0eb1e84c7146d4dff0ca6d237",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:ac6fc8104585779fb144b4cbfbd0002d9bbfe48243fbeff6aeab85161ba49ee7"
+      },
+      "host_pool": "codex-reliability",
+      "codex_version": "codex-cli 0.150.1",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "high",
+      "prompt_revision": "codex-repo-planner-v1",
+      "prompt_hash": "sha256:5a417e439e8823e5a5829158e2eb69535a16d97bebf653a985de2a132a1e16ed",
+      "output_schema_hash": "sha256:f76ec3ce30d214e580a17ae02fe49d493f9c1a6e486ca070899f32763e7ff645",
+      "sandbox": {
+        "workspace_write": false,
+        "command_network_access": false,
+        "git_metadata_read_only": true,
+        "credential_paths_deny_read": true
+      },
+      "allowed_authentication": [
+        "chatgpt_session",
+        "api_key"
+      ],
+      "active_time_seconds": 600,
+      "protocol_restart_limit": 1,
+      "selectable": true,
+      "policy_hash": "sha256:8bc47e9f1380245ae19e7c230374d16421de1d68d93ea991280957b38e6a62d8"
+    },
+    {
+      "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+      "policy_id": "codex-builder-gpt56-sol-v1",
+      "revision": "r1",
+      "display_name": "Codex Builder GPT-5.6 Sol High",
+      "driver": "codex_app_server",
+      "eligible_stages": [
+        "implement"
+      ],
+      "runner_images": {
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:95b103dcafe6bb3c0545c2c21c4f73546a03899f19d748aa07abcc2e20569da2",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:8789c0e0a18c04656a85f3236540eef6e56cf5c0eb1e84c7146d4dff0ca6d237",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:ac6fc8104585779fb144b4cbfbd0002d9bbfe48243fbeff6aeab85161ba49ee7"
+      },
+      "host_pool": "codex-reliability",
+      "codex_version": "codex-cli 0.150.1",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "high",
+      "prompt_revision": "codex-repo-builder-v1",
+      "prompt_hash": "sha256:b797485c0f987892f455fbb5bfccb71755dc1b0cfd2ba8c5fed42d7f347d15c3",
+      "output_schema_hash": "sha256:3ac750a26108828feac05140f72fbea3e6a53d162c00b5a7ad5fd5767faac2a6",
+      "sandbox": {
+        "workspace_write": true,
+        "command_network_access": false,
+        "git_metadata_read_only": true,
+        "credential_paths_deny_read": true
+      },
+      "allowed_authentication": [
+        "chatgpt_session",
+        "api_key"
+      ],
+      "active_time_seconds": 3600,
+      "protocol_restart_limit": 1,
+      "selectable": true,
+      "policy_hash": "sha256:b380f43d109437bc759f79364b6c8ba2ef7a0ca6a8014e8a8f359777a29d80fc"
+    },
+    {
+      "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+      "policy_id": "codex-repair-gpt56-sol-v1",
+      "revision": "r1",
+      "display_name": "Codex Repair GPT-5.6 Sol XHigh",
+      "driver": "codex_app_server",
+      "eligible_stages": [
+        "repair"
+      ],
+      "runner_images": {
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:95b103dcafe6bb3c0545c2c21c4f73546a03899f19d748aa07abcc2e20569da2",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:8789c0e0a18c04656a85f3236540eef6e56cf5c0eb1e84c7146d4dff0ca6d237",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:ac6fc8104585779fb144b4cbfbd0002d9bbfe48243fbeff6aeab85161ba49ee7"
+      },
+      "host_pool": "codex-reliability",
+      "codex_version": "codex-cli 0.150.1",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "xhigh",
+      "prompt_revision": "codex-repo-repair-v1",
+      "prompt_hash": "sha256:4743957a123a317bf4d520685fe9a8858553018f4763e0da1077b9ae2a641e44",
+      "output_schema_hash": "sha256:5ef01555638086752953495116971a52bc6e1a489914ec6605dbcb0a0673d7d2",
+      "sandbox": {
+        "workspace_write": true,
+        "command_network_access": false,
+        "git_metadata_read_only": true,
+        "credential_paths_deny_read": true
+      },
+      "allowed_authentication": [
+        "chatgpt_session",
+        "api_key"
+      ],
+      "active_time_seconds": 3600,
+      "protocol_restart_limit": 1,
+      "selectable": true,
+      "policy_hash": "sha256:cafa74a8d5f5bd3b0774da6aa3ca2f33f7209d4c9b92a3b3922f54a9e779ed1d"
+    },
+    {
+      "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+      "policy_id": "codex-verifier-gpt56-sol-v1",
+      "revision": "r1",
+      "display_name": "Codex Verifier GPT-5.6 Sol XHigh",
+      "driver": "codex_app_server",
+      "eligible_stages": [
+        "verify"
+      ],
+      "runner_images": {
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:95b103dcafe6bb3c0545c2c21c4f73546a03899f19d748aa07abcc2e20569da2",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:8789c0e0a18c04656a85f3236540eef6e56cf5c0eb1e84c7146d4dff0ca6d237",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:ac6fc8104585779fb144b4cbfbd0002d9bbfe48243fbeff6aeab85161ba49ee7"
+      },
+      "host_pool": "codex-reliability",
+      "codex_version": "codex-cli 0.150.1",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "xhigh",
+      "prompt_revision": "codex-repo-verifier-v1",
+      "prompt_hash": "sha256:a6117249e023cb3ac115b679a531328575ac05eef54970ffb1da688ff56c4793",
+      "output_schema_hash": "sha256:2987bf64ed5476a98c79b4d548f238e3920e18cc37c9388f878899ca921ec075",
+      "sandbox": {
+        "workspace_write": false,
+        "command_network_access": false,
+        "git_metadata_read_only": true,
+        "credential_paths_deny_read": true
+      },
+      "allowed_authentication": [
+        "chatgpt_session",
+        "api_key"
+      ],
+      "active_time_seconds": 900,
+      "protocol_restart_limit": 1,
+      "selectable": true,
+      "policy_hash": "sha256:34741188f2fe8573d027dd6120995e369a9d6a39072254c960fa766542038a0e"
+    }
+  ],
+  "defaults": {},
+  "config_hash": "sha256:59d26383b15d68754c4a6ca86c84feb2f9ec82c4379da35ae16287ce616befc0"
+}

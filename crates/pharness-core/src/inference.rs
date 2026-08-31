@@ -57,6 +57,7 @@ pub enum InferenceStage {
     Onboarding,
     Plan,
     Implement,
+    Repair,
     Test,
     Verify,
 }
@@ -67,6 +68,7 @@ impl InferenceStage {
             Self::Onboarding => "onboarding",
             Self::Plan => "plan",
             Self::Implement => "implement",
+            Self::Repair => "repair",
             Self::Test => "test",
             Self::Verify => "verify",
         }

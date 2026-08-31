@@ -161,6 +161,16 @@ spec:
               value: "true"
             - name: PHARNESS_INFERENCE_REGISTRY_JSON
               value: {{ .Files.Get "files/inference-registry.json" | quote }}
+            - name: PHARNESS_CODEX_AGENT_BACKEND_ENABLED
+              value: {{ .Values.codexAgentBackend.enabled | quote }}
+            - name: PHARNESS_AGENT_EXECUTION_REGISTRY_JSON
+              value: {{ .Files.Get .Values.codexAgentBackend.registryFile | quote }}
+            - name: PHARNESS_AGENT_HOST_ENROLLMENT_TTL_SECONDS
+              value: {{ .Values.codexAgentBackend.enrollmentTtlSeconds | quote }}
+            - name: PHARNESS_AGENT_HOST_CAPABILITY_TTL_SECONDS
+              value: {{ .Values.codexAgentBackend.capabilityTtlSeconds | quote }}
+            - name: PHARNESS_AGENT_LEASE_TTL_SECONDS
+              value: {{ .Values.codexAgentBackend.leaseTtlSeconds | quote }}
             - name: PHARNESS_WORKER_K8S_NAMESPACE
               value: {{ .Release.Namespace | quote }}
             - name: PHARNESS_WORKER_K8S_IMAGE

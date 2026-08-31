@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunDetailView } from "./RunDetailView";
 
 describe("Run retention presentation", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
   it("labels compacted raw payload as intentional expiry and preserves the sealed summary", async () => {
     const inference = {backend_kind:"fireworks",model:"accounts/fireworks/models/kimi-k2p6",target_id:"fireworks-kimi-k2p6",target_revision:"v1",policy_id:"planner-kimi-k2p6-high-v1",policy_revision:"v1",stage_prompt:{prompt_id:"repo-planner-v2",revision:"v2",content_hash:"prompt-hash"},tool_schema_hash:"tool-schema-hash",context_policy_hash:"context-policy-hash",protocol_calibration_hash:"protocol-calibration-hash",reasoning:{effort:"high",context_mode:"current_turn"},temperature:0.1,maximum_output_tokens:8192,binding_hash:"binding-hash",policy_hash:"policy-hash"};
@@ -40,6 +40,40 @@ describe("Run retention presentation", () => {
     expect(screen.getByText("context-policy-hash")).toBeInTheDocument();
     expect(screen.getByText("protocol-calibration-hash")).toBeInTheDocument();
     expect(screen.getByText("1/2")).toBeInTheDocument();
+  });
+
+  it("shows exact Codex policy, sticky host, workspace, and resumable thread provenance", async () => {
+    const agentExecution={
+      driver:"codex_app_server",
+      selection:{binding:{
+        schema_version:"pharness.dev/resolved-agent-execution-binding/v1alpha1",
+        policy:{policy_id:"codex-builder-gpt56-sol-v1",revision:"r1",display_name:"Codex Builder GPT-5.6 Sol High",driver:"codex_app_server",codex_version:"codex-cli 0.150.1",model:"gpt-5.6-sol",reasoning_effort:"high",prompt_revision:"codex-repo-builder-v1",prompt_hash:"sha256:prompt",output_schema_hash:"sha256:schema"},
+        host_pool:"codex-reliability",authentication_class:"chatgpt_session",runner_image:`registry.example/python@sha256:${"a".repeat(64)}`,binding_hash:"sha256:binding",
+      }},
+      lease:{id:"aglease_one",state:"running",host_pool:"codex-reliability",workspace_id:"workspace_one",runner_image:`registry.example/python@sha256:${"a".repeat(64)}`,binding_hash:"sha256:binding",remote_thread_id:"thread_1234567890"},
+      host:{display_name:"lucas-desktop",lifecycle_state:"ready"},
+      capability:{codex_version:"codex-cli 0.150.1",authentication_class:"chatgpt_session"},
+    };
+    vi.stubGlobal("fetch",vi.fn(async (input:RequestInfo | URL) => {
+      const url=String(input);
+      if(url.endsWith("/operator-summary")) return json({run_id:"run_codex",turns:1,agent_execution:agentExecution,changed_paths:[],acceptance_evidence:[],test_commands:[],test_results:[]});
+      if(url.endsWith("/events")) return json({events:[]});
+      if(url.endsWith("/diff")) return json({run_id:"run_codex",changes:[],diff:""});
+      if(url.endsWith("/artifacts")) return json({artifacts:[]});
+      if(url.endsWith("/environment-preparation")) return new Response("",{status:404});
+      return json({id:"run_codex",status:"completed",task:"Implement a bounded change",started_at:"1",finished_at:"2",run_budget:{initial_turns:48,initial_tokens:400000,active_execution_seconds:3600},budget_consumption:{turns_used:1,tokens_used:0,active_execution_seconds_used:1,allowed_turns:48,allowed_tokens:400000},agent_execution:agentExecution});
+    }));
+
+    render(<RunDetailView runId="run_codex" onOpenQueue={() => {}} operatorName="lucas"/>);
+
+    await waitFor(() => expect(screen.getByRole("heading",{name:"Codex Builder GPT-5.6 Sol High · gpt-5.6-sol"})).toBeInTheDocument());
+    expect(screen.getByText("codex-cli 0.150.1 · high")).toBeInTheDocument();
+    expect(screen.getByText("codex-reliability")).toBeInTheDocument();
+    expect(screen.getByText("lucas-desktop · ready")).toBeInTheDocument();
+    expect(screen.getByText("workspace_one")).toBeInTheDocument();
+    expect(screen.getByText(/resumable on the same host/)).toBeInTheDocument();
+    expect(screen.getByText("chatgpt_session")).toBeInTheDocument();
+    expect(screen.queryByText(/Fireworks|OpenRouter/)).not.toBeInTheDocument();
   });
 });
 

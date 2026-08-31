@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+mod agent_hosts;
 mod approval_policy;
 mod approvals;
 mod audit;
@@ -149,6 +150,7 @@ pub struct AppState {
     environment_profiles: Arc<Vec<pharness_core::EnvironmentProfile>>,
     repo_mode: RepoModeConfiguration,
     inference: Arc<pharness_config::InferenceGatewayConfig>,
+    agent_execution: Arc<pharness_config::AgentExecutionBackendConfig>,
 }
 
 #[cfg(test)]
@@ -174,6 +176,7 @@ pub fn router(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn router_with_inference(
     store: Arc<SqliteStore>,
     worker: RunDispatcher,
@@ -183,6 +186,31 @@ pub fn router_with_inference(
     operator_tokens: Vec<(String, String)>,
     workspace: WorkspaceProvisioner,
     inference: pharness_config::InferenceGatewayConfig,
+) -> Router {
+    router_with_runtime_configs(
+        store,
+        worker,
+        cluster_tools,
+        policy,
+        worker_token,
+        operator_tokens,
+        workspace,
+        inference,
+        pharness_config::AgentExecutionBackendConfig::disabled_default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn router_with_runtime_configs(
+    store: Arc<SqliteStore>,
+    worker: RunDispatcher,
+    cluster_tools: ReadOnlyClusterTools,
+    policy: SafetyPolicy,
+    worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
+    workspace: WorkspaceProvisioner,
+    inference: pharness_config::InferenceGatewayConfig,
+    agent_execution: pharness_config::AgentExecutionBackendConfig,
 ) -> Router {
     let state = AppState {
         store,
@@ -197,13 +225,16 @@ pub fn router_with_inference(
         environment_profiles: Arc::new(environment::load_environment_profiles()),
         repo_mode: RepoModeConfiguration::from_env(),
         inference: Arc::new(inference),
+        agent_execution: Arc::new(agent_execution),
     };
     data_lifecycle::spawn_retention_scheduler(state.clone());
+    agent_hosts::spawn_lease_monitor(state.clone());
 
     let operator_routes = Router::new()
         .merge(runs::router())
         .merge(system::router())
         .merge(inference::router())
+        .merge(agent_hosts::router())
         .merge(data_lifecycle::router())
         .merge(evidence::router())
         .merge(work_items::router())
@@ -225,6 +256,7 @@ pub fn router_with_inference(
 
     operator_routes
         .merge(internal::router(state.clone()))
+        .merge(agent_hosts::internal_router(state.clone()))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))

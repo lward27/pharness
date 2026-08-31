@@ -1,0 +1,19 @@
+api_url = "https://pharness-api.example.invalid"
+identity_file = "/var/lib/pharness-codex-host/identity.json"
+state_dir = "/var/lib/pharness-codex-host"
+workspace_root = "/var/lib/pharness-codex-host/workspaces"
+execution_mode = "standalone"
+codex_path = "/opt/pharness-codex-host/current/bin/codex"
+podman_path = "/usr/bin/podman"
+codex_auth_file = "/var/lib/pharness-codex-host/session/auth.json"
+# Kubernetes/API-key hosts instead set authentication_class = "api_key" and:
+# api_key_file = "/var/run/secrets/pharness-codex/openai-api-key"
+# Optional, host-scoped read-only Git credential. Never mounted into a runner.
+# source_reader_token_file = "/etc/pharness-codex-host/source-reader-token"
+authentication_class = "chatgpt_session"
+available_slots = 1
+poll_seconds = 10
+
+[runner_images]
+python-3.11 = "registry.example.invalid/pharness-python-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"
+node-24 = "registry.example.invalid/pharness-node-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"

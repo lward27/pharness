@@ -61,10 +61,13 @@ pub(in crate::app) async fn execute_work_item_action(
             &state,
             &work_item_id,
             &action_id,
-            actor,
-            request.reason,
-            request.state_hash,
-            request.inference_policies,
+            super::super::repo_mode::RepoWorkItemActionExecutionRequest {
+                actor,
+                reason: request.reason,
+                state_hash: request.state_hash,
+                inference_policies: request.inference_policies,
+                execution_policies: request.execution_policies,
+            },
         )
         .await?;
         return Ok(Json(value));

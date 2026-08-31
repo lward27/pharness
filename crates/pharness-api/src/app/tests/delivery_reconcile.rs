@@ -685,6 +685,7 @@ async fn reconcile_dispatches_one_preflighted_tekton_executor_then_waits() {
             reason: "reject stale execution authorization preview".to_string(),
             state_hash: "stale-pipeline-authorization-state".to_string(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -700,6 +701,7 @@ async fn reconcile_dispatches_one_preflighted_tekton_executor_then_waits() {
             reason: "authorize one exact disposable Tekton execution".to_string(),
             state_hash: authorization_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1086,6 +1088,7 @@ async fn reconcile_dispatches_one_preflighted_gitops_writer_then_waits() {
             reason: "approve the exact digest-pinned GitOps update".to_string(),
             state_hash: approve_gitops_change_set.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1110,6 +1113,7 @@ async fn reconcile_dispatches_one_preflighted_gitops_writer_then_waits() {
             reason: "observe the exact disposable GitOps base revision".to_string(),
             state_hash: base_revision_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1202,6 +1206,7 @@ async fn reconcile_dispatches_one_preflighted_gitops_writer_then_waits() {
             reason: "prepare exact disposable GitOps writer input".to_string(),
             state_hash: delivery_plan_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1263,6 +1268,7 @@ async fn reconcile_dispatches_one_preflighted_gitops_writer_then_waits() {
             reason: "authorize one exact disposable GitOps update".to_string(),
             state_hash: authorization_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1410,6 +1416,7 @@ async fn reconcile_dispatches_one_preflighted_gitops_writer_then_waits() {
             reason: "review a new immutable GitOps delivery attempt".to_string(),
             state_hash: retry_review.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1829,6 +1836,7 @@ async fn reconcile_dispatches_one_preflighted_argo_runner_after_gitops_merge_the
             reason: "authorize one exact disposable Argo sync".to_string(),
             state_hash: authorization_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -2005,6 +2013,7 @@ async fn reconcile_dispatches_one_preflighted_argo_runner_after_gitops_merge_the
             reason: "propose exact disposable release".to_string(),
             state_hash: release_action.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await

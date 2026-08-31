@@ -31,6 +31,7 @@ use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
 
+mod agent_execution;
 mod data_lifecycle;
 mod inference;
 mod onboarding;
@@ -4920,6 +4921,42 @@ impl SqliteStore {
             })
     }
 
+    pub async fn pause_run_for_agent_host(
+        &self,
+        run_id: &RunId,
+        stop_category: &str,
+        detail: &str,
+    ) -> Result<StoredRun, StoreError> {
+        if !matches!(
+            stop_category,
+            "agent_host_unavailable" | "subscription_quota_unavailable"
+        ) {
+            return Err(StoreError::InvalidData(
+                "invalid agent-host pause category".into(),
+            ));
+        }
+        let result = serde_json::json!({
+            "status":stop_category,
+            "stop_reason":detail,
+            "resumable":true,
+        });
+        sqlx::query(
+            "UPDATE runs SET status = ?2, result_json = ?3, stop_reason = ?4 WHERE id = ?1 AND status NOT IN ('completed','failed','cancelled')",
+        )
+        .bind(run_id.as_str())
+        .bind(stop_category)
+        .bind(serde_json::to_string(&result)?)
+        .bind(detail)
+        .execute(&self.pool)
+        .await?;
+        self.get_run(run_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "run".into(),
+                id: run_id.to_string(),
+            })
+    }
+
     pub async fn set_run_environment_snapshot(
         &self,
         run_id: &RunId,
@@ -7067,7 +7104,7 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 50);
+        assert_eq!(latest, 51);
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));

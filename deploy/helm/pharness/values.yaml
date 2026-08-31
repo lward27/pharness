@@ -115,6 +115,45 @@ inferenceEvaluation:
     pullPolicy: IfNotPresent
     revision: 1423a404d6e28fdcda48e8601332f509677c87a9
 
+# Portable Codex App Server execution remains disabled until the native host
+# passes authentication-boundary calibration and the exact stage policies are
+# qualified. The separate release commit replaces every compatibility digest
+# below with artifacts built from the merged implementation revision.
+codexAgentBackend:
+  enabled: false
+  registryFile: files/agent-execution-registry.json
+  codexVersion: "codex-cli 0.150.1"
+  enrollmentTtlSeconds: 900
+  capabilityTtlSeconds: 900
+  leaseTtlSeconds: 45
+  image:
+    repository: registry.lucas.engineering/pharness-codex-host
+    digest: sha256:82b07877b77eca9e15c7627b857f185e9c5ae1a4f930cd5f4dfef5b3aebd9db5
+    pullPolicy: IfNotPresent
+    revision: 1423a404d6e28fdcda48e8601332f509677c87a9
+  kubernetes:
+    # Packaging is acceptance-tested but intentionally not activated in the
+    # live cluster during this milestone.
+    enabled: false
+    hostPool: codex-reliability
+    authenticationClass: api_key
+    apiKeySecretName: pharness-codex-api-key
+    apiKeySecretKey: openai-api-key
+    enrollmentSecretName: pharness-codex-host-enrollment
+    enrollmentIdKey: enrollment-id
+    enrollmentTokenKey: enrollment-token
+    sourceReaderSecretName: ""
+    sourceReaderSecretKey: token
+    storageClass: local-path
+    workspaceSize: 20Gi
+    profiles:
+      - id: python-3.11
+        enabled: false
+        image: registry.lucas.engineering/pharness-python-runner@sha256:95b103dcafe6bb3c0545c2c21c4f73546a03899f19d748aa07abcc2e20569da2
+      - id: node-24
+        enabled: false
+        image: registry.lucas.engineering/pharness-node-runner@sha256:8789c0e0a18c04656a85f3236540eef6e56cf5c0eb1e84c7146d4dff0ca6d237
+
 retention:
   scheduledEnabled: true
   intervalSeconds: 86400
@@ -253,6 +292,8 @@ environmentProfiles:
     platform: linux/amd64
     required_executables:
       - pharness-worker
+      - pharness-codex-host
+      - codex
       - git
       - python
       - pip
@@ -273,6 +314,8 @@ environmentProfiles:
     platform: linux/amd64
     required_executables:
       - pharness-worker
+      - pharness-codex-host
+      - codex
       - git
       - node
       - npm
@@ -348,6 +391,7 @@ networkPolicy:
       - registry.npmjs.org
     codingAllowedHosts:
       - api.fireworks.ai
+      - api.openai.com
 
 # The only production target admitted by this milestone. The API compares
 # every field with its locked policy tuple; this is not a general allowlist.

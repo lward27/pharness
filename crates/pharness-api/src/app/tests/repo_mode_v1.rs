@@ -1265,10 +1265,13 @@ async fn zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence() {
         &fixture.state,
         &fixture.work_item_id,
         &action.id,
-        "operator".into(),
-        "recover startup that failed before preparation".into(),
-        action.state_hash.clone(),
-        None,
+        crate::app::repo_mode::RepoWorkItemActionExecutionRequest {
+            actor: "operator".into(),
+            reason: "recover startup that failed before preparation".into(),
+            state_hash: action.state_hash.clone(),
+            inference_policies: None,
+            execution_policies: None,
+        },
     )
     .await
     .unwrap();

@@ -47,6 +47,8 @@ pub struct RunResponse {
     pub sealed_summary: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inference_binding: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_execution: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -63,6 +65,11 @@ impl From<StoredRun> for RunResponse {
         let inference_binding = run
             .execution_target_json
             .pointer("/inference/resolved")
+            .cloned();
+        let agent_execution = run
+            .execution_target_json
+            .get("agent_execution")
+            .filter(|value| !value.is_null())
             .cloned();
         let scope = RunScope::from_execution_target(&run.execution_target_json);
         let ownership = RunOwnershipResponse {
@@ -110,6 +117,7 @@ impl From<StoredRun> for RunResponse {
             retention_state: run.retention_state,
             sealed_summary: run.sealed_summary,
             inference_binding,
+            agent_execution,
         }
     }
 }
@@ -174,6 +182,8 @@ pub struct RunOperatorSummaryResponse {
     pub normalized_cost: Option<f64>,
     #[serde(default)]
     pub inference_binding: Option<serde_json::Value>,
+    #[serde(default)]
+    pub agent_execution: Option<serde_json::Value>,
     pub compactions: u64,
     pub truncated_tool_results: u64,
     pub tools_started: u32,
@@ -954,6 +964,18 @@ pub struct ExecuteWorkItemActionRequest {
     pub state_hash: String,
     #[serde(default)]
     pub inference_policies: Option<StageChainInferencePolicyRequest>,
+    #[serde(default)]
+    pub execution_policies: Option<StageChainExecutionPolicyRequest>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct StageChainExecutionPolicyRequest {
+    #[serde(default)]
+    pub implement: Option<pharness_core::AgentExecutionPolicyRef>,
+    #[serde(default)]
+    pub repair: Option<pharness_core::AgentExecutionPolicyRef>,
+    #[serde(default)]
+    pub verify: Option<pharness_core::AgentExecutionPolicyRef>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

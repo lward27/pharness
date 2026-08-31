@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod agent_execution;
 mod data_lifecycle;
 mod inference;
 mod models;
@@ -9,6 +10,13 @@ mod repo_mode;
 mod sqlite;
 mod subject_preparation;
 
+pub use agent_execution::{
+    ClaimedAgentLease, CreateAgentExecutionPolicyQualification, CreateAgentExecutionSelection,
+    CreateAgentHostCapabilitySnapshot, CreateAgentHostEnrollment, CreateAgentLease,
+    EnrollAgentHost, StoredAgentExecutionPolicyQualification, StoredAgentExecutionSelection,
+    StoredAgentHost, StoredAgentHostCapabilitySnapshot, StoredAgentHostEnrollment,
+    StoredAgentLease,
+};
 pub use models::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,
     ApprovalGateListFilter, ApprovalGateSummary, ApprovalGateSummaryFilter, ApprovalListFilter,

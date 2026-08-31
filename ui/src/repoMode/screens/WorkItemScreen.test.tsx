@@ -184,6 +184,57 @@ describe("stage inference authorization", () => {
     expect(screen.getByText("repo-repair")).toBeInTheDocument();
     expect(screen.getByText("agent")).toBeInTheDocument();
   });
+
+  it("pins qualified Codex policies independently while keeping Test controller-owned", async () => {
+    const requests: Array<{url:string;init?:RequestInit}> = [];
+    const flow = {
+      ...completedFlow,
+      work_item:{...completedFlow.work_item,id:"witem_codex_chain",status:"waiting",closed_at:null,closure_reason:null},
+      action_rail:[{id:"authorize_stage_chain",status:"ready",effect_class:"model_execution",state_hash:"state-codex-chain",external_effect_summary:"Authorize the exact Codex stage chain."}],
+      repo_mode:{...completedFlow.repo_mode,effective_stage_outcomes:[],source_delivery_intent:null,coding_reliability:{enabled:true,deterministic_test:true,max_internal_corrections:1,internal_corrections_used:0,correction_lineage:[]}},
+    };
+    const execution = (stage:string,id:string,effort:string) => ({
+      available:true,qualified:true,
+      policy:{policy_id:id,revision:"r1",display_name:id,eligible_stages:[stage],model:"gpt-5.6-sol",reasoning_effort:effort},
+    });
+    vi.stubGlobal("fetch",vi.fn(async (input:RequestInfo | URL,init?:RequestInit) => {
+      const url=String(input); requests.push({url,init});
+      if(url.endsWith("/api/inference-policies")) return json({policies:[]});
+      if(url.endsWith("/api/agent-execution-policies")) return json({
+        defaults:{
+          implement:{policy_id:"codex-builder",revision:"r1"},
+          repair:{policy_id:"codex-repair",revision:"r1"},
+          verify:{policy_id:"codex-verifier",revision:"r1"},
+        },
+        policies:[execution("implement","codex-builder","high"),execution("repair","codex-repair","xhigh"),execution("verify","codex-verifier","xhigh")],
+      });
+      return json(flow);
+    }));
+
+    render(<WorkItemScreen workItemId="witem_codex_chain" section="overview" operatorName="lucas" />);
+    fireEvent.click(await screen.findByRole("button",{name:"authorize stage chain"}));
+    await waitFor(() => expect(screen.getByLabelText("Builder policy")).toHaveValue("codex:codex-builder@r1"));
+    expect(screen.getByLabelText("Repair policy")).toHaveValue("codex:codex-repair@r1");
+    expect(screen.getByLabelText("Verifier policy")).toHaveValue("codex:codex-verifier@r1");
+    expect(screen.getByLabelText("Test diagnosis policy (optional)")).toHaveValue("");
+    expect(screen.getAllByText(/Deterministic Test/)).not.toHaveLength(0);
+    fireEvent.change(screen.getByLabelText("Reason"),{target:{value:"Pin exact Codex policies and sticky workspace"}});
+    fireEvent.click(screen.getByRole("button",{name:"Confirm and apply"}));
+
+    await waitFor(() => expect(requests.some(request => request.init?.method === "POST")).toBe(true));
+    const body=JSON.parse(String(requests.find(request => request.init?.method === "POST")?.init?.body));
+    expect(body).toMatchObject({
+      actor:"lucas",
+      reason:"Pin exact Codex policies and sticky workspace",
+      state_hash:"state-codex-chain",
+      execution_policies:{
+        implement:{policy_id:"codex-builder",revision:"r1"},
+        repair:{policy_id:"codex-repair",revision:"r1"},
+        verify:{policy_id:"codex-verifier",revision:"r1"},
+      },
+      inference_policies:{},
+    });
+  });
 });
 
 function json(value:any) {
