@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
 pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-29.3";
-pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-08-30.1";
+pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-08-31.2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagePromptPack {
@@ -55,13 +55,13 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
             prompt_id: "repo-builder-v2",
             revision,
             stage: pharness_core::InferenceStage::Implement,
-            content: r#"Localize the task from the plan and repository map. Read nearby implementation and tests before editing. Make the smallest coherent patch within writable paths, preferring atomic apply_patch with preimage hashes. Use run_workspace_command only for bounded offline inspection or focused checks. Run focused checks, then every declared acceptance command, then inspect final Git diff and status. Preserve unrelated code. Submit implementation only after evidence is complete."#,
+            content: r#"Localize the task from the plan and repository map. Read nearby implementation and tests before editing. Make the smallest coherent patch within writable paths, preferring atomic apply_patch with the complete-file sha256 returned by read_file as each preimage hash. Use run_workspace_command only for bounded offline inspection or focused checks. Run focused checks, then every declared acceptance command, then inspect final Git diff and status. Preserve unrelated code. Submit implementation only after evidence is complete; submit_implementation is terminal and replaces legacy finish."#,
         }),
         "repo-repair" => Some(StagePromptPack {
             prompt_id: "repo-repair-v2",
             revision,
             stage: pharness_core::InferenceStage::Implement,
-            content: r#"Consume the exact deterministic Test or Verifier findings and correction lineage. Preserve correct existing work. Inspect only the failing area, make one targeted repair within the original WorkPlan and writable scope, rerun the relevant focused check and all acceptance commands, then inspect final Git diff and status. Do not broaden scope or rewrite correct work. Submit the repaired implementation."#,
+            content: r#"Consume the exact deterministic Test or Verifier findings and correction lineage. Preserve correct existing work. Inspect only the failing area, make one targeted repair within the original WorkPlan and writable scope, using the complete-file sha256 returned by read_file for atomic apply_patch preimages. Rerun the relevant focused check and all acceptance commands, then inspect final Git diff and status. Do not broaden scope or rewrite correct work. Submit the repaired implementation; submit_implementation is terminal and replaces legacy finish."#,
         }),
         "repo-test-diagnoser" => Some(StagePromptPack {
             prompt_id: "repo-test-diagnoser-v2",
@@ -178,7 +178,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "read_file",
-            "Read a UTF-8 file inside the workspace. Do not read secrets or credential files.",
+            "Read a bounded UTF-8 file inside the workspace and return the SHA-256 of the complete file for atomic apply_patch preimage validation. Do not read secrets or credential files.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -226,7 +226,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "write_file",
-            "Write a UTF-8 file inside the workspace. This is policy-gated and requires approval in default mode.",
+            "Create or replace one UTF-8 file inside a controller-declared writable path. The immutable attempt grant and writable boundary are enforced server-side.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -241,7 +241,7 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "patch_file",
-            "Apply an exact UTF-8 find/replace patch to an existing workspace file. This is policy-gated and requires approval in default mode.",
+            "Apply one exact UTF-8 find/replace edit to an existing file inside a controller-declared writable path. Use a unique find string unless replace_all is intentional.",
             serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -265,11 +265,11 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::new(
             "apply_patch",
-            "Atomically apply one bounded unified diff inside declared writable paths. Optional preimage hashes make the edit fail closed when the inspected file changed.",
+            "Atomically apply one bounded unified diff inside declared writable paths. Supply the exact complete-file SHA-256 returned by read_file for every existing file changed by the patch; use an empty map only when every changed path is new.",
             serde_json::json!({
                 "type":"object",
                 "additionalProperties":false,
-                "required":["reason","patch"],
+                "required":["reason","patch","preimage_sha256"],
                 "properties":{
                     "reason":{"type":"string"},
                     "patch":{"type":"string","minLength":1,"maxLength":262144},
@@ -816,6 +816,24 @@ mod tests {
             .collect::<HashSet<_>>();
 
         assert!(!names.contains("request_approval"));
+    }
+
+    #[test]
+    fn atomic_patch_schema_exposes_its_exact_preimage_contract() {
+        let tools = worker_tool_specs();
+        let read = tools.iter().find(|tool| tool.name == "read_file").unwrap();
+        let patch = tools
+            .iter()
+            .find(|tool| tool.name == "apply_patch")
+            .unwrap();
+
+        assert!(read.description.contains("complete file"));
+        assert!(patch.description.contains("every existing file"));
+        assert!(patch.parameters_schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "preimage_sha256"));
     }
 
     #[test]

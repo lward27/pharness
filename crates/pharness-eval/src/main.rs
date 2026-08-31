@@ -186,6 +186,14 @@ pub(crate) struct EvalResult {
     failure_category: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stop_reason_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure_action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure_error_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    action_trace: Vec<String>,
 }
 
 struct Fixture {
@@ -964,7 +972,14 @@ fn normalized_failure_category(
     .to_string()
 }
 
-fn normalized_stop_reason_code(outcome: &AttemptOutcome) -> Option<String> {
+fn normalized_stop_reason_code(outcome: &AttemptOutcome, events: &[AgentEvent]) -> Option<String> {
+    if let Some(category) = events.iter().rev().find_map(|event| {
+        (event.kind == EventKind::RunFailed)
+            .then(|| event.payload.get("stop_category")?.as_str())
+            .flatten()
+    }) {
+        return Some(category.to_string());
+    }
     let error = outcome.error.as_deref()?;
     let normalized = error.to_ascii_lowercase();
     let code = if normalized.contains("credential presence") {
@@ -1000,6 +1015,12 @@ fn normalized_stop_reason_code(outcome: &AttemptOutcome) -> Option<String> {
         "completion_evidence_exhausted"
     } else if normalized.contains("protocol_correction_exhausted") {
         "provider_protocol_correction_exhausted"
+    } else if normalized.contains("unsupported action") {
+        "invalid_action"
+    } else if normalized.contains("outside workspace") {
+        "workspace_scope_violation"
+    } else if normalized.contains("invalid tool arguments") {
+        "tool_arguments_invalid"
     } else if normalized.contains("active_execution_budget") {
         "active_time_exhaustion"
     } else if normalized.contains("token_budget") || normalized.contains("hard_budget") {
@@ -1010,6 +1031,84 @@ fn normalized_stop_reason_code(outcome: &AttemptOutcome) -> Option<String> {
         "worker_runtime_failure"
     };
     Some(code.to_string())
+}
+
+fn eval_failure_diagnostics(
+    outcome: &AttemptOutcome,
+    events: &[AgentEvent],
+) -> (Option<String>, Option<String>, Option<String>) {
+    let failure = events
+        .iter()
+        .rev()
+        .find(|event| event.kind == EventKind::RunFailed);
+    let action = failure
+        .and_then(|event| event.payload.get("action"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let error_kind = failure
+        .and_then(|event| {
+            event
+                .payload
+                .get("error_kind")
+                .or_else(|| event.payload.get("recoverable_error_kind"))
+        })
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let detail = failure
+        .and_then(|event| event.payload.get("error"))
+        .and_then(serde_json::Value::as_str)
+        .or(outcome.error.as_deref())
+        .map(bounded_eval_diagnostic);
+    (action, error_kind, detail)
+}
+
+fn eval_action_trace(events: &[AgentEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter(|event| event.kind == EventKind::ActionProposed)
+        .filter_map(|event| event.payload.get("action")?.as_str())
+        .take(64)
+        .map(str::to_string)
+        .collect()
+}
+
+fn bounded_eval_diagnostic(value: &str) -> String {
+    let mut output = value
+        .lines()
+        .take(8)
+        .map(|line| {
+            let normalized = line.to_ascii_lowercase();
+            if [
+                "authorization:",
+                "bearer ",
+                "api_key",
+                "api-key",
+                "password=",
+                "password:",
+                "secret=",
+                "secret:",
+                "token=",
+                "token:",
+            ]
+            .iter()
+            .any(|marker| normalized.contains(marker))
+            {
+                "[redacted-sensitive-line]".to_string()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if output.len() > 512 {
+        let mut boundary = 512;
+        while !output.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        output.truncate(boundary);
+        output.push_str("...[truncated]");
+    }
+    output
 }
 
 fn outcome_safety_violations(outcome: &AttemptOutcome) -> Vec<String> {
@@ -1328,8 +1427,14 @@ async fn run_live_coding_fixture(
     let failure_category =
         (!passed).then(|| normalized_failure_category(&outcome, &events, acceptance_ok));
     let stop_reason_code = (!passed)
-        .then(|| normalized_stop_reason_code(&outcome))
+        .then(|| normalized_stop_reason_code(&outcome, &events))
         .flatten();
+    let (failure_action, failure_error_kind, failure_detail) = if passed {
+        (None, None, None)
+    } else {
+        eval_failure_diagnostics(&outcome, &events)
+    };
+    let action_trace = eval_action_trace(&events);
     Ok(EvalResult {
         fixture: fixture.id.to_string(),
         attempt,
@@ -1362,6 +1467,10 @@ async fn run_live_coding_fixture(
         safety_violations,
         failure_category,
         stop_reason_code,
+        failure_action,
+        failure_error_kind,
+        failure_detail,
+        action_trace,
     })
 }
 
@@ -1433,8 +1542,14 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
     let failure_category = (!passed)
         .then(|| normalized_failure_category(&replay_outcome, &replay_events, acceptance_ok));
     let stop_reason_code = (!passed)
-        .then(|| normalized_stop_reason_code(&replay_outcome))
+        .then(|| normalized_stop_reason_code(&replay_outcome, &replay_events))
         .flatten();
+    let (failure_action, failure_error_kind, failure_detail) = if passed {
+        (None, None, None)
+    } else {
+        eval_failure_diagnostics(&replay_outcome, &replay_events)
+    };
+    let action_trace = eval_action_trace(&replay_events);
     Ok(EvalResult {
         fixture: fixture.id.to_string(),
         attempt,
@@ -1471,6 +1586,10 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         },
         failure_category,
         stop_reason_code,
+        failure_action,
+        failure_error_kind,
+        failure_detail,
+        action_trace,
     })
 }
 
@@ -1946,8 +2065,8 @@ impl ModelProvider for ReplayProvider {
 #[cfg(test)]
 mod tests {
     use super::{
-        builder_report_metadata, is_direct_to_gateway_transport_pair, replay_suite,
-        unexpected_changed_paths, FIXTURES,
+        bounded_eval_diagnostic, builder_report_metadata, is_direct_to_gateway_transport_pair,
+        replay_suite, unexpected_changed_paths, FIXTURES,
     };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
@@ -2001,5 +2120,18 @@ mod tests {
             "fireworks"
         ));
         assert!(!is_direct_to_gateway_transport_pair("gateway", "gateway"));
+    }
+
+    #[test]
+    fn evaluation_diagnostics_are_bounded_and_redact_sensitive_lines() {
+        let long = "x".repeat(600);
+        let diagnostic = bounded_eval_diagnostic(&format!(
+            "unsupported action: finish\nauthorization: Bearer do-not-retain\n{long}"
+        ));
+
+        assert!(diagnostic.starts_with("unsupported action: finish\n[redacted-sensitive-line]"));
+        assert!(!diagnostic.contains("do-not-retain"));
+        assert!(diagnostic.ends_with("...[truncated]"));
+        assert!(diagnostic.len() <= 526);
     }
 }
