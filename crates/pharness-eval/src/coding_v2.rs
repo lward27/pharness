@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const FIXTURE_REVISION: &str = "coding-reliability-v2.0";
+const FIXTURE_REVISION: &str = "coding-reliability-v2.1";
 const STACK_CASES: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -569,11 +569,11 @@ fn case_contract(case: usize) -> (&'static str, &'static str) {
         0 => ("localized-normalization", "Fix normalize_symbol so surrounding whitespace is removed, non-empty symbols are uppercased, and empty input is rejected."),
         1 => ("bounded-page-size", "Fix clamp_page_size so every result is inclusively bounded from 1 through 100."),
         2 => ("misleading-date-helper", "Fix valid_date_range so equal dates are valid and reversed dates are rejected. Do not use or modify the misleading legacy helper."),
-        3 => ("period-validation", "Fix normalize_period so supported periods are normalized case-insensitively and unsupported values are rejected."),
-        4 => ("ratio-and-docs", "Fix safe_ratio so a zero denominator is rejected and update README.md with that behavior."),
+        3 => ("period-validation", "Fix normalize_period so only the supported periods 1d, 5d, and 1mo are normalized case-insensitively after trimming; every other value must return the repository's no-value sentinel."),
+        4 => ("ratio-and-docs", "Fix safe_ratio so a zero denominator returns the repository's no-value sentinel rather than raising or producing an infinite value, and update README.md with that behavior."),
         5 => ("positive-parser", "Fix parse_positive so zero, negative, and malformed values are rejected while the seeded unrelated known failure remains untouched."),
         6 => ("missing-field-fallback", "Fix display_name so blank or missing names fall back to the ticker symbol without panicking."),
-        7 => ("multifile-retry-delay", "Fix retry_delay_ms to scale in 250 ms increments without overflow and update the consumer module to use it."),
+        7 => ("multifile-retry-delay", "Fix retry_delay_ms to scale in 250 ms increments, saturating at the unsigned 32-bit maximum 4,294,967,295, and update the consumer module to use it."),
         _ => unreachable!("case index is bounded"),
     }
 }
@@ -732,8 +732,18 @@ fn environment_snapshot(
         Stack::Python => ("python3", None),
         Stack::Node => ("node", Some("npm")),
     };
-    let runtime = find_executable(runtime_name)?;
-    let manager = package_manager.map(find_executable).transpose()?;
+    let runtime = if stack == Stack::Rust {
+        rustup_toolchain_executable(runtime_name)?
+    } else {
+        find_executable(runtime_name)?
+    };
+    let manager = if stack == Stack::Rust {
+        package_manager
+            .map(rustup_toolchain_executable)
+            .transpose()?
+    } else {
+        package_manager.map(find_executable).transpose()?
+    };
     let version = command_version(&runtime)?;
     let path_entry = Path::new(&runtime)
         .parent()
@@ -952,6 +962,23 @@ fn find_executable(name: &str) -> Result<String> {
         .find(|candidate| candidate.is_file())
         .map(|path| path.to_string_lossy().to_string())
         .with_context(|| format!("{name} is required to execute the frozen benchmark"))
+}
+
+fn rustup_toolchain_executable(name: &str) -> Result<String> {
+    let Ok(output) = std::process::Command::new("rustup")
+        .args(["which", name])
+        .output()
+    else {
+        return find_executable(name);
+    };
+    if !output.status.success() {
+        return find_executable(name);
+    }
+    let executable = String::from_utf8(output.stdout)?.trim().to_string();
+    if executable.is_empty() || !Path::new(&executable).is_file() {
+        bail!("rustup returned an invalid {name} executable");
+    }
+    Ok(executable)
 }
 
 fn command_version(executable: &str) -> Result<String> {
@@ -1289,10 +1316,26 @@ mod tests {
                 8
             );
         }
+        assert_eq!(FIXTURE_REVISION, "coding-reliability-v2.1");
         assert_eq!(
             inference_qualification_suite_hash("coding-v2").unwrap(),
-            inference_qualification_suite_hash("coding-v2").unwrap()
+            "sha256:4bf3fce21f86369794ac6e57816436ff331e7dd607eb303baaf720c885583767"
         );
+    }
+
+    #[test]
+    fn hidden_semantic_boundaries_are_explicit_in_every_stack_task() {
+        let fixtures = fixtures();
+        for stack in [Stack::Rust, Stack::Python, Stack::Node] {
+            let stack_tasks = fixtures
+                .iter()
+                .filter(|fixture| fixture.stack == stack)
+                .collect::<Vec<_>>();
+            assert!(stack_tasks[3].task.contains("1d, 5d, and 1mo"));
+            assert!(stack_tasks[3].task.contains("after trimming"));
+            assert!(stack_tasks[4].task.contains("no-value sentinel"));
+            assert!(stack_tasks[7].task.contains("4,294,967,295"));
+        }
     }
 
     #[test]
