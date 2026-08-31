@@ -13,6 +13,14 @@ command -v podman >/dev/null 2>&1 || {
 bundle_root="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 revision="${PHARNESS_HOST_BUNDLE_REVISION:-$(cat "$bundle_root/REVISION")}" 
 install_root="/opt/pharness-codex-host/${revision}"
+command -v sha256sum >/dev/null 2>&1 || {
+  echo "sha256sum is required to verify the PHarness host bundle" >&2
+  exit 1
+}
+(
+  cd "$bundle_root"
+  sha256sum --check CHECKSUMS.sha256
+)
 if ! id pharness-codex >/dev/null 2>&1; then
   useradd --system --create-home --home-dir /var/lib/pharness-codex-host --shell /bin/bash pharness-codex
 fi

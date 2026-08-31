@@ -71,7 +71,16 @@ bundle_root="${temporary}/root/pharness-codex-host"
 test "$(cat "${bundle_root}/REVISION")" = "$REVISION"
 file "${bundle_root}/bin/pharness-codex-host" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 file "${bundle_root}/bin/codex" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
-find "$bundle_root" -type f -print0 | sort -z | xargs -0 sha256sum >"${bundle_root}/CHECKSUMS.sha256"
+(
+  cd "$bundle_root"
+  find . -type f ! -name CHECKSUMS.sha256 -print0 \
+    | LC_ALL=C sort -z \
+    | xargs -0 sha256sum
+) >"${bundle_root}/CHECKSUMS.sha256"
+(
+  cd "$bundle_root"
+  sha256sum --check CHECKSUMS.sha256
+)
 
 mkdir -p "$OUTPUT_DIR"
 archive="${OUTPUT_DIR}/pharness-codex-host-${REVISION}-linux-amd64.tar.gz"
