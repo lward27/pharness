@@ -43,6 +43,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Verify the target binaries on the requested Linux platform through the
+# remote BuildKit worker. Do not attempt to execute Linux ELF files on the
+# packaging client, which may be macOS.
+docker buildx build \
+  --builder "$BUILDER" \
+  --platform linux/amd64 \
+  --pull \
+  --target bundle-verification \
+  --file "${REPOSITORY_ROOT}/deploy/docker/Dockerfile.codex-host" \
+  --build-arg "PHARNESS_BUILD_REVISION=${REVISION}" \
+  --build-arg TARGETARCH=amd64 \
+  "$REPOSITORY_ROOT"
+
 docker buildx build \
   --builder "$BUILDER" \
   --platform linux/amd64 \
@@ -56,8 +69,8 @@ docker buildx build \
 
 bundle_root="${temporary}/root/pharness-codex-host"
 test "$(cat "${bundle_root}/REVISION")" = "$REVISION"
-test "$("${bundle_root}/bin/pharness-codex-host" --version | awk '{print $2}')" = "0.1.0"
-"${bundle_root}/bin/codex" --version | grep -F '0.150.1' >/dev/null
+file "${bundle_root}/bin/pharness-codex-host" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
+file "${bundle_root}/bin/codex" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 find "$bundle_root" -type f -print0 | sort -z | xargs -0 sha256sum >"${bundle_root}/CHECKSUMS.sha256"
 
 mkdir -p "$OUTPUT_DIR"
