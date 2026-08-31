@@ -167,6 +167,8 @@ spec:
               value: "{{ .Values.api.image.repository }}@{{ .Values.api.image.digest }}"
             - name: PHARNESS_INFERENCE_EVALUATION_IMAGE
               value: "{{ .Values.inferenceEvaluation.image.repository }}@{{ .Values.inferenceEvaluation.image.digest }}"
+            - name: PHARNESS_INFERENCE_EVALUATION_NODE_HOSTNAME
+              value: {{ .Values.inferenceEvaluation.nodeHostname | quote }}
             - name: PHARNESS_BUILD_REVISION
               value: {{ .Values.api.image.revision | quote }}
             - name: PHARNESS_RUNTIME_IMAGE_DIGEST

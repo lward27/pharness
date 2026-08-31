@@ -674,6 +674,7 @@ pub(super) async fn test_state_with_git_observer(
             namespace: "pharness-test".to_string(),
             image: "example.test/pharness:latest".to_string(),
             inference_evaluation_image: "example.test/pharness-eval:latest".to_string(),
+            inference_evaluation_node_hostname: None,
             service_account: "pharness-worker".to_string(),
             tekton_executor_service_account: "pharness-tekton-runner".to_string(),
             tekton_allowed_namespaces: vec!["ci".to_string()],

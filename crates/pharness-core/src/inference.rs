@@ -786,7 +786,7 @@ impl ResolvedInferenceBinding {
             material["protocol_calibration_hash"] =
                 serde_json::Value::String(self.protocol_calibration_hash.clone());
         }
-        canonical_json_sha256(&material).map(|hash| format!("sha256:{hash}"))
+        canonical_json_sha256(&material)
     }
 
     pub fn computed_hash(&self) -> Result<String, serde_json::Error> {
@@ -1184,6 +1184,8 @@ mod tests {
             binding_hash: String::new(),
         };
         let first_hash = binding.computed_agent_profile_hash().unwrap();
+        assert!(first_hash.starts_with("sha256:"));
+        assert!(!first_hash.starts_with("sha256:sha256:"));
 
         binding.policy.reasoning.effort = Some(ReasoningEffort::High);
         binding.policy.policy_hash = binding.policy.computed_hash().unwrap();

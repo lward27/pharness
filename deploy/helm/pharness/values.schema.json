@@ -102,9 +102,10 @@
     },
     "inferenceEvaluation": {
       "type": "object",
-      "required": ["image"],
+      "required": ["image", "nodeHostname"],
       "properties": {
-        "image": { "$ref": "#/$defs/immutableImage" }
+        "image": { "$ref": "#/$defs/immutableImage" },
+        "nodeHostname": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" }
       },
       "additionalProperties": false
     },
