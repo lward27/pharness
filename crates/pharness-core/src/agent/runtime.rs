@@ -1097,7 +1097,11 @@ where
                         }
                         Err(error) => {
                             if reliability_v2_enabled(&config)
-                                && matches!(error, ToolError::UnsupportedAction { .. })
+                                && matches!(
+                                    &error,
+                                    ToolError::UnsupportedAction { action }
+                                        if action == tool_action.kind_name()
+                                )
                             {
                                 let result = ToolResult::error(
                                     "the selected action is not exposed by this immutable AgentProfile",
@@ -1221,10 +1225,10 @@ where
                                 EventKind::RunFailed,
                                 serde_json::json!({
                                     "error": error.to_string(),
-                                    "stop_category": if matches!(error, ToolError::OutsideWorkspace { .. }) {
-                                        "workspace_scope_violation"
-                                    } else {
-                                        "tool_execution_failure"
+                                    "stop_category": match &error {
+                                        ToolError::OutsideWorkspace { .. } => "workspace_scope_violation",
+                                        ToolError::UnsupportedAction { .. } => "tool_policy_rejection",
+                                        _ => "tool_execution_failure",
                                     },
                                     "error_kind": error.kind_name(),
                                     "turn": turn_index,
@@ -2278,6 +2282,45 @@ mod tests {
             event.kind == EventKind::ToolFinished
                 && event.payload["content"]["executed"] == false
                 && event.payload["content"]["error_kind"] == "unsupported_action"
+        }));
+    }
+
+    #[tokio::test]
+    async fn reliability_v2_reports_a_denied_sub_action_as_a_tool_policy_rejection() {
+        let events = InMemoryEventSink::default();
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([model_turn(AgentAction::ReadFile {
+                id: "act_denied_path".into(),
+                reason: "inspect an operating-system path".into(),
+                path: Utf8PathBuf::from("README.md"),
+                max_bytes: None,
+                start_line: None,
+                line_count: None,
+            })]),
+            events.clone(),
+            ErroringExecutor {
+                error: ToolError::UnsupportedAction {
+                    action: "read_file:/etc/environment".into(),
+                },
+            },
+        );
+        let mut config = RunConfig::local_test("bounded tool policy");
+        enable_reliability_v2(&mut config);
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+
+        assert_eq!(outcome.status, RunStatus::Failed);
+        assert!(outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("read_file:/etc/environment")));
+        assert!(!events
+            .events()
+            .iter()
+            .any(|event| event.kind == EventKind::ModelProtocolCorrection));
+        assert!(events.events().iter().any(|event| {
+            event.kind == EventKind::RunFailed
+                && event.payload["stop_category"] == "tool_policy_rejection"
         }));
     }
 

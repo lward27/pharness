@@ -194,6 +194,8 @@ pub(crate) struct EvalResult {
     failure_detail: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     action_trace: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure_diff: Option<String>,
 }
 
 struct Fixture {
@@ -832,12 +834,7 @@ pub(crate) fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
             EventKind::ToolStarted => {
                 metrics.tool_calls += 1;
             }
-            EventKind::ActionProposed
-                if event.payload["action"].as_str() == Some("run_shell")
-                    && event.payload["cmd"]
-                        .as_str()
-                        .is_some_and(environment_discovery_command) =>
-            {
+            EventKind::ActionProposed if environment_probe_action(&event.payload) => {
                 metrics.environment_probe_actions += 1;
             }
             EventKind::ApprovalRequired => metrics.approval_pauses += 1,
@@ -879,6 +876,38 @@ pub(crate) fn metrics_from_events(events: &[AgentEvent]) -> EvalMetrics {
         }
     }
     metrics
+}
+
+fn environment_probe_action(action: &serde_json::Value) -> bool {
+    match action["action"].as_str() {
+        Some("run_shell") => action["cmd"]
+            .as_str()
+            .is_some_and(environment_discovery_command),
+        Some("run_workspace_command") => {
+            let executable = action["executable"]
+                .as_str()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let arguments = action["args"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(" ");
+            ["which", "command", "env", "sh", "bash", "ls", "find"].contains(&executable.as_str())
+                || environment_discovery_command(&format!("{executable} {arguments}"))
+        }
+        Some("read_file" | "list_dir") => {
+            action["path"].as_str().is_some_and(environment_probe_path)
+        }
+        _ => false,
+    }
+}
+
+fn environment_probe_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    normalized.starts_with('/') || normalized == ".." || normalized.starts_with("../")
 }
 
 fn environment_discovery_command(command: &str) -> bool {
@@ -1066,9 +1095,16 @@ fn eval_action_trace(events: &[AgentEvent]) -> Vec<String> {
     events
         .iter()
         .filter(|event| event.kind == EventKind::ActionProposed)
-        .filter_map(|event| event.payload.get("action")?.as_str())
+        .filter_map(|event| {
+            let action = event.payload.get("action")?.as_str()?;
+            if action == "run_workspace_command" {
+                let executable = event.payload.get("executable")?.as_str()?;
+                Some(format!("{action}:{executable}"))
+            } else {
+                Some(action.to_string())
+            }
+        })
         .take(64)
-        .map(str::to_string)
         .collect()
 }
 
@@ -1471,6 +1507,7 @@ async fn run_live_coding_fixture(
         failure_error_kind,
         failure_detail,
         action_trace,
+        failure_diff: None,
     })
 }
 
@@ -1590,6 +1627,7 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         failure_error_kind,
         failure_detail,
         action_trace,
+        failure_diff: None,
     })
 }
 
@@ -2066,9 +2104,9 @@ impl ModelProvider for ReplayProvider {
 mod tests {
     use super::{
         bounded_eval_diagnostic, builder_report_metadata, is_direct_to_gateway_transport_pair,
-        replay_suite, unexpected_changed_paths, FIXTURES,
+        metrics_from_events, replay_suite, unexpected_changed_paths, FIXTURES,
     };
-    use pharness_core::{canonical_json_sha256, compiled_agent_profiles};
+    use pharness_core::{canonical_json_sha256, compiled_agent_profiles, AgentEvent, EventKind};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
 
     #[test]
@@ -2133,5 +2171,48 @@ mod tests {
         assert!(!diagnostic.contains("do-not-retain"));
         assert!(diagnostic.ends_with("...[truncated]"));
         assert!(diagnostic.len() <= 526);
+    }
+
+    #[test]
+    fn evaluation_metrics_count_typed_environment_probes() {
+        let events = [
+            AgentEvent {
+                event_id: "event-1".into(),
+                session_id: "session-1".into(),
+                run_id: "run-1".into(),
+                seq: 1,
+                kind: EventKind::ActionProposed,
+                payload: serde_json::json!({
+                    "action":"run_workspace_command",
+                    "executable":"which",
+                    "args":["python"]
+                }),
+            },
+            AgentEvent {
+                event_id: "event-2".into(),
+                session_id: "session-1".into(),
+                run_id: "run-1".into(),
+                seq: 2,
+                kind: EventKind::ActionProposed,
+                payload: serde_json::json!({
+                    "action":"read_file",
+                    "path":"/etc/environment"
+                }),
+            },
+            AgentEvent {
+                event_id: "event-3".into(),
+                session_id: "session-1".into(),
+                run_id: "run-1".into(),
+                seq: 3,
+                kind: EventKind::ActionProposed,
+                payload: serde_json::json!({
+                    "action":"run_workspace_command",
+                    "executable":"python",
+                    "args":["-m", "unittest"]
+                }),
+            },
+        ];
+
+        assert_eq!(metrics_from_events(&events).environment_probe_actions, 2);
     }
 }
