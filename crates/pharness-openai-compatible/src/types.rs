@@ -1,6 +1,6 @@
 use pharness_core::{
     InferenceBackendKind, ModelMessage, ModelRequest, ModelRole, ReasoningContextMode,
-    ReasoningReplay, StageInferencePolicyRevision, ToolProtocolMode, ToolSpec,
+    ReasoningReplay, StageInferencePolicyRevision, ToolChoiceMode, ToolProtocolMode, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
 
@@ -93,7 +93,14 @@ pub fn build_chat_request(
         } else {
             Vec::new()
         },
-        tool_choice: (mode == ToolProtocolMode::NativeTools).then_some(ToolChoice::Required),
+        tool_choice: (mode == ToolProtocolMode::NativeTools).then_some(match policy.tool_choice {
+            ToolChoiceMode::Auto => ToolChoice::Auto,
+            ToolChoiceMode::Required => ToolChoice::Required,
+            // A named specific tool is not part of a V1 policy revision. No
+            // configured target advertises this mode yet, so validation
+            // rejects it before this compatibility representation is used.
+            ToolChoiceMode::Specific => ToolChoice::Required,
+        }),
         parallel_tool_calls: (mode == ToolProtocolMode::NativeTools).then_some(false),
         stream: true,
         stream_options: include_stream_usage.then_some(StreamOptions {
@@ -371,6 +378,7 @@ mod tests {
             max_output_tokens: 8_192,
             max_input_tokens: 16_000,
             tool_protocol: ToolProtocolMode::NativeTools,
+            tool_choice: pharness_core::ToolChoiceMode::Required,
             transport_max_attempts: 3,
             selectable: true,
             policy_hash: "hash".into(),
@@ -389,6 +397,7 @@ mod tests {
                 CapabilityKind::AgentControl,
             )],
             mode: ToolProtocolMode::NativeTools,
+            tool_choice: pharness_core::ToolChoiceMode::Required,
             temperature: 0.1,
             max_tokens: 8_192,
             reasoning: None,

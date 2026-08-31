@@ -20,7 +20,7 @@ describe("Environment profile settings", () => {
         lifecycle_scripts: "denied",
         required_executables: ["pharness-worker", "git", "node", "npm"],
       }] });
-      if (url.endsWith("/api/config/effective")) return json({ features: { repo_mode_v1: { enabled: true, ui_enabled: true } } });
+      if (url.endsWith("/api/config/effective")) return json({ features: { repo_mode_v1: { enabled: true, ui_enabled: true }, coding_reliability_v2:{enabled:true} } });
       return json({ capabilities: [], repository_allowlists: {} });
     }));
 
@@ -42,13 +42,13 @@ describe("Environment profile settings", () => {
         targets:[{target_id:"fireworks-kimi-k2p6",revision:"v1",display_name:"Fireworks Kimi K2.6",backend_kind:"fireworks",upstream_model:"accounts/fireworks/models/kimi-k2p6",allowed_stages:["plan","implement"],transport:{scheme:"https",private_network:false},authentication_configured:true,context_limit_tokens:262144,output_limit_tokens:16384,selectable:true,config_hash:"target-one",latest_verification:{status:"passed",expires_at:String(Math.floor(Date.now()/1000)+900)}}],
       });
       if (url.endsWith("/api/inference-policies")) return json({registry_hash:"registry-one",policies:[
-        {policy_id:"fireworks-legacy-v1",revision:"v1",display_name:"Fireworks legacy behavior",eligible_stages:["plan","implement"],eligible_profiles:["repo-planner","repo-builder"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{context_mode:"provider_default"},temperature:0.1,maximum_output_tokens:4096,qualified:true,is_default:true,qualification_status:"accepted_legacy_baseline",policy_hash:"policy-one"},
-        {policy_id:"planner-kimi-k2p6-high-v1",revision:"v1",display_name:"Planner Kimi K2.6 high",eligible_stages:["plan"],eligible_profiles:["repo-planner"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{effort:"high",context_mode:"current_turn"},temperature:0.1,maximum_output_tokens:8192,qualified:false,is_default:false,qualification_status:"not_qualified",policy_hash:"policy-two",qualification_contract:{suite_id:"planner-v1",agent_profile_id:"repo-planner",agent_profile_hash:"profile-two"}},
+        {policy_id:"fireworks-legacy-v1",revision:"v1",display_name:"Fireworks legacy behavior",eligible_stages:["plan","implement"],eligible_profiles:["repo-planner","repo-builder"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{context_mode:"provider_default"},tool_choice:"required",context_assembly_limit:16000,temperature:0.1,maximum_output_tokens:4096,qualified:true,is_default:true,qualification_status:"accepted_legacy_baseline",policy_hash:"policy-one"},
+        {policy_id:"planner-kimi-k2p6-high-v1",revision:"v1",display_name:"Planner Kimi K2.6 high",eligible_stages:["plan"],eligible_profiles:["repo-planner"],reliability_v2_default_for_profiles:["repo-planner"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{effort:"high",context_mode:"current_turn"},tool_choice:"auto",context_assembly_limit:64000,temperature:0.1,maximum_output_tokens:8192,qualified:false,is_default:false,qualification_status:"not_qualified",policy_hash:"policy-two",qualification_contract:{suite_id:"planner-v1",agent_profile_id:"repo-planner",agent_profile_hash:"profile-two"}},
       ]});
       if (url.includes("/preflight") && init?.method === "POST") return json({status:"passed"});
       if (url.includes("/qualifications") && init?.method === "POST") return json({id:"infeval-one",status:"running",job_name:"pharness-inference-eval-one"});
       if (url.endsWith("/api/environment-profiles")) return json({profiles:[]});
-      if (url.endsWith("/api/config/effective")) return json({features:{repo_mode_v1:{enabled:true,ui_enabled:true}}});
+      if (url.endsWith("/api/config/effective")) return json({features:{repo_mode_v1:{enabled:true,ui_enabled:true},coding_reliability_v2:{enabled:true}}});
       return json({capabilities:[],repository_allowlists:{},inference:{status:"available",registry_aligned:true}});
     });
     vi.stubGlobal("fetch",fetchMock);
@@ -58,7 +58,9 @@ describe("Environment profile settings", () => {
     await waitFor(() => expect(screen.getByText("Gateway for new bound Runs")).toBeInTheDocument());
     expect(screen.getByRole("heading",{name:"Fireworks Kimi K2.6"})).toBeInTheDocument();
     expect(screen.getByText("accepted legacy baseline")).toBeInTheDocument();
-    expect(screen.getByText(/Not selectable until its exact stage qualification suite passes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Protocol compatibility alone is insufficient/i)).toBeInTheDocument();
+    expect(screen.getByText("auto · parallel disabled")).toBeInTheDocument();
+    expect(screen.getAllByText("repo-planner")).not.toHaveLength(0);
     expect(screen.getByRole("button",{name:"Run qualification"})).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button",{name:"Verify target"}));

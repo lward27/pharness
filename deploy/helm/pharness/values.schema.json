@@ -5,7 +5,7 @@
   "properties": {
     "features": {
       "type": "object",
-      "required": ["repoModeV1"],
+      "required": ["repoModeV1", "codingReliabilityV2"],
       "properties": {
         "repoModeV1": {
           "type": "object",
@@ -13,6 +13,14 @@
           "properties": {
             "enabled": { "type": "boolean" },
             "uiEnabled": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "codingReliabilityV2": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" }
           },
           "additionalProperties": false
         }

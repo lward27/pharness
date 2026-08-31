@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use pharness_core::{
     AgentAction, InferenceTargetRevision, ModelCapabilities, ModelProvider, ModelRequest,
-    ModelToolCall, ModelTurn, ProviderError, StageInferencePolicyRevision, TokenUsage,
-    ToolProtocolMode,
+    ModelToolCall, ModelTurn, ProviderError, ProviderProtocolErrorKind,
+    StageInferencePolicyRevision, TokenUsage, ToolProtocolMode,
 };
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Instant;
@@ -452,6 +452,20 @@ impl From<OpenAiCompatibleError> for ProviderError {
                 message: error.to_string(),
                 retryable,
             },
+            OpenAiCompatibleError::MissingAction => ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MissingAction,
+                message: error.to_string(),
+            },
+            OpenAiCompatibleError::MultipleToolCalls => ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MultipleActions,
+                message: error.to_string(),
+            },
+            OpenAiCompatibleError::MissingToolName | OpenAiCompatibleError::InvalidAction(_) => {
+                ProviderError::Protocol {
+                    category: ProviderProtocolErrorKind::MalformedArguments,
+                    message: error.to_string(),
+                }
+            }
             _ => ProviderError::MalformedResponse {
                 message: error.to_string(),
             },
@@ -537,6 +551,10 @@ mod tests {
                 stream_options: true,
                 reasoning_efforts: Vec::new(),
                 reasoning_context_modes: Vec::new(),
+                tool_choice_modes: vec![
+                    pharness_core::ToolChoiceMode::Auto,
+                    pharness_core::ToolChoiceMode::Required,
+                ],
             },
             context_limit_tokens: 32_768,
             output_limit_tokens: 8_192,
@@ -567,6 +585,7 @@ mod tests {
             max_output_tokens: 4_096,
             max_input_tokens: 16_000,
             tool_protocol: ToolProtocolMode::NativeTools,
+            tool_choice: pharness_core::ToolChoiceMode::Required,
             transport_max_attempts: 1,
             selectable: true,
             policy_hash: String::new(),
@@ -597,7 +616,13 @@ mod tests {
             ..OpenAiStreamAggregate::default()
         };
         let error = aggregate_to_model_turn(aggregate, ToolProtocolMode::NativeTools).unwrap_err();
-        assert!(matches!(error, ProviderError::MalformedResponse { .. }));
+        assert!(matches!(
+            error,
+            ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MultipleActions,
+                ..
+            }
+        ));
     }
 
     #[test]

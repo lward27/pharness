@@ -1,11 +1,11 @@
-use super::{pack_messages, ContextBudget};
+use super::{estimate_request_tokens, pack_messages, ContextBudget};
 use super::{CancellationFlag, RunStatus};
 use crate::project::{RunBudget, RunBudgetConsumption};
 use crate::{
     AgentAction, AgentEvent, EventId, EventKind, EventSink, ModelMessage, ModelProvider,
-    ModelRequest, NoopToolExecutor, PolicyDecision, ResolvedInferenceBinding, RiskLevel, RunId,
-    RunScope, SafetyPolicy, SessionId, ToolError, ToolErrorDisposition, ToolExecutor,
-    ToolProtocolMode, ToolResult, ToolSpec,
+    ModelRequest, NoopToolExecutor, PolicyDecision, ProviderError, ResolvedInferenceBinding,
+    RiskLevel, RunId, RunScope, SafetyPolicy, SessionId, ToolError, ToolErrorDisposition,
+    ToolExecutor, ToolProtocolMode, ToolResult, ToolResultStatus, ToolSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -204,6 +204,7 @@ where
         };
         let mut tokens_used = config.budget_consumption.tokens_used;
         let (mut recovery, mut completion) = resume_runtime_state(&messages);
+        let mut protocol_corrections = protocol_correction_count(&messages);
         if let RunStart::Approved(approved) = start {
             turn_start = approved.turns_completed;
             if let Some(outcome) = self
@@ -297,23 +298,6 @@ where
                 }
             };
             messages = packed.messages;
-            self.emit(
-                &config,
-                &mut seq,
-                EventKind::ModelRequestStarted,
-                serde_json::json!({
-                    "turn": turn_index,
-                    "estimated_input_tokens": packed.estimated_input_tokens,
-                    "original_message_count": packed.original_message_count,
-                    "packed_message_count": messages.len(),
-                    "compacted_exchanges": packed.compacted_exchanges,
-                    "truncated_tool_results": packed.truncated_tool_results,
-                    "context_budget": config.context_budget.max_input_tokens,
-                    "repository_instruction_files": config.repository_instruction_files,
-                    "inference": inference_event_metadata(config.inference_binding.as_ref()),
-                }),
-            );
-
             let mut request_messages = messages.clone();
             let remaining_turns = config
                 .budget_consumption
@@ -330,6 +314,7 @@ where
                     )
                 })
                 .unwrap_or_else(|| (config.tools.clone(), false));
+            let verifier_finish_allowed = turn_tools.iter().any(|tool| tool.name == "finish");
             if let Some(budget) = &config.run_budget {
                 request_messages.insert(
                     1.min(request_messages.len()),
@@ -345,18 +330,88 @@ where
             if verifier_final_reserve {
                 request_messages.insert(
                     1.min(request_messages.len()),
-                    ModelMessage::system(
+                    ModelMessage::system(if verifier_finish_allowed {
                         "FINAL VERIFIER RESERVE: evidence collection is closed. Submit the typed verification verdict now from the sealed Tester outcome and evidence already inspected, then finish. Only submit_verification and finish are authorized in these remaining turns."
-                            .to_string(),
+                            .to_string()
+                    } else {
+                        "FINAL VERIFIER RESERVE: evidence collection is closed. Submit the terminal typed verification verdict now from the sealed Test outcome and evidence already inspected. Only submit_verification is authorized in these remaining turns."
+                            .to_string()
+                    }),
+                );
+            }
+            if config
+                .inference_binding
+                .as_ref()
+                .and_then(|binding| binding.stage_prompt.as_ref())
+                .is_some()
+            {
+                request_messages.insert(
+                    1.min(request_messages.len()),
+                    ModelMessage::system(execution_ledger(
+                        &messages,
+                        remaining_turns,
+                        config
+                            .budget_consumption
+                            .allowed_tokens
+                            .saturating_sub(tokens_used),
+                    )),
+                );
+            }
+            let estimated_request_tokens =
+                estimate_request_tokens(&request_messages, &turn_tools, &config.context_budget);
+            if estimated_request_tokens.saturating_add(config.context_budget.reserved_output_tokens)
+                > config.context_budget.max_input_tokens
+            {
+                let error = "context_budget_exceeded".to_string();
+                self.emit(
+                    &config,
+                    &mut seq,
+                    EventKind::RunFailed,
+                    serde_json::json!({
+                        "error":error,
+                        "turn":turn_index,
+                        "estimated_request_tokens":estimated_request_tokens,
+                        "tool_schema_count":turn_tools.len(),
+                        "reasoning_replay_included":request_messages.iter().any(|message| message.reasoning.is_some()),
+                    }),
+                );
+                return RunOutcome::failed(turn_index, error).with_consumption(
+                    consumption_snapshot(
+                        &config,
+                        turn_index,
+                        tokens_used,
+                        config
+                            .budget_consumption
+                            .active_execution_seconds_used
+                            .saturating_add(active_started.elapsed().as_secs()),
                     ),
                 );
             }
+            self.emit(
+                &config,
+                &mut seq,
+                EventKind::ModelRequestStarted,
+                serde_json::json!({
+                    "turn": turn_index,
+                    "estimated_input_tokens": estimated_request_tokens,
+                    "packed_message_tokens":packed.estimated_input_tokens,
+                    "original_message_count": packed.original_message_count,
+                    "packed_message_count": messages.len(),
+                    "compacted_exchanges": packed.compacted_exchanges,
+                    "truncated_tool_results": packed.truncated_tool_results,
+                    "tool_schema_count":turn_tools.len(),
+                    "context_budget": config.context_budget.max_input_tokens,
+                    "repository_instruction_files": config.repository_instruction_files,
+                    "inference": inference_event_metadata(config.inference_binding.as_ref()),
+                }),
+            );
             let request = ModelRequest {
                 session_id: config.session_id.clone(),
                 run_id: config.run_id.clone(),
                 messages: request_messages,
                 tools: turn_tools,
                 mode: config.tool_protocol,
+                tool_choice: config.tool_choice,
                 temperature: config.temperature,
                 max_tokens: config.max_tokens,
                 reasoning: config
@@ -367,12 +422,41 @@ where
 
             let turn = match self.provider.complete_action(request).await {
                 Ok(turn) => turn,
+                Err(ProviderError::Protocol { category, message })
+                    if reliability_v2_enabled(&config) && protocol_corrections < 2 =>
+                {
+                    protocol_corrections += 1;
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::ModelProtocolCorrection,
+                        serde_json::json!({
+                            "category": category.as_str(),
+                            "message": message,
+                            "turn": turn_index,
+                            "correction": protocol_corrections,
+                            "maximum_corrections": 2,
+                        }),
+                    );
+                    messages.push(protocol_correction_message(
+                        category.as_str(),
+                        &message,
+                        protocol_corrections,
+                    ));
+                    continue;
+                }
                 Err(error) => {
+                    let stop_category = failure_category_for_provider_error(&error);
                     self.emit(
                         &config,
                         &mut seq,
                         EventKind::RunFailed,
-                        serde_json::json!({ "error": error.to_string(), "turn": turn_index }),
+                        serde_json::json!({
+                            "error": error.to_string(),
+                            "turn": turn_index,
+                            "stop_category": stop_category,
+                            "protocol_corrections": protocol_corrections,
+                        }),
                     );
                     return RunOutcome::failed(turn_index + 1, error.to_string()).with_consumption(
                         consumption_snapshot(
@@ -450,17 +534,23 @@ where
             );
 
             if verifier_final_reserve
-                && !matches!(
-                    &turn.action,
-                    AgentAction::SubmitVerification { .. } | AgentAction::Finish { .. }
-                )
+                && !matches!(&turn.action, AgentAction::SubmitVerification { .. })
+                && !(verifier_finish_allowed && matches!(&turn.action, AgentAction::Finish { .. }))
             {
                 let result = ToolResult::error(
-                    "verifier final reserve accepts only submit_verification or finish",
+                    if verifier_finish_allowed {
+                        "verifier final reserve accepts only submit_verification or finish"
+                    } else {
+                        "verifier final reserve accepts only submit_verification"
+                    },
                     serde_json::json!({
                         "error_kind": "verifier_final_reserve",
                         "remaining_turns": remaining_turns,
-                        "allowed_actions": ["submit_verification", "finish"],
+                        "allowed_actions":if verifier_finish_allowed {
+                            serde_json::json!(["submit_verification", "finish"])
+                        } else {
+                            serde_json::json!(["submit_verification"])
+                        },
                     }),
                 );
                 self.emit(
@@ -601,6 +691,60 @@ where
                         ),
                     };
                 }
+                AgentAction::Respond { message, .. }
+                    if reliability_v2_enabled(&config) && protocol_corrections < 2 =>
+                {
+                    protocol_corrections += 1;
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::ModelProtocolCorrection,
+                        serde_json::json!({
+                            "category": "missing_action",
+                            "message": message,
+                            "turn": turn_index,
+                            "correction": protocol_corrections,
+                            "maximum_corrections": 2,
+                        }),
+                    );
+                    messages.push(ModelMessage {
+                        role: crate::ModelRole::Assistant,
+                        content: message.clone(),
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        reasoning: None,
+                    });
+                    messages.push(protocol_correction_message(
+                        "missing_action",
+                        "the response did not select a PHarness action",
+                        protocol_corrections,
+                    ));
+                }
+                AgentAction::Respond { .. } if reliability_v2_enabled(&config) => {
+                    let error = "protocol_correction_exhausted:missing_action";
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::RunFailed,
+                        serde_json::json!({
+                            "error": error,
+                            "stop_category": "missing_action",
+                            "turn": turn_index,
+                            "protocol_corrections": protocol_corrections,
+                        }),
+                    );
+                    return RunOutcome::failed(turn_index + 1, error).with_consumption(
+                        consumption_snapshot(
+                            &config,
+                            turn_index + 1,
+                            tokens_used,
+                            config
+                                .budget_consumption
+                                .active_execution_seconds_used
+                                .saturating_add(active_started.elapsed().as_secs()),
+                        ),
+                    );
+                }
                 AgentAction::Respond { message, .. } => {
                     messages.push(ModelMessage {
                         role: crate::ModelRole::Assistant,
@@ -723,6 +867,166 @@ where
                                     .or_else(|| Some(tool_action.id().to_string())),
                                 Some(&tool_action),
                             ));
+                            if reliability_v2_enabled(&config)
+                                && terminal_submission_kind(&tool_action).is_some()
+                                && result.status == ToolResultStatus::Error
+                            {
+                                if protocol_corrections < 2 {
+                                    protocol_corrections += 1;
+                                    self.emit(
+                                        &config,
+                                        &mut seq,
+                                        EventKind::ModelProtocolCorrection,
+                                        serde_json::json!({
+                                            "category": "invalid_submission",
+                                            "action": tool_action.kind_name(),
+                                            "turn": turn_index,
+                                            "correction": protocol_corrections,
+                                            "maximum_corrections": 2,
+                                        }),
+                                    );
+                                    messages.push(protocol_correction_message(
+                                        "invalid_submission",
+                                        "the controller rejected the typed terminal submission",
+                                        protocol_corrections,
+                                    ));
+                                    continue;
+                                }
+                                let error = "protocol_correction_exhausted:invalid_submission";
+                                self.emit(
+                                    &config,
+                                    &mut seq,
+                                    EventKind::RunFailed,
+                                    serde_json::json!({
+                                        "error": error,
+                                        "stop_category": "invalid_submission",
+                                        "turn": turn_index,
+                                        "protocol_corrections": protocol_corrections,
+                                    }),
+                                );
+                                return RunOutcome::failed(turn_index + 1, error).with_consumption(
+                                    consumption_snapshot(
+                                        &config,
+                                        turn_index + 1,
+                                        tokens_used,
+                                        config
+                                            .budget_consumption
+                                            .active_execution_seconds_used
+                                            .saturating_add(active_started.elapsed().as_secs()),
+                                    ),
+                                );
+                            }
+                            if result.status == crate::ToolResultStatus::Ok {
+                                if let Some(submission_kind) =
+                                    terminal_submission_kind(&tool_action)
+                                {
+                                    if matches!(
+                                        tool_action,
+                                        AgentAction::SubmitImplementation { .. }
+                                    ) {
+                                        if let Some(reason) = completion_failure_reason(
+                                            &config.task_contract,
+                                            &completion,
+                                        ) {
+                                            let result = ToolResult::error(
+                                                "implementation submission rejected: completion evidence is incomplete",
+                                                serde_json::json!({
+                                                    "error_kind": "completion_evidence_missing",
+                                                    "reason": reason,
+                                                }),
+                                            );
+                                            self.emit(
+                                                &config,
+                                                &mut seq,
+                                                EventKind::ToolFinished,
+                                                serde_json::to_value(&result).unwrap_or_default(),
+                                            );
+                                            messages.push(tool_message(
+                                                &result,
+                                                Some(tool_action.id().to_string()),
+                                                Some(&tool_action),
+                                            ));
+                                            if protocol_corrections < 2 {
+                                                protocol_corrections += 1;
+                                                self.emit(
+                                                    &config,
+                                                    &mut seq,
+                                                    EventKind::ModelProtocolCorrection,
+                                                    serde_json::json!({
+                                                        "category": "missing_completion_evidence",
+                                                        "action": tool_action.kind_name(),
+                                                        "turn": turn_index,
+                                                        "correction": protocol_corrections,
+                                                        "maximum_corrections": 2,
+                                                    }),
+                                                );
+                                                messages.push(protocol_correction_message(
+                                                    "missing_completion_evidence",
+                                                    reason,
+                                                    protocol_corrections,
+                                                ));
+                                                continue;
+                                            }
+                                            let error =
+                                                "protocol_correction_exhausted:missing_completion_evidence";
+                                            self.emit(
+                                                &config,
+                                                &mut seq,
+                                                EventKind::RunFailed,
+                                                serde_json::json!({
+                                                    "error": error,
+                                                    "stop_category": "missing_completion_evidence",
+                                                    "turn": turn_index,
+                                                    "protocol_corrections": protocol_corrections,
+                                                }),
+                                            );
+                                            return RunOutcome::failed(turn_index + 1, error)
+                                                .with_consumption(consumption_snapshot(
+                                                    &config,
+                                                    turn_index + 1,
+                                                    tokens_used,
+                                                    config
+                                                        .budget_consumption
+                                                        .active_execution_seconds_used
+                                                        .saturating_add(
+                                                            active_started.elapsed().as_secs(),
+                                                        ),
+                                                ));
+                                        }
+                                    }
+
+                                    let summary = format!(
+                                        "controller-validated {submission_kind} submission accepted"
+                                    );
+                                    self.emit(
+                                        &config,
+                                        &mut seq,
+                                        EventKind::RunFinished,
+                                        serde_json::json!({
+                                            "summary": summary,
+                                            "success": true,
+                                            "terminal_submission": submission_kind,
+                                        }),
+                                    );
+                                    return RunOutcome {
+                                        status: RunStatus::Completed,
+                                        turns: turn_index + 1,
+                                        summary: Some(summary),
+                                        error: None,
+                                        approval: None,
+                                        budget_pause: None,
+                                        consumption: consumption_snapshot(
+                                            &config,
+                                            turn_index + 1,
+                                            tokens_used,
+                                            config
+                                                .budget_consumption
+                                                .active_execution_seconds_used
+                                                .saturating_add(active_started.elapsed().as_secs()),
+                                        ),
+                                    };
+                                }
+                            }
                         }
                         Err(error) => {
                             if error.disposition() == ToolErrorDisposition::Recoverable {
@@ -938,11 +1242,16 @@ fn tool_message(
     action: Option<&AgentAction>,
 ) -> ModelMessage {
     let mut result = result.clone();
-    if let (Some(action), Some(content)) = (action, result.content.as_object_mut()) {
-        content.insert(
-            "action".to_string(),
-            serde_json::Value::String(action.kind_name().to_string()),
-        );
+    if let Some(content) = result.content.as_object_mut() {
+        // Full command output is durable artifact material, not model context.
+        // The agent receives bounded stdout/stderr plus full-output hashes.
+        content.remove("artifact_content");
+        if let Some(action) = action {
+            content.insert(
+                "action".to_string(),
+                serde_json::Value::String(action.kind_name().to_string()),
+            );
+        }
     }
     ModelMessage {
         role: crate::ModelRole::Tool,
@@ -993,6 +1302,43 @@ fn recoverable_error_result(
     )
 }
 
+const PROTOCOL_CORRECTION_MARKER: &str = "PHARNESS_PROTOCOL_CORRECTION";
+
+fn reliability_v2_enabled(config: &RunConfig) -> bool {
+    config
+        .inference_binding
+        .as_ref()
+        .and_then(|binding| binding.stage_prompt.as_ref())
+        .is_some()
+}
+
+fn protocol_correction_count(messages: &[ModelMessage]) -> u32 {
+    messages
+        .iter()
+        .filter(|message| {
+            message.role == crate::ModelRole::System
+                && message.content.starts_with(PROTOCOL_CORRECTION_MARKER)
+        })
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX)
+}
+
+fn protocol_correction_message(category: &str, message: &str, correction: u32) -> ModelMessage {
+    ModelMessage::system(format!(
+        "{PROTOCOL_CORRECTION_MARKER} {correction}/2 ({category}): {message}. Select exactly one available PHarness tool. Do not emit prose without a tool call, do not call multiple tools in one response, and submit arguments that exactly match the advertised schema."
+    ))
+}
+
+fn failure_category_for_provider_error(error: &ProviderError) -> &'static str {
+    match error {
+        ProviderError::RequestFailed { .. } => "provider_rejection_or_transport_failure",
+        ProviderError::MalformedResponse { .. } => "malformed_provider_response",
+        ProviderError::Protocol { category, .. } => category.as_str(),
+        ProviderError::UnsupportedCapability { .. } => "unavailable_capability",
+    }
+}
+
 fn resume_runtime_state(messages: &[ModelMessage]) -> (RecoveryState, CompletionState) {
     let mut recovery = RecoveryState::default();
     let mut completion = CompletionState::default();
@@ -1034,7 +1380,7 @@ fn resume_runtime_state(messages: &[ModelMessage]) -> (RecoveryState, Completion
             continue;
         }
         match content.get("action").and_then(serde_json::Value::as_str) {
-            Some("write_file" | "patch_file") => {
+            Some("write_file" | "patch_file" | "apply_patch") => {
                 completion.mutation_seen = true;
                 completion.changed |=
                     content.get("diff").and_then(serde_json::Value::as_str) != Some("unchanged");
@@ -1054,7 +1400,9 @@ fn update_completion_state(state: &mut CompletionState, action: &AgentAction, re
         return;
     }
     match action {
-        AgentAction::WriteFile { .. } | AgentAction::PatchFile { .. } => {
+        AgentAction::WriteFile { .. }
+        | AgentAction::PatchFile { .. }
+        | AgentAction::ApplyPatch { .. } => {
             state.mutation_seen = true;
             state.changed |= result
                 .content
@@ -1068,6 +1416,104 @@ fn update_completion_state(state: &mut CompletionState, action: &AgentAction, re
         }
         _ => {}
     }
+}
+
+fn terminal_submission_kind(action: &AgentAction) -> Option<&'static str> {
+    match action {
+        AgentAction::SubmitOnboardingProposal { .. } => Some("onboarding_proposal"),
+        AgentAction::SubmitWorkPlan { .. } => Some("work_plan"),
+        AgentAction::SubmitImplementation { .. } => Some("implementation"),
+        AgentAction::SubmitTestDiagnosis { .. } => Some("test_diagnosis"),
+        AgentAction::SubmitVerification { .. } => Some("verification"),
+        _ => None,
+    }
+}
+
+fn execution_ledger(
+    messages: &[ModelMessage],
+    remaining_turns: u32,
+    remaining_tokens: u64,
+) -> String {
+    let mut inspected = Vec::new();
+    let mut changed = Vec::new();
+    let mut commands = Vec::new();
+    let mut failures = Vec::new();
+    for message in messages
+        .iter()
+        .filter(|message| message.role == crate::ModelRole::Tool)
+    {
+        let Ok(result) = serde_json::from_str::<ToolResult>(&message.content) else {
+            continue;
+        };
+        let action = result
+            .content
+            .get("action")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown");
+        if let Some(path) = result
+            .content
+            .get("path")
+            .and_then(serde_json::Value::as_str)
+        {
+            let target = if matches!(action, "write_file" | "patch_file" | "apply_patch") {
+                &mut changed
+            } else {
+                &mut inspected
+            };
+            if !target.iter().any(|candidate| candidate == path) {
+                target.push(path.to_string());
+            }
+        }
+        if let Some(paths) = result
+            .content
+            .get("changed_paths")
+            .and_then(serde_json::Value::as_array)
+        {
+            for path in paths.iter().filter_map(serde_json::Value::as_str) {
+                if !changed.iter().any(|candidate| candidate == path) {
+                    changed.push(path.to_string());
+                }
+            }
+        }
+        if result
+            .content
+            .get("acceptance_command")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+            || result
+                .content
+                .get("workspace_command")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+        {
+            commands.push(serde_json::json!({
+                "name":result.content.get("name"),
+                "command":result.content.get("command"),
+                "executable":result.content.get("executable"),
+                "args":result.content.get("args"),
+                "status":result.status,
+                "exit_code":result.content.get("exit_code"),
+            }));
+        }
+        if result.status != crate::ToolResultStatus::Ok {
+            failures.push(serde_json::json!({
+                "action":action,
+                "error_kind":result.content.get("error_kind"),
+                "summary":result.summary,
+            }));
+        }
+    }
+    format!(
+        "Controller execution ledger (derived from durable tool results; do not rewrite):\n{}",
+        serde_json::json!({
+            "inspected_paths":inspected,
+            "changed_paths":changed,
+            "commands":commands,
+            "unresolved_failures":failures,
+            "remaining_turns":remaining_turns,
+            "remaining_tokens":remaining_tokens,
+        })
+    )
 }
 
 fn completion_failure_reason(
@@ -1093,6 +1539,7 @@ pub struct RunConfig {
     pub messages: Vec<ModelMessage>,
     pub tools: Vec<ToolSpec>,
     pub tool_protocol: ToolProtocolMode,
+    pub tool_choice: crate::ToolChoiceMode,
     pub temperature: f32,
     pub max_tokens: u32,
     pub max_turns: u32,
@@ -1116,6 +1563,7 @@ impl RunConfig {
             messages: vec![ModelMessage::user(task)],
             tools: Vec::new(),
             tool_protocol: ToolProtocolMode::JsonAction,
+            tool_choice: crate::ToolChoiceMode::Required,
             temperature: 0.1,
             max_tokens: 4096,
             max_turns: 40,
@@ -1148,6 +1596,12 @@ fn inference_event_metadata(binding: Option<&ResolvedInferenceBinding>) -> serde
             "temperature":binding.policy.temperature(),
             "maximum_output_tokens":binding.policy.max_output_tokens,
             "context_assembly_limit":binding.policy.max_input_tokens,
+            "tool_choice":binding.policy.tool_choice,
+            "prompt_version":binding.prompt_version,
+            "stage_prompt":binding.stage_prompt,
+            "tool_schema_hash":binding.tool_schema_hash,
+            "context_policy_hash":binding.context_policy_hash,
+            "protocol_calibration_hash":binding.protocol_calibration_hash,
             "binding_hash":binding.binding_hash,
         })
     })
@@ -1300,11 +1754,15 @@ mod tests {
     };
     use crate::{
         AgentAction, ApprovalKind, CancellationFlag, CapabilityKind, ContextBudget, EventKind,
-        InMemoryEventSink, LocalReadOnlyFsTools, ModelCapabilities, ModelMessage, ModelProvider,
-        ModelRequest, ModelTurn, NoopToolExecutor, PermissionGrant, PermissionGrantPolicy,
-        PermissionGrantScope, PolicyMode, ProviderError, RiskLevel, RunBudget,
-        RunBudgetConsumption, RunScope, RunStatus, SafetyPolicy, TaskContract, TaskKind, ToolError,
-        ToolExecutor, ToolResult, ToolSpec,
+        InMemoryEventSink, InferenceBackendKind, InferenceCapabilities, InferenceStage,
+        InferenceTargetRef, InferenceTargetRevision, InferenceTransportPolicy,
+        LocalReadOnlyFsTools, ModelCapabilities, ModelMessage, ModelProvider, ModelRequest,
+        ModelTurn, NoopToolExecutor, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
+        PolicyMode, ProviderError, ProviderProtocolErrorKind, ReasoningRequestPolicy,
+        ResolvedInferenceBinding, RiskLevel, RunBudget, RunBudgetConsumption, RunScope, RunStatus,
+        SafetyPolicy, StageInferencePolicyRevision, StagePromptRevision, TaskContract, TaskKind,
+        ToolChoiceMode, ToolError, ToolExecutor, ToolResult, ToolSpec, INFERENCE_POLICY_SCHEMA,
+        INFERENCE_TARGET_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA, STAGE_PROMPT_SCHEMA,
     };
     use async_trait::async_trait;
     use camino::Utf8PathBuf;
@@ -1345,6 +1803,46 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["submit_verification", "finish"]
         );
+
+        let v2_tools = tools
+            .iter()
+            .filter(|tool| tool.name != "finish")
+            .cloned()
+            .collect::<Vec<_>>();
+        let (reserve_tools, reserve_active) = tools_for_turn(&v2_tools, 4, 4);
+        assert!(reserve_active);
+        assert_eq!(
+            reserve_tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["submit_verification"]
+        );
+    }
+
+    #[test]
+    fn workspace_command_artifact_payload_is_not_replayed_to_the_model() {
+        let message = tool_message(
+            &ToolResult::ok(
+                "workspace command passed",
+                serde_json::json!({
+                    "workspace_command": true,
+                    "stdout": "bounded output",
+                    "stdout_sha256": "sha256:abc",
+                    "artifact_content": {
+                        "stdout": "durable full output",
+                        "stderr": "",
+                    }
+                }),
+            ),
+            Some("call_workspace".into()),
+            None,
+        );
+        let replayed: serde_json::Value = serde_json::from_str(&message.content).unwrap();
+
+        assert_eq!(replayed["content"]["stdout"], "bounded output");
+        assert_eq!(replayed["content"]["stdout_sha256"], "sha256:abc");
+        assert!(replayed["content"].get("artifact_content").is_none());
     }
 
     #[test]
@@ -1456,6 +1954,170 @@ mod tests {
     #[derive(Clone)]
     struct ErroringExecutor {
         error: ToolError,
+    }
+
+    #[derive(Clone)]
+    struct AcceptingExecutor;
+
+    #[async_trait]
+    impl ToolExecutor for AcceptingExecutor {
+        async fn execute(&self, action: &AgentAction) -> Result<ToolResult, ToolError> {
+            Ok(ToolResult::ok(
+                format!("accepted {}", action.kind_name()),
+                serde_json::json!({"structured_submission":true}),
+            ))
+        }
+    }
+
+    fn enable_reliability_v2(config: &mut RunConfig) {
+        let target = InferenceTargetRevision {
+            schema_version: INFERENCE_TARGET_SCHEMA.into(),
+            target_id: "test-target".into(),
+            revision: "v1".into(),
+            display_name: "Test target".into(),
+            backend_kind: InferenceBackendKind::OpenaiCompatible,
+            protocol: "openai_chat_completions_v1".into(),
+            upstream_base_url: "https://example.invalid/v1".into(),
+            upstream_model: "test-model".into(),
+            authentication_binding: None,
+            transport: InferenceTransportPolicy::default(),
+            capabilities: InferenceCapabilities {
+                native_tools: true,
+                streaming: true,
+                json_schema: false,
+                stream_options: true,
+                reasoning_efforts: Vec::new(),
+                reasoning_context_modes: Vec::new(),
+                tool_choice_modes: vec![ToolChoiceMode::Auto],
+            },
+            context_limit_tokens: 65_536,
+            output_limit_tokens: 8_192,
+            allowed_stages: vec![InferenceStage::Plan],
+            selectable: true,
+            openrouter: None,
+            config_hash: "sha256:test-target".into(),
+        };
+        let policy = StageInferencePolicyRevision {
+            schema_version: INFERENCE_POLICY_SCHEMA.into(),
+            policy_id: "test-policy".into(),
+            revision: "v1".into(),
+            display_name: "Test policy".into(),
+            eligible_profiles: vec!["repo-planner".into()],
+            eligible_stages: vec![InferenceStage::Plan],
+            target: InferenceTargetRef {
+                target_id: target.target_id.clone(),
+                revision: target.revision.clone(),
+            },
+            target_hash: target.config_hash.clone(),
+            reasoning: ReasoningRequestPolicy::default(),
+            temperature_milli: Some(100),
+            max_output_tokens: 8_192,
+            max_input_tokens: 65_536,
+            tool_protocol: crate::ToolProtocolMode::NativeTools,
+            tool_choice: ToolChoiceMode::Auto,
+            transport_max_attempts: 1,
+            selectable: true,
+            policy_hash: "sha256:test-policy".into(),
+        };
+        config.tool_choice = ToolChoiceMode::Auto;
+        config.inference_binding = Some(ResolvedInferenceBinding {
+            schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
+            target,
+            policy,
+            prompt_version: "reliability-v2".into(),
+            stage_prompt: Some(StagePromptRevision {
+                schema_version: STAGE_PROMPT_SCHEMA.into(),
+                prompt_id: "repo-planner".into(),
+                revision: "v2".into(),
+                stage: InferenceStage::Plan,
+                content_hash: format!("sha256:{}", "a".repeat(64)),
+            }),
+            tool_schema_hash: "sha256:tools".into(),
+            context_policy_hash: "sha256:context".into(),
+            protocol_calibration_hash: "sha256:protocol".into(),
+            profile_budget_hash: "sha256:budget".into(),
+            base_agent_profile_hash: "sha256:base".into(),
+            agent_profile_hash: "sha256:profile".into(),
+            binding_hash: "sha256:binding".into(),
+        });
+    }
+
+    fn submitted_plan(id: &str) -> AgentAction {
+        AgentAction::SubmitWorkPlan {
+            id: id.into(),
+            reason: "submit the bounded plan".into(),
+            work_plan: serde_json::json!({"title":"bounded"}),
+        }
+    }
+
+    #[tokio::test]
+    async fn reliability_v2_corrects_one_protocol_error_then_accepts_terminal_submission() {
+        let events = InMemoryEventSink::default();
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([
+                Err(ProviderError::Protocol {
+                    category: ProviderProtocolErrorKind::MissingAction,
+                    message: "no tool call".into(),
+                }),
+                model_turn(submitted_plan("act_plan")),
+            ]),
+            events.clone(),
+            AcceptingExecutor,
+        );
+        let mut config = RunConfig::local_test("plan");
+        enable_reliability_v2(&mut config);
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+
+        assert_eq!(outcome.status, RunStatus::Completed);
+        assert_eq!(outcome.turns, 2);
+        assert_eq!(
+            events
+                .events()
+                .iter()
+                .filter(|event| event.kind == EventKind::ModelProtocolCorrection)
+                .count(),
+            1
+        );
+        assert!(events.events().iter().any(|event| {
+            event.kind == EventKind::RunFinished
+                && event.payload["terminal_submission"] == "work_plan"
+        }));
+    }
+
+    #[tokio::test]
+    async fn reliability_v2_never_exceeds_two_protocol_corrections() {
+        let events = InMemoryEventSink::default();
+        let failure = || {
+            Err(ProviderError::Protocol {
+                category: ProviderProtocolErrorKind::MultipleActions,
+                message: "multiple actions".into(),
+            })
+        };
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([failure(), failure(), failure()]),
+            events.clone(),
+            AcceptingExecutor,
+        );
+        let mut config = RunConfig::local_test("plan");
+        enable_reliability_v2(&mut config);
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+
+        assert_eq!(outcome.status, RunStatus::Failed);
+        assert_eq!(outcome.turns, 3);
+        assert_eq!(
+            events
+                .events()
+                .iter()
+                .filter(|event| event.kind == EventKind::ModelProtocolCorrection)
+                .count(),
+            2
+        );
+        assert!(events.events().iter().any(|event| {
+            event.kind == EventKind::RunFailed
+                && event.payload["stop_category"] == "multiple_actions"
+        }));
     }
 
     #[async_trait]

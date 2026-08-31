@@ -245,7 +245,20 @@ fn validate_gateway_request(
     }
     if policy.tool_protocol == pharness_core::ToolProtocolMode::NativeTools
         && (request.tools.is_empty()
-            || request.tool_choice != Some(pharness_openai_compatible::ToolChoice::Required)
+            || request.tool_choice
+                != Some(match policy.tool_choice {
+                    pharness_core::ToolChoiceMode::Auto => {
+                        pharness_openai_compatible::ToolChoice::Auto
+                    }
+                    pharness_core::ToolChoiceMode::Required => {
+                        pharness_openai_compatible::ToolChoice::Required
+                    }
+                    pharness_core::ToolChoiceMode::Specific => {
+                        return Err(GatewayError::InvalidRequest(
+                            "specific tool choice requires a named-tool policy revision".into(),
+                        ));
+                    }
+                })
             || request.parallel_tool_calls != Some(false))
     {
         return Err(GatewayError::Unauthorized("native tool policy mismatch"));
@@ -585,6 +598,10 @@ mod tests {
                 stream_options: true,
                 reasoning_efforts: vec![ReasoningEffort::High],
                 reasoning_context_modes: vec![ReasoningContextMode::CurrentTurn],
+                tool_choice_modes: vec![
+                    pharness_core::ToolChoiceMode::Auto,
+                    pharness_core::ToolChoiceMode::Required,
+                ],
             },
             context_limit_tokens: 32_768,
             output_limit_tokens: 8_192,
@@ -624,6 +641,7 @@ mod tests {
             max_output_tokens: 8_192,
             max_input_tokens: 16_000,
             tool_protocol: ToolProtocolMode::NativeTools,
+            tool_choice: pharness_core::ToolChoiceMode::Required,
             transport_max_attempts: 3,
             selectable: false,
             policy_hash: String::new(),

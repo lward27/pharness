@@ -162,9 +162,12 @@ impl SafetyPolicy {
             | AgentAction::GetEvidence { .. }
             | AgentAction::SubmitOnboardingProposal { .. }
             | AgentAction::SubmitWorkPlan { .. }
+            | AgentAction::SubmitImplementation { .. }
             | AgentAction::SubmitTestOutcome { .. }
+            | AgentAction::SubmitTestDiagnosis { .. }
             | AgentAction::SubmitVerification { .. }
             | AgentAction::RunAcceptanceCommand { .. }
+            | AgentAction::RunWorkspaceCommand { .. }
             | AgentAction::GitDiff { .. }
             | AgentAction::GitStatus { .. } => PolicyDecision::allow(
                 RiskLevel::Low,
@@ -235,6 +238,7 @@ impl SafetyPolicy {
             | AgentAction::CreateDirectory { path, .. } => {
                 self.evaluate_write_action(path.as_str())
             }
+            AgentAction::ApplyPatch { .. } => self.evaluate_write_action("."),
             AgentAction::RunShell { cmd, .. } => self.evaluate_command(cmd),
         }
     }
@@ -424,6 +428,7 @@ impl PermissionGrant {
                 action,
                 AgentAction::WriteFile { .. }
                     | AgentAction::PatchFile { .. }
+                    | AgentAction::ApplyPatch { .. }
                     | AgentAction::CreateDirectory { .. }
             )
             && self.scope.allows_action(action)
@@ -518,6 +523,9 @@ impl PermissionGrantScope {
             AgentAction::WriteFile { path, .. }
             | AgentAction::PatchFile { path, .. }
             | AgentAction::CreateDirectory { path, .. } => path.as_str(),
+            // Unified-diff paths are validated atomically against these same
+            // globs by the workspace executor before Git applies the patch.
+            AgentAction::ApplyPatch { .. } => return !self.writable_path_globs.is_empty(),
             _ => return true,
         };
         !self.writable_path_globs.is_empty()
@@ -563,18 +571,23 @@ fn capability_kind_for_action(action: &AgentAction) -> CapabilityKind {
         | AgentAction::GetEvidence { .. }
         | AgentAction::SubmitOnboardingProposal { .. }
         | AgentAction::SubmitWorkPlan { .. }
+        | AgentAction::SubmitImplementation { .. }
         | AgentAction::SubmitTestOutcome { .. }
+        | AgentAction::SubmitTestDiagnosis { .. }
         | AgentAction::SubmitVerification { .. } => CapabilityKind::AgentControl,
         AgentAction::ReadFile { .. }
         | AgentAction::WriteFile { .. }
         | AgentAction::PatchFile { .. }
+        | AgentAction::ApplyPatch { .. }
         | AgentAction::CreateDirectory { .. }
         | AgentAction::ListDir { .. }
         | AgentAction::SearchFiles { .. } => CapabilityKind::Filesystem,
         AgentAction::EnvironmentInfo { .. } | AgentAction::RunAcceptanceCommand { .. } => {
             CapabilityKind::AgentControl
         }
-        AgentAction::RunShell { .. } => CapabilityKind::Shell,
+        AgentAction::RunShell { .. } | AgentAction::RunWorkspaceCommand { .. } => {
+            CapabilityKind::Shell
+        }
         AgentAction::GitDiff { .. } | AgentAction::GitStatus { .. } => CapabilityKind::Git,
         AgentAction::KubernetesGet { .. } => CapabilityKind::KubernetesRead,
         AgentAction::ArgoGetApp { .. } => CapabilityKind::ArgoRead,

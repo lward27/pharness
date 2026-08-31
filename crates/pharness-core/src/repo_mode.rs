@@ -115,6 +115,11 @@ pub struct StageOutcomeDocument {
     pub work_item_id: String,
     pub stage_execution_id: String,
     pub stage: RepoStageKey,
+    /// Whether the terminal conclusion was produced by deterministic
+    /// controller logic or by a model-backed stage and then validated by the
+    /// controller. Historical documents default to `agent` for compatibility.
+    #[serde(default = "default_stage_outcome_origin")]
+    pub origin: String,
     pub status: StageTerminalStatus,
     pub objective: serde_json::Value,
     pub pinned_inputs: serde_json::Value,
@@ -140,6 +145,10 @@ pub struct StageOutcomeDocument {
     pub recommendations: Vec<serde_json::Value>,
     pub stop_reason: String,
     pub sealed_state_version: u64,
+}
+
+fn default_stage_outcome_origin() -> String {
+    "agent".into()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,6 +284,166 @@ pub fn compiled_agent_profiles(model: &str, prompt_version: &str) -> Vec<AgentPr
         .collect()
 }
 
+/// Compile the reliability-v2 Repo Mode profiles. These profiles deliberately
+/// omit the legacy `finish` action because controller-validated typed
+/// submissions terminate their stage. Test execution is controller-owned, so
+/// there is no model-backed `repo-tester` profile in this set.
+pub fn compiled_reliability_v2_agent_profiles(
+    model: &str,
+    prompt_bundle_version: &str,
+) -> Vec<AgentProfile> {
+    let specs = [
+        (
+            "repository-onboarding-proposer",
+            16,
+            24,
+            100_000,
+            200_000,
+            600,
+            vec![
+                "read_file",
+                "list_dir",
+                "search_files",
+                "submit_onboarding_proposal",
+            ],
+        ),
+        (
+            "repo-planner",
+            16,
+            24,
+            100_000,
+            200_000,
+            600,
+            vec![
+                "get_evidence",
+                "list_dir",
+                "read_file",
+                "search_files",
+                "submit_work_plan",
+            ],
+        ),
+        (
+            "repo-builder",
+            48,
+            100,
+            400_000,
+            1_000_000,
+            3_600,
+            vec![
+                "environment_info",
+                "get_evidence",
+                "list_dir",
+                "read_file",
+                "search_files",
+                "create_directory",
+                "write_file",
+                "patch_file",
+                "apply_patch",
+                "run_workspace_command",
+                "run_acceptance_command",
+                "git_diff",
+                "git_status",
+                "submit_implementation",
+            ],
+        ),
+        (
+            "repo-repair",
+            24,
+            40,
+            200_000,
+            480_000,
+            1_800,
+            vec![
+                "environment_info",
+                "get_evidence",
+                "list_dir",
+                "read_file",
+                "search_files",
+                "write_file",
+                "patch_file",
+                "apply_patch",
+                "run_workspace_command",
+                "run_acceptance_command",
+                "git_diff",
+                "git_status",
+                "submit_implementation",
+            ],
+        ),
+        (
+            "repo-test-diagnoser",
+            8,
+            12,
+            80_000,
+            160_000,
+            900,
+            vec![
+                "get_evidence",
+                "read_file",
+                "search_files",
+                "submit_test_diagnosis",
+            ],
+        ),
+        (
+            "repo-verifier",
+            24,
+            40,
+            200_000,
+            480_000,
+            900,
+            vec![
+                "get_evidence",
+                "read_file",
+                "search_files",
+                "git_diff",
+                "git_status",
+                "submit_verification",
+            ],
+        ),
+    ];
+
+    specs
+        .into_iter()
+        .map(
+            |(id, initial_turns, hard_turns, initial_tokens, hard_tokens, seconds, tools)| {
+                let budget = RunBudget {
+                    initial_turns,
+                    hard_turns,
+                    initial_tokens,
+                    hard_tokens,
+                    active_execution_seconds: seconds,
+                    verification_reserve_turns: match id {
+                        "repo-builder" | "repo-repair" | "repo-verifier" => 8,
+                        _ => 0,
+                    },
+                    ..RunBudget::default()
+                };
+                let material = serde_json::json!({
+                    "id": id,
+                    "version": "v2",
+                    "prompt_version": prompt_bundle_version,
+                    "model": model,
+                    "tools": tools,
+                    "budget": budget,
+                    "deterministic_test": true,
+                    "terminal_typed_submission": true,
+                });
+                use sha2::{Digest, Sha256};
+                let encoded =
+                    serde_json::to_vec(&material).expect("compiled AgentProfile serializes");
+                AgentProfile {
+                    id: id.into(),
+                    version: "v2".into(),
+                    profile_hash: format!("sha256:{:x}", Sha256::digest(encoded)),
+                    prompt_version: prompt_bundle_version.into(),
+                    model: model.into(),
+                    tools: tools.into_iter().map(str::to_string).collect(),
+                    budget,
+                }
+            },
+        )
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,6 +476,28 @@ mod tests {
         assert!(first
             .iter()
             .all(|profile| profile.profile_hash.starts_with("sha256:")));
+    }
+
+    #[test]
+    fn reliability_v2_profiles_are_terminal_and_controller_tested() {
+        let profiles = compiled_reliability_v2_agent_profiles("provider/model", "bundle-v2");
+        assert_eq!(profiles.len(), 6);
+        assert!(profiles.iter().all(|profile| profile.version == "v2"));
+        assert!(profiles
+            .iter()
+            .all(|profile| !profile.tools.iter().any(|tool| tool == "finish")));
+        assert!(!profiles.iter().any(|profile| profile.id == "repo-tester"));
+        let builder = profiles
+            .iter()
+            .find(|profile| profile.id == "repo-builder")
+            .expect("builder profile");
+        for tool in [
+            "apply_patch",
+            "run_workspace_command",
+            "submit_implementation",
+        ] {
+            assert!(builder.tools.iter().any(|candidate| candidate == tool));
+        }
     }
 
     #[test]

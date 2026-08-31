@@ -9,6 +9,8 @@ pub struct ModelRequest {
     pub messages: Vec<ModelMessage>,
     pub tools: Vec<ToolSpec>,
     pub mode: ToolProtocolMode,
+    #[serde(default)]
+    pub tool_choice: ToolChoiceMode,
     pub temperature: f32,
     pub max_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,6 +64,21 @@ pub enum ModelRole {
 pub enum ToolProtocolMode {
     NativeTools,
     JsonAction,
+}
+
+/// Provider-neutral control over native function-tool selection.
+///
+/// Legacy PHarness requests required a tool on every turn. Reliability V2
+/// defaults new policies to `Auto`, allowing the model to reason before
+/// selecting exactly one action while the runtime still rejects ambiguous or
+/// malformed action responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolChoiceMode {
+    Auto,
+    #[default]
+    Required,
+    Specific,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,10 +1,96 @@
 //! Worker system prompt and tool schema shared by every attempt host.
 
 use pharness_core::{CapabilityKind, ToolSpec};
+use sha2::{Digest, Sha256};
 
 /// Bump whenever the stable worker instructions change. Evaluations record
 /// this value so baseline and candidate runs can be compared meaningfully.
 pub const SYSTEM_PROMPT_VERSION: &str = "2026-08-29.3";
+pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-08-30.1";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagePromptPack {
+    pub prompt_id: &'static str,
+    pub revision: &'static str,
+    pub stage: pharness_core::InferenceStage,
+    pub content: &'static str,
+}
+
+impl StagePromptPack {
+    pub fn revision_record(&self) -> pharness_core::StagePromptRevision {
+        pharness_core::StagePromptRevision {
+            schema_version: pharness_core::STAGE_PROMPT_SCHEMA.into(),
+            prompt_id: self.prompt_id.into(),
+            revision: self.revision.into(),
+            stage: self.stage,
+            content_hash: format!("sha256:{:x}", Sha256::digest(self.content.as_bytes())),
+        }
+    }
+}
+
+pub fn repo_system_prompt() -> &'static str {
+    r#"You are a PHarness Repo Mode stage agent operating on one immutable source revision and one controller-owned stage.
+Use only the tools exposed in this request. Make at most one tool call per turn and never invent a tool, path, command, acceptance name, fact, or capability.
+Controller-provided RepositoryContract, EnvironmentSnapshot, repository map, context pack, execution ledger, and tool schemas are authoritative. Inspect only what the task requires. Never rediscover declared environment facts, install packages, access the network, mutate Git, or inspect secrets.
+Treat tool errors as evidence. Change approach after a recoverable failure instead of repeating it. Separate verified facts from assumptions and model claims.
+Typed submit_* tools are terminal: submit the required stage document exactly once when the stage work is complete. The controller, deterministic tests, and later stages decide success."#
+}
+
+pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
+    let revision = RELIABILITY_V2_PROMPT_BUNDLE_VERSION;
+    match profile_id {
+        "repository-onboarding-proposer" => Some(StagePromptPack {
+            prompt_id: "repo-onboarding-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Onboarding,
+            content: r#"Use discovery evidence to propose repository configuration. Label every item as a discovered fact, proposed configuration, assumption, conflict, or blocker. Copy executable facts only from discovery and compatible profile descriptors. Do not invent roots, commands, locks, Services, or profile IDs. Submit the smallest valid onboarding proposal or an exact blocker."#,
+        }),
+        "repo-planner" => Some(StagePromptPack {
+            prompt_id: "repo-planner-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Plan,
+            content: r#"Inspect the deterministic repository map and the minimum source evidence needed to localize the task. Map every intent clause and every selected acceptance item to concrete existing areas. Plans may name only paths, roots, commands, and acceptance names proven by controller context or repository reads. State assumptions and contradictions. Submit one bounded WorkPlan with implementation, test, and documentation steps; do not change source."#,
+        }),
+        "repo-builder" => Some(StagePromptPack {
+            prompt_id: "repo-builder-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Implement,
+            content: r#"Localize the task from the plan and repository map. Read nearby implementation and tests before editing. Make the smallest coherent patch within writable paths, preferring atomic apply_patch with preimage hashes. Use run_workspace_command only for bounded offline inspection or focused checks. Run focused checks, then every declared acceptance command, then inspect final Git diff and status. Preserve unrelated code. Submit implementation only after evidence is complete."#,
+        }),
+        "repo-repair" => Some(StagePromptPack {
+            prompt_id: "repo-repair-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Implement,
+            content: r#"Consume the exact deterministic Test or Verifier findings and correction lineage. Preserve correct existing work. Inspect only the failing area, make one targeted repair within the original WorkPlan and writable scope, rerun the relevant focused check and all acceptance commands, then inspect final Git diff and status. Do not broaden scope or rewrite correct work. Submit the repaired implementation."#,
+        }),
+        "repo-test-diagnoser" => Some(StagePromptPack {
+            prompt_id: "repo-test-diagnoser-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Test,
+            content: r#"Diagnose controller-provided deterministic command or hidden-test failures without modifying source. Tie every conclusion to exact output or evidence. Classify the failure and provide minimal repair recommendations. Do not rerun commands unless an exposed read-only tool is required to disambiguate. Submit one typed test diagnosis."#,
+        }),
+        "repo-verifier" => Some(StagePromptPack {
+            prompt_id: "repo-verifier-v2",
+            revision,
+            stage: pharness_core::InferenceStage::Verify,
+            content: r#"Review adversarially against intent, approved WorkPlan, final diff, deterministic Test outcome, acceptance evidence, documentation, and repository conventions. Look for semantic mismatches, unsafe edge cases, misleading tests or docs, and incomplete intent coverage. Never infer correctness from passing commands alone. Distinguish blocking findings from residual risks and submit one typed verdict with evidence references."#,
+        }),
+        _ => None,
+    }
+}
+
+pub fn tool_schema_hash_for_profile(tool_names: &[String]) -> Result<String, serde_json::Error> {
+    let allowed = tool_names
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let schemas = worker_tool_specs()
+        .into_iter()
+        .filter(|tool| allowed.contains(tool.name.as_str()))
+        .collect::<Vec<_>>();
+    let value = serde_json::to_value(schemas)?;
+    pharness_core::canonical_json_sha256(&value)
+}
 
 pub fn system_prompt() -> &'static str {
     r#"You are the pharness local SDLC agent worker for lucas_engineering.
@@ -178,6 +264,24 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
             CapabilityKind::Filesystem,
         ),
         ToolSpec::new(
+            "apply_patch",
+            "Atomically apply one bounded unified diff inside declared writable paths. Optional preimage hashes make the edit fail closed when the inspected file changed.",
+            serde_json::json!({
+                "type":"object",
+                "additionalProperties":false,
+                "required":["reason","patch"],
+                "properties":{
+                    "reason":{"type":"string"},
+                    "patch":{"type":"string","minLength":1,"maxLength":262144},
+                    "preimage_sha256":{
+                        "type":"object",
+                        "additionalProperties":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+                    }
+                }
+            }),
+            CapabilityKind::Filesystem,
+        ),
+        ToolSpec::new(
             "run_acceptance_command",
             "Run one exact offline acceptance command selected by name from the immutable RepositoryContract.",
             serde_json::json!({
@@ -190,6 +294,23 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
                 }
             }),
             CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "run_workspace_command",
+            "Run one bounded offline inspection, focused test, lint, compile, or build command as an argv vector. Package installation, network access, shell composition, and Git mutation are denied.",
+            serde_json::json!({
+                "type":"object",
+                "additionalProperties":false,
+                "required":["reason","executable","args"],
+                "properties":{
+                    "reason":{"type":"string"},
+                    "executable":{"type":"string","minLength":1,"maxLength":256},
+                    "args":{"type":"array","items":{"type":"string","maxLength":4096},"maxItems":128},
+                    "cwd":{"type":["string","null"]},
+                    "timeout_ms":{"type":["integer","null"],"minimum":100,"maximum":120000}
+                }
+            }),
+            CapabilityKind::Shell,
         ),
         ToolSpec::new(
             "get_evidence",
@@ -218,9 +339,21 @@ pub fn worker_tool_specs() -> Vec<ToolSpec> {
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
+            "submit_implementation",
+            "Submit the final Builder implementation record. A controller-valid submission terminates the Builder Run without a separate finish call.",
+            implementation_submission_schema(),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
             "submit_test_outcome",
             "Submit structured test findings bound to declared acceptance evidence.",
             test_outcome_submission_schema(),
+            CapabilityKind::AgentControl,
+        ),
+        ToolSpec::new(
+            "submit_test_diagnosis",
+            "Submit a read-only diagnosis of deterministic acceptance failures. A controller-valid submission terminates the diagnostic Run.",
+            test_diagnosis_submission_schema(),
             CapabilityKind::AgentControl,
         ),
         ToolSpec::new(
@@ -545,6 +678,28 @@ fn work_plan_submission_schema() -> serde_json::Value {
     })
 }
 
+fn implementation_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","implementation"],
+        "properties":{
+            "reason":{"type":"string","minLength":1,"maxLength":2000},
+            "implementation":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","changed_paths","acceptance_names","risks"],
+                "properties":{
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "changed_paths":{"type":"array","minItems":1,"maxItems":200,"items":{"type":"string","minLength":1}},
+                    "acceptance_names":{"type":"array","minItems":1,"maxItems":50,"items":{"type":"string","minLength":1}},
+                    "risks":{"type":"array","maxItems":50,"items":{"type":"string"}}
+                }
+            }
+        }
+    })
+}
+
 fn test_outcome_submission_schema() -> serde_json::Value {
     serde_json::json!({
         "type":"object",
@@ -561,6 +716,28 @@ fn test_outcome_submission_schema() -> serde_json::Value {
                     "acceptance_names":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50},
                     "claims":{"type":"array","items":{"type":"string"},"maxItems":50},
                     "risks":{"type":"array","items":{"type":"string"},"maxItems":50}
+                }
+            }
+        }
+    })
+}
+
+fn test_diagnosis_submission_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "required":["reason","diagnosis"],
+        "properties":{
+            "reason":{"type":"string","minLength":1,"maxLength":2000},
+            "diagnosis":{
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","failure_kind","evidence_refs","repair_recommendations"],
+                "properties":{
+                    "summary":{"type":"string","minLength":1,"maxLength":4000},
+                    "failure_kind":{"type":"string","enum":["compilation","assertion","lint","semantic_test","structural_environment","unknown"]},
+                    "evidence_refs":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"string","minLength":1}},
+                    "repair_recommendations":{"type":"array","maxItems":50,"items":{"type":"string"}}
                 }
             }
         }

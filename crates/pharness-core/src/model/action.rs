@@ -1,6 +1,7 @@
 use crate::ActionId;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,6 +34,13 @@ pub enum AgentAction {
         path: Utf8PathBuf,
         patch: TextPatch,
     },
+    ApplyPatch {
+        id: ActionId,
+        reason: String,
+        patch: String,
+        #[serde(default)]
+        preimage_sha256: BTreeMap<String, String>,
+    },
     ListDir {
         id: ActionId,
         reason: String,
@@ -64,6 +72,17 @@ pub enum AgentAction {
         reason: String,
         name: String,
     },
+    RunWorkspaceCommand {
+        id: ActionId,
+        reason: String,
+        executable: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        cwd: Option<Utf8PathBuf>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
     GetEvidence {
         id: ActionId,
         reason: String,
@@ -79,10 +98,20 @@ pub enum AgentAction {
         reason: String,
         work_plan: serde_json::Value,
     },
+    SubmitImplementation {
+        id: ActionId,
+        reason: String,
+        implementation: serde_json::Value,
+    },
     SubmitTestOutcome {
         id: ActionId,
         reason: String,
         outcome: serde_json::Value,
+    },
+    SubmitTestDiagnosis {
+        id: ActionId,
+        reason: String,
+        diagnosis: serde_json::Value,
     },
     SubmitVerification {
         id: ActionId,
@@ -193,15 +222,19 @@ impl AgentAction {
             | Self::ReadFile { id, .. }
             | Self::WriteFile { id, .. }
             | Self::PatchFile { id, .. }
+            | Self::ApplyPatch { id, .. }
             | Self::ListDir { id, .. }
             | Self::SearchFiles { id, .. }
             | Self::EnvironmentInfo { id, .. }
             | Self::CreateDirectory { id, .. }
             | Self::RunAcceptanceCommand { id, .. }
+            | Self::RunWorkspaceCommand { id, .. }
             | Self::GetEvidence { id, .. }
             | Self::SubmitOnboardingProposal { id, .. }
             | Self::SubmitWorkPlan { id, .. }
+            | Self::SubmitImplementation { id, .. }
             | Self::SubmitTestOutcome { id, .. }
+            | Self::SubmitTestDiagnosis { id, .. }
             | Self::SubmitVerification { id, .. }
             | Self::RunShell { id, .. }
             | Self::GitDiff { id, .. }
@@ -226,15 +259,19 @@ impl AgentAction {
             Self::ReadFile { .. } => "read_file",
             Self::WriteFile { .. } => "write_file",
             Self::PatchFile { .. } => "patch_file",
+            Self::ApplyPatch { .. } => "apply_patch",
             Self::ListDir { .. } => "list_dir",
             Self::SearchFiles { .. } => "search_files",
             Self::EnvironmentInfo { .. } => "environment_info",
             Self::CreateDirectory { .. } => "create_directory",
             Self::RunAcceptanceCommand { .. } => "run_acceptance_command",
+            Self::RunWorkspaceCommand { .. } => "run_workspace_command",
             Self::GetEvidence { .. } => "get_evidence",
             Self::SubmitOnboardingProposal { .. } => "submit_onboarding_proposal",
             Self::SubmitWorkPlan { .. } => "submit_work_plan",
+            Self::SubmitImplementation { .. } => "submit_implementation",
             Self::SubmitTestOutcome { .. } => "submit_test_outcome",
+            Self::SubmitTestDiagnosis { .. } => "submit_test_diagnosis",
             Self::SubmitVerification { .. } => "submit_verification",
             Self::RunShell { .. } => "run_shell",
             Self::GitDiff { .. } => "git_diff",

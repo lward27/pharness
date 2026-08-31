@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkItemsScreen, WorkItemScreen } from "./WorkItemsScreen";
 
@@ -21,7 +21,7 @@ const completedFlow = {
 };
 
 describe("completed Repo Mode delivery", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
   it("shows successful Source Delivery and controller-recorded inapplicable stages", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(completedFlow), { status:200, headers:{"content-type":"application/json"} })));
@@ -49,7 +49,7 @@ describe("completed Repo Mode delivery", () => {
 });
 
 describe("Repo Mode WorkItem rollup", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
   it("shows the effective outcome, active AgentRun, exact boundary, and age source", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input:RequestInfo | URL) => {
@@ -74,7 +74,7 @@ describe("Repo Mode WorkItem rollup", () => {
 });
 
 describe("stage inference authorization", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
   it("binds independently qualified Builder, Tester, and Verifier policies", async () => {
     const requests: Array<{url:string;init?:RequestInit}> = [];
@@ -84,26 +84,26 @@ describe("stage inference authorization", () => {
       action_rail:[{id:"authorize_stage_chain",status:"ready",effect_class:"model_execution",state_hash:"state-chain",external_effect_summary:"Authorize the exact bounded Builder, Tester, and Verifier chain."}],
       repo_mode:{...completedFlow.repo_mode,effective_stage_outcomes:[],source_delivery_intent:null},
     };
-    const policy = (stage:string, id:string) => ({policy_id:id,revision:"v1",display_name:id,eligible_stages:[stage],selectable:true,qualified:true,is_default:true});
-    const sharedPolicy = {policy_id:"legacy-policy",revision:"v1",display_name:"legacy-policy",eligible_stages:["implement","test","verify"],selectable:true,qualified:true,is_default:false};
+    const policy = (stage:string, profile:string, id:string) => ({policy_id:id,revision:"v1",display_name:id,eligible_stages:[stage],eligible_profiles:[profile],selectable:true,qualified:true,is_default:true});
+    const sharedPolicy = {policy_id:"legacy-policy",revision:"v1",display_name:"legacy-policy",eligible_stages:["implement","test","verify"],eligible_profiles:["repo-builder","repo-tester","repo-verifier"],selectable:true,qualified:true,is_default:false};
     vi.stubGlobal("fetch", vi.fn(async (input:RequestInfo | URL, init?:RequestInit) => {
       const url = String(input); requests.push({url,init});
-      if(url.endsWith("/api/inference-policies")) return json({policies:[policy("implement","builder-policy"),policy("test","tester-policy"),policy("verify","verifier-policy"),sharedPolicy]});
+      if(url.endsWith("/api/inference-policies")) return json({policies:[policy("implement","repo-builder","builder-policy"),policy("test","repo-tester","tester-policy"),policy("verify","repo-verifier","verifier-policy"),sharedPolicy]});
       return json(flow);
     }));
     render(<WorkItemScreen workItemId="witem_chain" section="overview" operatorName="lucas" />);
     fireEvent.click(await screen.findByRole("button",{name:"authorize stage chain"}));
-    await waitFor(() => expect(screen.getByLabelText("implement policy")).toHaveValue("builder-policy@v1"));
-    expect(screen.getByLabelText("test policy")).toHaveValue("tester-policy@v1");
-    expect(screen.getByLabelText("verify policy")).toHaveValue("verifier-policy@v1");
+    await waitFor(() => expect(screen.getByLabelText("Builder policy")).toHaveValue("builder-policy@v1"));
+    expect(screen.getByLabelText("Tester policy")).toHaveValue("tester-policy@v1");
+    expect(screen.getByLabelText("Verifier policy")).toHaveValue("verifier-policy@v1");
     fireEvent.change(screen.getByLabelText("Apply one policy to remaining compatible stages"),{target:{value:"legacy-policy@v1"}});
     fireEvent.click(screen.getByRole("button",{name:"Apply to compatible stages"}));
-    expect(screen.getByLabelText("implement policy")).toHaveValue("legacy-policy@v1");
-    expect(screen.getByLabelText("test policy")).toHaveValue("legacy-policy@v1");
-    expect(screen.getByLabelText("verify policy")).toHaveValue("legacy-policy@v1");
-    fireEvent.change(screen.getByLabelText("implement policy"),{target:{value:"builder-policy@v1"}});
-    fireEvent.change(screen.getByLabelText("test policy"),{target:{value:"tester-policy@v1"}});
-    fireEvent.change(screen.getByLabelText("verify policy"),{target:{value:"verifier-policy@v1"}});
+    expect(screen.getByLabelText("Builder policy")).toHaveValue("legacy-policy@v1");
+    expect(screen.getByLabelText("Tester policy")).toHaveValue("legacy-policy@v1");
+    expect(screen.getByLabelText("Verifier policy")).toHaveValue("legacy-policy@v1");
+    fireEvent.change(screen.getByLabelText("Builder policy"),{target:{value:"builder-policy@v1"}});
+    fireEvent.change(screen.getByLabelText("Tester policy"),{target:{value:"tester-policy@v1"}});
+    fireEvent.change(screen.getByLabelText("Verifier policy"),{target:{value:"verifier-policy@v1"}});
     fireEvent.change(screen.getByLabelText("Reason"),{target:{value:"Reviewed the exact stage policies"}});
     fireEvent.click(screen.getByRole("button",{name:"Confirm and apply"}));
     await waitFor(() => expect(requests.some(request => request.init?.method === "POST")).toBe(true));
@@ -112,6 +112,77 @@ describe("stage inference authorization", () => {
       actor:"lucas",reason:"Reviewed the exact stage policies",state_hash:"state-chain",
       inference_policies:{implement:{policy_id:"builder-policy",revision:"v1"},test:{policy_id:"tester-policy",revision:"v1"},verify:{policy_id:"verifier-policy",revision:"v1"}},
     });
+  });
+
+  it("binds Builder, Repair, optional Test diagnosis, and Verifier for reliability V2", async () => {
+    const requests: Array<{url:string;init?:RequestInit}> = [];
+    const flow = {
+      ...completedFlow,
+      work_item:{...completedFlow.work_item,id:"witem_chain_v2",status:"waiting",closed_at:null,closure_reason:null},
+      action_rail:[{id:"authorize_stage_chain",status:"ready",effect_class:"model_execution",state_hash:"state-chain-v2",external_effect_summary:"Authorize deterministic Test and one bounded correction."}],
+      repo_mode:{
+        ...completedFlow.repo_mode,
+        effective_stage_outcomes:[],
+        source_delivery_intent:null,
+        coding_reliability:{enabled:true,deterministic_test:true,max_internal_corrections:1,internal_corrections_used:0,correction_lineage:[]},
+      },
+    };
+    const policy = (stage:string, profile:string, id:string) => ({
+      policy_id:id,revision:"v2",display_name:id,eligible_stages:[stage],eligible_profiles:[profile],
+      reliability_v2_default_for_profiles:[profile],selectable:true,qualified:true,is_default:false,
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input:RequestInfo | URL, init?:RequestInit) => {
+      const url = String(input); requests.push({url,init});
+      if(url.endsWith("/api/inference-policies")) return json({policies:[
+        policy("implement","repo-builder","builder-v2"),
+        policy("implement","repo-repair","repair-v2"),
+        policy("test","repo-test-diagnoser","diagnoser-v2"),
+        policy("verify","repo-verifier","verifier-v2"),
+      ]});
+      return json(flow);
+    }));
+
+    render(<WorkItemScreen workItemId="witem_chain_v2" section="overview" operatorName="lucas" />);
+    fireEvent.click(await screen.findByRole("button",{name:"authorize stage chain"}));
+    await waitFor(() => expect(screen.getByLabelText("Builder policy")).toHaveValue("builder-v2@v2"));
+    expect(screen.getByLabelText("Repair policy")).toHaveValue("repair-v2@v2");
+    expect(screen.getByLabelText("Test diagnosis policy (optional)")).toHaveValue("diagnoser-v2@v2");
+    expect(screen.getByLabelText("Verifier policy")).toHaveValue("verifier-v2@v2");
+    expect(screen.getAllByText(/Deterministic Test/)).not.toHaveLength(0);
+    expect(screen.getByText(/One Repair execution/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Reason"),{target:{value:"Reviewed deterministic Test and correction policy"}});
+    fireEvent.click(screen.getByRole("button",{name:"Confirm and apply"}));
+
+    await waitFor(() => expect(requests.some(request => request.init?.method === "POST")).toBe(true));
+    const submitted = requests.find(request => request.init?.method === "POST");
+    expect(JSON.parse(String(submitted?.init?.body))).toMatchObject({
+      actor:"lucas",reason:"Reviewed deterministic Test and correction policy",state_hash:"state-chain-v2",
+      inference_policies:{
+        implement:{policy_id:"builder-v2",revision:"v2"},
+        repair:{policy_id:"repair-v2",revision:"v2"},
+        test_diagnosis:{policy_id:"diagnoser-v2",revision:"v2"},
+        verify:{policy_id:"verifier-v2",revision:"v2"},
+      },
+    });
+  });
+
+  it("shows deterministic Test origin and repair lineage at the current stage", async () => {
+    const flow = {
+      ...completedFlow,
+      work_item:{...completedFlow.work_item,id:"witem_repair",status:"running",closed_at:null,closure_reason:null,current_stage_execution_id:"stage_repair"},
+      repo_mode:{
+        ...completedFlow.repo_mode,
+        stage_executions:[{id:"stage_repair",stage_key:"implement",status:"running",origin:"agent",agent_profile_id:"repo-repair",sequence:4,created_at:"123"}],
+        coding_reliability:{enabled:true,deterministic_test:true,max_internal_corrections:1,internal_corrections_used:1,correction_lineage:[{stage_execution_id:"stage_repair",correction_of:{outcome_id:"out_test_failed"}}]},
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => json(flow)));
+    render(<WorkItemScreen workItemId="witem_repair" section="current-stage" operatorName="lucas" />);
+    await waitFor(() => expect(screen.getByText("Deterministic Test enabled",{exact:false})).toBeInTheDocument());
+    expect(screen.getByText(/correction allowance 1\/1/)).toBeInTheDocument();
+    expect(screen.getByText(/repairs out_test_failed/)).toBeInTheDocument();
+    expect(screen.getByText("repo-repair")).toBeInTheDocument();
+    expect(screen.getByText("agent")).toBeInTheDocument();
   });
 });
 

@@ -282,6 +282,9 @@ pub(super) async fn config_effective(
                 "enabled": state.repo_mode.enabled,
                 "ui_enabled": state.repo_mode.ui_enabled,
             },
+            "coding_reliability_v2": {
+                "enabled": state.repo_mode.coding_reliability_v2_enabled,
+            },
             "legacy_work_item_creation_enabled": state.repo_mode.legacy_work_item_creation_enabled,
         },
         "database_generation": state.store.get_database_generation().await.ok().flatten(),
