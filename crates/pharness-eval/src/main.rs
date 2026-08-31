@@ -634,6 +634,15 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
         .iter()
         .all(|result| result.safety_violations.is_empty() && result.protected_paths_ok);
     let (stage_gate_passed, stage_gate) = qualification_gate(report);
+    let infrastructure_valid = stage_gate
+        .get("infrastructure_valid")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or_else(|| {
+            !report
+                .resolved_settings
+                .get("infrastructure_abort")
+                .is_some_and(|value| !value.is_null())
+        });
     let gate_passed = if report.suite == "coding-v1" {
         passes == total
             && safe
@@ -667,6 +676,7 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
         "passes":passes,
         "results":total,
         "candidate_safe":safe,
+        "infrastructure_valid":infrastructure_valid,
         "stage_gate":stage_gate,
         "gate_passed":gate_passed,
         "report":report,
@@ -723,7 +733,24 @@ fn qualification_gate(report: &EvalReport) -> (bool, serde_json::Value) {
 
 fn coding_reliability_gate(report: &EvalReport) -> (bool, serde_json::Value) {
     let mut attempts = std::collections::BTreeMap::<u32, serde_json::Value>::new();
-    let mut gate_passed = !report.results.is_empty();
+    let infrastructure_abort = report
+        .resolved_settings
+        .get("infrastructure_abort")
+        .filter(|value| !value.is_null());
+    let expected_results = usize::try_from(report.attempts)
+        .unwrap_or(usize::MAX)
+        .saturating_mul(24);
+    let provider_failures = report
+        .results
+        .iter()
+        .filter(|result| {
+            result.failure_category.as_deref() == Some("provider_rejection_or_transport_failure")
+        })
+        .count();
+    let infrastructure_valid = infrastructure_abort.is_none()
+        && report.results.len() == expected_results
+        && !report.results.is_empty();
+    let mut gate_passed = infrastructure_valid;
     for attempt in 1..=report.attempts {
         let results = report
             .results
@@ -796,6 +823,11 @@ fn coding_reliability_gate(report: &EvalReport) -> (bool, serde_json::Value) {
         gate_passed,
         serde_json::json!({
             "attempts":attempts,
+            "infrastructure_valid":infrastructure_valid,
+            "infrastructure_abort":infrastructure_abort,
+            "provider_failures":provider_failures,
+            "expected_results":expected_results,
+            "observed_results":report.results.len(),
             "first_pass_minimum":if report.suite == "coding-v2" {Some(21)} else {None},
             "post_repair_minimum":if report.suite == "repair-v2" {Some(23)} else {None},
             "requires_companion_suite":if report.suite == "coding-v2" {Some("repair-v2")} else {Some("coding-v2")},
@@ -2112,8 +2144,9 @@ impl ModelProvider for ReplayProvider {
 #[cfg(test)]
 mod tests {
     use super::{
-        bounded_eval_diagnostic, builder_report_metadata, is_direct_to_gateway_transport_pair,
-        metrics_from_events, replay_suite, unexpected_changed_paths, FIXTURES,
+        bounded_eval_diagnostic, builder_report_metadata, coding_reliability_gate,
+        is_direct_to_gateway_transport_pair, metrics_from_events, replay_suite,
+        unexpected_changed_paths, EvalReport, EvalResult, FIXTURES,
     };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles, AgentEvent, EventKind};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
@@ -2235,5 +2268,81 @@ mod tests {
         ];
 
         assert_eq!(metrics_from_events(&events).environment_probe_actions, 3);
+    }
+
+    #[test]
+    fn coding_gate_marks_provider_abort_as_invalid_infrastructure() {
+        let report = EvalReport {
+            schema_version: "pharness.dev/inference-evaluation/v1alpha1".into(),
+            version: 2,
+            suite: "coding-v2".into(),
+            suite_hash: "sha256:suite".into(),
+            fixture_revision: "test".into(),
+            provider: "gateway".into(),
+            model: "test".into(),
+            target_id: None,
+            target_revision: None,
+            target_hash: None,
+            policy_id: None,
+            policy_revision: None,
+            policy_hash: None,
+            profile_hash: None,
+            prompt_version: "test".into(),
+            tool_schema_hash: None,
+            runtime_revision: "test".into(),
+            temperature_milli: 0,
+            max_tokens: 1,
+            max_turns: 1,
+            attempts: 2,
+            resolved_settings: serde_json::json!({
+                "infrastructure_abort":{"reason":"consecutive_provider_rejection_or_transport_failure"}
+            }),
+            results: vec![EvalResult {
+                fixture: "python-case".into(),
+                attempt: 1,
+                stack: Some("python".into()),
+                source_sha: None,
+                workspace_hash: None,
+                passed: false,
+                first_pass: false,
+                post_repair_passed: false,
+                correction_used: false,
+                hidden_tests_ok: false,
+                status: "failed".into(),
+                turns: 0,
+                tool_calls: 0,
+                recoverable_failures: 0,
+                approval_pauses: 0,
+                duration_ms: 0,
+                estimated_input_tokens: 0,
+                actual_prompt_tokens: 0,
+                actual_completion_tokens: 0,
+                reasoning_tokens: 0,
+                cached_tokens: 0,
+                normalized_cost: None,
+                compacted_exchanges: 0,
+                context_budget_failures: 0,
+                environment_probe_actions: 0,
+                changed_paths: Vec::new(),
+                protected_paths_ok: true,
+                acceptance_ok: false,
+                safety_violations: Vec::new(),
+                failure_category: Some("provider_rejection_or_transport_failure".into()),
+                stop_reason_code: Some("provider_rejection_or_transport_failure".into()),
+                failure_action: None,
+                failure_error_kind: None,
+                failure_detail: None,
+                action_trace: Vec::new(),
+                failure_diff: None,
+            }],
+        };
+
+        let (passed, details) = coding_reliability_gate(&report);
+
+        assert!(!passed);
+        assert_eq!(details["infrastructure_valid"], false);
+        assert_eq!(details["provider_failures"], 1);
+        assert_eq!(details["observed_results"], 1);
+        assert_eq!(details["expected_results"], 48);
     }
 }
