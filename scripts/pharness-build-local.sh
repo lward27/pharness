@@ -103,7 +103,7 @@ build_component() {
   local immutable_reference=""
   local manifest_json=""
   local image_json=""
-  local -a target_args=()
+  local -a build_command=(docker buildx build)
 
   case "$component" in
     runtime) dockerfile="deploy/docker/Dockerfile.runtime" ;;
@@ -114,12 +114,12 @@ build_component() {
     eval-runner) dockerfile="deploy/docker/Dockerfile.eval-runner" ;;
     codex-host)
       dockerfile="deploy/docker/Dockerfile.codex-host"
-      target_args=(--target runtime)
+      build_command+=(--target runtime)
       ;;
     *) echo "unsupported PHarness component ${component}" >&2; return 1 ;;
   esac
 
-  docker buildx build \
+  "${build_command[@]}" \
     --builder "$BUILDER" \
     --platform "$PLATFORM" \
     --pull \
@@ -127,7 +127,6 @@ build_component() {
     --provenance=false \
     --sbom=false \
     --file "${REPOSITORY_ROOT}/${dockerfile}" \
-    "${target_args[@]}" \
     --build-arg "PHARNESS_BUILD_REVISION=${REVISION}" \
     --build-arg TARGETARCH=amd64 \
     --tag "$image_tag" \
