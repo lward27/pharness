@@ -8,6 +8,9 @@ ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
 WORKDIR /build
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
+# pharness-eval embeds the reviewed inference registry so evaluations use the
+# same immutable target and policy definitions as the deployed control plane.
+COPY deploy/helm/pharness/files/inference-registry.json ./deploy/helm/pharness/files/inference-registry.json
 RUN test "${TARGETARCH}" = "amd64" \
     && apt-get update \
     && apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross \
