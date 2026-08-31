@@ -167,7 +167,7 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
     let candidate_contract = json!({
         "api_version":"pharness.dev/v1alpha1",
         "environment_profile":"python-3.11",
-        "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":format!("{}", "d".repeat(64))},
+        "dependency_lock":{"kind":"pip_requirements","path":"requirements.lock","sha256":"d".repeat(64)},
         "writable_paths":["src/**","tests/**","readme.md"],
         "acceptance_commands":[{"name":"unit-tests","command":"python -m unittest discover -s tests -v"}],
         "roots":{"source":["src"],"tests":["tests"],"documentation":["readme.md"]},
