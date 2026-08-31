@@ -1,6 +1,7 @@
 use super::{
-    evaluation_runtime_revision, fetch_gateway_evaluation_context, gateway_client,
-    metrics_from_events, normalized_stop_reason_code, required_evaluation_id, trusted_eval_policy,
+    eval_action_trace, eval_failure_diagnostics, evaluation_runtime_revision,
+    fetch_gateway_evaluation_context, gateway_client, metrics_from_events,
+    normalized_stop_reason_code, required_evaluation_id, trusted_eval_policy,
     validate_gateway_context, EvalAttemptBackend, EvalReport, EvalResult, Provider,
 };
 use anyhow::{bail, Context, Result};
@@ -513,6 +514,12 @@ async fn run_fixture(
     );
     let metrics = metrics_from_events(&events);
     let passed = outcome.status == "completed" && acceptance_ok && violations.is_empty();
+    let (failure_action, failure_error_kind, failure_detail) = if passed {
+        (None, None, None)
+    } else {
+        eval_failure_diagnostics(&outcome, &events)
+    };
+    let action_trace = eval_action_trace(&events);
     Ok(EvalResult {
         fixture: fixture.id.clone(),
         attempt,
@@ -550,8 +557,12 @@ async fn run_fixture(
                 .unwrap_or_else(|| "stage_qualification_mismatch".into())
         }),
         stop_reason_code: (!passed)
-            .then(|| normalized_stop_reason_code(&outcome))
+            .then(|| normalized_stop_reason_code(&outcome, &events))
             .flatten(),
+        failure_action,
+        failure_error_kind,
+        failure_detail,
+        action_trace,
     })
 }
 

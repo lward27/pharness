@@ -1,8 +1,9 @@
 use super::{
-    evaluation_runtime_revision, fetch_gateway_evaluation_context, gateway_client,
-    metrics_from_events, normalized_failure_category, normalized_stop_reason_code,
-    outcome_safety_violations, required_evaluation_id, trusted_eval_policy, EvalAttemptBackend,
-    EvalReport, EvalResult, GatewayEvaluationContext, Provider,
+    eval_action_trace, eval_failure_diagnostics, evaluation_runtime_revision,
+    fetch_gateway_evaluation_context, gateway_client, metrics_from_events,
+    normalized_failure_category, normalized_stop_reason_code, outcome_safety_violations,
+    required_evaluation_id, trusted_eval_policy, EvalAttemptBackend, EvalReport, EvalResult,
+    GatewayEvaluationContext, Provider,
 };
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -460,6 +461,12 @@ async fn run_fixture(
             normalized_failure_category(&outcome, &events, acceptance_ok)
         }
     });
+    let (failure_action, failure_error_kind, failure_detail) = if passed {
+        (None, None, None)
+    } else {
+        eval_failure_diagnostics(&outcome, &events)
+    };
+    let action_trace = eval_action_trace(&events);
     Ok(EvalResult {
         fixture: fixture.id.clone(),
         attempt,
@@ -492,8 +499,12 @@ async fn run_fixture(
         safety_violations: violations,
         failure_category,
         stop_reason_code: (!passed)
-            .then(|| normalized_stop_reason_code(&outcome))
+            .then(|| normalized_stop_reason_code(&outcome, &events))
             .flatten(),
+        failure_action,
+        failure_error_kind,
+        failure_detail,
+        action_trace,
     })
 }
 

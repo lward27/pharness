@@ -568,6 +568,72 @@ where
             }
 
             match turn.action {
+                AgentAction::Finish { id, .. }
+                    if reliability_v2_enabled(&config) && protocol_corrections < 2 =>
+                {
+                    protocol_corrections += 1;
+                    let result = ToolResult::error(
+                        "finish is not a terminal action for reliability-v2 stages",
+                        serde_json::json!({
+                            "action": "finish",
+                            "error_kind": "unsupported_action",
+                            "recoverable": false,
+                            "executed": false,
+                        }),
+                    );
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::ToolFinished,
+                        serde_json::to_value(&result).unwrap_or_default(),
+                    );
+                    messages.push(tool_message(&result, Some(id.to_string()), None));
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::ModelProtocolCorrection,
+                        serde_json::json!({
+                            "category": "invalid_action",
+                            "action": "finish",
+                            "turn": turn_index,
+                            "correction": protocol_corrections,
+                            "maximum_corrections": 2,
+                        }),
+                    );
+                    messages.push(protocol_correction_message(
+                        "invalid_action",
+                        "use the stage's typed submit_* action; it is terminal and replaces finish",
+                        protocol_corrections,
+                    ));
+                    continue;
+                }
+                AgentAction::Finish { .. } if reliability_v2_enabled(&config) => {
+                    let error = "protocol_correction_exhausted:invalid_action";
+                    self.emit(
+                        &config,
+                        &mut seq,
+                        EventKind::RunFailed,
+                        serde_json::json!({
+                            "error": error,
+                            "stop_category": "invalid_action",
+                            "error_kind": "unsupported_action",
+                            "turn": turn_index,
+                            "action": "finish",
+                            "protocol_corrections": protocol_corrections,
+                        }),
+                    );
+                    return RunOutcome::failed(turn_index + 1, error).with_consumption(
+                        consumption_snapshot(
+                            &config,
+                            turn_index + 1,
+                            tokens_used,
+                            config
+                                .budget_consumption
+                                .active_execution_seconds_used
+                                .saturating_add(active_started.elapsed().as_secs()),
+                        ),
+                    );
+                }
                 AgentAction::Finish {
                     id,
                     summary,
@@ -821,6 +887,7 @@ where
                                 EventKind::RunFailed,
                                 serde_json::json!({
                                     "error": summary,
+                                    "stop_category": "tool_policy_rejection",
                                     "turn": turn_index,
                                     "action": tool_action.kind_name(),
                                 }),
@@ -1029,6 +1096,79 @@ where
                             }
                         }
                         Err(error) => {
+                            if reliability_v2_enabled(&config)
+                                && matches!(error, ToolError::UnsupportedAction { .. })
+                            {
+                                let result = ToolResult::error(
+                                    "the selected action is not exposed by this immutable AgentProfile",
+                                    serde_json::json!({
+                                        "action": tool_action.kind_name(),
+                                        "error_kind": error.kind_name(),
+                                        "recoverable": false,
+                                        "executed": false,
+                                    }),
+                                );
+                                self.emit(
+                                    &config,
+                                    &mut seq,
+                                    EventKind::ToolFinished,
+                                    serde_json::to_value(&result).unwrap_or_default(),
+                                );
+                                messages.push(tool_message(
+                                    &result,
+                                    assistant_tool_calls
+                                        .first()
+                                        .map(|call| call.id.clone())
+                                        .or_else(|| Some(tool_action.id().to_string())),
+                                    Some(&tool_action),
+                                ));
+                                if protocol_corrections < 2 {
+                                    protocol_corrections += 1;
+                                    self.emit(
+                                        &config,
+                                        &mut seq,
+                                        EventKind::ModelProtocolCorrection,
+                                        serde_json::json!({
+                                            "category": "invalid_action",
+                                            "action": tool_action.kind_name(),
+                                            "turn": turn_index,
+                                            "correction": protocol_corrections,
+                                            "maximum_corrections": 2,
+                                        }),
+                                    );
+                                    messages.push(protocol_correction_message(
+                                        "invalid_action",
+                                        "select exactly one action from the tools exposed in the current request",
+                                        protocol_corrections,
+                                    ));
+                                    continue;
+                                }
+                                let exhausted =
+                                    "protocol_correction_exhausted:invalid_action".to_string();
+                                self.emit(
+                                    &config,
+                                    &mut seq,
+                                    EventKind::RunFailed,
+                                    serde_json::json!({
+                                        "error": exhausted,
+                                        "stop_category": "invalid_action",
+                                        "error_kind": error.kind_name(),
+                                        "turn": turn_index,
+                                        "action": tool_action.kind_name(),
+                                        "protocol_corrections": protocol_corrections,
+                                    }),
+                                );
+                                return RunOutcome::failed(turn_index + 1, exhausted)
+                                    .with_consumption(consumption_snapshot(
+                                        &config,
+                                        turn_index + 1,
+                                        tokens_used,
+                                        config
+                                            .budget_consumption
+                                            .active_execution_seconds_used
+                                            .saturating_add(active_started.elapsed().as_secs()),
+                                    ));
+                            }
                             if error.disposition() == ToolErrorDisposition::Recoverable {
                                 let fingerprint = action_fingerprint(&tool_action, &error);
                                 recovery.total += 1;
@@ -1081,6 +1221,12 @@ where
                                 EventKind::RunFailed,
                                 serde_json::json!({
                                     "error": error.to_string(),
+                                    "stop_category": if matches!(error, ToolError::OutsideWorkspace { .. }) {
+                                        "workspace_scope_violation"
+                                    } else {
+                                        "tool_execution_failure"
+                                    },
+                                    "error_kind": error.kind_name(),
                                     "turn": turn_index,
                                     "action": tool_action.kind_name(),
                                 }),
@@ -1959,6 +2105,9 @@ mod tests {
     #[derive(Clone)]
     struct AcceptingExecutor;
 
+    #[derive(Clone)]
+    struct RejectFinishExecutor;
+
     #[async_trait]
     impl ToolExecutor for AcceptingExecutor {
         async fn execute(&self, action: &AgentAction) -> Result<ToolResult, ToolError> {
@@ -1966,6 +2115,18 @@ mod tests {
                 format!("accepted {}", action.kind_name()),
                 serde_json::json!({"structured_submission":true}),
             ))
+        }
+    }
+
+    #[async_trait]
+    impl ToolExecutor for RejectFinishExecutor {
+        async fn execute(&self, action: &AgentAction) -> Result<ToolResult, ToolError> {
+            if matches!(action, AgentAction::Finish { .. }) {
+                return Err(ToolError::UnsupportedAction {
+                    action: action.kind_name().into(),
+                });
+            }
+            AcceptingExecutor.execute(action).await
         }
     }
 
@@ -2082,6 +2243,41 @@ mod tests {
         assert!(events.events().iter().any(|event| {
             event.kind == EventKind::RunFinished
                 && event.payload["terminal_submission"] == "work_plan"
+        }));
+    }
+
+    #[tokio::test]
+    async fn reliability_v2_corrects_an_unexposed_action_without_executing_it() {
+        let events = InMemoryEventSink::default();
+        let runtime = AgentRuntime::with_tools(
+            FakeProvider::new([
+                model_turn(AgentAction::Finish {
+                    id: "act_legacy_finish".into(),
+                    reason: "legacy completion habit".into(),
+                    summary: "done".into(),
+                    success: true,
+                }),
+                model_turn(submitted_plan("act_plan")),
+            ]),
+            events.clone(),
+            RejectFinishExecutor,
+        );
+        let mut config = RunConfig::local_test("plan");
+        enable_reliability_v2(&mut config);
+
+        let outcome = runtime.run(config, CancellationFlag::default()).await;
+
+        assert_eq!(outcome.status, RunStatus::Completed);
+        assert_eq!(outcome.turns, 2);
+        assert!(events.events().iter().any(|event| {
+            event.kind == EventKind::ModelProtocolCorrection
+                && event.payload["category"] == "invalid_action"
+                && event.payload["action"] == "finish"
+        }));
+        assert!(events.events().iter().any(|event| {
+            event.kind == EventKind::ToolFinished
+                && event.payload["content"]["executed"] == false
+                && event.payload["content"]["error_kind"] == "unsupported_action"
         }));
     }
 

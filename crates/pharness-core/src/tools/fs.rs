@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -183,6 +184,7 @@ impl LocalReadOnlyFsTools {
             serde_json::json!({
                 "path": path.as_str(),
                 "content": selected,
+                "sha256": format!("sha256:{:x}", Sha256::digest(content.as_bytes())),
                 "total_lines": total_lines,
                 "start_line": start_line,
                 "line_count": line_count,
@@ -471,6 +473,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.content["content"], "hello world");
+        assert_eq!(
+            result.content["sha256"],
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 
     #[tokio::test]
