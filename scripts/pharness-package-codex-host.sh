@@ -75,7 +75,15 @@ find "$bundle_root" -type f -print0 | sort -z | xargs -0 sha256sum >"${bundle_ro
 
 mkdir -p "$OUTPUT_DIR"
 archive="${OUTPUT_DIR}/pharness-codex-host-${REVISION}-linux-amd64.tar.gz"
-tar -C "${temporary}/root" -czf "$archive" pharness-codex-host
+# macOS bsdtar otherwise serializes Finder metadata and extended attributes as
+# AppleDouble `._*` members. Those files are not part of the verified bundle
+# and make extraction noisy on Linux. COPYFILE_DISABLE is ignored by GNU tar,
+# so the same command remains portable on Linux packaging clients.
+COPYFILE_DISABLE=1 tar -C "${temporary}/root" -czf "$archive" pharness-codex-host
+if tar -tzf "$archive" | grep -Eq '(^|/)\._'; then
+  echo "bundle contains unexpected AppleDouble metadata" >&2
+  exit 1
+fi
 sha256sum "$archive" >"${archive}.sha256"
 printf '{"revision":"%s","platform":"linux/amd64","codex_version":"0.150.1","archive":"%s","sha256":"%s"}\n' \
   "$REVISION" \
