@@ -1,5 +1,4 @@
 mod api;
-mod app_server;
 mod config;
 mod executor;
 mod service;
@@ -96,7 +95,9 @@ async fn main() -> anyhow::Result<()> {
         Command::PolicyMaterial => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&executor::policy_material())?
+                serde_json::to_string_pretty(
+                    &pharness_codex_host::stage_contract::policy_material()
+                )?
             );
             Ok(())
         }

@@ -8,9 +8,11 @@ use axum::middleware;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use pharness_core::{
-    canonical_json_sha256, inference_qualification_suite_hash, AgentAuthenticationClass,
-    AgentExecutionPolicyRef, AgentExecutionPolicyRevision, InferenceStage,
-    ResolvedAgentExecutionBinding, SessionId, StageExecutionDriver, AGENT_EXECUTION_POLICY_SCHEMA,
+    canonical_json_sha256, AgentAuthenticationClass, AgentExecutionPolicyRef,
+    AgentExecutionPolicyRevision, AgentExecutionQualificationContract, InferenceStage,
+    ResolvedAgentExecutionBinding, SessionId, StageExecutionDriver,
+    AGENT_EXECUTION_EVALUATION_SCHEMA, AGENT_EXECUTION_POLICY_SCHEMA, CODEX_PROTOCOL_CASES,
+    CODEX_PROTOCOL_EVALUATION_SCHEMA, CODEX_PROTOCOL_SUITE_ID,
     RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
 };
 use pharness_store::{
@@ -94,31 +96,6 @@ struct PolicyQualificationRequest {
     verdict: Option<String>,
     #[serde(default)]
     evidence_artifact_id: Option<String>,
-}
-
-const AGENT_EXECUTION_EVALUATION_SCHEMA: &str = "pharness.dev/agent-execution-evaluation/v1alpha1";
-const CODEX_PROTOCOL_EVALUATION_SCHEMA: &str = "pharness.dev/codex-protocol-evaluation/v1alpha1";
-const CODEX_PROTOCOL_SUITE_ID: &str = "codex-app-server-protocol-v1";
-const CODEX_PROTOCOL_CASES: [&str; 10] = [
-    "planner_structured_submission",
-    "builder_edit_and_structured_completion",
-    "deterministic_command_execution",
-    "repair_after_seeded_test_failure",
-    "read_only_verification",
-    "app_server_interruption_and_resume",
-    "invalid_structured_output",
-    "tool_command_network_denial",
-    "authentication_path_read_denial",
-    "subscription_quota_or_provider_error",
-];
-
-#[derive(Debug, Clone)]
-struct AgentQualificationContract {
-    suite_id: &'static str,
-    suite_hash: String,
-    semantic_attempts: u32,
-    fixtures_per_attempt: usize,
-    protocol_suite_hash: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -429,54 +406,18 @@ async fn record_policy_qualification(
 
 fn agent_qualification_contract(
     policy: &AgentExecutionPolicyRevision,
-) -> Result<AgentQualificationContract, ApiError> {
-    let stage = policy
-        .eligible_stages
-        .first()
-        .copied()
-        .filter(|_| policy.eligible_stages.len() == 1)
-        .ok_or_else(|| {
-            ApiError::conflict(
-                "Codex execution policies must bind exactly one stage for qualification",
-            )
-        })?;
-    let (suite_id, fixtures_per_attempt) = match stage {
-        InferenceStage::Plan => ("planner-v2", 12),
-        InferenceStage::Implement => ("coding-v2", 24),
-        InferenceStage::Repair => ("repair-v2", 24),
-        InferenceStage::Verify => ("verifier-v2", 24),
-        _ => {
-            return Err(ApiError::conflict(
-                "this stage has no Codex execution qualification suite",
-            ))
-        }
-    };
-    let suite_hash = inference_qualification_suite_hash(suite_id).map_err(|error| {
-        ApiError::internal(format!("failed to hash qualification suite: {error}"))
-    })?;
-    let protocol_suite_hash = canonical_json_sha256(&json!({
-        "schema_version":CODEX_PROTOCOL_EVALUATION_SCHEMA,
-        "suite_id":CODEX_PROTOCOL_SUITE_ID,
-        "fixture_revision":"codex-app-server-protocol-v1.0",
-        "codex_version":policy.codex_version,
-        "policy_hash":policy.policy_hash,
-        "cases":CODEX_PROTOCOL_CASES,
-        "attempts":3,
-    }))
-    .map_err(|error| ApiError::internal(format!("failed to hash protocol suite: {error}")))?;
-    Ok(AgentQualificationContract {
-        suite_id,
-        suite_hash,
-        semantic_attempts: 2,
-        fixtures_per_attempt,
-        protocol_suite_hash,
+) -> Result<AgentExecutionQualificationContract, ApiError> {
+    policy.qualification_contract().map_err(|error| {
+        ApiError::conflict(format!(
+            "Codex qualification contract is unavailable: {error}"
+        ))
     })
 }
 
 fn qualification_contract_json(
     policy: &AgentExecutionPolicyRevision,
     registry_hash: &str,
-    contract: &AgentQualificationContract,
+    contract: &AgentExecutionQualificationContract,
 ) -> Value {
     json!({
         "schema_version":"pharness.dev/agent-execution-qualification-contract/v1alpha1",
@@ -511,7 +452,7 @@ fn validate_agent_qualification_report(
     policy: &AgentExecutionPolicyRevision,
     registry_hash: &str,
     runtime_revision: &str,
-    contract: &AgentQualificationContract,
+    contract: &AgentExecutionQualificationContract,
     report: &Value,
 ) -> Result<bool, ApiError> {
     let exact_strings = [
@@ -521,7 +462,7 @@ fn validate_agent_qualification_report(
         ("policy_hash", policy.policy_hash.as_str()),
         ("registry_hash", registry_hash),
         ("runtime_revision", runtime_revision),
-        ("suite_id", contract.suite_id),
+        ("suite_id", contract.suite_id.as_str()),
         ("suite_hash", contract.suite_hash.as_str()),
         ("codex_version", policy.codex_version.as_str()),
         ("model", policy.model.as_str()),
@@ -545,11 +486,23 @@ fn validate_agent_qualification_report(
             "qualification report provenance does not match the exact policy, runtime, or suite",
         ));
     }
-    validate_protocol_report(policy, contract, report.get("protocol"))?;
+    let protocol_gate = validate_protocol_report(policy, contract, report.get("protocol"))?;
     let results = report
         .get("results")
         .and_then(Value::as_array)
         .ok_or_else(|| ApiError::bad_request("qualification results must be an array"))?;
+    if !protocol_gate {
+        if !results.is_empty()
+            || report.get("gate_passed").and_then(Value::as_bool) != Some(false)
+            || report.get("stop_reason").and_then(Value::as_str)
+                != Some("protocol_calibration_failed")
+        {
+            return Err(ApiError::conflict(
+                "failed protocol calibration must stop before semantic evaluation",
+            ));
+        }
+        return Ok(false);
+    }
     let expected = contract
         .fixtures_per_attempt
         .saturating_mul(contract.semantic_attempts as usize);
@@ -584,14 +537,14 @@ fn validate_agent_qualification_report(
             "reported qualification gate does not match the controller-derived result",
         ));
     }
-    Ok(semantic_gate)
+    Ok(protocol_gate && semantic_gate)
 }
 
 fn validate_protocol_report(
     policy: &AgentExecutionPolicyRevision,
-    contract: &AgentQualificationContract,
+    contract: &AgentExecutionQualificationContract,
     protocol: Option<&Value>,
-) -> Result<(), ApiError> {
+) -> Result<bool, ApiError> {
     let protocol = protocol
         .and_then(Value::as_object)
         .ok_or_else(|| ApiError::bad_request("Codex protocol evaluation is required"))?;
@@ -616,13 +569,12 @@ fn validate_protocol_report(
     for result in results {
         let attempt = result.get("attempt").and_then(Value::as_u64);
         let case = result.get("case").and_then(Value::as_str);
-        let passed = result.get("passed").and_then(Value::as_bool);
         let valid = attempt.is_some_and(|value| (1..=3).contains(&value))
             && case.is_some_and(|value| CODEX_PROTOCOL_CASES.contains(&value))
-            && passed == Some(true);
+            && result.get("passed").and_then(Value::as_bool).is_some();
         if !valid || !observed.insert((attempt.unwrap_or_default(), case.unwrap_or_default())) {
             return Err(ApiError::conflict(
-                "protocol qualification requires each exact case to pass once in all three attempts",
+                "protocol qualification requires each exact case once in all three attempts",
             ));
         }
     }
@@ -631,7 +583,9 @@ fn validate_protocol_report(
             "Codex protocol qualification requires 30 of 30 passing cases",
         ));
     }
-    Ok(())
+    Ok(results
+        .iter()
+        .all(|result| result.get("passed").and_then(Value::as_bool) == Some(true)))
 }
 
 fn qualification_attempt_passes(
@@ -1918,7 +1872,7 @@ mod tests {
 
     fn protocol_report(
         policy: &AgentExecutionPolicyRevision,
-        contract: &AgentQualificationContract,
+        contract: &AgentExecutionQualificationContract,
     ) -> Value {
         let results = (1..=3)
             .flat_map(|attempt| {
@@ -2022,6 +1976,20 @@ mod tests {
             &incomplete,
         )
         .is_err());
+
+        let mut failed_protocol = planner_report(&registry, policy, "runtime-sha");
+        failed_protocol["protocol"]["results"][0]["passed"] = json!(false);
+        failed_protocol["results"] = json!([]);
+        failed_protocol["gate_passed"] = json!(false);
+        failed_protocol["stop_reason"] = json!("protocol_calibration_failed");
+        assert!(!validate_agent_qualification_report(
+            policy,
+            &registry.config_hash,
+            "runtime-sha",
+            &contract,
+            &failed_protocol,
+        )
+        .unwrap());
 
         let mut false_gate = report;
         false_gate["results"][0]["passed"] = json!(false);
