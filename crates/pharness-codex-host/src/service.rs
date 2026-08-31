@@ -98,7 +98,7 @@ pub async fn protocol_smoke(config: &HostConfig, model: &str, effort: &str) -> a
     if let Some(auth_file) = config.codex_auth_file.as_deref() {
         copy_secret(auth_file, &codex_home.join("auth.json"))?;
     }
-    let app_config = crate::app_server::AppServerConfig {
+    let app_config = pharness_codex_host::app_server::AppServerConfig {
         codex_path: config.codex_path.clone(),
         codex_home,
         cwd: workspace,
@@ -123,7 +123,7 @@ pub async fn protocol_smoke(config: &HostConfig, model: &str, effort: &str) -> a
             None
         },
     };
-    let mut app = crate::app_server::AppServerSession::start(&app_config).await?;
+    let mut app = pharness_codex_host::app_server::AppServerSession::start(&app_config).await?;
     let command = app
         .exec_sandboxed_command(
             &app_config.cwd,
@@ -685,7 +685,7 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
     if config.authentication_class == "chatgpt_session" {
         copy_secret(credential_file, &codex_home.join("auth.json"))?;
     }
-    let app_config = crate::app_server::AppServerConfig {
+    let app_config = pharness_codex_host::app_server::AppServerConfig {
         codex_path: config.codex_path.clone(),
         codex_home,
         cwd: workspace,
@@ -702,7 +702,7 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
             None
         },
     };
-    let app = crate::app_server::AppServerSession::start(&app_config).await?;
+    let app = pharness_codex_host::app_server::AppServerSession::start(&app_config).await?;
     app.shutdown().await?;
     let codex_version = version(&config.codex_path, &["--version"]).await?;
     let codex_sha256 = file_sha256(&config.codex_path)?;

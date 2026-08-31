@@ -7,6 +7,32 @@ pub const AGENT_EXECUTION_POLICY_SCHEMA: &str = "pharness.dev/agent-execution-po
 pub const AGENT_EXECUTION_REGISTRY_SCHEMA: &str = "pharness.dev/agent-execution-registry/v1alpha1";
 pub const RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA: &str =
     "pharness.dev/resolved-agent-execution-binding/v1alpha1";
+pub const AGENT_EXECUTION_EVALUATION_SCHEMA: &str =
+    "pharness.dev/agent-execution-evaluation/v1alpha1";
+pub const CODEX_PROTOCOL_EVALUATION_SCHEMA: &str =
+    "pharness.dev/codex-protocol-evaluation/v1alpha1";
+pub const CODEX_PROTOCOL_SUITE_ID: &str = "codex-app-server-protocol-v1";
+pub const CODEX_PROTOCOL_CASES: [&str; 10] = [
+    "planner_structured_submission",
+    "builder_edit_and_structured_completion",
+    "deterministic_command_execution",
+    "repair_after_seeded_test_failure",
+    "read_only_verification",
+    "app_server_interruption_and_resume",
+    "invalid_structured_output",
+    "tool_command_network_denial",
+    "authentication_path_read_denial",
+    "subscription_quota_or_provider_error",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentExecutionQualificationContract {
+    pub suite_id: String,
+    pub suite_hash: String,
+    pub semantic_attempts: u32,
+    pub fixtures_per_attempt: usize,
+    pub protocol_suite_hash: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -188,6 +214,43 @@ impl AgentExecutionPolicyRevision {
             && self.eligible_stages.contains(&stage)
             && self.runner_images.contains_key(environment_profile)
             && self.allowed_authentication.contains(&authentication)
+    }
+
+    pub fn qualification_contract(
+        &self,
+    ) -> Result<AgentExecutionQualificationContract, AgentExecutionConfigError> {
+        let stage = self
+            .eligible_stages
+            .first()
+            .copied()
+            .filter(|_| self.eligible_stages.len() == 1)
+            .ok_or(AgentExecutionConfigError::QualificationStageUnavailable)?;
+        let (suite_id, fixtures_per_attempt) = match stage {
+            InferenceStage::Plan => ("planner-v2", 12),
+            InferenceStage::Implement => ("coding-v2", 24),
+            InferenceStage::Repair => ("repair-v2", 24),
+            InferenceStage::Verify => ("verifier-v2", 24),
+            _ => return Err(AgentExecutionConfigError::QualificationStageUnavailable),
+        };
+        let suite_hash = crate::inference_qualification_suite_hash(suite_id)
+            .map_err(AgentExecutionConfigError::QualificationSuite)?;
+        let protocol_suite_hash = canonical_json_sha256(&serde_json::json!({
+            "schema_version":CODEX_PROTOCOL_EVALUATION_SCHEMA,
+            "suite_id":CODEX_PROTOCOL_SUITE_ID,
+            "fixture_revision":"codex-app-server-protocol-v1.0",
+            "codex_version":self.codex_version,
+            "policy_hash":self.policy_hash,
+            "cases":CODEX_PROTOCOL_CASES,
+            "attempts":3,
+        }))
+        .map_err(AgentExecutionConfigError::Serialize)?;
+        Ok(AgentExecutionQualificationContract {
+            suite_id: suite_id.into(),
+            suite_hash,
+            semantic_attempts: 2,
+            fixtures_per_attempt,
+            protocol_suite_hash,
+        })
     }
 }
 
@@ -418,6 +481,10 @@ pub enum AgentExecutionConfigError {
     InvalidHash(String),
     #[error("Codex App Server policy does not enforce the required sandbox boundary")]
     UnsafeCodexSandbox,
+    #[error("agent execution policy has no supported qualification stage")]
+    QualificationStageUnavailable,
+    #[error("agent execution qualification suite is unavailable: {0}")]
+    QualificationSuite(String),
     #[error("resolved agent execution binding does not match its policy")]
     BindingMismatch,
     #[error("agent execution hash mismatch: expected {expected}, got {actual}")]
@@ -505,6 +572,35 @@ mod tests {
         assert!(matches!(
             unsafe_policy.validate(),
             Err(AgentExecutionConfigError::UnsafeCodexSandbox)
+        ));
+    }
+
+    #[test]
+    fn qualification_contract_is_bound_to_exact_policy_and_stage() {
+        let builder = policy();
+        let builder_contract = builder.qualification_contract().unwrap();
+        assert_eq!(builder_contract.suite_id, "coding-v2");
+        assert_eq!(builder_contract.semantic_attempts, 2);
+        assert_eq!(builder_contract.fixtures_per_attempt, 24);
+
+        let mut verifier = builder.clone();
+        verifier.policy_id = "codex-sol-verifier-v1".into();
+        verifier.eligible_stages = vec![InferenceStage::Verify];
+        verifier.policy_hash = verifier.computed_hash().unwrap();
+        let verifier_contract = verifier.qualification_contract().unwrap();
+        assert_eq!(verifier_contract.suite_id, "verifier-v2");
+        assert_ne!(builder_contract.suite_hash, verifier_contract.suite_hash);
+        assert_ne!(
+            builder_contract.protocol_suite_hash,
+            verifier_contract.protocol_suite_hash
+        );
+
+        let mut unsupported = builder;
+        unsupported.eligible_stages = vec![InferenceStage::Test];
+        unsupported.policy_hash = unsupported.computed_hash().unwrap();
+        assert!(matches!(
+            unsupported.qualification_contract(),
+            Err(AgentExecutionConfigError::QualificationStageUnavailable)
         ));
     }
 

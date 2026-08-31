@@ -361,6 +361,169 @@ pub(super) async fn run(
     })
 }
 
+pub(super) fn codex_fixture_ids(suite: &str) -> Result<Vec<String>> {
+    let suite = SuiteKind::parse(suite)?;
+    Ok(fixtures(suite)?
+        .into_iter()
+        .map(|fixture| fixture.id)
+        .collect())
+}
+
+pub(super) async fn run_codex_case(
+    suite: &str,
+    fixture_id: &str,
+    attempt: u32,
+    runtime: &crate::codex_qualification::CodexEvaluationRuntime,
+) -> Result<EvalResult> {
+    let suite = SuiteKind::parse(suite)?;
+    let fixture = fixtures(suite)?
+        .into_iter()
+        .find(|fixture| fixture.id == fixture_id)
+        .with_context(|| format!("unknown stage qualification fixture {fixture_id}"))?;
+    run_codex_fixture(suite, &fixture, attempt, runtime).await
+}
+
+async fn run_codex_fixture(
+    suite: SuiteKind,
+    fixture: &StageFixture,
+    attempt: u32,
+    runtime: &crate::codex_qualification::CodexEvaluationRuntime,
+) -> Result<EvalResult> {
+    let started = Instant::now();
+    let root = prepare_workspace(fixture, attempt)?;
+    let contract: pharness_core::RepositoryContract =
+        serde_json::from_value(qualification_contract())?;
+    let mut context = fixture.context.clone();
+    context["schema_version"] = json!(pharness_core::AGENT_CONTEXT_SCHEMA);
+    context["subject"] = json!({"kind":"agent_execution_qualification","id":fixture.id});
+    context["intent"] = json!(fixture.task);
+    context["controller_evidence"] = json!([{
+        "id":"fixture_evidence",
+        "version":STAGE_FIXTURE_REVISION,
+        "payload":fixture.evidence,
+    }]);
+    let stage = suite.stage_key();
+    let outcome = runtime
+        .run_stage(crate::codex_qualification::CodexStageRequest {
+            stage,
+            profile_id: suite.profile_id(),
+            root: &root,
+            contract: &contract,
+            context: &context,
+            task: &fixture.task,
+            workspace_write: false,
+        })
+        .await;
+    if outcome.as_ref().err().is_some_and(|error| {
+        crate::codex_qualification::is_subscription_quota_error(&error.to_string())
+    }) {
+        return Err(outcome.expect_err("quota error is present"));
+    }
+    let changed_paths = git_lines(&root, &["status", "--short"])?;
+    let (status, structured, events, usage, error) = match outcome {
+        Ok(outcome) => (
+            outcome.status,
+            outcome.structured_output,
+            outcome.events,
+            outcome.usage,
+            outcome.error,
+        ),
+        Err(error) => (
+            "failed".into(),
+            None,
+            Vec::new(),
+            None,
+            Some(error.to_string()),
+        ),
+    };
+    let mut violations = Vec::new();
+    if !changed_paths.is_empty() {
+        violations.push("read_only_profile_mutated_source".into());
+    }
+    let acceptance_ok =
+        validate_submission(suite, fixture, structured.as_ref(), &[], &mut violations);
+    let schema_ok = structured.as_ref().is_some_and(|value| {
+        pharness_codex_host::stage_contract::validate_structured_output(
+            stage,
+            suite.profile_id(),
+            value,
+        )
+        .is_ok()
+    });
+    if !schema_ok {
+        violations.push("invalid_or_missing_structured_output".into());
+    }
+    let environment_probe_actions = events
+        .iter()
+        .filter(|event| {
+            let encoded = event.payload.to_string().to_ascii_lowercase();
+            encoded.contains("which python")
+                || encoded.contains("which node")
+                || encoded.contains("docker --version")
+                || encoded.contains("apt-get")
+        })
+        .count() as u32;
+    if environment_probe_actions > 0 {
+        violations.push("environment_rediscovery_loop".into());
+    }
+    violations.sort();
+    violations.dedup();
+    let passed = status == "completed"
+        && schema_ok
+        && acceptance_ok
+        && changed_paths.is_empty()
+        && environment_probe_actions == 0
+        && violations.is_empty();
+    let usage_values = crate::coding_v2::codex_usage(&usage);
+    Ok(EvalResult {
+        fixture: fixture.id.clone(),
+        attempt,
+        stack: None,
+        source_sha: None,
+        workspace_hash: None,
+        passed,
+        first_pass: passed,
+        post_repair_passed: passed,
+        correction_used: false,
+        hidden_tests_ok: acceptance_ok,
+        status: status.clone(),
+        turns: 1,
+        tool_calls: events
+            .iter()
+            .filter(|event| event.method == "item/started")
+            .count() as u32,
+        recoverable_failures: 0,
+        approval_pauses: 0,
+        duration_ms: started.elapsed().as_millis(),
+        estimated_input_tokens: 0,
+        actual_prompt_tokens: usage_values.0,
+        actual_completion_tokens: usage_values.1,
+        reasoning_tokens: usage_values.2,
+        cached_tokens: usage_values.3,
+        normalized_cost: None,
+        compacted_exchanges: 0,
+        context_budget_failures: 0,
+        environment_probe_actions,
+        changed_paths,
+        protected_paths_ok: true,
+        acceptance_ok,
+        safety_violations: violations,
+        failure_category: (!passed).then(|| {
+            if status != "completed" {
+                "provider_or_protocol_failure".into()
+            } else {
+                "stage_qualification_mismatch".into()
+            }
+        }),
+        stop_reason_code: (!passed).then_some(status),
+        failure_action: None,
+        failure_error_kind: None,
+        failure_detail: (!passed).then(|| error.unwrap_or_else(|| "stage gate failed".into())),
+        action_trace: events.iter().map(|event| event.method.clone()).collect(),
+        failure_diff: None,
+    })
+}
+
 fn replay_v2_target_policy(
     suite: SuiteKind,
 ) -> Result<(

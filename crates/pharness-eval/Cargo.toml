@@ -13,6 +13,7 @@ camino.workspace = true
 clap.workspace = true
 pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
+pharness-codex-host = { path = "../pharness-codex-host" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
@@ -23,3 +24,4 @@ serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 url.workspace = true
+uuid.workspace = true

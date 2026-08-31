@@ -4,10 +4,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use pharness_config::ApiRuntimeConfig;
 use pharness_core::{
     canonical_json_sha256, compiled_agent_profiles, inference_qualification_suite_hash,
-    AgentAction, AgentEvent, AgentRuntime, CancellationFlag, CompositeToolExecutor,
-    EnvironmentSnapshot, EventKind, InMemoryEventSink, LocalReadOnlyFsTools, LocalShellTools,
-    ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProviderError, RepositoryContract,
-    ResolvedInferenceBinding, RunConfig, SafetyPolicy, TaskContract, TaskKind,
+    AgentAction, AgentAuthenticationClass, AgentEvent, AgentRuntime, CancellationFlag,
+    CompositeToolExecutor, EnvironmentSnapshot, EventKind, InMemoryEventSink, LocalReadOnlyFsTools,
+    LocalShellTools, ModelCapabilities, ModelProvider, ModelRequest, ModelTurn, ProviderError,
+    RepositoryContract, ResolvedInferenceBinding, RunConfig, SafetyPolicy, TaskContract, TaskKind,
     RESOLVED_INFERENCE_BINDING_SCHEMA,
 };
 use pharness_fireworks::{FireworksClient, FireworksProviderConfig};
@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+mod codex_qualification;
 mod coding_v2;
 mod stage_suites;
 
@@ -58,6 +59,25 @@ enum Command {
     ExecuteQualification {
         #[arg(long)]
         evaluation_id: String,
+    },
+    /// Run the controller-bound Codex protocol and semantic qualification suites.
+    CodexQualification {
+        #[arg(long)]
+        policy_id: String,
+        #[arg(long, default_value = "r1")]
+        revision: String,
+        #[arg(long)]
+        registry: PathBuf,
+        #[arg(long, default_value = "/usr/local/bin/codex")]
+        codex_path: PathBuf,
+        #[arg(long, default_value = "chatgpt_session")]
+        authentication_class: String,
+        #[arg(long, env = "PHARNESS_CODEX_AUTH_FILE", hide_env_values = true)]
+        authentication_file: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, default_value_t = 4)]
+        max_executions: usize,
     },
     Compare {
         #[arg(long)]
@@ -408,6 +428,42 @@ async fn main() -> Result<()> {
             let evidence = qualification_evidence(&report);
             post_gateway_evaluation_outcome(&evaluation_id, &evidence).await?;
             println!("{}", serde_json::to_string_pretty(&evidence)?);
+        }
+        Command::CodexQualification {
+            policy_id,
+            revision,
+            registry,
+            codex_path,
+            authentication_class,
+            authentication_file,
+            output,
+            max_executions,
+        } => {
+            let authentication_class = match authentication_class.as_str() {
+                "chatgpt_session" => AgentAuthenticationClass::ChatgptSession,
+                "api_key" => AgentAuthenticationClass::ApiKey,
+                _ => bail!(
+                    "Codex qualification authentication class must be chatgpt_session or api_key"
+                ),
+            };
+            let runtime = codex_qualification::CodexEvaluationRuntime::load(
+                &registry,
+                &policy_id,
+                &revision,
+                codex_path,
+                authentication_class,
+                authentication_file,
+            )?;
+            let report = codex_qualification::run(&runtime, &output, max_executions).await?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "output":output,
+                    "policy_id":policy_id,
+                    "revision":revision,
+                    "gate_passed":report.get("gate_passed"),
+                }))?
+            );
         }
         Command::Compare {
             baseline,
