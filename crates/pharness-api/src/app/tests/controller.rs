@@ -126,6 +126,7 @@ async fn work_item_reconcile_previews_then_declares_the_review_boundary() {
             reason: "reviewed current controller boundary".to_string(),
             state_hash: "stale-preview-hash".to_string(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -193,6 +194,7 @@ async fn work_item_reconcile_previews_then_declares_the_review_boundary() {
             reason: "stale WorkPlan review".to_string(),
             state_hash: "stale-review".to_string(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -207,6 +209,7 @@ async fn work_item_reconcile_previews_then_declares_the_review_boundary() {
             reason: "approve the bounded WorkPlan".to_string(),
             state_hash: approve.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await
@@ -1441,6 +1444,7 @@ async fn worker_can_pin_the_exact_issued_remote_workspace_while_preparing() {
         environment_profiles: Arc::new(Vec::new()),
         repo_mode: RepoModeConfiguration::test_enabled(),
         inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
+        agent_execution: Arc::new(pharness_config::AgentExecutionBackendConfig::disabled_default()),
     };
     let work_item = state
         .store

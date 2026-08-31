@@ -845,6 +845,7 @@ fn inference_stage_key(stage: InferenceStage) -> &'static str {
         InferenceStage::Onboarding => "onboarding",
         InferenceStage::Plan => "plan",
         InferenceStage::Implement => "implement",
+        InferenceStage::Repair => "repair",
         InferenceStage::Test => "test",
         InferenceStage::Verify => "verify",
     }
@@ -869,6 +870,7 @@ fn inference_stage_for_run(run: &StoredRun) -> Result<(InferenceStage, &'static 
         "implement" => Ok((InferenceStage::Implement, "implement")),
         "test" => Ok((InferenceStage::Test, "test")),
         "verify" => Ok((InferenceStage::Verify, "verify")),
+        "repair" => Ok((InferenceStage::Repair, "repair")),
         _ => Err(ApiError::conflict("Run stage is not model-backed")),
     }
 }
@@ -2199,6 +2201,7 @@ fn parse_stage(value: &str) -> Result<InferenceStage, ApiError> {
         "implement" | "builder" => Ok(InferenceStage::Implement),
         "test" | "tester" => Ok(InferenceStage::Test),
         "verify" | "verifier" => Ok(InferenceStage::Verify),
+        "repair" => Ok(InferenceStage::Repair),
         _ => Err(ApiError::bad_request("unsupported inference stage")),
     }
 }

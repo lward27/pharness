@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             "operator token auth enabled"
         );
     }
-    let app = app::router_with_inference(
+    let app = app::router_with_runtime_configs(
         store,
         dispatcher,
         cluster_tools,
@@ -144,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
             config.storage.workspace_allowed_remote_repos.clone(),
         ),
         config.inference.clone(),
+        config.agent_execution.clone(),
     );
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;

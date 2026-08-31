@@ -265,6 +265,7 @@ async fn failed_pipeline_intent_requires_review_and_preserves_evidence_for_one_r
             reason: "reviewed the exact failed PipelineRun evidence".to_string(),
             state_hash: retry.state_hash.clone(),
             inference_policies: None,
+            execution_policies: None,
         }),
     )
     .await

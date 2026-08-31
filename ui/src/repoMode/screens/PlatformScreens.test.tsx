@@ -80,6 +80,52 @@ describe("Environment profile settings", () => {
     expect(fetchMock.mock.calls.filter(([input,init]) => String(input).includes("/qualifications") && (init as RequestInit | undefined)?.method === "POST")).toHaveLength(1);
     expect(await screen.findByText("infeval-one")).toBeInTheDocument();
   });
+
+  it("renders portable Codex hosts and creates a bounded one-time enrollment", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/agent-hosts/enrollments") && init?.method === "POST") return json({
+        enrollment:{id:"hostenroll_one",expires_at:"180000"},
+        enrollment_token:"phost_enroll_once",
+      });
+      if (url.endsWith("/api/agent-hosts")) return json({
+        enabled:true,
+        registry_hash:"agent-registry-one",
+        hosts:[{
+          host:{id:"aghost_one",display_name:"lucas-desktop",host_pool:"codex-reliability",lifecycle_state:"ready",platform:"linux",architecture:"amd64",last_contact_at:"170000"},
+          capability:{status:"passed",codex_version:"codex-cli 0.150.1",podman_version:"podman 5.0",authentication_class:"chatgpt_session",supported_profiles:["python-3.11","node-24"],available_slots:1,blockers:[]},
+          leases:[{id:"aglease_one",state:"running",workspace_id:"workspace_one"}],
+          actions:[],
+        }],
+      });
+      if (url.endsWith("/api/agent-execution-policies")) return json({
+        policies:[{available:true,qualified:true,policy:{policy_id:"codex-builder",revision:"r1",display_name:"Codex Builder",eligible_stages:["implement"],host_pool:"codex-reliability",model:"gpt-5.6-sol",reasoning_effort:"high",codex_version:"codex-cli 0.150.1",prompt_revision:"builder-v1",allowed_authentication:["chatgpt_session","api_key"],policy_hash:"sha256:policy"},qualification:{verdict:"passed",suite_id:"coding-v2"}}],
+      });
+      if (url.endsWith("/api/environment-profiles")) return json({profiles:[]});
+      if (url.endsWith("/api/config/effective")) return json({features:{repo_mode_v1:{enabled:true,ui_enabled:true},coding_reliability_v2:{enabled:true}}});
+      return json({capabilities:[],repository_allowlists:{}});
+    });
+    vi.stubGlobal("fetch",fetchMock);
+
+    render(<SettingsScreen section="agent-hosts" operatorName="lucas" />);
+
+    await waitFor(() => expect(screen.getAllByRole("heading",{name:"lucas-desktop"})).not.toHaveLength(0));
+    expect(screen.getByText("codex-cli 0.150.1 · podman 5.0")).toBeInTheDocument();
+    expect(screen.getByText("chatgpt_session")).toBeInTheDocument();
+    expect(screen.getByText("aglease_one · workspace_one")).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Codex Builder"})).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button",{name:"Create one-time enrollment"}));
+    await waitFor(() => expect(screen.getByText("phost_enroll_once")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agent-hosts/enrollments",
+      expect.objectContaining({
+        method:"POST",
+        body:JSON.stringify({display_name:"lucas-desktop",host_pool:"codex-reliability",actor:"lucas",reason:"Operate the portable Codex host pool",config_hash:"agent-registry-one"}),
+      }),
+    );
+    expect(screen.queryByText(/session path|secret identity/i)).not.toBeInTheDocument();
+  });
 });
 
 function json(value: unknown) {

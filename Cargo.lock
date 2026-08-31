@@ -1294,6 +1294,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pharness-codex-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "globset",
+ "hmac",
+ "pharness-core",
+ "pharness-runhost",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "pharness-config"
 version = "0.1.0"
 dependencies = [

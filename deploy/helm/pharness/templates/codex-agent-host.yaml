@@ -1,0 +1,176 @@
+{{- if .Values.codexAgentBackend.kubernetes.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pharness-codex-host
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+automountServiceAccountToken: false
+---
+{{- range $profile := .Values.codexAgentBackend.kubernetes.profiles }}
+{{- if $profile.enabled }}
+{{- $profileName := $profile.id | lower | replace "." "-" | replace "_" "-" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharness-codex-host-{{ $profileName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: pharness-codex-host
+    app.kubernetes.io/part-of: pharness
+    pharness.dev/environment-profile: {{ $profile.id | quote }}
+data:
+  config.toml: |
+    api_url = "http://pharness-api.{{ $.Release.Namespace }}.svc.cluster.local:4777"
+    identity_file = "/var/lib/pharness-codex-host/identity.json"
+    state_dir = "/var/lib/pharness-codex-host"
+    workspace_root = "/var/lib/pharness-codex-host/workspaces"
+    execution_mode = "kubernetes"
+    codex_path = "/usr/local/bin/codex"
+    api_key_file = "/var/run/secrets/pharness-codex/openai-api-key"
+    authentication_class = "{{ $.Values.codexAgentBackend.kubernetes.authenticationClass }}"
+    available_slots = 1
+    poll_seconds = 10
+    {{- if $.Values.codexAgentBackend.kubernetes.sourceReaderSecretName }}
+    source_reader_token_file = "/var/run/secrets/pharness-source-reader/token"
+    {{- end }}
+
+    [runner_images]
+    "{{ $profile.id }}" = "{{ $profile.image }}"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pharness-codex-host-{{ $profileName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: pharness-codex-host
+    app.kubernetes.io/part-of: pharness
+    pharness.dev/environment-profile: {{ $profile.id | quote }}
+spec:
+  serviceName: pharness-codex-host-{{ $profileName }}
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: pharness-codex-host
+      pharness.dev/environment-profile: {{ $profile.id | quote }}
+  template:
+    metadata:
+      labels:
+        app: pharness-codex-host
+        app.kubernetes.io/part-of: pharness
+        pharness.dev/environment-profile: {{ $profile.id | quote }}
+        agentic.lucas.engineering/phase: coding
+    spec:
+      serviceAccountName: pharness-codex-host
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: enroll
+          image: {{ $profile.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - >-
+              if [ -s /var/lib/pharness-codex-host/identity.json ]; then exit 0; fi;
+              exec /usr/local/bin/pharness-codex-host enroll
+              --config /etc/pharness-codex-host/config.toml
+              --enrollment-id "$PHARNESS_AGENT_HOST_ENROLLMENT_ID"
+          env:
+            - name: PHARNESS_AGENT_HOST_ENROLLMENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.codexAgentBackend.kubernetes.enrollmentSecretName }}
+                  key: {{ $.Values.codexAgentBackend.kubernetes.enrollmentIdKey }}
+            - name: PHARNESS_AGENT_HOST_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.codexAgentBackend.kubernetes.enrollmentSecretName }}
+                  key: {{ $.Values.codexAgentBackend.kubernetes.enrollmentTokenKey }}
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/pharness-codex-host }
+            - { name: config, mountPath: /etc/pharness-codex-host, readOnly: true }
+            - { name: api-key, mountPath: /var/run/secrets/pharness-codex, readOnly: true }
+      containers:
+        - name: host
+          image: {{ $profile.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/pharness-codex-host"]
+          args: ["serve", "--config", "/etc/pharness-codex-host/config.toml"]
+          env:
+            - { name: HOME, value: /var/lib/pharness-codex-host }
+            - { name: CODEX_HOME, value: /var/lib/pharness-codex-host/codex-home }
+            - { name: HTTPS_PROXY, value: "http://pharness-egress-proxy.{{ $.Release.Namespace }}.svc.cluster.local:8080" }
+            - { name: NO_PROXY, value: ".svc,.svc.cluster.local" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+              ephemeral-storage: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/pharness-codex-host }
+            - { name: config, mountPath: /etc/pharness-codex-host, readOnly: true }
+            - { name: api-key, mountPath: /var/run/secrets/pharness-codex, readOnly: true }
+            {{- if $.Values.codexAgentBackend.kubernetes.sourceReaderSecretName }}
+            - { name: source-reader, mountPath: /var/run/secrets/pharness-source-reader, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: pharness-codex-host-{{ $profileName }}
+        - name: api-key
+          secret:
+            secretName: {{ $.Values.codexAgentBackend.kubernetes.apiKeySecretName }}
+            items:
+              - key: {{ $.Values.codexAgentBackend.kubernetes.apiKeySecretKey }}
+                path: openai-api-key
+                mode: 0400
+        {{- if $.Values.codexAgentBackend.kubernetes.sourceReaderSecretName }}
+        - name: source-reader
+          secret:
+            secretName: {{ $.Values.codexAgentBackend.kubernetes.sourceReaderSecretName }}
+            items:
+              - key: {{ $.Values.codexAgentBackend.kubernetes.sourceReaderSecretKey }}
+                path: token
+                mode: 0400
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+        labels:
+          app: pharness-codex-host
+          app.kubernetes.io/part-of: pharness
+          pharness.dev/environment-profile: {{ $profile.id | quote }}
+        annotations:
+          helm.sh/resource-policy: keep
+          argocd.argoproj.io/sync-options: Prune=false
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ $.Values.codexAgentBackend.kubernetes.storageClass }}
+        resources:
+          requests:
+            storage: {{ $.Values.codexAgentBackend.kubernetes.workspaceSize }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

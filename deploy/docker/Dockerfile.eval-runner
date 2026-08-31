@@ -18,7 +18,16 @@ RUN test "${TARGETARCH}" = "amd64" \
     && rm -rf /var/lib/apt/lists/* \
     && rustup target add x86_64-unknown-linux-gnu
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
-RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval
+RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval -p pharness-codex-host
+
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
+ARG TARGETARCH
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY deploy/docker/install-codex.sh /usr/local/bin/install-codex
+RUN chmod 0755 /usr/local/bin/install-codex \
+    && TARGETARCH="${TARGETARCH}" /usr/local/bin/install-codex /out/codex
 
 FROM rust:1-slim-bookworm@sha256:1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157 AS rust-runtime
 
@@ -43,6 +52,10 @@ RUN apt-get update \
 COPY --from=rust-runtime /usr/local/cargo /usr/local/cargo
 COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
+COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
+COPY --from=codex /out/codex /usr/local/bin/codex
+COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass
+RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
 USER 65532:65532
 WORKDIR /work
 RUN test "$(id -u)" = "65532" \

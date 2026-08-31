@@ -194,6 +194,40 @@ pub(in crate::app) async fn repo_work_item_flow(
             })
         })
         .collect::<Vec<_>>();
+    let agent_execution_selections = state
+        .store
+        .list_agent_execution_selections("work_item", work_item_id)
+        .await?;
+    let agent_execution_selection_views = agent_execution_selections
+        .iter()
+        .map(|selection| {
+            json!({
+                "id":selection.id,
+                "stage_key":selection.stage_key,
+                "stage_execution_id":selection.stage_execution_id,
+                "run_id":selection.run_id,
+                "supersedes_selection_id":selection.supersedes_selection_id,
+                "created_at":selection.created_at,
+                "binding":selection.resolved_binding,
+                "binding_hash":selection.binding_hash,
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut execution_views = Vec::with_capacity(executions.len());
+    for execution in &executions {
+        let mut value = serde_json::to_value(execution)
+            .map_err(|error| ApiError::internal(error.to_string()))?;
+        if let Some(object) = value.as_object_mut() {
+            let provenance = match execution.run_id.as_ref() {
+                Some(run_id) => {
+                    super::agent_hosts::sanitized_run_agent_execution(state, run_id).await?
+                }
+                None => None,
+            };
+            object.insert("agent_execution".into(), provenance.unwrap_or(Value::Null));
+        }
+        execution_views.push(value);
+    }
     let correction_lineage = executions
         .iter()
         .filter_map(|execution| {
@@ -406,7 +440,7 @@ pub(in crate::app) async fn repo_work_item_flow(
                 "repository_binding_revision":binding_revision,
                 "services":services,
             },
-            "stage_executions":executions,
+            "stage_executions":execution_views,
             "effective_stage_outcomes":outcomes,
             "history":{
                 "stage_outcomes":all_outcomes,
@@ -433,6 +467,7 @@ pub(in crate::app) async fn repo_work_item_flow(
                 "internal_corrections_used":internal_corrections_used,
                 "correction_lineage":correction_lineage,
                 "inference_selections":inference_selection_views,
+                "agent_execution_selections":agent_execution_selection_views,
             },
             "safe_advance":safe_advance,
         })),
@@ -1446,15 +1481,27 @@ fn annotation_contradictions(
         .collect()
 }
 
+pub(in crate::app) struct RepoWorkItemActionExecutionRequest {
+    pub actor: String,
+    pub reason: String,
+    pub state_hash: String,
+    pub inference_policies: Option<crate::dto::StageChainInferencePolicyRequest>,
+    pub execution_policies: Option<crate::dto::StageChainExecutionPolicyRequest>,
+}
+
 pub(in crate::app) async fn execute_repo_work_item_action(
     state: &AppState,
     work_item_id: &str,
     action_id: &str,
-    actor: String,
-    reason: String,
-    state_hash: String,
-    inference_policies: Option<crate::dto::StageChainInferencePolicyRequest>,
+    request: RepoWorkItemActionExecutionRequest,
 ) -> Result<Value, ApiError> {
+    let RepoWorkItemActionExecutionRequest {
+        actor,
+        reason,
+        state_hash,
+        inference_policies,
+        execution_policies,
+    } = request;
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -1713,6 +1760,7 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 &reason,
                 None,
                 inference_policies.as_ref(),
+                execution_policies.as_ref(),
             )
             .await
         }
@@ -2125,7 +2173,16 @@ async fn apply_repo_stage_correction(
         .into_iter()
         .find(|workspace| workspace.resolved_commit == work_item.source_commit)
         .ok_or_else(|| ApiError::conflict("preserved correction workspace is unavailable"))?;
-    authorize_repo_stage_chain(state, work_item_id, actor, reason, Some(workspace), None).await
+    authorize_repo_stage_chain(
+        state,
+        work_item_id,
+        actor,
+        reason,
+        Some(workspace),
+        None,
+        None,
+    )
+    .await
 }
 
 async fn retry_repo_followup_stage_startup(
@@ -3917,7 +3974,14 @@ async fn start_repo_planner(
     actor: &str,
     reason: &str,
 ) -> Result<Value, ApiError> {
-    if !state.worker.supports_remote_workspace() {
+    let planned_execution = super::agent_hosts::latest_planned_execution_selection(
+        state,
+        "work_item",
+        work_item_id,
+        "plan",
+    )
+    .await?;
+    if planned_execution.is_none() && !state.worker.supports_remote_workspace() {
         return Err(ApiError::unavailable(
             "Repo Mode planner execution requires kubernetes_job worker mode",
         ));
@@ -3979,7 +4043,33 @@ async fn start_repo_planner(
             "mandatory Planner context exceeds the 16,000-token context-pack limit",
         ));
     }
-    let cwd = state.worker.effective_cwd("/workspace");
+    let planner_workspace = if planned_execution.is_some() {
+        Some(
+            state
+                .store
+                .create_workspace(CreateWorkspace {
+                    id: new_prefixed_id("ws"),
+                    work_item_id: work_item_id.into(),
+                    run_id: Some(run_id.clone()),
+                    status: "provisioning".into(),
+                    source_repo: work_item.source_repo.clone(),
+                    source_ref: work_item.source_ref.clone(),
+                    resolved_commit: work_item.source_commit.clone(),
+                    branch: Some(format!("pharness/{work_item_id}/planner-{plan_sequence}")),
+                    retention_status: "retained".into(),
+                    actor: Some(actor.into()),
+                    reason: Some(reason.into()),
+                })
+                .await?,
+        )
+    } else {
+        None
+    };
+    let cwd = if planned_execution.is_some() {
+        "/workspace".to_string()
+    } else {
+        state.worker.effective_cwd("/workspace")
+    };
     state
         .store
         .create_session(CreateSession {
@@ -3993,9 +4083,24 @@ async fn start_repo_planner(
         work_item_id: Some(work_item_id.into()),
         repo: Some(work_item.source_repo.clone()),
         branch: Some(work_item.source_ref.clone()),
+        workspace_id: planner_workspace
+            .as_ref()
+            .map(|workspace| workspace.id.clone()),
         ..RunScope::default()
     };
-    let (inference_marker, resolved_profile) = if state.inference.enabled {
+    let (agent_execution_marker, inference_marker, resolved_profile) = if let Some(selection) =
+        &planned_execution
+    {
+        (
+            super::agent_hosts::execution_marker(selection),
+            json!({"mode":"not_selected","reason":"Planner uses codex_app_server"}),
+            Some((
+                selection.binding_hash.clone(),
+                selection.resolved_binding.policy.model.clone(),
+                selection.resolved_binding.policy.prompt_revision.clone(),
+            )),
+        )
+    } else if state.inference.enabled {
         let selection =
             super::inference::latest_planned_selection(state, "work_item", work_item_id, "plan")
                 .await?
@@ -4005,19 +4110,53 @@ async fn start_repo_planner(
                     )
                 })?;
         (
+            Value::Null,
             super::inference::execution_marker_for_selection(state, &selection),
             Some((
                 selection.resolved_binding.agent_profile_hash.clone(),
                 selection.resolved_binding.target.upstream_model.clone(),
+                profile.prompt_version.clone(),
             )),
         )
     } else {
-        (super::inference::execution_marker(state, None), None)
+        (
+            Value::Null,
+            super::inference::execution_marker(state, None),
+            None,
+        )
     };
-    if let Some((profile_hash, model)) = resolved_profile {
+    if let Some((profile_hash, model, prompt_version)) = resolved_profile {
         profile.profile_hash = profile_hash;
         profile.model = model;
+        profile.prompt_version = prompt_version;
     }
+    let runner_profile = if planned_execution.is_some() {
+        Some(
+            super::environment::select_profile(
+                &state.environment_profiles,
+                work_item
+                    .environment_profile_id
+                    .as_deref()
+                    .ok_or_else(|| ApiError::conflict("EnvironmentProfile is unavailable"))?,
+                &work_item.source_repo,
+            )
+            .map_err(ApiError::conflict)?
+            .clone(),
+        )
+    } else {
+        None
+    };
+    let workspace_source =
+        planner_workspace
+            .as_ref()
+            .map(|workspace| pharness_runhost::WorkspaceSourceSpec {
+                workspace_id: workspace.id.clone(),
+                source_repo: workspace.source_repo.clone(),
+                source_ref: workspace.source_ref.clone(),
+                source_commit: work_item.source_commit.clone(),
+                branch: workspace.branch.clone().unwrap_or_default(),
+                resolved_commit: None,
+            });
     let run = state
         .store
         .create_run(CreateRun {
@@ -4031,14 +4170,20 @@ async fn start_repo_planner(
             max_turns: profile.budget.initial_turns,
             initial_status: "queued".into(),
             execution_target_json: json!({
-                "kind":state.worker.execution_target_kind(),
+                "kind":if planned_execution.is_some() {"agent_host_workspace"} else {state.worker.execution_target_kind()},
+                "agent_execution":agent_execution_marker,
                 "inference":inference_marker,
-                "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id},
+                "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only"},
                 "agent_profile":profile,
                 "agent_context":context,
                 "agent_evidence_payloads":evidence.payloads,
                 "run_scope":scope.to_optional_json(),
                 "run_budget":profile.budget,
+                "workspace_source":workspace_source,
+                "environment_profile_id":work_item.environment_profile_id,
+                "repository_contract":work_item.repository_contract_json,
+                "selected_acceptance_commands":work_item.acceptance_criteria,
+                "runner_profile":runner_profile,
             }),
         })
         .await?;
@@ -4080,7 +4225,9 @@ async fn start_repo_planner(
             agent_profile_hash: Some(profile.profile_hash.clone()),
             context_pack_id: None,
             run_id: Some(run.id.clone()),
-            workspace_id: None,
+            workspace_id: planner_workspace
+                .as_ref()
+                .map(|workspace| workspace.id.clone()),
             input_hash: canonical_material_hash(&input_snapshot)?,
             input_snapshot,
         })
@@ -4117,8 +4264,25 @@ async fn start_repo_planner(
             false,
         )
         .await?;
-    state.worker.spawn_run(run.clone(), cwd);
-    Ok(json!({"work_item":item,"stage_execution":execution,"context_pack":pack,"run":run}))
+    let lease = if let (Some(planned), Some(workspace)) = (planned_execution, &planner_workspace) {
+        Some(
+            super::agent_hosts::queue_bound_run(
+                state,
+                planned,
+                &run,
+                &execution.id,
+                &workspace.id,
+                None,
+            )
+            .await?,
+        )
+    } else {
+        state.worker.spawn_run(run.clone(), cwd);
+        None
+    };
+    Ok(
+        json!({"work_item":item,"stage_execution":execution,"context_pack":pack,"run":run,"workspace":planner_workspace,"agent_lease":lease}),
+    )
 }
 
 async fn authorize_repo_stage_chain(
@@ -4128,6 +4292,7 @@ async fn authorize_repo_stage_chain(
     reason: &str,
     reuse_workspace: Option<pharness_store::StoredWorkspace>,
     inference_policies: Option<&crate::dto::StageChainInferencePolicyRequest>,
+    execution_policies: Option<&crate::dto::StageChainExecutionPolicyRequest>,
 ) -> Result<Value, ApiError> {
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -4220,6 +4385,49 @@ async fn authorize_repo_stage_chain(
         ));
     }
     let chain_state_hash = repo_work_item_state_hash(&metadata)?;
+    let mut planned_execution = Vec::new();
+    let mut execution_profiles = std::collections::BTreeSet::new();
+    let mut requested_execution = vec![(
+        "repo-builder",
+        pharness_core::InferenceStage::Implement,
+        execution_policies.and_then(|value| value.implement.as_ref()),
+    )];
+    if reliability_v2 {
+        requested_execution.push((
+            "repo-repair",
+            pharness_core::InferenceStage::Repair,
+            execution_policies.and_then(|value| value.repair.as_ref()),
+        ));
+    }
+    requested_execution.push((
+        "repo-verifier",
+        pharness_core::InferenceStage::Verify,
+        execution_policies.and_then(|value| value.verify.as_ref()),
+    ));
+    for (profile_id, stage, requested) in requested_execution {
+        if let Some(selection) = super::agent_hosts::create_planned_execution_selection(
+            state,
+            super::agent_hosts::PlannedExecutionSelectionRequest {
+                subject_kind: "work_item",
+                subject_id: work_item_id,
+                stage_key: profile_id,
+                stage,
+                environment_profile_id: work_item
+                    .environment_profile_id
+                    .as_deref()
+                    .ok_or_else(|| ApiError::conflict("EnvironmentProfile is unavailable"))?,
+                requested,
+                actor,
+                reason,
+                state_hash: &chain_state_hash,
+            },
+        )
+        .await?
+        {
+            execution_profiles.insert(profile_id.to_string());
+            planned_execution.push(selection);
+        }
+    }
     let mut planned_inference = Vec::new();
     if state.inference.enabled {
         let mut requested_stages = vec![(
@@ -4259,6 +4467,9 @@ async fn authorize_repo_stage_chain(
             inference_policies.and_then(|value| value.verify.as_ref()),
         ));
         for (profile_id, stage, requested) in requested_stages {
+            if execution_profiles.contains(profile_id) {
+                continue;
+            }
             let profile = profiles
                 .iter()
                 .find(|profile| profile.id == profile_id)
@@ -4313,6 +4524,14 @@ async fn authorize_repo_stage_chain(
                 "repo-verifier":profiles.iter().find(|profile| profile.id == "repo-verifier").map(|profile| &profile.budget),
                 "requested_repair_policy":inference_policies.and_then(|value| value.repair.as_ref()),
                 "requested_test_diagnosis_policy":inference_policies.and_then(|value| value.test_diagnosis.as_ref()).or_else(|| inference_policies.and_then(|value| value.test.as_ref())),
+                "agent_execution_selections":planned_execution.iter().map(|selection| json!({
+                    "selection_id":selection.id,
+                    "stage_key":selection.stage_key,
+                    "policy_id":selection.policy_id,
+                    "policy_revision":selection.policy_revision,
+                    "policy_hash":selection.policy_hash,
+                    "binding_hash":selection.binding_hash,
+                })).collect::<Vec<_>>(),
             }),
             state_hash: chain_state_hash,
             created_by: actor.into(),
@@ -4341,6 +4560,7 @@ async fn authorize_repo_stage_chain(
             "workspace":workspace,
             "builder":started,
             "inference_selections":planned_inference,
+            "agent_execution_selections":planned_execution,
         })),
         Err(error) => {
             state
@@ -4370,7 +4590,14 @@ async fn start_repo_builder(
     builder_profile_id: &str,
     correction_of: Option<&pharness_store::StoredStageOutcome>,
 ) -> Result<Value, ApiError> {
-    if !state.worker.enabled() {
+    let planned_execution = super::agent_hosts::latest_planned_execution_selection(
+        state,
+        "work_item",
+        &work_item.id,
+        builder_profile_id,
+    )
+    .await?;
+    if planned_execution.is_none() && !state.worker.enabled() {
         return Err(ApiError::unavailable(
             "model execution worker is unavailable",
         ));
@@ -4403,7 +4630,7 @@ async fn start_repo_builder(
         None
     };
     let reuse_prepared_environment = reused_environment_snapshot.is_some();
-    if !state.worker.supports_remote_workspace() {
+    if planned_execution.is_none() && !state.worker.supports_remote_workspace() {
         return Err(ApiError::conflict(
             "Repo Mode V1 immutable runner preparation requires kubernetes_job worker mode",
         ));
@@ -4484,7 +4711,11 @@ async fn start_repo_builder(
             "mandatory Builder context exceeds the 16,000-token context-pack limit",
         ));
     }
-    let cwd = state.worker.effective_cwd("/workspace");
+    let cwd = if planned_execution.is_some() {
+        "/workspace".to_string()
+    } else {
+        state.worker.effective_cwd("/workspace")
+    };
     state
         .store
         .create_session(CreateSession {
@@ -4533,36 +4764,55 @@ async fn start_repo_builder(
     .await?;
     let mut policy = super::policy::run_policy(&state.policy, None);
     policy.permission_grants = super::approvals::active_permission_grants(&state.store).await?;
-    let (inference_marker, resolved_profile) = if state.inference.enabled {
-        let selection = super::inference::latest_planned_selection_for_profile(
-            state,
-            "work_item",
-            &work_item.id,
-            "implement",
-            builder_profile_id,
-        )
-        .await?
-        .ok_or_else(|| {
-            ApiError::conflict(format!(
-                "{builder_profile_id} inference selection is unavailable"
-            ))
-        })?;
-        (
-            super::inference::execution_marker_for_selection(state, &selection),
-            Some((
-                selection.resolved_binding.agent_profile_hash.clone(),
-                selection.resolved_binding.target.upstream_model.clone(),
-            )),
-        )
-    } else {
-        (super::inference::execution_marker(state, None), None)
-    };
-    if let Some((profile_hash, model)) = resolved_profile {
+    let (agent_execution_marker, inference_marker, resolved_profile) =
+        if let Some(selection) = &planned_execution {
+            (
+                super::agent_hosts::execution_marker(selection),
+                json!({"mode":"not_selected","reason":"stage uses codex_app_server"}),
+                Some((
+                    selection.binding_hash.clone(),
+                    selection.resolved_binding.policy.model.clone(),
+                    selection.resolved_binding.policy.prompt_revision.clone(),
+                )),
+            )
+        } else if state.inference.enabled {
+            let selection = super::inference::latest_planned_selection_for_profile(
+                state,
+                "work_item",
+                &work_item.id,
+                "implement",
+                builder_profile_id,
+            )
+            .await?
+            .ok_or_else(|| {
+                ApiError::conflict(format!(
+                    "{builder_profile_id} inference selection is unavailable"
+                ))
+            })?;
+            (
+                Value::Null,
+                super::inference::execution_marker_for_selection(state, &selection),
+                Some((
+                    selection.resolved_binding.agent_profile_hash.clone(),
+                    selection.resolved_binding.target.upstream_model.clone(),
+                    profile.prompt_version.clone(),
+                )),
+            )
+        } else {
+            (
+                Value::Null,
+                super::inference::execution_marker(state, None),
+                None,
+            )
+        };
+    if let Some((profile_hash, model, prompt_version)) = resolved_profile {
         profile.profile_hash = profile_hash;
         profile.model = model;
+        profile.prompt_version = prompt_version;
     }
     let mut execution_target = json!({
-        "kind":"kubernetes_workspace",
+        "kind":if planned_execution.is_some() {"agent_host_workspace"} else {"kubernetes_workspace"},
+        "agent_execution":agent_execution_marker,
         "inference":inference_marker,
         "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"implement","context_pack_id":context_pack_id,"chain_authorization_id":authorization.id},
         "agent_profile":profile,
@@ -4577,6 +4827,7 @@ async fn start_repo_builder(
         "repository_contract":work_item.repository_contract_json,
         "selected_acceptance_commands":work_item.acceptance_criteria,
         "runner_profile":environment_profile,
+        "environment_preparation_required":!reuse_prepared_environment,
     });
     if let Some(snapshot) = reused_environment_snapshot.clone() {
         execution_target["environment_snapshot"] = snapshot;
@@ -4733,6 +4984,50 @@ async fn start_repo_builder(
                 Some(reason.into()),
             )
             .await?;
+    }
+    if let Some(planned) = planned_execution {
+        let pinned_host_id = if reuse_prepared_workspace {
+            super::agent_hosts::sticky_workspace_host(state, &workspace.id).await?
+        } else {
+            None
+        };
+        let lease = super::agent_hosts::queue_bound_run(
+            state,
+            planned,
+            &run,
+            &execution.id,
+            &workspace.id,
+            pinned_host_id,
+        )
+        .await?;
+        let preparation = if reuse_prepared_environment {
+            None
+        } else {
+            Some(
+                state
+                    .store
+                    .create_environment_preparation(CreateEnvironmentPreparation {
+                        id: new_prefixed_id("prep"),
+                        work_item_id: work_item.id.clone(),
+                        workspace_id: workspace.id.clone(),
+                        run_id: Some(run.id.clone()),
+                        status: "queued".into(),
+                        environment_profile_id: environment_profile.id.clone(),
+                        source_commit,
+                    })
+                    .await?,
+            )
+        };
+        return Ok(json!({
+            "run":run,
+            "stage_execution":execution,
+            "context_pack":pack,
+            "workspace":workspace,
+            "permission_grant":grant,
+            "environment_preparation":preparation,
+            "reused_environment_snapshot":reuse_prepared_environment,
+            "agent_lease":lease,
+        }));
     }
     if reuse_prepared_environment {
         state.worker.spawn_run(run.clone(), cwd);
@@ -5225,6 +5520,19 @@ async fn start_repo_followup_stage(
         ("verify", false) => "repo-verifier",
         _ => return Err(ApiError::internal("unsupported Repo Mode follow-up stage")),
     };
+    let planned_execution = if deterministic_test || test_diagnosis {
+        None
+    } else {
+        super::agent_hosts::latest_planned_execution_selection(
+            state,
+            "work_item",
+            work_item_id,
+            profile_id,
+        )
+        .await?
+    };
+    let sticky_host = super::agent_hosts::sticky_workspace_host(state, &workspace.id).await?;
+    let controller_test_on_agent_host = deterministic_test && sticky_host.is_some();
     let mut profile = if deterministic_test {
         let budget = pharness_core::RunBudget {
             initial_turns: 1,
@@ -5337,7 +5645,11 @@ async fn start_repo_followup_stage(
             .ok_or_else(|| ApiError::conflict("workspace branch is unavailable"))?,
         resolved_commit: Some(authorization.source_commit.clone()),
     };
-    let cwd = state.worker.effective_cwd("/workspace");
+    let cwd = if planned_execution.is_some() || controller_test_on_agent_host {
+        "/workspace".to_string()
+    } else {
+        state.worker.effective_cwd("/workspace")
+    };
     state
         .store
         .create_session(CreateSession {
@@ -5356,33 +5668,59 @@ async fn start_repo_followup_stage(
         production_impacting: false,
         ..RunScope::default()
     };
-    let (inference_marker, resolved_profile) = if deterministic_test {
-        (super::inference::execution_marker(state, None), None)
-    } else if state.inference.enabled {
-        let selection = super::inference::latest_planned_selection_for_profile(
-            state,
-            "work_item",
-            work_item_id,
-            stage,
-            profile_id,
-        )
-        .await?
-        .ok_or_else(|| {
-            ApiError::conflict(format!("{profile_id} inference selection is unavailable"))
-        })?;
-        (
-            super::inference::execution_marker_for_selection(state, &selection),
-            Some((
-                selection.resolved_binding.agent_profile_hash.clone(),
-                selection.resolved_binding.target.upstream_model.clone(),
-            )),
-        )
-    } else {
-        (super::inference::execution_marker(state, None), None)
-    };
-    if let Some((profile_hash, model)) = resolved_profile {
+    let (agent_execution_marker, inference_marker, resolved_profile) =
+        if let Some(selection) = &planned_execution {
+            (
+                super::agent_hosts::execution_marker(selection),
+                json!({"mode":"not_selected","reason":"stage uses codex_app_server"}),
+                Some((
+                    selection.binding_hash.clone(),
+                    selection.resolved_binding.policy.model.clone(),
+                    selection.resolved_binding.policy.prompt_revision.clone(),
+                )),
+            )
+        } else if deterministic_test {
+            (
+                if controller_test_on_agent_host {
+                    json!({"mode":"controller_deterministic_test","host_pool":"sticky_workspace"})
+                } else {
+                    Value::Null
+                },
+                super::inference::execution_marker(state, None),
+                None,
+            )
+        } else if state.inference.enabled {
+            let selection = super::inference::latest_planned_selection_for_profile(
+                state,
+                "work_item",
+                work_item_id,
+                stage,
+                profile_id,
+            )
+            .await?
+            .ok_or_else(|| {
+                ApiError::conflict(format!("{profile_id} inference selection is unavailable"))
+            })?;
+            (
+                Value::Null,
+                super::inference::execution_marker_for_selection(state, &selection),
+                Some((
+                    selection.resolved_binding.agent_profile_hash.clone(),
+                    selection.resolved_binding.target.upstream_model.clone(),
+                    profile.prompt_version.clone(),
+                )),
+            )
+        } else {
+            (
+                Value::Null,
+                super::inference::execution_marker(state, None),
+                None,
+            )
+        };
+    if let Some((profile_hash, model, prompt_version)) = resolved_profile {
         profile.profile_hash = profile_hash;
         profile.model = model;
+        profile.prompt_version = prompt_version;
     }
     let run = state
         .store
@@ -5403,7 +5741,8 @@ async fn start_repo_followup_stage(
             max_turns: profile.budget.initial_turns,
             initial_status: "queued".into(),
             execution_target_json: json!({
-                "kind":"kubernetes_workspace",
+                "kind":if planned_execution.is_some() || controller_test_on_agent_host {"agent_host_workspace"} else {"kubernetes_workspace"},
+                "agent_execution":agent_execution_marker,
                 "inference":inference_marker,
                 "repo_mode":{"stage_execution_id":execution_id,"stage":stage,"context_pack_id":context_id,"chain_authorization_id":authorization.id,"workspace_access":if deterministic_test {"ephemeral_copy"} else {"read_only"},"deterministic_test":deterministic_test,"test_diagnosis":test_diagnosis,"diagnosis_of_outcome_id":diagnosis_of.map(|outcome| outcome.id.as_str())},
                 "agent_profile":profile,
@@ -5516,10 +5855,38 @@ async fn start_repo_followup_stage(
             payload: json!({"source":"repo_mode_controller","stage":stage,"test_diagnosis":test_diagnosis,"stage_execution_id":execution.id,"chain_authorization_id":authorization.id}),
         })
         .await?;
-    state
-        .worker
-        .spawn_chained_run(run.clone(), cwd, completed_run.id.as_str());
-    Ok(json!({"run":run,"stage_execution":execution,"context_pack":pack,"workspace":workspace}))
+    let lease = if let Some(planned) = planned_execution {
+        Some(
+            super::agent_hosts::queue_bound_run(
+                state,
+                planned,
+                &run,
+                &execution.id,
+                &workspace.id,
+                sticky_host,
+            )
+            .await?,
+        )
+    } else if controller_test_on_agent_host {
+        Some(
+            super::agent_hosts::queue_controller_stage_on_sticky_host(
+                state,
+                &run,
+                &execution.id,
+                &workspace.id,
+                stage,
+            )
+            .await?,
+        )
+    } else {
+        state
+            .worker
+            .spawn_chained_run(run.clone(), cwd, completed_run.id.as_str());
+        None
+    };
+    Ok(
+        json!({"run":run,"stage_execution":execution,"context_pack":pack,"workspace":workspace,"agent_lease":lease}),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -5562,6 +5929,8 @@ struct RepoWorkItemPreflightRequest {
     max_attempts: Option<u32>,
     #[serde(default)]
     planner_inference_policy: Option<pharness_core::InferencePolicyRef>,
+    #[serde(default)]
+    planner_execution_policy: Option<pharness_core::AgentExecutionPolicyRef>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -5580,6 +5949,8 @@ struct CreateRepoWorkItemRequest {
     max_attempts: Option<u32>,
     #[serde(default)]
     planner_inference_policy: Option<pharness_core::InferencePolicyRef>,
+    #[serde(default)]
+    planner_execution_policy: Option<pharness_core::AgentExecutionPolicyRef>,
     preflight_hash: String,
     actor: String,
     reason: String,
@@ -5602,6 +5973,7 @@ struct RepoWorkItemPreflightResponse {
     builder_budget: pharness_core::RunBudget,
     max_attempts: u32,
     planner_inference: Value,
+    planner_execution: Value,
     readiness_assessment_id: Option<String>,
     blockers: Vec<Value>,
     warnings: Vec<Value>,
@@ -5644,6 +6016,7 @@ async fn create_repo_work_item(
         builder_budget: request.builder_budget,
         max_attempts: request.max_attempts,
         planner_inference_policy: request.planner_inference_policy,
+        planner_execution_policy: request.planner_execution_policy,
     };
     let preflight = build_repo_work_item_preflight(&state, &product_id, &preflight_request).await?;
     if request.preflight_hash != preflight.preflight_hash {
@@ -5721,7 +6094,25 @@ async fn create_repo_work_item(
         .into_iter()
         .find(|profile| profile.id == "repo-planner")
         .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
-    let planner_selection = if state.inference.enabled {
+    let planner_execution_selection = super::agent_hosts::create_planned_execution_selection(
+        &state,
+        super::agent_hosts::PlannedExecutionSelectionRequest {
+            subject_kind: "work_item",
+            subject_id: &work_item_id,
+            stage_key: "plan",
+            stage: pharness_core::InferenceStage::Plan,
+            environment_profile_id: preflight
+                .environment_profile_id
+                .as_deref()
+                .ok_or_else(|| ApiError::conflict("EnvironmentProfile is missing"))?,
+            requested: preflight_request.planner_execution_policy.as_ref(),
+            actor: &actor,
+            reason: &reason,
+            state_hash: &preflight.preflight_hash,
+        },
+    )
+    .await?;
+    let planner_selection = if planner_execution_selection.is_none() && state.inference.enabled {
         Some(
             super::inference::create_planned_selection(
                 &state,
@@ -5830,6 +6221,7 @@ async fn create_repo_work_item(
         "discover_execution": execution,
         "discover_outcome": outcome,
         "planner_inference_selection":planner_selection,
+        "planner_execution_selection":planner_execution_selection,
     })))
 }
 
@@ -5989,7 +6381,38 @@ async fn build_repo_work_item_preflight(
         .into_iter()
         .find(|profile| profile.id == "repo-planner")
         .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
-    let planner_inference = if state.inference.enabled {
+    let environment_profile_id = contract
+        .as_ref()
+        .map(|contract| contract.environment_profile.as_str());
+    let planner_execution_binding = match environment_profile_id {
+        Some(profile_id) => {
+            super::agent_hosts::resolve_execution_binding_auto_auth(
+                state,
+                pharness_core::InferenceStage::Plan,
+                profile_id,
+                request.planner_execution_policy.as_ref(),
+            )
+            .await?
+        }
+        None => None,
+    };
+    let planner_execution = match &planner_execution_binding {
+        Some(binding) => json!({
+            "mode":"codex_app_server",
+            "policy_id":binding.policy.policy_id,
+            "policy_revision":binding.policy.revision,
+            "policy_hash":binding.policy.policy_hash,
+            "model":binding.policy.model,
+            "reasoning_effort":binding.policy.reasoning_effort,
+            "host_pool":binding.host_pool,
+            "runner_image":binding.runner_image,
+            "binding_hash":binding.binding_hash,
+        }),
+        None => Value::Null,
+    };
+    let planner_inference = if planner_execution_binding.is_some() {
+        json!({"mode":"not_selected","reason":"Planner uses an agent execution policy"})
+    } else if state.inference.enabled {
         super::inference::preview_selection(
             state,
             pharness_core::InferenceStage::Plan,
@@ -6116,6 +6539,7 @@ async fn build_repo_work_item_preflight(
         "builder_budget":budget,
         "max_attempts":max_attempts,
         "planner_inference":planner_inference,
+        "planner_execution":planner_execution,
         "readiness_assessment_id":readiness.as_ref().map(|assessment| &assessment.id),
         "readiness_input_hash":readiness.as_ref().map(|assessment| &assessment.input_hash),
         "blockers":blockers,
@@ -6142,6 +6566,7 @@ async fn build_repo_work_item_preflight(
         builder_budget: budget,
         max_attempts,
         planner_inference,
+        planner_execution,
         readiness_assessment_id: readiness.map(|assessment| assessment.id),
         blockers,
         warnings,
@@ -6286,8 +6711,12 @@ async fn list_stage_executions(
     ensure_repo_mode_enabled(&state)?;
     repo_metadata(&state, &work_item_id).await?;
     let executions = state.store.list_stage_executions(&work_item_id).await?;
+    let mut views = Vec::with_capacity(executions.len());
+    for execution in &executions {
+        views.push(stage_execution_view(&state, execution).await?);
+    }
     Ok(Json(json!({
-        "stage_executions": executions,
+        "stage_executions": views,
         "count": executions.len(),
     })))
 }
@@ -6302,7 +6731,9 @@ async fn get_stage_execution(
         .get_stage_execution(&stage_execution_id)
         .await?
         .ok_or_else(|| ApiError::not_found("stage_execution", &stage_execution_id))?;
-    Ok(Json(json!({"stage_execution": execution})))
+    Ok(Json(
+        json!({"stage_execution": stage_execution_view(&state, &execution).await?}),
+    ))
 }
 
 async fn get_stage_outcome(
@@ -6319,10 +6750,33 @@ async fn get_stage_outcome(
         .store
         .get_stage_outcome_for_execution(&execution.id)
         .await?;
+    let agent_execution = match execution.run_id.as_ref() {
+        Some(run_id) => super::agent_hosts::sanitized_run_agent_execution(&state, run_id).await?,
+        None => None,
+    };
     Ok(Json(json!({
         "stage_execution_id": execution.id,
         "outcome": outcome,
+        "agent_execution":agent_execution,
     })))
+}
+
+async fn stage_execution_view(
+    state: &AppState,
+    execution: &pharness_store::StoredStageExecution,
+) -> Result<Value, ApiError> {
+    let mut value =
+        serde_json::to_value(execution).map_err(|error| ApiError::internal(error.to_string()))?;
+    if let Some(object) = value.as_object_mut() {
+        let provenance = match execution.run_id.as_ref() {
+            Some(run_id) => {
+                super::agent_hosts::sanitized_run_agent_execution(state, run_id).await?
+            }
+            None => None,
+        };
+        object.insert("agent_execution".into(), provenance.unwrap_or(Value::Null));
+    }
+    Ok(value)
 }
 
 async fn get_stage_context_pack(

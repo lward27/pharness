@@ -232,6 +232,13 @@ fn workspace_source_for_run(
     let Some(value) = execution_target.get("workspace_source") else {
         return Ok(None);
     };
+    // Historical and compatibility fixtures may serialize an absent optional
+    // workspace source explicitly as JSON null. Treat it identically to an
+    // omitted field; a non-null value must still satisfy the typed source
+    // contract before a worker can provision or resume it.
+    if value.is_null() {
+        return Ok(None);
+    }
     let source = serde_json::from_value::<WorkspaceSourceSpec>(value.clone())
         .map_err(|error| anyhow::anyhow!("run has invalid workspace source: {error}"))?;
     source.validate()?;
@@ -3570,6 +3577,15 @@ mod tests {
 
     #[test]
     fn reconstructs_only_valid_workspace_source_from_persisted_target() {
+        assert!(workspace_source_for_run(&serde_json::json!({}))
+            .unwrap()
+            .is_none());
+        assert!(workspace_source_for_run(&serde_json::json!({
+            "workspace_source": null
+        }))
+        .unwrap()
+        .is_none());
+
         let source = workspace_source_for_run(&serde_json::json!({
             "workspace_source": {
                 "workspace_id": "ws_test",

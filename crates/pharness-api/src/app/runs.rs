@@ -123,6 +123,19 @@ pub(super) async fn internal_environment_preparation(
     Path(run_id): Path<String>,
     Json(request): Json<InternalEnvironmentPreparationRequest>,
 ) -> Result<Json<EnvironmentPreparationResponse>, ApiError> {
+    let token = state.worker_token.clone().ok_or_else(|| {
+        ApiError::conflict("worker token is unavailable for snapshot verification")
+    })?;
+    internal_environment_preparation_with_token(state, run_id, request, &token, true).await
+}
+
+pub(super) async fn internal_environment_preparation_with_token(
+    state: AppState,
+    run_id: String,
+    request: InternalEnvironmentPreparationRequest,
+    snapshot_token: &str,
+    dispatch_legacy_worker: bool,
+) -> Result<Json<EnvironmentPreparationResponse>, ApiError> {
     let run_id = RunId::new(run_id);
     let run = state
         .store
@@ -223,13 +236,12 @@ pub(super) async fn internal_environment_preparation(
             .map_err(|error| {
                 ApiError::conflict(format!("environment snapshot is invalid: {error}"))
             })?;
-    let token = state.worker_token.as_deref().ok_or_else(|| {
-        ApiError::conflict("worker token is unavailable for snapshot verification")
-    })?;
     if !request
         .snapshot_signature
         .as_deref()
-        .is_some_and(|signature| verify_environment_snapshot(token, &snapshot_json, signature))
+        .is_some_and(|signature| {
+            verify_environment_snapshot(snapshot_token, &snapshot_json, signature)
+        })
     {
         return Err(ApiError::conflict(
             "environment snapshot signature is invalid",
@@ -292,7 +304,9 @@ pub(super) async fn internal_environment_preparation(
         .store
         .set_run_environment_snapshot(&run_id, snapshot_json)
         .await?;
-    state.worker.spawn_run(run.clone(), run.cwd.clone());
+    if dispatch_legacy_worker {
+        state.worker.spawn_run(run.clone(), run.cwd.clone());
+    }
     Ok(Json(preparation.into()))
 }
 
@@ -718,6 +732,8 @@ pub(super) async fn list_runs(
     let mut runs = Vec::with_capacity(stored_runs.len());
     for stored in stored_runs {
         let mut response: RunResponse = stored.into();
+        response.agent_execution =
+            super::agent_hosts::sanitized_run_agent_execution(&state, &response.id).await?;
         if let Some(work_item_id) = response.ownership.work_item_id.as_deref() {
             if let Some(metadata) = state
                 .store
@@ -780,7 +796,10 @@ pub(super) async fn get_run(
         .get_run(&run_id)
         .await?
         .ok_or_else(|| ApiError::not_found("run", run_id.as_str()))?;
-    Ok(Json(run.into()))
+    let mut response: RunResponse = run.into();
+    response.agent_execution =
+        super::agent_hosts::sanitized_run_agent_execution(&state, &run_id).await?;
+    Ok(Json(response))
 }
 
 pub(super) async fn get_run_environment_preparation(
@@ -1093,6 +1112,7 @@ pub(super) async fn get_run_operator_summary(
             .execution_target_json
             .pointer("/inference/resolved")
             .cloned(),
+        agent_execution: super::agent_hosts::sanitized_run_agent_execution(&state, &run_id).await?,
         compactions,
         truncated_tool_results,
         tools_started,

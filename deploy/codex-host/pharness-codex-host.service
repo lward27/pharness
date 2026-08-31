@@ -1,0 +1,32 @@
+[Unit]
+Description=PHarness portable Codex agent host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pharness-codex
+Group=pharness-codex
+Environment=HOME=/var/lib/pharness-codex-host
+Environment=CODEX_HOME=/var/lib/pharness-codex-host/session
+Environment=XDG_RUNTIME_DIR=/run/pharness-codex-host
+Environment=RUST_LOG=pharness_codex_host=info
+RuntimeDirectory=pharness-codex-host
+RuntimeDirectoryMode=0700
+StateDirectory=pharness-codex-host
+StateDirectoryMode=0700
+ConfigurationDirectory=pharness-codex-host
+ExecStartPre=/opt/pharness-codex-host/current/bin/pharness-codex-host check --config /etc/pharness-codex-host/config.toml
+ExecStart=/opt/pharness-codex-host/current/bin/pharness-codex-host serve --config /etc/pharness-codex-host/config.toml
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pharness-codex-host /run/pharness-codex-host
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
