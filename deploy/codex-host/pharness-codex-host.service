@@ -11,6 +11,7 @@ Environment=HOME=/var/lib/pharness-codex-host
 Environment=CODEX_HOME=/var/lib/pharness-codex-host/session
 Environment=XDG_RUNTIME_DIR=/run/pharness-codex-host
 Environment=RUST_LOG=pharness_codex_host=info
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 RuntimeDirectory=pharness-codex-host
 RuntimeDirectoryMode=0700
 StateDirectory=pharness-codex-host

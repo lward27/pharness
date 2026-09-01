@@ -11,6 +11,7 @@ use tokio::sync::watch;
 
 const MAX_PROTOCOL_LINE_BYTES: usize = 4 * 1024 * 1024;
 const PHARNESS_PERMISSION_PROFILE: &str = "pharness-stage";
+const SAFE_COMMAND_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 #[derive(Debug, Clone)]
 pub struct AppServerConfig {
@@ -467,6 +468,13 @@ fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<
             values.insert(name.to_string(), value.clone());
         }
     }
+    // Codex resolves the Linux sandbox launcher from the command environment.
+    // Keep a deterministic system PATH even for startup probes that do not yet
+    // have an EnvironmentSnapshot, so Ubuntu's AppArmor-authorized bwrap is
+    // preferred over the bundled fallback.
+    values
+        .entry("PATH".into())
+        .or_insert_with(|| SAFE_COMMAND_PATH.into());
     values.insert("HOME".into(), "/tmp".into());
     values.insert("LANG".into(), "C.UTF-8".into());
     let mut filesystem = BTreeMap::from([(String::from("/"), String::from("read"))]);
@@ -488,7 +496,26 @@ fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<
         }),
     )]);
     let document = toml::to_string(&json!({
+        "check_for_update_on_startup":false,
         "default_permissions":PHARNESS_PERMISSION_PROFILE,
+        "web_search":"disabled",
+        "agents":{"enabled":false},
+        "apps":{"_default":{"enabled":false}},
+        "features":{
+            "apps":false,
+            "browser_use":false,
+            "browser_use_external":false,
+            "computer_use":false,
+            "hooks":false,
+            "image_generation":false,
+            "in_app_browser":false,
+            "multi_agent":false,
+            "plugins":false,
+            "remote_plugin":false,
+            "skill_mcp_dependency_install":false,
+            "tool_suggest":false,
+            "workspace_dependencies":false,
+        },
         "permissions":permissions,
         "shell_environment_policy":{
             "inherit":"none",
@@ -679,6 +706,88 @@ mod tests {
                 .and_then(|value| value.get("enabled"))
                 .and_then(toml::Value::as_bool),
             Some(false)
+        );
+        assert_eq!(
+            value.get("web_search").and_then(toml::Value::as_str),
+            Some("disabled")
+        );
+        assert_eq!(
+            value
+                .get("agents")
+                .and_then(|value| value.get("enabled"))
+                .and_then(toml::Value::as_bool),
+            Some(false)
+        );
+        for feature in [
+            "apps",
+            "browser_use",
+            "browser_use_external",
+            "computer_use",
+            "hooks",
+            "image_generation",
+            "in_app_browser",
+            "multi_agent",
+            "plugins",
+            "remote_plugin",
+            "skill_mcp_dependency_install",
+            "tool_suggest",
+            "workspace_dependencies",
+        ] {
+            assert_eq!(
+                value
+                    .get("features")
+                    .and_then(|value| value.get(feature))
+                    .and_then(toml::Value::as_bool),
+                Some(false),
+                "feature {feature} must be disabled"
+            );
+        }
+        assert_eq!(
+            value
+                .get("shell_environment_policy")
+                .and_then(|value| value.get("set"))
+                .and_then(|value| value.get("PATH"))
+                .and_then(toml::Value::as_str),
+            Some(SAFE_COMMAND_PATH)
+        );
+        std::fs::remove_dir_all(temporary).unwrap();
+    }
+
+    #[test]
+    fn permission_profile_preserves_snapshot_path() {
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-permission-path-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        let mut environment = BTreeMap::new();
+        environment.insert(
+            "PATH".into(),
+            "/workspace/.pharness-runtime/bin:/usr/bin:/bin".into(),
+        );
+        let config = AppServerConfig {
+            codex_path: PathBuf::from("/usr/local/bin/codex"),
+            codex_home: temporary.join("codex-home"),
+            cwd: PathBuf::from("/workspace"),
+            model: "gpt-5.6-sol".into(),
+            reasoning_effort: "high".into(),
+            prompt: "test".into(),
+            output_schema: json!({"type":"object"}),
+            workspace_write: false,
+            writable_roots: Vec::new(),
+            denied_read_paths: Vec::new(),
+            environment,
+            upstream_api_key: None,
+        };
+        write_command_environment_policy(&config).unwrap();
+        let document = std::fs::read_to_string(config.codex_home.join("config.toml")).unwrap();
+        let value = document.parse::<toml::Value>().unwrap();
+        assert_eq!(
+            value
+                .get("shell_environment_policy")
+                .and_then(|value| value.get("set"))
+                .and_then(|value| value.get("PATH"))
+                .and_then(toml::Value::as_str),
+            Some("/workspace/.pharness-runtime/bin:/usr/bin:/bin")
         );
         std::fs::remove_dir_all(temporary).unwrap();
     }

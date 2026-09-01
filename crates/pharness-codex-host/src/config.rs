@@ -259,6 +259,10 @@ mod tests {
         assert!(installer.contains(
             "install -m 0640 -o root -g pharness-codex \"$bundle_root/etc/config.toml.example\" /etc/pharness-codex-host/config.toml"
         ));
+        assert!(installer.contains("env PATH=/usr/local/bin:/usr/bin:/bin"));
+        assert!(installer.contains("bwrap --help 2>&1"));
+        assert!(installer.contains("--as-pid-1"));
+        assert!(installer.contains("--perms"));
     }
 
     #[test]
