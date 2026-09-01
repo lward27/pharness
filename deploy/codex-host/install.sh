@@ -38,7 +38,10 @@ install -m 0755 "$bundle_root/libexec/git-askpass" "$install_root/libexec/git-as
 ln -sfn /opt/pharness-codex-host/current/libexec/git-askpass /usr/lib/pharness-codex-host/git-askpass
 ln -sfn "$install_root" /opt/pharness-codex-host/current
 install -d -o pharness-codex -g pharness-codex -m 0700 /var/lib/pharness-codex-host/session /var/lib/pharness-codex-host/workspaces
-install -d -m 0750 /etc/pharness-codex-host
+# systemd ConfigurationDirectory paths are root-owned. Keep the directory
+# traversable by the unprivileged service account while the config itself
+# remains root-owned and group-readable only.
+install -d -o root -g root -m 0755 /etc/pharness-codex-host
 if [ ! -e /etc/pharness-codex-host/config.toml ]; then
   install -m 0640 -o root -g pharness-codex "$bundle_root/etc/config.toml.example" /etc/pharness-codex-host/config.toml
 fi
