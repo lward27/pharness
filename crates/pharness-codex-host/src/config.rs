@@ -253,6 +253,15 @@ mod tests {
     }
 
     #[test]
+    fn distributed_installer_keeps_config_directory_traversable() {
+        let installer = include_str!("../../../deploy/codex-host/install.sh");
+        assert!(installer.contains("install -d -o root -g root -m 0755 /etc/pharness-codex-host"));
+        assert!(installer.contains(
+            "install -m 0640 -o root -g pharness-codex \"$bundle_root/etc/config.toml.example\" /etc/pharness-codex-host/config.toml"
+        ));
+    }
+
+    #[test]
     fn rejects_chatgpt_session_in_kubernetes() {
         let mut value = config();
         value.execution_mode = ExecutionMode::Kubernetes;
