@@ -20,7 +20,7 @@ RUN printf '%s\n' "${PHARNESS_BUILD_REVISION}" > /build/REVISION
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
 ARG TARGETARCH
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends bubblewrap ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY deploy/docker/install-codex.sh /usr/local/bin/install-codex
 RUN chmod 0755 /usr/local/bin/install-codex \
@@ -33,12 +33,13 @@ LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.title="PHarness portable Codex agent host"
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git \
+    && apt-get install -y --no-install-recommends bubblewrap ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 pharness \
     && useradd --uid 65532 --gid 65532 --home-dir /var/lib/pharness-codex-host --create-home pharness
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
+COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources
 COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass
 RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
 USER 65532:65532
@@ -50,6 +51,8 @@ ENTRYPOINT ["/usr/local/bin/pharness-codex-host"]
 FROM runtime AS bundle-verification
 RUN test "$(pharness-codex-host --version)" = "pharness-codex-host 0.1.0" \
     && codex --version | grep -F 'codex-cli 0.150.1' >/dev/null \
+    && test -x /usr/local/bin/codex-resources/bwrap \
+    && /usr/local/bin/codex-resources/bwrap --version | grep -F 'bubblewrap' >/dev/null \
     && schema_dir="$(mktemp -d)" \
     && codex app-server generate-json-schema --experimental --out "${schema_dir}" \
     && grep -F '"permissionProfile"' "${schema_dir}/v2/CommandExecParams.json" >/dev/null \
@@ -61,6 +64,7 @@ FROM scratch AS bundle
 ARG PHARNESS_BUILD_REVISION=unknown
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /pharness-codex-host/bin/pharness-codex-host
 COPY --from=codex /out/codex /pharness-codex-host/bin/codex
+COPY --from=codex /out/codex-resources /pharness-codex-host/bin/codex-resources
 COPY --from=builder /build/REVISION /pharness-codex-host/REVISION
 COPY deploy/codex-host/git-askpass /pharness-codex-host/libexec/git-askpass
 COPY deploy/codex-host/config.toml.example /pharness-codex-host/etc/config.toml.example

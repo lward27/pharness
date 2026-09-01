@@ -21,6 +21,10 @@ command -v sha256sum >/dev/null 2>&1 || {
   cd "$bundle_root"
   sha256sum --check CHECKSUMS.sha256
 )
+"$bundle_root/bin/codex-resources/bwrap" --version | grep -F 'bubblewrap' >/dev/null || {
+  echo "the bundled Codex sandbox is incompatible with this Linux host" >&2
+  exit 1
+}
 if ! id pharness-codex >/dev/null 2>&1; then
   useradd --system --create-home --home-dir /var/lib/pharness-codex-host --shell /bin/bash pharness-codex
 fi
@@ -31,9 +35,10 @@ if ! grep -q '^pharness-codex:' /etc/subgid; then
   usermod --add-subgids "${PHARNESS_CODEX_SUBGID_RANGE:-200000-265535}" pharness-codex
 fi
 
-install -d -m 0755 "$install_root/bin" "$install_root/libexec" /usr/lib/pharness-codex-host
+install -d -m 0755 "$install_root/bin" "$install_root/bin/codex-resources" "$install_root/libexec" /usr/lib/pharness-codex-host
 install -m 0755 "$bundle_root/bin/pharness-codex-host" "$install_root/bin/pharness-codex-host"
 install -m 0755 "$bundle_root/bin/codex" "$install_root/bin/codex"
+install -m 0755 "$bundle_root/bin/codex-resources/bwrap" "$install_root/bin/codex-resources/bwrap"
 install -m 0755 "$bundle_root/libexec/git-askpass" "$install_root/libexec/git-askpass"
 ln -sfn /opt/pharness-codex-host/current/libexec/git-askpass /usr/lib/pharness-codex-host/git-askpass
 ln -sfn "$install_root" /opt/pharness-codex-host/current
