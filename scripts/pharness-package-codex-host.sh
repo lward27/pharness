@@ -71,6 +71,7 @@ bundle_root="${temporary}/root/pharness-codex-host"
 test "$(cat "${bundle_root}/REVISION")" = "$REVISION"
 file "${bundle_root}/bin/pharness-codex-host" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 file "${bundle_root}/bin/codex" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
+file "${bundle_root}/bin/codex-resources/bwrap" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 (
   cd "$bundle_root"
   find . -type f ! -name CHECKSUMS.sha256 -print0 \
@@ -93,8 +94,10 @@ if tar -tzf "$archive" | grep -Eq '(^|/)\._'; then
   echo "bundle contains unexpected AppleDouble metadata" >&2
   exit 1
 fi
-sha256sum "$archive" >"${archive}.sha256"
+archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
+printf '%s  %s\n' "$archive_sha256" "$(basename "$archive")" >"${archive}.sha256"
+test "$(awk '{print $2}' "${archive}.sha256")" = "$(basename "$archive")"
 printf '{"revision":"%s","platform":"linux/amd64","codex_version":"0.150.1","archive":"%s","sha256":"%s"}\n' \
   "$REVISION" \
   "$(basename "$archive")" \
-  "$(sha256sum "$archive" | awk '{print $1}')"
+  "$archive_sha256"

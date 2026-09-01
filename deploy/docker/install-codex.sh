@@ -7,6 +7,7 @@ CODEX_VERSION="${CODEX_VERSION:-0.150.1}"
 CODEX_ARCHIVE_SHA256="${CODEX_ARCHIVE_SHA256:-ab308870bc7fc048c23dc49d03f6b8af9ce7fc99b9da882d6688be7a90155c7a}"
 TARGETARCH="${TARGETARCH:-amd64}"
 DESTINATION="${1:-/out/codex}"
+RESOURCE_DIRECTORY="$(dirname "$DESTINATION")/codex-resources"
 
 if [ "$TARGETARCH" != "amd64" ]; then
   echo "Codex host milestone supports only linux/amd64" >&2
@@ -26,4 +27,10 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --output
 printf '%s  %s\n' "$CODEX_ARCHIVE_SHA256" "$archive" | sha256sum --check --status
 tar -xzf "$archive" -C "$directory"
 install -D -m 0755 "$directory/codex-x86_64-unknown-linux-musl" "$DESTINATION"
+command -v bwrap >/dev/null 2>&1 || {
+  echo "bubblewrap is required to package the Codex Linux sandbox" >&2
+  exit 1
+}
+install -D -m 0755 "$(command -v bwrap)" "$RESOURCE_DIRECTORY/bwrap"
 "$DESTINATION" --version | grep -F "${CODEX_VERSION}" >/dev/null
+"$RESOURCE_DIRECTORY/bwrap" --version | grep -F 'bubblewrap' >/dev/null
