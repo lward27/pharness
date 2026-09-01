@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["features", "organization", "api", "inferenceGateway", "inferenceEvaluation", "codexAgentBackend", "worker", "ui", "environmentProfiles", "networkPolicy", "protectedProductionTarget", "retention", "archivePersistence"],
+  "required": ["features", "organization", "api", "inferenceGateway", "inferenceEvaluation", "codexAgentBackend", "worker", "ui", "environmentProfiles", "ingress", "networkPolicy", "protectedProductionTarget", "retention", "archivePersistence"],
   "properties": {
     "features": {
       "type": "object",
@@ -205,6 +205,30 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/environmentProfile" }
+    },
+    "ingress": {
+      "type": "object",
+      "required": ["enabled", "apiEnabled", "className", "clusterIssuer", "uiTlsSecretName", "apiTlsSecretName", "basicAuthSecretName", "agentHostApi"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "apiEnabled": { "type": "boolean" },
+        "className": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "clusterIssuer": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "uiTlsSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "apiTlsSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "basicAuthSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+        "agentHostApi": {
+          "type": "object",
+          "required": ["enabled", "host", "tlsSecretName"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "host": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$" },
+            "tlsSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "networkPolicy": {
       "type": "object",
