@@ -116,6 +116,7 @@ pub async fn protocol_smoke(config: &HostConfig, model: &str, effort: &str) -> a
         }),
         workspace_write: false,
         writable_roots: Vec::new(),
+        denied_read_paths: vec![credential_file(config)?.to_path_buf()],
         environment: BTreeMap::new(),
         upstream_api_key: if config.authentication_class == "api_key" {
             read_optional_secret(config.api_key_file.as_deref())?
@@ -129,7 +130,6 @@ pub async fn protocol_smoke(config: &HostConfig, model: &str, effort: &str) -> a
             &app_config.cwd,
             "printf pharness-command-sandbox",
             &BTreeMap::new(),
-            &[],
             Duration::from_secs(10),
         )
         .await?;
@@ -682,31 +682,53 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
     let workspace = probe_root.join("workspace");
     std::fs::create_dir_all(&codex_home)?;
     std::fs::create_dir_all(&workspace)?;
-    if config.authentication_class == "chatgpt_session" {
-        copy_secret(credential_file, &codex_home.join("auth.json"))?;
+    let verification = async {
+        if config.authentication_class == "chatgpt_session" {
+            copy_secret(credential_file, &codex_home.join("auth.json"))?;
+        }
+        let app_config = pharness_codex_host::app_server::AppServerConfig {
+            codex_path: config.codex_path.clone(),
+            codex_home,
+            cwd: workspace,
+            model: "gpt-5.6-sol".into(),
+            reasoning_effort: "low".into(),
+            prompt: "PHarness authentication boundary probe".into(),
+            output_schema: serde_json::json!({"type":"object"}),
+            workspace_write: false,
+            writable_roots: Vec::new(),
+            denied_read_paths: vec![credential_file.to_path_buf()],
+            environment: BTreeMap::new(),
+            upstream_api_key: if config.authentication_class == "api_key" {
+                read_optional_secret(Some(credential_file))?
+            } else {
+                None
+            },
+        };
+        let app = pharness_codex_host::app_server::AppServerSession::start(&app_config).await?;
+        app.shutdown().await?;
+        Ok::<_, anyhow::Error>((
+            version(&config.codex_path, &["--version"]).await?,
+            file_sha256(&config.codex_path)?,
+            authentication_metadata(credential_file)?,
+        ))
     }
-    let app_config = pharness_codex_host::app_server::AppServerConfig {
-        codex_path: config.codex_path.clone(),
-        codex_home,
-        cwd: workspace,
-        model: "gpt-5.6-sol".into(),
-        reasoning_effort: "low".into(),
-        prompt: "PHarness authentication boundary probe".into(),
-        output_schema: serde_json::json!({"type":"object"}),
-        workspace_write: false,
-        writable_roots: Vec::new(),
-        environment: BTreeMap::new(),
-        upstream_api_key: if config.authentication_class == "api_key" {
-            read_optional_secret(Some(credential_file))?
-        } else {
-            None
-        },
+    .await;
+    let cleanup = std::fs::remove_dir_all(&probe_root);
+    let (codex_version, codex_sha256, auth_metadata) = match verification {
+        Ok(evidence) => {
+            cleanup.context("failed to remove the Codex authentication boundary probe")?;
+            evidence
+        }
+        Err(error) => {
+            if let Err(cleanup_error) = cleanup {
+                tracing::warn!(
+                    error = %cleanup_error,
+                    "failed to clean a rejected Codex authentication boundary probe"
+                );
+            }
+            return Err(error);
+        }
     };
-    let app = pharness_codex_host::app_server::AppServerSession::start(&app_config).await?;
-    app.shutdown().await?;
-    let codex_version = version(&config.codex_path, &["--version"]).await?;
-    let codex_sha256 = file_sha256(&config.codex_path)?;
-    let auth_metadata = authentication_metadata(credential_file)?;
     write_secret_json(
         &config.state_dir.join("auth-boundary.json"),
         &serde_json::json!({
@@ -717,7 +739,6 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
             "verified_at":current_unix_seconds(),
         }),
     )?;
-    let _ = std::fs::remove_dir_all(probe_root);
     Ok(())
 }
 

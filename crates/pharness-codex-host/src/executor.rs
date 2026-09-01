@@ -275,6 +275,7 @@ async fn execute_codex_stage(
         output_schema,
         workspace_write,
         writable_roots: writable,
+        denied_read_paths: config.api_key_file.clone().into_iter().collect(),
         environment,
         upstream_api_key: if config.authentication_class == "api_key" {
             Some(
@@ -451,6 +452,7 @@ async fn execute_deterministic_test(
         output_schema: json!({"type":"object"}),
         workspace_write: true,
         writable_roots: vec![test_root.clone()],
+        denied_read_paths: config.api_key_file.clone().into_iter().collect(),
         environment: environment.clone(),
         upstream_api_key: if config.authentication_class == "api_key" {
             Some(
@@ -479,7 +481,6 @@ async fn execute_deterministic_test(
                 &test_root,
                 command_text,
                 &environment,
-                std::slice::from_ref(&test_root),
                 Duration::from_secs(900),
             )
             .await?;
