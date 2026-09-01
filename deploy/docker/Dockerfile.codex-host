@@ -20,7 +20,7 @@ RUN printf '%s\n' "${PHARNESS_BUILD_REVISION}" > /build/REVISION
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
 ARG TARGETARCH
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bubblewrap ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY deploy/docker/install-codex.sh /usr/local/bin/install-codex
 RUN chmod 0755 /usr/local/bin/install-codex \
@@ -51,7 +51,15 @@ ENTRYPOINT ["/usr/local/bin/pharness-codex-host"]
 FROM runtime AS bundle-verification
 RUN test "$(pharness-codex-host --version)" = "pharness-codex-host 0.1.0" \
     && codex --version | grep -F 'codex-cli 0.150.1' >/dev/null \
+    && test "$(command -v bwrap)" = '/usr/bin/bwrap' \
+    && bwrap --version | grep -F 'bubblewrap' >/dev/null \
+    && bwrap --help | grep -F -- '--as-pid-1' >/dev/null \
+    && bwrap --help | grep -F -- '--perms' >/dev/null \
     && test -x /usr/local/bin/codex-resources/bwrap \
+    && printf '%s  %s\n' \
+      'c102c5f893faed17ed053ce6ceb9fe0bb03069b991a6f0390e54d82c85f1bca0' \
+      '/usr/local/bin/codex-resources/bwrap' \
+      | sha256sum --check --status \
     && /usr/local/bin/codex-resources/bwrap --version | grep -F 'bubblewrap' >/dev/null \
     && schema_dir="$(mktemp -d)" \
     && codex app-server generate-json-schema --experimental --out "${schema_dir}" \

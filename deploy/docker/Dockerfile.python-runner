@@ -18,7 +18,7 @@ RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-worker -
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
 ARG TARGETARCH
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bubblewrap ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY deploy/docker/install-codex.sh /usr/local/bin/install-codex
 RUN chmod 0755 /usr/local/bin/install-codex \
