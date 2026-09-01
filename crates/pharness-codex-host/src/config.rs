@@ -243,6 +243,16 @@ mod tests {
     }
 
     #[test]
+    fn distributed_example_configuration_is_valid_toml() {
+        let raw = include_str!("../../../deploy/codex-host/config.toml.example");
+        let parsed: HostConfig = toml::from_str(raw).expect("example config must remain loadable");
+        assert_eq!(
+            parsed.runner_images.keys().cloned().collect::<Vec<_>>(),
+            vec!["node-24".to_string(), "python-3.11".to_string()]
+        );
+    }
+
+    #[test]
     fn rejects_chatgpt_session_in_kubernetes() {
         let mut value = config();
         value.execution_mode = ExecutionMode::Kubernetes;

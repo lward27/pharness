@@ -15,5 +15,5 @@ available_slots = 1
 poll_seconds = 10
 
 [runner_images]
-python-3.11 = "registry.example.invalid/pharness-python-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"
-node-24 = "registry.example.invalid/pharness-node-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"
+"python-3.11" = "registry.example.invalid/pharness-python-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"
+"node-24" = "registry.example.invalid/pharness-node-runner@sha256:REPLACE_WITH_64_HEX_DIGEST"
