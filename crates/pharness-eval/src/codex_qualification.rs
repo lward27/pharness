@@ -805,6 +805,7 @@ async fn command_protocol(
 }
 
 async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) -> Result<()> {
+    let contract = protocol_stage_contract(runtime)?;
     let home = root.join(".pharness-runtime/interruption");
     fs::create_dir_all(&home)?;
     if runtime.authentication_class == AgentAuthenticationClass::ChatgptSession {
@@ -814,9 +815,12 @@ async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) ->
         runtime,
         root,
         home,
-        "Run `sleep 20`, then return a valid implementation result.".into(),
-        output_schema("implement", profile_for_policy(runtime)?),
-        true,
+        format!(
+            "Run `sleep 20`, then return a valid {} result.",
+            contract.stage
+        ),
+        output_schema(contract.stage, contract.profile),
+        contract.workspace_write,
     )?;
     let mut app = AppServerSession::start(&config).await?;
     let thread = app.start_or_resume_thread(&config, None).await?;
@@ -831,7 +835,10 @@ async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) ->
     if interrupted.status != "interrupted" {
         bail!("App Server turn did not report interruption");
     }
-    config.prompt = "Resume this thread and return a valid implementation result without making any file changes.".into();
+    config.prompt = format!(
+        "Resume this thread and return a valid {} result without making any file changes.",
+        contract.stage
+    );
     let resumed = app.start_or_resume_thread(&config, Some(&thread)).await?;
     if resumed != thread {
         bail!("App Server resumed a different thread identity");
@@ -841,7 +848,41 @@ async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) ->
         .run_turn(&config, &thread, cancel_rx, Duration::from_secs(60))
         .await?;
     app.shutdown().await?;
-    validate_completed(&outcome, "implement", profile_for_policy(runtime)?)
+    validate_completed(&outcome, contract.stage, contract.profile)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProtocolStageContract {
+    stage: &'static str,
+    profile: &'static str,
+    workspace_write: bool,
+}
+
+fn protocol_stage_contract(runtime: &CodexEvaluationRuntime) -> Result<ProtocolStageContract> {
+    let contract = match runtime.policy.eligible_stages.as_slice() {
+        [InferenceStage::Plan] => ProtocolStageContract {
+            stage: "plan",
+            profile: "repo-planner",
+            workspace_write: false,
+        },
+        [InferenceStage::Implement] => ProtocolStageContract {
+            stage: "implement",
+            profile: "repo-builder",
+            workspace_write: true,
+        },
+        [InferenceStage::Repair] => ProtocolStageContract {
+            stage: "implement",
+            profile: "repo-repair",
+            workspace_write: true,
+        },
+        [InferenceStage::Verify] => ProtocolStageContract {
+            stage: "verify",
+            profile: "repo-verifier",
+            workspace_write: false,
+        },
+        _ => bail!("selected policy has no supported Codex protocol stage"),
+    };
+    Ok(contract)
 }
 
 fn app_config(
@@ -902,14 +943,6 @@ fn validate_completed(outcome: &AppServerOutcome, stage: &str, profile: &str) ->
         .as_ref()
         .context("Codex App Server returned no structured output")?;
     validate_structured_output(stage, profile, output)
-}
-
-fn profile_for_policy(runtime: &CodexEvaluationRuntime) -> Result<&'static str> {
-    match runtime.policy.eligible_stages.as_slice() {
-        [InferenceStage::Repair] => Ok("repo-repair"),
-        [InferenceStage::Implement] => Ok("repo-builder"),
-        _ => bail!("selected policy is not a Builder or Repair policy"),
-    }
 }
 
 fn initialize_git(root: &Path) -> Result<()> {
@@ -978,15 +1011,12 @@ fn bounded(value: &str, max: usize) -> String {
 mod tests {
     use super::*;
 
-    fn checkpoint_runtime() -> CodexEvaluationRuntime {
+    fn policy_runtime(policy_id: &str) -> CodexEvaluationRuntime {
         let registry: AgentExecutionRegistry = serde_json::from_str(include_str!(
             "../../../deploy/helm/pharness/files/agent-execution-registry.json"
         ))
         .unwrap();
-        let policy = registry
-            .policy("codex-planner-gpt56-sol-v1", "r1")
-            .unwrap()
-            .clone();
+        let policy = registry.policy(policy_id, "r1").unwrap().clone();
         CodexEvaluationRuntime {
             policy,
             registry_hash: registry.config_hash,
@@ -995,6 +1025,10 @@ mod tests {
             authentication_class: AgentAuthenticationClass::ChatgptSession,
             authentication_file: PathBuf::from("/not-used/auth.json"),
         }
+    }
+
+    fn checkpoint_runtime() -> CodexEvaluationRuntime {
+        policy_runtime("codex-planner-gpt56-sol-v1")
     }
 
     #[test]
@@ -1037,6 +1071,49 @@ mod tests {
         )
         .unwrap();
         assert_eq!(writable.writable_roots, vec![root]);
+    }
+
+    #[test]
+    fn interruption_protocol_uses_each_policies_own_stage_contract() {
+        for (policy_id, expected) in [
+            (
+                "codex-planner-gpt56-sol-v1",
+                ProtocolStageContract {
+                    stage: "plan",
+                    profile: "repo-planner",
+                    workspace_write: false,
+                },
+            ),
+            (
+                "codex-builder-gpt56-sol-v1",
+                ProtocolStageContract {
+                    stage: "implement",
+                    profile: "repo-builder",
+                    workspace_write: true,
+                },
+            ),
+            (
+                "codex-repair-gpt56-sol-v1",
+                ProtocolStageContract {
+                    stage: "implement",
+                    profile: "repo-repair",
+                    workspace_write: true,
+                },
+            ),
+            (
+                "codex-verifier-gpt56-sol-v1",
+                ProtocolStageContract {
+                    stage: "verify",
+                    profile: "repo-verifier",
+                    workspace_write: false,
+                },
+            ),
+        ] {
+            assert_eq!(
+                protocol_stage_contract(&policy_runtime(policy_id)).unwrap(),
+                expected
+            );
+        }
     }
 
     #[test]
