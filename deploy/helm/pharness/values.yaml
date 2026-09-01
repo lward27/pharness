@@ -378,6 +378,14 @@ ingress:
   apiTlsSecretName: pharness-api-lucas-engineering-tls
   # htpasswd secret gating the public console; ingress renders only when set.
   basicAuthSecretName: pharness-console-basic-auth
+  # Standalone agent hosts use the console's existing public hostname for the
+  # exact credential-gated outbound-host API prefix. Keeping this in a
+  # separate Ingress prevents console Basic Auth from consuming the host's
+  # bearer Authorization header.
+  agentHostApi:
+    enabled: true
+    host: pharness.lucas.engineering
+    tlsSecretName: pharness-lucas-engineering-tls
 
 networkPolicy:
   enabled: true
