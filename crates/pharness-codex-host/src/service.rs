@@ -71,6 +71,11 @@ pub async fn enroll(
 
 pub async fn check(config: &HostConfig) -> anyhow::Result<()> {
     config.validate()?;
+    if config.execution_mode == ExecutionMode::Standalone {
+        version(Path::new("slirp4netns"), &["--version"])
+            .await
+            .context("standalone Codex hosts require slirp4netns for rootless inference egress")?;
+    }
     verify_authentication_boundary(config).await?;
     let caps = capabilities(config, true).await?;
     if !caps.authentication_ready {
@@ -405,6 +410,13 @@ fn podman_isolation_args(deterministic_test: bool) -> Vec<&'static str> {
     ];
     if deterministic_test {
         args.push("--network=none");
+    } else {
+        // Podman's newer `pasta` default cannot enter the rootless network
+        // namespace when the host runs as a hardened system service without a
+        // login session. Select the installed, userspace slirp backend
+        // explicitly so only the App Server's inference channel has egress;
+        // Codex command execution remains network-denied by its sandbox.
+        args.push("--network=slirp4netns");
     }
     args
 }
@@ -847,9 +859,12 @@ mod tests {
     fn deterministic_test_container_has_no_network_and_keeps_runner_uid() {
         let deterministic = podman_isolation_args(true);
         assert!(deterministic.contains(&"--network=none"));
+        assert!(!deterministic.contains(&"--network=slirp4netns"));
         assert!(deterministic.contains(&"--userns=keep-id:uid=65532,gid=65532"));
         assert!(deterministic.contains(&"--read-only"));
-        assert!(!podman_isolation_args(false).contains(&"--network=none"));
+        let inference = podman_isolation_args(false);
+        assert!(!inference.contains(&"--network=none"));
+        assert!(inference.contains(&"--network=slirp4netns"));
     }
 
     #[test]
