@@ -171,6 +171,10 @@ impl CodexEvaluationRuntime {
                 bail!("workload identity is not supported by the standalone evaluator")
             }
         };
+        let mut denied_read_paths = vec![self.authentication_file.clone()];
+        if let Some(path) = copied_auth.as_ref() {
+            denied_read_paths.push(path.clone());
+        }
         let config = AppServerConfig {
             codex_path: self.codex_path.clone(),
             codex_home: codex_home.clone(),
@@ -181,6 +185,7 @@ impl CodexEvaluationRuntime {
             output_schema,
             workspace_write,
             writable_roots,
+            denied_read_paths,
             environment: BTreeMap::from([
                 (
                     "PATH".into(),
@@ -729,12 +734,11 @@ async fn run_protocol_case(
                         "PATH".into(),
                         std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into()),
                     )]),
-                    std::slice::from_ref(&root),
                     Duration::from_secs(10),
                 )
                 .await?;
             app.shutdown().await?;
-            if destination.exists() || boundary.exit_code != Some(0) {
+            if boundary.exit_code != Some(0) {
                 bail!(
                     "Codex command sandbox could read transient authentication material or inherited an upstream credential"
                 );
@@ -786,7 +790,6 @@ async fn command_protocol(
                 "PATH".into(),
                 std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into()),
             )]),
-            &[root.to_path_buf()],
             Duration::from_secs(10),
         )
         .await?;
@@ -858,6 +861,15 @@ fn app_config(
     } else {
         None
     };
+    let denied_read_paths = vec![
+        runtime.authentication_file.clone(),
+        codex_home.join("auth.json"),
+    ];
+    let writable_roots = if workspace_write {
+        vec![root.into()]
+    } else {
+        Vec::new()
+    };
     Ok(AppServerConfig {
         codex_path: runtime.codex_path.clone(),
         codex_home,
@@ -867,7 +879,8 @@ fn app_config(
         prompt,
         output_schema,
         workspace_write,
-        writable_roots: vec![root.into()],
+        writable_roots,
+        denied_read_paths,
         environment: BTreeMap::from([(
             "PATH".into(),
             std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".into()),
@@ -994,6 +1007,36 @@ mod tests {
             classify_codex_error("429 too many requests"),
             "provider_rate_limited"
         );
+    }
+
+    #[test]
+    fn protocol_configs_keep_read_only_stages_without_writable_roots() {
+        let runtime = checkpoint_runtime();
+        let root = PathBuf::from("/workspace");
+        let read_only = app_config(
+            &runtime,
+            &root,
+            PathBuf::from("/tmp/codex-read-only"),
+            "plan".into(),
+            json!({"type":"object"}),
+            false,
+        )
+        .unwrap();
+        assert!(read_only.writable_roots.is_empty());
+        assert!(read_only
+            .denied_read_paths
+            .contains(&runtime.authentication_file));
+
+        let writable = app_config(
+            &runtime,
+            &root,
+            PathBuf::from("/tmp/codex-writable"),
+            "implement".into(),
+            json!({"type":"object"}),
+            true,
+        )
+        .unwrap();
+        assert_eq!(writable.writable_roots, vec![root]);
     }
 
     #[test]

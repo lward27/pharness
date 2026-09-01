@@ -10,6 +10,7 @@ use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::watch;
 
 const MAX_PROTOCOL_LINE_BYTES: usize = 4 * 1024 * 1024;
+const PHARNESS_PERMISSION_PROFILE: &str = "pharness-stage";
 
 #[derive(Debug, Clone)]
 pub struct AppServerConfig {
@@ -22,6 +23,7 @@ pub struct AppServerConfig {
     pub output_schema: Value,
     pub workspace_write: bool,
     pub writable_roots: Vec<PathBuf>,
+    pub denied_read_paths: Vec<PathBuf>,
     pub environment: BTreeMap<String, String>,
     pub upstream_api_key: Option<String>,
 }
@@ -102,7 +104,7 @@ impl AppServerSession {
                 "initialize",
                 json!({
                     "clientInfo":{"name":"pharness-codex-host","version":env!("CARGO_PKG_VERSION")},
-                    "capabilities":{"experimentalApi":false,"requestAttestation":false}
+                    "capabilities":{"experimentalApi":true,"requestAttestation":false}
                 }),
             )
             .await?;
@@ -119,11 +121,6 @@ impl AppServerSession {
         config: &AppServerConfig,
         existing_thread_id: Option<&str>,
     ) -> anyhow::Result<String> {
-        let sandbox = if config.workspace_write {
-            "workspace-write"
-        } else {
-            "read-only"
-        };
         let result = if let Some(thread_id) = existing_thread_id {
             self.request(
                 "thread/resume",
@@ -132,7 +129,7 @@ impl AppServerSession {
                     "model":config.model,
                     "cwd":config.cwd,
                     "approvalPolicy":"never",
-                    "sandbox":sandbox,
+                    "permissions":PHARNESS_PERMISSION_PROFILE,
                     "baseInstructions":config.prompt,
                     "excludeTurns":false,
                 }),
@@ -145,7 +142,7 @@ impl AppServerSession {
                     "model":config.model,
                     "cwd":config.cwd,
                     "approvalPolicy":"never",
-                    "sandbox":sandbox,
+                    "permissions":PHARNESS_PERMISSION_PROFILE,
                     "baseInstructions":config.prompt,
                     "ephemeral":false,
                     "sessionStartSource":"startup",
@@ -167,17 +164,6 @@ impl AppServerSession {
         mut cancel: watch::Receiver<bool>,
         active_time_limit: Duration,
     ) -> anyhow::Result<AppServerOutcome> {
-        let sandbox_policy = if config.workspace_write {
-            json!({
-                "type":"workspaceWrite",
-                "networkAccess":false,
-                "writableRoots":config.writable_roots,
-                "excludeTmpdirEnvVar":true,
-                "excludeSlashTmp":true,
-            })
-        } else {
-            json!({"type":"readOnly","networkAccess":false})
-        };
         let request_id = self.next_request_id();
         self.write(&json!({
             "jsonrpc":"2.0",
@@ -190,7 +176,7 @@ impl AppServerSession {
                 "effort":config.reasoning_effort,
                 "cwd":config.cwd,
                 "approvalPolicy":"never",
-                "sandboxPolicy":sandbox_policy,
+                "permissions":PHARNESS_PERMISSION_PROFILE,
                 "outputSchema":config.output_schema,
             }
         }))
@@ -302,7 +288,6 @@ impl AppServerSession {
         cwd: &std::path::Path,
         command: &str,
         environment: &BTreeMap<String, String>,
-        writable_roots: &[PathBuf],
         timeout: Duration,
     ) -> anyhow::Result<SandboxedCommandOutcome> {
         let mut env = environment
@@ -321,13 +306,7 @@ impl AppServerSession {
                     "env":env,
                     "timeoutMs":u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
                     "outputBytesCap":131_072,
-                    "sandboxPolicy":{
-                        "type":"workspaceWrite",
-                        "networkAccess":false,
-                        "writableRoots":writable_roots,
-                        "excludeTmpdirEnvVar":true,
-                        "excludeSlashTmp":false,
-                    },
+                    "permissionProfile":PHARNESS_PERMISSION_PROFILE,
                 }),
             )
             .await?;
@@ -342,32 +321,49 @@ impl AppServerSession {
         &mut self,
         config: &AppServerConfig,
     ) -> anyhow::Result<()> {
-        let auth_path = config.codex_home.join("auth.json");
-        if auth_path.exists() {
-            std::fs::remove_file(&auth_path)
-                .context("failed to remove the transient Codex authentication file")?;
+        let denied_paths = denied_read_paths(config)?;
+        let existing_denied_paths = denied_paths
+            .iter()
+            .filter(|path| path.exists())
+            .collect::<Vec<_>>();
+        if existing_denied_paths.is_empty() {
+            anyhow::bail!("Codex authentication boundary has no credential path to verify");
         }
+        let mut command = vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "for path do test ! -r \"$path\" || exit 41; done".to_string(),
+            "pharness-auth-boundary".to_string(),
+        ];
+        command.extend(
+            existing_denied_paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned()),
+        );
         let result = self
             .request(
                 "command/exec",
                 json!({
-                    "command":[
-                        "/bin/sh",
-                        "-c",
-                        "test ! -r \"$1\"",
-                        "pharness-auth-boundary",
-                        auth_path,
-                    ],
+                    "command":command,
                     "cwd":config.cwd,
                     "env":{"CODEX_HOME":null,"HOME":"/tmp"},
                     "timeoutMs":5_000,
                     "outputBytesCap":4_096,
-                    "sandboxPolicy":{"type":"readOnly","networkAccess":false},
+                    "permissionProfile":PHARNESS_PERMISSION_PROFILE,
                 }),
             )
             .await?;
-        if result.get("exitCode").and_then(Value::as_i64) != Some(0) {
-            anyhow::bail!("Codex command sandbox can read its authentication file");
+        match result.get("exitCode").and_then(Value::as_i64) {
+            Some(0) => {}
+            Some(41) => {
+                anyhow::bail!("Codex command sandbox can read authentication material");
+            }
+            exit_code => {
+                anyhow::bail!(
+                    "Codex authentication boundary probe failed to execute: exit_code={exit_code:?}, stderr={}",
+                    bounded(&command_output(&result, "stderr"), 1_000)
+                );
+            }
         }
         Ok(())
     }
@@ -462,6 +458,9 @@ impl AppServerSession {
 
 fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.codex_home)?;
+    if !config.workspace_write && !config.writable_roots.is_empty() {
+        anyhow::bail!("read-only Codex stage cannot declare writable roots");
+    }
     let mut values = BTreeMap::new();
     for name in ["PATH", "PYTHONPATH", "PHARNESS_AGENT_STAGE"] {
         if let Some(value) = config.environment.get(name) {
@@ -470,7 +469,27 @@ fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<
     }
     values.insert("HOME".into(), "/tmp".into());
     values.insert("LANG".into(), "C.UTF-8".into());
+    let mut filesystem = BTreeMap::from([(String::from("/"), String::from("read"))]);
+    for path in &config.writable_roots {
+        let path = absolute_policy_path(path)?;
+        filesystem.insert(path, "write".into());
+    }
+    let git_metadata = config.cwd.join(".git");
+    filesystem.insert(absolute_policy_path(&git_metadata)?, "read".into());
+    for path in denied_read_paths(config)? {
+        filesystem.insert(absolute_policy_path(&path)?, "deny".into());
+    }
+    let permissions = BTreeMap::from([(
+        PHARNESS_PERMISSION_PROFILE.to_string(),
+        json!({
+            "description":"PHarness stage-scoped filesystem and network boundary",
+            "filesystem":filesystem,
+            "network":{"enabled":false},
+        }),
+    )]);
     let document = toml::to_string(&json!({
+        "default_permissions":PHARNESS_PERMISSION_PROFILE,
+        "permissions":permissions,
         "shell_environment_policy":{
             "inherit":"none",
             "ignore_default_excludes":false,
@@ -481,6 +500,24 @@ fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<
     }))?;
     std::fs::write(config.codex_home.join("config.toml"), document)?;
     Ok(())
+}
+
+fn denied_read_paths(config: &AppServerConfig) -> anyhow::Result<Vec<PathBuf>> {
+    let mut paths = config.denied_read_paths.clone();
+    paths.push(config.codex_home.join("auth.json"));
+    paths.sort();
+    paths.dedup();
+    for path in &paths {
+        absolute_policy_path(path)?;
+    }
+    Ok(paths)
+}
+
+fn absolute_policy_path(path: &std::path::Path) -> anyhow::Result<String> {
+    if !path.is_absolute() {
+        anyhow::bail!("Codex permission path must be absolute");
+    }
+    Ok(path.to_string_lossy().into_owned())
 }
 
 fn retain_notification(method: &str) -> bool {
@@ -542,21 +579,6 @@ fn bounded(value: &str, max: usize) -> String {
 }
 
 #[cfg(test)]
-fn sandbox_policy(workspace_write: bool, writable_roots: &[PathBuf]) -> Value {
-    if workspace_write {
-        json!({
-            "type":"workspaceWrite",
-            "networkAccess":false,
-            "writableRoots":writable_roots,
-            "excludeTmpdirEnvVar":true,
-            "excludeSlashTmp":true,
-        })
-    } else {
-        json!({"type":"readOnly","networkAccess":false})
-    }
-}
-
-#[cfg(test)]
 fn validate_workspace_root(
     root: &std::path::Path,
     candidate: &std::path::Path,
@@ -586,10 +608,98 @@ mod tests {
     }
 
     #[test]
-    fn sandbox_never_grants_command_network() {
-        let policy = sandbox_policy(true, &[PathBuf::from("/workspace/src")]);
-        assert_eq!(policy["networkAccess"], false);
-        assert_eq!(policy["type"], "workspaceWrite");
+    fn permission_profile_denies_auth_and_network() {
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-permission-profile-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        std::fs::create_dir_all(&temporary).unwrap();
+        let config = AppServerConfig {
+            codex_path: PathBuf::from("/usr/local/bin/codex"),
+            codex_home: temporary.join("codex-home"),
+            cwd: PathBuf::from("/workspace"),
+            model: "gpt-5.6-sol".into(),
+            reasoning_effort: "high".into(),
+            prompt: "test".into(),
+            output_schema: json!({"type":"object"}),
+            workspace_write: true,
+            writable_roots: vec![PathBuf::from("/workspace/src")],
+            denied_read_paths: vec![PathBuf::from("/run/secrets/api-key")],
+            environment: BTreeMap::new(),
+            upstream_api_key: None,
+        };
+        write_command_environment_policy(&config).unwrap();
+        let document = std::fs::read_to_string(config.codex_home.join("config.toml")).unwrap();
+        let value = document.parse::<toml::Value>().unwrap();
+        assert_eq!(
+            value
+                .get("default_permissions")
+                .and_then(toml::Value::as_str),
+            Some(PHARNESS_PERMISSION_PROFILE)
+        );
+        let filesystem = value
+            .get("permissions")
+            .and_then(|value| value.get(PHARNESS_PERMISSION_PROFILE))
+            .and_then(|value| value.get("filesystem"))
+            .and_then(toml::Value::as_table)
+            .unwrap();
+        assert_eq!(
+            filesystem.get("/").and_then(toml::Value::as_str),
+            Some("read")
+        );
+        assert_eq!(
+            filesystem
+                .get("/workspace/src")
+                .and_then(toml::Value::as_str),
+            Some("write")
+        );
+        assert_eq!(
+            filesystem
+                .get("/workspace/.git")
+                .and_then(toml::Value::as_str),
+            Some("read")
+        );
+        assert_eq!(
+            filesystem
+                .get("/run/secrets/api-key")
+                .and_then(toml::Value::as_str),
+            Some("deny")
+        );
+        assert_eq!(
+            filesystem
+                .get(config.codex_home.join("auth.json").to_str().unwrap())
+                .and_then(toml::Value::as_str),
+            Some("deny")
+        );
+        assert_eq!(
+            value
+                .get("permissions")
+                .and_then(|value| value.get(PHARNESS_PERMISSION_PROFILE))
+                .and_then(|value| value.get("network"))
+                .and_then(|value| value.get("enabled"))
+                .and_then(toml::Value::as_bool),
+            Some(false)
+        );
+        std::fs::remove_dir_all(temporary).unwrap();
+    }
+
+    #[test]
+    fn permission_profile_rejects_relative_sensitive_paths() {
+        let config = AppServerConfig {
+            codex_path: PathBuf::from("/usr/local/bin/codex"),
+            codex_home: PathBuf::from("/var/lib/pharness-codex"),
+            cwd: PathBuf::from("/workspace"),
+            model: "gpt-5.6-sol".into(),
+            reasoning_effort: "high".into(),
+            prompt: "test".into(),
+            output_schema: json!({"type":"object"}),
+            workspace_write: false,
+            writable_roots: Vec::new(),
+            denied_read_paths: vec![PathBuf::from("relative-secret")],
+            environment: BTreeMap::new(),
+            upstream_api_key: None,
+        };
+        assert!(write_command_environment_policy(&config).is_err());
     }
 
     #[test]
