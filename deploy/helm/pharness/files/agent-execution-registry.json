@@ -4,7 +4,7 @@
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-planner-gpt56-sol-v1",
-      "revision": "r2",
+      "revision": "r3",
       "display_name": "Codex Planner GPT-5.6 Sol High",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -35,12 +35,12 @@
       "active_time_seconds": 600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:76b9969daf8343b1bc888acb59987fe2170a6f7a7ab1b8c69681f46a21a74af0"
+      "policy_hash": "sha256:8d7ec2f75316405ea37bf06ae7cdc1b14d65fb57c9f169cccc28f72a50a3758e"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-builder-gpt56-sol-v1",
-      "revision": "r2",
+      "revision": "r3",
       "display_name": "Codex Builder GPT-5.6 Sol High",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -71,12 +71,12 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:3061a9976df880d24b6ec8630ff07c5642c7178231323c9ac0c11fce898adcf0"
+      "policy_hash": "sha256:eef0e496cffc0da632a62b4f78295da3c6d946154de6257c7ad8fcfef78876ee"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-repair-gpt56-sol-v1",
-      "revision": "r2",
+      "revision": "r3",
       "display_name": "Codex Repair GPT-5.6 Sol XHigh",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -107,12 +107,12 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:570ea5fa2a852cef2199634a0ce533c2116e2f27634598f6209c256cf24e0ccb"
+      "policy_hash": "sha256:423d309f4ee7a8646d1f37e4fc5426cefcdd0664a3872376027cba69c4d53ec3"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-verifier-gpt56-sol-v1",
-      "revision": "r2",
+      "revision": "r3",
       "display_name": "Codex Verifier GPT-5.6 Sol XHigh",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -143,9 +143,9 @@
       "active_time_seconds": 900,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:f3ada1bf166d84076bb2f7cc88f53abd15fad076be99b264cefbe8496b455a74"
+      "policy_hash": "sha256:6da48f8d36e3e13e37c896be6a8d630867b77211ba476858a4cfb317227b6d33"
     }
   ],
   "defaults": {},
-  "config_hash": "sha256:3e95c1ecdb62f168d2b627dbd36b0d6870a6359e6565ad4c346363fbbbc75d2c"
+  "config_hash": "sha256:dd6fc0820e91282076f25c6409716f39144544040f5ea6db69bc11837d9420e9"
 }

@@ -59,6 +59,7 @@ pub struct AppServerSession {
     lines: Lines<BufReader<ChildStdout>>,
     next_id: u64,
     events: Vec<AppServerEvent>,
+    pending_file_changes: BTreeMap<String, Vec<PathBuf>>,
     usage: Option<Value>,
 }
 
@@ -98,6 +99,7 @@ impl AppServerSession {
             lines: BufReader::new(stdout).lines(),
             next_id: 1,
             events: Vec::new(),
+            pending_file_changes: BTreeMap::new(),
             usage: None,
         };
         let initialized = session
@@ -224,13 +226,14 @@ impl AppServerSession {
                         continue;
                     }
                     if message.get("method").is_some() && message.get("id").is_some() {
-                        self.reject_server_request(&message).await?;
+                        self.handle_server_request(&message, Some(config)).await?;
                         continue;
                     }
                     let Some(method) = message.get("method").and_then(Value::as_str) else {
                         continue;
                     };
                     let params = message.get("params").cloned().unwrap_or(Value::Null);
+                    track_file_change(&mut self.pending_file_changes, method, &params);
                     if method == "thread/tokenUsage/updated" {
                         self.usage = Some(params.clone());
                     }
@@ -385,7 +388,7 @@ impl AppServerSession {
                 return Ok(message.get("result").cloned().unwrap_or(Value::Null));
             }
             if message.get("method").is_some() && message.get("id").is_some() {
-                self.reject_server_request(&message).await?;
+                self.handle_server_request(&message, None).await?;
                 continue;
             }
             if let Some(method) = message.get("method").and_then(Value::as_str) {
@@ -405,15 +408,58 @@ impl AppServerSession {
             .await
     }
 
-    async fn reject_server_request(&mut self, message: &Value) -> anyhow::Result<()> {
+    async fn handle_server_request(
+        &mut self,
+        message: &Value,
+        config: Option<&AppServerConfig>,
+    ) -> anyhow::Result<()> {
         let id = message.get("id").cloned().unwrap_or(Value::Null);
         let method = message.get("method").and_then(Value::as_str).unwrap_or("");
         let result = match method {
             "item/commandExecution/requestApproval" | "execCommandApproval" => {
+                self.events.push(AppServerEvent {
+                    method: "pharness/commandApproval".into(),
+                    payload: json!({"decision":"decline"}),
+                });
                 json!({"decision":"decline"})
             }
             "item/fileChange/requestApproval" | "applyPatchApproval" => {
-                json!({"decision":"decline"})
+                let params = message.get("params").unwrap_or(&Value::Null);
+                let approval = config
+                    .context("file-change approval arrived outside an active turn")
+                    .and_then(|config| {
+                        approved_file_change_paths(
+                            method,
+                            params,
+                            &self.pending_file_changes,
+                            config,
+                        )
+                    });
+                let decision = match approval {
+                    Ok(paths) => {
+                        self.events.push(AppServerEvent {
+                            method: "pharness/fileChangeApproval".into(),
+                            payload: json!({
+                                "decision":"accept",
+                                "path_count":paths.len(),
+                            }),
+                        });
+                        "accept"
+                    }
+                    Err(error) => {
+                        self.events.push(AppServerEvent {
+                            method: "pharness/fileChangeApproval".into(),
+                            payload: json!({
+                                "decision":"decline",
+                                "reason":bounded(&error.to_string(), 500),
+                            }),
+                        });
+                        "decline"
+                    }
+                };
+                // A one-time acceptance applies only the already-inspected patch.
+                // PHarness never grants App Server session-wide write authority.
+                json!({"decision":decision})
             }
             _ => {
                 self.write(&json!({
@@ -457,6 +503,122 @@ impl AppServerSession {
     }
 }
 
+fn track_file_change(pending: &mut BTreeMap<String, Vec<PathBuf>>, method: &str, params: &Value) {
+    let item = params.get("item");
+    let item_id = item.and_then(|item| item.get("id")).and_then(Value::as_str);
+    if method == "item/started"
+        && item
+            .and_then(|item| item.get("type"))
+            .and_then(Value::as_str)
+            == Some("fileChange")
+    {
+        let paths = item
+            .and_then(|item| item.get("changes"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|change| change.get("path").and_then(Value::as_str))
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        if let Some(item_id) = item_id {
+            pending.insert(item_id.into(), paths);
+        }
+    } else if method == "item/completed" {
+        if let Some(item_id) = item_id {
+            pending.remove(item_id);
+        }
+    }
+}
+
+fn approved_file_change_paths(
+    method: &str,
+    params: &Value,
+    pending: &BTreeMap<String, Vec<PathBuf>>,
+    config: &AppServerConfig,
+) -> anyhow::Result<Vec<PathBuf>> {
+    if !config.workspace_write || config.writable_roots.is_empty() {
+        anyhow::bail!("Codex stage has no writable workspace authority");
+    }
+    let paths = match method {
+        "item/fileChange/requestApproval" => {
+            let item_id = params
+                .get("itemId")
+                .and_then(Value::as_str)
+                .context("file-change approval has no item identity")?;
+            pending
+                .get(item_id)
+                .cloned()
+                .context("file-change approval has no preceding patch evidence")?
+        }
+        "applyPatchApproval" => params
+            .get("fileChanges")
+            .and_then(Value::as_object)
+            .context("legacy patch approval has no file changes")?
+            .keys()
+            .map(PathBuf::from)
+            .collect(),
+        _ => anyhow::bail!("unsupported file-change approval method"),
+    };
+    if paths.is_empty() {
+        anyhow::bail!("file-change approval contains no paths");
+    }
+    for path in &paths {
+        validate_approved_path(config, path)?;
+    }
+    if let Some(grant_root) = params.get("grantRoot").and_then(Value::as_str) {
+        validate_approved_path(config, std::path::Path::new(grant_root))?;
+    }
+    Ok(paths)
+}
+
+fn validate_approved_path(config: &AppServerConfig, path: &std::path::Path) -> anyhow::Result<()> {
+    let path = resolve_policy_path(&config.cwd, path)?;
+    let approved = config.writable_roots.iter().any(|root| {
+        resolve_policy_path(&config.cwd, root)
+            .map(|root| path == root || path.starts_with(root))
+            .unwrap_or(false)
+    });
+    if !approved {
+        anyhow::bail!("App Server file change escapes the stage writable roots");
+    }
+    Ok(())
+}
+
+fn resolve_policy_path(cwd: &std::path::Path, path: &std::path::Path) -> anyhow::Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    if path
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        anyhow::bail!("App Server file change contains traversal");
+    }
+    let mut existing = path.clone();
+    let mut missing = Vec::new();
+    while !existing.exists() {
+        let name = existing
+            .file_name()
+            .context("App Server file change has no existing ancestor")?;
+        missing.push(name.to_os_string());
+        if !existing.pop() {
+            anyhow::bail!("App Server file change has no existing ancestor");
+        }
+    }
+    let mut resolved = std::fs::canonicalize(&existing).with_context(|| {
+        format!(
+            "failed to resolve App Server file-change path {}",
+            path.display()
+        )
+    })?;
+    for component in missing.iter().rev() {
+        resolved.push(component);
+    }
+    Ok(resolved)
+}
+
 fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.codex_home)?;
     if !config.workspace_write && !config.writable_roots.is_empty() {
@@ -479,6 +641,7 @@ fn write_command_environment_policy(config: &AppServerConfig) -> anyhow::Result<
     values.insert("LANG".into(), "C.UTF-8".into());
     let mut filesystem = BTreeMap::from([(String::from("/"), String::from("read"))]);
     for path in &config.writable_roots {
+        validate_workspace_root(&config.cwd, path)?;
         let path = absolute_policy_path(path)?;
         filesystem.insert(path, "write".into());
     }
@@ -605,12 +768,16 @@ fn bounded(value: &str, max: usize) -> String {
     value.chars().take(max).collect()
 }
 
-#[cfg(test)]
 fn validate_workspace_root(
     root: &std::path::Path,
     candidate: &std::path::Path,
 ) -> anyhow::Result<()> {
-    if !candidate.is_absolute() || !candidate.starts_with(root) {
+    if !root.is_absolute() || !candidate.is_absolute() {
+        anyhow::bail!("Codex workspace and writable roots must be absolute");
+    }
+    let root = resolve_policy_path(root, root)?;
+    let candidate = resolve_policy_path(root.as_path(), candidate)?;
+    if candidate != root && !candidate.starts_with(&root) {
         anyhow::bail!("App Server writable root escapes the lease workspace");
     }
     Ok(())
@@ -619,6 +786,27 @@ fn validate_workspace_root(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn approval_config(
+        root: &std::path::Path,
+        workspace_write: bool,
+        writable_roots: Vec<PathBuf>,
+    ) -> AppServerConfig {
+        AppServerConfig {
+            codex_path: PathBuf::from("/usr/local/bin/codex"),
+            codex_home: root.join("codex-home"),
+            cwd: root.to_path_buf(),
+            model: "gpt-5.6-sol".into(),
+            reasoning_effort: "high".into(),
+            prompt: "test".into(),
+            output_schema: json!({"type":"object"}),
+            workspace_write,
+            writable_roots,
+            denied_read_paths: Vec::new(),
+            environment: BTreeMap::new(),
+            upstream_api_key: None,
+        }
+    }
 
     #[test]
     fn extracts_json_from_terminal_agent_message() {
@@ -823,5 +1011,127 @@ mod tests {
             std::path::Path::new("/etc")
         )
         .is_err());
+    }
+
+    #[test]
+    fn tracks_file_change_paths_by_item_identity() {
+        let mut pending = BTreeMap::new();
+        track_file_change(
+            &mut pending,
+            "item/started",
+            &json!({
+                "item":{
+                    "id":"patch-1",
+                    "type":"fileChange",
+                    "changes":[{"path":"/workspace/src/lib.rs","kind":"update","diff":"x"}],
+                    "status":"inProgress"
+                }
+            }),
+        );
+        assert_eq!(
+            pending.get("patch-1"),
+            Some(&vec![PathBuf::from("/workspace/src/lib.rs")])
+        );
+        track_file_change(
+            &mut pending,
+            "item/completed",
+            &json!({"item":{"id":"patch-1","type":"fileChange"}}),
+        );
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn writable_stage_accepts_only_preinspected_scoped_file_changes() {
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-file-approval-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        let source = temporary.join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("lib.rs"), "old\n").unwrap();
+        let config = approval_config(&temporary, true, vec![source.clone()]);
+        let pending = BTreeMap::from([(
+            "patch-1".into(),
+            vec![source.join("lib.rs"), source.join("new.rs")],
+        )]);
+        let paths = approved_file_change_paths(
+            "item/fileChange/requestApproval",
+            &json!({"itemId":"patch-1"}),
+            &pending,
+            &config,
+        )
+        .unwrap();
+        assert_eq!(paths.len(), 2);
+        assert!(approved_file_change_paths(
+            "item/fileChange/requestApproval",
+            &json!({"itemId":"unknown"}),
+            &pending,
+            &config,
+        )
+        .is_err());
+        assert!(approved_file_change_paths(
+            "item/fileChange/requestApproval",
+            &json!({"itemId":"patch-1","grantRoot":temporary.join("outside")}),
+            &pending,
+            &config,
+        )
+        .is_err());
+        std::fs::remove_dir_all(temporary).unwrap();
+    }
+
+    #[test]
+    fn file_change_approval_denies_read_only_out_of_scope_and_traversal_paths() {
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-file-denial-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        let source = temporary.join("src");
+        let outside = temporary.join("outside");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let writable = approval_config(&temporary, true, vec![source.clone()]);
+        let read_only = approval_config(&temporary, false, Vec::new());
+        for (config, path) in [
+            (&read_only, source.join("lib.rs")),
+            (&writable, outside.join("escape.rs")),
+            (&writable, PathBuf::from("src/../outside.rs")),
+        ] {
+            let pending = BTreeMap::from([("patch-1".into(), vec![path])]);
+            assert!(approved_file_change_paths(
+                "item/fileChange/requestApproval",
+                &json!({"itemId":"patch-1"}),
+                &pending,
+                config,
+            )
+            .is_err());
+        }
+        std::fs::remove_dir_all(temporary).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_change_approval_resolves_symlinks_before_scope_matching() {
+        use std::os::unix::fs::symlink;
+
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-file-symlink-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        let source = temporary.join("src");
+        let outside = temporary.join("outside");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("escape.rs"), "old\n").unwrap();
+        symlink(&outside, source.join("linked")).unwrap();
+        let config = approval_config(&temporary, true, vec![source.clone()]);
+        let pending = BTreeMap::from([("patch-1".into(), vec![source.join("linked/escape.rs")])]);
+        assert!(approved_file_change_paths(
+            "item/fileChange/requestApproval",
+            &json!({"itemId":"patch-1"}),
+            &pending,
+            &config,
+        )
+        .is_err());
+        std::fs::remove_dir_all(temporary).unwrap();
     }
 }

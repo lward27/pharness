@@ -7,7 +7,7 @@ use pharness_codex_host::stage_contract::{
 use pharness_core::{
     AgentAuthenticationClass, AgentExecutionPolicyRevision, AgentExecutionRegistry, InferenceStage,
     RepositoryContract, AGENT_EXECUTION_EVALUATION_SCHEMA, CODEX_PROTOCOL_CASES,
-    CODEX_PROTOCOL_EVALUATION_SCHEMA, CODEX_PROTOCOL_SUITE_ID,
+    CODEX_PROTOCOL_EVALUATION_SCHEMA, CODEX_PROTOCOL_FIXTURE_REVISION, CODEX_PROTOCOL_SUITE_ID,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,8 +17,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::watch;
-
-const PROTOCOL_FIXTURE_REVISION: &str = "codex-app-server-protocol-v1.0";
 
 #[derive(Debug, Clone)]
 pub(crate) struct CodexEvaluationRuntime {
@@ -607,7 +605,7 @@ fn protocol_report(
         "schema_version":CODEX_PROTOCOL_EVALUATION_SCHEMA,
         "suite_id":CODEX_PROTOCOL_SUITE_ID,
         "suite_hash":suite_hash,
-        "fixture_revision":PROTOCOL_FIXTURE_REVISION,
+        "fixture_revision":CODEX_PROTOCOL_FIXTURE_REVISION,
         "codex_version":runtime.policy.codex_version,
         "policy_hash":runtime.policy.policy_hash,
         "results":results,
@@ -646,14 +644,17 @@ async fn run_protocol_case(
             let output = runtime
                 .run_prompt(
                     &root,
-                    "Change src/value.txt from old to new, then return a valid implementation result with repair=false and the exact changed path. Return only the JSON object required by the schema.".into(),
+                    "Use your filesystem editing capability to persistently change src/value.txt from old to new. Read the file back to verify the exact new content before returning a valid implementation result with repair=false and the exact changed path. Return only the JSON object required by the schema.".into(),
                     output_schema("implement", "repo-builder"),
                     true,
                 )
                 .await?;
             validate_completed(&output, "implement", "repo-builder")?;
             if fs::read_to_string(root.join("src/value.txt"))? != "new\n" {
-                bail!("Builder protocol fixture did not produce the requested edit");
+                bail!(
+                    "Builder protocol fixture did not produce the requested edit: {}",
+                    protocol_outcome_diagnostic(&output)
+                );
             }
             Ok(())
         }
@@ -663,14 +664,17 @@ async fn run_protocol_case(
             let output = runtime
                 .run_prompt(
                     &root,
-                    "Repair src/value.txt so its exact content is fixed followed by a newline. Return a valid implementation result with repair=true. Return only the JSON object required by the schema.".into(),
+                    "Use your filesystem editing capability to persistently repair src/value.txt so its exact content is fixed followed by a newline. Read the file back to verify it before returning a valid implementation result with repair=true. Return only the JSON object required by the schema.".into(),
                     output_schema("implement", "repo-repair"),
                     true,
                 )
                 .await?;
             validate_completed(&output, "implement", "repo-repair")?;
             if fs::read_to_string(root.join("src/value.txt"))? != "fixed\n" {
-                bail!("Repair protocol fixture did not repair the seeded failure");
+                bail!(
+                    "Repair protocol fixture did not repair the seeded failure: {}",
+                    protocol_outcome_diagnostic(&output)
+                );
             }
             Ok(())
         }
@@ -936,6 +940,41 @@ fn validate_completed(outcome: &AppServerOutcome, stage: &str, profile: &str) ->
     validate_structured_output(stage, profile, output)
 }
 
+fn protocol_outcome_diagnostic(outcome: &AppServerOutcome) -> String {
+    let events = outcome
+        .events
+        .iter()
+        .filter_map(|event| {
+            let item = event.payload.get("item");
+            let item_type = item
+                .and_then(|item| item.get("type"))
+                .and_then(Value::as_str);
+            let relevant = event.method.starts_with("pharness/")
+                || matches!(item_type, Some("fileChange" | "commandExecution"));
+            relevant.then(|| {
+                json!({
+                    "method":event.method,
+                    "decision":event.payload.get("decision"),
+                    "reason":event.payload.get("reason"),
+                    "path_count":event.payload.get("path_count"),
+                    "item_type":item_type,
+                    "item_id":item.and_then(|item| item.get("id")),
+                    "item_status":item.and_then(|item| item.get("status")),
+                })
+            })
+        })
+        .collect::<Vec<_>>();
+    bounded(
+        &json!({
+            "status":outcome.status,
+            "structured_output":outcome.structured_output,
+            "events":events,
+        })
+        .to_string(),
+        2_000,
+    )
+}
+
 fn initialize_git(root: &Path) -> Result<()> {
     for args in [
         vec!["init", "-q"],
@@ -1007,7 +1046,7 @@ mod tests {
             "../../../deploy/helm/pharness/files/agent-execution-registry.json"
         ))
         .unwrap();
-        let policy = registry.policy(policy_id, "r2").unwrap().clone();
+        let policy = registry.policy(policy_id, "r3").unwrap().clone();
         CodexEvaluationRuntime {
             policy,
             registry_hash: registry.config_hash,
