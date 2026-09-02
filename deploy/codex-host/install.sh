@@ -42,6 +42,18 @@ command -v sha256sum >/dev/null 2>&1 || {
   echo "the bundled Codex sandbox is incompatible with this Linux host" >&2
   exit 1
 }
+test -x "$bundle_root/bin/codex-linux-sandbox" || {
+  echo "the Codex Linux sandbox alias is missing from the host bundle" >&2
+  exit 1
+}
+cmp -s "$bundle_root/bin/codex" "$bundle_root/bin/codex-linux-sandbox" || {
+  echo "the Codex Linux sandbox alias does not match the pinned Codex binary" >&2
+  exit 1
+}
+"$bundle_root/bin/codex-linux-sandbox" --help >/dev/null || {
+  echo "the Codex Linux sandbox alias cannot dispatch the pinned Codex binary" >&2
+  exit 1
+}
 printf '%s  %s\n' "$codex_bwrap_sha256" "$bundle_root/bin/codex-resources/bwrap" \
   | sha256sum --check --status || {
     echo "the bundled sandbox does not match the pinned Codex release" >&2
@@ -59,6 +71,7 @@ fi
 install -d -m 0755 "$install_root/bin" "$install_root/bin/codex-resources" "$install_root/libexec" /usr/lib/pharness-codex-host
 install -m 0755 "$bundle_root/bin/pharness-codex-host" "$install_root/bin/pharness-codex-host"
 install -m 0755 "$bundle_root/bin/codex" "$install_root/bin/codex"
+install -m 0755 "$bundle_root/bin/codex-linux-sandbox" "$install_root/bin/codex-linux-sandbox"
 install -m 0755 "$bundle_root/bin/codex-resources/bwrap" "$install_root/bin/codex-resources/bwrap"
 install -m 0755 "$bundle_root/libexec/git-askpass" "$install_root/libexec/git-askpass"
 if ! runuser -u pharness-codex -- \
@@ -70,6 +83,7 @@ if ! runuser -u pharness-codex -- \
 fi
 ln -sfn /opt/pharness-codex-host/current/libexec/git-askpass /usr/lib/pharness-codex-host/git-askpass
 ln -sfn "$install_root" /opt/pharness-codex-host/current
+ln -sfn /opt/pharness-codex-host/current/bin/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox
 install -d -o pharness-codex -g pharness-codex -m 0700 /var/lib/pharness-codex-host/session /var/lib/pharness-codex-host/workspaces
 # systemd ConfigurationDirectory paths are root-owned. Keep the directory
 # traversable by the unprivileged service account while the config itself

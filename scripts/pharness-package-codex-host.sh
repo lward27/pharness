@@ -71,6 +71,8 @@ bundle_root="${temporary}/root/pharness-codex-host"
 test "$(cat "${bundle_root}/REVISION")" = "$REVISION"
 file "${bundle_root}/bin/pharness-codex-host" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 file "${bundle_root}/bin/codex" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
+file "${bundle_root}/bin/codex-linux-sandbox" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
+cmp -s "${bundle_root}/bin/codex" "${bundle_root}/bin/codex-linux-sandbox"
 file "${bundle_root}/bin/codex-resources/bwrap" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 (
   cd "$bundle_root"

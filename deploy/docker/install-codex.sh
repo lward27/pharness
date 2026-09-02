@@ -9,6 +9,7 @@ CODEX_BWRAP_ARCHIVE_SHA256="${CODEX_BWRAP_ARCHIVE_SHA256:-3a24807ebbae57a5c37438
 CODEX_BWRAP_SHA256="${CODEX_BWRAP_SHA256:-c102c5f893faed17ed053ce6ceb9fe0bb03069b991a6f0390e54d82c85f1bca0}"
 TARGETARCH="${TARGETARCH:-amd64}"
 DESTINATION="${1:-/out/codex}"
+SANDBOX_ALIAS="$(dirname "$DESTINATION")/codex-linux-sandbox"
 RESOURCE_DIRECTORY="$(dirname "$DESTINATION")/codex-resources"
 
 if [ "$TARGETARCH" != "amd64" ]; then
@@ -35,11 +36,23 @@ printf '%s  %s\n' "$CODEX_BWRAP_ARCHIVE_SHA256" "$bwrap_archive" | sha256sum --c
 tar -xzf "$archive" -C "$directory"
 tar -xzf "$bwrap_archive" -C "$directory"
 install -D -m 0755 "$directory/codex-x86_64-unknown-linux-musl" "$DESTINATION"
+# Codex dispatches its Linux sandbox by argv0. The CLI normally creates a
+# temporary alias at startup, but PHarness intentionally replaces the command
+# PATH with a stage-scoped allowlist. Install a stable hard link beside Codex
+# so bubblewrap can re-exec the exact pinned binary through that allowlist.
+ln "$DESTINATION" "$SANDBOX_ALIAS"
+test -x "$SANDBOX_ALIAS"
+cmp -s "$DESTINATION" "$SANDBOX_ALIAS"
+"$SANDBOX_ALIAS" --help >/dev/null
 printf '%s  %s\n' \
   "$CODEX_BWRAP_SHA256" \
   "$directory/bwrap-x86_64-unknown-linux-musl" \
   | sha256sum --check --status
 install -D -m 0755 "$directory/bwrap-x86_64-unknown-linux-musl" "$RESOURCE_DIRECTORY/bwrap"
 "$DESTINATION" --version | grep -F "${CODEX_VERSION}" >/dev/null
+printf '%s  %s\n' \
+  "$(sha256sum "$DESTINATION" | awk '{print $1}')" \
+  "$SANDBOX_ALIAS" \
+  | sha256sum --check --status
 "$RESOURCE_DIRECTORY/bwrap" --version | grep -F 'bubblewrap' >/dev/null
 printf '%s  %s\n' "$CODEX_BWRAP_SHA256" "$RESOURCE_DIRECTORY/bwrap" | sha256sum --check --status
