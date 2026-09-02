@@ -30,6 +30,7 @@ bundle_root="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 revision="${PHARNESS_HOST_BUNDLE_REVISION:-$(cat "$bundle_root/REVISION")}" 
 install_root="/opt/pharness-codex-host/${revision}"
 codex_bwrap_sha256="c102c5f893faed17ed053ce6ceb9fe0bb03069b991a6f0390e54d82c85f1bca0"
+codex_code_mode_host_sha256="b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b"
 command -v sha256sum >/dev/null 2>&1 || {
   echo "sha256sum is required to verify the PHarness host bundle" >&2
   exit 1
@@ -54,6 +55,15 @@ cmp -s "$bundle_root/bin/codex" "$bundle_root/bin/codex-linux-sandbox" || {
   echo "the Codex Linux sandbox alias cannot dispatch the pinned Codex binary" >&2
   exit 1
 }
+test -x "$bundle_root/bin/codex-code-mode-host" || {
+  echo "the Codex Code Mode host is missing from the host bundle" >&2
+  exit 1
+}
+printf '%s  %s\n' "$codex_code_mode_host_sha256" "$bundle_root/bin/codex-code-mode-host" \
+  | sha256sum --check --status || {
+    echo "the Codex Code Mode host does not match the pinned Codex release" >&2
+    exit 1
+  }
 printf '%s  %s\n' "$codex_bwrap_sha256" "$bundle_root/bin/codex-resources/bwrap" \
   | sha256sum --check --status || {
     echo "the bundled sandbox does not match the pinned Codex release" >&2
@@ -72,7 +82,9 @@ install -d -m 0755 "$install_root/bin" "$install_root/bin/codex-resources" "$ins
 install -m 0755 "$bundle_root/bin/pharness-codex-host" "$install_root/bin/pharness-codex-host"
 install -m 0755 "$bundle_root/bin/codex" "$install_root/bin/codex"
 install -m 0755 "$bundle_root/bin/codex-linux-sandbox" "$install_root/bin/codex-linux-sandbox"
+install -m 0755 "$bundle_root/bin/codex-code-mode-host" "$install_root/bin/codex-code-mode-host"
 install -m 0755 "$bundle_root/bin/codex-resources/bwrap" "$install_root/bin/codex-resources/bwrap"
+install -m 0444 "$bundle_root/REVISION" "$install_root/REVISION"
 install -m 0755 "$bundle_root/libexec/git-askpass" "$install_root/libexec/git-askpass"
 if ! runuser -u pharness-codex -- \
   env PATH=/usr/local/bin:/usr/bin:/bin \

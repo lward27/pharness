@@ -718,15 +718,18 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
         };
         let app = pharness_codex_host::app_server::AppServerSession::start(&app_config).await?;
         app.shutdown().await?;
+        let code_mode_host =
+            pharness_codex_host::app_server::code_mode_host_path(&config.codex_path)?;
         Ok::<_, anyhow::Error>((
             version(&config.codex_path, &["--version"]).await?,
             file_sha256(&config.codex_path)?,
+            file_sha256(&code_mode_host)?,
             authentication_metadata(credential_file)?,
         ))
     }
     .await;
     let cleanup = std::fs::remove_dir_all(&probe_root);
-    let (codex_version, codex_sha256, auth_metadata) = match verification {
+    let (codex_version, codex_sha256, code_mode_host_sha256, auth_metadata) = match verification {
         Ok(evidence) => {
             cleanup.context("failed to remove the Codex authentication boundary probe")?;
             evidence
@@ -744,9 +747,10 @@ async fn verify_authentication_boundary(config: &HostConfig) -> anyhow::Result<(
     write_secret_json(
         &config.state_dir.join("auth-boundary.json"),
         &serde_json::json!({
-            "schema_version":"pharness.dev/codex-auth-boundary/v1alpha1",
+            "schema_version":"pharness.dev/codex-auth-boundary/v1alpha2",
             "codex_version":codex_version,
             "codex_sha256":codex_sha256,
+            "code_mode_host_sha256":code_mode_host_sha256,
             "authentication_metadata":auth_metadata,
             "verified_at":current_unix_seconds(),
         }),
@@ -773,6 +777,10 @@ fn authentication_boundary_current(config: &HostConfig, codex_version: &str) -> 
         .ok()
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
     let current_codex_sha256 = file_sha256(&config.codex_path).ok();
+    let current_code_mode_host_sha256 =
+        pharness_codex_host::app_server::code_mode_host_path(&config.codex_path)
+            .ok()
+            .and_then(|path| file_sha256(&path).ok());
     let current_auth_metadata = authentication_metadata(credential_file).ok();
     marker.is_some_and(|marker| {
         marker
@@ -783,6 +791,10 @@ fn authentication_boundary_current(config: &HostConfig, codex_version: &str) -> 
                 .get("codex_sha256")
                 .and_then(serde_json::Value::as_str)
                 == current_codex_sha256.as_deref()
+            && marker
+                .get("code_mode_host_sha256")
+                .and_then(serde_json::Value::as_str)
+                == current_code_mode_host_sha256.as_deref()
             && marker.get("authentication_metadata") == current_auth_metadata.as_ref()
     })
 }
