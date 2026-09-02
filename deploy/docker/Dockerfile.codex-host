@@ -39,6 +39,7 @@ RUN apt-get update \
     && useradd --uid 65532 --gid 65532 --home-dir /var/lib/pharness-codex-host --create-home pharness
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
+COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox
 COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources
 COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass
 RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
@@ -51,6 +52,9 @@ ENTRYPOINT ["/usr/local/bin/pharness-codex-host"]
 FROM runtime AS bundle-verification
 RUN test "$(pharness-codex-host --version)" = "pharness-codex-host 0.1.0" \
     && codex --version | grep -F 'codex-cli 0.150.1' >/dev/null \
+    && test -x /usr/local/bin/codex-linux-sandbox \
+    && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox \
+    && codex-linux-sandbox --help >/dev/null \
     && test "$(command -v bwrap)" = '/usr/bin/bwrap' \
     && bwrap --version | grep -F 'bubblewrap' >/dev/null \
     && bwrap --help | grep -F -- '--as-pid-1' >/dev/null \
@@ -72,6 +76,7 @@ FROM scratch AS bundle
 ARG PHARNESS_BUILD_REVISION=unknown
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /pharness-codex-host/bin/pharness-codex-host
 COPY --from=codex /out/codex /pharness-codex-host/bin/codex
+COPY --from=codex /out/codex-linux-sandbox /pharness-codex-host/bin/codex-linux-sandbox
 COPY --from=codex /out/codex-resources /pharness-codex-host/bin/codex-resources
 COPY --from=builder /build/REVISION /pharness-codex-host/REVISION
 COPY deploy/codex-host/git-askpass /pharness-codex-host/libexec/git-askpass

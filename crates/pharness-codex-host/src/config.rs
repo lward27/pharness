@@ -263,6 +263,15 @@ mod tests {
         assert!(installer.contains("bwrap --help 2>&1"));
         assert!(installer.contains("--as-pid-1"));
         assert!(installer.contains("--perms"));
+        assert!(installer.contains("$bundle_root/bin/codex-linux-sandbox"));
+        assert!(installer.contains(
+            "ln -sfn /opt/pharness-codex-host/current/bin/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox"
+        ));
+
+        let codex_installer = include_str!("../../../deploy/docker/install-codex.sh");
+        assert!(codex_installer.contains("ln \"$DESTINATION\" \"$SANDBOX_ALIAS\""));
+        assert!(codex_installer.contains("cmp -s \"$DESTINATION\" \"$SANDBOX_ALIAS\""));
+        assert!(codex_installer.contains("\"$SANDBOX_ALIAS\" --help >/dev/null"));
     }
 
     #[test]

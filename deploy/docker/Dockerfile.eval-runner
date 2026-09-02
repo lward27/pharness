@@ -54,6 +54,7 @@ COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
+COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox
 COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources
 COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass
 RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
@@ -66,4 +67,6 @@ RUN test "$(id -u)" = "65532" \
     && node --version \
     && npm --version \
     && git --version
+RUN test -x /usr/local/bin/codex-linux-sandbox \
+    && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox
 ENTRYPOINT ["pharness-eval"]

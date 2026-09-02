@@ -130,14 +130,8 @@ impl CodexEvaluationRuntime {
             request.context,
             request.task,
         )?;
-        self.run_prompt(
-            request.root,
-            prompt,
-            schema,
-            request.workspace_write,
-            vec![request.root.to_path_buf()],
-        )
-        .await
+        self.run_prompt(request.root, prompt, schema, request.workspace_write)
+            .await
     }
 
     async fn run_prompt(
@@ -146,7 +140,6 @@ impl CodexEvaluationRuntime {
         prompt: String,
         output_schema: Value,
         workspace_write: bool,
-        writable_roots: Vec<PathBuf>,
     ) -> Result<AppServerOutcome> {
         let codex_home = root
             .join(".pharness-runtime")
@@ -184,7 +177,7 @@ impl CodexEvaluationRuntime {
             prompt,
             output_schema,
             workspace_write,
-            writable_roots,
+            writable_roots: stage_writable_roots(root, workspace_write),
             denied_read_paths,
             environment: BTreeMap::from([
                 (
@@ -645,7 +638,6 @@ async fn run_protocol_case(
                     "Return a one-step plan covering acceptance name unit. Return only the JSON object required by the schema.".into(),
                     output_schema("plan", "repo-planner"),
                     false,
-                    vec![root.clone()],
                 )
                 .await?;
             validate_completed(&output, "plan", "repo-planner")
@@ -657,7 +649,6 @@ async fn run_protocol_case(
                     "Change src/value.txt from old to new, then return a valid implementation result with repair=false and the exact changed path. Return only the JSON object required by the schema.".into(),
                     output_schema("implement", "repo-builder"),
                     true,
-                    vec![root.clone()],
                 )
                 .await?;
             validate_completed(&output, "implement", "repo-builder")?;
@@ -675,7 +666,6 @@ async fn run_protocol_case(
                     "Repair src/value.txt so its exact content is fixed followed by a newline. Return a valid implementation result with repair=true. Return only the JSON object required by the schema.".into(),
                     output_schema("implement", "repo-repair"),
                     true,
-                    vec![root.clone()],
                 )
                 .await?;
             validate_completed(&output, "implement", "repo-repair")?;
@@ -691,7 +681,6 @@ async fn run_protocol_case(
                     "Approve this consistent fixture, cite fixture_evidence, and return only the JSON object required by the schema.".into(),
                     output_schema("verify", "repo-verifier"),
                     false,
-                    vec![root.clone()],
                 )
                 .await?;
             validate_completed(&output, "verify", "repo-verifier")?;
@@ -906,11 +895,6 @@ fn app_config(
         runtime.authentication_file.clone(),
         codex_home.join("auth.json"),
     ];
-    let writable_roots = if workspace_write {
-        vec![root.into()]
-    } else {
-        Vec::new()
-    };
     Ok(AppServerConfig {
         codex_path: runtime.codex_path.clone(),
         codex_home,
@@ -920,7 +904,7 @@ fn app_config(
         prompt,
         output_schema,
         workspace_write,
-        writable_roots,
+        writable_roots: stage_writable_roots(root, workspace_write),
         denied_read_paths,
         environment: BTreeMap::from([(
             "PATH".into(),
@@ -928,6 +912,13 @@ fn app_config(
         )]),
         upstream_api_key,
     })
+}
+
+fn stage_writable_roots(root: &Path, workspace_write: bool) -> Vec<PathBuf> {
+    workspace_write
+        .then(|| root.to_path_buf())
+        .into_iter()
+        .collect()
 }
 
 fn validate_completed(outcome: &AppServerOutcome, stage: &str, profile: &str) -> Result<()> {
@@ -1071,6 +1062,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(writable.writable_roots, vec![root]);
+    }
+
+    #[test]
+    fn stage_writable_roots_are_derived_only_from_stage_authority() {
+        let root = PathBuf::from("/workspace");
+        assert!(stage_writable_roots(&root, false).is_empty());
+        assert_eq!(stage_writable_roots(&root, true), vec![root]);
     }
 
     #[test]
