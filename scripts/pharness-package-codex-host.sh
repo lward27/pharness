@@ -78,7 +78,7 @@ test -x "${bundle_root}/bin/codex-code-mode-host"
 printf '%s  %s\n' \
   'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b' \
   "${bundle_root}/bin/codex-code-mode-host" \
-  | sha256sum --check --status
+  | sha256sum -c >/dev/null
 file "${bundle_root}/bin/codex-resources/bwrap" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 (
   cd "$bundle_root"
@@ -88,7 +88,7 @@ file "${bundle_root}/bin/codex-resources/bwrap" | grep -E 'ELF 64-bit LSB.*x86-6
 ) >"${bundle_root}/CHECKSUMS.sha256"
 (
   cd "$bundle_root"
-  sha256sum --check CHECKSUMS.sha256
+  sha256sum -c CHECKSUMS.sha256
 )
 
 mkdir -p "$OUTPUT_DIR"
