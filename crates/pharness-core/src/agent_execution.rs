@@ -12,6 +12,7 @@ pub const AGENT_EXECUTION_EVALUATION_SCHEMA: &str =
 pub const CODEX_PROTOCOL_EVALUATION_SCHEMA: &str =
     "pharness.dev/codex-protocol-evaluation/v1alpha1";
 pub const CODEX_PROTOCOL_SUITE_ID: &str = "codex-app-server-protocol-v1";
+pub const CODEX_PROTOCOL_FIXTURE_REVISION: &str = "codex-app-server-protocol-v1.1";
 pub const CODEX_PROTOCOL_CASES: [&str; 10] = [
     "planner_structured_submission",
     "builder_edit_and_structured_completion",
@@ -237,7 +238,7 @@ impl AgentExecutionPolicyRevision {
         let protocol_suite_hash = canonical_json_sha256(&serde_json::json!({
             "schema_version":CODEX_PROTOCOL_EVALUATION_SCHEMA,
             "suite_id":CODEX_PROTOCOL_SUITE_ID,
-            "fixture_revision":"codex-app-server-protocol-v1.0",
+            "fixture_revision":CODEX_PROTOCOL_FIXTURE_REVISION,
             "codex_version":self.codex_version,
             "policy_hash":self.policy_hash,
             "cases":CODEX_PROTOCOL_CASES,

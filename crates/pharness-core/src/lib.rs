@@ -26,7 +26,8 @@ pub use agent_execution::{
     AgentHostLifecycleState, AgentSandboxPolicy, ResolvedAgentExecutionBinding,
     StageExecutionDriver, AGENT_EXECUTION_EVALUATION_SCHEMA, AGENT_EXECUTION_POLICY_SCHEMA,
     AGENT_EXECUTION_REGISTRY_SCHEMA, CODEX_PROTOCOL_CASES, CODEX_PROTOCOL_EVALUATION_SCHEMA,
-    CODEX_PROTOCOL_SUITE_ID, RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
+    CODEX_PROTOCOL_FIXTURE_REVISION, CODEX_PROTOCOL_SUITE_ID,
+    RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};

@@ -270,7 +270,7 @@ mod tests {
             ("codex-repair-gpt56-sol-v1", "implement", "repo-repair"),
             ("codex-verifier-gpt56-sol-v1", "verify", "repo-verifier"),
         ] {
-            let policy = registry.policy(policy_id, "r2").unwrap();
+            let policy = registry.policy(policy_id, "r3").unwrap();
             let revision = expected_prompt_revision(stage, profile).unwrap();
             let prompt = prompt_pack(revision).unwrap();
             assert_eq!(policy.prompt_revision, revision);
