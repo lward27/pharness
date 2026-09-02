@@ -264,6 +264,9 @@ mod tests {
         assert!(installer.contains("--as-pid-1"));
         assert!(installer.contains("--perms"));
         assert!(installer.contains("$bundle_root/bin/codex-linux-sandbox"));
+        assert!(installer.contains("$bundle_root/bin/codex-code-mode-host"));
+        assert!(installer
+            .contains("install -m 0444 \"$bundle_root/REVISION\" \"$install_root/REVISION\""));
         assert!(installer.contains(
             "ln -sfn /opt/pharness-codex-host/current/bin/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox"
         ));
@@ -272,6 +275,8 @@ mod tests {
         assert!(codex_installer.contains("ln \"$DESTINATION\" \"$SANDBOX_ALIAS\""));
         assert!(codex_installer.contains("cmp -s \"$DESTINATION\" \"$SANDBOX_ALIAS\""));
         assert!(codex_installer.contains("\"$SANDBOX_ALIAS\" --help >/dev/null"));
+        assert!(codex_installer.contains("codex-code-mode-host-x86_64-unknown-linux-musl"));
+        assert!(codex_installer.contains("\"$CODE_MODE_HOST\""));
     }
 
     #[test]

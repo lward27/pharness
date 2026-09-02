@@ -73,6 +73,12 @@ file "${bundle_root}/bin/pharness-codex-host" | grep -E 'ELF 64-bit LSB.*x86-64'
 file "${bundle_root}/bin/codex" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 file "${bundle_root}/bin/codex-linux-sandbox" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 cmp -s "${bundle_root}/bin/codex" "${bundle_root}/bin/codex-linux-sandbox"
+file "${bundle_root}/bin/codex-code-mode-host" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
+test -x "${bundle_root}/bin/codex-code-mode-host"
+printf '%s  %s\n' \
+  'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b' \
+  "${bundle_root}/bin/codex-code-mode-host" \
+  | sha256sum --check --status
 file "${bundle_root}/bin/codex-resources/bwrap" | grep -E 'ELF 64-bit LSB.*x86-64' >/dev/null
 (
   cd "$bundle_root"

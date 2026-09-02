@@ -42,11 +42,17 @@ COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-work
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
 COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox
+COPY --from=codex /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host
 COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources
 COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass
 RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass
 RUN test -x /usr/local/bin/codex-linux-sandbox \
-    && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox
+    && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox \
+    && test -x /usr/local/bin/codex-code-mode-host \
+    && printf '%s  %s\n' \
+      'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b' \
+      '/usr/local/bin/codex-code-mode-host' \
+      | sha256sum --check --status
 USER 65532:65532
 WORKDIR /workspace
 ENTRYPOINT ["pharness-worker"]

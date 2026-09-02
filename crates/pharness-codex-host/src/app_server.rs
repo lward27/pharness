@@ -65,6 +65,7 @@ pub struct AppServerSession {
 
 impl AppServerSession {
     pub async fn start(config: &AppServerConfig) -> anyhow::Result<Self> {
+        validate_codex_runtime(&config.codex_path)?;
         write_command_environment_policy(config)?;
         let mut command = Command::new(&config.codex_path);
         command
@@ -503,6 +504,59 @@ impl AppServerSession {
     }
 }
 
+fn validate_codex_runtime(codex_path: &std::path::Path) -> anyhow::Result<()> {
+    let metadata = std::fs::metadata(codex_path).with_context(|| {
+        format!(
+            "Codex executable is unavailable at {}",
+            codex_path.display()
+        )
+    })?;
+    if !metadata.is_file() {
+        anyhow::bail!("Codex executable is not a file: {}", codex_path.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            anyhow::bail!(
+                "Codex executable is not executable: {}",
+                codex_path.display()
+            );
+        }
+    }
+    let code_mode_host = code_mode_host_path(codex_path)?;
+    let helper_metadata = std::fs::metadata(&code_mode_host).with_context(|| {
+        format!(
+            "Codex Code Mode host is unavailable at {}; install the companion binary from the same pinned Codex release",
+            code_mode_host.display()
+        )
+    })?;
+    if !helper_metadata.is_file() {
+        anyhow::bail!(
+            "Codex Code Mode host is not a file: {}",
+            code_mode_host.display()
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if helper_metadata.permissions().mode() & 0o111 == 0 {
+            anyhow::bail!(
+                "Codex Code Mode host is not executable: {}",
+                code_mode_host.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn code_mode_host_path(codex_path: &std::path::Path) -> anyhow::Result<PathBuf> {
+    Ok(codex_path
+        .parent()
+        .context("Codex executable has no parent directory")?
+        .join("codex-code-mode-host"))
+}
+
 fn track_file_change(pending: &mut BTreeMap<String, Vec<PathBuf>>, method: &str, params: &Value) {
     let item = params.get("item");
     let item_id = item.and_then(|item| item.get("id")).and_then(Value::as_str);
@@ -820,6 +874,34 @@ mod tests {
             extract_structured_output(&turn).unwrap()["decision"],
             "approved"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn codex_runtime_requires_an_executable_sibling_code_mode_host() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temporary = std::env::temp_dir().join(format!(
+            "pharness-codex-runtime-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        std::fs::create_dir_all(&temporary).unwrap();
+        let codex = temporary.join("codex");
+        std::fs::write(&codex, "codex").unwrap();
+        std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let error = validate_codex_runtime(&codex).unwrap_err().to_string();
+        assert!(error.contains("Codex Code Mode host is unavailable"));
+
+        let code_mode_host = temporary.join("codex-code-mode-host");
+        std::fs::write(&code_mode_host, "helper").unwrap();
+        std::fs::set_permissions(&code_mode_host, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let error = validate_codex_runtime(&codex).unwrap_err().to_string();
+        assert!(error.contains("Codex Code Mode host is not executable"));
+
+        std::fs::set_permissions(&code_mode_host, std::fs::Permissions::from_mode(0o755)).unwrap();
+        validate_codex_runtime(&codex).unwrap();
+        std::fs::remove_dir_all(temporary).unwrap();
     }
 
     #[test]
