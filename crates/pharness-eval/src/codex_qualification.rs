@@ -1007,7 +1007,7 @@ mod tests {
             "../../../deploy/helm/pharness/files/agent-execution-registry.json"
         ))
         .unwrap();
-        let policy = registry.policy(policy_id, "r1").unwrap().clone();
+        let policy = registry.policy(policy_id, "r2").unwrap().clone();
         CodexEvaluationRuntime {
             policy,
             registry_hash: registry.config_hash,

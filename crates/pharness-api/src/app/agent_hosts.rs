@@ -1933,8 +1933,8 @@ mod tests {
     #[test]
     fn qualification_contract_is_stage_specific_and_hash_bound() {
         let registry = registry();
-        let planner = registry.policy("codex-planner-gpt56-sol-v1", "r1").unwrap();
-        let builder = registry.policy("codex-builder-gpt56-sol-v1", "r1").unwrap();
+        let planner = registry.policy("codex-planner-gpt56-sol-v1", "r2").unwrap();
+        let builder = registry.policy("codex-builder-gpt56-sol-v1", "r2").unwrap();
         let planner_contract = agent_qualification_contract(planner).unwrap();
         let builder_contract = agent_qualification_contract(builder).unwrap();
         assert_eq!(planner_contract.suite_id, "planner-v2");
@@ -1951,7 +1951,7 @@ mod tests {
     #[test]
     fn qualification_report_requires_complete_protocol_and_derives_gate() {
         let registry = registry();
-        let policy = registry.policy("codex-planner-gpt56-sol-v1", "r1").unwrap();
+        let policy = registry.policy("codex-planner-gpt56-sol-v1", "r2").unwrap();
         let report = planner_report(&registry, policy, "runtime-sha");
         let contract = agent_qualification_contract(policy).unwrap();
         assert!(validate_agent_qualification_report(
