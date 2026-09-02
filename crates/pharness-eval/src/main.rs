@@ -64,7 +64,7 @@ enum Command {
     CodexQualification {
         #[arg(long)]
         policy_id: String,
-        #[arg(long, default_value = "r1")]
+        #[arg(long, default_value = "r2")]
         revision: String,
         #[arg(long)]
         registry: PathBuf,

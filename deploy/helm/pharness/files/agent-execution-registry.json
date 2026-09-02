@@ -4,7 +4,7 @@
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-planner-gpt56-sol-v1",
-      "revision": "r1",
+      "revision": "r2",
       "display_name": "Codex Planner GPT-5.6 Sol High",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -35,12 +35,12 @@
       "active_time_seconds": 600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:0c892aba4a9ee7c5550bb4d4a693c2f4641225dcc5ebfa9bad73897811491ddb"
+      "policy_hash": "sha256:36f48a662a6f17aa609d194c39727719e80eb385ae6f50262b246e8db52bc8c6"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-builder-gpt56-sol-v1",
-      "revision": "r1",
+      "revision": "r2",
       "display_name": "Codex Builder GPT-5.6 Sol High",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -57,7 +57,7 @@
       "reasoning_effort": "high",
       "prompt_revision": "codex-repo-builder-v1",
       "prompt_hash": "sha256:b797485c0f987892f455fbb5bfccb71755dc1b0cfd2ba8c5fed42d7f347d15c3",
-      "output_schema_hash": "sha256:3ac750a26108828feac05140f72fbea3e6a53d162c00b5a7ad5fd5767faac2a6",
+      "output_schema_hash": "sha256:085685e2cafb019391cc87538b04268276a2b140f04e153f90915fc6b88f5718",
       "sandbox": {
         "workspace_write": true,
         "command_network_access": false,
@@ -71,12 +71,12 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:ddd48f7e58c78adb543f4b609d42e8e77f6d0dc1ee03ff82b03edd791fbff09f"
+      "policy_hash": "sha256:2c5f3e30ee8b511d033b19eea8e27d31dd7bae2c44f3c22435b8b6032e171bbb"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-repair-gpt56-sol-v1",
-      "revision": "r1",
+      "revision": "r2",
       "display_name": "Codex Repair GPT-5.6 Sol XHigh",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -93,7 +93,7 @@
       "reasoning_effort": "xhigh",
       "prompt_revision": "codex-repo-repair-v1",
       "prompt_hash": "sha256:4743957a123a317bf4d520685fe9a8858553018f4763e0da1077b9ae2a641e44",
-      "output_schema_hash": "sha256:5ef01555638086752953495116971a52bc6e1a489914ec6605dbcb0a0673d7d2",
+      "output_schema_hash": "sha256:1167804c9001e56d43c7d277e5064d1e039f7cf1d978f94de3eabdc4d96b9251",
       "sandbox": {
         "workspace_write": true,
         "command_network_access": false,
@@ -107,12 +107,12 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:801a1f4f568bac4b30b276f74ba759a656f81ca7300419e24bf298273c579939"
+      "policy_hash": "sha256:16861362bdf670971cde55a7923b3eb710953af37d6c06d7ee1426fc9845f6f1"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
       "policy_id": "codex-verifier-gpt56-sol-v1",
-      "revision": "r1",
+      "revision": "r2",
       "display_name": "Codex Verifier GPT-5.6 Sol XHigh",
       "driver": "codex_app_server",
       "eligible_stages": [
@@ -129,7 +129,7 @@
       "reasoning_effort": "xhigh",
       "prompt_revision": "codex-repo-verifier-v1",
       "prompt_hash": "sha256:a6117249e023cb3ac115b679a531328575ac05eef54970ffb1da688ff56c4793",
-      "output_schema_hash": "sha256:2987bf64ed5476a98c79b4d548f238e3920e18cc37c9388f878899ca921ec075",
+      "output_schema_hash": "sha256:a792c4a5681b09a379e65119fecf5a87b4778b6f3df4bcf98531820444bf78ad",
       "sandbox": {
         "workspace_write": false,
         "command_network_access": false,
@@ -143,9 +143,9 @@
       "active_time_seconds": 900,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:eccc4b6f86e1505f87afb5a4f0c615156e87f3e26ba88fcc91cf15c36a2b0bcc"
+      "policy_hash": "sha256:6bdc316a9bcf7491d99ed0b1546d84e32eebe6354c9f00ce01be9f7643989e3e"
     }
   ],
   "defaults": {},
-  "config_hash": "sha256:3f9d46aa8a29981030b027826416ef310b96c891cfaf58172c57a152209fed33"
+  "config_hash": "sha256:e073ae0db3635664b5cbd9e17f0241f5f98680752afe85b6d7ce565a5890154c"
 }
