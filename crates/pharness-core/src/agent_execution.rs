@@ -12,7 +12,7 @@ pub const AGENT_EXECUTION_EVALUATION_SCHEMA: &str =
 pub const CODEX_PROTOCOL_EVALUATION_SCHEMA: &str =
     "pharness.dev/codex-protocol-evaluation/v1alpha1";
 pub const CODEX_PROTOCOL_SUITE_ID: &str = "codex-app-server-protocol-v1";
-pub const CODEX_PROTOCOL_FIXTURE_REVISION: &str = "codex-app-server-protocol-v1.1";
+pub const CODEX_PROTOCOL_FIXTURE_REVISION: &str = "codex-app-server-protocol-v1.2";
 pub const CODEX_PROTOCOL_CASES: [&str; 10] = [
     "planner_structured_submission",
     "builder_edit_and_structured_completion",

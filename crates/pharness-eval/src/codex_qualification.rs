@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::watch;
 
+const CODEX_PROTOCOL_RESUME_MAX_ACTIVE_TIME_SECONDS: u64 = 180;
+
 #[derive(Debug, Clone)]
 pub(crate) struct CodexEvaluationRuntime {
     pub policy: AgentExecutionPolicyRevision,
@@ -829,7 +831,7 @@ async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) ->
         bail!("App Server turn did not report interruption");
     }
     config.prompt = format!(
-        "Resume this thread and return a valid {} result without making any file changes.",
+        "Resume this thread. Do not run commands, inspect files, or make changes. Immediately return the smallest valid {} result required by the schema.",
         contract.stage
     );
     let resumed = app.start_or_resume_thread(&config, Some(&thread)).await?;
@@ -838,10 +840,24 @@ async fn interruption_protocol(runtime: &CodexEvaluationRuntime, root: &Path) ->
     }
     let (_cancel_tx, cancel_rx) = watch::channel(false);
     let outcome = app
-        .run_turn(&config, &thread, cancel_rx, Duration::from_secs(60))
+        .run_turn(
+            &config,
+            &thread,
+            cancel_rx,
+            interruption_resume_active_time(runtime),
+        )
         .await?;
     app.shutdown().await?;
     validate_completed(&outcome, contract.stage, contract.profile)
+}
+
+fn interruption_resume_active_time(runtime: &CodexEvaluationRuntime) -> Duration {
+    Duration::from_secs(
+        runtime
+            .policy
+            .active_time_seconds
+            .min(CODEX_PROTOCOL_RESUME_MAX_ACTIVE_TIME_SECONDS),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1151,6 +1167,22 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn interruption_resume_budget_is_bounded_by_the_selected_policy() {
+        let runtime = checkpoint_runtime();
+        assert_eq!(
+            interruption_resume_active_time(&runtime),
+            Duration::from_secs(CODEX_PROTOCOL_RESUME_MAX_ACTIVE_TIME_SECONDS)
+        );
+
+        let mut shorter = runtime;
+        shorter.policy.active_time_seconds = 45;
+        assert_eq!(
+            interruption_resume_active_time(&shorter),
+            Duration::from_secs(45)
+        );
     }
 
     #[test]
