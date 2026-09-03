@@ -34,9 +34,9 @@ organization:
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    digest: sha256:bc6736549e340b442b099488b2db1d0b853c43dfef609513af8da9394237b016
+    digest: sha256:e21df7b298aa81d7787105129cc6ff1b84f79f87856c342005e3fc06b38bcd37
     pullPolicy: IfNotPresent
-    revision: ae8bcb4c67bfeb737c1a23b355814380c35cac4c
+    revision: e9cda26431e0769d4025784128dd12ba18e426dc
   # SQLite single-writer: keep exactly one API replica.
   replicas: 1
   host: pharness-api.lucas.engineering
@@ -82,9 +82,9 @@ inferenceGateway:
   directFireworksEnabled: true
   image:
     repository: registry.lucas.engineering/pharness-model-gateway
-    digest: sha256:c09367adc34ee434d3965089ddf8ceb7a4fb64f1ed9f943f03acf103812d3533
+    digest: sha256:89fb89fffaebf67b846ecc1dd7f1fba7c1286067b45feda04ec91531de640f2f
     pullPolicy: IfNotPresent
-    revision: ae8bcb4c67bfeb737c1a23b355814380c35cac4c
+    revision: e9cda26431e0769d4025784128dd12ba18e426dc
   replicas: 1
   grantSecretName: pharness-model-grant-v2
   grantSecretKey: key
@@ -111,9 +111,9 @@ inferenceEvaluation:
   nodeHostname: ubuntu-lucas-engineering-2
   image:
     repository: registry.lucas.engineering/pharness-eval-runner
-    digest: sha256:1db9265251881040c523ddaba081119ff7ddf7792bf5d5d6b5958ce608c7f28d
+    digest: sha256:b97330d542e7918f8d9f8b3fe11b17121823704806dfb04a1fb8ebc337718fc0
     pullPolicy: IfNotPresent
-    revision: ae8bcb4c67bfeb737c1a23b355814380c35cac4c
+    revision: e9cda26431e0769d4025784128dd12ba18e426dc
 
 # Enable the outbound native-host control plane. Stage policies remain
 # unavailable until their exact host, protocol, and semantic qualifications
@@ -127,9 +127,9 @@ codexAgentBackend:
   leaseTtlSeconds: 45
   image:
     repository: registry.lucas.engineering/pharness-codex-host
-    digest: sha256:61e4b6c63f8a2149675b8156397b560d1597518f675bd83f736c39f18346cc27
+    digest: sha256:db300957928317f5f1ae6b9392bdcb85a7d99284935fec1074378a2919292d4f
     pullPolicy: IfNotPresent
-    revision: ae8bcb4c67bfeb737c1a23b355814380c35cac4c
+    revision: e9cda26431e0769d4025784128dd12ba18e426dc
   kubernetes:
     # Packaging is acceptance-tested but intentionally not activated in the
     # live cluster during this milestone.
@@ -148,10 +148,10 @@ codexAgentBackend:
     profiles:
       - id: python-3.11
         enabled: false
-        image: registry.lucas.engineering/pharness-python-runner@sha256:774ff4a9565fb3ff6f1a09275e862c335ab7a83a227c39a0854551abeb0e13a4
+        image: registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0
       - id: node-24
         enabled: false
-        image: registry.lucas.engineering/pharness-node-runner@sha256:e9124b987c747ff653cc8a37a02c4ec1ee80630929f8bc94b376a18e1f8accea
+        image: registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963
 
 retention:
   scheduledEnabled: true
@@ -286,8 +286,8 @@ worker:
 environmentProfiles:
   - id: python-3.11
     active: true
-    image: registry.lucas.engineering/pharness-python-runner@sha256:774ff4a9565fb3ff6f1a09275e862c335ab7a83a227c39a0854551abeb0e13a4
-    revision: "ae8bcb4c67bfeb737c1a23b355814380c35cac4c"
+    image: registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0
+    revision: "e9cda26431e0769d4025784128dd12ba18e426dc"
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -308,8 +308,8 @@ environmentProfiles:
       ephemeral_storage: 4Gi
   - id: node-24
     active: true
-    image: registry.lucas.engineering/pharness-node-runner@sha256:e9124b987c747ff653cc8a37a02c4ec1ee80630929f8bc94b376a18e1f8accea
-    revision: "ae8bcb4c67bfeb737c1a23b355814380c35cac4c"
+    image: registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963
+    revision: "e9cda26431e0769d4025784128dd12ba18e426dc"
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -351,9 +351,9 @@ tektonE2eBuildOutputSmoke:
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    digest: sha256:3fd78a429456ef2eba039187d93f9de6f07879ee577ce690f54c5371ea5a11e4
+    digest: sha256:ab8622f275e3f7a95068496e195ca5508398b541618809e51029da9a8ccc612a
     pullPolicy: IfNotPresent
-    revision: ae8bcb4c67bfeb737c1a23b355814380c35cac4c
+    revision: e9cda26431e0769d4025784128dd12ba18e426dc
   replicas: 1
   host: pharness.lucas.engineering
   resources:
