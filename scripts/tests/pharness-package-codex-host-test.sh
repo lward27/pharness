@@ -27,4 +27,10 @@ printf 'portable bundle checksum\n' >"${TEST_ROOT}/payload"
   sha256sum -c CHECKSUMS.sha256 >/dev/null
 )
 
+# The BSD sha256sum shipped by macOS requires an explicit `-` operand when
+# the checksum list arrives on stdin. GNU sha256sum accepts the same form.
+payload_sha256="$(sha256sum "${TEST_ROOT}/payload" | awk '{print $1}')"
+printf '%s  %s\n' "$payload_sha256" "${TEST_ROOT}/payload" \
+  | sha256sum -c - >/dev/null
+
 echo "pharness native bundle checksum portability tests passed"
