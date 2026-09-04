@@ -4,7 +4,7 @@ import { sendJson } from "../api";
 import { Empty, LinkButton, ResourceState, SectionHeader, Status } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
-import { FactGrid, formatMoment, humanize, RecordList } from "../presentation";
+import { FactGrid, formatMoment, humanize, repositoryLabel, RecordList } from "../presentation";
 import { ProductTopologyEditor } from "./ProductTopologyEditor";
 import { useOrganizationOverview } from "../ConsoleContext";
 
@@ -57,7 +57,7 @@ export function ProductScreen({ productId, section, operatorName }: { productId:
   const workItemBlocker = !data?.repositories?.length
     ? "Register and onboard a Repository before creating work."
     : !readyRepositories.length
-      ? `No Repository is coding-ready. ${firstBlockedRepository?.external_id || "The first Repository"} is ${humanize(firstBlockedRepository?.contract_readiness || "contract unavailable")} / ${humanize(firstBlockedRepository?.coding_readiness || "coding unavailable")}.`
+      ? `No Repository is coding-ready. ${repositoryLabel(firstBlockedRepository,"The first Repository")} is ${humanize(firstBlockedRepository?.contract_readiness || "contract unavailable")} / ${humanize(firstBlockedRepository?.coding_readiness || "coding unavailable")}.`
       : "";
   useEffect(() => { if(editable.data && !editing) setDraft(current => ({...current,display_name:editable.data.display_name || "",description:editable.data.description || "",owner_principal:editable.data.owner_principal || ""})); },[editable.data,editing]);
   const save = async (event:React.FormEvent) => {
@@ -95,7 +95,7 @@ function ServicesAndRepositories({ data,productId,operatorName,onApplied }: { da
       });
       const binding = bindingSummary?.binding || bindingSummary;
       const revision = bindingSummary?.current_revision || bindingSummary?.binding_revision;
-      return <button className="repo-list-row" type="button" key={repository.id} onClick={() => navigate(`repositories/${repository.id}/overview`)}><GitBranch size={18} /><div><strong>{repository.external_id}</strong><span>Binding revision {revision?.revision ?? binding?.revision ?? "unavailable"} · {(revision?.service_ids || binding?.service_ids || []).length} Service mappings</span><small className="repo-mono">{repository.registered_commit}</small></div><Status value={repository.coding_readiness || "registered"} /></button>;
+      return <button className="repo-list-row" type="button" key={repository.id} onClick={() => navigate(`repositories/${repository.id}/overview`)}><GitBranch size={18} /><div><strong>{repositoryLabel(repository)}</strong><span>Binding revision {revision?.revision ?? binding?.revision ?? "unavailable"} · {(revision?.service_ids || binding?.service_ids || []).length} Service mappings</span><small className="repo-mono">{repository.registered_commit}</small></div><Status value={repository.coding_readiness || "registered"} /></button>;
     })}{!data?.repositories?.length ? <p className="repo-muted">No durable Repository bindings.</p> : null}</div></section>
     <ProductTopologyEditor productId={productId} operatorName={operatorName} onApplied={onApplied}/>
   </div>;

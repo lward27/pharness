@@ -11,6 +11,18 @@ export function compactId(value?: string | null, length = 14) {
   return value.length > length ? `${value.slice(0, length)}…` : value;
 }
 
+/** Display the registered GitHub path, not its opaque numeric provider ID. */
+export function repositoryLabel(repository?: {canonical_url?: string; external_id?: string; provider_repository_id?: string; id?: string} | null, fallback = "Unavailable") {
+  if (repository?.canonical_url) {
+    try {
+      const url = new URL(repository.canonical_url);
+      const path = url.pathname.slice(1).replace(/\.git$/, "");
+      if (url.protocol === "https:" && url.hostname === "github.com" && !url.port && !url.username && !url.password && !url.search && !url.hash && /^[\w.-]+\/[\w.-]+$/.test(path)) return path;
+    } catch { /* Historical records may not contain a canonical URL. */ }
+  }
+  return repository?.external_id || repository?.provider_repository_id || repository?.id || fallback;
+}
+
 export function formatMoment(value?: string | null) {
   if (!value) return "Unavailable";
   const numeric = Number(value);

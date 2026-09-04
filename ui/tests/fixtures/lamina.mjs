@@ -5,7 +5,8 @@ import { runPayload } from "./lamina-runs.mjs";
 export const asOf = "2026-09-04T14:00:00Z";
 export const source = "a".repeat(40);
 export const product = { id:"prod_finance", product_key:"finance", display_name:"Finance", description:"Market intelligence, portfolio exploration, and ingestion.", owner_principal:"lucas", state_version:1, updated_at:asOf };
-export const repositories = ["finance-frontend","finance_app_database_service","yfinance_wrapper","scraper_manager","lucas_engineering"].map((name,index) => ({id:`repo_${index}`,external_id:`lward27/${name}`,canonical_url:`https://github.com/lward27/${name}.git`,default_branch:"main",registered_commit:source,product_bindings:[{product}],readiness:{contract_status:index===4?"unavailable":"ready",coding_status:index===4?"blocked":"ready"}}));
+// GitHub IDs are numeric in live data; labels must use the canonical URL.
+export const repositories = ["finance-frontend","finance_app_database_service","yfinance_wrapper","scraper_manager","lucas_engineering"].map((name,index) => ({id:`repo_${index}`,external_id:String(668351604 + index),canonical_url:`https://github.com/lward27/${name}.git`,default_branch:"main",registered_commit:source,product_bindings:[{product}],readiness:{contract_status:index===4?"unavailable":"ready",coding_status:index===4?"blocked":"ready"}}));
 export const services = ["finance-web","finance-database-api","market-data-api","market-data-ingestion","finance-messaging","finance-data-store"].map(key => ({id:`svc_${key}`,service_key:key,display_name:key,description:key.replaceAll("-"," "),status:"active"}));
 const charts = ["finance-frontend","finance-app-database-service","yfinance-wrapper","scraper-manager","rabbitmq","postgresql"];
 export const bindings = repositories.map((repository,index) => {
