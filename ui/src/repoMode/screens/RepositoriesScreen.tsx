@@ -4,7 +4,7 @@ import { query, sendJson } from "../api";
 import { actionEffectTone, ActionDialog, Empty, LinkButton, ResourceState, SectionHeader, Status, type ServerAction } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
-import { EvidenceReferences, FactGrid, formatMoment, Freshness, humanize, RawRecord, RecordList } from "../presentation";
+import { EvidenceReferences, FactGrid, formatMoment, Freshness, humanize, repositoryLabel, RawRecord, RecordList } from "../presentation";
 
 export function RepositoriesScreen({ operatorName }: { operatorName?: string }) {
   const [search, setSearch] = useState("");
@@ -19,8 +19,8 @@ export function RepositoriesScreen({ operatorName }: { operatorName?: string }) 
     <div className="repo-filterbar"><MagnifyingGlass size={18} /><input aria-label="Search Repositories" placeholder="Search registered repositories" value={search} onChange={event => { setSearch(event.target.value); setOffset(0); }} /></div>
     <div className="repo-table" aria-label="Repositories">
       <div className="repo-table-head" aria-hidden="true"><span>Repository</span><span>Registration</span><span>Contract</span><span>Coding</span><span>Freshness</span></div>
-      {(resource.data?.repositories || []).map((repository: any) => <button type="button" className="repo-table-row" key={repository.id} aria-label={`Open Repository ${repository.provider_repository_id}`} onClick={() => navigate(`repositories/${repository.id}/overview`)}>
-        <span><strong>{repository.provider_repository_id}</strong><small>{repository.product_bindings?.map((binding: any) => binding.display_name).join(" · ") || "Unbound"}</small></span>
+      {(resource.data?.repositories || []).map((repository: any) => <button type="button" className="repo-table-row" key={repository.id} aria-label={`Open Repository ${repositoryLabel(repository)}`} onClick={() => navigate(`repositories/${repository.id}/overview`)}>
+        <span><strong>{repositoryLabel(repository)}</strong><small>{repository.product_bindings?.map((binding: any) => binding.display_name).join(" · ") || "Unbound"}</small></span>
         <span><Status value="registered" /><small className="repo-mono">{repository.registered_commit?.slice(0, 12)}</small></span>
         <span><Status value={repository.contract_readiness} /></span>
         <span><Status value={repository.coding_readiness} /></span>
@@ -65,7 +65,7 @@ export function RepositoryScreen({ repositoryId, section, operatorName }: { repo
   const repository = data?.repository;
   const onboarding = data?.latest_onboarding;
   return <ResourceState status={resource.status} error={resource.error}>
-    <SectionHeader eyebrow="Repository" title={repository?.external_id || repositoryId} summary={repository?.canonical_url} action={onboarding ? <LinkButton to={`repository-onboardings/${onboarding.id}`}>Open onboarding</LinkButton> : undefined} />
+    <SectionHeader eyebrow="Repository" title={repositoryLabel(repository,repositoryId)} summary={repository?.canonical_url} action={onboarding ? <LinkButton to={`repository-onboardings/${onboarding.id}`}>Open onboarding</LinkButton> : undefined} />
     <nav className="repo-tabs" aria-label="Repository sections">{repositorySections.map(value => <button type="button" className={section === value ? "is-active" : ""} key={value} onClick={() => navigate(`repositories/${repositoryId}/${value}`)}>{value.replaceAll("-"," ")}</button>)}</nav>
     {section === "overview" ? <div className="repo-two-columns"><section className="repo-panel"><h2>Immutable registration</h2><FactGrid facts={[{label:"Provider",value:repository?.provider},{label:"Default branch",value:repository?.default_branch},{label:"Registered revision",value:repository?.registered_commit,mono:true},{label:"Repository state version",value:repository?.state_version}]} /><h3>Reviewed Product bindings</h3><RecordList values={(data?.product_bindings || []).map((entry:any) => ({name:entry.product?.display_name,product_id:entry.product?.id,binding:entry.binding?.id,revision:entry.current_revision?.revision,services:entry.current_revision?.service_ids?.length || 0,status:entry.binding?.status}))} empty="This Repository is not bound to a Product." /></section><CapabilityAxes repositoryId={repositoryId} capabilities={data?.capabilities || []} trust={data?.trust_policy || {}} authorization={data?.authorization || {}} onVerified={resource.refresh} /></div> : null}
     {section === "readiness" ? <Readiness data={data} repositoryId={repositoryId} operatorName={operatorName} onRefresh={resource.refresh} /> : null}
@@ -141,7 +141,7 @@ export function OnboardingScreen({ onboardingId, operatorName }: { onboardingId:
     return 0;
   }, [onboarding?.status]);
   return <ResourceState status={resource.status} error={resource.error}>
-    <SectionHeader eyebrow="Repository onboarding" title={repositoryIdentity?.external_id || onboarding?.repository_id || onboardingId} summary={`${productIdentity?.display_name ? `${productIdentity.display_name} · ` : ""}Pinned revision ${onboarding?.registered_commit || "unavailable"}`} action={action ? refreshOnboarding ? <button className="repo-primary" type="button" onClick={() => setRefreshing(value => !value)}>{refreshing ? "Close refresh" : "Start fresh onboarding"}</button> : <button className={`repo-primary repo-action-${actionEffectTone(action)}`} type="button" disabled={action.status !== "available"} onClick={() => setSelectedAction(action)}>{action.id.replaceAll("_"," ")}</button> : undefined} />
+    <SectionHeader eyebrow="Repository onboarding" title={repositoryLabel(repositoryIdentity,onboarding?.repository_id || onboardingId)} summary={`${productIdentity?.display_name ? `${productIdentity.display_name} · ` : ""}Pinned revision ${onboarding?.registered_commit || "unavailable"}`} action={action ? refreshOnboarding ? <button className="repo-primary" type="button" onClick={() => setRefreshing(value => !value)}>{refreshing ? "Close refresh" : "Start fresh onboarding"}</button> : <button className={`repo-primary repo-action-${actionEffectTone(action)}`} type="button" disabled={action.status !== "available"} onClick={() => setSelectedAction(action)}>{action.id.replaceAll("_"," ")}</button> : undefined} />
     {action?.status === "blocked" ? <div className="repo-corrective-path" role="status"><WarningCircle size={18}/><div><strong>{action.id.replaceAll("_", " ")}</strong><span>{(action.blockers || []).map((blocker:any) => typeof blocker === "string" ? blocker : blocker.summary || blocker.code).join(" · ")}</span></div></div> : null}
     {refreshing && refreshOnboarding ? <FreshOnboardingForm onboarding={onboarding} operatorName={operatorName} onCancel={() => setRefreshing(false)} /> : null}
     <ol className="repo-stepper" tabIndex={0} aria-label="Onboarding steps; scroll for all steps">{onboardingSteps.map((step,index) => <li className={index < activeStep ? "is-complete" : index === activeStep ? "is-current" : ""} key={step}><span>{index < activeStep ? <CheckCircle size={16} weight="fill" /> : index + 1}</span><small>{step}</small></li>)}</ol>
