@@ -2,8 +2,8 @@ export const JSON_HEADERS = { accept: "application/json" };
 
 const WRITE_HEADERS = { ...JSON_HEADERS, "content-type": "application/json" };
 
-export async function fetchJson(path, { optional = false } = {}) {
-  const response = await fetch(path, { headers: JSON_HEADERS });
+export async function fetchJson(path, { optional = false, signal } = {}) {
+  const response = await fetch(path, { headers: JSON_HEADERS, ...(signal ? { signal } : {}) });
   if (optional && response.status === 404) return null;
   if (!response.ok) {
     const text = await response.text();

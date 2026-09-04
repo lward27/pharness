@@ -7,11 +7,14 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "preview:lamina": "node scripts/lamina-preview.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:visual": "playwright test"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@vitejs/plugin-react": "5.0.4",
     "react": "19.2.0",

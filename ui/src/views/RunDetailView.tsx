@@ -93,19 +93,22 @@ function StreamStatusPanel({ streamState, eventCount, cursor, run }: any) {
 function BudgetPanel({ run, operatorSummary }: { run: any; operatorSummary: any }) {
   const budget = run?.run_budget ?? {};
   const consumed = run?.budget_consumption ?? {};
-  const turns = budgetMetric(consumed.turns_used ?? operatorSummary?.turns, consumed.allowed_turns ?? budget.initial_turns);
-  const tokens = budgetMetric(consumed.tokens_used ?? operatorSummary?.actual_total_tokens, consumed.allowed_tokens ?? budget.initial_tokens);
-  const activeTime = budgetMetric(consumed.active_execution_seconds_used, budget.active_execution_seconds);
   const metrics = [
-    { label: "Turns", metric: turns, used: String(turns.used), remaining: String(turns.remaining), limit: `${turns.limit} allowed` },
-    { label: "Tokens", metric: tokens, used: turns.limit ? tokens.used.toLocaleString() : String(tokens.used), remaining: tokens.remaining.toLocaleString(), limit: `${tokens.limit.toLocaleString()} allowed` },
-    { label: "Active time", metric: activeTime, used: formatRunDuration(activeTime.used), remaining: formatRunDuration(activeTime.remaining), limit: `${formatRunDuration(activeTime.limit)} allowed` },
-  ];
+    { label:"Turns", usedValue:consumed.turns_used ?? operatorSummary?.turns, limitValue:consumed.allowed_turns ?? budget.initial_turns },
+    { label:"Tokens", usedValue:consumed.tokens_used ?? operatorSummary?.actual_total_tokens, limitValue:consumed.allowed_tokens ?? budget.initial_tokens },
+    { label:"Active time", usedValue:consumed.active_execution_seconds_used, limitValue:budget.active_execution_seconds },
+  ].map(({label,usedValue,limitValue}) => {
+    const metric=budgetMetric(usedValue,limitValue);
+    const present=(value:unknown) => typeof value === "number" && Number.isFinite(value);
+    const format=(value:number) => label === "Active time" ? formatRunDuration(value) : value.toLocaleString();
+    const known=present(usedValue) && present(limitValue);
+    return {label,metric,known,used:present(usedValue)?format(metric.used):"Unavailable",remaining:known?format(metric.remaining):"unavailable",limit:present(limitValue)?`${format(metric.limit)} allowed`:"Limit unavailable"};
+  });
   return <section className="attempt-budget-panel" aria-label="Run budget">
     <div className="attempt-panel-heading"><div><span className="eyebrow">Execution budget</span><h3>Capacity for this workspace</h3></div><small>{operatorSummary?.budget_extensions ?? consumed.extensions ?? 0} extensions</small></div>
-    <div className="attempt-budget-grid">{metrics.map(({ label, metric, used, remaining, limit }) => <article className={`budget-meter tone-${metric.tone}`} key={label}>
+    <div className="attempt-budget-grid">{metrics.map(({ label, metric, known, used, remaining, limit }) => <article className={`budget-meter tone-${known ? metric.tone : "unavailable"}`} key={label}>
       <div><strong>{label}</strong><small>{limit}</small></div>
-      <progress max={100} value={metric.percent} aria-label={`${label} budget used`} />
+      {known ? <progress max={100} value={metric.percent} aria-label={`${label} budget used`} /> : <span className="repo-muted">Usage unavailable</span>}
       <p><b>{used} used · {remaining} remaining</b></p>
     </article>)}</div>
   </section>;
@@ -172,7 +175,7 @@ function WorkspaceChanges({ diff, changes, operatorSummary }: { diff: any; chang
 function ReliabilityPanel({ operatorSummary, run }: { operatorSummary: any; run: any }) {
   if (!operatorSummary) return null;
   return <section className="attempt-reliability-panel"><div className="attempt-panel-heading"><div><span className="eyebrow">Context and recovery</span><h3>Harness telemetry</h3></div></div><div className="reliability-facts">
-    <ReviewItem label="Context / actual" value={`${operatorSummary.estimated_context_tokens ?? 0} estimated · ${(operatorSummary.actual_total_tokens ?? 0).toLocaleString()} actual`} />
+    <ReviewItem label="Context / actual" value={`${operatorSummary.estimated_context_tokens ?? "Unavailable"} estimated · ${operatorSummary.actual_total_tokens?.toLocaleString() ?? "unavailable"} actual`} />
     <ReviewItem label="Tools" value={`${operatorSummary.tools_completed ?? 0} completed · ${operatorSummary.tools_failed ?? 0} failed`} />
     <ReviewItem label="Recoveries / retries" value={`${operatorSummary.recoverable_failures ?? 0} / ${operatorSummary.retries ?? 0}`} />
     <ReviewItem label="Environment probes" value={operatorSummary.environment_discovery_turns ?? 0} tone={operatorSummary.environment_discovery_turns ? "risk" : "healthy"} />
@@ -216,7 +219,7 @@ function CompactedRunSummary({ run, operatorSummary }: { run:any; operatorSummar
       <h3>Raw Run payload intentionally expired</h3>
       <p>The immutable Run identity, sealed summary, changed-path hashes, acceptance results, and evidence references remain available. Raw messages, event payloads, tool bodies, and diff content were compacted by policy.</p>
       <div className="environment-fact-grid">
-        <ReviewItem label="Turns / tokens" value={`${summary.turns ?? 0} · ${(summary.actual_total_tokens ?? 0).toLocaleString()}`} />
+        <ReviewItem label="Turns / tokens" value={`${summary.turns ?? "Unavailable"} · ${summary.actual_total_tokens?.toLocaleString() ?? "unavailable"}`} />
         <ReviewItem label="Tools / failures" value={`${summary.tools_completed ?? 0} · ${summary.tools_failed ?? 0}`} />
         <ReviewItem label="Changed paths" value={(summary.changed_paths ?? []).length} />
         <ReviewItem label="Acceptance passed" value={(summary.acceptance_evidence ?? []).length} />
@@ -240,16 +243,17 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       if (!runId) { setState({ status: "empty", detail: null, error: null }); return; }
       setState((current: any) => ({ ...current, status: current.detail ? "refreshing" : "loading" }));
       try {
-        const detail = await loadRunDetail(runId);
+        const detail = await loadRunDetail(runId, { signal: controller.signal });
         if (!active) return;
         setState({ status: "ready", detail, error: null });
         if (streamRunIdRef.current !== runId) {
           streamRunIdRef.current = runId;
-          if (isTerminalStatus(detail.run?.status)) { setStreamState({ status: "closed", error: null }); setStreamCursor(null); }
+          if (!isActiveRun(detail.run) || isTerminalStatus(detail.run?.status)) { setStreamState({ status: "closed", error: null }); setStreamCursor(null); }
           else setStreamCursor(latestEventSeq(detail.events));
         }
       } catch (error) {
@@ -257,28 +261,30 @@ export function RunDetailView({ runId, refreshDashboard, onOpenQueue, operatorNa
       }
     }
     load();
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [runId, reloadToken]);
 
   useEffect(() => {
     if (!runId) { setStreamState({ status: "idle", error: null }); return undefined; }
     if (streamCursor === null || streamRunIdRef.current !== runId) return undefined;
     setStreamState({ status: "connecting", error: null });
+    let active = true;
     let closeStream = () => {};
     closeStream = subscribeRunEvents(runId, {
       afterSeq: streamCursor,
       onEvent: (event) => {
+        if (!active) return;
         setStreamState({ status: isTerminalEvent(event) ? "closed" : "live", error: null });
         setState((current: any) => ({ ...current, detail: mergeRunEvent(current.detail, runId, event) }));
         if (eventShouldRefreshRunDetail(event)) setReloadToken((value) => value + 1);
         if (isTerminalEvent(event)) closeStream();
       },
-      onError: (error) => setStreamState({ status: "error", error: error.message }),
+      onError: (error) => { if (active) setStreamState({ status: "error", error: error.message }); },
     });
-    return closeStream;
+    return () => { active = false; closeStream(); };
   }, [runId, streamCursor]);
 
-  const detail = state.detail;
+  const detail = state.detail?.run?.id === runId ? state.detail : null;
   const run = detail?.run;
   const result = run?.result ?? {};
   const events = detail?.events ?? [];

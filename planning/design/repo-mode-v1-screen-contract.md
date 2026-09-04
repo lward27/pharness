@@ -50,6 +50,20 @@ swarm visualization, and secondary-persona specialization are deferred.
 
 ## Visual direction
 
+### Approved Lamina update — 2026-09-04
+
+The Lamina Operator Console milestone supersedes the earlier shell styling:
+use the supplied glass/pattern/glow prototype, floating top navigation in the
+same eight-section order, and horizontal laminae as WorkItem Overview's default.
+Intervals are server-projected recorded elapsed time, not fabricated progress
+or active model time. Repeated/repair executions remain distinct; Source
+Delivery includes recorded PR wait. Missing times are explicitly unavailable.
+Release/Observe remain inapplicable for Repo Mode. Phone navigation uses a
+drawer and one column; timeline scrolling is contained and keyboard accessible.
+Keep dark/light themes, self-hosted assets, reduced motion, and the current
+console fallback behind `features.repoModeV1.designOverhaulEnabled=false`.
+See [the approved implementation plan](../active/PHarness-Lamina-Operator-Console-Redesign.md).
+
 The supplied Product and organization dashboard concepts are the visual north
 star for dark, polished, information-dense, Product-oriented composition. The
 implementation should preserve their clarity, hierarchy, lifecycle visibility,

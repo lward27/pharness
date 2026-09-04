@@ -34,6 +34,7 @@ mod identifiers;
 mod inference;
 mod internal;
 mod json_values;
+mod lifecycle_timeline;
 mod operator;
 mod operator_experience;
 mod pipeline;
@@ -59,6 +60,7 @@ use system::{BuildMetadata, ProtectedTargetConfiguration};
 struct RepoModeConfiguration {
     enabled: bool,
     ui_enabled: bool,
+    design_overhaul_enabled: bool,
     coding_reliability_v2_enabled: bool,
     legacy_work_item_creation_enabled: bool,
     organization: pharness_store::BootstrapOrganization,
@@ -89,6 +91,11 @@ impl RepoModeConfiguration {
         Self {
             enabled,
             ui_enabled,
+            design_overhaul_enabled: std::env::var("PHARNESS_REPO_MODE_V1_DESIGN_OVERHAUL_ENABLED")
+                .ok()
+                .is_some_and(|value| {
+                    matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+                }),
             coding_reliability_v2_enabled,
             legacy_work_item_creation_enabled,
             organization: pharness_store::BootstrapOrganization {
@@ -107,6 +114,7 @@ impl RepoModeConfiguration {
         Self {
             enabled: true,
             ui_enabled: true,
+            design_overhaul_enabled: false,
             coding_reliability_v2_enabled: true,
             legacy_work_item_creation_enabled: true,
             organization: pharness_store::BootstrapOrganization {

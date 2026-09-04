@@ -16,6 +16,7 @@ const canonicalRepositoryUrl = `${repositoryUrl}.git`;
 const workerToken = "repo-mode-ui-e2e-worker";
 const here = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(here, "../..");
+const laminaEnabled = process.env.PHARNESS_UI_TEST_LAMINA === "true";
 
 let apiProcess;
 let githubServer;
@@ -190,7 +191,7 @@ test.beforeAll(async ({}, workerInfo) => {
   const githubPort = await listen(githubServer);
   const build = spawnSync("cargo", ["build", "-p", "pharness-api", "--features", "ui-e2e"], {
     cwd: workspace,
-    env: { ...process.env, CARGO_HOME: "/private/tmp/pharness-cargo-home", CARGO_TARGET_DIR: join(workspace, "target") },
+    env: { ...process.env, CARGO_TARGET_DIR: join(workspace, "target") },
     encoding: "utf8",
   });
   if (build.status !== 0) throw new Error(`failed to build real API fixture:\n${build.stdout}\n${build.stderr}`);
@@ -209,6 +210,7 @@ test.beforeAll(async ({}, workerInfo) => {
       PHARNESS_WORKER_TOKEN: workerToken,
       PHARNESS_REPO_MODE_V1_ENABLED: "true",
       PHARNESS_REPO_MODE_V1_UI_ENABLED: "true",
+      PHARNESS_REPO_MODE_V1_DESIGN_OVERHAUL_ENABLED: String(laminaEnabled),
       PHARNESS_ORGANIZATION_ID: "org_repo_mode_ui_e2e",
       PHARNESS_ORGANIZATION_KEY: "repo-mode-ui-e2e",
       PHARNESS_ORGANIZATION_NAME: "Repo Mode UI E2E",
@@ -645,12 +647,25 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await expect(page.getByRole("heading", { name: "Release" }).locator("..").getByText("inapplicable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Observe" }).locator("..").getByText("inapplicable", { exact: true })).toBeVisible();
   await stabilizeCompletedJourneySnapshot(page);
-  await expect(page).toHaveScreenshot("repo-mode-real-completed-desktop.png", { fullPage:true });
+  await expect(page).toHaveScreenshot(`${laminaEnabled ? "lamina" : "repo-mode"}-real-completed-desktop.png`, { fullPage:true });
 
   await page.setViewportSize({ width:390, height:844 });
   await page.goto(`/#/work-items/${workItemId}/delivery`);
   await expect(page.getByText("Source Delivery succeeded", { exact:true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await stabilizeCompletedJourneySnapshot(page);
-  await expect(page).toHaveScreenshot("repo-mode-real-completed-mobile.png", { fullPage:true });
+  await expect(page).toHaveScreenshot(`${laminaEnabled ? "lamina" : "repo-mode"}-real-completed-mobile.png`, { fullPage:true });
+  const finalFlow = await api(`/api/work-items/${workItemId}/flow`);
+  const repeatedFlow = await api(`/api/work-items/${workItemId}/flow`);
+  expect(finalFlow.repo_mode.state_hash).toBe(repeatedFlow.repo_mode.state_hash);
+  expect(finalFlow.repo_mode.history).toEqual(repeatedFlow.repo_mode.history);
+  expect(finalFlow.action_rail).toEqual(repeatedFlow.action_rail);
+  const timeline = finalFlow.repo_mode.lifecycle_timeline;
+  expect(timeline.intervals).toEqual(repeatedFlow.repo_mode.lifecycle_timeline.intervals);
+  expect(timeline.intervals.some(interval => interval.kind === "delivery_wait" && interval.started_at && interval.finished_at)).toBe(true);
+  if (laminaEnabled) {
+    await page.goto(`/#/work-items/${workItemId}/overview`);
+    await expect(page.getByRole("heading", {name:"WorkItem activity"})).toBeVisible();
+    await expect(page.locator(".lamina-lane")).toHaveCount(6);
+  }
 });

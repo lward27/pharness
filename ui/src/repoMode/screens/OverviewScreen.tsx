@@ -1,19 +1,19 @@
 import { ArrowSquareOut, Robot, WarningCircle } from "@phosphor-icons/react";
 import { Empty, LinkButton, Metric, ResourceState, SectionHeader, Status } from "../components";
-import { useResource } from "../useResource";
+import { useOrganizationOverview } from "../ConsoleContext";
 
 export function OverviewScreen() {
-  const resource = useResource<any>("/api/organization/overview", { pollMs: 15_000 });
+  const resource = useOrganizationOverview();
   const data = resource.data;
   const counts = data?.work_items || {};
   return <ResourceState status={resource.status} error={resource.error} empty={resource.status === "ready" && !data}>
     <SectionHeader eyebrow="Organization" title={data?.organization?.display_name || "PHarness"} summary="Current Product work, active agents, and exact attention boundaries. This screen is read-only." />
     <section className="repo-metrics" aria-label="Current work summary">
-      <Metric label="Current WorkItems" value={counts.current ?? 0} detail={`${counts.denominator ?? 0} total Repo Mode records`} />
-      <Metric label="Waiting externally" value={counts.waiting ?? 0} detail="Manual merge or provider evidence" />
-      <Metric label="Blocked" value={counts.blocked ?? 0} detail="Needs an operator decision" />
-      <Metric label="Failed" value={counts.failed ?? 0} detail="Terminally closed with preserved evidence" />
-      <Metric label="Recently completed" value={counts.recently_completed ?? 0} detail="Closed after observed merge" />
+      <Metric label="Current WorkItems" value={counts.current ?? "Unavailable"} detail={`${counts.denominator ?? "Unavailable"} total Repo Mode records`} />
+      <Metric label="Waiting" value={counts.waiting ?? "Unavailable"} detail="Human approval or external evidence" />
+      <Metric label="Blocked" value={counts.blocked ?? "Unavailable"} detail="Needs an operator decision" />
+      <Metric label="Failed" value={counts.failed ?? "Unavailable"} detail="Terminally closed with preserved evidence" />
+      <Metric label="Recently completed" value={counts.recently_completed ?? "Unavailable"} detail="Closed after observed merge" />
     </section>
 
     <div className="repo-overview-grid">

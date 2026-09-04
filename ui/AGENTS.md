@@ -22,6 +22,14 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## PHarness Prototype Direction
 
+- Approved 2026-09-04: the Lamina prototype is the visual source for the new
+  flagged console. Use floating top navigation with the eight existing sections,
+  glass/pattern/glow styling, and default horizontal laminae WorkItem intervals.
+  Do not ship the generated prototype runtime or fictional lifecycle/data.
+- Lamina intervals represent recorded elapsed time including waits; active
+  model time is separate. Unknown timing is unavailable. Preserve correction
+  lineage and read-only inspection. Local Mac release builds target linux/amd64.
+
 - The V1 global order is Overview, Products, Repositories, WorkItems, Agents, Releases, Insights, and Settings. Existing Triage, Queue, Approval, and Flow lenses must be adapted under this hierarchy rather than preserved as a competing navigation system. A WorkItem remains the durable intent root; ChangeSet Flow is one delivery segment, not the console spine.
 - WorkItem Overview is the default operational surface. Current Stage, StageOutcomes, Delivery, Evidence, and History remain distinct sections under the same intent.
 - Keep current WorkItems and AgentRuns primary. Prior attempts, superseded outcomes, completed WorkItems, and historical Runs belong in explicit History surfaces.

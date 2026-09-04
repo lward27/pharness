@@ -6,10 +6,11 @@ import { navigate } from "../routes";
 import { useResource } from "../useResource";
 import { FactGrid, formatMoment, humanize, RecordList } from "../presentation";
 import { ProductTopologyEditor } from "./ProductTopologyEditor";
+import { useOrganizationOverview } from "../ConsoleContext";
 
 export function ProductsScreen({ operatorName }: { operatorName?: string }) {
   const resource = useResource<any>("/api/products");
-  const overview = useResource<any>("/api/organization/overview");
+  const overview = useOrganizationOverview();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ display_name: "", description: "", owner_principal: operatorName || "operator", reason: "Create Product for Repo Mode" });

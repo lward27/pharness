@@ -30,15 +30,15 @@ export function decideRunApproval(runId, { decision, decidedBy, reason }) {
   return postJson(`/api/runs/${encodeURIComponent(runId)}/approvals`, { decision, decided_by: decidedBy, reason });
 }
 
-export async function loadRunDetail(runId) {
+export async function loadRunDetail(runId, { signal } = {}) {
   const encodedRunId = encodeURIComponent(runId);
   const [run, events, diff, artifacts, operatorSummary, environmentPreparation] = await Promise.all([
-    fetchJson(`/api/runs/${encodedRunId}`),
-    fetchJson(`/api/runs/${encodedRunId}/events`),
-    fetchJson(`/api/runs/${encodedRunId}/diff`, { optional: true }),
-    fetchJson(`/api/runs/${encodedRunId}/artifacts`, { optional: true }),
-    fetchJson(`/api/runs/${encodedRunId}/operator-summary`, { optional: true }),
-    fetchJson(`/api/runs/${encodedRunId}/environment-preparation`, { optional: true }),
+    fetchJson(`/api/runs/${encodedRunId}`, { signal }),
+    fetchJson(`/api/runs/${encodedRunId}/events`, { signal }),
+    fetchJson(`/api/runs/${encodedRunId}/diff`, { optional: true, signal }),
+    fetchJson(`/api/runs/${encodedRunId}/artifacts`, { optional: true, signal }),
+    fetchJson(`/api/runs/${encodedRunId}/operator-summary`, { optional: true, signal }),
+    fetchJson(`/api/runs/${encodedRunId}/environment-preparation`, { optional: true, signal }),
   ]);
   return {
     run,
