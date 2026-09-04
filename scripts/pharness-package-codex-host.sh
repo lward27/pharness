@@ -4,11 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(git -C "${SCRIPT_DIR}/.." rev-parse --show-toplevel)"
 REVISION=""
-BUILDER="${PHARNESS_BUILDX_BUILDER:-lucas-desktop}"
+BUILDER="${PHARNESS_BUILDX_BUILDER:-}"
 OUTPUT_DIR="${PHARNESS_BUNDLE_OUTPUT_DIR:-${REPOSITORY_ROOT}/dist}"
 
 usage() {
-  echo "Usage: $0 --revision <40-char-sha> [--builder lucas-desktop] [--output-dir <path>]" >&2
+  echo "Usage: $0 --revision <40-char-sha> --builder <buildx-builder> [--output-dir <path>]" >&2
   exit 2
 }
 
@@ -22,8 +22,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || usage
-[[ "$BUILDER" == "lucas-desktop" ]] || {
-  echo "native host bundles are built only on the dedicated lucas-desktop builder" >&2
+[[ "$BUILDER" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+  echo "An explicit normalized buildx builder is required; no fallback is permitted" >&2
   exit 1
 }
 
@@ -44,7 +44,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Verify the target binaries on the requested Linux platform through the
-# remote BuildKit worker. Do not attempt to execute Linux ELF files on the
+# selected BuildKit worker. Do not attempt to execute Linux ELF files on the
 # packaging client, which may be macOS.
 docker buildx build \
   --builder "$BUILDER" \

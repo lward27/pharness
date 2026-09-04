@@ -7,6 +7,7 @@ behavior.
 ## Assessments
 
 - [`pharness-viability-assessment-2026-08-07.md`](assessments/pharness-viability-assessment-2026-08-07.md)
+- [`pharness-lamina-local-acceptance-2026-09-04.md`](assessments/pharness-lamina-local-acceptance-2026-09-04.md)
 
 ## Coding evaluations
 

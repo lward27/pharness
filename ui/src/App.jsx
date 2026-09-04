@@ -499,14 +499,15 @@ export function LegacyApp() {
 }
 
 export function App() {
-  const [cutover, setCutover] = useState({ status: "loading", enabled: false });
+  const [cutover, setCutover] = useState({ status: "loading", enabled: false, configuration: null });
   useEffect(() => {
     let active = true;
-    fetchJson("/api/config/effective")
-      .then((config) => { if (active) setCutover({ status: "ready", enabled: config?.features?.repo_mode_v1?.ui_enabled === true }); })
+    const controller = new AbortController();
+    fetchJson("/api/config/effective", {signal:controller.signal})
+      .then((config) => { if (active) setCutover({ status: "ready", enabled: config?.features?.repo_mode_v1?.ui_enabled === true, configuration: config }); })
       .catch(() => { if (active) setCutover({ status: "ready", enabled: false }); });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, []);
   if (cutover.status === "loading") return <div className="repo-boot" role="status">Loading PHarness operator experience…</div>;
-  return cutover.enabled ? <Suspense fallback={<div className="repo-boot" role="status">Loading Repo Mode operator experience…</div>}><RepoModeApp /></Suspense> : <LegacyApp />;
+  return cutover.enabled ? <Suspense fallback={<div className="repo-boot" role="status">Loading Repo Mode operator experience…</div>}><RepoModeApp configuration={cutover.configuration} /></Suspense> : <LegacyApp />;
 }

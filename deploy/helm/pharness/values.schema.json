@@ -12,7 +12,8 @@
           "required": ["enabled", "uiEnabled"],
           "properties": {
             "enabled": { "type": "boolean" },
-            "uiEnabled": { "type": "boolean" }
+            "uiEnabled": { "type": "boolean" },
+            "designOverhaulEnabled": { "type": "boolean", "default": false }
           },
           "additionalProperties": false
         },

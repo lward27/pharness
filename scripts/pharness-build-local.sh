@@ -7,19 +7,19 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/pharness-build-local.sh <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|codex-host|all> \
-#     --revision <40-char-sha> [--builder <buildx-builder>] [--preflight-only]
+#     --revision <40-char-sha> --builder <buildx-builder> [--preflight-only]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(git -C "${SCRIPT_DIR}/.." rev-parse --show-toplevel)"
 TARGET="${1:-}"
 REVISION=""
-BUILDER="${PHARNESS_BUILDX_BUILDER:-lucas-desktop}"
+BUILDER="${PHARNESS_BUILDX_BUILDER:-}"
 PREFLIGHT_ONLY=false
 PLATFORM="linux/amd64"
 REGISTRY="registry.lucas.engineering"
 
 usage() {
-  echo "Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|codex-host|all> --revision <40-char-sha> [--builder lucas-desktop] [--preflight-only]" >&2
+  echo "Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|codex-host|all> --revision <40-char-sha> --builder <buildx-builder> [--preflight-only]" >&2
   exit 2
 }
 
@@ -38,12 +38,8 @@ done
   echo "--revision must be a full lowercase 40-character Git SHA" >&2
   exit 1
 }
-[[ "$BUILDER" =~ ^[A-Za-z0-9._-]+$ ]] || {
-  echo "--builder must be a normalized Docker buildx builder name" >&2
-  exit 1
-}
-[[ "$BUILDER" == "lucas-desktop" ]] || {
-  echo "PHarness release builds are pinned to the dedicated lucas-desktop builder; no automatic fallback is permitted" >&2
+[[ "$BUILDER" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+  echo "Explicit --builder or PHARNESS_BUILDX_BUILDER must be a normalized Docker buildx builder name (for example rancher-desktop); no fallback is permitted" >&2
   exit 1
 }
 
@@ -63,7 +59,7 @@ VERIFIED_REVISION="$(awk -F= '$1 == "verified_revision" { print $2 }' <<<"$VERIF
 REVISION="$VERIFIED_REVISION"
 
 docker version >/dev/null
-BUILDER_INSPECTION="$(docker buildx inspect "$BUILDER" --bootstrap)"
+BUILDER_INSPECTION="$(docker buildx inspect "$BUILDER")"
 grep -Eq 'Platforms:.*(^|, | )linux/amd64([, ]|$)' <<<"$BUILDER_INSPECTION" || {
   echo "buildx builder ${BUILDER} does not advertise ${PLATFORM}" >&2
   exit 1
@@ -84,6 +80,11 @@ if [[ "$PREFLIGHT_ONLY" == true ]]; then
     '{preflight:"passed",revision:$revision,builder:$builder,platform:$platform,components:$components,external_mutations:[]}'
   exit 0
 fi
+
+# This executes on the selected worker, not the client's default Docker daemon.
+# Do not cache the execution probe: emulation may have changed since last build.
+docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --no-cache \
+  --file "${REPOSITORY_ROOT}/deploy/docker/Dockerfile.platform-check" "$REPOSITORY_ROOT"
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pharness-local-build.XXXXXX")"
 cleanup() {

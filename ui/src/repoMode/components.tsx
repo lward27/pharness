@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ArrowRight, CheckCircle, Clock, LockKey, WarningCircle, X } from "@phosphor-icons/react";
 import { sendJson } from "./api";
 import { navigate } from "./routes";
+import { useDialog } from "./useDialog";
 
 export function Status({ value = "unavailable" }: { value?: string | null }) {
   const normalized = String(value || "unavailable").toLowerCase();
@@ -52,6 +53,14 @@ export type ServerAction = {
   state_hash: string;
 };
 
+export function actionEffectTone(action?: Pick<ServerAction, "effect_class">) {
+  const effect = action?.effect_class || "";
+  if (effect.includes("external")) return "is-external";
+  if (effect === "model_execution") return "is-model";
+  if (["approval_boundary", "human_review"].includes(effect) || effect.includes("authorization")) return "is-authorization";
+  return "is-internal";
+}
+
 export function ActionDialog({ action, owner, endpoint, operatorName, onClose, onApplied, requestFields, details }: { action: ServerAction; owner: { kind: string; id: string; product?: string; repository?: string; revision?: string }; endpoint: string; operatorName?: string; onClose: () => void; onApplied: () => void; requestFields?:Record<string,unknown>; details?:ReactNode }) {
   const [actor, setActor] = useState(operatorName || "operator");
   const [reason, setReason] = useState("");
@@ -59,32 +68,16 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
   const [error, setError] = useState("");
   const [requiresRefresh, setRequiresRefresh] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const external = action.effect_class?.includes("external");
-  const model = action.effect_class?.includes("model");
-  const effectTone = external ? "is-external" : model ? "is-model" : "is-internal";
+  const effectTone = actionEffectTone(action);
+  const external = effectTone === "is-external";
+  const model = effectTone === "is-model";
   const resourceTarget = typeof action.resource === "string"
     ? action.resource
     : action.resource
       ? Object.entries(action.resource).map(([key, value]) => `${key.replaceAll("_", " ")}: ${String(value)}`).join(" · ")
       : `${owner.kind} ${owner.id}`;
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    dialogRef.current?.querySelector<HTMLElement>("input")?.focus();
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "Tab") {
-        const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button,input,textarea") || []).filter(element => !element.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => { window.removeEventListener("keydown", handleKey); previous?.focus(); };
-  }, [onClose]);
+  useDialog(dialogRef, onClose);
 
   const submit = async () => {
     setSubmitting(true); setError("");
@@ -95,7 +88,7 @@ export function ActionDialog({ action, owner, endpoint, operatorName, onClose, o
       const value = caught as Error & { status?: number };
       if (value.status === 409) {
         setError(value.message);
-        setRequiresRefresh(/stale|changed after/i.test(value.message));
+        setRequiresRefresh(/stale|changed after|state.hash|preflight.hash/i.test(value.message));
         onApplied();
         return;
       }
@@ -140,7 +133,7 @@ export function OutcomeDetails({ outcome }: { outcome: any }) {
     {groups.map(([label, value]) => <section key={label as string}><h4>{label as string}</h4><StructuredValues value={value} /></section>)}
     {payload.unavailable_capabilities?.length ? <section><h4>Unavailable capabilities</h4><StructuredValues value={payload.unavailable_capabilities} /></section> : null}
     {payload.recommendations?.length ? <section><h4>Recommendations</h4><StructuredValues value={payload.recommendations} /></section> : null}
-    <section className="repo-provenance"><h4>Freshness and provenance</h4><dl><div><dt>Outcome</dt><dd className="repo-mono">{outcome.id}</dd></div><div><dt>Origin</dt><dd>{outcome.origin || payload.origin || "agent"}</dd></div><div><dt>Content hash</dt><dd className="repo-mono">{outcome.content_hash}</dd></div><div><dt>Sealed</dt><dd>{outcome.sealed_at || "Unavailable"}</dd></div><div><dt>State version</dt><dd>{outcome.sealed_state_version ?? outcome.state_version ?? "Unavailable"}</dd></div>{outcome.supersedes_outcome_id ? <div><dt>Supersedes</dt><dd className="repo-mono">{outcome.supersedes_outcome_id}</dd></div> : null}</dl></section>
+    <section className="repo-provenance"><h4>Freshness and provenance</h4><dl><div><dt>Outcome</dt><dd className="repo-mono">{outcome.id}</dd></div><div><dt>Origin</dt><dd>{outcome.origin || payload.origin || "Unavailable"}</dd></div><div><dt>Content hash</dt><dd className="repo-mono">{outcome.content_hash}</dd></div><div><dt>Sealed</dt><dd>{outcome.sealed_at || "Unavailable"}</dd></div><div><dt>State version</dt><dd>{outcome.sealed_state_version ?? outcome.state_version ?? "Unavailable"}</dd></div>{outcome.supersedes_outcome_id ? <div><dt>Supersedes</dt><dd className="repo-mono">{outcome.supersedes_outcome_id}</dd></div> : null}</dl></section>
     <details className="repo-raw-record"><summary>Raw sealed outcome</summary><pre>{JSON.stringify(outcome, null, 2)}</pre></details>
   </div>;
 }

@@ -1,0 +1,171 @@
+/* The approved prototype's visual language, scoped to the optional shell. */
+.repo-app.lamina-app {
+  --repo-bg:#16262d; --repo-panel:rgba(8,20,26,.76); --repo-panel-2:rgba(11,26,33,.88);
+  --repo-text:#eef6f7; --repo-muted:#a5b9c1; --repo-border:rgba(228,244,249,.13);
+  --repo-border-strong:rgba(136,209,240,.35); --repo-accent:#79c3ff; --repo-accent-2:#b394ff;
+  --repo-good:#71e79a; --repo-wait:#f5cd70; --repo-bad:#ff938b;
+  --repo-shadow:0 20px 44px -20px rgba(0,0,0,.65); --repo-radius:17px;
+  --lamina-inset:rgba(255,255,255,.045); --lamina-specular:rgba(255,255,255,.16);
+  --text:var(--repo-text); --text-muted:var(--repo-muted); --border:var(--repo-border);
+  --panel:var(--repo-panel); --panel-strong:var(--repo-panel-2); --accent:var(--repo-accent); --success:var(--repo-good);
+  display:block; position:relative; isolation:isolate; min-height:100vh; padding:18px 28px 0;
+  background:var(--repo-bg); font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:13px; -webkit-font-smoothing:antialiased;
+}
+.repo-app.lamina-app.theme-light {
+  --repo-bg:#f3f8f9; --repo-panel:rgba(255,255,255,.8); --repo-panel-2:rgba(255,255,255,.96);
+  --repo-text:#08181e; --repo-muted:#4a626e; --repo-border:rgba(10,26,32,.13);
+  --repo-border-strong:rgba(10,79,113,.34); --repo-accent:#1663aa; --repo-accent-2:#6144c9;
+  --repo-good:#0c7239; --repo-wait:#855909; --repo-bad:#b62d28;
+  --repo-shadow:0 18px 38px -22px rgba(12,40,50,.32); --lamina-inset:rgba(10,26,32,.035); --lamina-specular:rgba(255,255,255,.95);
+}
+.lamina-atmosphere { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; background:radial-gradient(70% 60% at 8% -8%,color-mix(in srgb,var(--repo-accent) 22%,transparent),transparent 70%),radial-gradient(80% 70% at 104% 108%,color-mix(in srgb,var(--repo-accent-2) 18%,transparent),transparent 72%),var(--repo-bg); }
+.lamina-atmosphere::before { content:""; position:absolute; inset:0; opacity:.68; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.13'/%3E%3C/svg%3E"),radial-gradient(var(--repo-border-strong) 1px,transparent 1.5px),repeating-radial-gradient(circle at 16% 4%,transparent 0 62px,var(--repo-border) 62px 63px),repeating-radial-gradient(circle at 92% 96%,transparent 0 78px,var(--repo-border) 78px 79px); background-size:180px 180px,26px 26px,auto,auto; }
+.lamina-atmosphere>div { position:absolute; width:44vw; height:44vw; top:-25vw; left:8%; border-radius:50%; background:var(--repo-accent); filter:blur(100px); opacity:.06; animation:lamina-drift 24s ease-in-out infinite alternate; }
+.lamina-atmosphere>div+div { top:auto; bottom:-22vw; left:auto; right:-10%; background:var(--repo-accent-2); animation-direction:alternate-reverse; }
+@keyframes lamina-drift { to { transform:translate3d(7vw,5vh,0) scale(1.15); } }
+.lamina-app .repo-main { max-width:1420px; margin:auto; }
+.lamina-app .repo-content { max-width:none; padding:28px 2px 80px; }
+.lamina-app :is(h1,h2,h3,h4) { font-family:inherit; }
+.lamina-app h1 { font-weight:600; letter-spacing:-.025em; }
+.lamina-app .repo-section-header h1 { font-size:29px; }
+.lamina-app h2 { font-size:17px; letter-spacing:-.015em; }
+.lamina-app :is(p,dd,small,strong,span) { overflow-wrap:anywhere; }
+.lamina-app .repo-mono,.lamina-app pre,.lamina-app code,.lamina-app kbd { font-family:"IBM Plex Mono",monospace; }
+.lamina-app :is(button,a,input,select,textarea,summary,[tabindex="0"]):focus-visible { outline:2px solid var(--repo-accent); outline-offset:4px; }
+.lamina-app button { cursor:pointer; }
+.lamina-app button:disabled { cursor:not-allowed; }
+.lamina-skip { position:fixed; top:-100px; left:24px; z-index:150; padding:12px; background:var(--repo-panel-2); border:1px solid var(--repo-accent); border-radius:10px; color:var(--repo-text); }
+.lamina-skip:focus { top:20px; }
+.lamina-topbar { position:sticky; top:18px; z-index:45; max-width:1420px; margin:auto; display:flex; align-items:center; gap:16px; padding:10px 13px; border:1px solid var(--repo-border); border-radius:20px; background:var(--repo-panel-2); backdrop-filter:blur(24px) saturate(175%); box-shadow:inset 0 1px var(--lamina-specular),var(--repo-shadow); }
+.lamina-topbar button { font:500 12px "IBM Plex Sans",sans-serif; color:var(--repo-muted); background:transparent; border:0; border-radius:10px; }
+.lamina-topbar .lamina-brand { display:flex; align-items:center; gap:9px; padding:0; color:var(--repo-text); }
+.lamina-brand>span,.lamina-avatar { display:grid; place-items:center; background:linear-gradient(150deg,var(--repo-accent),var(--repo-accent-2)); color:#092335; box-shadow:inset 0 1px rgba(255,255,255,.6),0 6px 14px -6px var(--repo-accent); }
+.lamina-brand>span { width:32px; height:32px; border-radius:10px; }
+.lamina-brand strong { font-size:14px; }
+.lamina-desktop-nav { flex:1; min-width:0; }
+.lamina-desktop-nav nav { display:flex; align-items:center; gap:2px; width:max-content; max-width:100%; padding:3px; border:1px solid var(--repo-border); border-radius:13px; background:var(--lamina-inset); }
+.lamina-desktop-nav nav button { display:flex; align-items:center; gap:6px; min-height:34px; padding:6px 10px; white-space:nowrap; }
+.lamina-desktop-nav nav button span { overflow-wrap:normal; }
+.lamina-desktop-nav nav button.is-active { color:var(--repo-text); background:color-mix(in srgb,var(--repo-accent) 15%,transparent); box-shadow:inset 0 1px var(--lamina-specular); }
+.lamina-topbar nav b,.lamina-nav-drawer nav b { padding:2px 5px; color:var(--repo-wait); background:color-mix(in srgb,var(--repo-wait) 12%,transparent); border-radius:5px; font:500 10px "IBM Plex Mono",monospace; }
+.lamina-topbar-tools { display:flex; align-items:center; gap:7px; }
+.lamina-topbar-tools button { display:grid; place-items:center; width:34px; height:34px; border:1px solid var(--repo-border); background:var(--lamina-inset); }
+.lamina-topbar-tools .lamina-menu { display:none; }
+.lamina-avatar { height:28px; width:28px; border-radius:8px; font:600 10px "IBM Plex Mono",monospace; }
+.lamina-connection { display:flex; align-items:center; gap:7px; padding:8px; border:1px solid color-mix(in srgb,var(--repo-good) 27%,transparent); border-radius:10px; font-size:11px; color:var(--repo-good); }
+.lamina-connection i { width:6px; height:6px; background:currentColor; border-radius:50%; }
+.lamina-connection:is(.is-unavailable,.is-stale,.is-connecting) { color:var(--repo-wait); border-color:var(--repo-border); }
+.lamina-app :is(.repo-panel,.repo-product-card,.repo-outcome-card,.repo-workitem-row,.repo-table,.repo-metric,.repo-empty,.repo-state,.repo-embedded-run) { border:1px solid var(--repo-border); border-radius:var(--repo-radius); background:var(--repo-panel); box-shadow:inset 0 1px var(--lamina-specular),var(--repo-shadow); backdrop-filter:blur(22px) saturate(150%); }
+.lamina-app .repo-panel { padding:20px; }
+.lamina-app :is(.repo-panel,.repo-section-header)>header p { margin:5px 0 0; color:var(--repo-muted); }
+.lamina-app .repo-metrics { gap:12px; }
+.lamina-app .repo-metric { padding:17px; background:radial-gradient(120% 100% at 100% 0%,color-mix(in srgb,var(--repo-accent) 10%,transparent),transparent 62%),var(--repo-panel); }
+.lamina-app .repo-metric>strong { font:500 30px/1.15 "IBM Plex Mono",monospace; color:var(--repo-accent); }
+.lamina-app .repo-metric>span { font-size:10px; text-transform:uppercase; letter-spacing:.09em; }
+.lamina-app .repo-metric small { font-size:11px; }
+.lamina-app .repo-eyebrow { font-size:10px; letter-spacing:.15em; font-weight:500; }
+.lamina-app .repo-list-row { border-radius:12px; transition:background .18s,border-color .18s; }
+.lamina-app button.repo-list-row:hover { background:var(--lamina-inset); border-color:var(--repo-border-strong); }
+.lamina-app :is(.repo-primary,.repo-link-button.is-primary) { border:1px solid var(--repo-border-strong); border-radius:11px; color:var(--repo-accent)!important; background:color-mix(in srgb,var(--repo-accent) 12%,transparent); font-weight:500; box-shadow:inset 0 1px var(--lamina-specular); }
+.lamina-app .repo-action-is-external { background:color-mix(in srgb,var(--repo-wait) 13%,var(--repo-panel))!important; color:var(--repo-wait)!important; }
+.lamina-app .repo-action-is-model { background:color-mix(in srgb,var(--repo-accent-2) 13%,var(--repo-panel))!important; color:var(--repo-accent-2)!important; }
+.lamina-app .repo-action-is-authorization,.lamina-app .repo-effect.is-authorization { background:color-mix(in srgb,var(--repo-wait) 8%,var(--repo-panel))!important; color:var(--repo-wait)!important; border-color:color-mix(in srgb,var(--repo-wait) 40%,transparent); }
+.lamina-app .repo-status { padding:5px 9px; font-weight:500; font-size:11px; background:color-mix(in srgb,currentColor 7%,transparent); }
+.lamina-app .repo-tabs { padding:5px; gap:5px; border:1px solid var(--repo-border); border-radius:13px; background:var(--repo-panel); width:fit-content; max-width:100%; box-shadow:inset 0 1px var(--lamina-specular); }
+.lamina-app .repo-tabs button { border-radius:9px; padding:0 14px; }
+.lamina-app .repo-tabs button.is-active { box-shadow:inset 0 1px var(--lamina-specular); background:color-mix(in srgb,var(--repo-accent) 15%,transparent); }
+.lamina-app :is(input,textarea,select) { background:var(--lamina-inset); color:var(--repo-text); border-radius:10px; min-width:0; }
+.lamina-app select option { color:var(--repo-text); background:var(--repo-bg); }
+.lamina-app .repo-workitem-header { align-items:start; grid-template-columns:auto minmax(0,1fr) auto auto; padding:18px 4px 14px; }
+.lamina-app .repo-workitem-header h1 { font-size:27px; margin:6px 0; }
+.lamina-app .repo-workitem-header p { max-width:85ch; line-height:1.55; }
+.lamina-app .repo-workitem-header .repo-primary { max-width:210px; }
+.lamina-app .lamina-scope-strip { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin:0 0 20px; padding:12px 16px; border:1px solid var(--repo-border); border-radius:12px; background:var(--repo-panel); }
+.lamina-scope-strip span { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.lamina-scope-strip small { color:var(--repo-muted); font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+.lamina-app .repo-workitem-row { padding:17px; }
+.lamina-app .repo-workitem-boundary :is(strong,small) { white-space:normal; }
+.lamina-app :is(.repo-dialog,.repo-search-dialog,.lamina-inspector,.lamina-nav-drawer) { color:var(--repo-text); background:var(--repo-panel-2); border:1px solid var(--repo-border-strong); box-shadow:inset 0 1px var(--lamina-specular),var(--repo-shadow); backdrop-filter:blur(24px); }
+.lamina-app .repo-dialog-backdrop,.lamina-app .repo-search-backdrop { z-index:110; }
+.lamina-app pre { max-width:100%; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.lamina-app .repo-bindings>div { background:var(--repo-panel-2); }
+.lamina-app .repo-inapplicable { opacity:1; color:var(--repo-muted); }
+.lamina-app .repo-metrics.repo-compact .repo-metric strong { font-size:18px; }
+.lamina-app .attempt-workspace { color:var(--repo-text); background:transparent; min-width:0; }
+.lamina-app :is(.attempt-budget-panel,.attempt-environment-panel,.attempt-acceptance-panel,.attempt-reliability-panel,.attempt-changes-panel,.attempt-tool-stream,.attempt-result-panel,.attempt-artifacts,.artifact-card,.change-card) { background:var(--repo-panel); border:1px solid var(--repo-border); border-radius:var(--repo-radius); box-shadow:inset 0 1px var(--lamina-specular); color:var(--repo-text); }
+.lamina-app :is(.attempt-workspace-header,.attempt-scope-strip,.budget-meter,.review-item,.attempt-stream-status) { color:var(--repo-text); border-color:var(--repo-border); background:var(--lamina-inset); }
+.lamina-app :is(.detail-actions,.inline-approval-actions) button { color:var(--repo-text); border:1px solid var(--repo-border); border-radius:10px; background:var(--lamina-inset); }
+.lamina-app :is(.environment-fact-grid,.reliability-facts,.attempt-scope-strip) :is(dt,.review-label) { color:var(--repo-muted); }
+.lamina-app :is(.environment-fact-grid,.reliability-facts,.attempt-scope-strip) :is(dd,.review-value) { color:var(--repo-text); overflow-wrap:anywhere; }
+.lamina-app .attempt-workspace pre { color:var(--repo-text); background:var(--repo-panel-2); }
+.lamina-nav-backdrop,.lamina-inspector-backdrop { position:fixed; inset:0; z-index:100; display:flex; justify-content:flex-end; background:rgba(0,10,16,.5); backdrop-filter:blur(5px); }
+.lamina-nav-drawer { padding:20px; width:min(360px,94vw); overflow:auto; }
+.lamina-nav-drawer header,.lamina-inspector>header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+.lamina-nav-drawer button,.lamina-inspector header button { border:1px solid var(--repo-border); border-radius:10px; padding:9px; background:var(--lamina-inset); color:inherit; }
+.lamina-nav-drawer nav { display:flex; flex-direction:column; gap:8px; }
+.lamina-nav-drawer nav button { display:flex; align-items:center; gap:12px; text-align:left; min-height:44px; }
+.lamina-nav-drawer nav button.is-active { border-color:var(--repo-accent); }
+.lamina-inspector { width:min(600px,100%); height:100%; overflow:auto; padding:24px; }
+.lamina-inspector-links { display:flex; gap:18px; flex-wrap:wrap; }
+.lamina-timeline { margin:0 0 20px; }
+.lamina-timeline h2 { display:flex; align-items:center; gap:9px; }
+.lamina-fit { display:flex; align-items:center; gap:7px; color:var(--repo-muted); font:400 11px "IBM Plex Mono",monospace; }
+.lamina-timeline-scroll { overflow-x:auto; padding:4px 10px 12px 0; }
+.lamina-time-axis,.lamina-lane { display:grid; grid-template-columns:165px minmax(500px,1fr); min-width:685px; gap:18px; }
+.lamina-time-axis { color:var(--repo-muted); font:400 10px "IBM Plex Mono",monospace; padding:8px 0 16px; }
+.lamina-time-axis>div { display:flex; justify-content:space-between; }
+.lamina-lane { border-top:1px solid var(--repo-border); padding:13px 0; align-items:center; }
+.lamina-lane-label { display:flex; flex-direction:column; align-items:start; gap:6px; text-transform:capitalize; }
+.lamina-lane-label>strong { font-size:12px; font-weight:500; }
+.lamina-lane-label>small { color:var(--repo-muted); font-size:10px; }
+.lamina-lane-label .repo-status { font-size:10px; padding:2px 6px; }
+.lamina-lane-tracks { background:repeating-linear-gradient(90deg,var(--repo-border) 0 1px,transparent 1px 25%); min-width:0; padding:2px 0; }
+.lamina-track { position:relative; height:34px; margin:3px 0; }
+.lamina-interval { position:absolute; display:flex; align-items:center; justify-content:space-between; gap:8px; left:var(--interval-start,0); width:var(--interval-width,auto); height:30px; min-width:5px; max-width:100%; overflow:hidden; padding:0 9px; border:1px solid color-mix(in srgb,var(--repo-accent) 35%,transparent); border-radius:8px; background:linear-gradient(110deg,color-mix(in srgb,var(--repo-accent) 24%,var(--repo-panel-2)),color-mix(in srgb,var(--repo-accent) 10%,var(--repo-panel-2))); color:var(--repo-text); box-shadow:inset 0 1px var(--lamina-specular); text-align:left; font-size:11px!important; }
+.lamina-interval span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.lamina-interval small { white-space:nowrap; font:400 10px "IBM Plex Mono",monospace; }
+.lamina-interval.is-history { background:var(--repo-panel-2); border-style:dashed; color:var(--repo-muted); }
+.lamina-interval.is-current { border-color:var(--repo-accent); box-shadow:inset 0 1px var(--lamina-specular),0 0 17px color-mix(in srgb,var(--repo-accent) 18%,transparent); }
+.lamina-interval.is-delivery_wait { border-color:color-mix(in srgb,var(--repo-wait) 50%,transparent); background:repeating-linear-gradient(110deg,color-mix(in srgb,var(--repo-wait) 12%,var(--repo-panel-2)) 0 9px,color-mix(in srgb,var(--repo-wait) 6%,var(--repo-panel-2)) 9px 18px); }
+.lamina-interval.is-point { width:13px; height:13px; min-width:13px; padding:0; top:8px; border-radius:4px; transform:translateX(-50%) rotate(45deg); overflow:visible; }
+.lamina-interval.is-point span { position:absolute; left:22px; transform:rotate(-45deg); transform-origin:left; max-width:180px; color:var(--repo-muted); font-size:10px; }
+.lamina-interval.is-unavailable { position:static; width:auto; background:var(--lamina-inset); border-style:dashed; }
+.lamina-track:has(.is-short) { height:40px; }
+.lamina-interval.is-short { overflow:visible; padding:0; height:14px; top:0; }
+.lamina-interval.is-short span { position:absolute; top:18px; left:0; width:max-content; max-width:170px; color:var(--repo-text); font-size:10px; }
+.lamina-interval.is-short small { display:none; }
+.lamina-interval.is-edge span { left:auto; right:0; }
+.lamina-no-interval { color:var(--repo-muted); font-size:11px; padding-left:10px; }
+.lamina-timeline-legend { display:flex; gap:18px; align-items:center; flex-wrap:wrap; padding-top:13px; color:var(--repo-muted); font-size:10px; }
+.lamina-timeline-legend span { display:flex; gap:7px; align-items:center; }
+.lamina-timeline-legend i { display:block; width:8px; height:8px; border:1px solid var(--repo-accent); border-radius:2px; }
+.lamina-timeline-legend span:nth-child(2) i { background:color-mix(in srgb,var(--repo-accent) 30%,transparent); }
+.lamina-timeline-legend span:nth-child(3) i { border-style:dashed; border-color:var(--repo-muted); }
+.lamina-timeline-legend small { margin-left:auto; }
+.lamina-text-timeline { display:grid; gap:9px; padding:14px; }
+.lamina-text-timeline li { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.lamina-text-timeline button { padding:8px; border:1px solid var(--repo-border); border-radius:8px; color:var(--repo-accent); background:var(--lamina-inset); }
+.lamina-app .attempt-console { color:var(--repo-text); background:transparent; }
+.lamina-app :is(.attempt-environment-panel,.attempt-budget-panel,.attempt-tool-stream,.attempt-acceptance-panel,.attempt-boundary-banner,.attempt-artifacts,.attempt-file-changes) { background:var(--repo-panel); border-color:var(--repo-border); border-radius:14px; }
+@media (max-width:1320px) { .lamina-desktop-nav nav svg { display:none; } .lamina-topbar { gap:10px; } .lamina-desktop-nav nav button { padding-inline:9px; } }
+@media (max-width:1120px) { .lamina-connection { display:none; } .lamina-brand strong { display:none; } .lamina-topbar { gap:8px; } .lamina-desktop-nav nav button { padding-inline:8px; } }
+@media (max-width:900px) { .lamina-desktop-nav { display:none; } .lamina-topbar-tools { margin-left:auto; } .lamina-topbar-tools .lamina-menu { display:grid; } .lamina-brand strong { display:block; } .lamina-connection { display:flex; } .lamina-app .repo-workitem-header { grid-template-columns:minmax(0,1fr) auto; } .lamina-app .repo-workitem-header>button:first-child { grid-column:1/-1; } }
+@media (max-width:760px) {
+  .repo-app.lamina-app { padding:10px 12px 0; } .lamina-topbar { top:10px; border-radius:16px; padding:8px; }
+  .lamina-app .repo-content { padding:24px 0 50px; } .lamina-app .repo-section-header h1 { font-size:26px; }
+  .lamina-app .repo-panel { padding:16px; } .lamina-app .repo-panel>header { flex-wrap:wrap; gap:9px; }
+  .lamina-app .repo-workitem-header { display:flex; flex-wrap:wrap; padding-top:5px; gap:12px; }
+  .lamina-app .repo-workitem-header>div:nth-child(2) { width:100%; } .lamina-app .repo-workitem-header h1 { font-size:24px; }
+  .lamina-app .repo-workitem-header>.repo-primary { margin-left:auto; max-width:100%; } .lamina-app .repo-workitem-status { align-items:start; }
+  .lamina-app .repo-tabs { width:100%; } .lamina-app .repo-tabs button { padding-inline:10px; }
+  .lamina-app .repo-table-head { display:none; } .lamina-app .repo-table-row { min-width:0; grid-template-columns:1fr; gap:10px; padding:17px; }
+  .lamina-app .repo-table-row>span { overflow:visible; } .lamina-app .repo-table-row small { white-space:normal; }
+  .lamina-app .repo-list-row { flex-wrap:wrap; } .lamina-app .repo-list-row>div { min-width:140px; }
+  .lamina-app .repo-structured-record dl>div,.lamina-app .repo-provenance dl>div { grid-template-columns:1fr; gap:3px; }
+  .lamina-app .repo-panel>.repo-metrics.repo-compact { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lamina-app .repo-header-actions { flex-wrap:wrap; } .lamina-app .repo-inference-actions { grid-template-columns:1fr; }
+  .lamina-timeline-legend { gap:12px; } .lamina-timeline-legend small { margin-left:0; width:100%; }
+  .lamina-inspector { padding:18px; } .lamina-app .repo-dialog { border-radius:18px 18px 0 0; }
+}
+@media (max-width:440px) { .lamina-connection { display:none; } .lamina-avatar { display:none; } .lamina-brand strong { font-size:13px; } }
+@media (prefers-reduced-motion:reduce) { .lamina-app *,.lamina-app *::before,.lamina-app *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }

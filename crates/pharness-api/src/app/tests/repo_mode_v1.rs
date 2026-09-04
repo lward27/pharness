@@ -882,6 +882,37 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         .await
         .unwrap();
     let history = flow.repo_mode.as_ref().unwrap().get("history").unwrap();
+    let timeline = &flow.repo_mode.as_ref().unwrap()["lifecycle_timeline"];
+    assert!(timeline["as_of"].as_str().is_some());
+    assert!(timeline["intervals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| { entry["kind"] == "delivery_wait" && entry["finished_at"].is_string() }));
+    // Repeated flow reads must not reconcile, create history, or change an
+    // action hash. Only the observation clock may differ.
+    let again = crate::app::repo_mode::repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    let repo = flow.repo_mode.as_ref().unwrap();
+    let next = again.repo_mode.as_ref().unwrap();
+    for key in [
+        "state_hash",
+        "history",
+        "stage_executions",
+        "effective_stage_outcomes",
+        "source_delivery_intent",
+    ] {
+        assert_eq!(repo[key], next[key], "read mutated {key}");
+    }
+    assert_eq!(
+        timeline["intervals"],
+        next["lifecycle_timeline"]["intervals"]
+    );
+    assert_eq!(
+        serde_json::to_value(&flow.action_rail).unwrap(),
+        serde_json::to_value(&again.action_rail).unwrap()
+    );
     assert!(history["stage_outcomes"].as_array().is_some_and(|items| {
         items
             .iter()

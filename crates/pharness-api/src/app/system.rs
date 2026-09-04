@@ -281,6 +281,7 @@ pub(super) async fn config_effective(
             "repo_mode_v1": {
                 "enabled": state.repo_mode.enabled,
                 "ui_enabled": state.repo_mode.ui_enabled,
+                "design_overhaul_enabled": state.repo_mode.design_overhaul_enabled,
             },
             "coding_reliability_v2": {
                 "enabled": state.repo_mode.coding_reliability_v2_enabled,

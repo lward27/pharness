@@ -179,7 +179,7 @@ describe("stage inference authorization", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(flow)));
     render(<WorkItemScreen workItemId="witem_repair" section="current-stage" operatorName="lucas" />);
     await waitFor(() => expect(screen.getByText("Deterministic Test enabled",{exact:false})).toBeInTheDocument());
-    expect(screen.getByText(/correction allowance 1\/1/)).toBeInTheDocument();
+    expect(screen.getByText(/correction allowance 1\s*\/\s*1/)).toBeInTheDocument();
     expect(screen.getByText(/repairs out_test_failed/)).toBeInTheDocument();
     expect(screen.getByText("repo-repair")).toBeInTheDocument();
     expect(screen.getByText("agent")).toBeInTheDocument();

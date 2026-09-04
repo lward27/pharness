@@ -193,6 +193,8 @@ spec:
               value: {{ .Values.features.repoModeV1.enabled | quote }}
             - name: PHARNESS_REPO_MODE_V1_UI_ENABLED
               value: {{ .Values.features.repoModeV1.uiEnabled | quote }}
+            - name: PHARNESS_REPO_MODE_V1_DESIGN_OVERHAUL_ENABLED
+              value: {{ .Values.features.repoModeV1.designOverhaulEnabled | default false | quote }}
             - name: PHARNESS_CODING_RELIABILITY_V2_ENABLED
               value: {{ .Values.features.codingReliabilityV2.enabled | quote }}
             - name: PHARNESS_ORGANIZATION_ID

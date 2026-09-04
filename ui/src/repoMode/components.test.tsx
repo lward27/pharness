@@ -1,9 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ActionDialog, type ServerAction } from "./components";
+import { actionEffectTone, ActionDialog, type ServerAction } from "./components";
 
 describe("Repo Mode action review", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps internal advance, model execution, authorization, and external effects distinct", () => {
+    expect(actionEffectTone({effect_class:"controller_internal"})).toBe("is-internal");
+    expect(actionEffectTone({effect_class:"model_execution"})).toBe("is-model");
+    expect(actionEffectTone({effect_class:"approval_boundary"})).toBe("is-authorization");
+    expect(actionEffectTone({effect_class:"human_review"})).toBe("is-authorization");
+    expect(actionEffectTone({effect_class:"external_source_mutation"})).toBe("is-external");
+  });
 
   it("clears the pending state and keeps the server blocker visible after a 409", async () => {
     const onApplied = vi.fn();

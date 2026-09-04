@@ -441,6 +441,11 @@ pub(in crate::app) async fn repo_work_item_flow(
                 "services":services,
             },
             "stage_executions":execution_views,
+            "lifecycle_timeline":super::lifecycle_timeline::project(
+                &executions, &all_outcomes, &outcomes, source_delivery_intent.as_ref(),
+                metadata.current_stage_execution_id.as_deref(), metadata.closed_at.as_deref(),
+                super::clock::current_millis().to_string(),
+            ),
             "effective_stage_outcomes":outcomes,
             "history":{
                 "stage_outcomes":all_outcomes,
