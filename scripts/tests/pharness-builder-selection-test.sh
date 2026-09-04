@@ -24,4 +24,12 @@ for script in pharness-build-local.sh pharness-package-codex-host.sh; do
   fi
 done
 grep -Fq 'Dockerfile.platform-check' "${SCRIPT_DIR}/../pharness-build-local.sh"
+if grep -Fq "does not advertise" "${SCRIPT_DIR}/../pharness-build-local.sh"; then
+  echo "build wrapper still trusts platform advertisement over execution" >&2; exit 1
+fi
+probe_line="$(grep -n 'Dockerfile.platform-check' "${SCRIPT_DIR}/../pharness-build-local.sh" | head -1 | cut -d: -f1)"
+preflight_line="$(grep -n 'if \[\[ "$PREFLIGHT_ONLY" == true \]\]' "${SCRIPT_DIR}/../pharness-build-local.sh" | head -1 | cut -d: -f1)"
+if [[ -z "$probe_line" || -z "$preflight_line" || "$probe_line" -ge "$preflight_line" ]]; then
+  echo "preflight can pass without the real platform-execution probe" >&2; exit 1
+fi
 echo "Explicit builder selection and fixed platform checks passed"
