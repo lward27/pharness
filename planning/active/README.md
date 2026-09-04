@@ -16,8 +16,10 @@ Before another implementation begins, add one approved milestone here with its e
 baseline, scope, behavioral invariants, acceptance gates, rollout boundary, and
 completion evidence requirements.
 
-The most recently closed maintenance milestone is the
-[`app.rs` behavior-preserving decomposition](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md).
+The most recently completed Product/UI milestone is the
+[`Lamina operator-console redesign`](../implemented/milestones/pharness-lamina-operator-console-redesign-milestone-2026-09-04.md).
+The most recently closed maintenance milestone remains the
+[`app.rs` behavior-preserving decomposition`](../implemented/milestones/app-rs-behavior-preserving-decomposition-milestone-2026-08-21.md).
 
 Two approved design entry points are ready for separate Plan Mode tasks:
 

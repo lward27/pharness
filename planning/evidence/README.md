@@ -8,6 +8,7 @@ behavior.
 
 - [`pharness-viability-assessment-2026-08-07.md`](assessments/pharness-viability-assessment-2026-08-07.md)
 - [`pharness-lamina-local-acceptance-2026-09-04.md`](assessments/pharness-lamina-local-acceptance-2026-09-04.md)
+- [`pharness-lamina-release-progress-2026-09-04.md`](assessments/pharness-lamina-release-progress-2026-09-04.md) — historical pre-release checkpoint
 
 ## Coding evaluations
 
@@ -21,6 +22,7 @@ behavior.
 - [`repo-mode-v1-operator-experience-release-2026-08-26.md`](smoke-results/repo-mode-v1-operator-experience-release-2026-08-26.md)
 - [`finance-clean-generation-acceptance-2026-08-28.md`](smoke-results/finance-clean-generation-acceptance-2026-08-28.md)
 - [`node-24-finance-frontend-source-smoke-2026-08-29.md`](smoke-results/node-24-finance-frontend-source-smoke-2026-08-29.md)
+- [`pharness-lamina-operator-console-release-2026-09-04.md`](smoke-results/pharness-lamina-operator-console-release-2026-09-04.md)
 
 The durable yfinance release characterization identifiers are also frozen in
 the
