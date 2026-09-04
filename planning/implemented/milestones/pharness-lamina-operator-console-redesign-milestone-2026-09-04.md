@@ -1,20 +1,32 @@
 # PHarness Lamina Operator Console Redesign
 
-Status: source merged and deterministic acceptance complete; evaluator blocked by local AMD64 emulation
+Status: implemented, released, enabled, and operationally accepted
 
 Approved: 2026-09-04. Re-characterized baseline:
 `1770ad823a4970a8bc8a48d093f1cacc7c5bb001`.
 
-Implementation and a live-data repository-label correction were merged in PRs
-#319 and #320. The final source is `2d99156a410830aa0015995c779e6c3603fdab95`.
-The redesign flag remains disabled. See the
-[release progress record](../evidence/assessments/pharness-lamina-release-progress-2026-09-04.md)
-for current tests, verified partial image builds, the chunked-upload workaround,
-approved older-cache cleanup, and the local Rust/AMD64 emulation blocker. The earlier
-[local acceptance and infrastructure hold](../evidence/assessments/pharness-lamina-local-acceptance-2026-09-04.md)
-is retained as historical evidence.
-The milestone is not operationally accepted until the seven-image release,
-native bundle, disabled/enabled GitOps rollout, and live Finance checks pass.
+Implementation and the live-data repository-label correction were merged in PRs
+#319 and #320. PR #321 corrected the release builder's platform validation so it
+proves an actual uncached Linux/AMD64 execution instead of rejecting a capable
+builder from advertised metadata alone. The immutable artifact source is
+`83a2689c877a3f48688d1d457c34e83474698c46`.
+
+PR #322 pinned all seven image digests while leaving the redesign disabled;
+GitOps merge `d3ca9e13b0b64213a835018a5a384a5fea8fd3f7`. PR #323 enabled only
+`features.repoModeV1.designOverhaulEnabled`; accepted GitOps revision
+`2d15c7c860233601f7715836c5ecd43a06179cad`.
+
+The exact Argo revision remained `Synced/Healthy/Succeeded` through the final
+observation window. API and UI reported the artifact source above, all live
+PHarness containers were ready with zero restarts, database generation
+`dbgen_finance_20260827` and all 14 WorkItem closure states were unchanged, and
+the live desktop/phone browser checks passed without mutations, 5xx responses,
+page overflow, serious/critical accessibility findings, or the legacy Repo Mode
+delivery warning. See the
+[final release record](../../evidence/smoke-results/pharness-lamina-operator-console-release-2026-09-04.md).
+The earlier [local acceptance](../../evidence/assessments/pharness-lamina-local-acceptance-2026-09-04.md)
+and [in-progress release record](../../evidence/assessments/pharness-lamina-release-progress-2026-09-04.md)
+remain historical evidence.
 
 ## Summary and locked decisions
 

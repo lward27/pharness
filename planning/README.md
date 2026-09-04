@@ -1,15 +1,16 @@
 # PHarness documentation map
 
-Last organized: 2026-08-26
+Last organized: 2026-09-04
 
 PHarness documentation is organized by purpose and lifecycle so an agent can
 distinguish current work from shipped behavior and historical context before it
 acts.
 
 The current stable release baseline is GitOps commit
-`bbe5c613958881b6237c5173d0dd7458eed7669c`. Its compiled source revision is
-`78fb3eb77cf082a9385a0bca1c4c2b06ed618f18`; immutable artifact provenance is
-recorded in the completed Node milestone and dated release evidence.
+`2d15c7c860233601f7715836c5ecd43a06179cad`. Its compiled source revision is
+`83a2689c877a3f48688d1d457c34e83474698c46`; immutable artifact identities,
+live revision checks, and the enabled Lamina console acceptance are recorded in
+the [dated release evidence](evidence/smoke-results/pharness-lamina-operator-console-release-2026-09-04.md).
 
 ## Start here
 
@@ -26,11 +27,16 @@ recorded in the completed Node milestone and dated release evidence.
 
 ## Current work
 
-The active milestone is the
-[`Finance Metadata Reliability Campaign`](active/PHarness-Finance-Metadata-Reliability-Campaign.md).
-It deliberately keeps every change single-repository while recording the
-backend-to-frontend merge order and pinned context needed to inform a later
-DeliveryPlan design.
+The current implementation and qualification milestone is
+[`Coding Reliability and Alternative-Model Qualification`](active/PHarness-Coding-Reliability-and-Alternative-Model-Qualification.md).
+The [`Finance Metadata Reliability Campaign`](active/PHarness-Finance-Metadata-Reliability-Campaign.md)
+is paused after FRC-1 and resumes at FRC-2 only after the frozen offline coding
+benchmark and disposable repair smoke pass. It continues to keep each change
+single-repository while recording backend-to-frontend merge order and pinned
+context for a later DeliveryPlan design.
+
+The latest completed Product/UI milestone is the
+[`Lamina operator-console redesign`](implemented/milestones/pharness-lamina-operator-console-redesign-milestone-2026-09-04.md).
 
 The approved
 [`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md) and

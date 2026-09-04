@@ -1,5 +1,11 @@
 # Lamina release progress — 2026-09-04
 
+> Historical checkpoint: this record captures the release before the local
+> AMD64 emulation blocker was resolved. The completed build, GitOps rollout,
+> and operational acceptance are recorded in the
+> [final release result](../smoke-results/pharness-lamina-operator-console-release-2026-09-04.md).
+> Its partial digests are not the deployed release artifacts.
+
 ## Requested change
 
 Continue the approved Lamina operator-console milestone through its immutable
