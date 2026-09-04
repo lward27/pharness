@@ -1,13 +1,18 @@
 # PHarness Lamina Operator Console Redesign
 
-Status: implementation and local acceptance complete; merge and release held
+Status: source merged and deterministic acceptance complete; evaluator blocked by local AMD64 emulation
 
 Approved: 2026-09-04. Re-characterized baseline:
 `1770ad823a4970a8bc8a48d093f1cacc7c5bb001`.
 
-Local implementation is on `codex/lamina-operator-console`. The redesign flag
-remains disabled. See the [acceptance and release-hold record](../evidence/assessments/pharness-lamina-local-acceptance-2026-09-04.md)
-for test results, preserved screenshots, and the infrastructure blocker.
+Implementation and a live-data repository-label correction were merged in PRs
+#319 and #320. The final source is `2d99156a410830aa0015995c779e6c3603fdab95`.
+The redesign flag remains disabled. See the
+[release progress record](../evidence/assessments/pharness-lamina-release-progress-2026-09-04.md)
+for current tests, verified partial image builds, the chunked-upload workaround,
+approved older-cache cleanup, and the local Rust/AMD64 emulation blocker. The earlier
+[local acceptance and infrastructure hold](../evidence/assessments/pharness-lamina-local-acceptance-2026-09-04.md)
+is retained as historical evidence.
 The milestone is not operationally accepted until the seven-image release,
 native bundle, disabled/enabled GitOps rollout, and live Finance checks pass.
 

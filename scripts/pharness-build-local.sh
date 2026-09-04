@@ -59,11 +59,11 @@ VERIFIED_REVISION="$(awk -F= '$1 == "verified_revision" { print $2 }' <<<"$VERIF
 REVISION="$VERIFIED_REVISION"
 
 docker version >/dev/null
-BUILDER_INSPECTION="$(docker buildx inspect "$BUILDER")"
-grep -Eq 'Platforms:.*(^|, | )linux/amd64([, ]|$)' <<<"$BUILDER_INSPECTION" || {
-  echo "buildx builder ${BUILDER} does not advertise ${PLATFORM}" >&2
-  exit 1
-}
+# Ensure the explicitly selected builder exists and is reachable. Do not treat
+# its advertised platform list as execution proof: VZ/Rosetta can execute
+# linux/amd64 correctly while BuildKit reports only the native linux/arm64
+# worker platform. The uncached probe below is the authoritative gate.
+docker buildx inspect "$BUILDER" >/dev/null
 
 components=()
 case "$TARGET" in
@@ -71,20 +71,20 @@ case "$TARGET" in
   *) components=("$TARGET") ;;
 esac
 
+# This executes on the selected worker, not the client's default Docker daemon.
+# Do not cache the execution probe: emulation may have changed since last build.
+docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --no-cache \
+  --file "${REPOSITORY_ROOT}/deploy/docker/Dockerfile.platform-check" "$REPOSITORY_ROOT"
+
 if [[ "$PREFLIGHT_ONLY" == true ]]; then
   jq -n \
     --arg revision "$REVISION" \
     --arg builder "$BUILDER" \
     --arg platform "$PLATFORM" \
     --argjson components "$(printf '%s\n' "${components[@]}" | jq -R . | jq -s .)" \
-    '{preflight:"passed",revision:$revision,builder:$builder,platform:$platform,components:$components,external_mutations:[]}'
+    '{preflight:"passed",revision:$revision,builder:$builder,platform:$platform,platform_execution:"passed",components:$components,external_mutations:[]}'
   exit 0
 fi
-
-# This executes on the selected worker, not the client's default Docker daemon.
-# Do not cache the execution probe: emulation may have changed since last build.
-docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --no-cache \
-  --file "${REPOSITORY_ROOT}/deploy/docker/Dockerfile.platform-check" "$REPOSITORY_ROOT"
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pharness-local-build.XXXXXX")"
 cleanup() {
