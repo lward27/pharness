@@ -84,4 +84,3 @@ M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its accep
 A real external blocker may suspend its dependent work but never waive its gate.
 Continue eligible independent work and ask only for missing authority/credentials
 or a decision with material downstream consequences.
-
