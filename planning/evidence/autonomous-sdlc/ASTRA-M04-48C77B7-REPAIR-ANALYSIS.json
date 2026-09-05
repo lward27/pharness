@@ -1,0 +1,86 @@
+{
+  "recorded_at": "2026-09-05T20:57:31.994605+00:00",
+  "evaluation_id": "infeval_01a0733b942376b19976dac13414a52a",
+  "qualification_id": "inferqual_01a0735980e874428eabab35c96b5694",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "job_name": "pharness-inference-eval-4fe69a798c67",
+  "started_at": "2026-09-05T20:21:19.802000+00:00",
+  "finished_at": "2026-09-05T20:54:00.680000+00:00",
+  "wall_clock_seconds": 1960.878,
+  "report_hash": "sha256:529183ba0dacbaa86b69862263c000557884684b52dbfe964d009368d1d5bb10",
+  "report_hash_verified": true,
+  "raw_artifact_sha256": "097b48bd6318ee7104cd54ba1f995e44e0fd08385097c3a8fbbfca9443343f98",
+  "gate_passed": true,
+  "candidate_safe": true,
+  "infrastructure_valid": true,
+  "attempts": [
+    {
+      "attempt": 1,
+      "cases": 24,
+      "passed": 24,
+      "per_stack": {
+        "rust": {
+          "cases": 8,
+          "passed": 8
+        },
+        "python": {
+          "cases": 8,
+          "passed": 8
+        },
+        "node": {
+          "cases": 8,
+          "passed": 8
+        }
+      }
+    },
+    {
+      "attempt": 2,
+      "cases": 24,
+      "passed": 24,
+      "per_stack": {
+        "rust": {
+          "cases": 8,
+          "passed": 8
+        },
+        "python": {
+          "cases": 8,
+          "passed": 8
+        },
+        "node": {
+          "cases": 8,
+          "passed": 8
+        }
+      }
+    }
+  ],
+  "totals": {
+    "passed": 48,
+    "first_pass": 0,
+    "post_repair_passed": 48,
+    "correction_used": 48,
+    "acceptance_ok": 48,
+    "hidden_tests_ok": 48,
+    "protected_paths_ok": 48
+  },
+  "violations": {},
+  "terminal_statuses": {
+    "completed": 48
+  },
+  "usage": {
+    "actual_prompt_tokens": 2267043,
+    "actual_completion_tokens": 55940,
+    "cached_tokens": 74336,
+    "reasoning_tokens": 5365,
+    "turns": 415,
+    "tool_calls": 415,
+    "recoverable_failures": 8,
+    "duration_ms": 1824585
+  },
+  "gate": {
+    "per_stack_post_repair_minimum": 7,
+    "post_repair_minimum": 23
+  },
+  "scope": "Two frozen seeded Repair attempts; not correction of an actual failed live Builder workspace",
+  "m04_accepted": false,
+  "does_not_qualify_another_runtime": true
+}

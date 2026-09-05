@@ -216,6 +216,8 @@ pub(crate) struct EvalResult {
     action_trace: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     failure_diff: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stage_submission: Option<serde_json::Value>,
 }
 
 struct Fixture {
@@ -1674,6 +1676,7 @@ async fn run_live_coding_fixture(
         failure_detail,
         action_trace,
         failure_diff: None,
+        stage_submission: None,
     })
 }
 
@@ -1794,6 +1797,7 @@ async fn run_replay_fixture(fixture: &Fixture, attempt: u32) -> Result<EvalResul
         failure_detail,
         action_trace,
         failure_diff: None,
+        stage_submission: None,
     })
 }
 
@@ -2510,6 +2514,7 @@ mod tests {
                 failure_detail: None,
                 action_trace: Vec::new(),
                 failure_diff: None,
+                stage_submission: None,
             }],
         }
     }

@@ -1,0 +1,123 @@
+{
+  "scope": "Qualified seeded Repair profile for the exact 48c77b7 runtime only; hosted creation remains disabled",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "evaluation_id": "infeval_01a0733b942376b19976dac13414a52a",
+  "qualification_id": "inferqual_01a0735980e874428eabab35c96b5694",
+  "report_hash": "sha256:529183ba0dacbaa86b69862263c000557884684b52dbfe964d009368d1d5bb10",
+  "protocol_artifact": "ASTRA-M04-48C77B7-REPAIR-LIVE-PROTOCOL.json",
+  "qualification_artifact": "ASTRA-M04-48C77B7-REPAIR-LIVE-RESULT.json",
+  "resolved_binding": {
+    "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+    "target": {
+      "schema_version": "pharness.dev/inference-target/v1alpha1",
+      "target_id": "fireworks-kimi-k3",
+      "revision": "v1",
+      "display_name": "Fireworks Kimi K3",
+      "backend_kind": "fireworks",
+      "protocol": "openai_chat_completions_v1",
+      "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+      "upstream_model": "accounts/fireworks/models/kimi-k3",
+      "authentication_binding": "fireworks-api-key",
+      "transport": {
+        "connect_timeout_seconds": 5,
+        "first_response_timeout_seconds": 300,
+        "stream_idle_timeout_seconds": 120,
+        "max_attempts": 3,
+        "allow_insecure_private_http": false
+      },
+      "capabilities": {
+        "native_tools": true,
+        "streaming": true,
+        "json_schema": false,
+        "stream_options": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "reasoning_context_modes": [
+          "current_turn",
+          "all_turns"
+        ],
+        "tool_choice_modes": [
+          "auto",
+          "required"
+        ]
+      },
+      "context_limit_tokens": 1048576,
+      "output_limit_tokens": 16384,
+      "allowed_stages": [
+        "onboarding",
+        "plan",
+        "implement",
+        "verify"
+      ],
+      "selectable": true,
+      "config_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e"
+    },
+    "policy": {
+      "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+      "policy_id": "repair-kimi-k3-v2",
+      "revision": "v1",
+      "display_name": "Reliability V2 repair Kimi K3",
+      "eligible_profiles": [
+        "repo-repair"
+      ],
+      "eligible_stages": [
+        "implement"
+      ],
+      "target": {
+        "target_id": "fireworks-kimi-k3",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+      "reasoning": {
+        "effort": "high",
+        "context_mode": "current_turn",
+        "expose_replay": true
+      },
+      "temperature_milli": 100,
+      "max_output_tokens": 16384,
+      "max_input_tokens": 98304,
+      "tool_protocol": "native_tools",
+      "tool_choice": "auto",
+      "transport_max_attempts": 3,
+      "selectable": true,
+      "policy_hash": "sha256:82569cfe4db0bc676bd420481b1839fabe1e6af89cb0765bb86fc4b54835f6c2"
+    },
+    "prompt_version": "2026-09-05.1",
+    "stage_prompt": {
+      "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+      "prompt_id": "repo-repair-v2",
+      "revision": "2026-09-05.1",
+      "stage": "implement",
+      "content_hash": "sha256:54127092bb24ef65eac752dea0faa5d6fdae9e0d4ad2333b28dfa5bec8a6a092"
+    },
+    "tool_schema_hash": "sha256:420bd139b7b091e1173a7861478b1955fdec5233249539f13f47ae92af7f87e5",
+    "context_policy_hash": "sha256:c31f66b6adfa4d4d99b229ce2272bb6d2bd0fe34afa40ccecab40afd6db8c82e",
+    "protocol_calibration_hash": "sha256:70201e4208f90cf878d2b074ca120a37f8e76eae0c49b6699cba16cecc16db5d",
+    "profile_budget_hash": "sha256:01c5d054ff535bcd6a9388ff2fd5eda07acf772974741bc3852a9e8bf7376e8b",
+    "base_agent_profile_hash": "sha256:9a598b2a2c366e28ae9d12c48210eddfbcae002bf640a65dea348c257048dd2a",
+    "agent_profile_hash": "sha256:eaa0ea60a8a15637e2070b4152804f28f303f2807f102530750a72618689e1c0",
+    "binding_hash": "sha256:da74cc4ffb02fba1401e2dcc19f7ef2ba90eca7b8042ae047280270c0f984361"
+  },
+  "binding_hash": "sha256:da74cc4ffb02fba1401e2dcc19f7ef2ba90eca7b8042ae047280270c0f984361",
+  "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+  "suite_id": "repair-v2",
+  "suite_hash": "sha256:ee2b221c907d7dc346337d3b89fb314963846c9cfd093290b2d7e893b3b7101b",
+  "profile_id": "repo-repair",
+  "profile_hash": "sha256:eaa0ea60a8a15637e2070b4152804f28f303f2807f102530750a72618689e1c0",
+  "target_id": "fireworks-kimi-k3",
+  "target_revision": "v1",
+  "policy_id": "repair-kimi-k3-v2",
+  "policy_revision": "v1",
+  "policy_hash": "sha256:82569cfe4db0bc676bd420481b1839fabe1e6af89cb0765bb86fc4b54835f6c2",
+  "frozen_gate": {
+    "per_stack_post_repair_minimum": 7,
+    "post_repair_minimum": 23
+  },
+  "limits_changed": false,
+  "profile_changed": false,
+  "model_changed": false,
+  "automatic_activation": false
+}

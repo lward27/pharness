@@ -61,7 +61,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder passed; onboarding, Planner and Test Diagnosis failed; harness contract corrections and remaining stages open | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder and seeded Repair passed on 48c77b7; Onboarding, Planner, Test Diagnosis and Verifier failed; corrected release and fresh qualification remain open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
@@ -71,8 +71,9 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: finish M04 qualification on immutable runtime `48c77b7` and continue
-M08 staging integration and M10 refinement. After live history preservation passed at 16:20 UTC, the gateway protocol checks
+Next eligible: prepare a compatible immutable release of the M04 corrections,
+then collect fresh qualification evidence; continue M08 runtime integration and
+M10 refinement. All qualification Jobs on `48c77b7` are terminal. After live history preservation passed at 16:20 UTC, the gateway protocol checks
 passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
 with two frozen attempts. Both finished 24/24 on the first pass, with every stack
 8/8 and no reported hidden-test false passes or policy violations.
@@ -91,9 +92,12 @@ and uses real discovery for twelve distinct V2.1 fixtures. It requires compatibl
 API/worker/UI deployment and fresh live qualification. Existing failed results remain unchanged.
 [Verifier finished at 20:14 UTC with 1/24 and 2/24 passes](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-VERIFIER-FAILURE.md).
 Its zero reported false approvals do not override 43 evidence/marker mismatches
-and two missing submissions. Repair then passed protocol calibration and started
-two frozen attempts; its result remains pending. The diagnostic correction retains concrete tool
-validation errors without changing fixtures, gates, profiles or limits.
+and two missing submissions. [Repair completed at 20:54 UTC with 24/24 in both attempts](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-REPAIR-QUALIFICATION.md),
+8/8 per stack and eight recoverable tool failures within existing limits. Its
+seeded repair proof does not establish correction of an actual failed Builder workspace.
+The [submission diagnostic correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SUBMISSION-DIAGNOSTICS.md)
+retains bounded accepted documents and separates the three Verifier predicates;
+the scorer, fixtures, gates, profiles and limits remain unchanged.
 Keep qualification Jobs serial. The frozen coding suite, thresholds, profiles and
 execution limits remain in force. Scorer repairs require explicit suite revisions
 and fresh evidence. The exact-runtime creation gate also requires

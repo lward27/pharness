@@ -4,14 +4,20 @@ Status: active and not qualified. On runtime `48c77b7`, Builder passed both froz
 runs 24/24, while onboarding failed both twelve-case attempts at 18:03 UTC on
 2026-09-05. Planner then scored 4/12 and 7/12; Test Diagnosis scored 0/12 in both
 attempts. [Verifier failed with 1/24 and 2/24 passes at 20:14 UTC](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-VERIFIER-FAILURE.md).
-Repair subsequently passed 30/30 protocol checks and started two frozen attempts;
-its result remains pending. The
+[Repair passed both 24-case attempts at 20:54 UTC](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-REPAIR-QUALIFICATION.md),
+including 8/8 per stack in each attempt after 30/30 protocol checks. These are
+seeded repairs; correction of an actual failed Builder workspace remains unproven.
+All stage attempts on this runtime are terminal. The
 [stage scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
 documents proven harness defects, their bounded fixes and the required fresh
 qualification. The [onboarding contract and fixture correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
 adds explicit blocked proposals, prevents their approval, and replaces contradictory
 V2 fixture workspaces with actual discovery. Its release and fresh live qualification
 remain open; no historical failed result is rescored.
+The [submission diagnostic correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SUBMISSION-DIAGNOSTICS.md)
+retains bounded accepted documents and separates the Verifier's three existing
+predicates without changing its scorer, fixtures or gates. It also requires a
+compatible release and fresh qualification; it cannot recover missing historical submissions.
 See the [Builder evidence](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
 and [onboarding failure](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md).
 Earlier `fd740927` results scored 22/24 and 20/24 and remain retained as
