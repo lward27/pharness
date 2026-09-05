@@ -179,3 +179,18 @@ migration. Preserve the Finance data generation, audit history and retention
 policy; do not use a down migration or a database reset for recovery. The final
 acceptance gates remain in
 [M06](../../programs/autonomous-sdlc/ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md).
+
+## Combined source validation (2026-09-05 14:18 UTC)
+
+Source `f370505` includes the merged M05 compatible-reader release and M04 prompt
+clarification through main `4c40b10c0b2f71ab92d464528145e178222a3368`. The complete
+workspace passed **641 distinct top-level Rust tests**, workspace/all-target
+Clippy with warnings denied, formatting, and architecture checks including five
+parser regressions. Nested language-fixture output is excluded from the count.
+[Validation manifest](ASTRA-M06-COMBINED-WORKSPACE-VALIDATION.json).
+
+The live Finance database is now on schema 0052 under source `2249950`. Migration
+0053 and this engineering controller remain undeployed. Source-publication
+continuation, build/deployment integration, terminal cancellation and live recovery
+acceptance remain open; source validation does not waive those gates. The next
+release must retain a schema-53 compatible recovery image before applying 0053.

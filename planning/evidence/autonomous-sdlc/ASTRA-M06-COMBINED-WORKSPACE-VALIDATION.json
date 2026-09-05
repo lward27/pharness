@@ -1,0 +1,118 @@
+{
+  "verified_at": "2026-09-05T14:20:07.049293+00:00",
+  "source_revision": "f37050577e069e93c256d18f9bab19d36da3389c",
+  "main_included": "4c40b10c0b2f71ab92d464528145e178222a3368",
+  "distinct_tests": 641,
+  "targets": [
+    {
+      "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+      "passed": 1
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+      "passed": 254
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_cli-99fc47e86a0160e1)",
+      "passed": 26
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_codex_host-29c0c9bd706652b9)",
+      "passed": 14
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_codex_host-ba341aa05fdd0c20)",
+      "passed": 13
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_config-e089ebc90c014b8c)",
+      "passed": 16
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+      "passed": 144
+    },
+    {
+      "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+      "passed": 6
+    },
+    {
+      "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+      "passed": 2
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+      "passed": 22
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_fireworks-bd22059e6db86a54)",
+      "passed": 14
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_model_gateway-1eaa58c36e64c975)",
+      "passed": 3
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+      "passed": 13
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-59b57ecd65585e61)",
+      "passed": 28
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+      "passed": 53
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_worker-37e9fb2e6a68a151)",
+      "passed": 32
+    },
+    {
+      "target": "Doc-tests pharness_codex_host",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_config",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_core",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_fireworks",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_openai_compatible",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_runhost",
+      "passed": 0
+    },
+    {
+      "target": "Doc-tests pharness_store",
+      "passed": 0
+    }
+  ],
+  "clippy": "workspace and all targets; warnings denied; passed",
+  "format": "passed",
+  "architecture": "passed; five dependency-parser tests",
+  "logs": [
+    {
+      "path": "/private/tmp/astra-m06-combined-workspace-tests.log",
+      "sha256": "259d07649a0249bc724c452fabba8f1898b641b4c158b6454eba79300700eac9"
+    },
+    {
+      "path": "/private/tmp/astra-m06-combined-workspace-clippy.log",
+      "sha256": "b0ed87a0c515e70caf8a5ec9cb03f2a8512ac50defbf15c059101c92b706c56b"
+    },
+    {
+      "path": "/private/tmp/astra-m06-combined-boundaries.log",
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    }
+  ],
+  "compatibility": "Schema 0053 remains undeployed. Hosted creation remains disabled. This is implementation validation, not live M06 acceptance or M04 qualification."
+}
