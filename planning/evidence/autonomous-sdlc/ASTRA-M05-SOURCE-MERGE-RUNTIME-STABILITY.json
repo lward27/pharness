@@ -20,5 +20,16 @@
     "status": "running",
     "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b"
   },
-  "claim": "source publication is separate from runtime activation"
+  "claim": "source publication is separate from runtime activation",
+  "followup_observations": [
+    {
+      "observed_at": "2026-09-05T12:31:27.713986+00:00",
+      "argo_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+      "argo_sync": "Synced",
+      "argo_health": "Healthy",
+      "api_uid": "b08506fe-a7e2-4ee2-8047-d556e5d53e27",
+      "api_ready": true,
+      "api_restarts": 0
+    }
+  ]
 }

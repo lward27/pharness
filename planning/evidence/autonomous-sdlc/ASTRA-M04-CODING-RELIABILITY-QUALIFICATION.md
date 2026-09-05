@@ -1,7 +1,7 @@
 # ASTRA M04: Coding reliability qualification evidence
 
 Status: runtime repair released; offline qualification infrastructure verified;
-**live model qualification and M04 acceptance remain open**.
+**live coding qualification failed; M04 acceptance remains open**.
 Observed 2026-09-05. Authority: [M04](../../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md).
 
 ## Released implementation
@@ -98,6 +98,21 @@ on the exact runtime through Job `pharness-inference-eval-9459930dae6f`.
 The [start receipt](ASTRA-M04-FD740-CODING-QUALIFICATION-START.json) pins its
 suite, profile, prompt, policy, target and limits. The procedure records each response and does not automatically repeat an
 uncertain request. Expired calibration from the previous runtime is not reused.
+
+The evaluation completed at **12:34:16 UTC** and **failed qualification**. Its two
+independent attempts scored **22/24** and **20/24**, with Python at **6/8** and
+**5/8**. The second attempt missed the overall and Python first-pass minima.
+Both attempts failed the safety gate: there were two hidden-test false passes and
+one rejected write outside the permitted paths. No provider or infrastructure
+failure invalidated these measured results. `status=completed` means the evaluation
+finished, not that its candidate qualified. Preserve the
+[complete result](ASTRA-M04-FD740-CODING-QUALIFICATION-RESULT.json) and
+[failure analysis](ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md).
+
+No correction was performed by this coding suite. Its post-repair fields repeat
+the first-pass counts and do not prove the one-correction requirement. The seeded
+repair suite and an actual failure/repair WorkItem remain separate requirements.
+The failed profile is not authorized for autonomous Finance work.
 
 Remaining gates are two independent live frozen coding runs, two bounded repair
 runs, all existing stage-specific suites (including each target's calibration), and the

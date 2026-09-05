@@ -70,9 +70,13 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: complete fresh live M04 qualification while continuing M05
-contract preparation. The evaluator repair is published and its exact deployed
-identity verified; all 216 packaged offline checks passed.
+Next eligible: address the measured M04 coding failures and qualify the resulting
+immutable runtime while continuing M05 reader publication and M06 preparation.
+The fd74092 live evaluation completed at 12:34 UTC and failed: 22/24 and 20/24,
+two hidden-test false passes, and one blocked write outside permitted paths.
+There were no provider or infrastructure failures in this run. See the
+[failure analysis](../../evidence/autonomous-sdlc/ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md).
+All 216 packaged offline checks passed; those fixtures do not qualify the model.
 The original backend artifact is restored; both staging deployments are Healthy;
 all 13 isolation checks passed. Cert-manager 1.20.3 preserves 31 ready certificates
 and 78 retained requests. The owner-authorized Mac serves Tekton's existing
@@ -81,16 +85,16 @@ exact-digest pull/run passed. Worker capability checks passed after the GitOps
 writer credential was rotated. Runtime contract declarations remain M05 and the
 real frontend pipeline remains M07. The tested M04 scratch cleanup is merged at
 `fd740927110366a983de6bb0d3bc6c576577708b`; its [release evidence](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md)
-does not replace the pending live model qualification. M05 now enforces saved stage profiles, gateway choices and limits in
-unpublished code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).
+does not replace live model qualification. M05 now enforces saved stage profiles, gateway choices and limits in
+merged code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).
 Fresh gateway calibration passed for Builder and Planner. MiniMax's malformed
 history rejection exposed a protocol compatibility defect; that repair and complete
 stage-report guards merged in PR 330 at `db84b797f1bbc833ba86844874d1d041bc33ab72`.
-The current coding evaluation remains on fd74092. Publish/requalify the new runtime
-after it finishes. Keep qualification jobs serial. M05 now omits its environment entry while
+The completed coding evaluation used fd74092. Publish/requalify the new runtime
+and keep qualification jobs serial. M05 omits its environment entry while
 creation is disabled; the complete rendered chart matches main, allowing reader
 source publication without interrupting evaluation. Hold the actual image-pin
-release until the active evaluation is terminal. Neither code merge nor provider diagnostics close M04. M05 compatible-reader source merged in
+release until active evaluations are terminal; that condition is now met. Neither code merge nor provider diagnostics close M04. M05 compatible-reader source merged in
 PR 328 at `2249950d225a4632b24235c2b6f2d8469a774243` on 2026-09-05. Its seven
 AMD64 images and native bundle are being built from that one source; the runtime
 still uses fd74092. M06 persistence preparation is committed at `9d52c9e` on
