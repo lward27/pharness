@@ -1,0 +1,58 @@
+{
+  "apiVersion": "tekton.dev/v1",
+  "kind": "PipelineRun",
+  "metadata": {
+    "name": "astra-m07-frontend-c4d64f9",
+    "namespace": "tekton-pipelines",
+    "labels": {
+      "app.kubernetes.io/part-of": "pharness",
+      "pharness.dev/acceptance": "astra-m07-build-prerequisite"
+    },
+    "annotations": {
+      "pharness.lucas.engineering/source-commit": "c4d64f9242f2955064f99e659bf1648ce6bc4273"
+    }
+  },
+  "spec": {
+    "pipelineRef": {
+      "name": "pharness-finance-frontend-build"
+    },
+    "params": [
+      {
+        "name": "revision",
+        "value": "c4d64f9242f2955064f99e659bf1648ce6bc4273"
+      }
+    ],
+    "timeouts": {
+      "pipeline": "1h0m0s"
+    },
+    "taskRunTemplate": {
+      "serviceAccountName": "pharness-finance-build",
+      "podTemplate": {
+        "nodeSelector": {
+          "kubernetes.io/arch": "amd64"
+        },
+        "securityContext": {
+          "fsGroup": 65532
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "name": "shared-data",
+        "volumeClaimTemplate": {
+          "spec": {
+            "storageClassName": "local-path",
+            "accessModes": [
+              "ReadWriteOnce"
+            ],
+            "resources": {
+              "requests": {
+                "storage": "1Gi"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

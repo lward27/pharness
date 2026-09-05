@@ -1,6 +1,6 @@
 # ASTRA M07: Exact-source delivery and real builds
 
-Status: independent finite pipelines and packaging merged; real build validation underway; source-controller and milestone acceptance open.
+Status: finite pipelines and packaging merged; both real builds verified; source-controller and milestone acceptance open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M04 and M06.
 
@@ -41,7 +41,7 @@ Preserve immutable historical evidence, existing Finance data generation, and ad
 - [ ] Stale head/base, failed checks, merge conflict, build failure, missing output, and mismatched digest stop the workflow.
 - [ ] Build inputs use declared locks and aligned runtime versions; no staging-to-production rebuild.
 - [ ] Required credentials remain scoped to their writer/effect boundary and absent from coding workers.
-- [ ] A real Tekton build is observed; fixture-only results cannot pass.
+- [x] Real backend and frontend Tekton builds passed, with independent registry source/digest verification. These program-operated runs do not satisfy autonomous source delivery or M11.
 
 Unit/adapter negative cases, pipeline rendering/server dry-run, then an authorized real immutable build. Application packaging prerequisites are implementation work, not M11 autonomous proof.
 

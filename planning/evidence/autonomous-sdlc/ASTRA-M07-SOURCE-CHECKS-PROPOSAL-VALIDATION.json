@@ -1,0 +1,94 @@
+{
+  "observed_at": "2026-09-05T15:26:17.626409+00:00",
+  "scope": "CI proposal validation only; neither PR merged and no branch protection changed",
+  "checkout": {
+    "version": "v7.0.1",
+    "commit": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "runtime": "node24"
+  },
+  "repositories": [
+    {
+      "repository": "lward27/yfinance_wrapper",
+      "pr_url": "https://github.com/lward27/yfinance_wrapper/pull/7",
+      "head_sha": "3fe7495b23b989af70acb4c48e7661334d829d01",
+      "base_sha": "efa6294954b01a089a65419c85542b8fc2f95c83",
+      "merge_state": "open",
+      "main_protected": false,
+      "workflow_run_id": 33974707112,
+      "check_id": 101329260312,
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "completed_at": "2026-09-05T15:25:04Z",
+      "job_url": "https://github.com/lward27/yfinance_wrapper/actions/runs/33974707112/job/101329260312",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Test the exact proposed tree with the release Dockerfile",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "test_log_excerpts": [
+        "Source integrity\tTest the exact proposed tree with the release Dockerfile\t2026-09-05T15:25:00.7622322Z #12 0.703 Ran 37 tests in 0.020s"
+      ]
+    },
+    {
+      "repository": "lward27/finance-frontend",
+      "pr_url": "https://github.com/lward27/finance-frontend/pull/8",
+      "head_sha": "4117a2a17e665a560079190af281a8844f7ea4aa",
+      "base_sha": "c4d64f9242f2955064f99e659bf1648ce6bc4273",
+      "merge_state": "open",
+      "main_protected": false,
+      "workflow_run_id": 33974707699,
+      "check_id": 101329261903,
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "completed_at": "2026-09-05T15:24:55Z",
+      "job_url": "https://github.com/lward27/finance-frontend/actions/runs/33974707699/job/101329261903",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Test the exact proposed tree with the release Dockerfile",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "test_log_excerpts": [
+        "Source integrity\tTest the exact proposed tree with the release Dockerfile\t2026-09-05T15:24:48.8656251Z #15 0.423 \u2139 tests 49",
+        "Source integrity\tTest the exact proposed tree with the release Dockerfile\t2026-09-05T15:24:48.8656936Z #15 0.423 \u2139 pass 49",
+        "Source integrity\tTest the exact proposed tree with the release Dockerfile\t2026-09-05T15:24:48.8657163Z #15 0.423 \u2139 fail 0",
+        "Source integrity\tTest the exact proposed tree with the release Dockerfile\t2026-09-05T15:24:50.5055860Z #15 2.173 \u2716 1 problem (0 errors, 1 warning)"
+      ]
+    }
+  ]
+}

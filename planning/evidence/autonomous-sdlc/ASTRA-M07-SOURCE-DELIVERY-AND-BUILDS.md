@@ -11,8 +11,8 @@ autonomous application change.
 | --- | --- | --- |
 | GitOps finite pipelines, PR 52 | `bd36ae698951ab36a4e7362562eba34a997a70c8` | Merged; Argo Synced/Healthy; application Deployments unchanged |
 | GitOps restricted identity, PR 53 | `491f081e3ea6e639528a98cce43466cc7858fdcc` | Merged; Argo Synced/Healthy at 15:09 UTC |
-| yfinance packaging, PR 6 | `efa6294954b01a089a65419c85542b8fc2f95c83` | Merged; real Tekton build running |
-| Frontend packaging, PR 7 | `c4d64f9242f2955064f99e659bf1648ce6bc4273` | Merged; real build follows backend completion |
+| yfinance packaging, PR 6 | `efa6294954b01a089a65419c85542b8fc2f95c83` | Merged; Tekton and independent registry verification passed |
+| Frontend packaging, PR 7 | `c4d64f9242f2955064f99e659bf1648ce6bc4273` | Merged; sequential Tekton and registry verification passed |
 
 The PRs are [pipelines](https://github.com/lward27/lucas_engineering/pull/52),
 [build identity](https://github.com/lward27/lucas_engineering/pull/53),
@@ -39,8 +39,9 @@ with the [baseline](ASTRA-M07-PRODUCTION-BEFORE-PIPELINES.json).
 Live checks denied production Deployment patches, PHarness Job creation, and
 Tekton Secret reads. Clone tracing is disabled and TLS verification required.
 Other applications retain their existing default identities. Finance runs must
-explicitly select the restricted account; PHarness dispatch enforcement is being
-implemented. [Identity evidence](ASTRA-M07-BUILD-IDENTITY-VERIFIED.json).
+explicitly select the restricted account. PHarness dispatch enforcement is tested
+in [PR 336](https://github.com/lward27/pharness/pull/336), held for the current
+immutable release to finish. [Identity evidence](ASTRA-M07-BUILD-IDENTITY-VERIFIED.json).
 
 The rendered guards passed 36 checks, covering invalid revisions, checkout
 mismatches, malformed digests, finite repository/image bindings, retired triggers,
@@ -73,13 +74,31 @@ revisions, images, source labels, locks, log hashes, and limitations.
 
 ## Real builds and remaining gates
 
-The backend [PipelineRun](ASTRA-M07-YFINANCE-PIPELINERUN.json) uses the merged
-commit, restricted account, Linux AMD64 placement, a dedicated 1Gi workspace,
-and the existing 60-minute timeout. It passed its tests and is publishing at this
-observation. Registry verification and the frontend run remain pending. This is
-a program-operated validation run, not a WorkItem-driven autonomous result.
+The backend [PipelineRun](ASTRA-M07-YFINANCE-PIPELINERUN.json) and sequential
+[frontend PipelineRun](ASTRA-M07-FRONTEND-PIPELINERUN.json) both succeeded. Each
+used the actual merged commit, restricted account, Linux AMD64 placement, a
+dedicated 1Gi workspace, and the existing 60-minute timeout. All four Tasks in
+each run passed. Their Pods had no Kubernetes API token mount.
 
-M07 still requires automatic source publication, current required-check evaluation,
+Independent verified-TLS registry reads confirmed the tag, manifest content hash,
+configuration content hash, platform, source repository, and actual merged SHA:
+
+| Application | Registry digest | Complete evidence |
+| --- | --- | --- |
+| yfinance | `sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca` | [Backend build](ASTRA-M07-YFINANCE-BUILD-VERIFIED.json) |
+| Frontend | `sha256:387a1f829181dc283dc2033ae204a754f863616ad86937a749d07ff8549df987` | [Frontend build](ASTRA-M07-FRONTEND-BUILD-VERIFIED.json) |
+
+The records retain TaskRun identities, executed spec hashes, step image identities,
+results and sanitized build logs. They do not claim an SBOM or signature. These
+are program-operated real builds, not WorkItem-driven autonomous results, and
+neither run updates an application Deployment.
+
+Both Finance branches currently lack required checks/protection. Two proposed
+source-check PRs passed on GitHub using these release Dockerfiles. The exact
+[protection decision](ASTRA-M07-SOURCE-MERGE-DECISION.md) is pending owner input
+because requiring PRs on both main branches changes the developer workflow.
+
+M07 still requires automatic source publication, enforced current required checks,
 exact verified-source merge, interruption recovery, build dispatch, and independent
 registry source/digest verification. Stale heads, changed base trees, conflicts,
 failed builds, and missing or mismatched results must stop delivery. A green Task
