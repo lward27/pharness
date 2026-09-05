@@ -61,7 +61,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder passed; onboarding failed; other stages running/pending | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
@@ -77,7 +77,10 @@ passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` st
 with two frozen attempts. Both finished 24/24 on the first pass, with every stack
 8/8 and no reported hidden-test false passes or policy violations.
 [Builder qualification](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
-is passed; Repair and the other required stage qualifications remain open.
+is passed. [Onboarding failed 0/12 in both attempts](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md)
+despite passing 30 protocol checks. Planner is running; Repair and the other required
+stage qualifications remain open. The diagnostic correction retains concrete tool
+validation errors without changing fixtures, gates, profiles or limits.
 Keep qualification Jobs serial. All original thresholds, fixtures, profiles and
 execution limits remain in force. The exact-runtime creation gate also requires
 matching qualification on any subsequent release before activation. The earlier fd74092 runs failed; they remain
@@ -99,14 +102,16 @@ It binds finite build authority to sealed source and retains declared Tekton out
 and conflicts. The [durable build controller](../../evidence/autonomous-sdlc/ASTRA-M07-DURABLE-BUILD-CONTROLLER.md)
 now records one build admission, original Job and PipelineRun identities, one read-only
 recovery observer, bounded grants and duplicate-safe terminal receipts. Its implementation
-passed 672 workspace tests. Deployment and the actual autonomous build/registry chain
+passed 672 workspace tests and merged in [PR 347](https://github.com/lward27/pharness/pull/347)
+at `94e81f89cfa6922224c23193520346a0884ced75`. Deployment and the actual autonomous build/registry chain
 remain open.
 These changes are not included in the deployed 48c77b7 artifacts. Source-to-build
 progression and live source-merge acceptance remain open. The proposed required
 Finance source checks passed in both application PRs, but applying main-branch
 protections remains [a pending owner decision](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-MERGE-DECISION.md).
-The source writer also needs [Administration read permission](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-CREDENTIAL-READINESS.md)
-to inspect the protections immediately before merge; its existing token returns HTTP 403.
+The owner updated the source writer's Administration read permission; both required
+reads are now [verified as authorized](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-CREDENTIAL-VERIFIED.json).
+Main branches remain unprotected pending the separate owner decision.
 That dependent gate cannot be waived; independent implementation can continue.
 
 Current evidence entry points:

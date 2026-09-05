@@ -1,7 +1,9 @@
 # ASTRA M07: Source credential readiness
 
-Status: automatic source merge has a credential prerequisite as well as the
-[pending branch-protection decision](ASTRA-M07-SOURCE-MERGE-DECISION.md).
+Status: the owner updated the writer permission; both protection reads were
+[verified as authorized at 18:17 UTC](ASTRA-M07-SOURCE-CREDENTIAL-VERIFIED.json).
+The [branch-protection decision](ASTRA-M07-SOURCE-MERGE-DECISION.md) remains pending.
+The initial failure and remediation below are retained as history.
 Observed 2026-09-05 against `lucas_engineering`, using the existing cluster
 Secrets in memory. No credential values or HTTP authorization headers were retained.
 
@@ -24,14 +26,15 @@ the required endpoint permission; it reported administrative access despite the
 403. These reads also do not prove source-write authority. [GitHub endpoint
 documentation](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection).
 
-The owner should add Administration **read-only** to the application-source
+The required repair was to add Administration **read-only** to the application-source
 writer token for the two Finance repositories. It does not need permission to
 edit branch protection. If the token is regenerated, replace the `token` key in
 `pharness/pharness-git-writer-token` through the existing secret-management process.
 The separately scoped GitOps writer credential is not this credential.
 
-After the owner responds, repeat the reads with the same cluster identity. After
-the branch-protection decision and application CI merges, validate the actual
+The repeated reads now return the explicit `Branch not protected` response rather
+than HTTP 403; both main heads remain unchanged. After the branch-protection
+decision and application CI merges, validate the actual
 protection body and exact required check using the writer's own credential.
 Keep automatic source merge blocked until both prerequisites are evidenced.
 
