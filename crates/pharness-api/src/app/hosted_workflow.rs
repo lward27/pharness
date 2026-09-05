@@ -1,3 +1,4 @@
+mod delivery;
 pub(super) mod projection;
 pub(super) mod stages;
 
@@ -152,6 +153,7 @@ pub(super) async fn resolve_policy(
         production_approval: ProductionApprovalBoundary::BeforeGitopsMerge,
     };
     policy.validate().map_err(ApiError::conflict)?;
+    delivery::validate_finance_coordinates(&policy)?;
     Ok(Some(policy))
 }
 
@@ -187,7 +189,7 @@ pub(super) async fn qualified_stage(
             && qualification.runtime_revision == state.build.api_revision
             && qualification.suite_id == suite_id
             && qualification.suite_hash == suite_hash
-            && (profile_id != "repo-builder" || qualification.attempts == 2)
+            && (!matches!(profile_id, "repo-builder" | "repo-repair") || qualification.attempts == 2)
             && selection["policy_hash"] == qualification.policy_hash
             && selection["target_hash"] == qualification.target_hash
             && qualification_binding.agent_profile_hash == qualification.agent_profile_hash)

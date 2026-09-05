@@ -353,6 +353,16 @@ pub(super) async fn repo_fixture_with_policy(
     state: super::AppState,
     workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
 ) -> RepoDeliveryFixture {
+    repo_fixture_for_source(suffix, with_source_delivery, state, workflow_policy, None).await
+}
+
+pub(super) async fn repo_fixture_for_source(
+    suffix: &str,
+    with_source_delivery: bool,
+    state: super::AppState,
+    workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
+    source_repo: Option<&str>,
+) -> RepoDeliveryFixture {
     state
         .store
         .ensure_bootstrap_organization(&state.repo_mode.organization)
@@ -388,8 +398,8 @@ pub(super) async fn repo_fixture_with_policy(
             repository: StoredRepositoryDraft {
                 id: repository_id.clone(),
                 provider: "github".into(),
-                external_id: format!("example/repo-{suffix}"),
-                canonical_url: format!("https://github.com/example/repo-{suffix}.git"),
+                external_id: source_repo.map(|url| url.trim_start_matches("https://github.com/").trim_end_matches(".git").to_string()).unwrap_or_else(|| format!("example/repo-{suffix}")),
+                canonical_url: source_repo.map(str::to_string).unwrap_or_else(|| format!("https://github.com/example/repo-{suffix}.git")),
                 default_branch: "main".into(),
                 registered_commit: SOURCE_SHA.into(),
             },

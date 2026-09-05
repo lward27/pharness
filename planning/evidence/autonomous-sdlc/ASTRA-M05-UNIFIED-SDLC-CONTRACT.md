@@ -20,6 +20,12 @@ has been deployed. Hosted creation remains disabled by default.
   mismatched repositories, unavailable contracts, or unqualified profiles.
   Readiness may default to the registered source commit and declared acceptance
   commands; the response and authorization hash expose the resolved choices.
+- Cross-check the source repository against its finite Finance pipeline, image,
+  GitOps repository/paths, Argo applications, Deployment, Service, port and probe.
+  Independently valid contracts for different applications cannot be combined
+  into one authorization. Preserve `prune=false` and `force=false`. Both reviewed
+  Finance applications are supported; broader application bindings remain a
+  future extension rather than an arbitrary deployment route.
 - Add policy/hash fields with migration 0052. Existing records retain null policy
   and source-only semantics. Reject policy/scope/budget changes and malformed
   policy pairs. A hosted row cannot complete without all eight successful stage
@@ -62,7 +68,7 @@ helper as the evaluation dispatcher. Fixture-specific tool schemas are compared
 against that qualification binding, while the live WorkItem binding remains
 separate. This corrects an impossible comparison between frozen-fixture and live
 tool hashes. Readiness requires matching runtime, suite, profile, policy and target
-hashes, and two builder attempts in the qualifying report. The qualification hash
+hashes, and two Builder and Repair attempts in their qualifying reports. The qualification hash
 algorithm and frozen suite are unchanged; deterministic fixture rows in unit tests
 are explicitly not live qualification proof.
 
@@ -74,11 +80,11 @@ M09 still owns hosted approval and production promotion.
 
 ## Validation
 
-449 distinct tests passed across API/admin, configuration, core and store suites:
-1 admin, 234 API, 16 configuration, 144 core unit, 6 existing core integration,
+451 distinct tests passed across API/admin, configuration, core and store suites:
+1 admin, 236 API, 16 configuration, 144 core unit, 6 existing core integration,
 2 hosted contract integration and 46 store tests. The four-crate run passed 448
-tests; after the final readiness regression was added, all 234 API tests and the
-admin test passed again. Unchanged core/configuration/store results are not counted
+tests; after the final readiness and cross-application checks were added, all 236
+API tests and the admin test passed again. Unchanged core/configuration/store results are not counted
 twice. No production database was used.
 The earlier 441-test run is retained as historical preparation evidence, not added
 to this total. The SQL migration-count assertion was updated to 52.
@@ -99,6 +105,10 @@ only the controller's Discover outcome exists. No workspace, coding job or
 deployment is invented. This is positive local API coverage, not positive live
 provider acceptance. Readiness describes recording authorization until M06 adds
 durable scheduling.
+The positive API fixture uses the real Finance coordinates with synthetic
+repository/qualification records and a disabled fake Git executor. Fourteen
+otherwise well-formed mismatches and destructive sync flags are rejected; these
+tests do not contact or mutate the application repositories.
 
 Clippy passed for all four changed crates and targets with warnings denied.
 Formatting and architecture boundary checks pass, including all five dependency

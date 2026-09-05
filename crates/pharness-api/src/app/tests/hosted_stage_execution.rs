@@ -97,19 +97,18 @@ async fn hosted_qualification_matches_frozen_suite_without_conflating_live_tool_
 }
 
 #[tokio::test]
-async fn hosted_builder_rejects_a_single_qualifying_run() {
+async fn hosted_builder_and_repair_reject_a_single_qualifying_run() {
     let mut state = test_state().await;
     enable_gateway(&mut state);
-    qualification_fixture(&state, InferenceStage::Implement, "repo-builder", 1).await;
-    assert!(qualified_stage(
-        &state,
-        "implement",
-        "repo-builder",
-        InferenceStage::Implement,
-        None
-    )
-    .await
-    .is_err());
+    for (stage, profile) in [("implement", "repo-builder"), ("repair", "repo-repair")] {
+        qualification_fixture(&state, InferenceStage::Implement, profile, 1).await;
+        assert!(
+            qualified_stage(&state, stage, profile, InferenceStage::Implement, None)
+                .await
+                .is_err(),
+            "{profile} must require two independent runs"
+        );
+    }
 }
 
 #[tokio::test]
@@ -490,8 +489,8 @@ async fn hosted_readiness_and_creation_preserve_exact_planner_authorization() {
     use tower::ServiceExt;
     let mut state = super::characterization::test_state_with_git_and_gitops(
         "/bin/false".into(),
-        "https://github.com/example/repo-hosted_planner_preview.git".into(),
-        "https://github.com/example/gitops.git".into(),
+        "https://github.com/lward27/yfinance_wrapper.git".into(),
+        "https://github.com/lward27/lucas_engineering.git".into(),
     )
     .await;
     enable_gateway(&mut state);
@@ -504,9 +503,14 @@ async fn hosted_readiness_and_creation_preserve_exact_planner_authorization() {
     ] {
         qualification_fixture(&state, stage, id, 2).await;
     }
-    let mut fixture =
-        super::repo_mode_v1::repo_fixture_with_policy("hosted_planner_preview", false, state, None)
-            .await;
+    let mut fixture = super::repo_mode_v1::repo_fixture_for_source(
+        "hosted_planner_preview",
+        false,
+        state,
+        None,
+        Some("https://github.com/lward27/yfinance_wrapper.git"),
+    )
+    .await;
     let metadata = fixture
         .state
         .store
@@ -547,7 +551,7 @@ async fn hosted_readiness_and_creation_preserve_exact_planner_authorization() {
         .unwrap();
     fixture.state.store.create_pipeline_contract(CreatePipelineContract {
         id: "pipeline_test".into(), status: "active".into(), namespace: "tekton-pipelines".into(),
-        pipeline_ref: "test-build".into(), version: "v1".into(), actor: None, reason: None,
+        pipeline_ref: "pharness-yfinance-build".into(), version: "v1".into(), actor: None, reason: None,
         contract_json: json!({"params":[{"name":"revision","type":"scalar","required":true}],"source_revision_param":"revision"}),
     }).await.unwrap();
     for (id, environment, namespace, application) in [
@@ -580,6 +584,11 @@ async fn hosted_readiness_and_creation_preserve_exact_planner_authorization() {
     binding.product_id = metadata.product_id.clone();
     binding.repository_id = metadata.repository_id.clone();
     binding.source_repo = item.source_repo;
+    binding.gitops_repo = "https://github.com/lward27/lucas_engineering.git".into();
+    binding.image_name = "registry.lucas.engineering/yfinance_wrapper".into();
+    binding.staging.kustomization_path =
+        "charts/finance-staging/yfinance/kustomization.yaml".into();
+    binding.production.kustomization_path = "charts/yfinance-wrapper/kustomization.yaml".into();
     fixture.state.hosted_workflow = Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig {
         enabled: true,
         bindings: vec![binding],
