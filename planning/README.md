@@ -9,7 +9,7 @@ Last organized: 2026-09-04. Current program: [ASTRA autonomous SDLC](programs/au
 | Getting started | [README](../README.md), [current baseline](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md) | What exists, what is deployed, and what is not yet proven |
 | Development | [architecture](architecture/README.md), [UI guidance](../ui/AGENTS.md) | Ownership, invariants, and implementation checks |
 | Operation | [operations](operations/README.md) | Scoped runbooks and release verification |
-| Reference | [product vision](design/product-vision-and-boundaries.md), [product model](design/product-model.md), [stage outcomes](design/stage-outcomes-and-evidence-handoffs.md) | Current direction and semantic contracts |
+| Reference | [product vision](design/product-vision-and-boundaries.md), [product model](design/product-model.md), [stage outcomes](design/stage-outcomes-and-evidence-handoffs.md), [hosted configuration](design/ASTRA-HOSTED-WORKFLOW-CONFIGURATION.md) | Current direction and semantic contracts |
 | Roadmap | [ASTRA master and twelve milestones](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), [active index](active/README.md) | Approved work and acceptance gates |
 | Evidence | [evidence](evidence/README.md), [implemented records](implemented/README.md), [archive](archive/README.md) | Dated proof, shipped decisions, and superseded history |
 

@@ -1,0 +1,151 @@
+{
+  "observed_at": "2026-09-05T10:49:11.899340+00:00",
+  "cluster": "lucas_engineering",
+  "compiled_runtime": "83a2689c877a3f48688d1d457c34e83474698c46",
+  "schema": "0051",
+  "data_generation": "dbgen_finance_20260827",
+  "declarations": [
+    {
+      "kind": "pipeline",
+      "action": "created",
+      "contract": {
+        "id": "pcontract_1788605350565822945",
+        "status": "active",
+        "namespace": "tekton-pipelines",
+        "pipeline_ref": "pharness-yfinance-build",
+        "version": "astra-v1",
+        "contract_json": {
+          "params": [
+            {
+              "name": "revision",
+              "required": true,
+              "type": "scalar"
+            },
+            {
+              "name": "context",
+              "required": false,
+              "type": "scalar"
+            },
+            {
+              "name": "dockerfile",
+              "required": false,
+              "type": "scalar"
+            }
+          ],
+          "source_revision_param": "revision",
+          "workspaces": [
+            {
+              "binding": "volume_claim_template",
+              "name": "shared-data",
+              "required": true
+            }
+          ]
+        },
+        "created_at": "1788605350565",
+        "updated_at": "1788605350565",
+        "status_changed_at": "1788605350565",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare verified finite Finance platform coordinates; metadata only, no deployment or production approval"
+      }
+    },
+    {
+      "kind": "deployment",
+      "action": "created",
+      "contract": {
+        "id": "dcontract_1788605351039034558",
+        "status": "active",
+        "target_environment": "staging",
+        "target_namespace": "apps-staging",
+        "argo_application": "yfinance-staging",
+        "version": "astra-v1",
+        "contract_json": {
+          "force": false,
+          "health_path": "/healthz",
+          "operation": "sync",
+          "post_sync_verification": {
+            "prometheus_inventory": "disabled",
+            "service_healthz": "required"
+          },
+          "prune": false,
+          "service_name": "yfinance-wrapper",
+          "service_port": 8090,
+          "workload_kind": "Deployment",
+          "workload_name": "yfinance-wrapper"
+        },
+        "created_at": "1788605351039",
+        "updated_at": "1788605351039",
+        "status_changed_at": "1788605351039",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare verified finite Finance platform coordinates; metadata only, no deployment or production approval"
+      }
+    },
+    {
+      "kind": "deployment",
+      "action": "created",
+      "contract": {
+        "id": "dcontract_1788605351512248801",
+        "status": "active",
+        "target_environment": "production",
+        "target_namespace": "apps-prod",
+        "argo_application": "yfinance-wrapper",
+        "version": "astra-v1",
+        "contract_json": {
+          "force": false,
+          "health_path": "/healthz",
+          "operation": "sync",
+          "post_sync_verification": {
+            "prometheus_inventory": "disabled",
+            "service_healthz": "required"
+          },
+          "prune": false,
+          "service_name": "yfinance-wrapper",
+          "service_port": 8090,
+          "workload_kind": "Deployment",
+          "workload_name": "yfinance-wrapper"
+        },
+        "created_at": "1788605351512",
+        "updated_at": "1788605351512",
+        "status_changed_at": "1788605351512",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare verified finite Finance platform coordinates; metadata only, no deployment or production approval"
+      }
+    },
+    {
+      "kind": "deployment",
+      "action": "created",
+      "contract": {
+        "id": "dcontract_1788605351981544485",
+        "status": "active",
+        "target_environment": "staging",
+        "target_namespace": "apps-staging",
+        "argo_application": "finance-frontend-staging",
+        "version": "astra-v1",
+        "contract_json": {
+          "force": false,
+          "health_path": "/",
+          "operation": "sync",
+          "post_sync_verification": {
+            "prometheus_inventory": "disabled",
+            "service_healthz": "required"
+          },
+          "prune": false,
+          "service_name": "finance-frontend",
+          "service_port": 8080,
+          "workload_kind": "Deployment",
+          "workload_name": "finance-frontend"
+        },
+        "created_at": "1788605351981",
+        "updated_at": "1788605351981",
+        "status_changed_at": "1788605351981",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare verified finite Finance platform coordinates; metadata only, no deployment or production approval"
+      }
+    }
+  ],
+  "scope": "Supported contract metadata writes only. No WorkItems, PipelineRuns, deployment intents, approvals or cluster mutations were created.",
+  "pending": [
+    "Frontend production contract requires M05 compatible API release.",
+    "Frontend pipeline declaration follows actual M07 Pipeline implementation.",
+    "Hosted creation remains disabled."
+  ]
+}

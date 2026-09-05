@@ -92,6 +92,21 @@ The last import-only correction also passed the API compiler/linter with warning
 The JSON fixture under `crates/pharness-core/tests/fixtures` is test data. It is
 not a qualified provider profile or live delivery evidence.
 
+## Live declaration preparation
+
+The existing schema-51 API registered the yfinance Pipeline, yfinance staging,
+yfinance production and frontend staging contracts with actual returned IDs.
+[Registration evidence](ASTRA-M05-CONTRACT-REGISTRATION.json) preserves their exact
+coordinates and states the metadata-only effects. No WorkItem, PipelineRun,
+deployment intent, approval or cluster mutation was created.
+
+The prepared Helm values bind yfinance to those IDs and expose the configuration
+through the API environment with hosted creation disabled. Frontend production
+registration awaits the M05 compatible API; its actual Pipeline and registration
+remain M07. The chart renders and lints with the disabled binding; the API Deployment passes
+server-side dry-run in namespace `pharness`. See the
+[configuration and rollback guide](../../design/ASTRA-HOSTED-WORKFLOW-CONFIGURATION.md).
+
 ## Compatibility and cutover
 
 `PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON` supplies server-owned configuration. Its
@@ -115,7 +130,7 @@ an unbuilt API revision. Keep qualification provenance explicit at cutover.
 ## Remaining acceptance work
 
 1. M02's platform coordinates, restored backend baseline and staging checks are
-   available. Register supported runtime contracts and finish M04 qualification.
+   available. Finish the remaining frontend runtime contracts and M04 qualification.
    Deterministic fixtures do not establish positive live hosted creation.
 2. Stage-entry and resume enforcement now pass deterministic tests. Validate the
    actual deployed reader/gateway/worker path and saved policy under real hosted

@@ -79,7 +79,7 @@ It did not run a live model evaluation, complete hosted WorkItem, production pro
 or representative-user usability study. Prior release test counts remain historical
 reported evidence, not checks rerun here. M01 made no cluster or application-code change.
 
-## Implementation refresh at 10:41 UTC
+## Implementation refresh on 2026-09-05
 
 The table above preserves the original baseline. These later observations supersede
 its mutable status claims; they do not imply complete autonomous acceptance.
@@ -102,9 +102,11 @@ its mutable status claims; they do not imply complete autonomous acceptance.
   A 112 MiB uncached AMD64 build/push and exact-digest pull/run passed through the
   existing private registry gateway. Separate repository capability checks passed
   after the owner replaced the GitOps writer token.
-- The authenticated Finance generation is `dbgen_finance_20260827`; runtime contract
-  inventories are currently empty. M05 must register actual IDs and deploy compatible
-  readers before hosted writes. Its new migration/code is not live.
+- The authenticated Finance generation is `dbgen_finance_20260827`. Initial contract
+  inventories were empty; M05 subsequently registered the existing yfinance Pipeline,
+  both staging targets and yfinance production through schema-51 APIs. Its new
+  migration/code is not live. Compatible readers and remaining frontend contracts
+  must precede hosted writes.
 - Frontend and PHarness Argo auto-sync; yfinance still requires M09 alignment with
   human approval before the production GitOps merge.
 - The previous coding evaluation was evicted for accumulated scratch storage and

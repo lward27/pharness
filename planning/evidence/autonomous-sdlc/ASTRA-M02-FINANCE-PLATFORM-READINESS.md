@@ -111,13 +111,14 @@ No frontend application traces or request-metric SLO have been established. Fres
 Nginx logs are available; M08 owns the bounded frontend verification contract.
 This telemetry capture is prerequisite discovery, not a staging release verdict.
 
-The live API currently lists no PipelineContracts or DeploymentContracts. The
-[finite coordinates](ASTRA-M02-FINANCE-DELIVERY-BINDINGS.md) identify their required
-resources; M05 registers validated contract IDs before enabling hosted creation.
-The existing protected production contract API admits only yfinance; M05 is adding
-finite frontend declaration while preserving the legacy execution restriction.
-M07 owns the actual frontend pipeline. Missing runtime declarations must never be
-replaced by invented IDs or synthetic successful build results.
+The initial API contract inventory was empty. Subsequent M05 preparation has
+registered four schema-51 declarations through supported APIs: the existing
+yfinance Pipeline, both staging targets and protected yfinance production. See
+[actual contract IDs](ASTRA-M05-CONTRACT-REGISTRATION.json) and the
+[finite coordinates](ASTRA-M02-FINANCE-DELIVERY-BINDINGS.md). No build or deployment
+was launched. Frontend production registration requires the M05 compatible API;
+M07 owns its actual Pipeline. Hosted creation remains disabled. Missing declarations
+must never be replaced by invented IDs or synthetic successful build results.
 
 ## Remaining program gates and recovery
 

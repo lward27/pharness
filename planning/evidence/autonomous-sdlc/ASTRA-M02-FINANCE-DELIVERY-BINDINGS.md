@@ -32,10 +32,10 @@ The image digest is determined by a verified real build and remains identical
 through promotion. The application source SHA is not the GitOps SHA.
 
 The recorded Product/Repository IDs originate in the accepted Finance generation.
-The authenticated API confirmed generation `dbgen_finance_20260827`. Its current
-PipelineContract and DeploymentContract inventories are empty; see
-[contract inventory](ASTRA-M02-CONTRACT-INVENTORY.json). M05 creates declarations
-through supported operations and records returned IDs before hosted writes.
+The authenticated API confirmed generation `dbgen_finance_20260827`. Its initial
+[contract inventory](ASTRA-M02-CONTRACT-INVENTORY.json) was empty. M05 has since
+[registered four supported declarations](ASTRA-M05-CONTRACT-REGISTRATION.json),
+recording actual returned IDs before any hosted writes.
 The frontend production declaration requires the finite M05 contract change;
 its old protected executor remains limited to yfinance. No IDs are fabricated here.
 
@@ -87,7 +87,7 @@ See [scoped M02 telemetry](ASTRA-M02-STAGING-TELEMETRY-VERIFIED.json).
   and exact-digest pull/run passed. The Mac remains an availability dependency.
 - All 13 required/denied network paths passed after the public-ingress correction.
   Relevant staging app signals are present; missing frontend signals remain explicit.
-- Runtime contract IDs, complete source/build evidence, frontend runtime-config
+- Remaining frontend contracts, complete source/build evidence, frontend runtime-config
   loading, autonomous progression and human production approvals remain M05–M11.
 
 These are finite Lucas-specific bindings, not a provider-neutral adapter contract.

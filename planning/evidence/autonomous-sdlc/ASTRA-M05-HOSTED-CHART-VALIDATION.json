@@ -1,0 +1,39 @@
+{
+  "observed_at": "2026-09-05T10:51:05.321290+00:00",
+  "source_base": "41ffd386864fa5416445fc29ba038610f6ac215a",
+  "helm_lint": "passed",
+  "helm_render": "passed",
+  "hosted_config": {
+    "bindings": [
+      {
+        "cluster_context": "lucas_engineering",
+        "gitops_ref": "main",
+        "gitops_repo": "https://github.com/lward27/lucas_engineering.git",
+        "id": "finance-yfinance",
+        "image_name": "registry.lucas.engineering/yfinance_wrapper",
+        "pipeline_contract_id": "pcontract_1788605350565822945",
+        "product_id": "prod_01a043699d65721193e7e75d38654a2d",
+        "production": {
+          "deployment_contract_id": "dcontract_1788605351512248801",
+          "kustomization_path": "charts/yfinance-wrapper/kustomization.yaml"
+        },
+        "repository_id": "repo_01a04369f6387e6095aee4047ed2224f",
+        "revision": "v1",
+        "rollback_permitted": true,
+        "schema_version": "pharness.dev/lucas-delivery-binding/v1alpha1",
+        "source_ref": "main",
+        "source_repo": "https://github.com/lward27/yfinance_wrapper.git",
+        "staging": {
+          "deployment_contract_id": "dcontract_1788605351039034558",
+          "kustomization_path": "charts/finance-staging/yfinance/kustomization.yaml"
+        }
+      }
+    ],
+    "enabled": false
+  },
+  "recorded_contract_ids_match": true,
+  "live_application": "not applied; compatible reader release still required",
+  "render_namespace": "pharness",
+  "initial_server_dry_run": "rejected namespace mismatch from default local render; corrected to actual namespace before retry",
+  "server_dry_run": "passed for Deployment/pharness-api in pharness"
+}
