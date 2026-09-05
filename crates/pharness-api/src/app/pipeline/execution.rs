@@ -203,6 +203,24 @@ pub(in crate::app) async fn internal_pipeline_intent_execution_outcome(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if super::hosted::is_hosted(&state.store, &intent).await? {
+        return Err(ApiError::conflict(
+            "hosted builds require the original admitted PipelineRun observation",
+        ));
+    }
+    record_pipeline_execution_outcome(State(state), Path(pipeline_intent_id), Json(request)).await
+}
+
+pub(in crate::app) async fn record_pipeline_execution_outcome(
+    State(state): State<AppState>,
+    Path(pipeline_intent_id): Path<String>,
+    Json(request): Json<PipelineIntentExecutionOutcomeRequest>,
+) -> Result<Json<PipelineIntentResponse>, ApiError> {
+    let intent = state
+        .store
+        .get_pipeline_intent(&pipeline_intent_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
     if intent.status != "executing" {
         return Err(ApiError::conflict(
             "execution outcome requires a PipelineIntent in executing status",
@@ -231,11 +249,12 @@ pub(in crate::app) async fn internal_pipeline_intent_execution_outcome(
         "failed" => (
             "failed",
             "pipeline_intent.execution_failed",
-            if intent
-                .intent_json
-                .pointer("/execution_state/state")
-                .and_then(Value::as_str)
-                == Some("pipeline_run_created")
+            if intent.intent_json.get("hosted_build").is_some()
+                || intent
+                    .intent_json
+                    .pointer("/execution_state/state")
+                    .and_then(Value::as_str)
+                    == Some("pipeline_run_created")
             {
                 "pipeline_run_failed"
             } else {

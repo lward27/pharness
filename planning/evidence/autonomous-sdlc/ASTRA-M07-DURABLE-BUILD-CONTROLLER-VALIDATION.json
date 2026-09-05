@@ -1,0 +1,251 @@
+{
+  "recorded_at": "2026-09-05T18:01:23.630977+00:00",
+  "initial_source_base": "252030cdd2e457e4658ed7489c7e6a833add2f28",
+  "refreshed_source_base": "e4948646a6f25a92fc1382d86a633c6d46a9bf30",
+  "branch": "codex/astra-build-progression",
+  "scope": "Durable automatic finite hosted builds; local implementation validation only",
+  "validation": {
+    "workspace_passed": 672,
+    "failed": 0,
+    "targets": [
+      {
+        "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "status": "ok",
+        "passed": 274,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_cli-99fc47e86a0160e1)",
+        "status": "ok",
+        "passed": 26,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_codex_host-29c0c9bd706652b9)",
+        "status": "ok",
+        "passed": 14,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_codex_host-ba341aa05fdd0c20)",
+        "status": "ok",
+        "passed": 13,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_config-e089ebc90c014b8c)",
+        "status": "ok",
+        "passed": 16,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "status": "ok",
+        "passed": 149,
+        "failed": 0
+      },
+      {
+        "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "status": "ok",
+        "passed": 6,
+        "failed": 0
+      },
+      {
+        "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+        "status": "ok",
+        "passed": 22,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_fireworks-bd22059e6db86a54)",
+        "status": "ok",
+        "passed": 14,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_model_gateway-1eaa58c36e64c975)",
+        "status": "ok",
+        "passed": 3,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+        "status": "ok",
+        "passed": 13,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-59b57ecd65585e61)",
+        "status": "ok",
+        "passed": 28,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+        "status": "ok",
+        "passed": 53,
+        "failed": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_worker-37e9fb2e6a68a151)",
+        "status": "ok",
+        "passed": 37,
+        "failed": 0
+      },
+      {
+        "target": "Running tests/hosted_build.rs (target/debug/deps/hosted_build-fab92f0d6dfc448e)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_codex_host",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_config",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_core",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_fireworks",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_openai_compatible",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_runhost",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "Doc-tests pharness_store",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0
+      }
+    ],
+    "clippy": "API/core/worker all targets; warnings denied; passed",
+    "architecture": "passed, including five parser tests",
+    "format": "passed",
+    "diff_check": "passed",
+    "route_inventory": 230,
+    "worker_integration_scenarios": 4,
+    "cluster_readonly_identity": {
+      "cluster_context": "lucas_engineering",
+      "subject": "system:serviceaccount:pharness:pharness-worker",
+      "namespace": "tekton-pipelines",
+      "resource": "pipelineruns.tekton.dev",
+      "verb": "create",
+      "allowed": false
+    }
+  },
+  "source_files": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "360a3fd3c87c4eafc9847ffe595aabc8f02cf5441fc42405a976e1aabee3ae6b",
+    "crates/pharness-api/src/app/hosted_controller/build.rs": "65a82552aa9f578ac4a1309c41395d7aaebc93cdf997e78f898db203ae1ff901",
+    "crates/pharness-api/src/app/hosted_controller/build/outcomes.rs": "d00e295fa8df881d30df0e078508602427503f082bb820a31c01529b9476faca",
+    "crates/pharness-api/src/app/hosted_controller/build/preparation.rs": "d5aadbccae026bb9fa99e1baaec7c06a3e3995faf68d37fc8ff73c2d0c331485",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "cf98e0ce4c75ee59f4595d47e08d755af096c9805c3c1b9233c5baa8b8d89bf5",
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "e3d3778583fc6fc146747df5e6808844af0a3c5817977c9569dcfd5bdbf72006",
+    "crates/pharness-api/src/app/internal.rs": "3af35ff7493150af26fc04f11736164e6ba006acc79ad623e859878d294e511f",
+    "crates/pharness-api/src/app/pipeline/execution.rs": "eff2f19bdc568ea81449e20c29d6bb150f5e1041ba816c3c51cc6582b0e33d7c",
+    "crates/pharness-api/src/app/pipeline/hosted.rs": "5e35b26fe91b62a4e3a8536e82db2bea3cb99fee0a8495c858ea56b8d0a531b4",
+    "crates/pharness-api/src/app/pipeline/intents.rs": "2be9d15cc84fd94a0b3a6646ca240ea11aa93bb07c7f41577ef40bafacd1a349",
+    "crates/pharness-api/src/app/tests/characterization.rs": "6dc68a269db4cf1254396ffb1deef4e6f3a76ea78a08a5f981781814e1ef155f",
+    "crates/pharness-api/src/app/tests/hosted_build.rs": "4b6737466ee4fdb83b6cac230a7a8a894bdaef73c8025ff0ec2ac6c8e28b5863",
+    "crates/pharness-api/src/app/tests/hosted_pipeline.rs": "5d9a4ccd36c1c4a5f6289179baeb44dc4e735a0fd0fa02d719d0572d8a705866",
+    "crates/pharness-api/src/app/tests/hosted_source_merge.rs": "4251bdf1e59f89f472e91839823da71d1119e71c7650fe5651c6f92e4e97c6d0",
+    "crates/pharness-api/src/app/tests/mod.rs": "99c9ab27e12a4ec8ab1cea686c0ad2eb2b6a35abaa322481a0e86306837f0dba",
+    "crates/pharness-api/src/dispatch.rs": "327eefc120036eef43b8e03e755e13263d62b474e0a30f069fad90652c950c66",
+    "crates/pharness-api/src/dispatch/hosted_build.rs": "ea0e551ded70c2d9602623c720ae25b0385d0dfeca95caa7e31af419c611795c",
+    "crates/pharness-api/tests/fixtures/app-route-inventory.tsv": "01ac321a46cc4a86447a49a33029c7ff883d7d43bbf6b85636ff938bb8728de1",
+    "crates/pharness-core/src/hosted_sdlc.rs": "e712249786e46efe4549bbf453cc244954165d761b825ccf4ff4a0d8ae6acb88",
+    "crates/pharness-core/src/hosted_sdlc/build.rs": "77448deabb28243235c22bee6f437f0a916c36439e3370cd7f9226af236aac81",
+    "crates/pharness-worker/src/hosted_build.rs": "94562a60801fc5dede5f118aa3d7e81ddfa5ee8570e366c86b6e0cb133c28bfa",
+    "crates/pharness-worker/src/main.rs": "77ada6fda4179eefd181391cc4b5b876800ab00aa45f2b6666ea8df40ae53157",
+    "crates/pharness-worker/tests/hosted_build.rs": "c1016c02db2b54f15526ac75b063d55e83934bd52d0a8687d5d0d76fb13a111b"
+  },
+  "logs": [
+    {
+      "path": "/private/tmp/astra-m07-build-progression-workspace-tests.log",
+      "sha256": "ea513b3e5df469c739dd7143bb0b220480b1f822af018469bc82175fc8e21aad"
+    },
+    {
+      "path": "/private/tmp/astra-m07-build-progression-clippy-final.log",
+      "sha256": "74cb9b8dd6a0606dbe0e84d591f8b8ae0634a57f7a3ddbec2910284c00072c80"
+    },
+    {
+      "path": "/private/tmp/astra-m07-build-progression-architecture-final.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    {
+      "path": "/private/tmp/astra-m07-build-progression-full-tests.log",
+      "sha256": "c064050242dbc34927a6c1f5e8ab67f0d06968576366ca1f2faa52d283e29b59"
+    },
+    {
+      "path": "/private/tmp/astra-m07-build-progression-tests-2.log",
+      "sha256": "3c0594d935280df916e49cc372ccc5f47a472dbd6927943d3277df4971110aaa"
+    },
+    {
+      "path": "/private/tmp/astra-m07-hosted-build-worker-integration.log",
+      "sha256": "93da446e90d8d609ff83ddf42d117944035c881a54962d27cfccfc97b0339eb4"
+    },
+    {
+      "path": "/private/tmp/astra-m07-build-progression-final-focused.log",
+      "sha256": "ae785d8c9dd00cd7fc154c30611f7c6375fe60fcda8a50107c8792d9167e9b11"
+    }
+  ],
+  "live_effects": {
+    "hosted_work_items_submitted": 0,
+    "live_builds_dispatched": 0,
+    "application_patches": 0,
+    "deployments": 0,
+    "production_approvals": 0
+  },
+  "recovery_contract": {
+    "build_admissions": 1,
+    "observer_dispatch_attempts": 1,
+    "observer_kubernetes_identity": "existing read-only worker",
+    "deadline": "original operation + existing 3600000ms controller bound",
+    "grant_expiry": "original operation + existing 1800000ms ceiling, capped by original deadline",
+    "automatic_build_retries": 0,
+    "pause": "stops new preparation/admission; observation of admitted work continues",
+    "success": "build result only; Release and WorkItem remain open"
+  },
+  "remaining_gates": [
+    "Source branch-protection decision and actual protected required-check enforcement",
+    "Application-source writer Administration read permission",
+    "Matching-runtime stage qualification and complete immutable PHarness release",
+    "Actual autonomous source-to-Tekton-to-registry evidence chain",
+    "M08 staging/runtime verification and M09 production approval",
+    "M11 two real autonomous maintenance WorkItems and M12 operational acceptance"
+  ]
+}

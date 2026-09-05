@@ -76,6 +76,9 @@ pub(super) async fn advance(
             action.state_hash.clone(),
             action.resource.clone(),
         )
+    } else if let Some((hash, resource)) = super::build::candidate(state, snapshot).await? {
+        require_authority(snapshot, HostedAutomaticAction::Build)?;
+        (super::build::ACTION.into(), hash, resource)
     } else if let Some(run) = continuation_candidate(snapshot) {
         require_authority(snapshot, HostedAutomaticAction::Test)?;
         require_authority(snapshot, HostedAutomaticAction::Verify)?;
@@ -114,7 +117,7 @@ pub(super) async fn advance(
     let repo_lock = format!("repository:{}", snapshot.metadata.repository_id);
     let keys = if runs_worker {
         vec!["coding", repo_lock.as_str()]
-    } else if action == "authorize_source_delivery" {
+    } else if action == "authorize_source_delivery" || action == super::build::ACTION {
         vec![repo_lock.as_str()]
     } else {
         Vec::new()

@@ -69,7 +69,7 @@ async fn route_inventory_matches_mounted_routes_and_auth_classes() {
     inventory.sort();
     assert_eq!(
         inventory.len(),
-        228,
+        230,
         "update the checked-in inventory only after reviewing an intentional route change"
     );
     assert_eq!(
@@ -678,6 +678,29 @@ pub(super) async fn test_state_with_git_and_gitops(
     allowed_repo: String,
     gitops_repo: String,
 ) -> AppState {
+    test_state_with_delivery_namespaces(kubectl_bin, allowed_repo, gitops_repo, vec!["ci".into()])
+        .await
+}
+
+pub(super) async fn test_state_with_hosted_build(
+    kubectl_bin: String,
+    allowed_repo: String,
+) -> AppState {
+    test_state_with_delivery_namespaces(
+        kubectl_bin,
+        allowed_repo.clone(),
+        allowed_repo,
+        vec!["tekton-pipelines".into()],
+    )
+    .await
+}
+
+async fn test_state_with_delivery_namespaces(
+    kubectl_bin: String,
+    allowed_repo: String,
+    gitops_repo: String,
+    tekton_namespaces: Vec<String>,
+) -> AppState {
     let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
     let worker = RunDispatcher::Kubernetes(KubernetesJobDispatcher::new(
         store.clone(),
@@ -689,7 +712,7 @@ pub(super) async fn test_state_with_git_and_gitops(
             inference_evaluation_node_hostname: None,
             service_account: "pharness-worker".to_string(),
             tekton_executor_service_account: "pharness-tekton-runner".to_string(),
-            tekton_allowed_namespaces: vec!["ci".to_string()],
+            tekton_allowed_namespaces: tekton_namespaces,
             tekton_executor_poll_seconds: 5,
             argo_executor_enabled: true,
             argo_executor_service_account: "pharness-argo-runner".to_string(),

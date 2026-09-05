@@ -96,11 +96,17 @@ The [verified build handoff](../../evidence/autonomous-sdlc/ASTRA-M07-HOSTED-BUI
 merged through [PR 345](https://github.com/lward27/pharness/pull/345) at
 `252030cdd2e457e4658ed7489c7e6a833add2f28`; 464 API/core/worker checks passed.
 It binds finite build authority to sealed source and retains declared Tekton outputs
-and conflicts. Durable automatic build dispatch and recovery are the next implementation slice.
+and conflicts. The [durable build controller](../../evidence/autonomous-sdlc/ASTRA-M07-DURABLE-BUILD-CONTROLLER.md)
+now records one build admission, original Job and PipelineRun identities, one read-only
+recovery observer, bounded grants and duplicate-safe terminal receipts. Its implementation
+passed 672 workspace tests. Deployment and the actual autonomous build/registry chain
+remain open.
 These changes are not included in the deployed 48c77b7 artifacts. Source-to-build
 progression and live source-merge acceptance remain open. The proposed required
 Finance source checks passed in both application PRs, but applying main-branch
 protections remains [a pending owner decision](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-MERGE-DECISION.md).
+The source writer also needs [Administration read permission](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-CREDENTIAL-READINESS.md)
+to inspect the protections immediately before merge; its existing token returns HTTP 403.
 That dependent gate cannot be waived; independent implementation can continue.
 
 Current evidence entry points:

@@ -15,6 +15,9 @@ pub(super) async fn execute_operation(
     operation: StoredWorkflowOperation,
     refs: Value,
 ) -> Result<Condition, ApiError> {
+    if operation.action == super::build::ACTION {
+        return super::build::reconcile(state, claim, snapshot, &operation, false).await;
+    }
     if matches!(
         operation.action.as_str(),
         "approve_work_plan" | "approve_change_set"
@@ -115,6 +118,9 @@ pub(super) async fn reconcile_operation(
     expired: bool,
     redispatch: bool,
 ) -> Result<Condition, ApiError> {
+    if operation.action == super::build::ACTION {
+        return super::build::reconcile(state, claim, snapshot, &operation, expired).await;
+    }
     if operation.status == "pending" {
         if claim.control != "active" || expired {
             state

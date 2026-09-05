@@ -24,9 +24,13 @@ pub(super) async fn fixture_with_policy(
     fake: &KubectlFixture,
     policy: Option<Value>,
 ) -> RepoDeliveryFixture {
-    let state =
+    let state = if policy.is_some() {
+        super::characterization::test_state_with_hosted_build(fake.command.clone(), REPO.into())
+            .await
+    } else {
         super::characterization::test_state_with_git_observer(fake.command.clone(), REPO.into())
-            .await;
+            .await
+    };
     let policy = match policy {
         Some(mut policy) => {
             let p = &policy["pipeline_contract"];

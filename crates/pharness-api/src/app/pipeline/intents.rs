@@ -587,6 +587,9 @@ pub(in crate::app) async fn retry_failed_pipeline_intent(
         .get_pipeline_intent(pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", pipeline_intent_id))?;
+    if super::hosted::is_hosted(&state.store, &current).await? {
+        return Err(ApiError::conflict("Hosted build recovery preserves the original execution. This manual retry route cannot allocate another build or extend its authority."));
+    }
     if current.status != "failed"
         || !matches!(
             pipeline_intent_execution_state(&current),
