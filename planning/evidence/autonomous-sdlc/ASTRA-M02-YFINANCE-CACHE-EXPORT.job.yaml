@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: astra-m02-yfinance-cache-export-20260905
+  namespace: tekton-pipelines
+  labels:
+    pharness.dev/program: astra-autonomous-sdlc
+spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      nodeName: ubuntu-lucas-engineering-2
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+      - name: export
+        image: registry.lucas.engineering/pharness-eval-runner@sha256:6e838f21e22e4b864f4d45188ac92cb2bc6ac26b5bd206b18e472e2f84248dd8
+        imagePullPolicy: IfNotPresent
+        command:
+        - python3
+        - -c
+        args:
+        - "import hashlib, http.server, io, json, os, re, tarfile, time\nfrom pathlib\
+          \ import Path\nroot_digest='sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1'\n\
+          content=Path('/cache'); archive=Path('/work/yfinance-original.oci.tar')\n\
+          seen={}; pending=[root_digest]; total=0\nwhile pending:\n digest=pending.pop()\n\
+          \ if digest in seen: continue\n if len(seen)>=128 or not re.fullmatch(r'sha256:[0-9a-f]{64}',digest):raise\
+          \ RuntimeError('invalid or excessive descriptor graph')\n path=content/digest[7:]\n\
+          \ size=path.stat().st_size\n if size>2*1024**3 or total+size>2*1024**3:raise\
+          \ RuntimeError('cached image exceeds bounded export size')\n h=hashlib.sha256()\n\
+          \ with path.open('rb') as f:\n  for chunk in iter(lambda:f.read(1024*1024),b''):h.update(chunk)\n\
+          \ if 'sha256:'+h.hexdigest()!=digest:raise RuntimeError('cached content\
+          \ digest mismatch')\n seen[digest]=(path,size);total+=size\n if size<=16*1024**2:\n\
+          \  try:document=json.loads(path.read_bytes())\n  except (ValueError,UnicodeDecodeError):continue\n\
+          \  if isinstance(document,dict):\n   for descriptor in document.get('manifests',[])+document.get('layers',[])+([document['config']]\
+          \ if 'config' in document else []):\n    if not isinstance(descriptor,dict)\
+          \ or 'digest' not in descriptor:raise RuntimeError('invalid image descriptor')\n\
+          \    pending.append(descriptor['digest'])\nroot=json.loads(seen[root_digest][0].read_bytes())\n\
+          index={'schemaVersion':2,'manifests':[{'mediaType':root['mediaType'],'digest':root_digest,'size':seen[root_digest][1],'annotations':{'org.opencontainers.image.ref.name':'yfinance-original'}}]}\n\
+          with tarfile.open(archive,'w') as tar:\n for name,data in [('oci-layout',b'{\"\
+          imageLayoutVersion\":\"1.0.0\"}'),('index.json',json.dumps(index).encode())]:\n\
+          \  info=tarfile.TarInfo(name);info.size=len(data);tar.addfile(info,io.BytesIO(data))\n\
+          \ for digest,(path,size) in seen.items():\n  info=tarfile.TarInfo('blobs/sha256/'+digest[7:]);info.size=size\n\
+          \  with path.open('rb') as f:tar.addfile(info,f)\nh=hashlib.sha256()\nwith\
+          \ archive.open('rb') as f:\n for chunk in iter(lambda:f.read(1024*1024),b''):h.update(chunk)\n\
+          result={'root_digest':root_digest,'descriptor_count':len(seen),'content_bytes':total,'archive_bytes':archive.stat().st_size,'archive_sha256':h.hexdigest(),'all_content_hashes_verified':True,'source_cache_read_only':True}\n\
+          print(json.dumps(result),flush=True)\nclass Handler(http.server.BaseHTTPRequestHandler):\n\
+          \ def do_GET(self):\n  if self.path!='/yfinance-original.oci.tar':self.send_error(404);return\n\
+          \  self.send_response(200);self.send_header('Content-Length',str(archive.stat().st_size));self.end_headers()\n\
+          \  with archive.open('rb') as f:\n   for chunk in iter(lambda:f.read(1024*1024),b''):self.wfile.write(chunk)\n\
+          \  self.server.delivered=True\n def log_message(self,*args):pass\nserver=http.server.HTTPServer(('127.0.0.1',9000),Handler);server.timeout=5;server.delivered=False\n\
+          deadline=time.monotonic()+480\nwhile not server.delivered and time.monotonic()<deadline:server.handle_request()\n\
+          server.server_close()\nif not server.delivered:raise RuntimeError('archive\
+          \ retrieval deadline exceeded')\nprint('verified archive delivered; original\
+          \ cache unchanged',flush=True)\n"
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+            ephemeral-storage: 512Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+            ephemeral-storage: 2304Mi
+        volumeMounts:
+        - name: cache
+          mountPath: /cache
+          readOnly: true
+        - name: work
+          mountPath: /work
+      volumes:
+      - name: cache
+        hostPath:
+          path: /var/lib/rancher/k3s/agent/containerd/io.containerd.content.v1.content/blobs/sha256
+          type: Directory
+      - name: work
+        emptyDir:
+          sizeLimit: 2Gi

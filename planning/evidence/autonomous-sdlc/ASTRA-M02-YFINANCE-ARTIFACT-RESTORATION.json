@@ -1,0 +1,97 @@
+{
+  "started_at": "2026-09-05T10:02:49.391535+00:00",
+  "completed_at": "2026-09-05T10:03:15.366753+00:00",
+  "cluster": "lucas_engineering",
+  "source_node": "ubuntu-lucas-engineering-2",
+  "source_cache_read_only": true,
+  "archive_sha256": "c6c0ddb29af255ed00a56db96663611777cb66ccb454c2a229e1706c234fd69a",
+  "source_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+  "restored_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+  "restoration_tag": "registry.lucas.engineering/yfinance_wrapper:astra-restored-f1cfc06fcac6-20260905",
+  "destination_tls_verified": true,
+  "transport": "kubectl port-forward to registry-write-gateway:8443; original registry hostname and private CA verified",
+  "blob_results": [
+    {
+      "digest": "sha256:fd6acdb929c78eed9adc15fbd123fcb898d1c168c782528e588c04372a5a9c64",
+      "bytes": 7688,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:b7bdb9b5ad66434e7365f228bed4643be49d606e99cad5295af344036d33165f",
+      "bytes": 947393,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:1861eda1a197b045a66a7b25f8cf0d62d746fa6767fe1c9e1a124c36a35cd3ef",
+      "bytes": 919512,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:f27e2a3c1b142507713be65a3a0b2c36e81d1c08e3f8bcb40132584e0db418a5",
+      "bytes": 142258330,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:0f1ab4d10af04732827f31d119f162c532a315ceb05b004e5ae65e77226c41f4",
+      "bytes": 2282,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:040fc61ec6e2aaaf2c3c119c92035e53b1098d0787ceb096c18a2d8f9bc84adf",
+      "bytes": 536,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:e5543466e50cd42f62b9587df37a596c52686eaf476960321702a08a66c59a1b",
+      "bytes": 420,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:ca7cf6478f3f19bfaef5f8457922aee1f238ffca17269bd51016da648676643c",
+      "bytes": 237,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:ee86cbb2b5ae4ec80466c36a5645e0bd252d0680b0264c3a1d02ba1131327da4",
+      "bytes": 249,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:bc67619158b85486e9f69441aae96c2e581cace96bd4e785357b6f4266216a37",
+      "bytes": 24076928,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:66e1e7fe58b0ec3a70b163a975c6f92f54b7a698c3601adac51f659bca8c9017",
+      "bytes": 6100783,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:d74736caedd40737be802d27bfe1d5d0e10377ddb1c7b4103391e0bbff5152e0",
+      "bytes": 236319920,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:ec935196e6a095bdd6ac865248321ea4fd33424071fe14264cd33900f8ae6212",
+      "bytes": 67797999,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:68b64c51cda3d04397bcf5742a29a9a1ba7adcfd18a376bacb8d114ed64cbd5a",
+      "bytes": 25638637,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:1da3cb2f93f2ca3c5bdaf4c024a7f1ebd717938d20c858e4be4b9aa81fc8608c",
+      "bytes": 49312314,
+      "result": "already_present"
+    }
+  ],
+  "manifests_restored": [
+    "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+  ],
+  "manifest_bytes_unchanged": true,
+  "application_rebuilt": false,
+  "production_restarted": false,
+  "prior_attempt": "The initial attempt restored missing blobs and received exact-digest PUT confirmations; its final GET omitted an OCI Accept header. This verification repeats the idempotent writes with explicit accepted manifest media types."
+}

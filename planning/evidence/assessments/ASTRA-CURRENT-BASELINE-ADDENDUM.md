@@ -5,7 +5,7 @@ Observed: 2026-09-05T00:51:25.906783+00:00. This updates the interpretation of t
 `12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d`. It does not rewrite that review.
 Implementation authority: [approved ASTRA program](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
 
-## Verified baseline
+## Verified starting baseline at 00:51 UTC
 
 | Concern | Current evidence | Limit |
 | --- | --- | --- |
@@ -79,12 +79,37 @@ It did not run a live model evaluation, complete hosted WorkItem, production pro
 or representative-user usability study. Prior release test counts remain historical
 reported evidence, not checks rerun here. M01 made no cluster or application-code change.
 
-## M02/M03 refresh
+## Implementation refresh at 10:41 UTC
 
-- M03 evidence semantics, module boundaries, and generated workspace cleanup are now
-  implemented at `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; [test acceptance](../autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md). Live images remain unchanged.
-- Finance frontend and PHarness Argo applications auto-sync, but yfinance currently
-  has no automated sync policy. M09 must align that configuration with the agreed
-  human approval before production GitOps merge.
-- After the owner rotated the Cloudflare token, all three Finance DNS challenges
-  were presented successfully. Renewal/HTTPS remains under verification in M02.
+The table above preserves the original baseline. These later observations supersede
+its mutable status claims; they do not imply complete autonomous acceptance.
+
+- M01/M03 are merged. M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`;
+  [acceptance evidence](../autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
+  PHarness main is now `fd740927110366a983de6bb0d3bc6c576577708b`, including the
+  M04 evaluator scratch cleanup. Compiled live runtime remains `83a2689...` pending release.
+- Finance TLS renewed on the old controller after credential rotation. The approved
+  sequential cert-manager upgrade reached 1.20.3, preserving 31 Ready Certificates
+  and all 78 retained request UIDs. The earlier cleanup error is not a live blocker.
+- GitOps `137262f4377c5f1d19379f73e83249d66d09a0fd` has both staging applications
+  Synced/Healthy. The frontend uses its captured immutable digest. The exact backend
+  production artifact was recovered from retained node content and restored byte-for-byte;
+  staging pulled it. Production was not restarted or rebuilt.
+- Staging isolation now passes all 13 expected/denied connection checks, including
+  production's public ingress. Fresh yfinance metrics/logs/traces and frontend logs
+  are observed. Frontend runtime-config loading remains the unimplemented M11 request.
+- The owner-selected M1 Mac serves the existing Tekton BuildKit endpoint with mTLS.
+  A 112 MiB uncached AMD64 build/push and exact-digest pull/run passed through the
+  existing private registry gateway. Separate repository capability checks passed
+  after the owner replaced the GitOps writer token.
+- The authenticated Finance generation is `dbgen_finance_20260827`; runtime contract
+  inventories are currently empty. M05 must register actual IDs and deploy compatible
+  readers before hosted writes. Its new migration/code is not live.
+- Frontend and PHarness Argo auto-sync; yfinance still requires M09 alignment with
+  human approval before the production GitOps merge.
+- The previous coding evaluation was evicted for accumulated scratch storage and
+  produced no qualifying report. Fixed limits and frozen thresholds remain intact;
+  M04 must publish the repair and run fresh qualifications.
+
+See [current M02 evidence](../autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md)
+and the master ledger for remaining gates. Healthy infrastructure is not F13 closure.

@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-09-05T09:27:00Z",
+  "host_architecture": "arm64",
+  "docker_context": "rancher-desktop",
+  "buildx_builder": "rancher-desktop",
+  "advertised_platforms": [
+    "linux/arm64"
+  ],
+  "requested_platform": "linux/amd64",
+  "uncached_run_passed": true,
+  "container_execution_architecture": "x86_64",
+  "probe_base": "docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
+  "probe_image": "astra-amd64-preflight:20260905",
+  "probe_image_identity": "sha256:0ff42a3b85b53c37b3b5b794cd7d36991e57e6dcf79043ca1f7398f82225dd2a",
+  "scope": "Local builder capability only; no Tekton build or registry push acceptance"
+}

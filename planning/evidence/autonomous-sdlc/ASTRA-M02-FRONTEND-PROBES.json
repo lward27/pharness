@@ -1,0 +1,62 @@
+{
+  "observed_at": "2026-09-05T01:38:24.575284+00:00",
+  "gitops_revision": "e036269a173a9e2563bb6011854b561007b49828",
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/runtime-config.json",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "csp": null,
+      "cache_control": "no-store",
+      "configuration": {
+        "schemaVersion": 1,
+        "environment": "staging",
+        "services": {
+          "database": null,
+          "yfinance": "/api/yfinance",
+          "scraper": null
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "csp": "connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
+      "cache_control": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/database/healthz",
+      "status": 503,
+      "expected": 503,
+      "pass": true,
+      "csp": "connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
+      "cache_control": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/yfinance/healthz",
+      "status": 403,
+      "expected": 403,
+      "pass": true,
+      "csp": "connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
+      "cache_control": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/yfinance/healthz",
+      "status": 502,
+      "expected": 200,
+      "pass": false,
+      "csp": "connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
+      "cache_control": null,
+      "blocker": "staging_backend_image_unavailable"
+    }
+  ],
+  "scope": "frontend readiness only; backend registry digest missing; 502 is recorded failure, not application acceptance"
+}

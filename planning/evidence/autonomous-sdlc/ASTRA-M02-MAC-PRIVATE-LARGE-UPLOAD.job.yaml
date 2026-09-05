@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: astra-m02-mac-private-large-upload-20260905
+  namespace: tekton-pipelines
+  labels:
+    pharness.dev/program: astra-autonomous-sdlc
+spec:
+  activeDeadlineSeconds: 360
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        pharness.dev/program: astra-autonomous-sdlc
+        tekton.dev/task: remote-buildkit
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+      - name: probe
+        image: docker.io/moby/buildkit@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - "cat > /work/Dockerfile <<'DOCKERFILE'\nFROM docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3\n\
+          RUN test \"$(uname -m)\" = x86_64 && echo ASTRA_UNCACHED_AMD64_EXECUTION_PASSED\n\
+          RUN dd if=/dev/urandom of=/payload.bin bs=1048576 count=112 && test \"$(wc\
+          \ -c </payload.bin)\" = 117440512\nLABEL org.lucas-engineering.buildkit-smoke=\"\
+          astra-mac-private-large-20260905\"\nDOCKERFILE\nbuildctl --addr tcp://k3s-buildkit.tekton-pipelines.svc.cluster.local:12340\
+          \ \\\n --tlsservername buildkit-k3s.lucas.internal \\\n --tlscacert /var/run/buildkit-tls/ca.pem\
+          \ \\\n --tlscert /var/run/buildkit-tls/cert.pem \\\n --tlskey /var/run/buildkit-tls/key.pem\
+          \ \\\n build --frontend dockerfile.v0 --local context=/work --local dockerfile=/work\
+          \ \\\n --opt platform=linux/amd64 --no-cache \\\n --output type=image,name=registry.lucas.engineering/buildkit-smoke:astra-mac-private-large-20260905,push=true\
+          \ \\\n --metadata-file /work/metadata.json\ncat /work/metadata.json\n"
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - name: tls
+          mountPath: /var/run/buildkit-tls
+          readOnly: true
+        - name: registry-auth
+          mountPath: /var/run/registry
+          readOnly: true
+        - name: work
+          mountPath: /work
+        env:
+        - name: DOCKER_CONFIG
+          value: /var/run/registry
+        - name: TMPDIR
+          value: /work
+      volumes:
+      - name: tls
+        secret:
+          secretName: remote-buildkit-client-tls
+          defaultMode: 256
+      - name: registry-auth
+        secret:
+          secretName: lucas-registry-push
+          defaultMode: 256
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+      - name: work
+        emptyDir:
+          sizeLimit: 64Mi

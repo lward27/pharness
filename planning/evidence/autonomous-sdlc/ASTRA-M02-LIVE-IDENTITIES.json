@@ -1,0 +1,161 @@
+{
+  "observed_at": "2026-09-05T01:44:48.427242+00:00",
+  "context": "lucas_engineering",
+  "applications": [
+    {
+      "name": "root-app",
+      "revision": "e036269a173a9e2563bb6011854b561007b49828",
+      "sync": "Synced",
+      "health": "Healthy",
+      "auto_sync": true
+    },
+    {
+      "name": "finance-frontend",
+      "revision": "e036269a173a9e2563bb6011854b561007b49828",
+      "sync": "Synced",
+      "health": "Healthy",
+      "auto_sync": true
+    },
+    {
+      "name": "yfinance-wrapper",
+      "revision": "e036269a173a9e2563bb6011854b561007b49828",
+      "sync": "Synced",
+      "health": "Healthy",
+      "auto_sync": false
+    },
+    {
+      "name": "finance-frontend-staging",
+      "revision": "e036269a173a9e2563bb6011854b561007b49828",
+      "sync": "Synced",
+      "health": "Healthy",
+      "auto_sync": true
+    },
+    {
+      "name": "yfinance-staging",
+      "revision": "e036269a173a9e2563bb6011854b561007b49828",
+      "sync": "Synced",
+      "health": "Degraded",
+      "auto_sync": true
+    }
+  ],
+  "pods": [
+    {
+      "namespace": "apps-prod",
+      "name": "yfinance-wrapper-d88db787f-zbfck",
+      "phase": "Running",
+      "images": [
+        "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+      ],
+      "containers": [
+        {
+          "name": "yfinance-wrapper",
+          "ready": true,
+          "imageID": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+          "restarts": 0,
+          "waiting_reason": null
+        }
+      ]
+    },
+    {
+      "namespace": "apps-prod",
+      "name": "finance-frontend-77d8696c66-jd6q5",
+      "phase": "Running",
+      "images": [
+        "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+      ],
+      "containers": [
+        {
+          "name": "finance-frontend",
+          "ready": true,
+          "imageID": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d",
+          "restarts": 0,
+          "waiting_reason": null
+        }
+      ]
+    },
+    {
+      "namespace": "apps-staging",
+      "name": "yfinance-wrapper-66b99984d9-w7qq6",
+      "phase": "Pending",
+      "images": [
+        "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+      ],
+      "containers": [
+        {
+          "name": "yfinance-wrapper",
+          "ready": false,
+          "imageID": "",
+          "restarts": 0,
+          "waiting_reason": "ImagePullBackOff"
+        }
+      ]
+    },
+    {
+      "namespace": "apps-staging",
+      "name": "finance-frontend-67c58fbcfd-d64zb",
+      "phase": "Running",
+      "images": [
+        "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+      ],
+      "containers": [
+        {
+          "name": "finance-frontend",
+          "ready": true,
+          "imageID": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d",
+          "restarts": 0,
+          "waiting_reason": null
+        }
+      ]
+    }
+  ],
+  "certificates": [
+    {
+      "name": "finance-lucas-engineering-tls",
+      "not_after": "2026-08-20T14:23:21Z",
+      "conditions": [
+        {
+          "type": "Ready",
+          "status": "False",
+          "reason": "Expired"
+        },
+        {
+          "type": "Issuing",
+          "status": "False",
+          "reason": "Failed"
+        }
+      ]
+    },
+    {
+      "name": "finance-db-lucas-engineering-tls",
+      "not_after": "2026-08-20T13:23:15Z",
+      "conditions": [
+        {
+          "type": "Ready",
+          "status": "False",
+          "reason": "Expired"
+        },
+        {
+          "type": "Issuing",
+          "status": "False",
+          "reason": "Failed"
+        }
+      ]
+    },
+    {
+      "name": "yfinance-lucas-engineering-tls",
+      "not_after": "2026-08-20T13:21:33Z",
+      "conditions": [
+        {
+          "type": "Ready",
+          "status": "False",
+          "reason": "Expired"
+        },
+        {
+          "type": "Issuing",
+          "status": "False",
+          "reason": "Failed"
+        }
+      ]
+    }
+  ]
+}

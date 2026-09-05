@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-09-05T09:28:47.037928+00:00",
+  "certificates": 31,
+  "explicit_preservation": true,
+  "prior_request_count": 78,
+  "current_request_count": 78,
+  "lost_request_uids": [],
+  "gitops_preservation_merge": "999f958bf35d87a0de565cae933d4121b8ab8de7",
+  "pharness_preservation_merge": "97f65557870154c9b02ba5a71d83a006ad6e638e"
+}
