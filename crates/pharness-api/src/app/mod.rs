@@ -30,6 +30,7 @@ mod evidence;
 mod execution_checks;
 mod gitops;
 mod hashing;
+mod hosted_controller;
 mod hosted_workflow;
 mod identifiers;
 mod inference;

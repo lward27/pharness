@@ -241,7 +241,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         }
         None => None,
     };
-    let action_rail = derive_repo_actions(
+    let mut action_rail = derive_repo_actions(
         &metadata,
         RepoActionInputs {
             attempts: (work_item.attempt_count, work_item.max_attempts),
@@ -274,6 +274,14 @@ pub(in crate::app) async fn repo_work_item_flow(
         .into_iter()
         .map(Into::into)
         .collect();
+    let workflow_control = state
+        .store
+        .get_workflow_reconciliation(work_item_id)
+        .await?;
+    if let Some(control) = &workflow_control {
+        action_rail =
+            crate::app::hosted_controller::control_actions(control, metadata.closed_at.is_some())?;
+    }
     let first_action = action_rail.first();
     let safe_advance = first_action
         .map(|action| {
@@ -307,7 +315,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         });
     let work_item_response: crate::dto::WorkItemResponse =
         crate::dto::WorkItemResponse::from(work_item.clone()).with_repo_metadata(&metadata);
-    let reconcile_preview = ReconcileWorkItemResponse {
+    let mut reconcile_preview = ReconcileWorkItemResponse {
         action: first_action
             .map(|action| action.id.clone())
             .unwrap_or_else(|| "wait".into()),
@@ -344,6 +352,14 @@ pub(in crate::app) async fn repo_work_item_flow(
             .unwrap_or_default(),
         authorization_checks: Vec::new(),
     };
+    if let Some(control) = &workflow_control {
+        reconcile_preview.action = "controller_wait".into();
+        reconcile_preview.message = control.condition_reason.clone();
+        reconcile_preview.boundary = control.condition.clone();
+        reconcile_preview.can_apply = false;
+        reconcile_preview.effect_summary =
+            "Authorized progression is owned by the hosted controller".into();
+    }
     Ok(WorkItemFlowResponse {
         work_item: work_item_response,
         reconcile_preview,
@@ -359,6 +375,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         ),
         repo_mode: Some(json!({
             "metadata":metadata,
+            "workflow_control":workflow_control.as_ref().map(crate::app::hosted_controller::public_state),
             "state_hash":repo_work_item_state_hash(&metadata)?,
             "ownership":{
                 "product":product,

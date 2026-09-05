@@ -1,9 +1,10 @@
 # ASTRA M06: Durable controller implementation evidence
 
-Status: persistence preparation tested; controller integration and milestone acceptance open.
+Status: persistence, worker dispatch recovery, and operator controls tested; continuous progression and milestone acceptance open.
 Observed 2026-09-05. Worktree `pharness-astra-controller`, branch
 `codex/astra-autonomous-controller`, created from current main `db84b797` and
-merged with tested M05 preparation at `e197497`. The deployed API remains on
+merged with tested M05 preparation at `e197497`, then current main `2249950` at
+controller merge `3a2e369`. The deployed API remains on
 `fd740927`; no M06 code or schema has been deployed.
 
 ## Implemented boundary
@@ -52,10 +53,23 @@ Clippy, formatting and architecture checks pass. See
 [dispatch recovery evidence](ASTRA-M06-DISPATCH-RECOVERY-VALIDATION.json). The
 adapter uses a local fake Kubernetes executable with no cluster credentials.
 
+The existing action endpoint now provides versioned pause, resume, and cancellation
+for hosted work. It rejects routine manual advancement, preserves legacy actions,
+and keeps reads effect-free. The public state explains that already-dispatched work
+may finish while observation and authorized recovery continue. A process admission
+lock also closes a race between simultaneous legacy and hosted dispatches; one API
+replica alone did not serialize asynchronous capacity checks.
+
+After these changes the complete API/admin suite passed **244 tests**. With the
+unchanged 51 store tests, **295 distinct tests** passed. A 16-test hosted subset
+is included in the API total. Clippy, formatting, and architecture checks passed.
+Two unused-result warnings in test code were corrected before final Clippy. See
+[control and admission evidence](ASTRA-M06-CONTROLS-AND-ADMISSION-VALIDATION.json).
+
 ## Remaining implementation and acceptance
 
-The API loop, routine progression, scheduling of dispatch recovery, operator control routes,
-callback integration and their adapter tests remain to be implemented. No autonomous
+The API loop, routine progression, scheduling of dispatch recovery, callback
+integration and their adapter tests remain to be implemented. No autonomous
 workflow or cluster recovery is claimed by the persistence tests. M05 compatible
 readers and qualification remain dependencies; this independent preparation does
 not waive those gates.

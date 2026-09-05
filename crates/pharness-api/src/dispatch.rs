@@ -23,6 +23,7 @@ mod recovery;
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
 const CHAINED_RUN_HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(250);
+static RUN_ADMISSION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const WORKSPACE_ID_LABEL: &str = "pharness.lucas.engineering/workspace-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
@@ -1335,6 +1336,9 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         approval: Option<&StoredApproval>,
         predecessor_run_id: Option<&str>,
     ) -> anyhow::Result<()> {
+        // SQLite is single-writer, but HTTP handlers and spawned dispatch tasks
+        // are concurrent. Keep capacity observation and Job creation together.
+        let _admission = RUN_ADMISSION.lock().await;
         let hosted_manifest = recovery::is_hosted(run)
             .then(|| recovery::bind_manifest(self.job_manifest(run, approval)));
         if let Some(manifest) = &hosted_manifest {
@@ -1585,10 +1589,9 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         manifest
     }
 
-    /// The API is deliberately single-replica while SQLite is the durable
-    /// store, so this read-before-create admission check is sufficient for the
-    /// first bounded coding-worker pool. A future multi-worker controller must
-    /// replace it with durable queue admission.
+    /// The caller holds RUN_ADMISSION across this observation and creation.
+    /// Persisted hosted operation locks survive restarts; this process lock also
+    /// serializes legacy dispatches sharing the same single-replica worker pool.
     async fn list_run_jobs_for_capacity(&self) -> anyhow::Result<serde_json::Value> {
         let selector = format!("{JOB_NAME_LABEL}={JOB_NAME_VALUE}");
         let output = tokio::process::Command::new(&self.kubectl_bin)
@@ -5149,6 +5152,64 @@ mod tests {
             manifest.pointer("/spec/activeDeadlineSeconds"),
             Some(&json!(600 + NETWORK_POLICY_STABILIZATION_SECONDS))
         );
+    }
+
+    #[tokio::test]
+    async fn simultaneous_legacy_and_hosted_dispatch_share_one_worker_slot() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!(
+            "pharness-admission-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let kubectl = root.join("kubectl");
+        // Capture an empty capacity response before delaying it. Without an
+        // admission lock, both callers observe zero Jobs and create two.
+        let script = format!(
+            r#"#!/usr/bin/env python3
+import json,pathlib,sys,time
+root=pathlib.Path({root:?})
+args=sys.argv[1:]
+if args[:2]==['get','jobs']:
+    jobs=[json.loads(p.read_text()) for p in root.glob('job-*.json')]
+    time.sleep(.1)
+    print(json.dumps({{'items':jobs}}))
+elif args[:2]==['get','job']:
+    p=root/('job-'+args[2]+'.json')
+    if p.exists():print(p.read_text())
+elif args[0]=='get':
+    print('persistentvolumeclaim/already-provisioned')
+elif args[0]=='create':
+    job=json.load(sys.stdin)
+    assert job['kind']=='Job'
+    job['status']={{'active':1}}
+    (root/('job-'+job['metadata']['name']+'.json')).write_text(json.dumps(job))
+    with (root/'creates').open('a') as f:f.write('x')
+else:sys.exit(99)
+"#,
+            root = root.to_str().unwrap()
+        );
+        std::fs::write(&kubectl, script).unwrap();
+        std::fs::set_permissions(&kubectl, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.kubectl_bin = kubectl.to_str().unwrap().into();
+        dispatcher.config.max_concurrent_run_jobs = 1;
+        let mut legacy = test_run();
+        legacy.id = RunId::new("run_legacy_admission");
+        let mut hosted = test_run();
+        hosted.id = RunId::new("run_hosted_admission");
+        hosted.execution_target_json["hosted_workflow_policy_hash"] = json!("sha256:fixture");
+        let (a, b) = tokio::join!(
+            dispatcher.create_job(&legacy, None, None),
+            dispatcher.create_job(&hosted, None, None)
+        );
+        assert_ne!(
+            a.is_ok(),
+            b.is_ok(),
+            "exactly one Run should be admitted: {a:?}, {b:?}"
+        );
+        assert_eq!(std::fs::read(root.join("creates")).unwrap().len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     async fn test_dispatcher(node_hostname: Option<String>) -> KubernetesJobDispatcher {

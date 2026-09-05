@@ -57,6 +57,23 @@ pub(in crate::app) async fn execute_work_item_action(
             .map(|Extension(OperatorIdentity(name))| name)
             .or_else(|| clean_optional_text(request.actor.clone()))
             .ok_or_else(|| ApiError::bad_request("action execution actor is required"))?;
+        if state
+            .store
+            .get_workflow_reconciliation(&work_item_id)
+            .await?
+            .is_some()
+        {
+            return crate::app::hosted_controller::execute_control(
+                &state,
+                &work_item_id,
+                &action_id,
+                &request.state_hash,
+                &actor,
+                &request.reason,
+            )
+            .await
+            .map(Json);
+        }
         let value = super::super::repo_mode::execute_repo_work_item_action(
             &state,
             &work_item_id,
