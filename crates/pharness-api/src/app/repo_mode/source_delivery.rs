@@ -906,6 +906,9 @@ pub(in crate::app) async fn internal_source_delivery_observation_context(
     }
     Ok(Json(GitDeliveryObservationContextResponse {
         execution_id: query.execution_id,
+        expected_base_commit_sha: intent.authorization["workflow_policy_hash"]
+            .is_string()
+            .then(|| intent.base_commit.clone()),
         repository: intent.source_repo,
         base_ref: intent.base_ref,
         head_branch: pull_request
@@ -1117,9 +1120,13 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
                     work_item_id,
                     &intent,
                     &provider_observation,
-                    "failed",
-                    "merged pull-request head does not match approved source provenance",
-                    request.merge_commit_sha.as_deref(),
+                    SourceDeliveryConclusion {
+                        status: "failed",
+                        stop_reason:
+                            "merged pull-request head does not match approved source provenance",
+                        merge_commit_sha: request.merge_commit_sha.as_deref(),
+                        hosted_merge_proof: None,
+                    },
                 )
                 .await?;
             }
@@ -1213,6 +1220,8 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
                         "controller:repo-mode",
                         if pull_request_state == "closed" {
                             "source pull request closed without merge"
+                        } else if intent.authorization["workflow_policy_hash"].is_string() {
+                            "source merge is supervised by the saved hosted workflow"
                         } else {
                             "manual merge and provider checks remain external"
                         },
@@ -1260,8 +1269,14 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         .latest_provider_check_set_observation(&intent.id, "pre_merge")
         .await?;
     let current = current_millis();
+    let hosted_merge_proof =
+        crate::app::hosted_controller::source_merge::observed_proof(&state, &intent, &request)
+            .await?;
     let delivery_succeeded = pull_request_state == "closed"
         && merge_sha.is_some()
+        && hosted_merge_proof
+            .as_ref()
+            .map_or(true, |proof| proof["accepted"] == true)
         && provider_status == "passing"
         && pre_merge.as_ref().is_some_and(|observation| {
             observation.authoritative_rules_succeeded
@@ -1279,9 +1294,9 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         "failed"
     };
     let stop_reason = if delivery_succeeded {
-        "manual merge matched the approved head and fresh authoritative required checks"
+        "source merge matched the approved head, applicable authority, and fresh required checks"
     } else {
-        "merge occurred without matching fresh passing pre-merge provider evidence"
+        "source merge lacks matching authority, source ancestry, or fresh passing check evidence"
     };
     if let SourceDeliverySubject::WorkItem(work_item_id) = &subject {
         seal_source_delivery_closure(
@@ -1289,9 +1304,12 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
             work_item_id,
             &intent,
             &provider_observation,
-            terminal_status,
-            stop_reason,
-            merge_sha,
+            SourceDeliveryConclusion {
+                status: terminal_status,
+                stop_reason,
+                merge_commit_sha: merge_sha,
+                hosted_merge_proof: hosted_merge_proof.as_ref(),
+            },
         )
         .await?;
     }
@@ -1303,6 +1321,7 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         "pre_merge_observation_id":pre_merge.as_ref().map(|observation| &observation.id),
         "merge_observation_id":provider_observation.id,
         "status":terminal_status,
+        "hosted_merge_proof":hosted_merge_proof,
     });
     let intent = state
         .store
@@ -1473,15 +1492,26 @@ pub(super) fn derive_provider_check_status(
     Ok(status)
 }
 
+struct SourceDeliveryConclusion<'a> {
+    status: &'a str,
+    stop_reason: &'a str,
+    merge_commit_sha: Option<&'a str>,
+    hosted_merge_proof: Option<&'a Value>,
+}
+
 async fn seal_source_delivery_closure(
     state: &AppState,
     work_item_id: &str,
     intent: &StoredSourceDeliveryIntent,
     provider: &pharness_store::StoredProviderCheckSetObservation,
-    status: &str,
-    stop_reason: &str,
-    merge_commit_sha: Option<&str>,
+    conclusion: SourceDeliveryConclusion<'_>,
 ) -> Result<(), ApiError> {
+    let SourceDeliveryConclusion {
+        status,
+        stop_reason,
+        merge_commit_sha,
+        hosted_merge_proof,
+    } = conclusion;
     let existing = state
         .store
         .list_effective_stage_outcomes(work_item_id)
@@ -1502,6 +1532,7 @@ async fn seal_source_delivery_closure(
         "provider_check_observation_id":provider.id,
         "provider_check_observation_hash":provider.content_hash,
         "merge_commit_sha":merge_commit_sha,
+        "hosted_merge_proof":hosted_merge_proof,
     });
     let execution = state
         .store

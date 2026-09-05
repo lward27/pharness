@@ -486,8 +486,7 @@ async fn hosted_source_callback_does_not_reset_expired_wait_or_close_the_work_it
         assert_eq!(
             state.condition,
             match status {
-                "merged" => "progressing",
-                "failed" | "head_drift" | "pull_request_closed" => "blocked",
+                "merged" | "failed" | "head_drift" | "pull_request_closed" => "blocked",
                 _ => "wait_expired",
             }
         );

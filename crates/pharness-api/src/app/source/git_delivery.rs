@@ -1261,6 +1261,7 @@ pub(in crate::app) async fn internal_git_delivery_observation_context(
         .ok_or_else(|| ApiError::conflict("Git observation execution has no source provenance"))?;
     let _ = run_id;
     Ok(Json(GitDeliveryObservationContextResponse {
+        expected_base_commit_sha: None,
         execution_id: query.execution_id,
         repository: source.repository,
         base_ref: source.base_ref,

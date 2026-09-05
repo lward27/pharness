@@ -1,13 +1,10 @@
 # ASTRA: Hosted workflow configuration and compatibility
 
-Status: M05 compatible reader deployed, 2026-09-05 at 14:07 UTC. Source
-`2249950` and its verified image set/native bundle are retained. Live schema 0052
-preserves the Finance generation, all historical WorkItems/Runs, stage evidence,
-audit records and retention holds. Hosted creation and Coding Reliability V2
-remain disabled; this is not autonomous-delivery acceptance.
-Read the [program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) and
-[M05 evidence](../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md)
-for current acceptance, rather than treating configuration as proof of autonomy.
+Status: versioned contract with partially implemented delivery. The
+[program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) owns current deployment,
+qualification, activation and acceptance status. The compatible schema-53 reader
+was verified on 2026-09-05; hosted creation remains disabled. A registered binding
+or compatible reader is not autonomous-delivery acceptance.
 
 ## One request and one saved authorization
 
@@ -28,7 +25,8 @@ unbounded repair, an additional coding backend or generic platform adapters.
 
 Canonical stages remain discover, plan, implement, test, verify, source_delivery,
 release and observe. Repair is the existing bounded implementation correction.
-A source merge keeps hosted work open. A hosted row cannot complete until all eight
+A successful source merge keeps hosted work open. An invalid source merge can
+terminate the request as failed, with downstream stages unfulfilled. A hosted row cannot complete successfully until all eight
 stage outcomes are successful; M07–M09 additionally bind the individually
 inspectable source, build, staging, approval and production evidence. The stage
 count alone is not a complete evidence chain.
@@ -37,9 +35,10 @@ count alone is not a complete evidence chain.
 
 `deploy/helm/pharness/values.yaml` owns `hostedWorkflow`. When enabled, the API Deployment passes
 it as `PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON`. The reader default and committed
-Helm setting are disabled. The chart currently declares only the verified yfinance
-binding; frontend registration completes after the compatible M05 API and M07
-Pipeline are available. Never insert guessed database IDs or silently substitute
+Helm setting are disabled. The chart currently declares the yfinance binding. The frontend Pipeline and
+production contract were also registered through the live schema-53 API; its
+complete hosted binding still requires integration. [Frontend registration](../evidence/autonomous-sdlc/ASTRA-M05-FRONTEND-CONTRACT-REGISTRATION.json)
+records the returned identities. These declarations do not enable execution. Never insert guessed database IDs or silently substitute
 another repository, environment or Pipeline.
 
 The schema-51 API registered the existing yfinance Pipeline, both staging targets,
@@ -48,8 +47,8 @@ and the protected yfinance production target through its supported contract APIs
 contains returned identifiers, exact documents and the accepted Finance generation
 `dbgen_finance_20260827`. These are metadata declarations. Registration launched no
 WorkItem, build, deployment, approval or cluster mutation. Frontend production
-contract declaration requires the M05 API change; it does not enable the old
-protected-yfinance executor to deploy the frontend.
+contract declaration is now recorded separately. It does not grant production
+approval or implement frontend release execution.
 
 Each binding names the Product and repository IDs, canonical source URL/main,
 `lucas_engineering`, PipelineContract ID, untagged registry repository, canonical
@@ -77,29 +76,46 @@ Disabling **new submissions** does not change the authorization of existing work
 Deterministic Test requests no model access. Test fixtures do not establish a
 qualified live provider or autonomous delivery.
 
+## Durable source merge boundary
+
+The hosted source controller preserves the original branch/PR publication
+permission and records separate `pharness.dev/hosted-source-merge/v1alpha1`
+authority in its existing operation. That authority binds the approved ChangeSet,
+policy, original base, exact PR head and branch, Finance repository, required CI
+identity and original source-wait deadline. It cannot target the GitOps repository.
+
+The isolated Git writer validates strict, administrator-enforced branch protection,
+required CI and exact source. A durable admission record permits one provider merge
+attempt. Lost admission or merge acknowledgements lead to observation, not another
+merge attempt. Pause/cancel and expired or stale evidence withhold new admission;
+late outcome receipts remain recordable. GET requests never grant an attempt.
+
+A worker receipt remains a claim pending independent provider observation. The
+observer reads the actual merge commit's parent commits and tree. Hosted source
+success requires matching original base/head ancestry, fresh checks and a recorded
+admission; source-only history retains its prior contract. Successful hosted source
+work remains open for the separate build, deployment and runtime gates. See the
+[M07 merge evidence](../evidence/autonomous-sdlc/ASTRA-M07-GUARDED-SOURCE-MERGE.md)
+for implementation, validation and remaining gaps.
+
 ## Reader rollout and rollback floor
 
-Migration 0052 adds policy/hash fields and completion guards while preserving
-legacy records, Finance generation, retention and audit history. Legacy WorkItems
-retain null policy and explicitly source-only completion semantics. Additive does
-not mean the schema-51 executable is rollback-compatible: its SQLx migrator rejects
-an unknown applied migration.
+Migration 0052 introduced hosted policy fields and completion guards; 0053 added
+durable reconciliation, operations and claims. The live Finance history and schema
+were verified after deploying the complete `48c77b7` image set. The
+[compatible controller release](../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md)
+is the current schema-53 recovery floor. Schema-52 binaries, including the retained
+`2249950` release, cannot be deployed against that database.
 
-Build and retain the immutable compatible reader release first. Record its exact
-image set as the earliest safe rollback release **before applying 0052**. Deploy
-with `hostedWorkflow.enabled: false`; verify the actual schema/generation and
-historical, paused and partial reads. An older image must not misread hosted work
-or be used after this migration. Restore forward with the retained compatible
-reader if a subsequent release fails; do not remove migration history or reset data.
+The new source-merge execution kind also requires compatible API and worker
+readers. Before enabling these workflow writes, release all required images from
+one merged source revision and record the new minimum compatible rollback set.
+Do not roll back to a reader that could misunderstand the recorded hosted effects.
 
-The chart omits the hosted environment entry while creation is disabled. The
-complete disabled Helm output matches current main byte for byte, so publishing
-reader source does not restart the running API. Enabling hosted creation later
-adds the configuration and intentionally rolls the API. Merge the immutable image
-pins only after active qualification and ordinary Runs reach a safe boundary.
-[Rollout comparison](../evidence/autonomous-sdlc/ASTRA-M05-DISABLED-ROLLOUT-COMPARISON.json)
-records this check. This replaces the earlier unconditional environment entry,
-which would have restarted the API during the current evaluation.
+The chart omits hosted configuration while creation is disabled. Preserve that
+boundary through preparatory releases and finish active qualification/ordinary
+Runs before replacing their runtime. Historical rollout comparisons are dated
+checks, not a permanent claim that later renders are identical.
 
 Hosted cutover requires qualified gateway/V2 execution, usable contracts, durable
 progression and accepted delivery behavior. Only then enable creation through the
@@ -107,8 +123,11 @@ reviewed GitOps release. The old unscoped creation route returns an explicit
 retirement response; historical reads remain available. This document does not
 waive the separate M05–M11 acceptance checks or human production approval.
 
-## Retained schema-52 reader
+## Retained implementation history
 
-The compatible source `2249950d225a4632b24235c2b6f2d8469a774243` and its complete
-immutable image set are retained. Read the [minimum rollback release](../evidence/autonomous-sdlc/ASTRA-M05-COMPATIBLE-READER-RELEASE.md) before applying 0052 or recovering this deployment.
-Hosted writes remain disabled until the program gates pass.
+The [schema-52 reader evidence](../evidence/autonomous-sdlc/ASTRA-M05-COMPATIBLE-READER-RELEASE.md)
+remains useful migration history, not the current rollback target. Hosted writes
+remain disabled until the program gates pass. Qualification currently binds the
+exact compiled API revision: a later release requires matching qualification
+before new hosted creation. Prior qualifying evidence is retained and is not
+silently transferred to a different runtime.

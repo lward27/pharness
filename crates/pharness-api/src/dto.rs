@@ -1527,6 +1527,8 @@ pub struct GitDeliveryObservationContextResponse {
     pub pull_request_url: String,
     pub pull_request_number: u64,
     pub github_api_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_base_commit_sha: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1539,6 +1541,10 @@ pub struct GitDeliveryObservationOutcomeRequest {
     pub merged: Option<bool>,
     #[serde(default)]
     pub merge_commit_sha: Option<String>,
+    #[serde(default)]
+    pub merge_parent_shas: Option<Vec<String>>,
+    #[serde(default)]
+    pub merge_tree_sha: Option<String>,
     #[serde(default)]
     pub head_branch: Option<String>,
     #[serde(default)]

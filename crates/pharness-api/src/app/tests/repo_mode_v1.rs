@@ -701,6 +701,8 @@ fn provider_observation(execution_id: &str, merged: bool) -> GitDeliveryObservat
         pull_request_state: Some(if merged { "closed" } else { "open" }.into()),
         merged: Some(merged),
         merge_commit_sha: merged.then(|| MERGE_SHA.into()),
+        merge_parent_shas: None,
+        merge_tree_sha: None,
         head_branch: Some("pharness/test/source".into()),
         head_commit_sha: Some(HEAD_SHA.into()),
         error_code: None,
@@ -870,7 +872,7 @@ async fn hosted_cutover_retires_the_unscoped_creation_route() {
 }
 
 #[tokio::test]
-async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable() {
+async fn hosted_unadmitted_merge_closes_failed_without_sealing_release_inapplicable() {
     let fixture = repo_fixture_with_workflow("hosted", true, true).await;
     super::super::repo_mode::seal_repo_inapplicable_tail(
         &fixture.state.store,
@@ -920,7 +922,7 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
     )
     .await
     .unwrap();
-    assert_eq!(result["delivery_status"], "succeeded");
+    assert_eq!(result["delivery_status"], "failed");
     let metadata = fixture
         .state
         .store
@@ -928,7 +930,7 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
         .await
         .unwrap()
         .unwrap();
-    assert!(metadata.closed_at.is_none());
+    assert!(metadata.closed_at.is_some());
     assert!(metadata.workflow_policy.is_some());
     assert!(metadata.workflow_policy_hash.is_some());
     let Json(item) = super::get_work_item(
@@ -937,7 +939,7 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
     )
     .await
     .unwrap();
-    assert_eq!(item.status, "executing");
+    assert_eq!(item.status, "failed");
     assert_eq!(item.workflow_kind, "hosted_sdlc");
     assert!(item.production_impacting);
     let Json(flow) = super::work_item_flow(
@@ -974,7 +976,7 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
         .unwrap();
     assert!(outcomes
         .iter()
-        .any(|outcome| outcome.stage_key == "source_delivery" && outcome.status == "succeeded"));
+        .any(|outcome| outcome.stage_key == "source_delivery" && outcome.status == "failed"));
     assert!(!outcomes
         .iter()
         .any(|outcome| matches!(outcome.stage_key.as_str(), "release" | "observe")));
@@ -1015,7 +1017,7 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
         .unwrap()
         .unwrap();
     assert_eq!(reread.workflow_policy_hash, metadata.workflow_policy_hash);
-    assert!(reread.closed_at.is_none());
+    assert_eq!(reread.closed_at, metadata.closed_at);
 }
 
 #[tokio::test]

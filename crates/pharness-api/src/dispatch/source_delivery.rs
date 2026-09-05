@@ -11,6 +11,7 @@ use serde_json::Value;
 pub enum SourceJobKind {
     Writer,
     Observer,
+    Merge,
 }
 
 pub struct SourceJobObservation {
@@ -81,7 +82,7 @@ impl KubernetesJobDispatcher {
     ) -> anyhow::Result<(Value, bool)> {
         anyhow::ensure!(
             match kind {
-                SourceJobKind::Writer => self.git_writer_available(),
+                SourceJobKind::Writer | SourceJobKind::Merge => self.git_writer_available(),
                 SourceJobKind::Observer => self.git_observer_available(),
             },
             "source delivery executor is not configured"
@@ -93,15 +94,37 @@ impl KubernetesJobDispatcher {
             .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
         let hosted = intent.authorization["workflow_policy_hash"].is_string();
         let recorded = match kind {
-            SourceJobKind::Writer => &intent.writer_execution_id,
-            SourceJobKind::Observer => &intent.observer_execution_id,
+            SourceJobKind::Writer => intent.writer_execution_id.clone(),
+            SourceJobKind::Observer => intent.observer_execution_id.clone(),
+            SourceJobKind::Merge => {
+                anyhow::ensure!(hosted, "source-only work has no hosted merge execution");
+                let operation = self
+                    .store
+                    .workflow_operation_for_source_intent(intent_id)
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("source merge operation is unavailable"))?;
+                let authority: pharness_core::hosted_sdlc::HostedSourceMergeAuthority =
+                    serde_json::from_value(
+                        operation.resource_refs["source_merge_authority"].clone(),
+                    )?;
+                anyhow::ensure!(
+                    authority.source_delivery_intent_id == intent_id
+                        && authority.operation_id == operation.id
+                        && authority.material_hash().map_err(anyhow::Error::msg)?
+                            == operation.resource_refs["source_merge_authority_hash"]
+                                .as_str()
+                                .unwrap_or_default(),
+                    "source merge operation authority does not match its immutable identity"
+                );
+                Some(authority.execution_id)
+            }
         };
         anyhow::ensure!(
             !hosted || recorded.as_deref() == Some(execution_id),
             "source delivery execution does not match the persisted operation"
         );
         let mut manifest = match kind {
-            SourceJobKind::Writer => self.git_writer_job_manifest(
+            SourceJobKind::Writer | SourceJobKind::Merge => self.git_writer_job_manifest(
                 &GitDeliveryExecutionRequest {
                     change_set_id: intent_id.into(),
                     execution_id: execution_id.into(),
@@ -121,6 +144,16 @@ impl KubernetesJobDispatcher {
             intent_id,
             "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
         )?;
+        if kind == SourceJobKind::Merge {
+            let env = manifest["spec"]["template"]["spec"]["containers"][0]["env"]
+                .as_array_mut()
+                .ok_or_else(|| anyhow::anyhow!("source merge Job environment is unavailable"))?;
+            let kind = env
+                .iter_mut()
+                .find(|entry| entry["name"] == "PHARNESS_EXECUTION_KIND")
+                .ok_or_else(|| anyhow::anyhow!("source merge execution kind is unavailable"))?;
+            kind["value"] = serde_json::json!("git_delivery_merge");
+        }
         Ok((manifest, hosted))
     }
 

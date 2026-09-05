@@ -60,18 +60,23 @@ pub(super) async fn reconcile(
         intent.status.as_str(),
         "merged" | "failed" | "pull_request_closed"
     ) {
+        let verified_merge = intent.status == "merged"
+            && intent
+                .merge_provenance
+                .as_ref()
+                .is_some_and(|p| p["hosted_merge_proof"]["accepted"] == true);
         state.store.record_workflow_operation(claim, &operation.id, "succeeded", &refs,
             "Source operation termination reconciled; the source outcome still determines delivery eligibility", now()).await?;
         return Ok(condition(
-            if intent.status == "merged" {
+            if verified_merge {
                 "progressing"
             } else {
                 "blocked"
             },
-            if intent.status == "merged" {
+            if verified_merge {
                 "The exact source merge is recorded. Build, deployment, and runtime verification remain separate."
             } else {
-                "Source delivery failed or its pull request was closed. No build or deployment is authorized by this result."
+                "Source delivery has no verified autonomous merge. No build or deployment is authorized by this result."
             },
         ));
     }
@@ -119,7 +124,7 @@ pub(super) async fn reconcile(
             )
             .await?;
     }
-    state
+    let operation = state
         .store
         .record_workflow_operation(
             claim,
@@ -135,6 +140,11 @@ pub(super) async fn reconcile(
         "writer_dispatched" | "observer_dispatched"
     ) {
         return observe_job(state, claim, &intent, expired).await;
+    }
+    if let Some(condition) =
+        super::source_merge::reconcile(state, claim, &operation, &intent).await?
+    {
+        return Ok(condition);
     }
     if expired {
         return Ok(condition("wait_expired", "The bounded source wait expired. No further writer or observation Jobs are dispatched; recorded callbacks remain valid."));

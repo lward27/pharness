@@ -38,6 +38,22 @@ impl SqliteStore {
             .transpose()
     }
 
+    /// Retain access to a source operation after its lock is released, so late
+    /// callbacks can record evidence without reopening or rebinding an effect.
+    pub async fn workflow_operation_for_source_intent(
+        &self,
+        intent_id: &str,
+    ) -> Result<Option<StoredWorkflowOperation>, StoreError> {
+        let rows = sqlx::query("SELECT * FROM hosted_operations WHERE json_extract(resource_refs_json, '$.source_delivery_intent_id') = ? LIMIT 2")
+            .bind(intent_id).fetch_all(&self.pool).await?;
+        if rows.len() > 1 {
+            return Err(StoreError::Conflict(
+                "source intent has ambiguous operation identity".into(),
+            ));
+        }
+        rows.into_iter().next().map(operation_from_row).transpose()
+    }
+
     /// One atomic statement arbitrates claims. A replacement claim increments
     /// its fence, so an expired owner cannot record a new dispatch or finish.
     pub async fn claim_due_workflow(
