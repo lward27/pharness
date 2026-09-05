@@ -32,6 +32,13 @@ and ready service endpoints. Both existing staging baselines passed live read-on
 checks. It is not deployed or connected to the controller and does not establish
 a runtime observation window or application acceptance.
 
+The [deterministic application probes](../../evidence/autonomous-sdlc/ASTRA-M08-FUNCTIONAL-PROBES.md)
+are implemented and tested but not deployed. Frontend staging HTTP checks passed;
+the existing yfinance staging image failed current-source validation and market-route
+checks. [Baseline drift](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-BASELINE-DRIFT.md)
+records the discrepancy and the unproven source commit behind that image. Preserve
+these failures when defining baseline expectations and candidate acceptance.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.

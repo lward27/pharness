@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod identity;
 mod kubernetes;
+mod probes;
 #[cfg(test)]
 mod tests;
 
