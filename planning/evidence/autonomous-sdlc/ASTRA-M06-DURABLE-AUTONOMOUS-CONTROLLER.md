@@ -4,8 +4,9 @@ Status: continuous engineering progression integrated and locally tested; delive
 Observed 2026-09-05. Worktree `pharness-astra-controller`, branch
 `codex/astra-autonomous-controller`, created from current main `db84b797` and
 merged with tested M05 preparation at `e197497`, then current main `2249950` at
-controller merge `3a2e369`. The deployed API remains on
-`fd740927`; no M06 code or schema has been deployed.
+controller merge `3a2e369`. The deployed API is on source `2249950`, schema 0052
+as of the 14:08 UTC live check. M06 is merged through source `48c77b7`; its new
+runtime passed the isolated migration check below but remains undeployed.
 
 ## Implemented boundary
 
@@ -204,3 +205,22 @@ contains the existing Finance generation on schema 0052 with 14 WorkItems and
 its compatible rollback floor before deploying. The controller has no live hosted
 work to advance while creation remains disabled; that idle fact is not restart
 or autonomous-delivery acceptance.
+
+## Immutable-image migration proof
+
+Runtime `48c77b7` at digest
+`sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d`
+successfully migrated an isolated copy of the verified pre-0053 archive. The
+migration container had neither the live data volume nor credentials. SQLite
+integrity and the runtime health check passed; all 14 WorkItems, 82 Runs, stage,
+evidence, audit, product/repository and generation records were preserved. Existing
+WorkItem fields were compared, and all three new hosted controller tables remain
+empty. Legacy work was not enrolled. The original archive remains schema 0052.
+[Job](ASTRA-M06-CLONE-MIGRATION-JOB.json) and
+[verified result](ASTRA-M06-CLONE-MIGRATION-VERIFIED.json).
+
+The complete seven-image/native release is still being assembled. A Node runner
+registry transfer timed out; its completed local OCI artifact is retained for an
+identity-preserving retry. No partial release pins or live database migration were
+applied. Before deployment, record the complete schema-53-compatible rollback set;
+source `2249950` cannot read schema 0053 and must not be used afterward.

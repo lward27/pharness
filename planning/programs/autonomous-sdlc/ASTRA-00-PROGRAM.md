@@ -64,7 +64,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller merged; deployment and acceptance gates open | M05. |
-| M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
+| M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | finite pipelines and packaging merged; build validation underway; autonomy gate open | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections merged; deployment and acceptance gates open | May begin after M05; closes against M09 behavior. |
@@ -72,7 +72,10 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
 Next eligible: address the measured M04 coding failures and qualify the resulting
-immutable runtime while continuing M06 and M10 preparation.
+immutable runtime while continuing M06, M07 and M10 preparation. Source `48c77b7`
+is being built as one immutable controller/console release; live PHarness remains
+on `2249950`. The isolated schema-53 migration passed against the Finance snapshot;
+live migration and its compatible rollback floor remain pending.
 The fd74092 live evaluation completed at 12:34 UTC and failed: 22/24 and 20/24,
 two hidden-test false passes, and one blocked write outside permitted paths.
 There were no provider or infrastructure failures in this run. See the
@@ -84,7 +87,8 @@ and 78 retained requests. The owner-authorized Mac serves Tekton's existing
 BuildKit endpoint; uncached AMD64 execution, a 112 MiB private TLS push, and
 exact-digest pull/run passed. Worker capability checks passed after the GitOps
 writer credential was rotated. Runtime contract declarations remain M05 and the
-real frontend pipeline remains M07. The tested M04 scratch cleanup is merged at
+real frontend pipeline is deployed through GitOps `491f081`; real build validation
+and automatic dispatch remain M07. The tested M04 scratch cleanup is merged at
 `fd740927110366a983de6bb0d3bc6c576577708b`; its [release evidence](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md)
 does not replace live model qualification. M05 now enforces saved stage profiles, gateway choices and limits in
 merged code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).

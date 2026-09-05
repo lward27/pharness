@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-09-05T15:16:48.334400+00:00",
+  "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "component": "node-runner",
+  "phase": "registry_blob_chunk_upload",
+  "failure": "TLS connection read timed out waiting for an 8 MiB PATCH response",
+  "timeout_seconds": 60,
+  "local_oci_artifact_retained": true,
+  "retry_policy": "One transfer retry from the verified original archive after the Finance registry publication finishes; completed image evidence is reused. No source change, budget increase, or partial release pin.",
+  "published_components": [
+    "python-runner",
+    "runtime",
+    "ui"
+  ],
+  "log_sha256": "31d2c4692213b8d833aaaa9dc91caa036e54cdfe0e9b6c8a1cb7944e0310ab68",
+  "live_database_migrated": false
+}

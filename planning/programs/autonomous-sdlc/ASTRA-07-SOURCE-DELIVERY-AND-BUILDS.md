@@ -1,8 +1,13 @@
 # ASTRA M07: Exact-source delivery and real builds
 
-Status: planned.
+Status: independent finite pipelines and packaging merged; real build validation underway; source-controller and milestone acceptance open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M04 and M06.
+
+The [execution evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md)
+records the GitOps and application revisions. This preparation proceeds independently
+while qualification and delivery integration remain open. It cannot satisfy their
+gates or either M11 autonomous change.
 
 ## Objective and scope
 
@@ -69,4 +74,3 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
-

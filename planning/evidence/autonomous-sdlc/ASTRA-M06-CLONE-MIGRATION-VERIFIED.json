@@ -1,0 +1,39 @@
+{
+  "observed_at": "2026-09-05T14:56:39.624346+00:00",
+  "cluster_context": "lucas_engineering",
+  "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "runtime_image": "registry.lucas.engineering/pharness-runtime@sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d",
+  "job": "astra-m06-clone-migration-0053-20260905",
+  "job_uid": "1afbd7d2-1cd3-48b8-b9e4-b9cc50a34595",
+  "pod": "astra-m06-clone-migration-0053-20260905-hbh7f",
+  "pod_uid": "08a31e9d-1162-477a-8a14-3eb61fe82a30",
+  "result": {
+    "integrity": "ok",
+    "maximum_migration": 53,
+    "applied_migrations": 53,
+    "legacy_policy_rows": 0,
+    "historical_work_items_identical": true,
+    "preserved_counts": {
+      "work_items": 14,
+      "runs": 82,
+      "stage_executions": 102,
+      "stage_outcomes": 102,
+      "evidence_validations": 83,
+      "audit_events": 260,
+      "retention_holds": 4,
+      "products": 1,
+      "repositories": 5,
+      "database_generations": 1
+    },
+    "controller_counts": {
+      "hosted_reconciliations": 0,
+      "hosted_operations": 0,
+      "hosted_operation_locks": 0
+    },
+    "source_migration_unchanged": 52,
+    "runtime_health": {
+      "ok": true
+    }
+  },
+  "scope": "Isolated migration from actual Finance snapshot; live database was not migrated."
+}

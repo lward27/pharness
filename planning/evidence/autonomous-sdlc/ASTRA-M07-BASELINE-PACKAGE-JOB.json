@@ -1,0 +1,65 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-m07-baseline-python-packages",
+    "namespace": "apps-staging",
+    "labels": {
+      "pharness.dev/purpose": "astra-packaging-inventory"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 120,
+    "template": {
+      "metadata": {
+        "labels": {
+          "pharness.dev/purpose": "astra-packaging-inventory"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "name": "inspect",
+            "image": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+            "command": [
+              "python",
+              "-c",
+              "import importlib.metadata as m,json,platform; print(json.dumps({'python':platform.python_version(),'machine':platform.machine(),'packages':{d.metadata['Name']:d.version for d in m.distributions() if d.metadata['Name'].lower().startswith('opentelemetry') or d.metadata['Name'].lower() in ['fastapi','uvicorn','yfinance','setuptools','wheel','pip']}}))"
+            ],
+            "env": [
+              {
+                "name": "PYTHONDONTWRITEBYTECODE",
+                "value": "1"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "250m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

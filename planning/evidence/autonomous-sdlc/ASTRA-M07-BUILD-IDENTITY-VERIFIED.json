@@ -1,0 +1,48 @@
+{
+  "observed_at": "2026-09-05T15:09:53.231447+00:00",
+  "gitops_revision": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+  "argo_sync": "Synced",
+  "argo_health": "Healthy",
+  "service_account": {
+    "name": "pharness-finance-build",
+    "uid": "30e99fdb-a3c7-4733-aa6b-1f08c2952ace",
+    "automount_service_account_token": false
+  },
+  "permission_checks": [
+    {
+      "verb": "patch",
+      "resource": "deployments.apps",
+      "namespace": "apps-prod",
+      "allowed": false
+    },
+    {
+      "verb": "create",
+      "resource": "jobs.batch",
+      "namespace": "pharness",
+      "allowed": false
+    },
+    {
+      "verb": "get",
+      "resource": "secrets",
+      "namespace": "tekton-pipelines",
+      "allowed": false
+    }
+  ],
+  "pipelines": [
+    {
+      "name": "pharness-yfinance-build",
+      "uid": "e7537de9-c512-48d2-9f16-dcae72f84438",
+      "clone_verbose": false,
+      "clone_tls_verification": true,
+      "spec_sha256": "f2f669a22ea69568236cfba878b96368c9cce9a9e592a4f54e372b335f8aa425"
+    },
+    {
+      "name": "pharness-finance-frontend-build",
+      "uid": "5f2833d4-23bc-4d68-8222-206b1a05564e",
+      "clone_verbose": false,
+      "clone_tls_verification": true,
+      "spec_sha256": "a1d13468d1216b7576f6940245fef4fadd6fcd4daaf929ca284c90e6ee383230"
+    }
+  ],
+  "production_deployment_authority": false
+}
