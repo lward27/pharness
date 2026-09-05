@@ -62,7 +62,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
 | M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | implementation in progress; gate open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
-| M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | planned | M05. |
+| M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | persistence preparation on isolated branch; gate open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
@@ -90,7 +90,12 @@ The current coding evaluation remains on fd74092. Publish/requalify the new runt
 after it finishes. Keep qualification jobs serial. M05 now omits its environment entry while
 creation is disabled; the complete rendered chart matches main, allowing reader
 source publication without interrupting evaluation. Hold the actual image-pin
-release until the active evaluation is terminal. Neither code merge nor provider diagnostics close M04.
+release until the active evaluation is terminal. Neither code merge nor provider diagnostics close M04. M05 compatible-reader source merged in
+PR 328 at `2249950d225a4632b24235c2b6f2d8469a774243` on 2026-09-05. Its seven
+AMD64 images and native bundle are being built from that one source; the runtime
+still uses fd74092. M06 persistence preparation is committed at `9d52c9e` on
+`codex/astra-autonomous-controller`; its API integration and acceptance remain open.
+Neither schema 0052 nor 0053 has been applied to Finance.
 See [M02 evidence](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
 A real external blocker may suspend its dependent work but never waive its gate.

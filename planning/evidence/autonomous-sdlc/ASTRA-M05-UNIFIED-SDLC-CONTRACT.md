@@ -5,7 +5,10 @@ Observed 2026-09-05. Implementation base: PHarness
 `fd740927110366a983de6bb0d3bc6c576577708b`, including M03 and the M04 evaluator
 scratch-lifecycle repair. The compiled cluster runtime is now
 `fd740927110366a983de6bb0d3bc6c576577708b`; none of the M05 Rust code or migration
-has been deployed. Hosted creation remains disabled by default.
+has been deployed. Hosted creation remains disabled by default. Compatible-reader source merged in
+[PR 328](https://github.com/lward27/pharness/pull/328) as
+`2249950d225a4632b24235c2b6f2d8469a774243`. The immutable image set and native
+bundle are being built from that exact revision; source merge does not apply 0052.
 
 ## Implemented and tested
 
