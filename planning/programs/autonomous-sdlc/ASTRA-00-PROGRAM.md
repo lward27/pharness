@@ -74,13 +74,18 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 Next eligible: finish M04 qualification on immutable runtime `48c77b7` and continue
 M07 source-to-build integration and M10 refinement. After live history preservation passed at 16:20 UTC, the gateway protocol checks
 passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
-with two frozen attempts. Results are pending.
+with two frozen attempts. Both finished 24/24 on the first pass, with every stack
+8/8 and no reported hidden-test false passes or policy violations.
+[Builder qualification](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
+is passed; Repair and the other required stage qualifications remain open.
 Keep qualification Jobs serial. All original thresholds, fixtures, profiles and
-execution limits remain in force. The earlier fd74092 runs failed; they remain
+execution limits remain in force. The exact-runtime creation gate also requires
+matching qualification on any subsequent release before activation. The earlier fd74092 runs failed; they remain
 [recorded evidence](../../evidence/autonomous-sdlc/ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md),
 not superseded passes.
 
-The source-publication controller merged through [PR 338](https://github.com/lward27/pharness/pull/338).
+The source-publication controller merged through [PR 338](https://github.com/lward27/pharness/pull/338),
+with its normal-callback identity regression fixed in [PR 342](https://github.com/lward27/pharness/pull/342).
 The finite build-dispatch restriction merged through [PR 336](https://github.com/lward27/pharness/pull/336),
 and the latest list polish merged through [PR 337](https://github.com/lward27/pharness/pull/337).
 These changes are not included in the deployed 48c77b7 artifacts. Automatic source
