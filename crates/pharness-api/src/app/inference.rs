@@ -1,3 +1,6 @@
+mod qualification_binding;
+pub(super) use qualification_binding::qualification_binding_for_policy;
+
 use super::identifiers::new_prefixed_id;
 use super::{ApiError, AppState};
 use axum::extract::{Path, Query, State};
@@ -117,6 +120,7 @@ pub(super) async fn ensure_run_inference_selection(
     state: &AppState,
     run: &StoredRun,
 ) -> Result<Option<RunInferenceSpec>, ApiError> {
+    crate::app::hosted_workflow::stages::validate_run(state, run).await?;
     if !state.inference.enabled {
         return Ok(None);
     }
@@ -583,31 +587,34 @@ struct ResolveBindingRequest<'a> {
     requested: Option<&'a InferencePolicyRef>,
 }
 
-async fn resolve_binding(
+pub(super) fn policy_reference(
     state: &AppState,
-    request: ResolveBindingRequest<'_>,
-) -> Result<ResolvedInferenceBinding, ApiError> {
-    let policy_ref = request.requested.cloned().or_else(|| {
+    stage: InferenceStage,
+    profile_id: &str,
+    requested: Option<&InferencePolicyRef>,
+) -> Result<InferencePolicyRef, ApiError> {
+    let policy_ref = requested.cloned().or_else(|| {
         state
             .repo_mode
             .coding_reliability_v2_enabled
-            .then(|| reliability_v2_default_policy(request.profile_id))
+            .then(|| reliability_v2_default_policy(profile_id))
             .flatten()
     });
     let policy_ref = policy_ref
-        .or_else(|| {
-            state
-                .inference
-                .registry
-                .defaults
-                .get(&request.stage)
-                .cloned()
-        })
+        .or_else(|| state.inference.registry.defaults.get(&stage).cloned())
         .ok_or_else(|| {
             ApiError::unavailable(
                 "no qualified default inference policy is configured for this stage",
             )
         })?;
+    Ok(policy_ref)
+}
+
+async fn resolve_binding(
+    state: &AppState,
+    request: ResolveBindingRequest<'_>,
+) -> Result<ResolvedInferenceBinding, ApiError> {
+    let policy_ref = policy_reference(state, request.stage, request.profile_id, request.requested)?;
     let policy = state
         .inference
         .registry
@@ -1233,26 +1240,13 @@ async fn create_policy_qualification(
             "only active non-legacy candidate policies may be qualified",
         ));
     }
-    let (suite_id, expected_profile_id) = qualification_contract_for_policy(policy)?;
-    let stage = policy
-        .eligible_stages
-        .first()
-        .copied()
-        .ok_or_else(|| ApiError::conflict("policy has no supported qualification stage"))?;
-    if !policy.eligible_stages.contains(&stage)
-        || !policy
-            .eligible_profiles
-            .iter()
-            .any(|profile| profile == expected_profile_id)
-    {
-        return Err(ApiError::conflict(
-            "qualification suite, stage, profile, and policy eligibility do not match",
-        ));
-    }
-    let profile = qualification_profiles(policy, &target.upstream_model)
-        .into_iter()
-        .find(|profile| profile.id == expected_profile_id)
-        .ok_or_else(|| ApiError::internal("compiled qualification AgentProfile is missing"))?;
+    let (suite_id, profile, binding) = qualification_binding_for_policy(
+        &state,
+        &InferencePolicyRef {
+            policy_id: policy_id.clone(),
+            revision: revision.clone(),
+        },
+    )?;
     let suite_hash = inference_qualification_suite_hash(suite_id).map_err(|error| {
         ApiError::internal(format!("failed to hash qualification suite: {error}"))
     })?;
@@ -1288,91 +1282,6 @@ async fn create_policy_qualification(
             "inference target requires a fresh passing protocol verification before qualification",
         ));
     }
-    let tools = serde_json::to_value(&profile.tools).map_err(|error| {
-        ApiError::internal(format!("failed to serialize profile tools: {error}"))
-    })?;
-    let budget = serde_json::to_value(&profile.budget).map_err(|error| {
-        ApiError::internal(format!("failed to serialize profile budget: {error}"))
-    })?;
-    let reliability_v2 = policy.policy_id.ends_with("-v2");
-    let stage_prompt = reliability_v2
-        .then(|| pharness_runhost::stage_prompt_for_profile(&profile.id))
-        .flatten()
-        .map(|prompt| prompt.revision_record());
-    let tool_schema_hash = if reliability_v2 {
-        let (acceptance_names, evidence_ids) = qualification_tool_constraints(suite_id);
-        pharness_runhost::constrained_tool_schema_hash(
-            &profile.tools,
-            &acceptance_names,
-            &evidence_ids,
-        )
-        .map_err(|error| {
-            ApiError::internal(format!(
-                "failed to hash qualification tool schemas: {error}"
-            ))
-        })?
-    } else {
-        canonical_json_sha256(&tools).map_err(|error| {
-            ApiError::internal(format!("failed to hash qualification tools: {error}"))
-        })?
-    };
-    let context_policy_hash = if reliability_v2 {
-        canonical_json_sha256(&json!({
-            "schema_version":"pharness.dev/repo-context-policy/v2",
-            "stage":stage,
-            "max_input_tokens":policy.max_input_tokens,
-            "max_output_tokens":policy.max_output_tokens,
-            "controller_execution_ledger":true,
-            "deterministic_checkpoints":true,
-        }))
-        .map_err(|error| ApiError::internal(error.to_string()))?
-    } else {
-        String::new()
-    };
-    let protocol_calibration_hash = if reliability_v2 {
-        canonical_json_sha256(&json!({
-            "schema_version":"pharness.dev/protocol-contract/v2",
-            "target_hash":target.config_hash,
-            "policy_hash":policy.policy_hash,
-            "tool_choice":policy.tool_choice,
-            "tool_protocol":policy.tool_protocol,
-            "parallel_tool_calls":false,
-        }))
-        .map_err(|error| ApiError::internal(error.to_string()))?
-    } else {
-        String::new()
-    };
-    let mut binding = ResolvedInferenceBinding {
-        schema_version: RESOLVED_INFERENCE_BINDING_SCHEMA.into(),
-        target: target.clone(),
-        policy: policy.clone(),
-        prompt_version: if reliability_v2 {
-            pharness_runhost::RELIABILITY_V2_PROMPT_BUNDLE_VERSION.into()
-        } else {
-            SYSTEM_PROMPT_VERSION.into()
-        },
-        stage_prompt,
-        base_agent_profile_hash: profile.profile_hash.clone(),
-        agent_profile_hash: String::new(),
-        tool_schema_hash,
-        context_policy_hash,
-        protocol_calibration_hash,
-        profile_budget_hash: canonical_json_sha256(&budget).map_err(|error| {
-            ApiError::internal(format!("failed to hash qualification budget: {error}"))
-        })?,
-        binding_hash: String::new(),
-    };
-    binding.agent_profile_hash = binding.computed_agent_profile_hash().map_err(|error| {
-        ApiError::internal(format!(
-            "failed to hash qualification AgentProfile: {error}"
-        ))
-    })?;
-    binding.binding_hash = binding.computed_hash().map_err(|error| {
-        ApiError::internal(format!("failed to hash qualification binding: {error}"))
-    })?;
-    binding.validate().map_err(|error| {
-        ApiError::internal(format!("qualification binding is invalid: {error}"))
-    })?;
     let evaluation_id = new_prefixed_id("infeval");
     let resolved_agent_profile_hash = binding.agent_profile_hash.clone();
     state
@@ -1567,6 +1476,7 @@ async fn issue_model_grant(
     let Some(run) = state.store.get_run(&run_id_typed).await? else {
         return issue_evaluation_model_grant(&state, &run_id, request).await;
     };
+    crate::app::hosted_workflow::stages::validate_run(&state, &run).await?;
     if !matches!(run.status.as_str(), "running" | "preparing")
         || run.cancel_requested_at.is_some()
         || run.budget_consumption.turns_used >= run.budget_consumption.allowed_turns

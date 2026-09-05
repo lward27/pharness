@@ -145,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         config.inference.clone(),
         config.agent_execution.clone(),
+        config.hosted_workflow.clone(),
     );
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;

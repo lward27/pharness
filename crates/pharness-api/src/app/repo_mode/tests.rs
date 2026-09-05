@@ -71,6 +71,8 @@ fn metadata() -> StoredRepoWorkItemMetadata {
         state_version: 8,
         closed_at: None,
         closure_reason: None,
+        workflow_policy: None,
+        workflow_policy_hash: None,
     }
 }
 

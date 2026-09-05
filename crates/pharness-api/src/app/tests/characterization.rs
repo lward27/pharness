@@ -347,6 +347,7 @@ pub(super) async fn test_state() -> AppState {
         repo_mode: RepoModeConfiguration::test_enabled(),
         inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
         agent_execution: Arc::new(pharness_config::AgentExecutionBackendConfig::disabled_default()),
+        hosted_workflow: Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig::default()),
     }
 }
 
@@ -661,6 +662,7 @@ pub(super) async fn test_state_with_cluster_tools(cluster_tools: ReadOnlyCluster
         repo_mode: RepoModeConfiguration::test_enabled(),
         inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
         agent_execution: Arc::new(pharness_config::AgentExecutionBackendConfig::disabled_default()),
+        hosted_workflow: Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig::default()),
     }
 }
 
@@ -760,6 +762,7 @@ pub(super) async fn test_state_with_git_observer(
         repo_mode: RepoModeConfiguration::test_enabled(),
         inference: Arc::new(pharness_config::InferenceGatewayConfig::legacy_default()),
         agent_execution: Arc::new(pharness_config::AgentExecutionBackendConfig::disabled_default()),
+        hosted_workflow: Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig::default()),
     }
 }
 

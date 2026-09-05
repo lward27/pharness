@@ -1,0 +1,273 @@
+{
+  "schema_version": "pharness.dev/hosted-workflow/v1alpha1",
+  "delivery_binding": {
+    "schema_version": "pharness.dev/lucas-delivery-binding/v1alpha1",
+    "id": "binding_test",
+    "revision": "v1",
+    "product_id": "prod_test",
+    "repository_id": "repo_test",
+    "source_repo": "https://github.com/example/repo.git",
+    "source_ref": "main",
+    "cluster_context": "lucas_engineering",
+    "pipeline_contract_id": "pipeline_test",
+    "image_name": "registry.lucas.engineering/test",
+    "gitops_repo": "https://github.com/example/gitops.git",
+    "gitops_ref": "main",
+    "staging": {
+      "deployment_contract_id": "staging_test",
+      "kustomization_path": "charts/staging/kustomization.yaml"
+    },
+    "production": {
+      "deployment_contract_id": "production_test",
+      "kustomization_path": "charts/production/kustomization.yaml"
+    },
+    "rollback_permitted": true
+  },
+  "delivery_binding_hash": "sha256:6773a3e7a932331ab607687829ecf9cb624f115a712ba38e5da149aa21e6e148",
+  "pipeline_contract": {
+    "id": "pipeline_test",
+    "status": "active",
+    "namespace": "tekton-pipelines",
+    "pipeline_ref": "test-build",
+    "version": "v1",
+    "contract_json": {
+      "params": [
+        {
+          "name": "revision",
+          "type": "scalar",
+          "required": true
+        }
+      ],
+      "source_revision_param": "revision"
+    }
+  },
+  "builder_budget": {
+    "initial_turns": 48,
+    "hard_turns": 100,
+    "initial_tokens": 400000,
+    "hard_tokens": 1000000,
+    "active_execution_seconds": 3600,
+    "recoverable_tool_errors": 4,
+    "identical_failures": 2,
+    "verification_reserve_turns": 8
+  },
+  "max_attempts": 2,
+  "agent_profiles": [
+    {
+      "id": "repo-planner",
+      "version": "v2",
+      "profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prompt_version": "test-only",
+      "model": "test-only",
+      "tools": [],
+      "budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600,
+        "recoverable_tool_errors": 4,
+        "identical_failures": 2,
+        "verification_reserve_turns": 8
+      }
+    },
+    {
+      "id": "repo-builder",
+      "version": "v2",
+      "profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prompt_version": "test-only",
+      "model": "test-only",
+      "tools": [],
+      "budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600,
+        "recoverable_tool_errors": 4,
+        "identical_failures": 2,
+        "verification_reserve_turns": 8
+      }
+    },
+    {
+      "id": "repo-repair",
+      "version": "v2",
+      "profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prompt_version": "test-only",
+      "model": "test-only",
+      "tools": [],
+      "budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600,
+        "recoverable_tool_errors": 4,
+        "identical_failures": 2,
+        "verification_reserve_turns": 8
+      }
+    },
+    {
+      "id": "repo-test-diagnoser",
+      "version": "v2",
+      "profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prompt_version": "test-only",
+      "model": "test-only",
+      "tools": [],
+      "budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600,
+        "recoverable_tool_errors": 4,
+        "identical_failures": 2,
+        "verification_reserve_turns": 8
+      }
+    },
+    {
+      "id": "repo-verifier",
+      "version": "v2",
+      "profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prompt_version": "test-only",
+      "model": "test-only",
+      "tools": [],
+      "budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600,
+        "recoverable_tool_errors": 4,
+        "identical_failures": 2,
+        "verification_reserve_turns": 8
+      }
+    }
+  ],
+  "inference_registry_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "stage_inference": {
+    "test": {
+      "mode": "deterministic"
+    },
+    "plan": {
+      "policy": {
+        "policy_id": "plan-test",
+        "revision": "v1"
+      },
+      "policy_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "target": {
+        "target_id": "test-only",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "agent_profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "qualification_id": "qual_test_plan",
+      "qualified_runtime_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "implement": {
+      "policy": {
+        "policy_id": "implement-test",
+        "revision": "v1"
+      },
+      "policy_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "target": {
+        "target_id": "test-only",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "agent_profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "qualification_id": "qual_test_implement",
+      "qualified_runtime_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "repair": {
+      "policy": {
+        "policy_id": "repair-test",
+        "revision": "v1"
+      },
+      "policy_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "target": {
+        "target_id": "test-only",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "agent_profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "qualification_id": "qual_test_repair",
+      "qualified_runtime_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "test_diagnosis": {
+      "policy": {
+        "policy_id": "test_diagnosis-test",
+        "revision": "v1"
+      },
+      "policy_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "target": {
+        "target_id": "test-only",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "agent_profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "qualification_id": "qual_test_test_diagnosis",
+      "qualified_runtime_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "verify": {
+      "policy": {
+        "policy_id": "verify-test",
+        "revision": "v1"
+      },
+      "policy_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "target": {
+        "target_id": "test-only",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "agent_profile_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "qualification_id": "qual_test_verify",
+      "qualified_runtime_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "automatic_actions": [
+    "discover",
+    "plan",
+    "implement",
+    "test",
+    "verify",
+    "source_delivery",
+    "build",
+    "staging_delivery",
+    "observe"
+  ],
+  "production_approval": "before_gitops_merge",
+  "rollback": "one_previous_verified_deployment",
+  "staging_contract": {
+    "id": "staging_test",
+    "status": "active",
+    "target_environment": "staging",
+    "target_namespace": "apps-staging",
+    "argo_application": "test-staging",
+    "version": "v1",
+    "contract_json": {
+      "operation": "sync",
+      "workload_kind": "Deployment",
+      "workload_name": "test",
+      "service_name": "test",
+      "service_port": 8000,
+      "health_path": "/healthz"
+    }
+  },
+  "production_contract": {
+    "id": "production_test",
+    "status": "active",
+    "target_environment": "production",
+    "target_namespace": "apps-prod",
+    "argo_application": "test-production",
+    "version": "v1",
+    "contract_json": {
+      "operation": "sync",
+      "workload_kind": "Deployment",
+      "workload_name": "test",
+      "service_name": "test",
+      "service_port": 8000,
+      "health_path": "/healthz"
+    }
+  }
+}

@@ -1244,18 +1244,28 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         .await?;
     let subject_response = match &subject {
         SourceDeliverySubject::WorkItem(work_item_id) => {
+            let hosted = repo_metadata(&state, work_item_id)
+                .await?
+                .workflow_policy
+                .is_some();
             let item = state
                 .store
                 .update_repo_work_item_status(
                     work_item_id,
-                    if delivery_succeeded {
+                    if delivery_succeeded && hosted {
+                        "executing"
+                    } else if delivery_succeeded {
                         "completed"
                     } else {
                         "failed"
                     },
                     "controller:repo-mode",
-                    stop_reason,
-                    true,
+                    if delivery_succeeded && hosted {
+                        "source merge verified; build, deployment, production approval, and runtime verification remain required"
+                    } else {
+                        stop_reason
+                    },
+                    !delivery_succeeded || !hosted,
                 )
                 .await?;
             json!({"work_item":item})

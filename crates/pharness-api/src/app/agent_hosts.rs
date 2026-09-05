@@ -236,7 +236,10 @@ pub(super) fn internal_router(state: AppState) -> Router<AppState> {
             "/api/internal/agent-hosts/:host_id/leases/:lease_id/pause",
             post(pause_lease),
         )
-        .route_layer(middleware::from_fn(enforce_operational_mode))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_operational_mode,
+        ))
         .with_state(state)
 }
 

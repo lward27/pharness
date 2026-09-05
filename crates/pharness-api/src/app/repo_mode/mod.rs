@@ -3,6 +3,7 @@ mod creation;
 mod evidence;
 mod projection;
 mod source_delivery;
+mod stage_authorization;
 mod stages;
 mod state;
 
@@ -17,6 +18,10 @@ pub(in crate::app) use self::source_delivery::{
     internal_source_delivery_context, internal_source_delivery_observation_context,
     internal_source_delivery_observation_outcome, internal_source_delivery_writer_outcome,
 };
+#[cfg(test)]
+pub(in crate::app) use self::stage_authorization::authorize_repo_stage_chain;
+#[cfg(test)]
+pub(in crate::app) use self::stages::start_repo_planner;
 pub(in crate::app) use self::stages::{
     continue_repo_stage_chain, record_repo_chain_continuation_failure,
 };
