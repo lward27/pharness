@@ -91,7 +91,7 @@ Animations include recurring pulse, sheen, and ring effects. No reduced-motion t
 
 The Tools screen presents an approvable request to write `/etc/pharness/policy.toml`, explicitly outside the pinned workspace, and shows a patch relaxing review rules. The example says no rule can grant the action “without review.”
 
-The filesystem tool independently rejects writes whose canonical parent is outside its workspace root. Human approval does not remove that filesystem boundary. See [prototype approval fixture](<../../pharness-ui-design-overhaul/Pharness Console.dc.html#L1001>) and [filesystem boundary](../../../crates/pharness-core/src/tools/fs.rs#L54).
+The filesystem tool independently rejects writes whose canonical parent is outside its workspace root. Human approval does not remove that filesystem boundary. See [prototype approval fixture](<../../pharness-ui-design-overhaul/Pharness Console.dc.html#L1001>) and [filesystem boundary](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-core/src/tools/fs.rs#L54).
 
 **Recommendation:** use an approval example that is valid within the declared tool boundary. Present an outside-workspace action as denied/unavailable with an explanation, not as something an operator can make safe by pressing Approve. This is a fixture/copy correction. It is not a recommendation to relax the sandbox.
 

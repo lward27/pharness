@@ -14,6 +14,11 @@ Do not mark this milestone accepted because a dependency appears healthy.
 
 ## Implementation
 
+Baseline correction: yfinance is currently manual-sync while frontend auto-syncs.
+Enable yfinance auto-sync in GitOps only with the approval-before-merge contract in
+place, before accepting hosted production promotion. Do not treat a manual sync as
+a substitute for that contract.
+
 1. Prepare approval over exact image digest, GitOps diff, staging evidence, target, and preceding healthy deployment. Human approval must precede production GitOps merge because Argo auto-sync is enabled.
 
 2. Revalidate the bound state immediately before merging. Changed source/config/digest/target or invalid staging evidence invalidates approval.

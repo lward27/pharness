@@ -21,7 +21,7 @@ The source has important safety and reliability mechanisms:
 - The coding runtime contains context budgeting, output truncation, bounded recovery, and completion requirements. It can reject completion without meaningful workspace evidence.
 - SQLite and the single API replica keep the deployment understandable. The Helm chart uses a single-writer configuration and Recreate strategy. That is a reasonable deliberate constraint for the present scope.
 
-Evidence: [workspace](../../../Cargo.toml), [API composition](../../../crates/pharness-api/src/app/mod.rs), [dispatch](../../../crates/pharness-api/src/dispatch.rs), [stage model](../../../crates/pharness-core/src/repo_mode.rs), [stage storage](../../../crates/pharness-store/src/sqlite/repo_mode.rs), [context management](../../../crates/pharness-core/src/agent/context.rs), [runtime](../../../crates/pharness-core/src/agent/runtime.rs), [API deployment](../../../deploy/helm/pharness/templates/api.yaml).
+Evidence: [workspace](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/Cargo.toml), [API composition](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/mod.rs), [dispatch](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/dispatch.rs), [stage model](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-core/src/repo_mode.rs), [stage storage](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-store/src/sqlite/repo_mode.rs), [context management](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-core/src/agent/context.rs), [runtime](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-core/src/agent/runtime.rs), [API deployment](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/deploy/helm/pharness/templates/api.yaml).
 
 These strengths deserve credit. Earlier reviews that described missing context/recovery machinery or an undecomposed API should not be reused as current findings.
 
@@ -40,7 +40,7 @@ UNIQUE constraint failed: stage_executions.work_item_id,
 stage_executions.stage_key, stage_executions.sequence
 ```
 
-Evidence: [writer audit](../../../crates/pharness-api/src/app/repo_mode.rs#L1239), [closure](../../../crates/pharness-api/src/app/repo_mode.rs#L2225), [duplicate insertion](../../../crates/pharness-api/src/app/repo_mode.rs#L2315), [audit side effect](../../../crates/pharness-api/src/app/repo_mode.rs#L2362), [store insertion](../../../crates/pharness-store/src/sqlite/repo_mode.rs#L257), [existing closure test](../../../crates/pharness-api/src/app/tests/repo_mode_v1.rs#L339).
+Evidence: [writer audit](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L1239), [closure](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2225), [duplicate insertion](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2315), [audit side effect](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2362), [store insertion](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-store/src/sqlite/repo_mode.rs#L257), [existing closure test](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/tests/repo_mode_v1.rs#L339).
 
 The source-delivery outcome is written before the error. A later repeat may take the existing-outcome path and recover. This review does not claim permanent corruption or failure on every retry. The defect is partial completion and an avoidable error during a normal transition.
 
@@ -56,7 +56,7 @@ There is a maintainability lesson here: a function called `append_repo_audit` ha
 
 The entire submission is retained under `agent_claims`, which is good. However, the normalized outcome writes empty top-level risks and, on success, empty top-level contradictions. The corresponding validation is labeled valid. A submission containing an approved decision together with caveats can therefore produce a cleaner controller summary than the submission warrants.
 
-Evidence: [pass condition](../../../crates/pharness-api/src/worker.rs#L761), [retained claims and normalized fields](../../../crates/pharness-api/src/worker.rs#L851), [structured submission handling](../../../crates/pharness-runhost/src/lib.rs#L1056), [stage evidence contract](../../design/stage-outcomes-and-evidence-handoffs.md).
+Evidence: [pass condition](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/worker.rs#L761), [retained claims and normalized fields](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/worker.rs#L851), [structured submission handling](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-runhost/src/lib.rs#L1056), [stage evidence contract](../../design/stage-outcomes-and-evidence-handoffs.md).
 
 The structured submission handler checks that the payload is a bounded, nonempty object. That is not full semantic verification of its advertised schema. Upstream success checks still provide real protection; this finding does not say a verifier can make any arbitrary failed build pass, nor that the raw evidence is discarded.
 
@@ -71,7 +71,7 @@ Running `scripts/check-app-module-boundaries.sh` reported:
 - A wildcard import at `repo_mode.rs:4443`, inside the test module.
 - A dependency-parser crash: its regex interpreted prose inside a Rust string as a `use` tree.
 
-Evidence: [boundary script](../../../scripts/check-app-module-boundaries.sh), [dependency parser](../../../scripts/app-module-dependencies.py#L104), [dated graph](../../architecture/app-module-dependency-graph-2026-08-21.md).
+Evidence: [boundary script](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/scripts/check-app-module-boundaries.sh), [dependency parser](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/scripts/app-module-dependencies.py#L104), [dated graph](../../architecture/app-module-dependency-graph-2026-08-21.md).
 
 The wildcard is a rule violation, not evidence of a production dependency cycle. The parser failure means the present graph was not successfully checked. Do not cite the old graph's acyclic conclusion as a fresh result.
 

@@ -78,3 +78,13 @@ fresh SQLite migration application, architecture checks, and generated-file inve
 It did not run a live model evaluation, complete hosted WorkItem, production promotion,
 or representative-user usability study. Prior release test counts remain historical
 reported evidence, not checks rerun here. M01 made no cluster or application-code change.
+
+## M02/M03 refresh
+
+- M03 evidence semantics, module boundaries, and generated workspace cleanup are now
+  implemented at `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; [test acceptance](../autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md). Live images remain unchanged.
+- Finance frontend and PHarness Argo applications auto-sync, but yfinance currently
+  has no automated sync policy. M09 must align that configuration with the agreed
+  human approval before production GitOps merge.
+- After the owner rotated the Cloudflare token, all three Finance DNS challenges
+  were presented successfully. Renewal/HTTPS remains under verification in M02.

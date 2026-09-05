@@ -18,13 +18,13 @@ The source supports important parts of that chain. The current contracts, howeve
 | Release into hosting | Existing typed Tekton, GitOps, Argo and release-evidence paths | A unified released Repo Mode journey through deployment |
 | Verify the running product | Runtime observation and verification capabilities in the connected path | A continuous autonomous product stewardship loop demonstrated end to end |
 
-Evidence: [Repo Mode product contract](../../design/repo-mode-v1-product-contract.md), [product implementation](../../../crates/pharness-api/src/app/products.rs), [Repo Mode controller](../../../crates/pharness-api/src/app/repo_mode.rs), [worker outcome handling](../../../crates/pharness-api/src/worker.rs), and [typed dispatch](../../../crates/pharness-api/src/dispatch.rs).
+Evidence: [Repo Mode product contract](../../design/repo-mode-v1-product-contract.md), [product implementation](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/products.rs), [Repo Mode controller](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs), [worker outcome handling](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/worker.rs), and [typed dispatch](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/dispatch.rs).
 
 ## Autonomy needs a precise boundary
 
 **Objective:** Repo Mode closes after observing manual source merge. Its Release and Observe stages are explicitly inapplicable. Automatic merge, deployment, whole-attempt retry, and rollback are out of the V1 product contract. The existing chain can continue between authorized coding stages; not every transition requires a fresh human click. It would be inaccurate to call the entire system manual, just as it would be inaccurate to call the complete hosting lifecycle autonomous.
 
-The wait reconciliation endpoint is also narrower than its name might suggest: it reconciles due waits from persisted evidence; it does not itself run the provider or Job that produces the observation. Its existence alone is not proof of a continuously operating observer. See [wait reconciliation](../../../crates/pharness-api/src/app/work_items/waits.rs).
+The wait reconciliation endpoint is also narrower than its name might suggest: it reconciles due waits from persisted evidence; it does not itself run the provider or Job that produces the observation. Its existence alone is not proof of a continuously operating observer. See [wait reconciliation](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/work_items/waits.rs).
 
 **Judgment:** The product should explain autonomy as a bounded promise: “PHarness can do these steps under this authorization; it stops here for this reason.” “Autonomous” without that boundary creates a larger expectation than the current evidence supports.
 

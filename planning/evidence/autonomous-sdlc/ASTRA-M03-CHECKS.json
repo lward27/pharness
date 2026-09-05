@@ -1,0 +1,68 @@
+{
+  "observed_at": "2026-09-05T01:14:54.534593+00:00",
+  "source_revision": "b354c2b534fb4f518a439e92bb6770c8287fd4fd",
+  "source_parent": "4d7cb34",
+  "baseline_main": "c36b46aceb72f3d7097bc0bdee74810c745f7c0c",
+  "api_tests": {
+    "passed": 223,
+    "failed": 0
+  },
+  "admin_tests": {
+    "passed": 1,
+    "failed": 0
+  },
+  "final_caveat_regression": {
+    "passed": 1,
+    "failed": 0
+  },
+  "parser_tests": {
+    "passed": 5,
+    "failed": 0
+  },
+  "module_boundaries": "passed, existing limits unchanged",
+  "clippy": "cargo clippy -p pharness-api --all-targets -- -D warnings passed",
+  "formatting": "cargo fmt --all --check passed",
+  "removed_generated_files": [
+    "crates/pharness-eval/target/pharness-evals/ambiguous-edit-recovery-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/ambiguous-edit-recovery-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/ambiguous-edit-recovery-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/ambiguous-edit-recovery-1/settings.toml",
+    "crates/pharness-eval/target/pharness-evals/configuration-change-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/configuration-change-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/configuration-change-1/config/app.toml",
+    "crates/pharness-eval/target/pharness-evals/configuration-change-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/documentation-only-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/documentation-only-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/documentation-only-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/large-file-navigation-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/large-file-navigation-1/Cargo.toml",
+    "crates/pharness-eval/target/pharness-evals/large-file-navigation-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/large-file-navigation-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/large-file-navigation-1/src/lib.rs",
+    "crates/pharness-eval/target/pharness-evals/mixed-implementation-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/mixed-implementation-1/Cargo.toml",
+    "crates/pharness-eval/target/pharness-evals/mixed-implementation-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/mixed-implementation-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/mixed-implementation-1/src/lib.rs",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/Cargo.toml",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/src/lib.rs",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/src/route.rs",
+    "crates/pharness-eval/target/pharness-evals/multi-file-rust-1/src/units.rs",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/Cargo.toml",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/src/greeting.rs",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/src/lib.rs",
+    "crates/pharness-eval/target/pharness-evals/new-module-1/tests/greeting.rs",
+    "crates/pharness-eval/target/pharness-evals/single-file-rust-1/.gitignore",
+    "crates/pharness-eval/target/pharness-evals/single-file-rust-1/Cargo.toml",
+    "crates/pharness-eval/target/pharness-evals/single-file-rust-1/README.md",
+    "crates/pharness-eval/target/pharness-evals/single-file-rust-1/protected.txt",
+    "crates/pharness-eval/target/pharness-evals/single-file-rust-1/src/lib.rs"
+  ],
+  "deployment": "not deployed; no database changes"
+}

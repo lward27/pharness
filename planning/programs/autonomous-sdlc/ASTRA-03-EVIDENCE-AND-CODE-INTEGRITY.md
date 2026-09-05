@@ -1,6 +1,6 @@
 # ASTRA M03: Evidence and code integrity
 
-Status: active.
+Status: accepted (committed implementation and tests; deployment remains pending the program release).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M01. May proceed independently of M02.
 
@@ -32,11 +32,11 @@ Preserve immutable historical evidence, existing Finance data generation, and ad
 
 ## Tests and acceptance
 
-- [ ] Approved-with-risk retains visible caveats; approved-with-contradiction cannot normalize to succeeded; raw submissions remain immutable.
-- [ ] Normal prior-state closure and repeated closure do not create duplicate stage executions or rewrite history.
-- [ ] Both architecture boundary and dependency checks pass under their existing limits.
-- [ ] Focused regression tests and the required workspace checks pass. No public API behavior changes beyond correcting contradictory outcome semantics.
-- [ ] Tracked-file inventory distinguishes intentional evidence from disposable target/workspace output.
+- [x] Approved-with-risk retains visible caveats; approved-with-contradiction cannot normalize to succeeded; raw submissions remain immutable.
+- [x] Normal prior-state closure and repeated closure do not create duplicate stage executions or rewrite history.
+- [x] Both architecture boundary and dependency checks pass under their existing limits.
+- [x] Focused regression tests and the required workspace checks pass. No public API behavior changes beyond correcting contradictory outcome semantics.
+- [x] Tracked-file inventory distinguishes intentional evidence from disposable target/workspace output.
 
 Inspect current regression coverage first; add tests only for substantive gaps. Run parser/boundary checks, focused Rust tests, fmt, clippy, and workspace tests as appropriate to the change.
 
@@ -70,3 +70,5 @@ and finding ledger, then continue the next eligible milestone. If an external in
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
 
+
+Acceptance evidence: [M03 report](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).

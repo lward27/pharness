@@ -56,7 +56,7 @@ Evidence: [new WorkItem state and form](../../../ui/src/views/WorkItemNewView.ts
 
 The creation UI offers “Run read-only preflight.” Its capability checks call verification endpoints that can create short-lived Kubernetes Jobs, poll them, delete them, and persist verification results. The reviewed code includes repository/runtime capability checks and controlled network activity.
 
-Evidence: [preflight handler](../../../ui/src/views/WorkItemNewView.tsx#L72), [verification endpoint](../../../crates/pharness-api/src/app/system.rs#L411), [verification dispatch](../../../crates/pharness-api/src/dispatch.rs#L787).
+Evidence: [preflight handler](../../../ui/src/views/WorkItemNewView.tsx#L72), [verification endpoint](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/system.rs#L411), [verification dispatch](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/dispatch.rs#L787).
 
 This does not mean the check performs an unbounded product mutation. It means “read-only” is ambiguous about infrastructure effects.
 

@@ -1,6 +1,6 @@
 # ASTRA: Autonomous SDLC in lucas_engineering
 
-Status: approved implementation program; M01 accepted; M02 and M03 active. Approved by the owner on 2026-09-04.
+Status: approved implementation program; M01 and M03 accepted; M02 and M04 active. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
 Current compiled PHarness release: `83a2689c877a3f48688d1d457c34e83474698c46`.
 These are starting observations, not permanent latest-version claims.
@@ -22,7 +22,8 @@ does not replace the human production-approval event required in runtime accepta
 - Discovery, planning, coding, tests, source merge, builds, and staging are automatic
   under a recorded, bounded authorization.
 - Human approval binds digest, GitOps diff, staging evidence, target, and healthy
-  rollback baseline **before production GitOps merge**. Argo already auto-syncs.
+  rollback baseline **before production GitOps merge**. Frontend and PHarness already auto-sync;
+  yfinance is currently manual-sync and must be aligned in M09 before hosted promotion.
 - One bounded safe rollback may follow an approved release. Incompatible/destructive
   changes stop. Missing telemetry alone is not proof that rollback is appropriate.
 - One mutable application repository per WorkItem; separately authorized GitOps
@@ -57,8 +58,8 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | --- | --- | --- | --- |
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | active | M01. May proceed independently of M03. |
-| M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | active | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | planned | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
+| M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | planned | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | planned | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
@@ -68,7 +69,8 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: M02 and M03 (independent). M01 is accepted; see its committed evidence.
+Next eligible: M02 platform readiness and M04 coding qualification (independent).
+M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
 A real external blocker may suspend its dependent work but never waive its gate.
 Continue eligible independent work and ask only for missing authority/credentials
 or a decision with material downstream consequences.
@@ -133,8 +135,8 @@ current evidence, including for fixes that landed before this program.
 
 | Finding | Initial disposition | Owner | Required closure |
 | --- | --- | --- | --- |
-| F01 duplicate source closure | Fix landed upstream; revalidate | M03, M06 | Normal/repeated closure and retry-safe completion pass |
-| F02 verifier caveats | Still applicable | M03, M10 | Risks retained; contradictions cannot normalize to unconditional success |
+| F01 duplicate source closure | Revalidated in M03; controller recovery remains | M03, M06 | Normal/repeated closure and retry-safe completion pass |
+| F02 verifier caveats | Semantics fixed/tested in M03; UI remains | M03, M10 | Risks retained; contradictions cannot normalize to unconditional success |
 | F03 unavailable looks empty | New resource states improved; retiring fallback remains | M10 | Failed-load and stale-state UI tests across reachable surfaces |
 | F04 scope disagreement | Legacy exposure requires validation | M10 | Scope, filters, counts, cancellation, and data agree |
 | F05 incoherent cockpit example | Prototype concern; validate implementation | M10 | One coherent current state/action, no fictional fixture state |
@@ -143,8 +145,8 @@ current evidence, including for fixes that landed before this program.
 | F08 documentation drift | Confirmed; indexes partly repaired upstream | M01, M12 | Current reality/direction/history have unambiguous entry points |
 | F09 competing lifecycle/navigation | Direction superseded by approved program | M05, M10 | Canonical lifecycle and established navigation agree |
 | F10 demo defaults | Legacy creation exposure | M10 | Validated context only, no implicit demo input |
-| F11 failed architecture guardrails | Still applicable | M03 | Parser and existing boundary/size checks pass |
-| F12 tracked generated workspace | Still applicable | M03 | Disposable output untracked; intentional evidence retained |
+| F11 failed architecture guardrails | Closed with M03 checks | M03 | Parser and existing boundary/size checks pass |
+| F12 tracked generated workspace | Closed with M03 inventory | M03 | Disposable output untracked; intentional evidence retained |
 | F13 complete-journey proof | Not accepted | M04, M07–M09, M11–M12 | Qualified coding plus two autonomous real releases and operational proof |
 | F14 read-only readiness wording | Still applicable | M05, M10 | Actual Job/persistence effects accurately explained |
 | F15 competing destinations/filters | Lamina improved; remaining routes need convergence | M10 | One operational path with honest scoped history |

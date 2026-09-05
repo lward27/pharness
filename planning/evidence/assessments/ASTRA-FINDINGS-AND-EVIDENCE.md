@@ -96,11 +96,11 @@ The final error comes from prose inside a Rust string being captured by the impo
 
 ### Source chain
 
-1. [Writer dispatch](../../../crates/pharness-api/src/app/repo_mode.rs#L1239) calls `append_repo_audit`.
-2. [The audit helper](../../../crates/pharness-api/src/app/repo_mode.rs#L2362) calls `seal_repo_inapplicable_tail`, which creates Release and Observe at sequence 1 if they have no effective outcomes.
-3. [Merge observation](../../../crates/pharness-api/src/app/repo_mode.rs#L2047) calls `seal_source_delivery_closure` before updating terminal intent/WorkItem status.
-4. [Closure](../../../crates/pharness-api/src/app/repo_mode.rs#L2225) checks only whether a source-delivery outcome already exists. On its first path it seals that outcome and then unconditionally creates the Release/Observe tail again.
-5. [Store insertion](../../../crates/pharness-store/src/sqlite/repo_mode.rs#L257) uses an ordinary insert. Migration 0042 enforces uniqueness of `(work_item_id, stage_key, sequence)`.
+1. [Writer dispatch](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L1239) calls `append_repo_audit`.
+2. [The audit helper](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2362) calls `seal_repo_inapplicable_tail`, which creates Release and Observe at sequence 1 if they have no effective outcomes.
+3. [Merge observation](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2047) calls `seal_source_delivery_closure` before updating terminal intent/WorkItem status.
+4. [Closure](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-api/src/app/repo_mode.rs#L2225) checks only whether a source-delivery outcome already exists. On its first path it seals that outcome and then unconditionally creates the Release/Observe tail again.
+5. [Store insertion](https://github.com/lward27/pharness/blob/12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d/crates/pharness-store/src/sqlite/repo_mode.rs#L257) uses an ordinary insert. Migration 0042 enforces uniqueness of `(work_item_id, stage_key, sequence)`.
 
 ### Diagnostic modification, isolated from the user's checkout
 

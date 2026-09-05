@@ -1,6 +1,6 @@
 # ASTRA M04: Coding reliability qualification
 
-Status: planned.
+Status: active.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M03. An external qualification blocker does not stop independent M02/M05 preparation.
 
