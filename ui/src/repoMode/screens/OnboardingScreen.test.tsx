@@ -1,9 +1,34 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "./RepositoriesScreen";
 
 describe("Repository onboarding", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it("retains a blocked proposal without inventing a contract or offering approval", async () => {
+    const flow = {
+      onboarding:{id:"ronb_blocked",repository_id:"repo_one",product_id:"prod_one",registered_commit:"a".repeat(40),status:"proposal_blocked",state_hash:"blocked-state",actions:[{id:"refresh_onboarding",status:"blocked",blockers:["Dependency lock is missing; correct source before approval."]}]},
+      proposal:{status:"proposed",proposal:{schema_version:"pharness.dev/repository-onboarding-proposal/v1alpha2",discovery_id:"rdisc_one",discovery_hash:"sha256:discovery",candidate_contract:null,instructions:"",service_proposals:[],binding_proposals:[],assumptions:[],conflicts:[],blockers:["immutable_dependency_lock_missing"],readiness_forecast:{}}},
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(flow), {status:200,headers:{"content-type":"application/json"}}));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<OnboardingScreen onboardingId="ronb_blocked" operatorName="lucas" />);
+    await waitFor(() => expect(screen.getByText(/No executable contract proposed/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", {name:"approve proposal"})).not.toBeInTheDocument();
+    expect(screen.getByText(/PHarness has not checked readiness yet/)).toBeInTheDocument();
+    expect(screen.queryByText("No blockers.")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.every(call => !call[1]?.method || call[1].method === "GET")).toBe(true);
+    fireEvent.click(screen.getByRole("button", {name:"Edit proposal revision"}));
+    expect(screen.getByLabelText("Executable contract JSON")).toHaveValue("null");
+    fireEvent.click(screen.getByRole("button", {name:"Save new proposal revision"}));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/repository-onboardings/ronb_blocked/proposal",
+      expect.objectContaining({method:"PUT",body:expect.any(String)}),
+    ));
+    const saved = JSON.parse(fetchMock.mock.calls.find(call => call[1]?.method === "PUT")![1].body);
+    expect(saved.proposal.candidate_contract).toBeNull();
+    expect(saved.proposal.blockers).toEqual(["immutable_dependency_lock_missing"]);
+  });
 
   it("presents discovery, proposal, source delivery, and readiness with progressive disclosure", async () => {
     const flow = {

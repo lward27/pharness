@@ -144,7 +144,7 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 
 #[test]
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
-    for id in ["planner-v2", "test-diagnosis-v2"] {
+    for id in ["onboarding-v2", "planner-v2", "test-diagnosis-v2"] {
         assert_eq!(
             pharness_core::inference_qualification_fixture_revision(id).unwrap(),
             "stage-qualification-v2.1"
@@ -161,7 +161,6 @@ fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gat
     for (id, revision) in [
         ("coding-v2", "coding-reliability-v2.1"),
         ("repair-v2", "repair-reliability-v2.1"),
-        ("onboarding-v2", "stage-qualification-v2.0"),
         ("verifier-v2", "stage-qualification-v2.0"),
     ] {
         assert_eq!(

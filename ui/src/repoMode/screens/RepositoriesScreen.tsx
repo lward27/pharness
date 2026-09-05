@@ -186,7 +186,7 @@ function qualifiedPolicies(data:any) { return (data?.policies || []).filter((pol
 function policyRefValue(value:any) { return value?.policy_id && value?.revision ? `${value.policy_id}@${value.revision}` : ""; }
 function parsePolicyRef(value:string) { if(!value) return undefined; const separator = value.lastIndexOf("@"); return {policy_id:value.slice(0,separator),revision:value.slice(separator+1)}; }
 
-function Proposal({ proposal }: { proposal:any }) { return <div className="repo-proposal"><div className="repo-proposal-facts"><h3>Controller-bound facts</h3><FactGrid facts={[{label:"Discovery record",value:proposal.discovery_id,mono:true},{label:"Discovery hash",value:proposal.discovery_hash,mono:true}]} /></div><div><h3>Executable contract changes</h3><ContractSummary version={{contract:proposal.candidate_contract,content_hash:"Proposal · not active until merged"}} /></div><div><h3>Product topology suggestions</h3><p className="repo-muted">These suggestions never change Services or Repository bindings when the executable contract is approved. Review them separately in the owning Product topology editor.</p><RecordList values={[...(proposal.service_proposals || []),...(proposal.binding_proposals || [])]} empty="No Service or binding changes proposed." /></div><div><h3>Model guidance and forecast</h3><p className="repo-guidance">{proposal.instructions || "No bounded instructions proposed."}</p><RecordList values={Object.entries(proposal.readiness_forecast || {}).map(([key,value]) => ({key,value}))} empty="No readiness forecast claims." /></div><section className="repo-claim-zone"><h3>Agent assumptions</h3><RecordList values={proposal.assumptions} empty="No assumptions reported." tone="warning" /><h3>Conflicts and unsupported claims</h3><RecordList values={proposal.conflicts} empty="No conflicts reported." tone="warning" /></section><RecordList values={proposal.blockers} empty="No controller blockers." tone="error" /><RawRecord label="Raw proposal revision" value={proposal} /></div>; }
+function Proposal({ proposal }: { proposal:any }) { return <div className="repo-proposal"><div className="repo-proposal-facts"><h3>Controller-bound facts</h3><FactGrid facts={[{label:"Discovery record",value:proposal.discovery_id,mono:true},{label:"Discovery hash",value:proposal.discovery_hash,mono:true}]} /></div><div><h3>Executable contract changes</h3>{proposal.candidate_contract ? <ContractSummary version={{contract:proposal.candidate_contract,content_hash:"Proposal · not active until merged"}} /> : <p className="repo-muted">No executable contract proposed. Resolve the reported blockers or conflicts before approval.</p>}</div><div><h3>Product topology suggestions</h3><p className="repo-muted">These suggestions never change Services or Repository bindings when the executable contract is approved. Review them separately in the owning Product topology editor.</p><RecordList values={[...(proposal.service_proposals || []),...(proposal.binding_proposals || [])]} empty="No Service or binding changes proposed." /></div><div><h3>Model guidance and forecast</h3><p className="repo-guidance">{proposal.instructions || "No bounded instructions proposed."}</p><RecordList values={Object.entries(proposal.readiness_forecast || {}).map(([key,value]) => ({key,value}))} empty="No readiness forecast claims." /></div><section className="repo-claim-zone"><h3>Agent assumptions</h3><RecordList values={proposal.assumptions} empty="No assumptions reported." tone="warning" /><h3>Conflicts and unsupported claims</h3><RecordList values={proposal.conflicts} empty="No conflicts reported." tone="warning" /></section><RecordList values={proposal.blockers} empty="No proposal blockers reported." tone="error" /><RawRecord label="Raw proposal revision" value={proposal} /></div>; }
 
 function DiscoverySummary({ discovery }: { discovery:any }) {
   const inspected = (discovery.files || []).filter((file:any) => file.inspected).length;
@@ -199,7 +199,8 @@ function SourceDeliverySummary({ intent }: { intent:any }) {
 }
 
 function ReadinessSummary({ readiness, forecast }: { readiness:any; forecast:any }) {
-  const value = readiness || forecast || {};
+  if(!readiness) return <><p className="repo-muted">PHarness has not checked readiness yet. The agent's forecast below is unverified.</p><RecordList values={Object.entries(forecast || {}).map(([key,value]) => ({key,value}))} empty="No agent forecast is available." /><RawRecord label="Raw agent forecast" value={forecast || {}} /></>;
+  const value = readiness;
   return <><FactGrid facts={[{label:"Contract",value:<Status value={value.contract_status || "forecast"} />},{label:"Coding",value:<Status value={value.coding_status || "forecast"} />},{label:"Assessed",value:formatMoment(value.assessed_at)},{label:"Profile",value:value.environment_profile_id || "Unavailable"}]} /><RecordList values={value.checks} empty="No sealed readiness checks." /><RecordList values={value.warnings} empty="No warnings." tone="warning" /><RecordList values={value.blockers} empty="No blockers." tone="error" /><EvidenceReferences values={value.evidence_refs} /><RawRecord label="Raw readiness record" value={value} /></>;
 }
 
@@ -208,11 +209,11 @@ function OnboardingProposalEditor({ proposal,onboarding,operatorName,onSaved }:a
   const [actor,setActor] = useState(operatorName || "operator");
   const [reason,setReason] = useState("Review and revise onboarding proposal");
   const [instructions,setInstructions] = useState(proposal.instructions || "");
-  const [contract,setContract] = useState(JSON.stringify(proposal.candidate_contract || {},null,2));
+  const [contract,setContract] = useState(JSON.stringify(proposal.candidate_contract ?? null,null,2));
   const [mappings,setMappings] = useState(JSON.stringify({service_proposals:proposal.service_proposals || [],binding_proposals:proposal.binding_proposals || []},null,2));
   const [review,setReview] = useState(JSON.stringify({assumptions:proposal.assumptions || [],conflicts:proposal.conflicts || [],blockers:proposal.blockers || [],readiness_forecast:proposal.readiness_forecast || {}},null,2));
   const [error,setError] = useState("");
-  if(onboarding?.status !== "proposal_ready") return null;
+  if(!["proposal_ready","proposal_blocked"].includes(onboarding?.status)) return null;
   const save = async () => {
     setError("");
     try {

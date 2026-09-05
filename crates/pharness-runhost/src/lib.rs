@@ -441,7 +441,7 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
     }
     let profile_constraint = match id {
         "repository-onboarding-proposer" => {
-            "\nRepository onboarding contract rule: candidate_contract.environment_profile must exactly copy one id from AgentContext.contract_constraints.compatible_environment_profiles and its dependency_lock.kind must match that descriptor's accepted_dependency_lock_kinds. Generic language names and shortened aliases are invalid."
+            "\nRepository onboarding contract rule: when a candidate contract is present, candidate_contract.environment_profile must exactly copy one id from AgentContext.contract_constraints.compatible_environment_profiles and its dependency_lock.kind must match that descriptor's accepted_dependency_lock_kinds. Generic language names and shortened aliases are invalid. If discovery cannot support a complete contract, submit candidate_contract: null with explicit blockers or conflicts; never invent missing executable facts."
         }
         "repo-verifier" if is_reliability_v2 => {
             "\nVerifier completion rule: begin with the sealed Test outcome, Git diff, and Git status. Read only files needed to investigate a concrete risk or contradiction; do not reread a path unless new evidence changed the question. You do not need to read every changed file when the diff and sealed evidence are sufficient. Preserve the final eight turns for the terminal submit_verification action and submit the typed verdict before the soft turn boundary."
@@ -2157,11 +2157,6 @@ fn onboarding_submission(
         serde_json::from_value(document.clone()).map_err(|error| ToolError::InvalidArguments {
             message: format!("repository onboarding proposal is invalid: {error}"),
         })?;
-    if proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA {
-        return Err(ToolError::InvalidArguments {
-            message: "repository onboarding proposal has the wrong schema_version".into(),
-        });
-    }
     let Some((discovery_id, discovery_hash)) = &tools.onboarding_discovery else {
         return Err(ToolError::InvalidArguments {
             message: "repository onboarding proposal has no controller-bound discovery".into(),
@@ -2173,15 +2168,9 @@ fn onboarding_submission(
                 .into(),
         });
     }
-    let contract: RepositoryContract = serde_json::from_value(proposal.candidate_contract.clone())
-        .map_err(|error| ToolError::InvalidArguments {
-            message: format!("candidate repository contract is invalid: {error}"),
-        })?;
-    contract
-        .validate_candidate()
-        .map_err(|error| ToolError::InvalidArguments {
-            message: error.to_string(),
-        })?;
+    proposal
+        .validate_submission()
+        .map_err(|message| ToolError::InvalidArguments { message })?;
     structured_submission("repository_onboarding_proposal", document)
 }
 
@@ -2892,6 +2881,40 @@ mod workspace_source_tests {
             .await
             .unwrap();
         assert_eq!(accepted.content["structured_submission"], true);
+
+        let mut blocked = proposal.clone();
+        blocked["candidate_contract"] = serde_json::Value::Null;
+        blocked["blockers"] = serde_json::json!(["immutable_dependency_lock_missing"]);
+        let accepted_blocker = tools
+            .execute(&AgentAction::SubmitOnboardingProposal {
+                id: ActionId::new("act_blocked_onboarding"),
+                reason: "retain missing prerequisite".into(),
+                proposal: blocked.clone(),
+            })
+            .await
+            .unwrap();
+        assert!(accepted_blocker.content["document"]["candidate_contract"].is_null());
+        for invalid_blocker in [
+            {
+                let mut value = blocked.clone();
+                value["blockers"] = serde_json::json!([]);
+                value
+            },
+            {
+                let mut value = blocked.clone();
+                value["discovery_id"] = serde_json::json!("rdisc_other");
+                value
+            },
+        ] {
+            assert!(tools
+                .execute(&AgentAction::SubmitOnboardingProposal {
+                    id: ActionId::new("act_invalid_blocker"),
+                    reason: "test boundary".into(),
+                    proposal: invalid_blocker,
+                })
+                .await
+                .is_err());
+        }
 
         let mut invalid = proposal;
         invalid["candidate_contract"]["dependency_lock"]["sha256"] =

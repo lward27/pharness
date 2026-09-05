@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 mod integrity;
+mod onboarding;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SuiteKind {
@@ -395,7 +396,7 @@ async fn run_codex_fixture(
     runtime: &crate::codex_qualification::CodexEvaluationRuntime,
 ) -> Result<EvalResult> {
     let started = Instant::now();
-    let root = prepare_workspace(fixture, attempt)?;
+    let root = prepare_workspace(suite, fixture, attempt)?;
     let contract: pharness_core::RepositoryContract =
         serde_json::from_value(qualification_contract())?;
     let mut context = fixture.context.clone();
@@ -615,7 +616,7 @@ async fn run_fixture(
     binding: &ResolvedInferenceBinding,
 ) -> Result<EvalResult> {
     let started = Instant::now();
-    let root = prepare_workspace(fixture, attempt)?;
+    let root = prepare_workspace(suite, fixture, attempt)?;
     let backend = Arc::new(EvalAttemptBackend::default());
     let run_id = format!("eval-{}-{}-{attempt}", suite.suite_id(), fixture.id);
     let execution_target = execution_target(suite, fixture, profile)?;
@@ -791,7 +792,7 @@ fn execution_target(
 fn fixtures(suite: SuiteKind) -> Result<Vec<StageFixture>> {
     match suite {
         SuiteKind::OnboardingV1 => Ok(onboarding_fixtures()?.into_iter().take(8).collect()),
-        SuiteKind::OnboardingV2 => onboarding_fixtures(),
+        SuiteKind::OnboardingV2 => onboarding::fixtures(),
         SuiteKind::PlannerV1 => Ok(planner_fixtures()?.into_iter().take(8).collect()),
         SuiteKind::PlannerV2 => planner_fixtures(),
         SuiteKind::TesterV1 => tester_fixtures(),
@@ -1118,7 +1119,7 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
                 "discovery_hash":fixture.context["discovery"]["hash"],
                 "candidate_contract":fixture.expected["contract"],
                 "instructions":"Use the pinned runtime and declared acceptance commands.",
-                "service_proposals":[],"binding_proposals":[],"assumptions":[],"conflicts":[],
+                "service_proposals":[],"binding_proposals":if fixture.expected["reuse_service"] == true {json!([{"service_keys":["finance-web"],"scopes":["src/**"]}])} else {json!([])},"assumptions":[],"conflicts":[],
                 "blockers":if fixture.expected["blocker"].as_str().unwrap_or_default().is_empty() {json!([])} else {json!([fixture.expected["blocker"]])},
                 "readiness_forecast":{"coding":"requires controller validation"},
             }),
@@ -1176,7 +1177,8 @@ fn validate_submission(
     };
     let encoded = document.to_string().to_ascii_lowercase();
     match suite {
-        SuiteKind::OnboardingV1 | SuiteKind::OnboardingV2 => {
+        SuiteKind::OnboardingV2 => onboarding::validate(fixture, document, violations),
+        SuiteKind::OnboardingV1 => {
             let profile = fixture.expected["profile"].as_str().unwrap_or_default();
             let blocker = fixture.expected["blocker"].as_str().unwrap_or_default();
             let profile_ok = document["candidate_contract"]["environment_profile"] == profile;
@@ -1294,13 +1296,27 @@ fn structured_submission(events: &[AgentEvent], kind: &str) -> Option<Value> {
     })
 }
 
-fn prepare_workspace(fixture: &StageFixture, attempt: u32) -> Result<PathBuf> {
+fn prepare_workspace(suite: SuiteKind, fixture: &StageFixture, attempt: u32) -> Result<PathBuf> {
     let root = std::env::temp_dir().join(format!(
         "pharness-stage-eval-{}-{attempt}-{}",
         fixture.id,
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);
+    if suite == SuiteKind::OnboardingV2 {
+        fs::create_dir(&root)?;
+        onboarding::write_workspace(&root, &fixture.expected["workspace_files"])?;
+        let source = git_lines(&root, &["rev-parse", "HEAD"])?;
+        if source.first().map(String::as_str)
+            != fixture
+                .context
+                .pointer("/discovery/repository/resolved_commit")
+                .and_then(Value::as_str)
+        {
+            bail!("onboarding workspace does not match its discovery revision");
+        }
+        return Ok(root);
+    }
     fs::create_dir_all(root.join("src"))?;
     fs::create_dir_all(root.join("tests"))?;
     fs::write(root.join("README.md"), "# Qualification fixture\n")?;

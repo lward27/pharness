@@ -179,16 +179,10 @@ pub(super) async fn put_repository_onboarding_proposal(
     ensure_repo_mode_enabled(&state)?;
     validate_required(&request.actor, "actor", 200)?;
     validate_required(&request.reason, "reason", 1_000)?;
-    if request.proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA {
-        return Err(ApiError::bad_request(
-            "proposal schema_version must be pharness.dev/repository-onboarding-proposal/v1alpha1",
-        ));
-    }
-    if request.proposal.instructions.len() > 32 * 1024 {
-        return Err(ApiError::bad_request(
-            "repository instructions must not exceed 32 KiB",
-        ));
-    }
+    let contract = request
+        .proposal
+        .validate_submission()
+        .map_err(ApiError::bad_request)?;
     let onboarding = find_onboarding(&state, &onboarding_id).await?;
     let preview = onboarding_operator_response(&state, onboarding.clone()).await?;
     if preview.state_hash != request.state_hash {
@@ -213,13 +207,6 @@ pub(super) async fn put_repository_onboarding_proposal(
             "proposal must reference the exact current successful discovery",
         ));
     }
-    let contract: pharness_core::RepositoryContract =
-        serde_json::from_value(request.proposal.candidate_contract.clone()).map_err(|error| {
-            ApiError::bad_request(format!("candidate contract is invalid: {error}"))
-        })?;
-    contract
-        .validate_candidate()
-        .map_err(|error| ApiError::bad_request(error.to_string()))?;
     let repository = state
         .store
         .get_repository(&onboarding.repository_id)
@@ -229,12 +216,14 @@ pub(super) async fn put_repository_onboarding_proposal(
         .inventory_json
         .as_ref()
         .ok_or_else(|| ApiError::conflict("deterministic discovery inventory is unavailable"))?;
-    validate_onboarding_contract_compatibility(
-        &state.environment_profiles,
-        &repository.canonical_url,
-        inventory,
-        &contract,
-    )?;
+    if let Some(contract) = contract.filter(|_| !request.proposal.is_blocked()) {
+        validate_onboarding_contract_compatibility(
+            &state.environment_profiles,
+            &repository.canonical_url,
+            inventory,
+            &contract,
+        )?;
+    }
     validate_onboarding_product_proposals(&state, &onboarding, &request.proposal).await?;
     let proposal_value = serde_json::to_value(&request.proposal)
         .map_err(|error| ApiError::internal(error.to_string()))?;
@@ -350,10 +339,7 @@ pub(super) async fn execute_repository_onboarding_action(
                 serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
                     ApiError::internal(format!("stored onboarding proposal is invalid: {error}"))
                 })?;
-            let contract: pharness_core::RepositoryContract =
-                serde_json::from_value(typed.candidate_contract.clone()).map_err(|error| {
-                    ApiError::conflict(format!("stored candidate contract is invalid: {error}"))
-                })?;
+            let contract = typed.approvable_contract().map_err(ApiError::conflict)?;
             let discovery = state
                 .store
                 .get_repository_discovery(&proposal.discovery_id)
@@ -1313,8 +1299,7 @@ async fn validate_and_store_agent_onboarding_proposal(
                 "onboarding proposer submission is invalid: {error}"
             ))
         })?;
-    if proposal.schema_version != pharness_core::ONBOARDING_PROPOSAL_SCHEMA
-        || proposal.discovery_id != discovery.id
+    if proposal.discovery_id != discovery.id
         || proposal.discovery_hash != discovery_hash
         || proposal.instructions.len() > 32 * 1024
     {
@@ -1322,27 +1307,23 @@ async fn validate_and_store_agent_onboarding_proposal(
             "onboarding proposal does not match its exact discovery or bounded schema",
         ));
     }
-    let contract: pharness_core::RepositoryContract =
-        serde_json::from_value(proposal.candidate_contract.clone()).map_err(|error| {
-            ApiError::conflict(format!("candidate contract is invalid: {error}"))
-        })?;
-    contract
-        .validate_candidate()
-        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    let contract = proposal.validate_submission().map_err(ApiError::conflict)?;
     let repository = state
         .store
         .get_repository(&onboarding.repository_id)
         .await?
         .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
-    validate_onboarding_contract_compatibility(
-        &state.environment_profiles,
-        &repository.canonical_url,
-        discovery
-            .inventory_json
-            .as_ref()
-            .ok_or_else(|| ApiError::conflict("onboarding discovery inventory is unavailable"))?,
-        &contract,
-    )?;
+    if let Some(contract) = contract.filter(|_| !proposal.is_blocked()) {
+        validate_onboarding_contract_compatibility(
+            &state.environment_profiles,
+            &repository.canonical_url,
+            discovery.inventory_json.as_ref().ok_or_else(|| {
+                ApiError::conflict("onboarding discovery inventory is unavailable")
+            })?,
+            &contract,
+        )?;
+    }
+    validate_onboarding_product_proposals(state, onboarding, &proposal).await?;
     let value =
         serde_json::to_value(&proposal).map_err(|error| ApiError::internal(error.to_string()))?;
     state
