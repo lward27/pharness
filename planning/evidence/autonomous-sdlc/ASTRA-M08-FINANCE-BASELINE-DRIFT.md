@@ -1,6 +1,12 @@
 # ASTRA M08: Finance source and deployed baseline differ
 
 Observed on September 5, 2026, against staging only. This updates the current-baseline account without rewriting historical evidence.
+The [2026-09-05 staging baseline refresh](ASTRA-M08-YFINANCE-CURRENT-STAGING-BASELINE.md)
+subsequently deployed the existing current-source image and passed the unchanged functional
+probes plus one shared five-minute signal/trace window. The failures below remain valid
+historical evidence for `f1cfc06`, which is still the production baseline. This correction
+was program-operated and does not close autonomous M08 delivery or M11 acceptance.
+
 
 The pinned yfinance image `sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1` is healthy and its Deployment, current ReplicaSet, Pod image identity and ready Service endpoint agree with Argo. Those observations do not prove the current application's behavior.
 
