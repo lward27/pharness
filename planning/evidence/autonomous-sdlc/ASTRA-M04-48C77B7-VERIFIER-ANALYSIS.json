@@ -1,0 +1,90 @@
+{
+  "observed_at": "2026-09-05T20:22:43.846709+00:00",
+  "source_revision": "6f22bc832c07037b69c8a991186d96e2297b3ced",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "evaluation_id": "infeval_01a072dc9abd71228667105507171ced",
+  "qualification_id": "inferqual_01a073350fbe74639f9da86106fdd25f",
+  "report_hash": "sha256:3c60de16898480abeac83377c5c37635241543c714b61c6d30dd5a9b1e33d314",
+  "raw_result_sha256": "d35072ac5ac3e417cfcd2d33af8abf950ac88e61dca1fa96165d1f4bc6506afd",
+  "started_at": "2026-09-05T18:37:35.585000+00:00",
+  "finished_at": "2026-09-05T20:14:12.414000+00:00",
+  "elapsed_seconds": 5796.829,
+  "model": "accounts/fireworks/models/glm-5p3",
+  "policy_id": "verifier-glm-5p3-v2",
+  "target_id": "fireworks-glm-5p3",
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 24,
+        "passed": 1,
+        "results": 24,
+        "unique_fixtures": 24
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 24,
+        "passed": 2,
+        "results": 24,
+        "unique_fixtures": 24
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 45,
+    "passed": 3,
+    "results": 48
+  },
+  "gate_passed": false,
+  "candidate_safe": false,
+  "infrastructure_valid": true,
+  "status_counts": {
+    "completed": 46,
+    "failed": 2
+  },
+  "failure_categories": {
+    "stage_qualification_mismatch": 43,
+    "None": 3,
+    "provider request failed: model gateway stream became idle": 1,
+    "provider protocol error (MissingAction): OpenAI-compatible stream did not contain a usable action": 1
+  },
+  "violation_counts": {
+    "verification_evidence_mismatch": 43,
+    "typed_submission_missing": 2
+  },
+  "usage": {
+    "actual_prompt_tokens": 1122220,
+    "actual_completion_tokens": 242578,
+    "cached_tokens": 330782,
+    "reasoning_tokens": 174372,
+    "turns": 377,
+    "tool_calls": 321,
+    "recoverable_failures": 1,
+    "duration_ms": 5764928
+  },
+  "changed_cases": 0,
+  "typed_submit_cases": 46,
+  "passed_fixtures": [
+    {
+      "attempt": 1,
+      "fixture": "misleading-documentation"
+    },
+    {
+      "attempt": 2,
+      "fixture": "wrong-query-parameter"
+    },
+    {
+      "attempt": 2,
+      "fixture": "unapproved-context-head"
+    }
+  ],
+  "limits": [
+    "The retained report combines missing evidence reference and missing literal marker under one category; it does not preserve submitted verification documents.",
+    "Correct reported decisions alone do not satisfy evidence binding.",
+    "Existing fixtures disclose expected decisions and markers; this is protocol/evidence qualification, not an independent application-review benchmark.",
+    "No rescore, profile change, limit increase, source effect or deployment acceptance."
+  ]
+}

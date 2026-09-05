@@ -3,7 +3,9 @@
 Status: active and not qualified. On runtime `48c77b7`, Builder passed both frozen
 runs 24/24, while onboarding failed both twelve-case attempts at 18:03 UTC on
 2026-09-05. Planner then scored 4/12 and 7/12; Test Diagnosis scored 0/12 in both
-attempts. Verifier is running and Repair remains serial. The
+attempts. [Verifier failed with 1/24 and 2/24 passes at 20:14 UTC](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-VERIFIER-FAILURE.md).
+Repair subsequently passed 30/30 protocol checks and started two frozen attempts;
+its result remains pending. The
 [stage scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
 documents proven harness defects, their bounded fixes and the required fresh
 qualification. The [onboarding contract and fixture correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
