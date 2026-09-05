@@ -79,6 +79,10 @@ pub(super) async fn advance(
     } else if let Some((hash, resource)) = super::build::candidate(state, snapshot).await? {
         require_authority(snapshot, HostedAutomaticAction::Build)?;
         (super::build::ACTION.into(), hash, resource)
+    } else if let Some((hash, resource)) = super::staging::candidate(state, snapshot).await? {
+        require_authority(snapshot, HostedAutomaticAction::StagingDelivery)?;
+        require_authority(snapshot, HostedAutomaticAction::Observe)?;
+        (super::staging::ACTION.into(), hash, resource)
     } else if let Some(run) = continuation_candidate(snapshot) {
         require_authority(snapshot, HostedAutomaticAction::Test)?;
         require_authority(snapshot, HostedAutomaticAction::Verify)?;
@@ -115,8 +119,15 @@ pub(super) async fn advance(
         "start_planner" | "authorize_stage_chain" | "continue_stage"
     );
     let repo_lock = format!("repository:{}", snapshot.metadata.repository_id);
+    let staging_lock = format!("delivery:{}:staging", snapshot.metadata.repository_id);
     let keys = if runs_worker {
         vec!["coding", repo_lock.as_str()]
+    } else if action == super::staging::ACTION {
+        vec![
+            repo_lock.as_str(),
+            staging_lock.as_str(),
+            "gitops:lucas_engineering:main",
+        ]
     } else if action == "authorize_source_delivery" || action == super::build::ACTION {
         vec![repo_lock.as_str()]
     } else {

@@ -49,6 +49,25 @@ pub(super) async fn fixture_with_policy(
                 .await
                 .unwrap();
             policy["pipeline_contract"] = json!(contract);
+            for key in ["staging_contract", "production_contract"] {
+                let p = &policy[key];
+                let contract = state
+                    .store
+                    .create_deployment_contract(pharness_store::CreateDeploymentContract {
+                        id: p["id"].as_str().unwrap().into(),
+                        status: "active".into(),
+                        target_environment: p["target_environment"].as_str().unwrap().into(),
+                        target_namespace: p["target_namespace"].as_str().unwrap().into(),
+                        argo_application: p["argo_application"].as_str().unwrap().into(),
+                        version: p["version"].as_str().unwrap().into(),
+                        contract_json: p["contract_json"].clone(),
+                        actor: Some("unit-test".into()),
+                        reason: Some("Finite staging/production contract fixture".into()),
+                    })
+                    .await
+                    .unwrap();
+                policy[key] = json!(contract);
+            }
             serde_json::from_value(policy).unwrap()
         }
         None => serde_json::from_str(include_str!(

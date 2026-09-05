@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: apps-staging
+resources:
+  - ../../yfinance-wrapper
+  - network-policy.yaml
+images:
+  - name: registry.lucas.engineering/yfinance_wrapper
+    digest: sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1
+patches:
+  - path: deployment-patch.yaml
+  - target:
+      kind: Ingress
+      name: yfinance-wrapper
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: yfinance-wrapper

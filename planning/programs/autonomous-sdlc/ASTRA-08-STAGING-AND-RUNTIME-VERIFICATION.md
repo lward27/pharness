@@ -1,6 +1,6 @@
 # ASTRA M08: Staging and runtime verification
 
-Status: bounded native Tempo reader locally validated; separate deployment records implemented and locally checked. Neither slice is deployed; staging progression, runtime adjudication and acceptance remain open.
+Status: bounded native Tempo reader, separate deployment records and durable staging GitOps handoff implemented with local validation. These slices are not deployed; Argo/runtime verification and real staging acceptance remain open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
 
@@ -16,6 +16,15 @@ advancement of hosted deployments. The SQLite uniqueness change requires a
 transactional table replacement; the live-copy migration check and compatible
 reader deployment are still required before any hosted writes. This does not
 establish a deployed candidate, production approval or release verification.
+
+The [durable staging GitOps slice](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS.md)
+connects verified autonomous builds to one admitted, finite staging digest update.
+It preserves original operation and Job identities, uses an atomic expected-base
+GitHub commit, and recovers uncertain outcomes with one separate GitOps reader.
+Its local tests do not establish a real GitOps mutation or running deployment.
+The operation retains its delivery locks after a committed digest while actual
+Argo and runtime verification remain pending. Production cannot be expressed by
+this authority; the existing production approval boundary is unchanged.
 
 ## Objective and scope
 

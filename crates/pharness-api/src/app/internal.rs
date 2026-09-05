@@ -16,6 +16,10 @@ use super::hosted_controller::build::{internal_build_attempt, internal_build_out
 use super::hosted_controller::source_merge::{
     internal_source_merge_attempt, internal_source_merge_context, internal_source_merge_outcome,
 };
+use super::hosted_controller::staging::{
+    internal_staging_attempt, internal_staging_context, internal_staging_outcome,
+    internal_staging_plan,
+};
 use super::inference;
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
 use super::products::{
@@ -161,6 +165,22 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/pipeline-intents/:pipeline_intent_id/hosted-execution-outcome",
             post(internal_build_outcome),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/staging/context",
+            get(internal_staging_context),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/staging/plan",
+            post(internal_staging_plan),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/staging/attempt",
+            post(internal_staging_attempt),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/staging/outcome",
+            post(internal_staging_outcome),
         )
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-context",
