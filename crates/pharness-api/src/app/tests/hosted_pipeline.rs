@@ -11,6 +11,13 @@ async fn merged_source(suffix: &str, fake: &KubectlFixture) -> RepoDeliveryFixtu
     finish_source(fixture(suffix, fake).await).await
 }
 
+pub(super) async fn merged_finance_source(
+    suffix: &str,
+    fake: &KubectlFixture,
+) -> RepoDeliveryFixture {
+    finish_source(fixture_with_policy(suffix, fake, Some(finance_policy())).await).await
+}
+
 async fn finish_source(f: RepoDeliveryFixture) -> RepoDeliveryFixture {
     let a = authority(&f).await;
     let _ = admit(&f, &a).await.unwrap();

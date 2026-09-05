@@ -205,6 +205,21 @@ pub(in crate::app) async fn validate_intent(
     state: &AppState,
     intent: &StoredPipelineIntent,
 ) -> Result<bool, ApiError> {
+    validate_intent_mode(state, intent, true).await
+}
+
+pub(in crate::app) async fn validate_observed_intent(
+    state: &AppState,
+    intent: &StoredPipelineIntent,
+) -> Result<bool, ApiError> {
+    validate_intent_mode(state, intent, false).await
+}
+
+async fn validate_intent_mode(
+    state: &AppState,
+    intent: &StoredPipelineIntent,
+    for_write: bool,
+) -> Result<bool, ApiError> {
     let change = state
         .store
         .get_change_set(&intent.change_set_id)
@@ -232,8 +247,9 @@ pub(in crate::app) async fn validate_intent(
         .await?
         .ok_or_else(|| ApiError::conflict("hosted build PipelineContract is unavailable"))?;
     let execution = super::execution::tekton_execution_spec(&intent.intent_json)?;
-    if control.control != "active"
-        || crate::app::OperationalMode::from_env() != crate::app::OperationalMode::Normal
+    if (for_write
+        && (control.control != "active"
+            || crate::app::OperationalMode::from_env() != crate::app::OperationalMode::Normal))
         || !policy
             .automatic_actions
             .contains(&HostedAutomaticAction::Build)

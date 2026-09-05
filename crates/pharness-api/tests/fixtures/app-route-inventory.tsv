@@ -71,6 +71,8 @@ GET	/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-observation-
 POST	/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-observation-outcome	worker
 POST	/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-outcome	worker
 POST	/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome	worker
+POST	/api/internal/pipeline-intents/:pipeline_intent_id/execution-attempt	worker
+POST	/api/internal/pipeline-intents/:pipeline_intent_id/hosted-execution-outcome	worker
 GET	/api/internal/repository-discoveries/:discovery_id/context	worker
 POST	/api/internal/repository-discoveries/:discovery_id/outcome	worker
 GET	/api/internal/repository-onboardings/:onboarding_id/contract-validation-context	worker

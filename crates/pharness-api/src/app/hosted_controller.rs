@@ -1,4 +1,5 @@
 pub(in crate::app) mod approval;
+pub(in crate::app) mod build;
 mod control;
 mod operations;
 mod preparation;

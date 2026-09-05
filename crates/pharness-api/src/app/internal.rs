@@ -12,6 +12,7 @@ use super::gitops::delivery::{
     internal_gitops_delivery_outcome as internal_standard_gitops_delivery_outcome,
     InternalGitOpsDeliveryQuery,
 };
+use super::hosted_controller::build::{internal_build_attempt, internal_build_outcome};
 use super::hosted_controller::source_merge::{
     internal_source_merge_attempt, internal_source_merge_context, internal_source_merge_outcome,
 };
@@ -152,6 +153,14 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome",
             post(internal_pipeline_intent_execution_outcome),
+        )
+        .route(
+            "/api/internal/pipeline-intents/:pipeline_intent_id/execution-attempt",
+            post(internal_build_attempt),
+        )
+        .route(
+            "/api/internal/pipeline-intents/:pipeline_intent_id/hosted-execution-outcome",
+            post(internal_build_outcome),
         )
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-context",

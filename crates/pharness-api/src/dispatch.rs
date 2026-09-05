@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod hosted_build;
 mod recovery;
 mod source_delivery;
 #[cfg(test)]

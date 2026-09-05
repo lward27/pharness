@@ -39,6 +39,7 @@ const CONTEXT_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
 
+mod hosted_build;
 mod source_merge;
 
 /// Update one declared Kustomize image entry to an immutable image digest.
@@ -2080,6 +2081,9 @@ async fn fetch_internal_context<T: DeserializeOwned>(
 /// Submit and observe one prevalidated PipelineRun. This mode deliberately
 /// does not load model credentials or run an agent loop.
 async fn execute_tekton_trigger() -> anyhow::Result<()> {
+    if std::env::var("PHARNESS_HOSTED_BUILD").as_deref() == Ok("true") {
+        return hosted_build::execute().await;
+    }
     let api_url = required_env("PHARNESS_API_URL")?
         .trim_end_matches('/')
         .to_string();
