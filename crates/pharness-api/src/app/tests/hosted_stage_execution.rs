@@ -479,7 +479,7 @@ async fn hosted_frontend_contract_registration_preserves_legacy_execution_bounda
 }
 
 #[tokio::test]
-async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization() {
+async fn hosted_readiness_and_creation_preserve_exact_planner_authorization() {
     use axum::{
         body::{to_bytes, Body},
         http::Request,
@@ -488,8 +488,9 @@ async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization(
         CreateDeploymentContract, CreatePipelineContract, CreateRepositoryContractVersion,
     };
     use tower::ServiceExt;
-    let mut state = super::characterization::test_state_with_git_observer(
+    let mut state = super::characterization::test_state_with_git_and_gitops(
         "/bin/false".into(),
+        "https://github.com/example/repo-hosted_planner_preview.git".into(),
         "https://github.com/example/gitops.git".into(),
     )
     .await;
@@ -527,6 +528,9 @@ async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization(
         .await
         .unwrap()
         .unwrap();
+    let mut contract = item.repository_contract_json.unwrap();
+    contract["dependency_lock"]["kind"] = json!("pip_requirements");
+    contract["dependency_lock"]["sha256"] = json!("d".repeat(64));
     fixture
         .state
         .store
@@ -535,8 +539,8 @@ async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization(
             repository_id: metadata.repository_id.clone(),
             onboarding_id: old.onboarding_id,
             source_commit: item.source_commit.clone().unwrap(),
-            contract: item.repository_contract_json.unwrap(),
-            content_hash: "sha256:preview-test".into(),
+            content_hash: crate::app::hashing::canonical_material_hash(&contract).unwrap(),
+            contract,
             merge_provenance: json!({"fixture_only":true}),
         })
         .await
@@ -607,6 +611,73 @@ async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization(
         !body["blockers"].as_array().unwrap().is_empty(),
         "this fixture deliberately does not claim complete repository readiness"
     );
+    make_repository_ready(&mut fixture.state, &metadata.repository_id).await;
+    let submission = json!({
+        "title":"Use the recorded Planner", "intent":"Inspect qualification and planner identity", "repository_id":metadata.repository_id,
+    });
+    let router = crate::app::repo_mode::router().with_state(fixture.state.clone());
+    let response = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/products/{}/work-items/preflight",
+                    metadata.product_id
+                ))
+                .header("content-type", "application/json")
+                .body(Body::from(submission.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let ready: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 100_000).await.unwrap()).unwrap();
+    assert_eq!(ready["blockers"], json!([]), "{ready}");
+    let mut creation = submission;
+    creation["preflight_hash"] = ready["preflight_hash"].clone();
+    creation["actor"] = json!("unit-test");
+    creation["reason"] = json!("test exact hosted creation; no live provider or deployment proof");
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/products/{}/work-items", metadata.product_id))
+                .header("content-type", "application/json")
+                .body(Body::from(creation.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let created: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 100_000).await.unwrap()).unwrap();
+    assert_eq!(status, axum::http::StatusCode::OK, "{created}");
+    assert_eq!(created["work_item"]["workflow_kind"], "hosted_sdlc");
+    assert_eq!(
+        created["repo_mode"]["workflow_policy"],
+        ready["workflow_policy"]
+    );
+    assert_eq!(created["discover_outcome"]["origin"], "controller");
+    let created_id = created["work_item"]["id"].as_str().unwrap();
+    let flow = crate::app::repo_mode::repo_work_item_flow(&fixture.state, created_id)
+        .await
+        .unwrap();
+    assert_eq!(flow.work_item.workflow_kind, "hosted_sdlc");
+    assert_eq!(flow.delivery_configuration["release"]["required"], true);
+    assert!(flow.work_item.closed_at.is_none());
+    assert!(flow.workspaces.is_empty());
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .list_effective_stage_outcomes(created_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
     fixture
         .state
         .store
@@ -641,4 +712,76 @@ async fn hosted_readiness_reports_the_same_planner_binding_as_its_authorization(
     .await
     .unwrap_err();
     assert!(error.message.contains("required health probe"));
+}
+
+async fn make_repository_ready(state: &mut crate::app::AppState, repository_id: &str) {
+    use pharness_store::{CreateCapabilityVerification, CreateRepositoryReadinessAssessment};
+    let repository = state
+        .store
+        .get_repository(repository_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let version = state
+        .store
+        .latest_repository_contract_version(repository_id, &repository.registered_commit)
+        .await
+        .unwrap()
+        .unwrap();
+    let contract: pharness_core::RepositoryContract =
+        serde_json::from_value(version.contract.clone()).unwrap();
+    let profile: pharness_core::EnvironmentProfile = serde_json::from_value(json!({
+        "id":"python-3.11", "active":true, "image":format!("example.test/python@sha256:{}","d".repeat(64)),
+        "revision":"a".repeat(40), "platform":"linux/amd64", "required_executables":["pharness-worker","git","python","pip"],
+        "preparation_strategy":"python_hashed_requirements", "service_account":"pharness-python-runner",
+        "repository_allowlist":[repository.canonical_url], "limits":{"cpu":"1","memory":"1Gi","ephemeral_storage":"1Gi"},
+    })).unwrap();
+    contract.validate_for_profile(&profile).unwrap();
+    state.environment_profiles = Arc::new(vec![profile.clone()]);
+    let now = crate::app::clock::current_millis();
+    let mut verifications = Vec::new();
+    for (id, capability) in [
+        ("capverify_hosted_source", "source_reader"),
+        (
+            "capverify_hosted_profile",
+            "environment_profile:python-3.11",
+        ),
+    ] {
+        verifications.push(
+            state
+                .store
+                .create_capability_verification(CreateCapabilityVerification {
+                    id: id.into(),
+                    capability: capability.into(),
+                    status: "available".into(),
+                    summary: "deterministic readiness fixture".into(),
+                    principal: None,
+                    repository: Some(repository.canonical_url.clone()),
+                    permission: None,
+                    verified_at: now.to_string(),
+                    expires_at: (now + 900_000).to_string(),
+                })
+                .await
+                .unwrap(),
+        );
+    }
+    let input = json!({
+        "schema_version":"pharness.dev/repository-readiness-input/v1alpha1",
+        "repository_id":repository.id, "source_commit":repository.registered_commit,
+        "contract_version_id":version.id, "contract_hash":version.content_hash, "dependency_lock_hash":contract.dependency_lock.sha256,
+        "environment_profile_id":profile.id, "environment_profile_revision":profile.revision, "runner_image":profile.image,
+        "validation_policy_version":"repo-mode-v1", "required_executables":profile.required_executables, "acceptance_commands":contract.acceptance_commands,
+        "capability_evidence":{
+            "source_reader":{"id":verifications[0].id,"verified_at":verifications[0].verified_at,"expires_at":verifications[0].expires_at},
+            "environment_profile":{"id":verifications[1].id,"verified_at":verifications[1].verified_at,"expires_at":verifications[1].expires_at},
+        },
+    });
+    state.store.create_repository_readiness_assessment(CreateRepositoryReadinessAssessment {
+        id:"rready_hosted_current".into(), repository_id:repository.id, source_commit:repository.registered_commit,
+        contract_version_id:Some(version.id), contract_hash:Some(version.content_hash), dependency_lock_hash:Some(contract.dependency_lock.sha256),
+        environment_profile_id:Some(profile.id), environment_profile_revision:Some(profile.revision), runner_image_digest:Some(format!("sha256:{}","d".repeat(64))),
+        validation_policy_version:"repo-mode-v1".into(), contract_status:"ready".into(), coding_status:"ready".into(), checks:json!([]), blockers:json!([]), warnings:json!([]),
+        evidence_refs:json!(verifications.iter().map(|v|json!({"kind":"capability_verification","id":v.id,"capability":v.capability})).collect::<Vec<_>>()),
+        input_hash:crate::app::hashing::canonical_material_hash(&input).unwrap(), content_hash:"sha256:readiness-test-fixture".into(), expires_at:Some((now + 900_000).to_string()),
+    }).await.unwrap();
 }

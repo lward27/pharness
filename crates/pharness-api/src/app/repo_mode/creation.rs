@@ -354,6 +354,7 @@ pub(super) async fn create_repo_work_item(
         })
         .await?;
     let metadata = repo_metadata(&state, &work_item_id).await?;
+    let work_item = crate::dto::WorkItemResponse::from(work_item).with_repo_metadata(&metadata);
     Ok(Json(json!({
         "work_item": work_item,
         "repo_mode": metadata,
@@ -673,7 +674,7 @@ async fn build_repo_work_item_preflight(
         vec![
             "create_hosted_work_item".into(),
             "seal_discover_stage_from_readiness".into(),
-            "schedule_authorized_workflow".into(),
+            "record_authorized_workflow".into(),
         ]
     } else if blockers.is_empty() {
         vec![

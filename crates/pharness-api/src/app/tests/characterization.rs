@@ -670,6 +670,14 @@ pub(super) async fn test_state_with_git_observer(
     kubectl_bin: String,
     allowed_repo: String,
 ) -> AppState {
+    test_state_with_git_and_gitops(kubectl_bin, allowed_repo.clone(), allowed_repo).await
+}
+
+pub(super) async fn test_state_with_git_and_gitops(
+    kubectl_bin: String,
+    allowed_repo: String,
+    gitops_repo: String,
+) -> AppState {
     let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
     let worker = RunDispatcher::Kubernetes(KubernetesJobDispatcher::new(
         store.clone(),
@@ -705,7 +713,7 @@ pub(super) async fn test_state_with_git_observer(
             gitops_writer_enabled: true,
             gitops_writer_service_account: "pharness-gitops-writer".to_string(),
             gitops_writer_token_secret_name: Some("pharness-gitops-writer-token".to_string()),
-            gitops_writer_allowed_repos: vec![allowed_repo.clone()],
+            gitops_writer_allowed_repos: vec![gitops_repo.clone()],
             gitops_writer_github_api_url: "https://api.github.com".to_string(),
             gitops_writer_author_name: "Pharness".to_string(),
             gitops_writer_author_email: "pharness@example.test".to_string(),
@@ -721,7 +729,7 @@ pub(super) async fn test_state_with_git_observer(
             gitops_observer_enabled: true,
             gitops_observer_service_account: "pharness-gitops-observer".to_string(),
             gitops_observer_token_secret_name: Some("pharness-gitops-observer-token".to_string()),
-            gitops_observer_allowed_repos: vec![allowed_repo.clone()],
+            gitops_observer_allowed_repos: vec![gitops_repo],
             gitops_observer_github_api_url: "https://api.github.com".to_string(),
             gitops_observer_active_deadline_seconds: 300,
             gitops_observer_ttl_seconds_after_finished: 3600,

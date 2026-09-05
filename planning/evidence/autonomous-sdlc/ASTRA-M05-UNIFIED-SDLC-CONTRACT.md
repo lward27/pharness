@@ -92,6 +92,13 @@ missing resume markers; successful repair selection/resume; and frontend declara
 without legacy production authorization. The readiness response reports the exact
 Planner binding saved in the policy, even when the worker default differs; a
 contract that disables its health probe is rejected.
+The same API regression also supplies explicitly synthetic, current repository and
+qualification evidence, then exercises successful readiness and creation. The
+stored policy matches the readiness response, creation reports `hosted_sdlc`, and
+only the controller's Discover outcome exists. No workspace, coding job or
+deployment is invented. This is positive local API coverage, not positive live
+provider acceptance. Readiness describes recording authorization until M06 adds
+durable scheduling.
 
 Clippy passed for all four changed crates and targets with warnings denied.
 Formatting and architecture boundary checks pass, including all five dependency
