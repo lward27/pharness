@@ -1,0 +1,98 @@
+{
+  "verified_at": "2026-09-05T13:59:46.384895+00:00",
+  "source_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "cluster": "lucas_engineering",
+  "builder": "rancher-desktop",
+  "platform": "linux/amd64",
+  "images": [
+    {
+      "component": "runtime",
+      "image_url": "registry.lucas.engineering/pharness-runtime",
+      "digest": "sha256:12176080848f9f3e4ffd33873f697e731d2a49077059d900406f909603464171",
+      "immutable_ref": "registry.lucas.engineering/pharness-runtime@sha256:12176080848f9f3e4ffd33873f697e731d2a49077059d900406f909603464171",
+      "archive_sha256": "ea85ffb631477c68ab6e514c75e233dd7a6e410c0c61b1257754d1a00e14d39e",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T12:42:36.639711+00:00"
+    },
+    {
+      "component": "ui",
+      "image_url": "registry.lucas.engineering/pharness-ui",
+      "digest": "sha256:3aa02811edf1b1230f3fb6807a800802d93132ffa34974aa92258c141a6b295e",
+      "immutable_ref": "registry.lucas.engineering/pharness-ui@sha256:3aa02811edf1b1230f3fb6807a800802d93132ffa34974aa92258c141a6b295e",
+      "archive_sha256": "96ab87f1534c5ae3d525478ff530e464593afb0f9acabe66ec166337296610c4",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T12:44:28.145849+00:00"
+    },
+    {
+      "component": "python-runner",
+      "image_url": "registry.lucas.engineering/pharness-python-runner",
+      "digest": "sha256:058e0e2a9c59fb47a7a89eae567e3f0f87a394e1cf050ab2ebc7d71106672152",
+      "immutable_ref": "registry.lucas.engineering/pharness-python-runner@sha256:058e0e2a9c59fb47a7a89eae567e3f0f87a394e1cf050ab2ebc7d71106672152",
+      "archive_sha256": "5f399b00ada1f0faa1b666a1b919bae1594415500c942d1896b25fca60f03106",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T13:03:42.820870+00:00"
+    },
+    {
+      "component": "node-runner",
+      "image_url": "registry.lucas.engineering/pharness-node-runner",
+      "digest": "sha256:451ed9b3742ea57e2e3f67ad485d0cfd7f1d07a204514204315d3cdd6ff1d8f1",
+      "immutable_ref": "registry.lucas.engineering/pharness-node-runner@sha256:451ed9b3742ea57e2e3f67ad485d0cfd7f1d07a204514204315d3cdd6ff1d8f1",
+      "archive_sha256": "5fefcc32ff041121dd4fd5b91cc98f8de8ebe37d1818185ba449d235a61c1312",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T13:16:36.552222+00:00"
+    },
+    {
+      "component": "model-gateway",
+      "image_url": "registry.lucas.engineering/pharness-model-gateway",
+      "digest": "sha256:9fbc812ec40e2bc071f29f06b8ce7c9561a301308b13a53c2bf77c89aa5fe389",
+      "immutable_ref": "registry.lucas.engineering/pharness-model-gateway@sha256:9fbc812ec40e2bc071f29f06b8ce7c9561a301308b13a53c2bf77c89aa5fe389",
+      "archive_sha256": "09e7451239b9b37afaf38c6fa99d409b7245c07cb0576a397339d21969c9c1aa",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T13:20:46.269903+00:00"
+    },
+    {
+      "component": "eval-runner",
+      "image_url": "registry.lucas.engineering/pharness-eval-runner",
+      "digest": "sha256:2c5a09b6cbe46210e8f63df1c1b061db84300a2b6f154a0f64d752bfd8a79379",
+      "immutable_ref": "registry.lucas.engineering/pharness-eval-runner@sha256:2c5a09b6cbe46210e8f63df1c1b061db84300a2b6f154a0f64d752bfd8a79379",
+      "archive_sha256": "4e84948d488913af878aaf6eb2d37d22a8c93c853396d5bc0e872cad0136a92a",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T13:45:12.069312+00:00"
+    },
+    {
+      "component": "codex-host",
+      "image_url": "registry.lucas.engineering/pharness-codex-host",
+      "digest": "sha256:abe8bac8dd1be0927e1b94766b6d1c2aa3e487f8e72cdab346eb5cfecbaf0aa8",
+      "immutable_ref": "registry.lucas.engineering/pharness-codex-host@sha256:abe8bac8dd1be0927e1b94766b6d1c2aa3e487f8e72cdab346eb5cfecbaf0aa8",
+      "archive_sha256": "79d978333691fe944ea910915121d747596157e5de4b68b023a2f9419ff88e5b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T13:58:35.543134+00:00"
+    }
+  ],
+  "native_bundle": {
+    "filename": "pharness-codex-host-2249950d225a4632b24235c2b6f2d8469a774243-linux-amd64.tar.gz",
+    "sha256": "c8e3be60d07d24ecc266ef39a7349a6eb46ba078a1d2357f4bfa7c1e220ebf29",
+    "bytes": 231643972,
+    "codex_version": "0.150.1",
+    "checksummed_files": 13,
+    "all_checksums_verified": true,
+    "linux_runtime_bundle_verification": "passed via Dockerfile.codex-host bundle-verification target",
+    "appledouble_members": 0
+  },
+  "build_log_sha256": "f38d3960a53c2fe1bed91a074be1fba78dab3aa809176e0b204e8af4106fc24c",
+  "scope": "Immutable artifact set only. Live reader rollout, coding qualification, hosted writes, and autonomous delivery acceptance remain separate."
+}

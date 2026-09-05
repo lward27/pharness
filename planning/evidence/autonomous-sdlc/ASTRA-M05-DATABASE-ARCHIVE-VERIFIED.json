@@ -1,0 +1,425 @@
+{
+  "archive_path": "/data/archives/ASTRA-pre-0052-20260905",
+  "database_sha256": "sha256:fbc7e2873e71202ae90fcb1fe28e6f160e189e9adc5c29ab395cb39ce7c29d3f",
+  "database_bytes": 21204992,
+  "manifest_sha256": "sha256:c3b3926722c13ae86c17b04a311593183990574c9473ce19d76217935683a0a8",
+  "integrity_check": "ok",
+  "migrations": [
+    {
+      "description": "initial",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 1
+    },
+    {
+      "description": "run result json",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 2
+    },
+    {
+      "description": "pending approval payload",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 3
+    },
+    {
+      "description": "permission grants",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 4
+    },
+    {
+      "description": "approval run scope",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 5
+    },
+    {
+      "description": "audit events",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 6
+    },
+    {
+      "description": "approval preview",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 7
+    },
+    {
+      "description": "observations",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 8
+    },
+    {
+      "description": "observation resource identity",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 9
+    },
+    {
+      "description": "incidents",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 10
+    },
+    {
+      "description": "remediation plans",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 11
+    },
+    {
+      "description": "approval gates",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 12
+    },
+    {
+      "description": "approval gate decisions",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 13
+    },
+    {
+      "description": "work plans",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 14
+    },
+    {
+      "description": "work plan lifecycle",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 15
+    },
+    {
+      "description": "change sets",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 16
+    },
+    {
+      "description": "pipeline intents",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 17
+    },
+    {
+      "description": "deployment intents",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 18
+    },
+    {
+      "description": "releases",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 19
+    },
+    {
+      "description": "registry evidence",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 20
+    },
+    {
+      "description": "pipeline contracts",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 21
+    },
+    {
+      "description": "deployment contracts",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 22
+    },
+    {
+      "description": "work items",
+      "installed_on": "2026-08-27 13:26:24",
+      "success": 1,
+      "version": 23
+    },
+    {
+      "description": "work item work plans",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 24
+    },
+    {
+      "description": "work item change sets",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 25
+    },
+    {
+      "description": "work item pipeline lineage",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 26
+    },
+    {
+      "description": "work item deployment lineage",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 27
+    },
+    {
+      "description": "work item release registry lineage",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 28
+    },
+    {
+      "description": "work item approval gates",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 29
+    },
+    {
+      "description": "work item approval gate scopes",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 30
+    },
+    {
+      "description": "work item gitops approval gates",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 31
+    },
+    {
+      "description": "gitops change sets",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 32
+    },
+    {
+      "description": "controller waits",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 33
+    },
+    {
+      "description": "operator origins",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 34
+    },
+    {
+      "description": "run creator",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 35
+    },
+    {
+      "description": "audit event origins",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 36
+    },
+    {
+      "description": "work item delivery configuration",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 37
+    },
+    {
+      "description": "capability verifications",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 38
+    },
+    {
+      "description": "environment ready sdlc",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 39
+    },
+    {
+      "description": "repo mode product model",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 40
+    },
+    {
+      "description": "repository onboarding",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 41
+    },
+    {
+      "description": "repo mode execution",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 42
+    },
+    {
+      "description": "repo mode onboarding execution",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 43
+    },
+    {
+      "description": "subject scoped preparation",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 44
+    },
+    {
+      "description": "onboarding readiness completion",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 45
+    },
+    {
+      "description": "evidence retrieval event identity",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 46
+    },
+    {
+      "description": "operator annotation decisions",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 47
+    },
+    {
+      "description": "repeatable environment preparations",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 48
+    },
+    {
+      "description": "data lifecycle foundation",
+      "installed_on": "2026-08-27 13:26:25",
+      "success": 1,
+      "version": 49
+    },
+    {
+      "description": "stage inference gateway",
+      "installed_on": "2026-08-29 19:44:11",
+      "success": 1,
+      "version": 50
+    },
+    {
+      "description": "portable agent hosts",
+      "installed_on": "2026-08-31 22:00:25",
+      "success": 1,
+      "version": 51
+    }
+  ],
+  "database_generation": {
+    "created_at": "1787837185820",
+    "id": "dbgen_finance_20260827",
+    "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+    "purpose": "clean-finance-product-generation",
+    "schema_version": "0049"
+  },
+  "table_counts": {
+    "_sqlx_migrations": 51,
+    "agent_context_packs": 73,
+    "agent_execution_policy_qualifications": 0,
+    "agent_execution_selections": 0,
+    "agent_host_capability_snapshots": 188,
+    "agent_host_enrollments": 1,
+    "agent_hosts": 1,
+    "agent_leases": 0,
+    "approval_gates": 0,
+    "approvals": 0,
+    "archive_records": 1,
+    "artifacts": 38,
+    "audit_events": 260,
+    "budget_extensions": 29,
+    "capability_verifications": 156,
+    "change_sets": 9,
+    "context_items": 0,
+    "controller_waits": 0,
+    "database_generations": 1,
+    "deployment_contracts": 3,
+    "deployment_intents": 0,
+    "effective_stage_outcomes": 75,
+    "environment_preparations": 20,
+    "environments": 0,
+    "events": 7462,
+    "evidence_retrievals": 70,
+    "evidence_validation_references": 144,
+    "evidence_validations": 83,
+    "file_changes": 156,
+    "gitops_change_sets": 0,
+    "incidents": 0,
+    "inference_evaluation_grant_issuances": 5009,
+    "inference_evaluations": 39,
+    "inference_policy_qualifications": 23,
+    "inference_target_verifications": 31,
+    "messages": 0,
+    "model_grant_issuances": 130,
+    "observations": 0,
+    "operator_annotation_decisions": 3,
+    "operator_annotations": 12,
+    "organizations": 1,
+    "permission_grants": 25,
+    "pipeline_contracts": 1,
+    "pipeline_intents": 0,
+    "product_model_snapshots": 7,
+    "products": 1,
+    "provider_check_set_observations": 16,
+    "registry_evidence": 0,
+    "releases": 0,
+    "remediation_plans": 0,
+    "repositories": 5,
+    "repository_binding_revision_scopes": 18,
+    "repository_binding_revisions": 10,
+    "repository_bindings": 5,
+    "repository_contract_versions": 6,
+    "repository_discoveries": 11,
+    "repository_onboarding_proposals": 15,
+    "repository_onboardings": 11,
+    "repository_readiness_assessments": 20,
+    "resource_refs": 0,
+    "retention_holds": 4,
+    "retention_previews": 1,
+    "retention_receipts": 0,
+    "runs": 82,
+    "sealed_run_summaries": 0,
+    "services": 6,
+    "sessions": 82,
+    "source_delivery_intents": 9,
+    "stage_chain_authorizations": 27,
+    "stage_executions": 102,
+    "stage_inference_selections": 20,
+    "stage_outcomes": 102,
+    "subject_environment_preparations": 20,
+    "subject_workspaces": 20,
+    "tool_calls": 0,
+    "work_items": 14,
+    "work_plans": 13,
+    "workspaces": 15
+  },
+  "observed_at": "2026-09-05T13:35:58.143226+00:00",
+  "cluster": "lucas_engineering",
+  "job": "astra-m05-pre0052-archive-20260905",
+  "job_uid": "090c2f6a-be9a-4878-8604-3a6b810215d6",
+  "pod": "astra-m05-pre0052-archive-20260905-fggh7",
+  "pod_uid": "6fe979f2-107d-444f-a732-156bfe2d8a7d",
+  "node": "ubuntu-lucas-engineering",
+  "source_claim": "pharness-api-data-finance-20260827",
+  "containers": [
+    {
+      "name": "archive",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:12176080848f9f3e4ffd33873f697e731d2a49077059d900406f909603464171",
+      "restarts": 0,
+      "exit_code": 0
+    },
+    {
+      "name": "verify",
+      "image_id": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+      "restarts": 0,
+      "exit_code": 0
+    }
+  ],
+  "scope": "Consistent read-only source snapshot to a new archive directory on the existing Finance PVC; no restoration, down migration or source database reset performed"
+}
