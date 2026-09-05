@@ -49,6 +49,13 @@ is deployed through GitOps and fresh log coverage passed. The PHarness reader it
 deployed. These results do not override backend functional failures or establish trace
 correlation, durable baseline admission, automatic staging or production readiness.
 
+The [health-request trace correlation](../../evidence/autonomous-sdlc/ASTRA-M08-HEALTH-TRACE-CORRELATION.md)
+passed a real five-minute staging check with matching request/parent IDs and a complete
+Tempo server span. Other backend probes still failed. The reader is not deployed;
+[API access preflight](../../evidence/autonomous-sdlc/ASTRA-M08-API-RUNTIME-READER-PREFLIGHT.json)
+identified missing finite Kubernetes read permissions and telemetry configuration.
+The local operator checks cannot substitute for deployed controller verification.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.
