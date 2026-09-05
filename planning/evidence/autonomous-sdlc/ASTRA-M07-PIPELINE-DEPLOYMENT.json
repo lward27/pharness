@@ -1,0 +1,57 @@
+{
+  "observed_at": "2026-09-05T14:51:28.695876+00:00",
+  "cluster_context": "lucas_engineering",
+  "source_commit": "2a12c33aaf91c3f2172c5a53f6890a9e92a310ed",
+  "gitops_merge_commit": "bd36ae698951ab36a4e7362562eba34a997a70c8",
+  "argo": {
+    "application": "tekton-ci",
+    "revision": "bd36ae698951ab36a4e7362562eba34a997a70c8",
+    "sync": "Synced",
+    "health": "Healthy"
+  },
+  "requested_resources": [
+    {
+      "kind": "Pipeline",
+      "name": "pharness-yfinance-build",
+      "uid": "e7537de9-c512-48d2-9f16-dcae72f84438",
+      "generation": 4,
+      "requested_spec_matches": true
+    },
+    {
+      "kind": "Pipeline",
+      "name": "pharness-finance-frontend-build",
+      "uid": "5f2833d4-23bc-4d68-8222-206b1a05564e",
+      "generation": 1,
+      "requested_spec_matches": true
+    },
+    {
+      "kind": "Task",
+      "name": "remote-buildkit",
+      "uid": "fa76ed77-622a-48b7-bd77-e08bae470867",
+      "generation": 2,
+      "requested_spec_matches": true
+    }
+  ],
+  "retired_resources": [
+    "triggerbinding/finance-frontend-binding",
+    "triggertemplate/finance-frontend-template"
+  ],
+  "frontend_listener_route_absent": true,
+  "production": {
+    "yfinance-wrapper": {
+      "same_spec_generation_pods_and_images": true,
+      "generation": 14,
+      "images": [
+        "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+      ]
+    },
+    "finance-frontend": {
+      "same_spec_generation_pods_and_images": true,
+      "generation": 19,
+      "images": [
+        "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+      ]
+    }
+  },
+  "scope": "Pipeline configuration and obsolete trigger retirement only; no application build, source merge or production promotion acceptance."
+}

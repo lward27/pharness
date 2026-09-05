@@ -1,6 +1,6 @@
 # ASTRA M06: Controller release and schema 53 recovery floor
 
-Status: artifact and clone checks passed; prepared before the live migration. Deployment and live data preservation are not yet claimed.
+Status: artifact and clone checks passed. The recovery floor was committed before the live migration. Release PR 339 merged at 16:14:59 UTC as `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`; live images and schema/history preservation are verified.
 
 The earliest retained release that understands migration 0053 is source `48c77b7b4438d621ff9563b913857bcf771f1800`. After 0053 is applied, recovery must use this release or a later compatible reader. The previous `2249950d225a4632b24235c2b6f2d8469a774243` release cannot reopen this schema. Disabling hosted creation does not make the older reader compatible. Do not remove migration records, down-migrate, reset the Finance generation or restore the snapshot over newer history as routine recovery.
 
@@ -31,3 +31,13 @@ Deploy through a separate Helm release-pin commit and observe Argo's actual reco
 This release includes the engineering controller, prompt clarification and initial console changes merged through source 48c77b7. It excludes later build-dispatch, source-progression and list-polish changes. It does not qualify the coding path or prove autonomous delivery. Finance production approval remains a separate human action before its GitOps merge.
 
 If this first schema-53 deployment fails, preserve the data and use a forward fix from this compatible source. For a later compatible release regression, restore these exact pins through GitOps only after checking configuration and data compatibility. Never deploy a schema-52 reader against the migrated database.
+
+## Release dispatch
+
+[PR 339](https://github.com/lward27/pharness/pull/339) contains the exact release pins and the recovery floor. The preflight found all 82 Runs terminal and no active Jobs. All 53 rendered Kubernetes objects passed server dry-run. A hard repository-cache refresh was requested; Argo remains responsible for automatic reconciliation. No manual sync receipt is used as deployment evidence.
+
+## Live verification
+
+At 16:19 UTC, Argo reported `Synced` and `Healthy` at release revision `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`. All five long-running Deployments ran the expected image identities with ready Pods and zero restarts. The [observation record](ASTRA-M06-CONTROLLER-RELEASE-OBSERVED.json) distinguishes the 62 retained historical failed API Pods from the current release.
+
+At 16:20 UTC, the [read-only live database comparison](ASTRA-M06-LIVE-DATABASE-VERIFIED.json) confirmed all 53 migrations, identical historical WorkItem fields and every recorded history/retention count unchanged. All three hosted controller tables remain empty. No new qualification or contract write preceded this check. Hosted creation and Coding Reliability V2 remain disabled. The first fresh gateway qualification request followed the successful comparison.

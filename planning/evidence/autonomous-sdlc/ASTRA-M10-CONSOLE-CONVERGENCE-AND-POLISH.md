@@ -114,3 +114,13 @@ release acceptance remains open.
 PR 334 merged at `ca98fa7c7474902d206e130ca14eddddec8d82a7` on 2026-09-05 at
 14:36 UTC. This source merge has not yet changed the live image. Final production
 and recovery projections, route retirement and milestone acceptance remain open.
+
+## List consistency follow-up
+
+[PR 337](https://github.com/lward27/pharness/pull/337), source
+`1b52f2520c38dd185f02c82760939d5c037b9642`, adds the independently validated
+[list/search/error corrections](ASTRA-M10-LIST-CONSISTENCY.md). It has not been
+merged or deployed. Its 94 unit and 116 distinct browser checks do not replace
+the remaining full M10 acceptance gates.
+
+PR 337 merged at 16:22 UTC as `d67908bf5d00354ce857036916118c8e62cd7cd4`. Its 94-unit/116-distinct-browser validation remains linked above; these later list changes are not deployed in the 48c77b7 image set. The initial PR 334 corrections are deployed and their source identity is included in the M06 release evidence.

@@ -1,0 +1,107 @@
+{
+  "verified_at": "2026-09-05T14:56:39.766654+00:00",
+  "applications": {
+    "yfinance": {
+      "source_revision": "f743f4aff641d2896f79b135963495b10db44d05",
+      "source_base": "12ff05dab47778dd2344970001c4218c1825db96",
+      "platform": "linux/amd64",
+      "local_image_id": "sha256:6938b64ac2155e06e85254bde65d7c42fe795f2e93ddfba4a4b999eae0cc4002",
+      "oci_labels": {
+        "org.opencontainers.image.revision": "f743f4aff641d2896f79b135963495b10db44d05",
+        "org.opencontainers.image.source": "https://github.com/lward27/yfinance_wrapper"
+      },
+      "existing_tests_passed": 37,
+      "build_log_sha256": "e861e51ba4c4caf3289271db4fb233fa30b1f5bec9ccbcf4c236060d7bafc361",
+      "smoke": {
+        "python": "3.11.16",
+        "machine": "x86_64",
+        "checks": {
+          "healthz": {
+            "status": 200,
+            "body": {
+              "status": "ok"
+            }
+          },
+          "/history?ticker_name=INVALID%21&period=5d": {
+            "status": 422,
+            "body": {
+              "detail": "Ticker contains invalid characters"
+            }
+          },
+          "/markets/not-a-market": {
+            "status": 422,
+            "body": {
+              "detail": "Unsupported market 'not-a-market'. Supported markets: ASIA, COMMODITIES, CRYPTOCURRENCIES, CURRENCIES, EUROPE, GB, RATES, US."
+            }
+          }
+        },
+        "scope": "Isolated packaging smoke with no external network and exporters disabled; not runtime telemetry acceptance."
+      },
+      "changed_paths": [
+        ".dockerignore",
+        ".pharness/repository.yaml",
+        "Dockerfile",
+        "readme.md",
+        "requirements.lock",
+        "requirements.txt"
+      ],
+      "tracked_sources_untouched": true,
+      "lock": {
+        "previous_versions_preserved": 51,
+        "new_explicit_and_transitive_packages": {
+          "asgiref": "3.12.1",
+          "opentelemetry-instrumentation-asgi": "0.52b0",
+          "opentelemetry-instrumentation-asyncio": "0.52b0",
+          "opentelemetry-instrumentation-click": "0.52b0",
+          "opentelemetry-instrumentation-dbapi": "0.52b0",
+          "opentelemetry-instrumentation-fastapi": "0.52b0",
+          "opentelemetry-instrumentation-grpc": "0.52b0",
+          "opentelemetry-instrumentation-logging": "0.52b0",
+          "opentelemetry-instrumentation-requests": "0.52b0",
+          "opentelemetry-instrumentation-sqlite3": "0.52b0",
+          "opentelemetry-instrumentation-starlette": "0.52b0",
+          "opentelemetry-instrumentation-threading": "0.52b0",
+          "opentelemetry-instrumentation-tortoiseorm": "0.52b0",
+          "opentelemetry-instrumentation-urllib": "0.52b0",
+          "opentelemetry-instrumentation-urllib3": "0.52b0",
+          "opentelemetry-instrumentation-wsgi": "0.52b0",
+          "opentelemetry-util-http": "0.52b0"
+        },
+        "sha256": "9ddd03e2b5d463d35e4007fa1d3f67e635f291cf61d4e4bbffe4d7b3b9317f09"
+      }
+    },
+    "frontend": {
+      "source_revision": "d67bd8ad928f948849f0daebd6a483ff6755d08c",
+      "source_base": "068510d3442efc75c036b327d3820b17c87c8c0a",
+      "platform": "linux/amd64",
+      "local_image_id": "sha256:f2dc79d8d222f43457c15f8ea4a4049c8c2c6d6cfdcfbdcfd603e1cce911cfa5",
+      "oci_labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.opencontainers.image.revision": "d67bd8ad928f948849f0daebd6a483ff6755d08c",
+        "org.opencontainers.image.source": "https://github.com/lward27/finance-frontend"
+      },
+      "existing_tests_passed": 49,
+      "build_log_sha256": "eb6f2aa8d85aa75fd959198fda8b0c74838bf1227ca558c8e0fb48f72a608c90",
+      "smoke": {
+        "index_http": 200,
+        "spa_fallback_matches_index": true,
+        "javascript_asset_http": 200,
+        "javascript_asset_nonempty": true,
+        "nginx_version": "nginx version: nginx/1.31.5",
+        "scope": "Isolated packaging smoke with no external network; no browser execution of application service calls and no deployment/runtime-config acceptance."
+      },
+      "changed_paths": [
+        ".dockerignore",
+        "Dockerfile",
+        "README.md"
+      ],
+      "tracked_sources_untouched": true,
+      "lint": {
+        "errors": 0,
+        "warnings": 1,
+        "warning": "Unchanged src/pages/Dashboard.jsx:140 useEffect omits fetchScrapeStatus and fetchTickers dependencies; existing lint command exits successfully."
+      }
+    }
+  },
+  "scope": "Local builds from clean committed packaging branches. No application patch, source-main merge, registry release, deployment or M11 autonomous acceptance is claimed."
+}

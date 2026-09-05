@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-05T15:01:41.625317+00:00",
+  "merges": {
+    "yfinance_wrapper": {
+      "headRefOid": "f743f4aff641d2896f79b135963495b10db44d05",
+      "mergeCommit": {
+        "oid": "efa6294954b01a089a65419c85542b8fc2f95c83"
+      },
+      "mergedAt": "2026-09-05T15:00:05Z",
+      "state": "MERGED",
+      "url": "https://github.com/lward27/yfinance_wrapper/pull/6"
+    },
+    "finance-frontend": {
+      "headRefOid": "d67bd8ad928f948849f0daebd6a483ff6755d08c",
+      "mergeCommit": {
+        "oid": "c4d64f9242f2955064f99e659bf1648ce6bc4273"
+      },
+      "mergedAt": "2026-09-05T15:00:05Z",
+      "state": "MERGED",
+      "url": "https://github.com/lward27/finance-frontend/pull/7"
+    }
+  },
+  "scope": "Program-authorized packaging prerequisites. These are not autonomous M11 application changes or production approvals."
+}

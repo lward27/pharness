@@ -1,8 +1,13 @@
 # ASTRA M07: Exact-source delivery and real builds
 
-Status: planned.
+Status: finite pipelines and packaging merged; both real builds verified; source publication and observation validated in PR 338; automatic merge, source-to-build integration and milestone acceptance open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M04 and M06.
+
+The [execution evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md)
+records the GitOps and application revisions. This preparation proceeds independently
+while qualification and delivery integration remain open. It cannot satisfy their
+gates or either M11 autonomous change.
 
 ## Objective and scope
 
@@ -36,7 +41,7 @@ Preserve immutable historical evidence, existing Finance data generation, and ad
 - [ ] Stale head/base, failed checks, merge conflict, build failure, missing output, and mismatched digest stop the workflow.
 - [ ] Build inputs use declared locks and aligned runtime versions; no staging-to-production rebuild.
 - [ ] Required credentials remain scoped to their writer/effect boundary and absent from coding workers.
-- [ ] A real Tekton build is observed; fixture-only results cannot pass.
+- [x] Real backend and frontend Tekton builds passed, with independent registry source/digest verification. These program-operated runs do not satisfy autonomous source delivery or M11.
 
 Unit/adapter negative cases, pipeline rendering/server dry-run, then an authorized real immutable build. Application packaging prerequisites are implementation work, not M11 autonomous proof.
 
@@ -69,4 +74,3 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
-

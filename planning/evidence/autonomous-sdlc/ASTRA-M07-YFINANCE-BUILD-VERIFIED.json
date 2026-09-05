@@ -1,0 +1,216 @@
+{
+  "observed_at": "2026-09-05T15:19:10.286430+00:00",
+  "cluster": "lucas_engineering",
+  "gitops_pipeline_revision": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+  "source_repository": "https://github.com/lward27/yfinance_wrapper",
+  "source_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+  "pipeline_run": {
+    "name": "astra-m07-yfinance-efa6294",
+    "uid": "88ffc3cd-4796-45a3-bdc9-60162127b325",
+    "pipeline": "pharness-yfinance-build",
+    "start_time": "2026-09-05T15:10:31Z",
+    "completion_time": "2026-09-05T15:18:06Z",
+    "results": {
+      "IMAGE_URL": "registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83",
+      "IMAGE_DIGEST": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+      "SOURCE_COMMIT": "efa6294954b01a089a65419c85542b8fc2f95c83"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-09-05T15:18:06Z",
+        "message": "Tasks Completed: 4 (Failed: 0, Cancelled 0), Skipped: 0",
+        "reason": "Succeeded",
+        "status": "True",
+        "type": "Succeeded"
+      }
+    ],
+    "timeout": {
+      "pipeline": "1h0m0s"
+    }
+  },
+  "task_runs": [
+    {
+      "name": "astra-m07-yfinance-efa6294-build-push",
+      "uid": "3be8fbd8-2893-4f45-afb6-014aa968af7f",
+      "pipeline_task": "build-push",
+      "executed_spec_sha256": "0f70a3db11ba3789a14f06a3cc7f03b9b6fe7b72869112bbbc5cb706a98e0b59",
+      "step_images": [
+        {
+          "name": "build-and-push",
+          "image": "docker.io/moby/buildkit@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9"
+        },
+        {
+          "name": "publish-results",
+          "image": "docker.io/library/bash:5.1.4@sha256:c523c636b722339f41b6a431b44588ab2f762c5de5ec3bd7964420ff982fb1d9"
+        }
+      ],
+      "start_time": "2026-09-05T15:11:23Z",
+      "completion_time": "2026-09-05T15:18:05Z",
+      "results": [
+        {
+          "name": "IMAGE_DIGEST",
+          "type": "string",
+          "value": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca"
+        },
+        {
+          "name": "IMAGE_URL",
+          "type": "string",
+          "value": "registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83"
+        }
+      ]
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-fetch-source",
+      "uid": "3f1a4f03-9325-4bc5-8f8b-5225a3779571",
+      "pipeline_task": "fetch-source",
+      "executed_spec_sha256": "84f3050ef197ee8364f74d3c98c49d9ed7ea0ccb852c3041ece24f5e0fd41f7c",
+      "step_images": [
+        {
+          "name": "clone",
+          "image": "ghcr.io/tektoncd/github.com/tektoncd/pipeline/cmd/git-init@sha256:28ff94e63e4058afc3f15b4c11c08cf3b54fa91faa646a4bbac90380cd7158df"
+        }
+      ],
+      "start_time": "2026-09-05T15:10:54Z",
+      "completion_time": "2026-09-05T15:11:11Z",
+      "results": [
+        {
+          "name": "commit",
+          "type": "string",
+          "value": "efa6294954b01a089a65419c85542b8fc2f95c83"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "value": "https://github.com/lward27/yfinance_wrapper.git"
+        }
+      ]
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-validate-revision",
+      "uid": "2089111e-17ec-48f2-bfe0-7c4b872c919d",
+      "pipeline_task": "validate-revision",
+      "executed_spec_sha256": "5e22480df86bd728d0f3fb869b773287855732e73536cf250fffeafaef925f69",
+      "step_images": [
+        {
+          "name": "validate",
+          "image": "docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+        }
+      ],
+      "start_time": "2026-09-05T15:10:31Z",
+      "completion_time": "2026-09-05T15:10:54Z",
+      "results": []
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-verify-checkout",
+      "uid": "8b164b6a-57c6-4daa-9fd8-edb642343921",
+      "pipeline_task": "verify-checkout",
+      "executed_spec_sha256": "1554452c5222c300d9236cba3a65ab7ef084da58523c22b74fcbfd601ecadebf",
+      "step_images": [
+        {
+          "name": "compare",
+          "image": "docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+        }
+      ],
+      "start_time": "2026-09-05T15:11:12Z",
+      "completion_time": "2026-09-05T15:11:23Z",
+      "results": []
+    }
+  ],
+  "pods": [
+    {
+      "name": "astra-m07-yfinance-efa6294-build-push-pod",
+      "uid": "4c834117-8a27-4be0-b811-0d8f868ffd5e",
+      "service_account": "pharness-finance-build",
+      "api_token_mount": false,
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Succeeded",
+      "containers": [
+        {
+          "name": "step-build-and-push",
+          "image_id": "docker.io/moby/buildkit@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
+          "restart_count": 0,
+          "exit_code": 0
+        },
+        {
+          "name": "step-publish-results",
+          "image_id": "docker.io/library/bash@sha256:c523c636b722339f41b6a431b44588ab2f762c5de5ec3bd7964420ff982fb1d9",
+          "restart_count": 0,
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-fetch-source-pod",
+      "uid": "2139c621-1cce-490b-b3ad-af6ae0c75368",
+      "service_account": "pharness-finance-build",
+      "api_token_mount": false,
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Succeeded",
+      "containers": [
+        {
+          "name": "step-clone",
+          "image_id": "ghcr.io/tektoncd/github.com/tektoncd/pipeline/cmd/git-init@sha256:28ff94e63e4058afc3f15b4c11c08cf3b54fa91faa646a4bbac90380cd7158df",
+          "restart_count": 0,
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-validate-revision-pod",
+      "uid": "c923b7a5-3793-474e-9d94-c5be9f041e66",
+      "service_account": "pharness-finance-build",
+      "api_token_mount": false,
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Succeeded",
+      "containers": [
+        {
+          "name": "step-validate",
+          "image_id": "docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+          "restart_count": 0,
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "astra-m07-yfinance-efa6294-verify-checkout-pod",
+      "uid": "4778f783-2146-4f28-8ea5-8acdea73cc15",
+      "service_account": "pharness-finance-build",
+      "api_token_mount": false,
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Succeeded",
+      "containers": [
+        {
+          "name": "step-compare",
+          "image_id": "docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+          "restart_count": 0,
+          "exit_code": 0
+        }
+      ]
+    }
+  ],
+  "registry": {
+    "image": "registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83",
+    "digest": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+    "manifest_digest": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+    "config_digest": "sha256:39e732ff6a8e96763b0f63001fec769e9392dede2b9811d4dfd1cc7bcb8bdb1e",
+    "os": "linux",
+    "architecture": "amd64",
+    "oci_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+    "oci_source": "https://github.com/lward27/yfinance_wrapper",
+    "tag_and_digest_match": true,
+    "manifest_and_config_hashes_verified": true,
+    "tls_verified": true,
+    "sbom_verified": false,
+    "signature_verified": false
+  },
+  "build_log": {
+    "path": "ASTRA-M07-YFINANCE-BUILD.log",
+    "sha256": "7b33fc2b8631012f8dad3fe1c218ef1c9a48ddafff7aa0a80c002390dbe0f511",
+    "captured_query_redacted_sha256": "693d9cd81caa31028ef692a2bf7b09fd8c6d6bd09daaa9e407db527427302a90",
+    "normalization": [
+      "URL query strings removed before capture",
+      "Trailing whitespace removed for the committed text artifact"
+    ]
+  },
+  "scope": "Program-operated real merged-source Tekton-to-registry proof. Not autonomous source delivery, M11 acceptance, or a production deployment."
+}

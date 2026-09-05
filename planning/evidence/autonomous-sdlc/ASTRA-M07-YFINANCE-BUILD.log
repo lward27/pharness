@@ -1,0 +1,321 @@
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.07kB 0.2s done
+#1 DONE 0.2s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+#2 DONE 1.7s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 84B 0.2s done
+#3 DONE 0.2s
+
+#4 [dependencies 1/4] FROM docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+#4 resolve docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1 done
+#4 sha256:605d2cb1fe61c64de721db128eab03d7fdb885947126722e2d98a49b18147fe2 0B / 249B 0.2s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 0B / 14.45MB 0.2s
+#4 sha256:7ce8f1a1db8f7a913c17b3b6aa717c65c735bb723a8b6c3958e3a122a971869f 0B / 1.29MB 0.2s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 0B / 29.78MB 0.2s
+#4 sha256:605d2cb1fe61c64de721db128eab03d7fdb885947126722e2d98a49b18147fe2 249B / 249B 0.2s done
+#4 ...
+
+#5 [internal] load build context
+#5 transferring context: 112.82kB 0.5s done
+#5 DONE 0.5s
+
+#4 [dependencies 1/4] FROM docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 1.05MB / 14.45MB 0.9s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 2.10MB / 14.45MB 1.2s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 4.19MB / 14.45MB 1.8s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 5.24MB / 14.45MB 2.3s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 6.29MB / 14.45MB 2.6s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 8.39MB / 14.45MB 3.0s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 9.44MB / 14.45MB 3.2s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 10.49MB / 14.45MB 3.5s
+#4 sha256:7ce8f1a1db8f7a913c17b3b6aa717c65c735bb723a8b6c3958e3a122a971869f 1.05MB / 1.29MB 3.5s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 11.53MB / 14.45MB 3.9s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 12.58MB / 14.45MB 4.1s
+#4 sha256:7ce8f1a1db8f7a913c17b3b6aa717c65c735bb723a8b6c3958e3a122a971869f 1.29MB / 1.29MB 3.9s done
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 13.63MB / 14.45MB 4.4s
+#4 sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 14.45MB / 14.45MB 4.5s done
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 1.05MB / 29.78MB 5.3s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 3.15MB / 29.78MB 6.8s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 5.24MB / 29.78MB 8.3s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 7.34MB / 29.78MB 9.3s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 9.44MB / 29.78MB 10.1s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 11.53MB / 29.78MB 10.8s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 13.63MB / 29.78MB 11.3s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 15.73MB / 29.78MB 11.7s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 17.83MB / 29.78MB 12.2s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 19.92MB / 29.78MB 12.8s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 22.02MB / 29.78MB 13.1s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 24.12MB / 29.78MB 13.5s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 26.21MB / 29.78MB 14.0s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 28.31MB / 29.78MB 14.6s
+#4 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 29.78MB / 29.78MB 14.8s done
+#4 extracting sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d
+#4 extracting sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 0.5s done
+#4 DONE 15.3s
+
+#4 [dependencies 1/4] FROM docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+#4 extracting sha256:7ce8f1a1db8f7a913c17b3b6aa717c65c735bb723a8b6c3958e3a122a971869f 0.0s done
+#4 extracting sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3
+#4 extracting sha256:daff6f8ae2ef893f1b47c500d35ae0ba6f0c1bb82a4bf0f084f84a4a363644c3 0.3s done
+#4 DONE 15.6s
+
+#4 [dependencies 1/4] FROM docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+#4 extracting sha256:605d2cb1fe61c64de721db128eab03d7fdb885947126722e2d98a49b18147fe2 done
+#4 DONE 15.6s
+
+#6 [dependencies 2/4] WORKDIR /app
+#6 DONE 0.1s
+
+#7 [dependencies 3/4] COPY requirements.lock ./
+#7 DONE 0.0s
+
+#8 [dependencies 4/4] RUN python -m pip install --disable-pip-version-check --no-cache-dir       --require-hashes --only-binary=:all: -r requirements.lock     && python -m pip check
+#8 9.501 Collecting annotated-types==0.8.0 (from -r requirements.lock (line 3))
+#8 9.994   Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#8 10.32 Collecting anyio==3.7.1 (from -r requirements.lock (line 7))
+#8 10.43   Downloading anyio-3.7.1-py3-none-any.whl (80 kB)
+#8 10.57      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.9/80.9 kB 610.1 kB/s eta 0:00:00
+#8 10.81 Collecting asgiref==3.12.1 (from -r requirements.lock (line 13))
+#8 10.92   Downloading asgiref-3.12.1-py3-none-any.whl (25 kB)
+#8 11.12 Collecting beautifulsoup4==4.15.0 (from -r requirements.lock (line 17))
+#8 11.24   Downloading beautifulsoup4-4.15.0-py3-none-any.whl (109 kB)
+#8 11.29      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 109.9/109.9 kB 2.5 MB/s eta 0:00:00
+#8 11.51 Collecting certifi==2026.7.22 (from -r requirements.lock (line 21))
+#8 11.61   Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+#8 11.67      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 137.0/137.0 kB 2.5 MB/s eta 0:00:00
+#8 12.75 Collecting cffi==2.1.1 (from -r requirements.lock (line 27))
+#8 12.87   Downloading cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+#8 12.95      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 217.8/217.8 kB 2.7 MB/s eta 0:00:00
+#8 13.97 Collecting charset-normalizer==3.5.1 (from -r requirements.lock (line 129))
+#8 14.08   Downloading charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (262 kB)
+#8 14.19      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 262.3/262.3 kB 2.7 MB/s eta 0:00:00
+#8 14.41 Collecting click==8.4.2 (from -r requirements.lock (line 303))
+#8 14.53   Downloading click-8.4.2-py3-none-any.whl (119 kB)
+#8 14.56      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 119.2/119.2 kB 5.0 MB/s eta 0:00:00
+#8 15.20 Collecting curl-cffi==0.13.0 (from -r requirements.lock (line 307))
+#8 15.31   Downloading curl_cffi-0.13.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (8.3 MB)
+#8 17.40      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.3/8.3 MB 4.0 MB/s eta 0:00:00
+#8 17.66 Collecting deprecated==1.3.1 (from -r requirements.lock (line 319))
+#8 17.76   Downloading deprecated-1.3.1-py2.py3-none-any.whl (11 kB)
+#8 18.30 Collecting fastapi==0.104.1 (from -r requirements.lock (line 327))
+#8 18.41   Downloading fastapi-0.104.1-py3-none-any.whl (92 kB)
+#8 18.42      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 92.9/92.9 kB 11.3 MB/s eta 0:00:00
+#8 18.83 Collecting frozendict==2.4.7 (from -r requirements.lock (line 331))
+#8 18.95   Downloading frozendict-2.4.7-py3-none-any.whl (16 kB)
+#8 19.16 Collecting googleapis-common-protos==1.75.0 (from -r requirements.lock (line 424))
+#8 19.27   Downloading googleapis_common_protos-1.75.0-py3-none-any.whl (300 kB)
+#8 19.33      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 300.6/300.6 kB 5.7 MB/s eta 0:00:00
+#8 23.44 Collecting grpcio==1.83.0 (from -r requirements.lock (line 430))
+#8 23.55   Downloading grpcio-1.83.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.1 MB)
+#8 25.09      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.1/7.1 MB 4.6 MB/s eta 0:00:00
+#8 25.31 Collecting h11==0.16.0 (from -r requirements.lock (line 483))
+#8 25.42   Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#8 25.62 Collecting idna==3.18 (from -r requirements.lock (line 487))
+#8 25.72   Downloading idna-3.18-py3-none-any.whl (65 kB)
+#8 25.74      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 kB 4.9 MB/s eta 0:00:00
+#8 26.09 Collecting importlib-metadata==8.6.1 (from -r requirements.lock (line 493))
+#8 26.20   Downloading importlib_metadata-8.6.1-py3-none-any.whl (26 kB)
+#8 26.35 Collecting multitasking==0.0.13 (from -r requirements.lock (line 497))
+#8 26.48   Downloading multitasking-0.0.13-py3-none-any.whl (16 kB)
+#8 28.24 Collecting numpy==2.4.6 (from -r requirements.lock (line 501))
+#8 28.34   Downloading numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+#8 31.99      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 4.6 MB/s eta 0:00:00
+#8 32.40 Collecting opentelemetry-api==1.31.0 (from -r requirements.lock (line 577))
+#8 32.52   Downloading opentelemetry_api-1.31.0-py3-none-any.whl (65 kB)
+#8 32.54      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.1/65.1 kB 5.6 MB/s eta 0:00:00
+#8 32.77 Collecting opentelemetry-distro==0.52b0 (from -r requirements.lock (line 602))
+#8 32.87   Downloading opentelemetry_distro-0.52b0-py3-none-any.whl (3.4 kB)
+#8 33.10 Collecting opentelemetry-exporter-otlp==1.31.0 (from -r requirements.lock (line 606))
+#8 33.20   Downloading opentelemetry_exporter_otlp-1.31.0-py3-none-any.whl (7.0 kB)
+#8 33.39 Collecting opentelemetry-exporter-otlp-proto-common==1.31.0 (from -r requirements.lock (line 610))
+#8 33.49   Downloading opentelemetry_exporter_otlp_proto_common-1.31.0-py3-none-any.whl (18 kB)
+#8 33.71 Collecting opentelemetry-exporter-otlp-proto-grpc==1.31.0 (from -r requirements.lock (line 616))
+#8 33.82   Downloading opentelemetry_exporter_otlp_proto_grpc-1.31.0-py3-none-any.whl (18 kB)
+#8 34.04 Collecting opentelemetry-exporter-otlp-proto-http==1.31.0 (from -r requirements.lock (line 620))
+#8 34.15   Downloading opentelemetry_exporter_otlp_proto_http-1.31.0-py3-none-any.whl (17 kB)
+#8 34.39 Collecting opentelemetry-instrumentation==0.52b0 (from -r requirements.lock (line 624))
+#8 34.50   Downloading opentelemetry_instrumentation-0.52b0-py3-none-any.whl (31 kB)
+#8 34.73 Collecting opentelemetry-instrumentation-asgi==0.52b0 (from -r requirements.lock (line 643))
+#8 34.84   Downloading opentelemetry_instrumentation_asgi-0.52b0-py3-none-any.whl (16 kB)
+#8 35.03 Collecting opentelemetry-instrumentation-asyncio==0.52b0 (from -r requirements.lock (line 650))
+#8 35.13   Downloading opentelemetry_instrumentation_asyncio-0.52b0-py3-none-any.whl (13 kB)
+#8 35.30 Collecting opentelemetry-instrumentation-click==0.52b0 (from -r requirements.lock (line 654))
+#8 35.41   Downloading opentelemetry_instrumentation_click-0.52b0-py3-none-any.whl (5.0 kB)
+#8 35.65 Collecting opentelemetry-instrumentation-dbapi==0.52b0 (from -r requirements.lock (line 658))
+#8 35.75   Downloading opentelemetry_instrumentation_dbapi-0.52b0-py3-none-any.whl (12 kB)
+#8 35.98 Collecting opentelemetry-instrumentation-fastapi==0.52b0 (from -r requirements.lock (line 664))
+#8 36.08   Downloading opentelemetry_instrumentation_fastapi-0.52b0-py3-none-any.whl (12 kB)
+#8 36.32 Collecting opentelemetry-instrumentation-grpc==0.52b0 (from -r requirements.lock (line 668))
+#8 36.42   Downloading opentelemetry_instrumentation_grpc-0.52b0-py3-none-any.whl (27 kB)
+#8 36.63 Collecting opentelemetry-instrumentation-logging==0.52b0 (from -r requirements.lock (line 672))
+#8 36.73   Downloading opentelemetry_instrumentation_logging-0.52b0-py3-none-any.whl (12 kB)
+#8 36.96 Collecting opentelemetry-instrumentation-requests==0.52b0 (from -r requirements.lock (line 676))
+#8 37.06   Downloading opentelemetry_instrumentation_requests-0.52b0-py3-none-any.whl (12 kB)
+#8 37.30 Collecting opentelemetry-instrumentation-sqlite3==0.52b0 (from -r requirements.lock (line 680))
+#8 37.40   Downloading opentelemetry_instrumentation_sqlite3-0.52b0-py3-none-any.whl (9.3 kB)
+#8 37.64 Collecting opentelemetry-instrumentation-starlette==0.52b0 (from -r requirements.lock (line 684))
+#8 37.74   Downloading opentelemetry_instrumentation_starlette-0.52b0-py3-none-any.whl (11 kB)
+#8 37.93 Collecting opentelemetry-instrumentation-threading==0.52b0 (from -r requirements.lock (line 688))
+#8 38.03   Downloading opentelemetry_instrumentation_threading-0.52b0-py3-none-any.whl (9.3 kB)
+#8 38.22 Collecting opentelemetry-instrumentation-tortoiseorm==0.52b0 (from -r requirements.lock (line 692))
+#8 38.32   Downloading opentelemetry_instrumentation_tortoiseorm-0.52b0-py3-none-any.whl (10 kB)
+#8 38.54 Collecting opentelemetry-instrumentation-urllib==0.52b0 (from -r requirements.lock (line 696))
+#8 38.65   Downloading opentelemetry_instrumentation_urllib-0.52b0-py3-none-any.whl (12 kB)
+#8 38.95 Collecting opentelemetry-instrumentation-urllib3==0.52b0 (from -r requirements.lock (line 700))
+#8 39.06   Downloading opentelemetry_instrumentation_urllib3-0.52b0-py3-none-any.whl (13 kB)
+#8 39.29 Collecting opentelemetry-instrumentation-wsgi==0.52b0 (from -r requirements.lock (line 704))
+#8 39.41   Downloading opentelemetry_instrumentation_wsgi-0.52b0-py3-none-any.whl (14 kB)
+#8 39.64 Collecting opentelemetry-proto==1.31.0 (from -r requirements.lock (line 708))
+#8 39.74   Downloading opentelemetry_proto-1.31.0-py3-none-any.whl (55 kB)
+#8 39.76      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 55.9/55.9 kB 4.9 MB/s eta 0:00:00
+#8 39.99 Collecting opentelemetry-sdk==1.31.0 (from -r requirements.lock (line 715))
+#8 40.09   Downloading opentelemetry_sdk-1.31.0-py3-none-any.whl (118 kB)
+#8 40.12      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 118.9/118.9 kB 6.6 MB/s eta 0:00:00
+#8 40.34 Collecting opentelemetry-semantic-conventions==0.52b0 (from -r requirements.lock (line 722))
+#8 40.45   Downloading opentelemetry_semantic_conventions-0.52b0-py3-none-any.whl (183 kB)
+#8 40.49      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 183.4/183.4 kB 6.9 MB/s eta 0:00:00
+#8 40.71 Collecting opentelemetry-util-http==0.52b0 (from -r requirements.lock (line 740))
+#8 40.81   Downloading opentelemetry_util_http-0.52b0-py3-none-any.whl (7.3 kB)
+#8 40.82 Requirement already satisfied: packaging==26.3 in /usr/local/lib/python3.11/site-packages (from -r requirements.lock (line 751)) (26.3)
+#8 41.93 Collecting pandas==3.0.5 (from -r requirements.lock (line 755))
+#8 42.03   Downloading pandas-3.0.5-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (11.3 MB)
+#8 44.42      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.3/11.3 MB 4.7 MB/s eta 0:00:00
+#8 44.79 Collecting peewee==4.3.0 (from -r requirements.lock (line 799))
+#8 44.90   Downloading peewee-4.3.0-py3-none-any.whl (179 kB)
+#8 44.94      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 179.5/179.5 kB 7.0 MB/s eta 0:00:00
+#8 45.19 Collecting platformdirs==4.11.3 (from -r requirements.lock (line 803))
+#8 45.29   Downloading platformdirs-4.11.3-py3-none-any.whl (23 kB)
+#8 46.64 Collecting protobuf==5.29.6 (from -r requirements.lock (line 807))
+#8 46.74   Downloading protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl (320 kB)
+#8 46.81      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 320.5/320.5 kB 5.4 MB/s eta 0:00:00
+#8 46.97 Collecting pycparser==3.0 (from -r requirements.lock (line 823))
+#8 47.09   Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+#8 47.10      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 33.4 MB/s eta 0:00:00
+#8 48.09 Collecting pydantic==2.13.4 (from -r requirements.lock (line 827))
+#8 48.19   Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+#8 48.29      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 472.3/472.3 kB 5.1 MB/s eta 0:00:00
+#8 54.07 Collecting pydantic-core==2.46.4 (from -r requirements.lock (line 831))
+#8 54.18   Downloading pydantic_core-2.46.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+#8 54.63      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 4.8 MB/s eta 0:00:00
+#8 54.82 Collecting python-dateutil==2.9.0.post0 (from -r requirements.lock (line 953))
+#8 54.92   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+#8 54.98      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 229.9/229.9 kB 4.4 MB/s eta 0:00:00
+#8 55.36 Collecting pytz==2026.3.post1 (from -r requirements.lock (line 957))
+#8 55.46   Downloading pytz-2026.3.post1-py2.py3-none-any.whl (508 kB)
+#8 55.58      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 508.3/508.3 kB 4.4 MB/s eta 0:00:00
+#8 55.87 Collecting requests==2.34.2 (from -r requirements.lock (line 961))
+#8 56.01   Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+#8 56.02      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 73.1/73.1 kB 21.8 MB/s eta 0:00:00
+#8 56.19 Collecting six==1.17.0 (from -r requirements.lock (line 967))
+#8 56.31   Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+#8 56.47 Collecting sniffio==1.3.1 (from -r requirements.lock (line 971))
+#8 56.58   Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+#8 56.82 Collecting soupsieve==2.9.2 (from -r requirements.lock (line 975))
+#8 56.92   Downloading soupsieve-2.9.2-py3-none-any.whl (37 kB)
+#8 57.23 Collecting starlette==0.27.0 (from -r requirements.lock (line 979))
+#8 57.34   Downloading starlette-0.27.0-py3-none-any.whl (66 kB)
+#8 57.35      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.0/67.0 kB 32.6 MB/s eta 0:00:00
+#8 57.55 Collecting typing-extensions==4.16.0 (from -r requirements.lock (line 983))
+#8 57.66   Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#8 57.67      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45.6/45.6 kB 25.4 MB/s eta 0:00:00
+#8 57.83 Collecting typing-inspection==0.4.4 (from -r requirements.lock (line 994))
+#8 57.93   Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+#8 58.21 Collecting urllib3==2.7.0 (from -r requirements.lock (line 998))
+#8 58.31   Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+#8 58.37      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.1/131.1 kB 3.2 MB/s eta 0:00:00
+#8 58.64 Collecting uvicorn==0.24.0.post1 (from -r requirements.lock (line 1002))
+#8 58.74   Downloading uvicorn-0.24.0.post1-py3-none-any.whl (59 kB)
+#8 58.76      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 59.7/59.7 kB 6.0 MB/s eta 0:00:00
+#8 59.72 Collecting websockets==17.0.1 (from -r requirements.lock (line 1006))
+#8 59.83   Downloading websockets-17.0.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (219 kB)
+#8 59.87      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 219.9/219.9 kB 6.3 MB/s eta 0:00:00
+#8 62.61 Collecting wrapt==1.17.3 (from -r requirements.lock (line 1116))
+#8 62.71   Downloading wrapt-1.17.3-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (82 kB)
+#8 62.74      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 82.4/82.4 kB 4.4 MB/s eta 0:00:00
+#8 62.99 Collecting yfinance==1.2.0 (from -r requirements.lock (line 1207))
+#8 63.10   Downloading yfinance-1.2.0-py2.py3-none-any.whl (130 kB)
+#8 63.13      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 130.2/130.2 kB 9.6 MB/s eta 0:00:00
+#8 63.36 Collecting zipp==4.1.0 (from -r requirements.lock (line 1211))
+#8 63.46   Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+#8 71.62 Installing collected packages: pytz, multitasking, zipp, wrapt, websockets, urllib3, typing-extensions, soupsieve, sniffio, six, pycparser, protobuf, platformdirs, peewee, opentelemetry-util-http, numpy, idna, h11, frozendict, click, charset-normalizer, certifi, asgiref, annotated-types, uvicorn, typing-inspection, requests, python-dateutil, pydantic-core, opentelemetry-proto, importlib-metadata, grpcio, googleapis-common-protos, deprecated, cffi, beautifulsoup4, anyio, starlette, pydantic, pandas, opentelemetry-exporter-otlp-proto-common, opentelemetry-api, curl-cffi, yfinance, opentelemetry-semantic-conventions, fastapi, opentelemetry-sdk, opentelemetry-instrumentation-click, opentelemetry-instrumentation, opentelemetry-instrumentation-wsgi, opentelemetry-instrumentation-urllib3, opentelemetry-instrumentation-urllib, opentelemetry-instrumentation-tortoiseorm, opentelemetry-instrumentation-threading, opentelemetry-instrumentation-requests, opentelemetry-instrumentation-logging, opentelemetry-instrumentation-grpc, opentelemetry-instrumentation-dbapi, opentelemetry-instrumentation-asyncio, opentelemetry-instrumentation-asgi, opentelemetry-exporter-otlp-proto-http, opentelemetry-exporter-otlp-proto-grpc, opentelemetry-distro, opentelemetry-instrumentation-starlette, opentelemetry-instrumentation-sqlite3, opentelemetry-instrumentation-fastapi, opentelemetry-exporter-otlp
+#8 121.9 Successfully installed annotated-types-0.8.0 anyio-3.7.1 asgiref-3.12.1 beautifulsoup4-4.15.0 certifi-2026.7.22 cffi-2.1.1 charset-normalizer-3.5.1 click-8.4.2 curl-cffi-0.13.0 deprecated-1.3.1 fastapi-0.104.1 frozendict-2.4.7 googleapis-common-protos-1.75.0 grpcio-1.83.0 h11-0.16.0 idna-3.18 importlib-metadata-8.6.1 multitasking-0.0.13 numpy-2.4.6 opentelemetry-api-1.31.0 opentelemetry-distro-0.52b0 opentelemetry-exporter-otlp-1.31.0 opentelemetry-exporter-otlp-proto-common-1.31.0 opentelemetry-exporter-otlp-proto-grpc-1.31.0 opentelemetry-exporter-otlp-proto-http-1.31.0 opentelemetry-instrumentation-0.52b0 opentelemetry-instrumentation-asgi-0.52b0 opentelemetry-instrumentation-asyncio-0.52b0 opentelemetry-instrumentation-click-0.52b0 opentelemetry-instrumentation-dbapi-0.52b0 opentelemetry-instrumentation-fastapi-0.52b0 opentelemetry-instrumentation-grpc-0.52b0 opentelemetry-instrumentation-logging-0.52b0 opentelemetry-instrumentation-requests-0.52b0 opentelemetry-instrumentation-sqlite3-0.52b0 opentelemetry-instrumentation-starlette-0.52b0 opentelemetry-instrumentation-threading-0.52b0 opentelemetry-instrumentation-tortoiseorm-0.52b0 opentelemetry-instrumentation-urllib-0.52b0 opentelemetry-instrumentation-urllib3-0.52b0 opentelemetry-instrumentation-wsgi-0.52b0 opentelemetry-proto-1.31.0 opentelemetry-sdk-1.31.0 opentelemetry-semantic-conventions-0.52b0 opentelemetry-util-http-0.52b0 pandas-3.0.5 peewee-4.3.0 platformdirs-4.11.3 protobuf-5.29.6 pycparser-3.0 pydantic-2.13.4 pydantic-core-2.46.4 python-dateutil-2.9.0.post0 pytz-2026.3.post1 requests-2.34.2 six-1.17.0 sniffio-1.3.1 soupsieve-2.9.2 starlette-0.27.0 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.7.0 uvicorn-0.24.0.post1 websockets-17.0.1 wrapt-1.17.3 yfinance-1.2.0 zipp-4.1.0
+#8 121.9 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+#8 127.3 No broken requirements found.
+#8 DONE 127.5s
+
+#9 [verified 1/3] COPY src/yfinance_wrapper ./yfinance_wrapper
+#9 DONE 0.1s
+
+#10 [verified 2/3] COPY tests ./tests
+#10 DONE 0.0s
+
+#11 [verified 3/3] RUN python -m unittest discover -s tests -v     && python -m compileall -q yfinance_wrapper tests
+#11 4.734 test_invalid_date_range_returns_422_and_no_ticker_call (test_history_endpoint_validation.TestHistoryEndpointValidation.test_invalid_date_range_returns_422_and_no_ticker_call) ... ok
+#11 4.759 test_invalid_period_returns_422_and_no_ticker_call (test_history_endpoint_validation.TestHistoryEndpointValidation.test_invalid_period_returns_422_and_no_ticker_call) ... ok
+#11 4.767 test_invalid_ticker_returns_422_and_no_ticker_call (test_history_endpoint_validation.TestHistoryEndpointValidation.test_invalid_ticker_returns_422_and_no_ticker_call) ... ok
+#11 4.776 test_period_and_dates_conflict_returns_422_and_no_ticker_call (test_history_endpoint_validation.TestHistoryEndpointValidation.test_period_and_dates_conflict_returns_422_and_no_ticker_call) ... ok
+#11 4.785 test_all_supported_markets_accepted (test_market_endpoint.TestMarketEndpoint.test_all_supported_markets_accepted) ... ok
+#11 4.801 test_empty_market_returns_422_and_no_market_call (test_market_endpoint.TestMarketEndpoint.test_empty_market_returns_422_and_no_market_call) ... ok
+#11 4.807 test_invalid_market_returns_422_and_no_market_call (test_market_endpoint.TestMarketEndpoint.test_invalid_market_returns_422_and_no_market_call) ... ok
+#11 4.815 test_upstream_exception_returns_502 (test_market_endpoint.TestMarketEndpoint.test_upstream_exception_returns_502) ... ok
+#11 4.823 test_valid_canonical_market_returns_envelope (test_market_endpoint.TestMarketEndpoint.test_valid_canonical_market_returns_envelope) ... ok
+#11 4.832 test_valid_lowercase_market_returns_envelope (test_market_endpoint.TestMarketEndpoint.test_valid_lowercase_market_returns_envelope) ... ok
+#11 4.840 test_valid_mixed_case_market_returns_envelope (test_market_endpoint.TestMarketEndpoint.test_valid_mixed_case_market_returns_envelope) ... ok
+#11 4.849 test_all_canonical_keys_accepted (test_market_validator.TestValidateMarket.test_all_canonical_keys_accepted) ... ok
+#11 4.850 test_error_includes_supported_list (test_market_validator.TestValidateMarket.test_error_includes_supported_list) ... ok
+#11 4.850 test_lowercase_accepted (test_market_validator.TestValidateMarket.test_lowercase_accepted) ... ok
+#11 4.850 test_mixed_case_accepted (test_market_validator.TestValidateMarket.test_mixed_case_accepted) ... ok
+#11 4.850 test_rejects_empty (test_market_validator.TestValidateMarket.test_rejects_empty) ... ok
+#11 4.851 test_rejects_invalid_market (test_market_validator.TestValidateMarket.test_rejects_invalid_market) ... ok
+#11 4.851 test_rejects_none (test_market_validator.TestValidateMarket.test_rejects_none) ... ok
+#11 4.851 test_rejects_partial_match (test_market_validator.TestValidateMarket.test_rejects_partial_match) ... ok
+#11 4.851 test_rejects_whitespace_only (test_market_validator.TestValidateMarket.test_rejects_whitespace_only) ... ok
+#11 4.852 test_strips_whitespace (test_market_validator.TestValidateMarket.test_strips_whitespace) ... ok
+#11 4.852 test_allows_dots_and_hyphens (test_validation.TestNormalizeTicker.test_allows_dots_and_hyphens) ... ok
+#11 4.853 test_rejects_empty (test_validation.TestNormalizeTicker.test_rejects_empty) ... ok
+#11 4.853 test_rejects_invalid_characters (test_validation.TestNormalizeTicker.test_rejects_invalid_characters) ... ok
+#11 4.853 test_rejects_none (test_validation.TestNormalizeTicker.test_rejects_none) ... ok
+#11 4.853 test_rejects_too_long (test_validation.TestNormalizeTicker.test_rejects_too_long) ... ok
+#11 4.854 test_rejects_whitespace_only (test_validation.TestNormalizeTicker.test_rejects_whitespace_only) ... ok
+#11 4.854 test_strips_whitespace (test_validation.TestNormalizeTicker.test_strips_whitespace) ... ok
+#11 4.855 test_uppercases (test_validation.TestNormalizeTicker.test_uppercases) ... ok
+#11 4.855 test_both_none_returns_default (test_validation.TestValidateDateRange.test_both_none_returns_default) ... ok
+#11 4.856 test_future_allowed_when_flag_set (test_validation.TestValidateDateRange.test_future_allowed_when_flag_set) ... ok
+#11 4.856 test_future_end_raises_by_default (test_validation.TestValidateDateRange.test_future_end_raises_by_default) ... ok
+#11 4.857 test_future_start_raises_by_default (test_validation.TestValidateDateRange.test_future_start_raises_by_default) ... ok
+#11 4.857 test_only_end_raises (test_validation.TestValidateDateRange.test_only_end_raises) ... ok
+#11 4.858 test_only_start_raises (test_validation.TestValidateDateRange.test_only_start_raises) ... ok
+#11 4.858 test_start_after_end_raises (test_validation.TestValidateDateRange.test_start_after_end_raises) ... ok
+#11 4.858 test_valid_range (test_validation.TestValidateDateRange.test_valid_range) ... ok
+#11 4.859
+#11 4.859 ----------------------------------------------------------------------
+#11 4.859 Ran 37 tests in 0.126s
+#11 4.859
+#11 4.859 OK
+#11 DONE 5.6s
+
+#12 [runtime 1/2] COPY --from=verified /app/yfinance_wrapper ./yfinance_wrapper
+#12 DONE 0.0s
+
+#13 [runtime 2/2] RUN case "$SOURCE_COMMIT" in *[!0-9a-f]*|'') exit 1 ;; esac     && test "${#SOURCE_COMMIT}" -eq 40
+#13 DONE 0.1s
+
+#14 exporting to image
+#14 exporting layers
+#14 exporting layers 6.1s done
+#14 exporting manifest sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca done
+#14 exporting config sha256:39e732ff6a8e96763b0f63001fec769e9392dede2b9811d4dfd1cc7bcb8bdb1e done
+#14 pushing layers
+#14 ...
+
+#15 [auth] sharing credentials for registry.lucas.engineering
+#15 DONE 0.0s
+
+#14 exporting to image
+#14 pushing layers 219.0s done
+#14 pushing manifest for registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca
+#14 pushing manifest for registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca 10.2s done
+#14 DONE 235.3s
