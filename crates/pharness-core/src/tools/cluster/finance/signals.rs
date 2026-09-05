@@ -11,6 +11,7 @@ mod request;
 #[cfg(test)]
 mod tests;
 mod window;
+pub(super) use window::Context as WindowContext;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

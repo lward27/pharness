@@ -4,6 +4,70 @@ use tokio::{
     net::TcpListener,
 };
 
+#[tokio::test]
+#[ignore = "explicit staging access, three deterministic probes, Tempo and an actual five-minute window"]
+async fn live_finance_health_trace_correlation() {
+    let expected: FinanceDeploymentExpectation = serde_json::from_str(
+        &std::env::var("PHARNESS_FINANCE_LIVE_EXPECTATION").expect("explicit expectation required"),
+    )
+    .unwrap();
+    assert_eq!(expected.application, FinanceApplication::Yfinance);
+    assert_eq!(expected.environment, FinanceEnvironment::Staging);
+    let tools = ReadOnlyClusterTools::default()
+        .with_kubectl_bin(
+            std::env::var("PHARNESS_FINANCE_LIVE_KUBECTL")
+                .expect("explicit cluster wrapper required"),
+        )
+        .with_tempo_url_option(Some(
+            std::env::var("PHARNESS_FINANCE_LIVE_TEMPO").expect("explicit Tempo endpoint required"),
+        ));
+    let base = std::env::var("PHARNESS_FINANCE_LIVE_PROBE_BASE")
+        .expect("explicit staging probe endpoint required");
+    let before = tools
+        .observe_finance_deployment(&expected)
+        .await
+        .unwrap()
+        .content;
+    assert_eq!(before["identity_state"], "verified");
+    let window =
+        crate::tools::FinanceRuntimeWindow::starting_after(timestamp().unwrap(), 300).unwrap();
+    println!(
+        "{}",
+        json!({"identity_before":before,"planned_window":window})
+    );
+    async fn wait_until(target_ms: u64) {
+        loop {
+            let now = timestamp().unwrap();
+            if now >= target_ms {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis((target_ms - now).min(1000))).await;
+        }
+    }
+    wait_until(window.start_unix_seconds * 1000).await;
+    let probes = collect(&expected, &base, 15_000, MAX_BODY_BYTES)
+        .await
+        .unwrap();
+    println!("{}", json!({"functional_probes":probes}));
+    wait_until((window.end_unix_seconds + 10) * 1000).await;
+    let after = tools
+        .observe_finance_deployment(&expected)
+        .await
+        .unwrap()
+        .content;
+    let trace = tools
+        .observe_finance_health_trace(&expected, &window, &before, &after, &probes)
+        .await
+        .unwrap();
+    println!("{}", json!({"identity_after":after,"health_trace":trace}));
+    assert_eq!(trace.content["trace_state"], "observed");
+    assert_eq!(
+        trace.content["functional_probe_state"],
+        probes["probe_state"]
+    );
+    assert_eq!(trace.content["runtime_verification"], "not_evaluated");
+}
+
 fn expected(
     application: FinanceApplication,
     environment: FinanceEnvironment,
@@ -87,6 +151,7 @@ async fn deterministic_backend_probes_keep_validation_and_trace_correlation_expl
         let trace = probe["backend_trace_id"].as_str().unwrap();
         assert_eq!(trace.len(), 32);
         assert!(trace.bytes().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(probe["backend_parent_span_id"].as_str().unwrap().len(), 16);
         let request = requests
             .iter()
             .find(|r| r.starts_with(&format!("GET {} ", probe["path"].as_str().unwrap())))
