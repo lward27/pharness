@@ -499,7 +499,7 @@ test("production WorkItem wizard blocks until immutable preflight and warning ac
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("PipelineContract").selectOption(pipeline.id);
   await page.getByLabel("DeploymentContract").selectOption(deployment.id);
-  await page.getByRole("button", { name: "Run read-only preflight" }).click();
+  await page.getByRole("button", { name: "Check readiness" }).click();
   await expect(page.getByText("Submission ready")).toBeVisible();
   await page.getByRole("button", { name: "Review mutations" }).click();
   await expect(page.getByRole("button", { name: "Create supervised WorkItem" })).toBeDisabled();
@@ -927,7 +927,7 @@ test("wizard preserves a blocked preparation preflight without creating durable 
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("PipelineContract").selectOption("pcontract_yfinance");
   await page.getByLabel("DeploymentContract").selectOption("dcontract_yfinance");
-  await page.getByRole("button", { name: "Run read-only preflight" }).click();
+  await page.getByRole("button", { name: "Check readiness" }).click();
   await expect(page.getByText("1 blocking checks")).toBeVisible();
   await expect(page.getByText("Runner preparation capability has not passed.")).toBeVisible();
   await expect(page).toHaveScreenshot("work-item-preparation-blocked.png", { fullPage: true });

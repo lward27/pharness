@@ -256,7 +256,7 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await page.getByRole("button", { name: "Register Repository" }).click();
   await page.getByLabel("GitHub HTTPS URL").fill(repositoryUrl);
   await page.getByLabel("Full commit SHA").fill(sourceSha);
-  await page.getByRole("button", { name: "Run preflight" }).click();
+  await page.getByRole("button", { name: "Check readiness" }).click();
   await expect(page.getByRole("heading", { name: "Review registration" })).toBeVisible();
   await expect(page.getByText(canonicalRepositoryUrl)).toBeVisible();
   await page.getByRole("button", { name: "Confirm registration" }).click();
@@ -498,8 +498,8 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await page.getByLabel("unit", { exact: false }).check();
   await page.getByLabel("compile", { exact: false }).check();
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "Run preflight" }).click();
-  await expect(page.getByRole("heading", { name: "Read-only preflight and final summary" })).toBeVisible();
+  await page.getByRole("button", { name: "Check readiness" }).click();
+  await expect(page.getByRole("heading", { name: "Readiness and final summary" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Later authorization boundaries" })).toBeVisible();
   await expect(page.getByText("PHarness observes but never performs the source merge")).toBeVisible();
   await page.getByRole("button", { name: "Confirm and create WorkItem" }).click();
