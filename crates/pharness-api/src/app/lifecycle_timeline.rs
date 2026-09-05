@@ -121,7 +121,7 @@ pub(super) fn project(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{json, project, StoredSourceDeliveryIntent, StoredStageExecution};
 
     fn execution(id: &str, sequence: u64) -> StoredStageExecution {
         serde_json::from_value(json!({"id":id,"work_item_id":"wi","stage_key":"implement","sequence":sequence,

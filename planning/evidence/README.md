@@ -1,5 +1,10 @@
 # Evidence and assessments
 
+The [ASTRA baseline addendum](assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md) reconciles
+the original review with current main. The [program ledger](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md)
+links acceptance gates to [milestone evidence](autonomous-sdlc/ASTRA-M01-BASELINE-AND-DOCUMENTATION.md).
+Dated evidence remains historical; a new plan is not a completed result.
+
 Evidence is dated and immutable in meaning: it records what was observed at a
 specific revision or release. It does not automatically describe current
 behavior.

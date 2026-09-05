@@ -1,5 +1,9 @@
 # PHarness Data Model Convergence — Planning Entry Point
 
+> Current status (2026-09-04): **Prior entry point; subordinate**.
+> Replacement/authority: [ASTRA](../programs/autonomous-sdlc/ASTRA-05-UNIFIED-SDLC-CONTRACT.md).
+> Preserve accepted data lifecycle, generation, retention, and additive compatibility. Do not start a separate convergence campaign.
+
 ## Purpose
 
 Plan the behavior-preserving convergence of PHarness's physical SQLite model after the clean Finance generation has been accepted. The work should reduce duplicate lifecycle representations and compatibility-only storage without weakening immutable evidence, Repo Mode semantics, legacy readability, retention safety, or rollback.

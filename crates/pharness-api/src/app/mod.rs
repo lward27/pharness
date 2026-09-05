@@ -43,6 +43,7 @@ mod principals;
 mod products;
 mod releases;
 mod repo_mode;
+mod repository_readiness;
 mod risk;
 mod runs;
 mod sdlc;
@@ -446,7 +447,9 @@ mod tests;
 
 #[cfg(test)]
 mod operational_mode_tests {
-    use super::*;
+    use super::{
+        operational_mutation_decision, Method, OperationalMode, OperationalMutationDecision,
+    };
 
     #[test]
     fn read_only_serves_reads_and_blocks_every_mutation() {

@@ -1,6 +1,10 @@
 # PHarness Finance Metadata Reliability Campaign
 
-Status: active
+> Current status (2026-09-04): **Historical campaign; superseded**.
+> Replacement/authority: [ASTRA](../programs/autonomous-sdlc/ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md).
+> As of 2026-09-04, both FRC-1 Market and the frontend Market Overview exist on application main. The progress below is dated source-only campaign history, not current eligibility. M11 uses maintenance requests instead of recreating these features.
+
+Original status: active
 
 Started: 2026-08-29
 

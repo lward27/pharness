@@ -1,6 +1,10 @@
 # PHarness Coding Reliability and Alternative-Model Qualification Milestone
 
-Status: active
+> Current status (2026-09-04): **Reference for ASTRA M04**.
+> Replacement/authority: [ASTRA](../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md).
+> The existing frozen gates remain binding. This document is a procedure reference, not an independent expansion program.
+
+Original status: active
 Baseline: `07b47b91e0c3eca4d18bde112e0549d12587b98a`
 Priority: correctness of produced code before further platform expansion
 

@@ -13,6 +13,72 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = REPO_ROOT / "crates/pharness-api/src/app"
 
 
+def rust_code(source: str) -> str:
+    """Mask comments and literals while retaining positions and line breaks.
+
+    This is a lexical filter, not a Rust parser. In particular, apostrophes in
+    lifetimes/labels must remain code, and raw strings and nested block comments
+    must be consumed before looking for ordinary string/comment delimiters.
+    """
+    masked = list(source)
+    index = 0
+    raw_start = re.compile(r'(?:br|cr|r)(#{0,255})"')
+    char_literal = re.compile(r"'(?:\\(?:u\{[0-9a-fA-F_]+\}|x[0-9a-fA-F]{2}|[^\n])|[^'\\\n])'")
+
+    def mask(start: int, end: int) -> None:
+        for position in range(start, end):
+            if source[position] != "\n":
+                masked[position] = " "
+
+    while index < len(source):
+        start = index
+        if source.startswith("//", index):
+            end = source.find("\n", index + 2)
+            index = len(source) if end < 0 else end
+        elif source.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < len(source) and depth:
+                if source.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif source.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ValueError("unterminated Rust block comment")
+        elif (
+            (index == 0 or not (source[index - 1].isalnum() or source[index - 1] == "_"))
+            and (raw := raw_start.match(source, index))
+        ):
+            closing = '"' + raw.group(1)
+            end = source.find(closing, raw.end())
+            if end < 0:
+                raise ValueError("unterminated Rust raw string")
+            index = end + len(closing)
+        elif source[index] == '"':
+            index += 1
+            while index < len(source):
+                if source[index] == "\\":
+                    index += 2
+                elif source[index] == '"':
+                    index += 1
+                    break
+                else:
+                    index += 1
+            else:
+                raise ValueError("unterminated Rust string")
+        elif source[index] == "'" and (character := char_literal.match(source, index)):
+            index = character.end()
+        else:
+            index += 1
+            continue
+        mask(start, min(index, len(source)))
+    return "".join(masked)
+
+
 def module_name(path: Path) -> str:
     parts = list(path.relative_to(APP_ROOT).parts)
     if parts[-1] == "mod.rs":
@@ -100,10 +166,24 @@ def graph() -> dict[str, set[str]]:
     known = set(modules)
     edges: dict[str, set[str]] = defaultdict(set)
     for current, path in modules.items():
-        source = re.sub(r"//[^\n]*", "", path.read_text())
-        for use_tree in re.findall(r"\buse\s+([^;]+);", source, flags=re.DOTALL):
-            for imported in expand_use_tree(" ".join(use_tree.split())):
-                target = resolve_import(current, imported, known)
+        source = rust_code(path.read_text())
+        inline_modules = {
+            match.end() - 1: match.group(1)
+            for match in re.finditer(r"\bmod\s+([_A-Za-z][_A-Za-z0-9]*)\s*\{", source)
+        }
+        scopes: list[str | None] = []
+        cursor = 0
+        for statement in re.finditer(r"\buse\s+([^;]+);", source, flags=re.DOTALL):
+            while cursor < statement.start():
+                if source[cursor] == "{":
+                    scopes.append(inline_modules.get(cursor))
+                elif source[cursor] == "}":
+                    scopes.pop()
+                cursor += 1
+            parts = [] if current == "<root>" else current.split("::")
+            context = "::".join(parts + [name for name in scopes if name]) or "<root>"
+            for imported in expand_use_tree(" ".join(statement.group(1).split())):
+                target = resolve_import(context, imported, known)
                 if target and target != current:
                     edges[current].add(target)
         edges.setdefault(current, set())

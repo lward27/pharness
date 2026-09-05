@@ -2349,7 +2349,13 @@ fn sanitize_failure(message: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        dynamic_tool_constraints, gateway_readiness_url, is_hex_sha256, is_prefixed_sha256, json,
+        parse_stage, protocol_calibration_messages, qualification_suite_contract,
+        qualification_tool_constraints, validate_protocol_calibration_generation,
+        validate_qualification_report, InferenceStage, ModelRole, StoredInferenceEvaluation,
+        RESOLVED_INFERENCE_BINDING_SCHEMA,
+    };
 
     #[test]
     fn stage_query_is_bounded() {

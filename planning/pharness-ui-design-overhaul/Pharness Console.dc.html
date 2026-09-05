@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;min-height:100vh;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+--accent:#3ee0e8;
+--bg0:#16262d;--bg1:#22383f;
+--txt:#eef6f7;--txt2:#94a9b1;--txt3:#647a83;
+--glass:rgba(8,20,26,.6);--glass2:rgba(11,26,33,.76);--glassIn:rgba(255,255,255,.055);
+--edge:rgba(255,255,255,.1);--edge2:rgba(255,255,255,.19);--specular:rgba(255,255,255,.13);
+--cyan:#3ee0e8;--green:#46e07a;--amber:#f5c542;--red:#ff6a60;--blue:#58b0ff;--purple:#b394ff;
+--drop:0 20px 44px -20px rgba(0,0,0,.7);
+background:var(--bg0);color:var(--txt)}
+body[data-theme="light"]{
+--bg0:#f3f8f9;--bg1:#ffffff;
+--txt:#08181e;--txt2:#4a626e;--txt3:#5f7480;
+--glass:rgba(255,255,255,.74);--glass2:rgba(255,255,255,.88);--glassIn:rgba(10,26,32,.035);
+--edge:rgba(10,26,32,.085);--edge2:rgba(10,26,32,.17);--specular:rgba(255,255,255,.95);
+--cyan:#04737d;--green:#0d8341;--amber:#96650a;--red:#bf2f26;--blue:#1a67ba;--purple:#6144c9;
+--drop:0 18px 38px -22px rgba(12,40,50,.42)}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--txt)}
+::selection{background:color-mix(in oklab,var(--accent) 40%,transparent)}
+@keyframes pvDrift1{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(9vw,5vh,0) scale(1.18)}100%{transform:translate3d(0,0,0) scale(1)}}
+@keyframes pvDrift2{0%{transform:translate3d(0,0,0) scale(1.1)}50%{transform:translate3d(-11vw,-7vh,0) scale(.92)}100%{transform:translate3d(0,0,0) scale(1.1)}}
+@keyframes pvDrift3{0%{transform:translate3d(0,0,0) scale(.95)}50%{transform:translate3d(6vw,-9vh,0) scale(1.25)}100%{transform:translate3d(0,0,0) scale(.95)}}
+@keyframes pvSheen{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
+@keyframes pvPulse{0%{box-shadow:0 0 0 0 currentColor;opacity:1}70%{box-shadow:0 0 0 7px transparent;opacity:.75}100%{box-shadow:0 0 0 0 transparent;opacity:1}}
+@keyframes pvRing{0%{transform:scale(.7);opacity:.55}100%{transform:scale(2.3);opacity:0}}
+@keyframes pvFlow{0%{background-position:0 0}100%{background-position:44px 0}}
+@keyframes pvRise{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@keyframes pvSpin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;background:radial-gradient(70% 60% at 8% -8%,color-mix(in oklab,var(--accent) 22%,transparent),transparent 70%),radial-gradient(80% 70% at 104% 108%,color-mix(in oklab,var(--purple) 16%,transparent),transparent 72%),radial-gradient(120% 90% at 12% -10%,var(--bg1),transparent 60%),var(--bg0)">
+  <div style="position:absolute;inset:0;opacity:.8;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E&quot;),radial-gradient(var(--edge2) 1px,transparent 1.5px),repeating-radial-gradient(circle at 16% 4%,transparent 0 62px,var(--edge) 62px 63px),repeating-radial-gradient(circle at 92% 96%,transparent 0 78px,var(--edge) 78px 79px);background-size:180px 180px,26px 26px,auto,auto"></div>
+</div>
+
+<div style="position:relative;z-index:2;min-height:100vh;padding:0 28px 96px">
+
+  <div style="position:sticky;top:0;z-index:50;display:flex;justify-content:center;padding:18px 0 10px">
+    <div style="position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;width:100%;max-width:1420px;padding:9px 12px 9px 16px;border:1px solid var(--edge);border-radius:20px;background:var(--glass2);backdrop-filter:blur(24px) saturate(175%);-webkit-backdrop-filter:blur(24px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),inset 0 -1px 0 var(--glassIn),var(--drop)">
+      <div style="position:absolute;top:0;left:0;width:34%;height:100%;pointer-events:none;background:linear-gradient(100deg,transparent,var(--specular),transparent);opacity:.7;animation:pvSheen 9s linear infinite"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex:none">
+        <div style="position:relative;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(150deg,color-mix(in oklab,var(--accent) 75%,transparent),color-mix(in oklab,var(--purple) 55%,transparent));box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 14px -6px color-mix(in oklab,var(--accent) 70%,transparent)">
+          <div style="width:11px;height:11px;border-radius:3px;border:2px solid rgba(255,255,255,.92);transform:rotate(45deg)"></div>
+        </div>
+        <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;line-height:1.15">
+            <strong style="font-size:13px;letter-spacing:.02em">PHarness</strong>
+            <span style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt3)">Control plane</span>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex;gap:3px;padding:3px;border-radius:13px;background:var(--glassIn);border:1px solid var(--edge);min-width:0;overflow-x:auto;scrollbar-width:none">
+        <sc-for list="{{ navItems }}" as="tab" hint-placeholder-count="3">
+          <button type="button" onClick="{{ tab.go }}" title="{{ tab.label }}" style="flex:none;border:0;border-radius:10px;padding:7px 13px;font:500 12.5px/1 'IBM Plex Sans',sans-serif;display:flex;align-items:center;gap:7px;color:{{ tab.fg }};background:{{ tab.bg }};box-shadow:{{ tab.shadow }};transition:background .18s,color .18s" style-hover="color:var(--txt)">
+            <span style="white-space:nowrap">{{ tab.label }}</span>
+            <sc-if value="{{ tab.badge }}" hint-placeholder-val="{{ true }}">
+              <b style="font:600 10px/1 'IBM Plex Mono',monospace;padding:3px 5px;border-radius:5px;background:color-mix(in oklab,var(--amber) 22%,transparent);color:var(--amber)">{{ tab.badge }}</b>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ showSearch }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;gap:8px;flex:1 1 200px;min-width:0;padding:7px 12px;border-radius:12px;border:1px solid var(--edge);background:var(--glassIn)">
+          <div style="width:11px;height:11px;border:1.6px solid var(--txt3);border-radius:50%;flex:none"></div>
+          <span style="min-width:0;font-size:12.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Search runs, WorkItems, audit events…</span>
+          <kbd style="flex:none;margin-left:auto;font:500 10px/1 'IBM Plex Mono',monospace;color:var(--txt3);border:1px solid var(--edge);border-radius:5px;padding:4px 5px">⌘K</kbd>
+        </div>
+      </sc-if>
+      <sc-if value="{{ compactSearch }}" hint-placeholder-val="{{ false }}">
+        <button type="button" title="Search" style="flex:none;margin-left:auto;width:32px;height:32px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt3);display:grid;place-items:center" style-hover="color:var(--txt);border-color:var(--edge2)">
+          <span style="display:block;width:11px;height:11px;border:1.6px solid currentColor;border-radius:50%"></span>
+        </button>
+      </sc-if>
+
+      <div style="display:flex;align-items:center;gap:7px;flex:none">
+        <sc-for list="{{ visibleScopeChips }}" as="chip" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:1px;padding:5px 11px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn)">
+            <span style="font:500 8.5px/1 'IBM Plex Sans';letter-spacing:.13em;text-transform:uppercase;color:var(--txt3)">{{ chip.label }}</span>
+            <strong style="font:500 11.5px/1.3 'IBM Plex Mono',monospace;color:var(--txt)">{{ chip.value }}</strong>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:7px;flex:none;padding-left:4px;border-left:1px solid var(--edge)">
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:11px;border:1px solid color-mix(in oklab,var(--green) 30%,transparent);background:color-mix(in oklab,var(--green) 12%,transparent)">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--green);color:color-mix(in oklab,var(--green) 55%,transparent);animation:pvPulse 2.2s ease-out infinite"></span>
+          <span style="font:500 11px/1 'IBM Plex Mono',monospace;color:var(--green)">Live</span>
+        </div>
+        <button type="button" onClick="{{ toggleTheme }}" title="Toggle theme" style="width:32px;height:32px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt2);display:grid;place-items:center;font-size:13px" style-hover="color:var(--txt);border-color:var(--edge2)">{{ themeGlyph }}</button>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px;border-radius:12px;border:1px solid var(--edge);background:var(--glassIn)">
+          <div style="width:24px;height:24px;border-radius:8px;display:grid;place-items:center;font:600 10px/1 'IBM Plex Mono',monospace;color:#04191c;background:linear-gradient(150deg,var(--accent),var(--purple))">WL</div>
+          <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;line-height:1.2">
+              <strong style="font-size:11.5px">lucas</strong>
+              <span style="font:400 9px/1 'IBM Plex Mono',monospace;color:var(--txt3)">operator</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1420px;margin:0 auto">
+
+    <sc-if value="{{ isTriage }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Operate · exception inbox</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Triage</h1>
+            <p style="margin:0;max-width:60ch;font-size:13px;line-height:1.55;color:var(--txt2);text-wrap:pretty">One thread per WorkItem. Review its current boundary in the cockpit; standalone tool requests stay separate. Oldest exceptions first.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--edge);background:var(--glass)">
+              <span style="width:26px;height:15px;border-radius:99px;background:color-mix(in oklab,var(--green) 32%,transparent);position:relative;display:inline-block"><span style="position:absolute;top:2px;right:2px;width:11px;height:11px;border-radius:50%;background:var(--green)"></span></span>
+              <span style="font-size:11.5px;color:var(--txt2)">Auto-refresh</span>
+              <span ref="{{ clockRef }}" style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">14:22:07</span>
+            </div>
+            <button type="button" style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:1px solid color-mix(in oklab,var(--accent) 40%,transparent);background:color-mix(in oklab,var(--accent) 16%,transparent);color:var(--accent);font:500 12.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--accent) 26%,transparent)">Refresh</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px">
+          <sc-for list="{{ triageStats }}" as="stat" hint-placeholder-count="5">
+            <div style="position:relative;overflow:hidden;display:flex;flex-direction:column;gap:5px;padding:16px 17px;border:1px solid var(--edge);border-radius:17px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 100% at 100% 0%,{{ stat.glow }},transparent 62%)"></div>
+              <span style="font:500 9.5px/1.5 'IBM Plex Sans';letter-spacing:.11em;text-transform:uppercase;color:var(--txt3);min-height:29px">{{ stat.label }}</span>
+              <strong style="font:500 31px/1 'IBM Plex Mono',monospace;letter-spacing:-.02em;color:{{ stat.color }}">{{ stat.value }}</strong>
+              <small style="font-size:11px;color:var(--txt3)">{{ stat.note }}</small>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:14px;padding:12px 16px;border:1px solid var(--edge);border-radius:15px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto">
+            <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--amber)"></span>
+            <strong style="flex:none;font-size:12.5px;white-space:nowrap">Oldest exceptions first</strong>
+            <small style="min-width:0;font-size:11.5px;color:var(--txt3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Absolute timestamps on hover · counts derive from the shared dashboard read model</small>
+          </div>
+          <div style="display:flex;gap:6px;flex:none">
+            <sc-for list="{{ originFilters }}" as="f" hint-placeholder-count="3">
+              <button type="button" style="padding:6px 11px;border-radius:9px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font:500 11.5px/1 'IBM Plex Mono',monospace;white-space:nowrap" style-hover="border-color:var(--edge2)">{{ f.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+          <sc-for list="{{ threads }}" as="row" hint-placeholder-count="6">
+            <div onClick="{{ row.open }}" style="position:relative;overflow:hidden;display:grid;grid-template-columns:14px minmax(0,1fr) 122px 148px;gap:18px;align-items:center;padding:15px 18px;border:1px solid var(--edge);border-radius:17px;background:var(--glass);box-shadow:inset 0 1px 0 var(--specular);cursor:pointer;transition:background .18s,border-color .18s,transform .18s" style-hover="background:var(--glass2);border-color:var(--edge2);transform:translateY(-1px)">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ row.tone }}"></div>
+              <div style="position:relative;width:9px;height:9px;border-radius:50%;background:{{ row.tone }};margin-left:2px">
+                <span style="position:absolute;inset:-3px;border-radius:50%;border:1px solid {{ row.tone }}"></span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <small style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ row.kind }} · {{ row.signalCount }} signals · origin {{ row.origin }}</small>
+                <strong style="font-size:14px;letter-spacing:-.01em">{{ row.title }}</strong>
+                <em style="font-style:normal;font-size:12px;color:var(--txt2);line-height:1.5">{{ row.detail }}</em>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px">
+                  <sc-for list="{{ row.signals }}" as="sig" hint-placeholder-count="2">
+                    <small style="padding:3px 8px;border-radius:7px;border:1px solid var(--edge);background:var(--glassIn);font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt2)">{{ sig }}</small>
+                  </sc-for>
+                </div>
+              </div>
+              <span style="justify-self:start;padding:5px 11px;border-radius:99px;border:1px solid {{ row.pillBorder }};background:{{ row.pillBg }};color:{{ row.tone }};font:500 11px/1.3 'IBM Plex Sans';white-space:nowrap">{{ row.status }}</span>
+              <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+                <time style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ row.age }}</time>
+                <strong style="font-size:12px;color:var(--accent);display:flex;align-items:center;gap:6px">{{ row.action }} →</strong>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRuns }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Operate · durable execution</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Run Queue</h1>
+            <p style="margin:0;max-width:62ch;font-size:13px;line-height:1.55;color:var(--txt2)">Execution state and governance state are reported separately. Dispatch mode reads from <code style="font:400 12px/1 'IBM Plex Mono',monospace;color:var(--txt)">/api/config/effective</code>.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:12px;border:1px solid color-mix(in oklab,var(--blue) 34%,transparent);background:color-mix(in oklab,var(--blue) 12%,transparent)">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--blue)"></span>
+            <span style="font:500 11.5px/1 'IBM Plex Mono',monospace;color:var(--blue)">worker.mode = kubernetes_job</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+          <sc-for list="{{ runStats }}" as="stat" hint-placeholder-count="4">
+            <div style="position:relative;overflow:hidden;display:flex;flex-direction:column;gap:5px;padding:16px 17px;border:1px solid var(--edge);border-radius:17px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 100% at 100% 0%,{{ stat.glow }},transparent 62%)"></div>
+              <span style="font:500 9.5px/1.5 'IBM Plex Sans';letter-spacing:.11em;text-transform:uppercase;color:var(--txt3);min-height:29px">{{ stat.label }}</span>
+              <strong style="font:500 31px/1 'IBM Plex Mono',monospace;color:{{ stat.color }}">{{ stat.value }}</strong>
+              <small style="font-size:11px;color:var(--txt3)">{{ stat.note }}</small>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:{{ runsGridCols }};gap:12px;margin-top:12px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid var(--edge);border-radius:14px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);">
+              <sc-for list="{{ runFilters }}" as="f" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;border:1px solid var(--edge);background:var(--glassIn);font:400 11.5px/1 'IBM Plex Mono',monospace;color:var(--txt2);white-space:nowrap"><span style="color:var(--txt3)">{{ f.label }}</span><span>{{ f.value }}</span><span style="color:var(--txt3);font-size:9px">▾</span></div>
+              </sc-for>
+              <span style="margin-left:auto;font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ runCountLabel }}</span>
+            </div>
+
+            <sc-for list="{{ runs }}" as="run" hint-placeholder-count="6">
+              <div style="position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(120px,1.7fr) minmax(0,1fr) minmax(0,118px) minmax(0,68px) minmax(0,104px) auto;gap:12px;align-items:center;padding:14px 17px;border:1px solid var(--edge);border-radius:16px;background:var(--glass);box-shadow:inset 0 1px 0 var(--specular);transition:background .18s,border-color .18s" style-hover="background:var(--glass2);border-color:var(--edge2)">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ run.tone }}"></div>
+                <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                  <strong style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ run.task }}</strong>
+                  <small style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ run.shortId }}</small>
+                </div>
+                <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ run.scope }}</span>
+                <span style="justify-self:start;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;border:1px solid {{ run.pillBorder }};background:{{ run.pillBg }};color:{{ run.tone }};font:500 11px/1.3 'IBM Plex Sans';white-space:nowrap">
+                  <span style="width:5px;height:5px;border-radius:50%;background:{{ run.tone }}"></span>{{ run.status }}
+                </span>
+                <span style="font:400 11.5px/1 'IBM Plex Mono',monospace;color:var(--txt2);min-width:0;overflow:hidden;white-space:nowrap">{{ run.turns }}</span>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <time style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt2)">{{ run.started }}</time>
+                  <small style="font:400 10px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ run.finished }}</small>
+                </div>
+                <div style="display:flex;gap:6px;justify-content:flex-end">
+                  <button type="button" onClick="{{ run.open }}" style="padding:7px 12px;border-radius:9px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 11.5px/1 'IBM Plex Sans'" style-hover="border-color:var(--accent);color:var(--accent)">Open</button>
+                  <button type="button" disabled="{{ run.terminal }}" style="padding:7px 12px;border-radius:9px;border:1px solid {{ run.cancelBorder }};background:transparent;color:{{ run.cancelFg }};font:500 11.5px/1 'IBM Plex Sans';opacity:{{ run.cancelOpacity }};cursor:{{ run.cancelCursor }}">Cancel</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;position:sticky;top:96px">
+            <div style="display:flex;flex-direction:column;gap:12px;padding:17px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Submit run</span>
+                <strong style="font-size:14px">Dispatch to worker Job</strong>
+              </div>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--txt3)">Task
+                <textarea rows="3" style="resize:vertical;padding:10px 11px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt);font:400 12px/1.5 'IBM Plex Mono',monospace">List the top-level files, then finish with one sentence.</textarea>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--txt3)">Max turns
+                <input value="20" style="padding:9px 11px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt);font:400 12px/1 'IBM Plex Mono',monospace">
+              </label>
+              <div style="display:flex;gap:9px;align-items:flex-start;padding:11px;border-radius:12px;border:1px solid color-mix(in oklab,var(--amber) 32%,transparent);background:color-mix(in oklab,var(--amber) 10%,transparent)">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);margin-top:5px;flex:none"></span>
+                <small style="font-size:11px;line-height:1.5;color:var(--txt2)">CWD is not shown: in <span style="font-family:'IBM Plex Mono',monospace">kubernetes_job</span> mode the server overrides it to the Job workspace.</small>
+              </div>
+              <button type="button" style="padding:11px;border-radius:12px;border:1px solid color-mix(in oklab,var(--accent) 45%,transparent);background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent);font:600 12.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--accent) 28%,transparent)">Submit run</button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:11px;padding:17px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Effective config</span>
+              <sc-for list="{{ configFacts }}" as="fact" hint-placeholder-count="4">
+                <div style="display:flex;justify-content:space-between;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--edge)">
+                  <span style="font-size:11.5px;color:var(--txt3)">{{ fact.label }}</span>
+                  <strong style="font:500 11.5px/1.3 'IBM Plex Mono',monospace;color:var(--txt);text-align:right">{{ fact.value }}</strong>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRun }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:pvRise .3s ease both">
+        <button type="button" onClick="{{ goRuns }}" style="margin:18px 0 12px;padding:7px 12px;border-radius:10px;border:1px solid var(--edge);background:var(--glass);color:var(--txt2);font:500 11.5px/1 'IBM Plex Sans'" style-hover="color:var(--txt);border-color:var(--edge2)">← Run Queue</button>
+
+        <div style="position:relative;overflow:hidden;padding:20px 22px;border:1px solid var(--edge);border-radius:20px;background:var(--glass2);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+          <div style="position:absolute;top:0;left:0;width:30%;height:100%;pointer-events:none;background:linear-gradient(100deg,transparent,var(--specular),transparent);opacity:.35"></div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px">
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+              <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Run workspace · durable controller state</span>
+              <h1 style="margin:0;font:600 24px/1.2 'IBM Plex Sans';letter-spacing:-.02em">{{ activeRun.task }}</h1>
+              <span style="font:400 11.5px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ activeRun.id }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;flex:none">
+              <span style="display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:99px;border:1px solid color-mix(in oklab,var(--green) 34%,transparent);background:color-mix(in oklab,var(--green) 13%,transparent);color:var(--green);font:500 11.5px/1 'IBM Plex Sans'">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--green);color:color-mix(in oklab,var(--green) 55%,transparent);animation:pvPulse 2s ease-out infinite"></span>Running
+              </span>
+              <span style="padding:7px 13px;border-radius:99px;border:1px solid var(--edge);background:var(--glassIn);font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt2)">stream cursor 418</span>
+              <button type="button" style="padding:9px 14px;border-radius:11px;border:1px solid color-mix(in oklab,var(--red) 38%,transparent);background:transparent;color:var(--red);font:500 11.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--red) 14%,transparent)">Cancel run</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--edge)">
+            <sc-for list="{{ runScopeStrip }}" as="f" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">{{ f.label }}</span>
+                <strong style="font:500 12.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt)">{{ f.value }}</strong>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px">
+          <sc-for list="{{ budgetMeters }}" as="m" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:11px;padding:16px 17px;border:1px solid var(--edge);border-radius:17px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">{{ m.label }}</span>
+                <strong style="font:500 13px/1 'IBM Plex Mono',monospace;color:{{ m.color }}">{{ m.used }}</strong>
+              </div>
+              <div style="position:relative;height:8px;border-radius:99px;background:var(--glassIn);border:1px solid var(--edge);overflow:hidden">
+                <div style="position:absolute;inset:0 auto 0 0;width:{{ m.pct }};border-radius:99px;background:linear-gradient(90deg,color-mix(in oklab,{{ m.color }} 55%,transparent),{{ m.color }});box-shadow:0 0 12px -2px {{ m.color }}"></div>
+                <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg,transparent 0 10px,var(--specular) 10px 12px,transparent 12px 22px);opacity:.35"></div>
+              </div>
+              <small style="font-size:11px;color:var(--txt3)">{{ m.note }}</small>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:12px;margin-top:12px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:10px;padding:17px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:4px">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--accent)">Live execution</span>
+                <strong style="font-size:14px">Tool and model stream</strong>
+              </div>
+              <strong style="font:500 20px/1 'IBM Plex Mono',monospace;color:var(--txt2)">{{ eventCount }}</strong>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0;max-height:440px;overflow:auto">
+              <sc-for list="{{ streamEvents }}" as="ev" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:52px 16px minmax(0,1fr) 74px;gap:12px;align-items:start;padding:11px 4px;border-bottom:1px solid var(--edge)">
+                  <span style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:var(--txt3)">{{ ev.seq }}</span>
+                  <span style="margin-top:5px;width:7px;height:7px;border-radius:2px;background:{{ ev.color }};box-shadow:0 0 8px -1px {{ ev.color }}"></span>
+                  <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                    <strong style="font:500 12px/1.4 'IBM Plex Mono',monospace;color:{{ ev.color }}">{{ ev.type }}</strong>
+                    <span style="font-size:11.5px;line-height:1.5;color:var(--txt2);overflow-wrap:anywhere">{{ ev.detail }}</span>
+                  </div>
+                  <time style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:var(--txt3);text-align:right">{{ ev.at }}</time>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-direction:column;gap:10px;padding:17px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Verification reserve</span>
+                  <strong style="font-size:14px">Declared acceptance</strong>
+                </div>
+                <strong style="font:500 15px/1 'IBM Plex Mono',monospace;color:var(--green)">2/3</strong>
+              </div>
+              <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:11px;align-items:center;padding:10px 11px;border-radius:12px;border:1px solid var(--edge);background:var(--glassIn)">
+                  <span style="width:9px;height:9px;border-radius:50%;background:{{ a.color }}"></span>
+                  <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt);overflow-wrap:anywhere">{{ a.command }}</span>
+                  <span style="font:500 10.5px/1 'IBM Plex Sans';color:{{ a.color }}">{{ a.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;padding:17px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Persisted workspace</span>
+                  <strong style="font-size:14px">Changed paths</strong>
+                </div>
+                <strong style="font:500 15px/1 'IBM Plex Mono',monospace;color:var(--txt2)">4</strong>
+              </div>
+              <sc-for list="{{ changedPaths }}" as="p" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:11px;border:1px solid var(--edge);background:var(--glassIn)">
+                  <span style="font:500 9.5px/1 'IBM Plex Mono',monospace;color:{{ p.color }};width:22px">{{ p.badge }}</span>
+                  <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt);overflow-wrap:anywhere">{{ p.path }}</span>
+                </div>
+              </sc-for>
+              <button type="button" style="margin-top:2px;padding:9px;border-radius:11px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 11.5px/1 'IBM Plex Sans'" style-hover="border-color:var(--accent);color:var(--accent)">Review full persisted diff</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isWorkItems }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Operate · delivery intents</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">WorkItems</h1>
+            <p style="margin:0;max-width:62ch;font-size:13px;line-height:1.55;color:var(--txt2)">Durable autonomous delivery intents and the controller boundary each one currently sits at.</p>
+          </div>
+          <button type="button" style="padding:11px 17px;border-radius:12px;border:1px solid color-mix(in oklab,var(--accent) 45%,transparent);background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent);font:600 12.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--accent) 28%,transparent)">New WorkItem</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid var(--edge);border-radius:14px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);">
+          <sc-for list="{{ workItemFilters }}" as="f" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;border:1px solid var(--edge);background:var(--glassIn);font:400 11.5px/1 'IBM Plex Mono',monospace;color:var(--txt2);white-space:nowrap"><span style="color:var(--txt3)">{{ f.label }}</span><span>{{ f.value }}</span><span style="color:var(--txt3);font-size:9px">▾</span></div>
+          </sc-for>
+          <span style="margin-left:auto;font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">12 WorkItems · showing 1–6</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+          <sc-for list="{{ workItems }}" as="wi" hint-placeholder-count="6">
+            <div onClick="{{ wi.open }}" style="position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) 118px 96px 168px 104px 78px;gap:16px;align-items:center;padding:15px 18px;border:1px solid var(--edge);border-radius:17px;background:var(--glass);box-shadow:inset 0 1px 0 var(--specular);cursor:pointer;transition:background .18s,border-color .18s,transform .18s" style-hover="background:var(--glass2);border-color:var(--edge2);transform:translateY(-1px)">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ wi.tone }}"></div>
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <strong style="font-size:14px;letter-spacing:-.01em">{{ wi.title }}</strong>
+                <em style="font-style:normal;font-size:12px;color:var(--txt2);line-height:1.5">{{ wi.reason }}</em>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                  <sc-for list="{{ wi.stages }}" as="st" hint-placeholder-count="6">
+                    <span style="flex:0 0 20px;height:3px;border-radius:99px;background:{{ st.fill }};box-shadow:{{ st.glow }}"></span>
+                  </sc-for>
+                </div>
+                <small style="display:block;font:400 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wi.boundary }}</small>
+              </div>
+              <span style="justify-self:start;padding:5px 11px;border-radius:99px;border:1px solid {{ wi.pillBorder }};background:{{ wi.pillBg }};color:{{ wi.tone }};font:500 11px/1.3 'IBM Plex Sans';white-space:nowrap">{{ wi.status }}</span>
+              <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt2)">{{ wi.env }}</span>
+              <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ wi.repo }}</span>
+              <span style="font-size:11.5px;color:var(--txt3)">{{ wi.attempts }}</span>
+              <time style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3);text-align:right">{{ wi.updated }}</time>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCockpit }}" hint-placeholder-val="{{ true }}">
+      <div style="animation:pvRise .3s ease both">
+        <button type="button" onClick="{{ goWorkItems }}" style="margin:18px 0 12px;padding:7px 12px;border-radius:10px;border:1px solid var(--edge);background:var(--glass);color:var(--txt2);font:500 11.5px/1 'IBM Plex Sans'" style-hover="color:var(--txt);border-color:var(--edge2)">← WorkItems</button>
+
+        <div style="position:relative;overflow:hidden;padding:20px 22px;border:1px solid var(--edge);border-radius:20px;background:var(--glass2);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+          <div style="position:absolute;top:0;left:0;width:28%;height:100%;pointer-events:none;background:linear-gradient(100deg,transparent,var(--specular),transparent);opacity:.3"></div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px">
+            <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+              <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Supervised WorkItem · 019e9987</span>
+              <h1 style="margin:0;font:600 25px/1.2 'IBM Plex Sans';letter-spacing:-.02em">Reduce checkout timeout regression</h1>
+              <p style="margin:0;max-width:70ch;font-size:12.5px;line-height:1.55;color:var(--txt2)">Mitigate elevated timeout rate in the checkout path and restore p99 under 800ms without changing payment semantics.</p>
+            </div>
+            <span style="flex:none;display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:99px;border:1px solid color-mix(in oklab,var(--red) 34%,transparent);background:color-mix(in oklab,var(--red) 13%,transparent);color:var(--red);font:500 11.5px/1 'IBM Plex Sans'">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--red);color:color-mix(in oklab,var(--red) 55%,transparent);animation:pvPulse 2.4s ease-out infinite"></span>Blocked
+            </span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--edge)">
+            <sc-for list="{{ trustGrid }}" as="f" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">{{ f.label }}</span>
+                <strong style="font:500 12.5px/1.4 'IBM Plex Mono',monospace;color:{{ f.color }}">{{ f.value }}</strong>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding:9px 12px;border:1px solid var(--edge);border-radius:16px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);">
+          <div style="display:flex;gap:3px;padding:3px;border-radius:12px;background:var(--glassIn);border:1px solid var(--edge)">
+            <sc-for list="{{ cockpitSections }}" as="s" hint-placeholder-count="4">
+              <button type="button" onClick="{{ s.go }}" style="border:0;border-radius:10px;padding:7px 14px;font:500 12px/1 'IBM Plex Sans';display:flex;align-items:center;gap:7px;color:{{ s.fg }};background:{{ s.bg }};box-shadow:{{ s.shadow }}">
+                {{ s.label }}
+                <sc-if value="{{ s.live }}" hint-placeholder-val="{{ false }}">
+                  <span style="font:500 9px/1 'IBM Plex Mono',monospace;padding:3px 5px;border-radius:5px;background:color-mix(in oklab,var(--green) 22%,transparent);color:var(--green)">LIVE</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Lifecycle rail</span>
+            <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--glassIn);border:1px solid var(--edge)">
+              <sc-for list="{{ railTabs }}" as="r" hint-placeholder-count="3">
+                <button type="button" onClick="{{ r.go }}" style="border:0;border-radius:9px;padding:6px 12px;font:500 11.5px/1 'IBM Plex Mono',monospace;color:{{ r.fg }};background:{{ r.bg }}">{{ r.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative;overflow:hidden;margin-top:12px;padding:22px;border:1px solid var(--edge);border-radius:20px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:18px;margin-bottom:20px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--accent)">Controller lifecycle</span>
+              <strong style="font-size:15px">{{ railTitle }}</strong>
+            </div>
+            <small style="font-size:11.5px;color:var(--txt3);text-align:right;max-width:44ch;line-height:1.5">{{ railNote }}</small>
+          </div>
+
+          <sc-if value="{{ railIsBeads }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 4px 0">
+              <div style="position:relative;height:4px;margin:0 34px 0;border-radius:99px;background:var(--glassIn);border:1px solid var(--edge)">
+                <div style="position:absolute;inset:0 auto 0 0;width:{{ railProgress }};border-radius:99px;background:linear-gradient(90deg,color-mix(in oklab,var(--accent) 40%,transparent),var(--accent));box-shadow:0 0 16px -1px var(--accent)"></div>
+                <div style="position:absolute;inset:0;overflow:hidden;border-radius:99px"><div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg,transparent 0 12px,var(--specular) 12px 14px,transparent 14px 26px);opacity:.4"></div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-top:-12px">
+                <sc-for list="{{ stages }}" as="st" hint-placeholder-count="6">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center">
+                    <div style="position:relative;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:{{ st.nodeBg }};border:2px solid {{ st.nodeBorder }};box-shadow:{{ st.nodeGlow }}">
+                      <span style="width:6px;height:6px;border-radius:50%;background:{{ st.dot }}"></span>
+                      <span style="position:absolute;inset:-4px;border-radius:50%;border:1px solid {{ st.ring }};animation:{{ st.ringAnim }}"></span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <strong style="font-size:12px;color:{{ st.labelColor }}">{{ st.label }}</strong>
+                      <small style="font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt3)">{{ st.meta }}</small>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ railIsLaminae }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:grid;grid-template-columns:132px minmax(0,1fr) 104px;gap:14px;padding:0 4px 4px">
+                <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Stage</span>
+                <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Controller activity · 6h window</span>
+                <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3);text-align:right">Elapsed</span>
+              </div>
+              <sc-for list="{{ stages }}" as="st" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:132px minmax(0,1fr) 104px;gap:14px;align-items:center;padding:11px 12px;border:1px solid var(--edge);border-radius:14px;background:{{ st.laminaBg }};transition:background .18s" style-hover="background:var(--glass2)">
+                  <div style="display:flex;align-items:center;gap:9px;min-width:0">
+                    <span style="width:7px;height:7px;border-radius:50%;background:{{ st.dot }};flex:none"></span>
+                    <strong style="font-size:12.5px;color:{{ st.labelColor }};white-space:nowrap">{{ st.label }}</strong>
+                  </div>
+                  <div style="position:relative;height:26px;border-radius:9px;background:var(--glassIn);border:1px solid var(--edge);overflow:hidden">
+                    <sc-for list="{{ st.spans }}" as="sp" hint-placeholder-count="2">
+                      <div title="{{ sp.title }}" style="position:absolute;top:5px;bottom:5px;left:{{ sp.left }};width:{{ sp.width }};border-radius:6px;background:linear-gradient(180deg,color-mix(in oklab,{{ sp.color }} 85%,transparent),color-mix(in oklab,{{ sp.color }} 45%,transparent));box-shadow:inset 0 1px 0 var(--specular),0 0 12px -4px {{ sp.color }};display:flex;align-items:center;padding-left:6px">
+                        <span style="font:500 9px/1 'IBM Plex Mono',monospace;color:#03181c;white-space:nowrap;overflow:hidden">{{ sp.label }}</span>
+                      </div>
+                    </sc-for>
+                    <div style="position:absolute;top:0;bottom:0;left:{{ railProgress }};width:1px;background:var(--accent);box-shadow:0 0 8px 1px var(--accent)"></div>
+                  </div>
+                  <span style="font:400 11px/1.4 'IBM Plex Mono',monospace;color:var(--txt3);text-align:right">{{ st.meta }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ railIsOrbit }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:center">
+              <div style="position:relative;width:200px;height:200px">
+                <svg viewBox="0 0 160 160" style="width:100%;height:100%;transform:rotate(-90deg)">
+                  <circle cx="80" cy="80" r="64" fill="none" stroke="var(--edge)" stroke-width="10"></circle>
+                  <sc-for list="{{ stages }}" as="st" hint-placeholder-count="6">
+                    <circle cx="80" cy="80" r="64" fill="none" stroke="{{ st.dot }}" stroke-width="10" stroke-linecap="round" stroke-dasharray="{{ st.arcDash }}" stroke-dashoffset="{{ st.arcOffset }}" opacity="{{ st.arcOpacity }}"></circle>
+                  </sc-for>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px">
+                  <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Boundary</span>
+                  <strong style="font:500 16px/1.2 'IBM Plex Sans';color:var(--amber);text-align:center">ChangeSet</strong>
+                  <small style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt3)">3 of 6 stages</small>
+                </div>
+                <div style="position:absolute;inset:-14px;border-radius:50%;border:1px dashed var(--edge);pointer-events:none"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+                <sc-for list="{{ stages }}" as="st" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border:1px solid var(--edge);border-radius:13px;background:{{ st.laminaBg }}">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ st.dot }}"></span>
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                      <strong style="font-size:12.5px;color:{{ st.labelColor }}">{{ st.label }}</strong>
+                      <small style="font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt3)">{{ st.meta }}</small>
+                    </div>
+                    <span style="font:500 10px/1 'IBM Plex Sans';color:{{ st.dot }};white-space:nowrap">{{ st.statusLabel }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px;margin-top:12px;align-items:start">
+          <div style="position:relative;overflow:hidden;display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid color-mix(in oklab,var(--amber) 30%,var(--edge));border-radius:19px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+            <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(110% 90% at 0% 0%,color-mix(in oklab,var(--amber) 12%,transparent),transparent 60%)"></div>
+            <div style="display:flex;align-items:flex-start;gap:13px">
+              <div style="width:36px;height:36px;flex:none;border-radius:12px;display:grid;place-items:center;border:1px solid color-mix(in oklab,var(--amber) 38%,transparent);background:color-mix(in oklab,var(--amber) 14%,transparent);color:var(--amber);font-size:16px">!</div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--amber)">Next required step · ChangeSet boundary</span>
+                <h2 style="margin:0;font:600 18px/1.25 'IBM Plex Sans'">Capture Change Set</h2>
+                <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--txt2);text-wrap:pretty">The controller will record the persisted workspace diff as an immutable ChangeSet. No Git push, Tekton pipeline, or Argo sync happens at this boundary.</p>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;padding:13px;border-radius:14px;border:1px solid var(--edge);background:var(--glassIn)">
+              <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Why this cannot advance</span>
+              <sc-for list="{{ blockers }}" as="b" hint-placeholder-count="2">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--edge)">
+                  <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                    <strong style="font:500 11.5px/1.3 'IBM Plex Mono',monospace;color:var(--red)">{{ b.code }}</strong>
+                    <span style="font-size:11.5px;line-height:1.5;color:var(--txt2)">{{ b.summary }}</span>
+                  </div>
+                  <button type="button" style="padding:7px 11px;border-radius:9px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 11px/1 'IBM Plex Sans';white-space:nowrap" style-hover="border-color:var(--accent);color:var(--accent)">{{ b.action }}</button>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:9px;flex-wrap:wrap">
+              <button type="button" disabled="{{ true }}" title="Blocked: acceptance evidence is missing" style="padding:11px 17px;border-radius:12px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt3);font:600 12.5px/1 'IBM Plex Sans';cursor:not-allowed">Capture Change Set</button>
+              <button type="button" style="padding:11px 17px;border-radius:12px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 12.5px/1 'IBM Plex Sans'" style-hover="border-color:var(--accent);color:var(--accent)">Advance internal steps</button>
+              <button type="button" style="padding:11px 17px;border-radius:12px;border:1px solid var(--edge);background:transparent;color:var(--txt2);font:500 12.5px/1 'IBM Plex Sans'" style-hover="color:var(--txt)">Refresh preview</button>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-direction:column;gap:10px;padding:18px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Active wait</span>
+                <strong style="font-size:14px">Tekton pipeline observation</strong>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="position:relative;width:52px;height:52px;flex:none">
+                  <svg viewBox="0 0 44 44" style="width:100%;height:100%;transform:rotate(-90deg)">
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="var(--edge)" stroke-width="4"></circle>
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="var(--blue)" stroke-width="4" stroke-linecap="round" stroke-dasharray="62 51"></circle>
+                  </svg>
+                  <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px/1 'IBM Plex Mono',monospace;color:var(--blue)">4/7</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:12px;color:var(--txt2)">Next observation <strong style="font-family:'IBM Plex Mono',monospace;color:var(--txt)">in 48s</strong></span>
+                  <span style="font-size:12px;color:var(--txt2)">Deadline <strong style="font-family:'IBM Plex Mono',monospace;color:var(--txt)">14:52:10</strong> · 21m remaining</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px;padding:18px;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+              <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)">Execution envelope</span>
+              <sc-for list="{{ envelope }}" as="f" hint-placeholder-count="6">
+                <div style="display:flex;justify-content:space-between;gap:14px;padding-bottom:8px;border-bottom:1px solid var(--edge)">
+                  <span style="font-size:11.5px;color:var(--txt3)">{{ f.label }}</span>
+                  <strong style="font:500 11.5px/1.4 'IBM Plex Mono',monospace;color:{{ f.color }};text-align:right">{{ f.value }}</strong>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGates }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Govern · lifecycle boundaries</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Approval Gates</h1>
+            <p style="margin:0;max-width:64ch;font-size:13px;line-height:1.55;color:var(--txt2)">Governance and release-state review — gates do not authorize tool execution by themselves. Grouped under the remediation plan that owns them, because sixteen flat cards of four repeating kinds hides structure the control plane already has.</p>
+          </div>
+          <div style="display:flex;gap:6px">
+            <sc-for list="{{ gateFilters }}" as="f" hint-placeholder-count="2">
+              <button type="button" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:11px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font:500 12px/1 'IBM Plex Sans';white-space:nowrap">{{ f.label }}<b style="font:600 10.5px/1 'IBM Plex Mono',monospace;padding:3px 6px;border-radius:5px;background:var(--glassIn)">{{ f.count }}</b></button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:end;margin-bottom:12px;padding:14px 17px;border:1px solid color-mix(in oklab,var(--accent) 26%,var(--edge));border-radius:16px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular)">
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;text-transform:uppercase;color:var(--accent)">Batch decision</span>
+              <strong style="font-size:12.5px">3 actionable gates selected</strong>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--txt3)">Reason · written to every selected gate's audit record
+              <input value="Evidence reviewed together for the checkout mitigation" style="padding:8px 11px;border-radius:10px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt);font:400 11.5px/1 'IBM Plex Mono',monospace">
+            </label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--txt3);flex:none">Decision
+            <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--glassIn);border:1px solid var(--edge)">
+              <sc-for list="{{ batchDecisions }}" as="d" hint-placeholder-count="3">
+                <button type="button" onClick="{{ d.go }}" style="flex:none;border:0;border-radius:9px;padding:7px 13px;font:500 11.5px/1 'IBM Plex Sans';white-space:nowrap;color:{{ d.fg }};background:{{ d.bg }}">{{ d.label }}</button>
+              </sc-for>
+            </div>
+          </label>
+          <button type="button" style="flex:none;padding:11px 16px;border-radius:11px;border:1px solid color-mix(in oklab,var(--accent) 45%,transparent);background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent);font:600 12px/1 'IBM Plex Sans';white-space:nowrap" style-hover="background:color-mix(in oklab,var(--accent) 28%,transparent)">Apply to selected</button>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ gatePlans }}" as="plan" hint-placeholder-count="3">
+            <div style="overflow:hidden;border:1px solid var(--edge);border-radius:19px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:16px 19px;border-bottom:1px solid var(--edge);background:var(--glassIn)">
+                <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <span style="font:500 10.5px/1 'IBM Plex Mono',monospace;color:var(--accent)">{{ plan.id }}</span>
+                    <span style="color:var(--txt3);font-size:11px">owns</span>
+                    <span style="font:500 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt2);padding:3px 7px;border-radius:6px;border:1px solid var(--edge)">{{ plan.incident }}</span>
+                  </div>
+                  <strong style="font-size:15px;letter-spacing:-.01em">{{ plan.title }}</strong>
+                  <small style="font-size:11.5px;color:var(--txt3)">{{ plan.summary }}</small>
+                </div>
+                <div style="display:flex;align-items:center;gap:9px">
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+                    <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Gate progress</span>
+                    <strong style="font:500 13px/1 'IBM Plex Mono',monospace;color:{{ plan.color }}">{{ plan.progress }}</strong>
+                  </div>
+                  <div style="display:flex;gap:3px">
+                    <sc-for list="{{ plan.pips }}" as="p" hint-placeholder-count="4">
+                      <span style="width:16px;height:5px;border-radius:99px;background:{{ p.fill }}"></span>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+              <sc-for list="{{ plan.gates }}" as="g" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:52px minmax(0,1fr) 128px minmax(0,190px) auto;gap:16px;align-items:center;padding:14px 19px;border-bottom:1px solid var(--edge);background:{{ g.rowBg }}">
+                  <span style="font:500 10.5px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ g.order }}</span>
+                  <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <strong style="font:500 13px/1.3 'IBM Plex Sans'">{{ g.kind }}</strong>
+                      <span style="padding:2px 7px;border-radius:6px;border:1px solid {{ g.riskBorder }};background:{{ g.riskBg }};color:{{ g.riskFg }};font:600 9.5px/1.4 'IBM Plex Mono',monospace">risk {{ g.risk }}</span>
+                    </div>
+                    <small style="font:400 11px/1.5 'IBM Plex Mono',monospace;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ g.scope }}</small>
+                  </div>
+                  <span style="justify-self:start;padding:5px 11px;border-radius:99px;border:1px solid {{ g.pillBorder }};background:{{ g.pillBg }};color:{{ g.tone }};font:500 11px/1.3 'IBM Plex Sans';white-space:nowrap">{{ g.status }}</span>
+                  <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                    <small style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:var(--txt3)">{{ g.meta }}</small>
+                    <small style="font-size:11px;color:{{ g.reasonColor }};line-height:1.45;overflow-wrap:anywhere">{{ g.reason }}</small>
+                  </div>
+                  <div style="display:flex;gap:7px;justify-content:flex-end">
+                    <button type="button" disabled="{{ g.locked }}" title="{{ g.actionTitle }}" style="padding:7px 12px;border-radius:9px;border:1px solid {{ g.satisfyBorder }};background:{{ g.satisfyBg }};color:{{ g.satisfyFg }};font:500 11.5px/1 'IBM Plex Sans';white-space:nowrap;opacity:{{ g.opacity }};cursor:{{ g.cursor }}">Satisfy</button>
+                    <button type="button" disabled="{{ g.locked }}" title="{{ g.actionTitle }}" style="padding:7px 12px;border-radius:9px;border:1px solid {{ g.waiveBorder }};background:transparent;color:{{ g.waiveFg }};font:500 11.5px/1 'IBM Plex Sans';white-space:nowrap;opacity:{{ g.opacity }};cursor:{{ g.cursor }}">Waive</button>
+                    <button type="button" disabled="{{ g.locked }}" title="{{ g.actionTitle }}" style="padding:7px 12px;border-radius:9px;border:1px solid {{ g.rejectBorder }};background:transparent;color:{{ g.rejectFg }};font:500 11.5px/1 'IBM Plex Sans';white-space:nowrap;opacity:{{ g.opacity }};cursor:{{ g.cursor }}">Reject</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isIncidents }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Govern · incident response</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Incidents</h1>
+            <p style="margin:0;max-width:64ch;font-size:13px;line-height:1.55;color:var(--txt2)">Read-only incident candidates derived from Tekton and Release observability evidence. The linked remediation plan owns the lifecycle gates.</p>
+          </div>
+          <div style="display:flex;gap:6px;flex:none">
+            <sc-for list="{{ incidentFilters }}" as="f" hint-placeholder-count="3">
+              <button type="button" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:11px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font:500 12px/1 'IBM Plex Sans';white-space:nowrap">{{ f.label }}<b style="font:600 10.5px/1 'IBM Plex Mono',monospace;padding:3px 6px;border-radius:5px;background:var(--glassIn)">{{ f.count }}</b></button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ incidents }}" as="inc" hint-placeholder-count="3">
+            <div style="overflow:hidden;border:1px solid var(--edge);border-radius:19px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;padding:17px 20px">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ inc.tone }}"></div>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <span style="font:500 10.5px/1 'IBM Plex Mono',monospace;color:var(--accent)">{{ inc.id }}</span>
+                    <span style="padding:3px 9px;border-radius:99px;border:1px solid {{ inc.sevBorder }};background:{{ inc.sevBg }};color:{{ inc.tone }};font:600 10px/1.4 'IBM Plex Mono',monospace">{{ inc.severity }}</span>
+                    <span style="padding:3px 9px;border-radius:99px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt2);font:400 10.5px/1.4 'IBM Plex Mono',monospace">{{ inc.status }}</span>
+                  </div>
+                  <strong style="font-size:15.5px;letter-spacing:-.01em">{{ inc.title }}</strong>
+                  <span style="font-size:12.5px;line-height:1.55;color:var(--txt2);text-wrap:pretty">{{ inc.summary }}</span>
+                  <small style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:var(--txt3)">created {{ inc.created }} · derived from observation {{ inc.observation }}</small>
+                  <pre style="margin:4px 0 0;padding:11px 13px;border-radius:12px;border:1px solid var(--edge);background:var(--glassIn);font:400 11px/1.65 'IBM Plex Mono',monospace;color:var(--txt2);white-space:pre-wrap;overflow-wrap:anywhere">{{ inc.reasons }}</pre>
+                </div>
+                <div style="display:flex;align-items:center;gap:16px;flex:none">
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                    <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Severity</span>
+                    <strong style="font-size:13px;color:{{ inc.tone }}">{{ inc.severityLabel }}</strong>
+                  </div>
+                  <button type="button" onClick="{{ inc.goGates }}" style="padding:9px 14px;border-radius:11px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 11.5px/1 'IBM Plex Sans';white-space:nowrap" style-hover="border-color:var(--accent);color:var(--accent)">Remediation plan</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:14px 20px;border-top:1px solid var(--edge);background:var(--glassIn)">
+                <sc-for list="{{ inc.facts }}" as="fact" hint-placeholder-count="4">
+                  <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                    <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">{{ fact.label }}</span>
+                    <strong style="font:500 11.5px/1.4 'IBM Plex Mono',monospace;color:{{ fact.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ fact.value }}</strong>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isToolApprovals }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Govern · execution trust</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Tool Approvals</h1>
+            <p style="margin:0;max-width:66ch;font-size:13px;line-height:1.55;color:var(--txt2)">Execution decisions for proposed tool actions. Each authorizes or denies one paused run action — it is not a release gate and does not satisfy governance state.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:12px;border:1px solid color-mix(in oklab,var(--amber) 34%,transparent);background:color-mix(in oklab,var(--amber) 12%,transparent);flex:none">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);color:color-mix(in oklab,var(--amber) 55%,transparent);animation:pvPulse 2.2s ease-out infinite"></span>
+            <span style="font:500 11.5px/1 'IBM Plex Mono',monospace;color:var(--amber);white-space:nowrap">2 runs paused</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ toolApprovals }}" as="ta" hint-placeholder-count="2">
+            <div style="position:relative;overflow:hidden;border:1px solid {{ ta.cardBorder }};border-radius:19px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+              <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(110% 90% at 0% 0%,{{ ta.glow }},transparent 58%)"></div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:22px;padding:19px 20px">
+                <div style="display:flex;flex-direction:column;gap:11px;min-width:0">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <span style="font:500 10.5px/1 'IBM Plex Mono',monospace;color:var(--accent)">{{ ta.id }}</span>
+                    <span style="padding:3px 9px;border-radius:99px;border:1px solid var(--edge);background:var(--glassIn);color:var(--txt2);font:400 10.5px/1.4 'IBM Plex Mono',monospace">{{ ta.kind }}</span>
+                    <span style="padding:3px 9px;border-radius:99px;border:1px solid {{ ta.riskBorder }};background:{{ ta.riskBg }};color:{{ ta.tone }};font:600 10px/1.4 'IBM Plex Mono',monospace">risk {{ ta.risk }}</span>
+                    <small style="font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt3)">requested {{ ta.age }}</small>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:5px">
+                    <strong style="font-size:15.5px;letter-spacing:-.01em">{{ ta.title }}</strong>
+                    <span style="font-size:12.5px;line-height:1.55;color:var(--txt2);text-wrap:pretty">{{ ta.summary }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:7px;padding:13px;border-radius:14px;border:1px solid var(--edge);background:var(--glassIn)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                      <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Preview</span>
+                      <small style="min-width:0;font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ta.previewPath }}</small>
+                    </div>
+                    <pre style="margin:0;font:400 11.5px/1.7 'IBM Plex Mono',monospace;color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere">{{ ta.call }}</pre>
+                  </div>
+                  <div style="display:flex;gap:9px;flex-wrap:wrap">
+                    <button type="button" style="padding:11px 17px;border-radius:12px;border:1px solid color-mix(in oklab,var(--green) 42%,transparent);background:color-mix(in oklab,var(--green) 14%,transparent);color:var(--green);font:600 12.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--green) 24%,transparent)">Approve</button>
+                    <button type="button" style="padding:11px 17px;border-radius:12px;border:1px solid color-mix(in oklab,var(--red) 38%,transparent);background:transparent;color:var(--red);font:500 12.5px/1 'IBM Plex Sans'" style-hover="background:color-mix(in oklab,var(--red) 14%,transparent)">Deny</button>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:9px;min-width:0">
+                  <span style="font:500 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">Approval record</span>
+                  <sc-for list="{{ ta.facts }}" as="fact" hint-placeholder-count="5">
+                    <div style="display:flex;justify-content:space-between;gap:14px;padding-bottom:8px;border-bottom:1px solid var(--edge)">
+                      <span style="flex:none;font-size:11.5px;color:var(--txt3)">{{ fact.label }}</span>
+                      <strong style="min-width:0;font:500 11.5px/1.4 'IBM Plex Mono',monospace;color:{{ fact.color }};text-align:right;overflow-wrap:anywhere">{{ fact.value }}</strong>
+                    </div>
+                  </sc-for>
+                  <button type="button" onClick="{{ goRun }}" style="margin-top:2px;padding:9px;border-radius:11px;border:1px solid var(--edge2);background:var(--glass2);color:var(--txt);font:500 11.5px/1 'IBM Plex Sans'" style-hover="border-color:var(--accent);color:var(--accent)">Open paused run</button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:pvRise .3s ease both">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:22px 4px 18px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:500 10px/1 'IBM Plex Sans';letter-spacing:.2em;text-transform:uppercase;color:var(--accent)">Investigate · durable event log</span>
+            <h1 style="margin:0;font:600 27px/1.1 'IBM Plex Sans';letter-spacing:-.02em">Audit</h1>
+            <p style="margin:0;max-width:64ch;font-size:13px;line-height:1.55;color:var(--txt2)">Server-side filtering on kind, resource, actor, and run id. Payloads expand in place — never truncated mid-word.</p>
+          </div>
+          <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">2,481 events · showing 1–7</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid var(--edge);border-radius:14px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%)">
+          <sc-for list="{{ auditFilters }}" as="f" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;border:1px solid {{ f.border }};background:{{ f.bg }};font:400 11.5px/1 'IBM Plex Mono',monospace;color:var(--txt2);white-space:nowrap"><span style="color:var(--txt3)">{{ f.label }}</span><span style="color:{{ f.fg }}">{{ f.value }}</span><span style="color:var(--txt3);font-size:9px">▾</span></div>
+          </sc-for>
+          <span style="margin-left:auto;font:400 11px/1 'IBM Plex Mono',monospace;color:var(--accent)">#/audit/idempotency</span>
+        </div>
+
+        <div style="margin-top:12px;overflow:hidden;border:1px solid var(--edge);border-radius:18px;background:var(--glass);backdrop-filter:blur(22px) saturate(175%);-webkit-backdrop-filter:blur(22px) saturate(175%);box-shadow:inset 0 1px 0 var(--specular),var(--drop)">
+          <div style="display:grid;grid-template-columns:88px 190px 108px minmax(0,1fr) 116px 24px;gap:16px;padding:12px 19px;border-bottom:1px solid var(--edge);background:var(--glassIn)">
+            <sc-for list="{{ auditCols }}" as="c" hint-placeholder-count="6">
+              <span style="font:500 9px/1 'IBM Plex Sans';letter-spacing:.15em;text-transform:uppercase;color:var(--txt3)">{{ c }}</span>
+            </sc-for>
+          </div>
+          <sc-for list="{{ auditRows }}" as="r" hint-placeholder-count="7">
+            <div style="border-bottom:1px solid var(--edge)">
+              <div onClick="{{ r.toggle }}" style="display:grid;grid-template-columns:88px 190px 108px minmax(0,1fr) 116px 24px;gap:16px;align-items:center;padding:13px 19px;cursor:pointer;transition:background .16s" style-hover="background:var(--glassIn)">
+                <time style="font:400 11px/1 'IBM Plex Mono',monospace;color:var(--txt3)">{{ r.at }}</time>
+                <span style="font:500 11.5px/1.4 'IBM Plex Mono',monospace;color:{{ r.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.kind }}</span>
+                <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--txt2)">{{ r.actor }}</span>
+                <span style="font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.resource }}</span>
+                <span style="font:400 11px/1.4 'IBM Plex Mono',monospace;color:var(--txt3)">{{ r.run }}</span>
+                <span style="font-size:10px;color:var(--txt3);justify-self:end">{{ r.chevron }}</span>
+              </div>
+              <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                <pre style="margin:0;padding:14px 19px 18px;background:var(--glassIn);font:400 11.5px/1.65 'IBM Plex Mono',monospace;color:var(--txt2);white-space:pre-wrap;overflow-wrap:anywhere">{{ r.payload }}</pre>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;\&quot;dark\&quot; | \&quot;light\&quot;&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#58b0ff&quot;,&quot;#3ee0e8&quot;,&quot;#7ee787&quot;,&quot;#b394ff&quot;],&quot;default&quot;:&quot;#58b0ff&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;railVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;laminae&quot;,&quot;beads&quot;,&quot;orbit&quot;],&quot;default&quot;:&quot;laminae&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Lifecycle rail&quot;}}">
+const T = {
+  ok: "var(--green)", warn: "var(--amber)", bad: "var(--red)", info: "var(--blue)",
+  idle: "var(--txt3)", accent: "var(--accent)", cool: "var(--purple)"
+};
+const mix = (c, p) => `color-mix(in oklab,${c} ${p}%,transparent)`;
+
+const THREADS = [
+  { kind: "work_item", signalCount: 4, title: "Reduce checkout timeout regression", detail: "Blocked at the ChangeSet boundary — acceptance evidence incomplete after attempt 2 of 3.", signals: ["acceptance_incomplete", "attempt 2/3", "gate: staging_validation"], origin: "smoke", status: "Blocked", tone: T.bad, age: "41m ago", action: "Open cockpit", view: "cockpit" },
+  { kind: "approval_gate", signalCount: 1, title: "Staging validation · finance-app release", detail: "Lifecycle gate order 3 of 4 on remediation plan rp-0f21; requested by controller 34m ago.", signals: ["kind: staging_validation", "plan: rp-0f21"], origin: "operator", status: "Pending", tone: T.warn, age: "34m ago", action: "Review gate", view: "triage" },
+  { kind: "work_item", signalCount: 3, title: "Upgrade OpenTelemetry instrumentation", detail: "Waiting on Tekton pipeline observation, check 4 of 7; deadline in 21m.", signals: ["wait: tekton_pipeline", "checks 4/7"], origin: "smoke", status: "Verifying", tone: T.info, age: "1h 12m ago", action: "Open cockpit", view: "cockpit" },
+  { kind: "tool_approval", signalCount: 1, title: "Write outside declared workspace scope", detail: "Model requested fs.write to /etc/pharness/policy.toml — outside the pinned workspace root.", signals: ["tool: fs.write", "risk: escalation"], origin: "smoke", status: "Pending", tone: T.warn, age: "1h 40m ago", action: "Decide", view: "triage" },
+  { kind: "work_item", signalCount: 5, title: "Investigate billing latency spike", detail: "Replan required — two terminal attempts classified model_stalled with no persisted diff.", signals: ["classification: model_stalled", "attempts 2/3", "no_change_set"], origin: "operator", status: "Blocked", tone: T.bad, age: "3h 04m ago", action: "Open cockpit", view: "cockpit" },
+  { kind: "approval_gate", signalCount: 2, title: "Production promotion · api-gateway", detail: "Gate order 4 of 4; incident inc-0093 remains open on the owning remediation plan.", signals: ["production_impacting", "incident: inc-0093"], origin: "operator", status: "Pending", tone: T.warn, age: "5h 22m ago", action: "Review gate", view: "triage" },
+];
+
+const RUNS = [
+  { task: "Harden checkout retry with idempotency keys", shortId: "019e9987…4382", scope: "coding-alpha / storefront / main", status: "Running", tone: T.green || T.ok, turns: "18 turns", started: "14:02:11", finished: "active", terminal: false },
+  { task: "Regenerate OpenTelemetry span attributes", shortId: "019e9a12…b71c", scope: "coding-alpha / obs-lib / main", status: "Approval required", tone: T.warn, turns: "7 turns", started: "13:47:52", finished: "paused 13:51:04", terminal: false },
+  { task: "List the top-level files, then finish with one sentence.", shortId: "019e98b4…0d29", scope: "coding-alpha / pharness / main", status: "Completed", tone: T.ok, turns: "3 turns", started: "13:20:08", finished: "finished 13:20:41", terminal: true },
+  { task: "Capture baseline for billing latency spike", shortId: "019e9871…ff03", scope: "coding-alpha / billing-svc / main", status: "Failed", tone: T.bad, turns: "22 turns", started: "12:58:33", finished: "finished 13:09:12", terminal: true },
+  { task: "Prepare rollback intent for finance-app", shortId: "019e9840…7a55", scope: "coding-alpha / finance-app / release", status: "Cancelled", tone: T.idle, turns: "1 turn", started: "12:31:19", finished: "finished 12:31:44", terminal: true },
+  { task: "Extend turn budget for retry hardening", shortId: "019e97f2…c410", scope: "coding-alpha / storefront / main", status: "Budget extension required", tone: T.cool, turns: "48 turns", started: "11:52:07", finished: "held 12:14:38", terminal: false },
+];
+
+const WORK_ITEMS = [
+  { title: "Reduce checkout timeout regression", reason: "Blocked · acceptance evidence incomplete at ChangeSet boundary", status: "Blocked", tone: T.bad, env: "staging", repo: "acme/storefront @ main", attempts: "1 attempt left", updated: "41m ago", boundary: "boundary: capture_change_set", filled: 3, view: "cockpit" },
+  { title: "Upgrade OpenTelemetry instrumentation", reason: "Verifying · Tekton pipeline observation, check 4 of 7", status: "Verifying", tone: T.info, env: "staging", repo: "acme/obs-lib @ main", attempts: "2 attempts left", updated: "1h 12m ago", boundary: "boundary: observe_delivery", filled: 5, view: "cockpit" },
+  { title: "Investigate billing latency spike", reason: "Blocked · two terminal attempts classified model_stalled", status: "Blocked", tone: T.bad, env: "staging", repo: "acme/billing-svc @ main", attempts: "1 attempt left", updated: "3h 04m ago", boundary: "boundary: declare_work_plan", filled: 2, view: "cockpit" },
+  { title: "Add retry logic to partner webhook handler", reason: "Executing · isolated coding attempt in progress", status: "Executing", tone: T.ok, env: "dev", repo: "acme/partner-api @ main", attempts: "3 attempts left", updated: "18m ago", boundary: "boundary: execute_attempt", filled: 3, view: "cockpit" },
+  { title: "Release candidate hardening for v3.4.1", reason: "Planning · WorkPlan declared, awaiting change capture", status: "Planning", tone: T.cool, env: "staging", repo: "acme/api-gateway @ release", attempts: "3 attempts left", updated: "2h 47m ago", boundary: "boundary: capture_change_set", filled: 2, view: "cockpit" },
+  { title: "Rotate egress-broker credentials", reason: "Completed · delivery evidence reconciled", status: "Completed", tone: T.ok, env: "prod", repo: "acme/infra-live @ main", attempts: "3 attempts left", updated: "yesterday", boundary: "boundary: terminal", filled: 6, view: "cockpit" },
+];
+
+const STAGE_DEFS = [
+  { label: "Source", meta: "commit pinned", state: "done", spans: [[2, 9, "resolve"]] },
+  { label: "Plan", meta: "WorkPlan v2", state: "done", spans: [[13, 14, "declare"], [30, 8, "revise"]] },
+  { label: "ChangeSet", meta: "current boundary", state: "current", spans: [[44, 18, "capture"]] },
+  { label: "Delivery", meta: "not started", state: "todo", spans: [] },
+  { label: "Verify", meta: "1 gate pending", state: "todo", spans: [] },
+  { label: "Terminal", meta: "—", state: "todo", spans: [] },
+];
+
+const GATE_PLANS = [
+  { id: "rp-0f21", incident: "inc-0093", title: "Checkout timeout mitigation", summary: "Four lifecycle gates · storefront · staging → production",
+    gates: [
+      { kind: "design_review", risk: "medium", scope: "change_set/cs-0311", status: "Satisfied", by: "lucas", at: "11:04:22", actionable: true, reason: "Reviewed against the idempotency ADR; no payment semantics change." },
+      { kind: "security_review", risk: "medium", scope: "change_set/cs-0311", status: "Waived", by: "lucas", at: "11:41:08", actionable: true, reason: "No new egress destinations and no secret material touched; waived with the standing exemption." },
+      { kind: "staging_validation", risk: "medium", scope: "pipeline_intent/pi-0142", status: "Pending", by: "", at: "34m ago", actionable: true, reason: "" },
+      { kind: "production_promotion", risk: "high", scope: "pipeline_intent/pi-0143", status: "Pending", by: "", at: "34m ago", actionable: false, blocker: "This gate becomes actionable only when its declared lifecycle boundary is reached — staging_validation is still pending." },
+    ] },
+  { id: "rp-0e88", incident: "inc-0091", title: "Billing latency remediation", summary: "Four lifecycle gates · billing-svc · blocked on replan",
+    gates: [
+      { kind: "design_review", risk: "low", scope: "change_set/cs-0298", status: "Satisfied", by: "lucas", at: "09:12:40", actionable: true, reason: "Index change is additive and reversible." },
+      { kind: "security_review", risk: "high", scope: "change_set/cs-0298", status: "Rejected", by: "lucas", at: "09:58:17", actionable: true, reason: "Proposed change reads the PII column directly; requires a scoped view first." },
+      { kind: "staging_validation", risk: "medium", scope: "pipeline_intent/pi-0139", status: "Pending", by: "", at: "3h 04m ago", actionable: false, blocker: "Upstream security_review was rejected, so this gate is not at its lifecycle boundary." },
+      { kind: "production_promotion", risk: "high", scope: "pipeline_intent/pi-0140", status: "Pending", by: "", at: "3h 04m ago", actionable: false, blocker: "This gate becomes actionable only when its declared lifecycle boundary is reached." },
+    ] },
+  { id: "rp-0d54", incident: "inc-0087", title: "OpenTelemetry instrumentation upgrade", summary: "Four lifecycle gates · obs-lib · awaiting pipeline evidence",
+    gates: [
+      { kind: "design_review", risk: "low", scope: "change_set/cs-0274", status: "Satisfied", by: "lucas", at: "yesterday 16:20", actionable: true, reason: "Attribute names follow the semantic conventions pin." },
+      { kind: "security_review", risk: "low", scope: "change_set/cs-0274", status: "Satisfied", by: "lucas", at: "yesterday 16:44", actionable: true, reason: "Telemetry payloads carry no request bodies." },
+      { kind: "staging_validation", risk: "medium", scope: "pipeline_intent/pi-0131", status: "Pending", by: "", at: "1h 12m ago", actionable: true, reason: "" },
+      { kind: "production_promotion", risk: "high", scope: "pipeline_intent/pi-0132", status: "Pending", by: "", at: "1h 12m ago", actionable: false, blocker: "This gate becomes actionable only when its declared lifecycle boundary is reached." },
+    ] },
+];
+
+const AUDIT = [
+  { at: "14:21:58", kind: "run.tool_result", actor: "worker", resource: "run/019e9987", run: "019e9987", color: "var(--green)",
+    payload: '{\n  "tool": "shell.exec",\n  "command": "cargo test -p pharness-store",\n  "exit_code": 0,\n  "duration_ms": 46021,\n  "run_scope": { "namespace": "coding-alpha", "repo": "acme/storefront", "branch": "main" }\n}' },
+  { at: "14:19:51", kind: "approval.auto_granted", actor: "policy", resource: "tool_approval/ta-4471", run: "019e9987", color: "var(--blue)",
+    payload: '{\n  "tool": "fs.write",\n  "path": "src/checkout/retry.rs",\n  "rule": "workspace_root_write",\n  "production_impacting": false\n}' },
+  { at: "13:58:02", kind: "work_item.attempt_finished", actor: "controller", resource: "work_item/019e9987", run: "019e9871", color: "var(--amber)",
+    payload: '{\n  "outcome": { "status": "failed", "turns": 22 },\n  "classification": { "code": "acceptance_incomplete", "recommended_action": "inspect_and_replan" }\n}' },
+  { at: "11:41:08", kind: "approval_gate.decided", actor: "lucas", resource: "approval_gate/ag-0212", run: "—", color: "var(--green)",
+    payload: '{\n  "gate_kind": "security_review",\n  "decision": "approve",\n  "decided_by": "lucas",\n  "reason": "No new egress destinations, no secret material touched.",\n  "remediation_plan_id": "rp-0f21"\n}' },
+  { at: "11:04:22", kind: "approval_gate.decided", actor: "lucas", resource: "approval_gate/ag-0211", run: "—", color: "var(--green)",
+    payload: '{\n  "gate_kind": "design_review",\n  "decision": "approve",\n  "decided_by": "lucas",\n  "reason": "Reviewed against the idempotency ADR; no payment semantics change."\n}' },
+  { at: "09:58:17", kind: "approval_gate.decided", actor: "lucas", resource: "approval_gate/ag-0208", run: "—", color: "var(--red)",
+    payload: '{\n  "gate_kind": "security_review",\n  "decision": "deny",\n  "decided_by": "lucas",\n  "reason": "Proposed change reads the PII column directly; requires a scoped view first."\n}' },
+  { at: "09:12:40", kind: "remediation_plan.created", actor: "controller", resource: "remediation_plan/rp-0e88", run: "—", color: "var(--purple)",
+    payload: '{\n  "incident_id": "inc-0091",\n  "gate_count": 4,\n  "source": "observation/obs-1177"\n}' },
+];
+
+const INCIDENTS = [
+  { id: "inc-0093", severity: "critical", status: "candidate", title: "Elevated checkout timeout rate", tone: T.bad,
+    summary: "Tekton and Release observability evidence show p99 on the checkout path above 800ms across three consecutive pipeline runs.",
+    created: "10:41:07", observation: "obs-1183", run: "019e9987",
+    reasons: '{\n  "reasons": [\n    "pipeline_run_degraded: checkout-e2e failed 3 of 3 attempts",\n    "release_slo_breach: p99 latency 812ms over 800ms budget"\n  ]\n}',
+    facts: [
+      { label: "Remediation plan", value: "rp-0f21", color: "var(--accent)" },
+      { label: "Observation", value: "obs-1183", color: "var(--accent)" },
+      { label: "Run", value: "019e9987", color: "var(--accent)" },
+      { label: "Created", value: "10:41:07", color: "var(--txt)" },
+    ] },
+  { id: "inc-0091", severity: "high", status: "candidate", title: "Billing query latency regression", tone: T.warn,
+    summary: "Release observability attached a latency regression on billing reads after the index change landed in staging.",
+    created: "08:52:44", observation: "obs-1177", run: "019e9871",
+    reasons: '{\n  "reasons": [\n    "release_slo_breach: billing read p95 340ms over 200ms budget"\n  ]\n}',
+    facts: [
+      { label: "Remediation plan", value: "rp-0e88", color: "var(--accent)" },
+      { label: "Observation", value: "obs-1177", color: "var(--accent)" },
+      { label: "Run", value: "019e9871", color: "var(--accent)" },
+      { label: "Created", value: "08:52:44", color: "var(--txt)" },
+    ] },
+  { id: "inc-0087", severity: "low", status: "accepted", title: "Missing spans on partner webhook path", tone: T.info,
+    summary: "Tekton evidence shows the webhook path emitting no spans after the instrumentation pin moved.",
+    created: "yesterday 15:58", observation: "obs-1164", run: "",
+    reasons: '{\n  "reasons": [\n    "pipeline_run_evidence: 0 spans recorded for partner-webhook stage"\n  ]\n}',
+    facts: [
+      { label: "Remediation plan", value: "rp-0d54", color: "var(--accent)" },
+      { label: "Observation", value: "obs-1164", color: "var(--accent)" },
+      { label: "Run", value: "not linked", color: "var(--txt3)" },
+      { label: "Created", value: "yesterday 15:58", color: "var(--txt)" },
+    ] },
+];
+
+const TOOL_APPROVALS = [
+  { id: "ta-4482", kind: "fs_write", risk: "high", tone: T.bad, age: "1h 40m ago", status: "pending",
+    title: "Write /etc/pharness/policy.toml",
+    summary: "Paused run action: write outside the pinned workspace root, so no policy rule can grant it without review.",
+    previewPath: "/etc/pharness/policy.toml",
+    call: '@@ -12,6 +12,9 @@\n   [approvals]\n   require_human = true\n+  # relax review for fs_write inside /work\n+  auto_grant_workspace_writes = true\n+  auto_grant_risk_ceiling = "medium"',
+    facts: [
+      { label: "Approval", value: "ta-4482", color: "var(--txt)" },
+      { label: "Tool action", value: "fs_write", color: "var(--txt)" },
+      { label: "Run", value: "019e9a12…b71c", color: "var(--accent)" },
+      { label: "Risk", value: "High", color: "var(--red)" },
+      { label: "Status", value: "Pending", color: "var(--amber)" },
+      { label: "Requested", value: "12:42:18", color: "var(--txt)" },
+    ] },
+  { id: "ta-4479", kind: "net_fetch", risk: "medium", tone: T.warn, age: "2h 12m ago", status: "pending",
+    title: "Fetch https://mirror.internal/crates/index",
+    summary: "Paused run action: network read from a host the run did not declare. Deciding here resumes or blocks only this action.",
+    previewPath: "net_fetch · mirror.internal",
+    call: 'GET https://mirror.internal/crates/index\n\n(no request body · response not yet fetched)',
+    facts: [
+      { label: "Approval", value: "ta-4479", color: "var(--txt)" },
+      { label: "Tool action", value: "net_fetch", color: "var(--txt)" },
+      { label: "Run", value: "019e97f2…c410", color: "var(--accent)" },
+      { label: "Risk", value: "Medium", color: "var(--amber)" },
+      { label: "Status", value: "Pending", color: "var(--amber)" },
+      { label: "Requested", value: "12:10:04", color: "var(--txt)" },
+    ] },
+];
+
+class Component extends DCLogic {
+  state = {
+    view: "triage",
+    theme: this.props.theme ?? "dark",
+    rail: this.props.railVariant ?? "beads",
+    section: "overview",
+    clock: "14:22:07",
+    vw: typeof window === "undefined" ? 1440 : window.innerWidth,
+    openAudit: 0,
+    batchDecision: "Satisfy",
+  };
+
+  clockRef = React.createRef();
+
+  componentDidMount() {
+    this.applyBody();
+    this.onResize = () => {
+      const w = window.innerWidth;
+      if (Math.abs(w - this.state.vw) > 2) this.setState({ vw: w });
+    };
+    window.addEventListener("resize", this.onResize);
+    this.onResize();
+    this.timer = window.setInterval(() => {
+      const node = this.clockRef.current;
+      if (node) node.textContent = new Date().toTimeString().slice(0, 8);
+    }, 1000);
+  }
+  componentWillUnmount() { window.clearInterval(this.timer); window.removeEventListener("resize", this.onResize); }
+  componentDidUpdate(prev) {
+    if (prev.theme !== this.props.theme && this.props.theme) this.setState({ theme: this.props.theme });
+    if (prev.railVariant !== this.props.railVariant && this.props.railVariant) this.setState({ rail: this.props.railVariant });
+    this.applyBody();
+  }
+  applyBody() {
+    document.body.dataset.theme = this.state.theme;
+    const pairs = { "#58b0ff": "#1a67ba", "#3ee0e8": "#04737d", "#7ee787": "#0d8341", "#b394ff": "#6144c9" };
+    const a = this.props.accent;
+    if (a) {
+      const light = pairs[a.toLowerCase()] ?? `color-mix(in oklab, ${a} 70%, #062430)`;
+      document.body.style.setProperty("--accent", this.state.theme === "light" ? light : a);
+    }
+  }
+
+  tabStyle(active) {
+    return active
+      ? { fg: "var(--txt)", bg: "var(--glass2)", shadow: "inset 0 1px 0 var(--specular),0 4px 12px -6px rgba(0,0,0,.55)" }
+      : { fg: "var(--txt3)", bg: "transparent", shadow: "none" };
+  }
+
+  pill(tone) {
+    return { pillBorder: mix(tone, 32), pillBg: mix(tone, 12) };
+  }
+
+  renderVals() {
+    const { view, theme, rail, section, vw, batchDecision } = this.state;
+    const go = (v) => () => this.setState({ view: v });
+    const scopeChips = [
+      { label: "Environment", value: "homelab" },
+      { label: "Namespace", value: "coding-alpha" },
+      { label: "Impact", value: "non-prod" },
+    ];
+    const chipBudget = vw >= 1820 ? 3 : vw >= 1670 ? 2 : vw >= 1530 ? 1 : 0;
+
+    const navItems = [
+      { id: "triage", label: "Triage", badge: "6" },
+      { id: "workitems", label: "WorkItems", badge: "3" },
+      { id: "runs", label: "Runs", badge: null },
+      { id: "gates", label: "Gates", badge: "16" },
+      { id: "tools", label: "Tools", badge: "2" },
+      { id: "incidents", label: "Incidents", badge: null, short: "Inc" },
+      { id: "audit", label: "Audit", badge: null },
+    ].map((t) => {
+      const active = t.id === view || (t.id === "workitems" && view === "cockpit") || (t.id === "runs" && view === "run");
+      const label = vw < 1120 && t.short ? t.short : t.label;
+      return { ...t, label, badge: vw >= 1480 ? t.badge : null, ...this.tabStyle(active), go: go(t.id) };
+    });
+
+    const stages = STAGE_DEFS.map((s, i) => {
+      const done = s.state === "done", cur = s.state === "current";
+      const dot = done ? "var(--green)" : cur ? "var(--amber)" : "var(--txt3)";
+      return {
+        label: s.label, meta: s.meta, dot,
+        labelColor: s.state === "todo" ? "var(--txt3)" : "var(--txt)",
+        statusLabel: done ? "Satisfied" : cur ? "Awaiting" : "Not started",
+        nodeBg: done ? mix("var(--green)", 26) : cur ? mix("var(--amber)", 26) : "var(--glassIn)",
+        nodeBorder: done ? "var(--green)" : cur ? "var(--amber)" : "var(--edge2)",
+        nodeGlow: cur ? "0 0 20px -2px var(--amber)" : done ? "0 0 12px -4px var(--green)" : "none",
+        ring: cur ? "var(--amber)" : "transparent",
+        ringAnim: cur ? "pvRing 2.4s ease-out infinite" : "none",
+        laminaBg: cur ? mix("var(--amber)", 9) : "var(--glassIn)",
+        spans: s.spans.map(([left, width, label]) => ({
+          left: `${left}%`, width: `${width}%`, label,
+          color: done ? "var(--green)" : "var(--amber)",
+          title: `${s.label} · ${label}`,
+        })),
+        arcDash: "61 341",
+        arcOffset: String(-(i * 67.02)),
+        arcOpacity: s.state === "todo" ? "0.18" : "1",
+      };
+    });
+
+    const railCopy = {
+      beads: ["Stage beads", "Six controller stages on one liquid track. The filled segment is durable state; the glowing node is the boundary the operator owns right now."],
+      laminae: ["Stage laminae", "Each stage becomes a glass lamina with its own activity lane, so replans and repeated captures stay visible instead of collapsing into one dot."],
+      orbit: ["Stage orbit", "One segmented ring for lifecycle completeness plus a per-stage legend — reads at a glance from across the room, keeps the detail one row away."],
+    }[rail];
+
+    return {
+      navItems,
+      themeGlyph: theme === "dark" ? "☾" : "☀",
+      toggleTheme: () => this.setState((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+      clockRef: this.clockRef,
+      isTriage: view === "triage",
+      isRuns: view === "runs",
+      isRun: view === "run",
+      isWorkItems: view === "workitems",
+      isCockpit: view === "cockpit",
+      isGates: view === "gates",
+      isAudit: view === "audit",
+      isIncidents: view === "incidents",
+      isToolApprovals: view === "tools",
+      goRun: go("run"),
+
+      incidentFilters: [
+        { label: "Incidents", count: "3", fg: "var(--txt)", border: "var(--edge2)", bg: "var(--glass2)" },
+        { label: "Candidates", count: "2", fg: "var(--amber)", border: mix("var(--amber)", 34), bg: mix("var(--amber)", 12) },
+        { label: "High severity", count: "2", fg: "var(--red)", border: mix("var(--red)", 34), bg: mix("var(--red)", 12) },
+        { label: "Run-linked", count: "2", fg: "var(--txt3)", border: "var(--edge)", bg: "transparent" },
+      ],
+      incidents: INCIDENTS.map((i) => ({
+        ...i,
+        severityLabel: i.severity.charAt(0).toUpperCase() + i.severity.slice(1),
+        sevBorder: mix(i.tone, 38),
+        sevBg: mix(i.tone, 13),
+        goGates: go("gates"),
+      })),
+
+      toolApprovals: TOOL_APPROVALS.map((t) => ({
+        ...t,
+        cardBorder: mix(t.tone, 30) + "",
+        glow: mix(t.tone, 11),
+        riskBorder: mix(t.tone, 38),
+        riskBg: mix(t.tone, 13),
+      })),
+
+      gateFilters: [
+        { label: "pending", count: "16", fg: "var(--amber)", border: mix("var(--amber)", 34), bg: mix("var(--amber)", 12) },
+        { label: "all", count: "25", fg: "var(--txt3)", border: "var(--edge)", bg: "transparent" },
+      ],
+      batchDecisions: ["Satisfy", "Waive", "Reject"].map((label) => ({
+        label,
+        fg: label === batchDecision ? "var(--txt)" : "var(--txt3)",
+        bg: label === batchDecision ? "var(--glass2)" : "transparent",
+        go: () => this.setState({ batchDecision: label }),
+      })),
+      gatePlans: GATE_PLANS.map((p) => {
+        const settled = p.gates.filter((g) => g.status !== "Pending").length;
+        const tones = { Satisfied: "var(--green)", Waived: "var(--blue)", Rejected: "var(--red)", Pending: "var(--amber)" };
+        const riskFg = { high: "var(--red)", medium: "var(--amber)", low: "var(--txt3)" };
+        return {
+          id: p.id, incident: p.incident, title: p.title, summary: p.summary,
+          progress: `${settled} of ${p.gates.length}`,
+          color: settled === p.gates.length ? "var(--green)" : "var(--amber)",
+          pips: p.gates.map((g) => ({ fill: g.status === "Pending" ? "var(--edge2)" : tones[g.status] })),
+          gates: p.gates.map((g, i) => {
+            const decided = g.status !== "Pending";
+            const locked = decided || g.actionable === false;
+            const tone = tones[g.status];
+            return {
+              order: `${i + 1} / ${p.gates.length}`, kind: g.kind, scope: g.scope, status: g.status, tone,
+              risk: g.risk, riskFg: riskFg[g.risk], riskBorder: mix(riskFg[g.risk], 30), riskBg: mix(riskFg[g.risk], 10),
+              ...this.pill(tone), locked,
+              rowBg: g.actionable === false ? mix("var(--txt3)", 7) : "transparent",
+              meta: decided ? `decided by ${g.by} · ${g.at}` : g.actionable === false ? "future lifecycle gate" : `requested by controller · ${g.at}`,
+              reason: decided ? g.reason : g.actionable === false ? g.blocker : "",
+              reasonColor: g.actionable === false ? "var(--txt3)" : "var(--txt2)",
+              actionTitle: decided ? `Already ${g.status.toLowerCase()}` : g.actionable === false ? g.blocker : "Requires operator and rationale",
+              opacity: locked ? "0.38" : "1",
+              cursor: locked ? "not-allowed" : "pointer",
+              satisfyBorder: locked ? "var(--edge)" : mix("var(--green)", 42),
+              satisfyBg: locked ? "transparent" : mix("var(--green)", 14),
+              satisfyFg: locked ? "var(--txt3)" : "var(--green)",
+              waiveBorder: locked ? "var(--edge)" : mix("var(--blue)", 38),
+              waiveFg: locked ? "var(--txt3)" : "var(--blue)",
+              rejectBorder: locked ? "var(--edge)" : mix("var(--red)", 38),
+              rejectFg: locked ? "var(--txt3)" : "var(--red)",
+            };
+          }),
+        };
+      }),
+
+      auditFilters: [
+        { label: "kind", value: "any", fg: "var(--txt2)", border: "var(--edge)", bg: "var(--glassIn)" },
+        { label: "resource", value: "any", fg: "var(--txt2)", border: "var(--edge)", bg: "var(--glassIn)" },
+        { label: "actor", value: "lucas", fg: "var(--accent)", border: mix("var(--accent)", 34), bg: mix("var(--accent)", 10) },
+        { label: "run id", value: "any", fg: "var(--txt2)", border: "var(--edge)", bg: "var(--glassIn)" },
+        { label: "text", value: "idempotency", fg: "var(--accent)", border: mix("var(--accent)", 34), bg: mix("var(--accent)", 10) },
+      ],
+      auditCols: ["Time", "Kind", "Actor", "Resource", "Run", ""],
+      auditRows: AUDIT.map((r, i) => ({
+        ...r,
+        open: this.state.openAudit === i,
+        chevron: this.state.openAudit === i ? "▲" : "▼",
+        toggle: () => this.setState((s) => ({ openAudit: s.openAudit === i ? -1 : i })),
+      })),
+      goRuns: go("runs"),
+      goWorkItems: go("workitems"),
+
+      showSearch: vw >= 1120,
+      compactSearch: vw < 1120,
+      visibleScopeChips: scopeChips.slice(3 - chipBudget),
+      wide: vw >= 1480,
+      runsGridCols: vw >= 1200 ? "minmax(0,1fr) 300px" : "minmax(0,1fr)",
+
+      triageStats: [
+        { label: "Exception threads", value: "6", note: "one operator path each", color: "var(--txt)", glow: mix("var(--accent)", 10) },
+        { label: "Actionable signals", value: "16", note: "preserved, not hidden", color: "var(--txt)", glow: mix("var(--accent)", 8) },
+        { label: "Blocked WorkItems", value: "3", note: "replan or corrective review", color: "var(--red)", glow: mix("var(--red)", 12) },
+        { label: "Lifecycle gates", value: "16", note: "grouped under 8 plans", color: "var(--amber)", glow: mix("var(--amber)", 12) },
+        { label: "Tool requests", value: "2", note: "separate execution trust", color: "var(--amber)", glow: mix("var(--amber)", 9) },
+      ],
+
+      originFilters: [
+        { label: "all origins", fg: "var(--txt)", bg: "var(--glass2)", border: "var(--edge2)" },
+        { label: "smoke", fg: "var(--txt3)", bg: "transparent", border: "var(--edge)" },
+        { label: "operator", fg: "var(--txt3)", bg: "transparent", border: "var(--edge)" },
+      ],
+
+      threads: THREADS.map((t) => ({ ...t, ...this.pill(t.tone), open: go(t.view) })),
+
+      runStats: [
+        { label: "Running", value: "3", note: "execution state", color: "var(--green)", glow: mix("var(--green)", 12) },
+        { label: "Approval required", value: "1", note: "execution state", color: "var(--amber)", glow: mix("var(--amber)", 12) },
+        { label: "Tool approvals", value: "2", note: "governance state", color: "var(--amber)", glow: mix("var(--amber)", 9) },
+        { label: "Lifecycle gates", value: "16", note: "governance state", color: "var(--amber)", glow: mix("var(--amber)", 9) },
+      ],
+      runFilters: [
+        { label: "status", value: "any" },
+        { label: "actor", value: "any" },
+        { label: "origin", value: "any" },
+        { label: "search", value: "—" },
+      ],
+      runCountLabel: "48 runs · showing 1–6",
+      runs: RUNS.map((r) => ({
+        ...r, ...this.pill(r.tone),
+        dotAnim: r.terminal ? "none" : "pvPulse 2.2s ease-out infinite",
+        open: go("run"),
+        cancelBorder: r.terminal ? "var(--edge)" : mix("var(--red)", 38),
+        cancelFg: r.terminal ? "var(--txt3)" : "var(--red)",
+        cancelOpacity: r.terminal ? "0.45" : "1",
+        cancelCursor: r.terminal ? "not-allowed" : "pointer",
+      })),
+      configFacts: [
+        { label: "worker.mode", value: "kubernetes_job" },
+        { label: "worker.image", value: "pharness-runtime:1f4a9c" },
+        { label: "store", value: "sqlite · durable" },
+        { label: "poll interval", value: "15s" },
+      ],
+
+      activeRun: { task: "Harden checkout retry with idempotency keys", id: "019e9987-5b86-7f61-9a92-d44938944382" },
+      runScopeStrip: [
+        { label: "Pinned scope", value: "coding-alpha / storefront / main" },
+        { label: "Worker Job", value: "pharness-run-019e9987" },
+        { label: "Started", value: "14:02:11" },
+        { label: "Finished", value: "active" },
+      ],
+      budgetMeters: [
+        { label: "Turns", used: "18 / 48", pct: "37%", color: "var(--green)", note: "hard limit 100 · 0 extensions", },
+        { label: "Tokens", used: "184k / 400k", pct: "46%", color: "var(--accent)", note: "hard limit 1.0M" },
+        { label: "Wall clock", used: "20m / 45m", pct: "44%", color: "var(--blue)", note: "Job deadline 14:47:11" },
+      ],
+      eventCount: "418",
+      streamEvents: [
+        { seq: "418", type: "tool.result", detail: "cargo test -p pharness-store → 84 passed, 0 failed", color: "var(--green)", at: "14:21:58" },
+        { seq: "417", type: "tool.call", detail: "shell.exec · cargo test -p pharness-store", color: "var(--accent)", at: "14:21:12" },
+        { seq: "416", type: "model.message", detail: "Adding an idempotency key to the retry envelope before re-running acceptance.", color: "var(--purple)", at: "14:20:44" },
+        { seq: "415", type: "tool.result", detail: "fs.write · src/checkout/retry.rs (+38 −6)", color: "var(--green)", at: "14:20:09" },
+        { seq: "414", type: "approval.granted", detail: "fs.write inside workspace root · auto-granted by policy", color: "var(--blue)", at: "14:19:51" },
+        { seq: "413", type: "tool.call", detail: "fs.read · src/checkout/retry.rs", color: "var(--accent)", at: "14:19:22" },
+        { seq: "412", type: "harness.context", detail: "context compaction at 62% window · 3 spans retained", color: "var(--amber)", at: "14:18:40" },
+      ],
+      acceptance: [
+        { command: "cargo test -p pharness-store", label: "Passed", color: "var(--green)" },
+        { command: "cargo clippy -- -D warnings", label: "Passed", color: "var(--green)" },
+        { command: "scripts/pharness-e2e-smoke.sh", label: "Not run", color: "var(--txt3)" },
+      ],
+      changedPaths: [
+        { badge: "+38", path: "src/checkout/retry.rs", color: "var(--green)" },
+        { badge: "+12", path: "src/checkout/mod.rs", color: "var(--green)" },
+        { badge: "−6", path: "tests/retry_budget.rs", color: "var(--red)" },
+        { badge: "+4", path: "config/pharness.example.toml", color: "var(--green)" },
+      ],
+
+      workItemFilters: [
+        { label: "status", value: "any" },
+        { label: "environment", value: "any" },
+        { label: "repository", value: "any" },
+        { label: "actor", value: "any" },
+        { label: "origin", value: "any" },
+      ],
+      workItems: WORK_ITEMS.map((w) => ({
+        ...w, ...this.pill(w.tone), open: go(w.view),
+        stages: Array.from({ length: 6 }, (_, i) => ({
+          fill: i < w.filled ? w.tone : "var(--edge)",
+          glow: i === w.filled - 1 ? `0 0 8px -1px ${w.tone}` : "none",
+        })),
+      })),
+
+      cockpitSections: ["Overview", "Attempt", "Delivery", "Evidence"].map((label) => {
+        const id = label.toLowerCase();
+        return { label, ...this.tabStyle(id === section), live: id === "attempt", go: () => this.setState({ section: id }) };
+      }),
+      railTabs: [
+        { id: "beads", label: "beads" },
+        { id: "laminae", label: "laminae" },
+        { id: "orbit", label: "orbit" },
+      ].map((r) => ({
+        label: r.label,
+        fg: r.id === rail ? "var(--txt)" : "var(--txt3)",
+        bg: r.id === rail ? "var(--glass2)" : "transparent",
+        go: () => this.setState({ rail: r.id }),
+      })),
+      railIsBeads: rail === "beads",
+      railIsLaminae: rail === "laminae",
+      railIsOrbit: rail === "orbit",
+      railTitle: railCopy[0],
+      railNote: railCopy[1],
+      railProgress: "44%",
+      stages,
+
+      trustGrid: [
+        { label: "Target", value: "staging · coding-alpha", color: "var(--txt)" },
+        { label: "Immutable source", value: "acme/storefront · 7c41ab9", color: "var(--green)" },
+        { label: "Runner", value: "rust-1.83-node20", color: "var(--txt)" },
+        { label: "Last controller change", value: "14:19:51", color: "var(--txt)" },
+      ],
+      blockers: [
+        { code: "acceptance_incomplete", summary: "scripts/pharness-e2e-smoke.sh has not produced durable tool evidence for this attempt.", action: "Review execute_attempt" },
+        { code: "gate_pending", summary: "Lifecycle gate staging_validation (order 3 of 4) has not been decided.", action: "Open gate" },
+      ],
+      envelope: [
+        { label: "Attempts", value: "2 used / 3 total", color: "var(--amber)" },
+        { label: "Turns", value: "48 initial / 100 hard", color: "var(--txt)" },
+        { label: "Tokens", value: "400k initial / 1.0M hard", color: "var(--txt)" },
+        { label: "Workspace", value: "storefront · 7c41ab9", color: "var(--txt)" },
+        { label: "Attempt branch", value: "pharness/wi-019e9987-a2", color: "var(--txt)" },
+        { label: "Retention", value: "retained", color: "var(--green)" },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

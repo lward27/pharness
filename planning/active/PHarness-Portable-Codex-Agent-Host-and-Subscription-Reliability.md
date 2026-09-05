@@ -1,5 +1,9 @@
 # PHarness Portable Codex Agent Host and Subscription-Backed Reliability Milestone
 
+> Current status (2026-09-04): **Expansion deferred**.
+> Replacement/authority: [ASTRA](../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md).
+> Preserve the existing host implementation and release packaging. The approved program qualifies the existing gateway path; do not independently resume host expansion.
+
 ## Summary
 
 Add Codex as a first-class PHarness agent execution backend for Planner,
