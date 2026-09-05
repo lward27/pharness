@@ -64,5 +64,6 @@
     "pipeline.tekton.dev/pharness-e2e-build-output configured (server dry run)"
   ],
   "applied": false,
-  "validator_correction": "The initial expected-registry comparison omitted the derived policy/configuration hashes. The accepted check independently recomputes those hashes and still requires exact equality for every registry field."
+  "validator_correction": "The initial expected-registry comparison omitted the derived policy/configuration hashes. The accepted check independently recomputes those hashes and still requires exact equality for every registry field.",
+  "whitespace_check": "Passed for source, configuration and documentation. Verbatim build/test logs retain terminal carriage returns, trailing spaces and terminal blank lines so recorded hashes remain reproducible."
 }
