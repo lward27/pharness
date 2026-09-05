@@ -95,6 +95,11 @@ pub(in crate::app) async fn create_gitops_change_set(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if crate::app::pipeline::hosted::is_hosted(&state.store, &intent).await? {
+        return Err(ApiError::conflict(
+            "Hosted GitOps changes progress through the saved workflow; this creation route serves historical source-only work",
+        ));
+    }
     if !pipeline_intent_is_deployment_eligible(&intent.status)
         || intent
             .intent_json
@@ -236,7 +241,7 @@ pub(in crate::app) async fn create_gitops_change_set(
             deployment_intent_id: deployment_intent.id,
             gitops_update_plan_artifact_id: artifact.id,
             session_id: intent.session_id.clone(),
-            run_id,
+            run_id: Some(run_id),
             status: "proposed".to_string(),
             title: format!("GitOps ChangeSet: {}", work_item.title),
             summary: format!(
@@ -287,6 +292,7 @@ pub(in crate::app) async fn transition_gitops_change_set(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &current).await?;
     let target = GitOpsChangeSetStatus::parse(&request.target_status)?;
     GitOpsChangeSetStatus::parse(&current.status)?.ensure_can_transition_to(target)?;
     let change_set = state
@@ -323,12 +329,16 @@ pub(in crate::app) async fn repropose_failed_gitops_change_set(
         .get_gitops_change_set(gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &current).await?;
     if current.status != "approved" {
         return Err(ApiError::conflict(
             "GitOps delivery retry review requires an approved GitOps ChangeSet",
         ));
     }
-    let artifacts = state.store.list_artifacts(&current.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&current)?)
+        .await?;
     let plan = artifacts
         .iter()
         .filter(|artifact| gitops_delivery_plan_matches_change_set(artifact, &current))

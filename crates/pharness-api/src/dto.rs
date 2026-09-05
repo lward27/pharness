@@ -1911,7 +1911,7 @@ pub struct GitOpsChangeSetResponse {
     pub pipeline_intent_id: String,
     pub deployment_intent_id: String,
     pub gitops_update_plan_artifact_id: String,
-    pub run_id: RunId,
+    pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
     pub summary: String,
@@ -2274,6 +2274,7 @@ pub struct DeploymentIntentsResponse {
 pub struct DeploymentIntentResponse {
     pub id: String,
     pub pipeline_intent_id: String,
+    pub delivery_stage: pharness_store::DeliveryStage,
     pub change_set_id: String,
     pub work_plan_id: String,
     pub remediation_plan_id: Option<String>,
@@ -2303,6 +2304,7 @@ impl From<StoredDeploymentIntent> for DeploymentIntentResponse {
         Self {
             id: intent.id,
             pipeline_intent_id: intent.pipeline_intent_id,
+            delivery_stage: intent.delivery_stage,
             change_set_id: intent.change_set_id,
             work_plan_id: intent.work_plan_id,
             remediation_plan_id: intent.remediation_plan_id,

@@ -33,6 +33,16 @@ count alone is not a complete evidence chain.
 
 ## Authoritative configuration
 
+The M08 delivery-record extension adds separate staging and production
+DeploymentIntents for one PipelineIntent, with one GitOps change and Release per
+deployment. Historical records remain explicitly `legacy`; hosted delivery may
+have no coding-run ID. Use the stage/deployment-scoped store reads, not the legacy
+singular lookup by build. Schema 54 and its compatible reader are not yet deployed.
+[Compatibility evidence](../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md)
+describes the data-preserving SQLite table replacement, required live-copy check,
+and rollback floor before enabling new writes. Proposed records alone establish
+no deployment or production approval.
+
 `deploy/helm/pharness/values.yaml` owns `hostedWorkflow`. When enabled, the API Deployment passes
 it as `PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON`. The reader default and committed
 Helm setting are disabled. The chart currently declares the yfinance binding. The frontend Pipeline and

@@ -57,3 +57,5 @@ pub(super) fn router() -> Router<AppState> {
             post(observe_gitops_change_set_delivery),
         )
 }
+
+mod legacy;

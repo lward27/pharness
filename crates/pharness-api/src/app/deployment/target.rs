@@ -12,6 +12,11 @@ pub(in crate::app) struct DeploymentTarget {
 pub(in crate::app) fn deployment_target(
     intent: &StoredDeploymentIntent,
 ) -> Result<DeploymentTarget, ApiError> {
+    if intent.delivery_stage != pharness_store::DeliveryStage::Legacy {
+        return Err(ApiError::conflict(
+            "Hosted deployments use automatic GitOps reconciliation and workflow approval; legacy Argo sync is unavailable",
+        ));
+    }
     Ok(DeploymentTarget {
         environment: intent.target_environment.clone().ok_or_else(|| {
             ApiError::conflict("DeploymentIntent target_environment is required for Argo preflight")

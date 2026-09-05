@@ -65,7 +65,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
-| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | bounded Tempo reader locally validated; deployment, staging progression and acceptance open | M07 and usable M02 staging bindings. |
+| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Tempo reader and separate deployment records locally checked; neither deployed; staging progression and acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections deployed; list consistency validated in PR 337; remaining deployment and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
@@ -131,6 +131,7 @@ Current evidence entry points:
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
 - [M07 real build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md): both actual Finance Tekton builds and registry identities; these program-operated builds do not count as autonomous WorkItems.
 - [M08 native Tempo reader](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md): bounded collection and a real staging trace sample; the reader is not deployed or integrated into staging progression.
+- [M08 delivery-record compatibility](../../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md): separate staging/production records on the same build, preserved legacy history, and rejected legacy delivery actions. Schema 54 requires the recorded live-copy check and compatible reader deployment; no hosted delivery writes or deployment acceptance are claimed.
 - [M10 visual and interaction evidence](../../evidence/autonomous-sdlc/ASTRA-M10-LIST-CONSISTENCY.md): 94 unit checks and 116 distinct browser checks across the documented runs; deployment, delivery-dependent states and owner walkthrough remain open.
 
 [Execution history](ASTRA-PROGRAM-EXECUTION-HISTORY.md) retains prior source
@@ -154,6 +155,10 @@ explain current state and one useful action. GET and navigation never dispatch w
 Use additive migrations from the verified current schema (0053 after the M06 compatible-controller release).
 Preserve the Finance generation and retention/audit history. Compatible readers
 ship before hosted writes; record the minimum compatible rollback release.
+The M08 cardinality extension records one explicit SQL exception: SQLite requires
+an atomic, data-preserving replacement of the GitOps table to remove the embedded
+one-change-per-build constraint. Its history/foreign-key/rollback tests do not
+waive the pre-deployment check against a copy of the current live database.
 Legacy work finishes under its pinned source-only contract. Preserve source-only
 success history and inapplicable stages. New hosted work cannot close at source merge.
 

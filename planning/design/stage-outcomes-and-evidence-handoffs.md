@@ -15,6 +15,13 @@ release, and observe. Build, staging, and production evidence remain distinguish
 within release. New hosted work cannot complete at source merge. Legacy source-only
 inapplicable tails and completed records retain their original meaning.
 
+Within hosted release, one real build feeds distinct staging and production
+deployment records. Each retains its GitOps change, Release and registry evidence;
+promotion does not create a fictitious second build. A coding-run reference may
+be absent when the durable workflow operation owns delivery. The required source,
+build, approval and runtime chain still applies. The schema-54 reader is prepared
+but not deployed; see the [delivery-record compatibility evidence](../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md).
+
 Normalized caveats must retain submitted risks/contradictions. Agent claims are not
 verified facts, and unresolved contradictions cannot be sealed as unconditional success.
 Missing runtime telemetry is inconclusive. Restored service after rollback does not mean

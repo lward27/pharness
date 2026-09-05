@@ -29,6 +29,7 @@ pub(super) fn reconcile_deployment_intent() -> StoredDeploymentIntent {
     StoredDeploymentIntent {
         id: "dint_reconcile".to_string(),
         pipeline_intent_id: "pint_reconcile".to_string(),
+        delivery_stage: pharness_store::DeliveryStage::Legacy,
         change_set_id: "cset_reconcile".to_string(),
         work_plan_id: "wplan_reconcile".to_string(),
         remediation_plan_id: None,

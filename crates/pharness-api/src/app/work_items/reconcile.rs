@@ -1909,7 +1909,10 @@ pub(in crate::app) async fn gitops_base_revision_reconcile_state(
     store: &SqliteStore,
     change_set: &StoredGitOpsChangeSet,
 ) -> Result<GitOpsBaseRevisionReconcileState, ApiError> {
-    let artifacts = store.list_artifacts(&change_set.run_id).await?;
+    let Some(run_id) = change_set.run_id.as_ref() else {
+        return Ok(GitOpsBaseRevisionReconcileState::Missing);
+    };
+    let artifacts = store.list_artifacts(run_id).await?;
     if artifacts
         .iter()
         .any(|artifact| gitops_base_revision_matches_change_set(artifact, change_set))

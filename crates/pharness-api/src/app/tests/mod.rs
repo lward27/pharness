@@ -197,6 +197,7 @@ mod controller;
 mod delivery_reconcile;
 mod hosted_build;
 mod hosted_controller;
+mod hosted_delivery_records;
 mod hosted_pipeline;
 mod hosted_source_controller;
 mod hosted_source_merge;

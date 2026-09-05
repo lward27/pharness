@@ -1,0 +1,125 @@
+{
+  "observed_at": "2026-09-05T20:03:41.631020+00:00",
+  "source_base": "44f4d9d092f54b1a7c485204403c278f5b8dd5a0",
+  "branch": "codex/astra-staging-delivery",
+  "source_sha256": {
+    "crates/pharness-api/src/app/audit.rs": "2af1f7c4c9e6b0eea608e2a2bf8899b81a14e5703ca3c5080b83b8014e21bcb8",
+    "crates/pharness-api/src/app/deployment/intents.rs": "c4932d7de31f37d6c20433d8f25a93d635d4812b10dfe858877669b55d4f165f",
+    "crates/pharness-api/src/app/deployment/target.rs": "d3b091831cd2f6a1981aadf14b181da046241caa8171662ac452669f77d7d75f",
+    "crates/pharness-api/src/app/gitops/change_sets.rs": "cd63e9621c6d6fdf4f866c234bc041e573014c4d579923e9379bf32411b294f3",
+    "crates/pharness-api/src/app/gitops/delivery.rs": "e99aeacc415e36ba3f7568aa954400ffd7a2d63990a061360d8c405770bb43e1",
+    "crates/pharness-api/src/app/gitops/delivery_flow.rs": "a16ad3aaf5cc8b58a829aa7056743b6ed235e346531db4ed807e275ad7230c52",
+    "crates/pharness-api/src/app/gitops/legacy.rs": "c6bfdc7916f6208e458fd6ebf9ca3fb71578eef4cf1f414e6bac8d577157d425",
+    "crates/pharness-api/src/app/gitops/mod.rs": "a78c03657069a770d108435961a4be04013a80b15d0d1592773a4a90c3c074b9",
+    "crates/pharness-api/src/app/tests/delivery_reconcile.rs": "e3aba2ac0c6a854d64192515f58ff5702100a90f5d126d3af09c80dbf1ecb084",
+    "crates/pharness-api/src/app/tests/hosted_delivery_records.rs": "78501ffbd29c0b230f5ce0d531e3ea7b0538b2a6e612b596fa86dcd8a7afc7bb",
+    "crates/pharness-api/src/app/tests/hosted_pipeline.rs": "061dbfbdcf94b04cdbca9b32b3faf68405975d7def6ed3168570cdc47bb7c051",
+    "crates/pharness-api/src/app/tests/mod.rs": "20c7e6ae58138df3f54dfbf1715c648e3b54929813fba520cffc7147e533d0ae",
+    "crates/pharness-api/src/app/tests/production.rs": "610fd46cf3ceae7d39dde1f6235e3cdf4821c604f906b3fdf255f57fecedd4d5",
+    "crates/pharness-api/src/app/tests/support.rs": "df13ef8e13625c34db0d2fd41f5ff7cdbb316b434e2906abf532ac5ea3f270e3",
+    "crates/pharness-api/src/app/work_items/reconcile.rs": "a745abbf56761940d8a99e540eed952ea0ec11302fded492d77f14703f51aad7",
+    "crates/pharness-api/src/dto.rs": "545e706d1516d53002bb281c7f496fb8f40c67fd1ff396b8d9b7d4d93ca1ec28",
+    "crates/pharness-store/migrations/0054_delivery_stages.sql": "30cff23fee5c9d6f0c7c8dd18758758075a3343470a2b1b3b64e002f8d44ccbe",
+    "crates/pharness-store/src/lib.rs": "a0ed2f5b82d7bc7b59f63fd205cb91bc0797c37fd49914a5689968ba8a706b8e",
+    "crates/pharness-store/src/models.rs": "49e832b2af5e482d23a30b35293af27663dabf217d6ccf09e1020644792ceb1c",
+    "crates/pharness-store/src/sqlite.rs": "6b0990c585ab48b07c9c66a5d5782d1f68288da52fafb920741f3d38d6393045",
+    "crates/pharness-store/src/sqlite/delivery.rs": "42e47d172d9ec3a36cddf441649303d15a02a981e644a71c64e76383c1e25e42",
+    "crates/pharness-store/src/sqlite/delivery/tests.rs": "03f10127d0e3be450736c4e79166fc61442350e51563efae825afd67ed2d6de1",
+    "crates/pharness-store/src/sqlite/delivery/tests/migration.rs": "543806984f609443adb263396aa7f9bc7143aa19393dcf2746f34a3282b1180a"
+  },
+  "checks": {
+    "combined_tests": {
+      "command": "cargo test -p pharness-store -p pharness-api",
+      "passed": 337,
+      "api": 276,
+      "administrative_tool": 1,
+      "store": 60,
+      "failed": 0,
+      "path": "/private/tmp/astra-m08-delivery-tests-final.log",
+      "sha256": "c7d9488aa89e62e4b94062036aae36d2c238eb9c7d64bef52d6f7e6085a6275a"
+    },
+    "legacy_guard_focus": {
+      "command": "cargo test -p pharness-api hosted_deployment_records",
+      "passed": 1,
+      "path": "/private/tmp/astra-m08-delivery-api-final-focus.log",
+      "sha256": "a51bd2b4e357dce7f699131f22dd2ef138262d3edb39be92ab58f3e41c2cf447"
+    },
+    "rollback_floor_focus": {
+      "command": "cargo test -p pharness-store schema_53_history_and_foreign_keys_survive_upgrade_and_reopen",
+      "passed": 1,
+      "path": "/private/tmp/astra-m08-delivery-rollback-floor-test.log",
+      "sha256": "974b2b5899eb45a02588a91e362e9445d27ef795662389552eaa3f4fde736e8e"
+    },
+    "clippy": {
+      "command": "cargo clippy -p pharness-store -p pharness-api --all-targets -- -D warnings",
+      "path": "/private/tmp/astra-m08-delivery-clippy-final.log",
+      "sha256": "257c399b532a91191d65b02d0a01e09bf4263a6bddad6d7739f106213943386f"
+    },
+    "store_clippy_after_floor_assertion": {
+      "command": "cargo clippy -p pharness-store --all-targets -- -D warnings",
+      "path": "/private/tmp/astra-m08-delivery-store-clippy-final.log",
+      "sha256": "058ce08c8860cbb5ab16a9f5972508a31bc9a43860519abb93e9888689302b50"
+    },
+    "architecture_and_five_parser_checks": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 bash scripts/check-app-module-boundaries.sh",
+      "path": "/private/tmp/astra-m08-delivery-architecture-final.log",
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    },
+    "formatting": {
+      "command": "cargo fmt --all -- --check",
+      "path": "/private/tmp/astra-m08-delivery-fmt-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "documentation_links": {
+      "checked": 47,
+      "missing": []
+    }
+  },
+  "distinct_test_count": 337,
+  "migration": {
+    "from": 53,
+    "to": 54,
+    "live_schema_changed": false,
+    "preserved_fixture_tables": 12,
+    "existing_rows_default_stage": "legacy",
+    "transactional_table_replacement": "gitops_change_sets",
+    "coding_run_optional_for_hosted_gitops": true,
+    "runtime_foreign_keys": true,
+    "dangling_fk_aborts_and_preserves_original": true,
+    "interrupted_transaction_rollback_and_retry": true,
+    "previous_53_migrator_rejects_version_54": true,
+    "rollback_floor": "First immutable release containing migration 54, immediately upon schema deployment",
+    "live_database_copy_check": "pending"
+  },
+  "failed_attempts": [
+    {
+      "reason": "New DeliveryStage public export was missing; corrected.",
+      "path": "/private/tmp/astra-m08-delivery-store-tests.log",
+      "sha256": "d7e40ad9e7a32669e5134ef91f24ec5c0f38cd93905f8dd52bf75bba393632cc"
+    },
+    {
+      "reason": "API has no library target; no tests ran under --lib.",
+      "path": "/private/tmp/astra-m08-delivery-api-tests.log",
+      "sha256": "4e929b95388f804ced0a68adf00ff1abb5078103524f20f32073a79df35d536c"
+    },
+    {
+      "reason": "Two legacy artifact readers still expected a non-null RunId; corrected.",
+      "path": "/private/tmp/astra-m08-delivery-api-tests-2.log",
+      "sha256": "6c6c0dd3d50358d5443d2b1a80d5045c0b10f2a3b5b972b315d441702e1332e8"
+    },
+    {
+      "reason": "One needless borrow; corrected.",
+      "path": "/private/tmp/astra-m08-delivery-clippy.log",
+      "sha256": "e4f239cdf38fea9871ed7afb62ecd1f944736ac0aa78316f7e238ec492134456"
+    }
+  ],
+  "limits": {
+    "synthetic_fixtures_only": true,
+    "hosted_creation_enabled": false,
+    "deployment_performed": false,
+    "production_authority_granted": false,
+    "actual_staging_controller": "pending",
+    "runtime_verification": "pending",
+    "milestone_08_accepted": false
+  }
+}

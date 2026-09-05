@@ -97,7 +97,7 @@ fn finance_policy() -> Value {
     p
 }
 
-async fn build_intent(f: &RepoDeliveryFixture) -> pharness_store::StoredPipelineIntent {
+pub(super) async fn build_intent(f: &RepoDeliveryFixture) -> pharness_store::StoredPipelineIntent {
     let request = json!({"pipeline_contract_id":"pipeline_test","intent_json":{"execution":{"enabled":true,"namespace":"tekton-pipelines","pipeline_ref":"pharness-yfinance-build","production_impacting":false,"params":{"revision":"c".repeat(40),"dockerfile":"./Dockerfile","context":"./"},"workspaces":[{"name":"shared-data","volume_claim_template":{"storage":"1Gi","access_modes":["ReadWriteOnce"]}}]}}});
     let Json(created) = crate::app::pipeline::intents::create_work_item_pipeline_intent(
         State(f.state.clone()),
