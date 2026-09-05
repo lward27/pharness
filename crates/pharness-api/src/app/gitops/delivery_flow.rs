@@ -78,7 +78,12 @@ pub(in crate::app) async fn gitops_delivery_flow(
     let Some(change_set) = change_set else {
         return Ok(None);
     };
-    let artifacts = store.list_artifacts(&change_set.run_id).await?;
+    let Some(run_id) = change_set.run_id.as_ref() else {
+        // Hosted promotion has its own durable operation references. It must
+        // never borrow artifacts from another run to populate this legacy flow.
+        return Ok(None);
+    };
+    let artifacts = store.list_artifacts(run_id).await?;
     let Some(plan) = artifacts
         .iter()
         .find(|artifact| gitops_delivery_plan_matches_change_set(artifact, change_set))

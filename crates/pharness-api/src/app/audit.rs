@@ -168,7 +168,7 @@ pub(in crate::app) async fn append_gitops_change_set_audit_event(
             actor: actor.or_else(|| Some("api".to_string())),
             resource_kind: "gitops_change_set".to_string(),
             resource_id: change_set.id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             payload_json: json!({
                 "gitops_change_set_id": change_set.id,
                 "work_item_id": change_set.work_item_id,
@@ -177,7 +177,7 @@ pub(in crate::app) async fn append_gitops_change_set_audit_event(
                 "pipeline_intent_id": change_set.pipeline_intent_id,
                 "deployment_intent_id": change_set.deployment_intent_id,
                 "gitops_update_plan_artifact_id": change_set.gitops_update_plan_artifact_id,
-                "run_id": change_set.run_id.as_str(),
+                "run_id": change_set.run_id.as_ref().map(RunId::as_str),
                 "status": change_set.status,
                 "material_hash": change_set.material_hash,
                 "gitops": {

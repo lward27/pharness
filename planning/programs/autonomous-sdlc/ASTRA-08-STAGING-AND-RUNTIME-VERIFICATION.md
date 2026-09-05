@@ -1,6 +1,6 @@
 # ASTRA M08: Staging and runtime verification
 
-Status: bounded native Tempo reader implemented and locally validated; deployment, controller integration and acceptance remain open.
+Status: bounded native Tempo reader locally validated; separate deployment records implemented and locally checked. Neither slice is deployed; staging progression, runtime adjudication and acceptance remain open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
 
@@ -8,6 +8,14 @@ The [native Tempo reader evidence](../../evidence/autonomous-sdlc/ASTRA-M08-BOUN
 records the tested finite query, a real staging trace sample, explicit collection
 limits and inconclusive behavior. It is not deployed, does not establish release
 identity, and cannot satisfy this milestone's staging or promotion gates alone.
+
+The [delivery-record compatibility slice](../../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md)
+extends the existing build/deployment/GitOps graph for separate staging and
+production records. Schema 54 preserves historical values and rejects legacy
+advancement of hosted deployments. The SQLite uniqueness change requires a
+transactional table replacement; the live-copy migration check and compatible
+reader deployment are still required before any hosted writes. This does not
+establish a deployed candidate, production approval or release verification.
 
 ## Objective and scope
 

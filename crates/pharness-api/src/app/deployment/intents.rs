@@ -119,6 +119,11 @@ pub(in crate::app) async fn create_deployment_intent_from_pipeline_intent(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if crate::app::pipeline::hosted::is_hosted(&state.store, &pipeline_intent).await? {
+        return Err(ApiError::conflict(
+            "Hosted deployments progress through the saved workflow; this creation route serves historical source-only work",
+        ));
+    }
     ensure_pipeline_intent_ready_for_deployment(&pipeline_intent)?;
     let remediation_plan_id = pipeline_intent.remediation_plan_id.clone();
     let incident_id = pipeline_intent.incident_id.clone();
@@ -417,6 +422,11 @@ pub(in crate::app) async fn transition_deployment_intent(
         .get_deployment_intent(&deployment_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+    if current.delivery_stage != pharness_store::DeliveryStage::Legacy {
+        return Err(ApiError::conflict(
+            "Hosted deployment evidence and progression are owned by the saved workflow",
+        ));
+    }
     let target = clean_optional_text(Some(request.target_status))
         .ok_or_else(|| ApiError::bad_request("target_status is required"))?;
     validate_deployment_intent_transition(&current.status, &target)?;
@@ -467,6 +477,11 @@ pub(in crate::app) async fn attach_deployment_intent_evidence(
         .get_deployment_intent(&deployment_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("deployment_intent", &deployment_intent_id))?;
+    if current.delivery_stage != pharness_store::DeliveryStage::Legacy {
+        return Err(ApiError::conflict(
+            "Hosted deployment evidence and progression are owned by the saved workflow",
+        ));
+    }
     if current.status == "stale" {
         return Err(ApiError::conflict(format!(
             "cannot attach evidence to stale deployment intent {deployment_intent_id}"

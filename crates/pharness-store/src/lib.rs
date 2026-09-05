@@ -5,6 +5,7 @@ mod data_lifecycle;
 mod hosted_controller;
 mod inference;
 mod models;
+pub use models::DeliveryStage;
 mod onboarding;
 mod product;
 mod repo_mode;

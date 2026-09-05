@@ -806,7 +806,7 @@ pub struct CreateGitOpsChangeSet {
     pub deployment_intent_id: String,
     pub gitops_update_plan_artifact_id: String,
     pub session_id: SessionId,
-    pub run_id: RunId,
+    pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
     pub summary: String,
@@ -831,7 +831,7 @@ pub struct StoredGitOpsChangeSet {
     pub deployment_intent_id: String,
     pub gitops_update_plan_artifact_id: String,
     pub session_id: SessionId,
-    pub run_id: RunId,
+    pub run_id: Option<RunId>,
     pub status: String,
     pub title: String,
     pub summary: String,
@@ -1091,10 +1091,33 @@ pub struct UpdateDeploymentIntentEvidence {
     pub reason: Option<String>,
 }
 
+/// A legacy deployment retains its original contract. Hosted work promotes the
+/// same build through two separately inspectable deployment records.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveryStage {
+    #[default]
+    Legacy,
+    Staging,
+    Production,
+}
+
+impl DeliveryStage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::Staging => "staging",
+            Self::Production => "production",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredDeploymentIntent {
     pub id: String,
     pub pipeline_intent_id: String,
+    #[serde(default)]
+    pub delivery_stage: DeliveryStage,
     pub change_set_id: String,
     pub work_plan_id: String,
     pub remediation_plan_id: Option<String>,

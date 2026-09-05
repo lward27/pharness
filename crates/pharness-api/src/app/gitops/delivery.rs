@@ -59,6 +59,7 @@ pub(in crate::app) async fn resolve_gitops_base_revision(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     if !matches!(change_set.status.as_str(), "proposed" | "approved") {
         return Err(ApiError::conflict(
             "GitOps base revision resolution requires a proposed or approved GitOps ChangeSet",
@@ -79,7 +80,10 @@ pub(in crate::app) async fn resolve_gitops_base_revision(
         ));
     }
     let reason = required_text(request.reason, "reason")?;
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     if let Some(existing) = artifacts
         .iter()
         .filter(|artifact| {
@@ -133,7 +137,7 @@ pub(in crate::app) async fn resolve_gitops_base_revision(
         .create_artifact(CreateArtifact {
             id: format!("art_{}_gitops_base_revision_execution", unique_suffix()),
             session_id: change_set.session_id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             kind: "gitops_base_revision_execution".to_string(),
             label: format!("GitOps base revision resolution for {}", change_set.id),
             mime_type: Some("application/json".to_string()),
@@ -185,7 +189,7 @@ pub(in crate::app) async fn resolve_gitops_base_revision(
                 .create_artifact(CreateArtifact {
                     id: format!("art_{}_gitops_base_revision", unique_suffix()),
                     session_id: change_set.session_id.clone(),
-                    run_id: Some(change_set.run_id.clone()),
+                    run_id: change_set.run_id.clone(),
                     kind: "gitops_base_revision".to_string(),
                     label: format!(
                         "Failed GitOps base revision resolution for {}",
@@ -240,6 +244,7 @@ pub(in crate::app) async fn prepare_gitops_change_set_delivery(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     if change_set.status != "approved" {
         return Err(ApiError::conflict(
             "GitOps delivery planning requires an approved GitOps ChangeSet",
@@ -275,7 +280,10 @@ pub(in crate::app) async fn prepare_gitops_change_set_delivery(
         ));
     }
 
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     let base_revision = current_gitops_base_revision(&artifacts, &change_set)?;
     if let Some(existing) = artifacts
         .iter()
@@ -298,7 +306,7 @@ pub(in crate::app) async fn prepare_gitops_change_set_delivery(
         .create_artifact(CreateArtifact {
             id: format!("art_{}_gitops_delivery_plan", unique_suffix()),
             session_id: change_set.session_id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             kind: "gitops_delivery_plan".to_string(),
             label: format!("GitOps delivery plan for {}", change_set.id),
             mime_type: Some("application/json".to_string()),
@@ -385,7 +393,9 @@ pub(in crate::app) async fn current_gitops_delivery_plan(
     store: &SqliteStore,
     change_set: &StoredGitOpsChangeSet,
 ) -> Result<(StoredArtifact, StoredArtifact), ApiError> {
-    let artifacts = store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = store
+        .list_artifacts(super::legacy::run_id(change_set)?)
+        .await?;
     let plan = artifacts
         .iter()
         .filter(|artifact| gitops_delivery_plan_matches_change_set(artifact, change_set))
@@ -427,6 +437,7 @@ pub(in crate::app) async fn authorize_gitops_change_set_delivery(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     if change_set.status != "approved" {
         return Err(ApiError::conflict(
             "GitOps delivery authorization requires an approved GitOps ChangeSet",
@@ -516,6 +527,7 @@ pub(in crate::app) async fn preflight_gitops_change_set_delivery(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     let work_plan = state
         .store
         .get_work_plan(&change_set.work_plan_id)
@@ -643,7 +655,10 @@ pub(in crate::app) async fn preflight_gitops_change_set_delivery(
         "blocked"
     };
     let grant_id = grant.as_ref().map(|grant| grant.id.clone());
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     if let Some(existing) = artifacts.into_iter().find(|artifact| {
         artifact.kind == "gitops_delivery_preflight"
             && artifact.content_json.as_ref().is_some_and(|content| {
@@ -682,7 +697,7 @@ pub(in crate::app) async fn preflight_gitops_change_set_delivery(
         .create_artifact(CreateArtifact {
             id: format!("art_{}_gitops_delivery_preflight", unique_suffix()),
             session_id: change_set.session_id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             kind: "gitops_delivery_preflight".to_string(),
             label: format!("GitOps delivery preflight for {}", change_set.id),
             mime_type: Some("application/json".to_string()),
@@ -801,7 +816,10 @@ pub(in crate::app) async fn execute_gitops_change_set_delivery(
             "GitOps delivery repository is not allowlisted for the dedicated GitOps writer",
         ));
     }
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     if let Some(existing) = artifacts.iter().find(|artifact| {
         gitops_delivery_artifact_matches_plan(artifact, "gitops_delivery_execution", &plan.id)
             && artifact.content_json.as_ref().is_some_and(|content| {
@@ -847,7 +865,7 @@ pub(in crate::app) async fn execute_gitops_change_set_delivery(
         .create_artifact(CreateArtifact {
             id: format!("art_{}_gitops_delivery_execution", unique_suffix()),
             session_id: change_set.session_id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             kind: "gitops_delivery_execution".to_string(),
             label: format!("GitOps delivery execution for {}", change_set.id),
             mime_type: Some("application/json".to_string()),
@@ -945,6 +963,7 @@ pub(in crate::app) async fn observe_gitops_change_set_delivery(
         .get_gitops_change_set(&gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", &gitops_change_set_id))?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     let (plan, _) = current_gitops_delivery_plan(&state.store, &change_set).await?;
     let source = gitops_delivery_plan_source(&plan, &change_set)?;
     let settings = state
@@ -960,7 +979,10 @@ pub(in crate::app) async fn observe_gitops_change_set_delivery(
             "GitOps delivery repository is not allowlisted for the Git observer",
         ));
     }
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     let delivery_result = artifacts
         .iter()
         .filter(|artifact| {
@@ -1072,7 +1094,7 @@ pub(in crate::app) async fn observe_gitops_change_set_delivery(
     let execution_id = format!("gopsobs_{}", unique_suffix());
     let execution = state.store.create_artifact(CreateArtifact {
         id: format!("art_{}_gitops_delivery_observation", unique_suffix()),
-        session_id: change_set.session_id.clone(), run_id: Some(change_set.run_id.clone()),
+        session_id: change_set.session_id.clone(), run_id: change_set.run_id.clone(),
         kind: "gitops_delivery_observation_execution".to_string(),
         label: format!("GitOps delivery observation for {}", change_set.id),
         mime_type: Some("application/json".to_string()), path: None, content_text: None,
@@ -1106,7 +1128,7 @@ pub(in crate::app) async fn observe_gitops_change_set_delivery(
                         unique_suffix()
                     ),
                     session_id: change_set.session_id.clone(),
-                    run_id: Some(change_set.run_id.clone()),
+                    run_id: change_set.run_id.clone(),
                     kind: "gitops_delivery_observation_dispatch_failure".to_string(),
                     label: format!(
                         "GitOps delivery observation dispatch failure for {}",
@@ -1210,7 +1232,7 @@ pub(in crate::app) async fn internal_gitops_base_revision_outcome(
                 .create_artifact(CreateArtifact {
                     id: format!("art_{}_gitops_base_revision", unique_suffix()),
                     session_id: change_set.session_id.clone(),
-                    run_id: Some(change_set.run_id.clone()),
+                    run_id: change_set.run_id.clone(),
                     kind: "gitops_base_revision".to_string(),
                     label: format!("Resolved GitOps base revision for {}", change_set.id),
                     mime_type: Some("application/json".to_string()),
@@ -1236,7 +1258,7 @@ pub(in crate::app) async fn internal_gitops_base_revision_outcome(
             .create_artifact(CreateArtifact {
                 id: format!("art_{}_gitops_base_revision", unique_suffix()),
                 session_id: change_set.session_id.clone(),
-                run_id: Some(change_set.run_id.clone()),
+                run_id: change_set.run_id.clone(),
                 kind: "gitops_base_revision".to_string(),
                 label: format!("Failed GitOps base revision resolution for {}", change_set.id),
                 mime_type: Some("application/json".to_string()),
@@ -1286,7 +1308,7 @@ pub(in crate::app) async fn current_gitops_base_revision_execution(
         .ok_or_else(|| ApiError::not_found("gitops_change_set", gitops_change_set_id))?;
     let execution = state
         .store
-        .list_artifacts(&change_set.run_id)
+        .list_artifacts(super::legacy::run_id(&change_set)?)
         .await?
         .into_iter()
         .find(|artifact| {
@@ -1317,6 +1339,7 @@ pub(in crate::app) async fn internal_gitops_delivery_context(
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &query.execution_id)
             .await?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     let source = gitops_delivery_plan_source(&plan, &change_set)?;
     let settings = state.worker.gitops_writer_settings().ok_or_else(|| {
         ApiError::conflict("GitOps writer executor is not configured for delivery context")
@@ -1363,6 +1386,7 @@ pub(in crate::app) async fn internal_gitops_delivery_outcome(
     let (change_set, plan, _execution) =
         current_gitops_delivery_execution(&state, &gitops_change_set_id, &request.execution_id)
             .await?;
+    super::legacy::ensure_legacy_mutation(&state.store, &change_set).await?;
     let result = match request.status.as_str() {
         "completed" => {
             let branch = clean_optional_text(request.branch).ok_or_else(|| {
@@ -1541,11 +1565,11 @@ pub(in crate::app) async fn internal_gitops_delivery_observation_outcome(
                 return Err(ApiError::bad_request("merged GitOps outcome has invalid merge provenance"));
             }
             if !merged && merge.is_some() { return Err(ApiError::bad_request("unmerged GitOps outcome must not include merge_commit_sha")); }
-            let observation = state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_pr_observation",unique_suffix()),session_id:change_set.session_id.clone(),run_id:Some(change_set.run_id.clone()),kind:"gitops_delivery_pr_observation".to_string(),label:format!("GitOps PR observation for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"status":"observed","gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"pull_request_state":state_value,"merged":merged,"head_branch":branch,"head_commit_sha":commit,"merge_commit_sha":merge})) }).await?;
-            if let Some(merge_sha) = merge { state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_merge",unique_suffix()),session_id:change_set.session_id.clone(),run_id:Some(change_set.run_id.clone()),kind:"gitops_delivery_merge".to_string(),label:format!("Immutable GitOps merge for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"pull_request_url":expected.get("pull_request_url"),"pull_request_number":expected.get("pull_request_number"),"head_commit_sha":commit,"merge_commit_sha":merge_sha})) }).await?; }
+            let observation = state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_pr_observation",unique_suffix()),session_id:change_set.session_id.clone(),run_id:change_set.run_id.clone(),kind:"gitops_delivery_pr_observation".to_string(),label:format!("GitOps PR observation for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"status":"observed","gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"pull_request_state":state_value,"merged":merged,"head_branch":branch,"head_commit_sha":commit,"merge_commit_sha":merge})) }).await?;
+            if let Some(merge_sha) = merge { state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_merge",unique_suffix()),session_id:change_set.session_id.clone(),run_id:change_set.run_id.clone(),kind:"gitops_delivery_merge".to_string(),label:format!("Immutable GitOps merge for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"pull_request_url":expected.get("pull_request_url"),"pull_request_number":expected.get("pull_request_number"),"head_commit_sha":commit,"merge_commit_sha":merge_sha})) }).await?; }
             observation.into()
         }
-        "failed" => state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_pr_observation",unique_suffix()),session_id:change_set.session_id.clone(),run_id:Some(change_set.run_id.clone()),kind:"gitops_delivery_pr_observation".to_string(),label:format!("Failed GitOps PR observation for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"status":"failed","gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"error_code":clean_optional_text(request.error_code).unwrap_or_else(|| "gitops_observer_failed".to_string())})) }).await?.into(),
+        "failed" => state.store.create_artifact(CreateArtifact { id:format!("art_{}_gitops_delivery_pr_observation",unique_suffix()),session_id:change_set.session_id.clone(),run_id:change_set.run_id.clone(),kind:"gitops_delivery_pr_observation".to_string(),label:format!("Failed GitOps PR observation for {}",change_set.id),mime_type:Some("application/json".to_string()),path:None,content_text:None,content_json:Some(json!({"execution_id":request.execution_id,"status":"failed","gitops_change_set_id":change_set.id,"gitops_delivery_plan_artifact_id":plan.id,"error_code":clean_optional_text(request.error_code).unwrap_or_else(|| "gitops_observer_failed".to_string())})) }).await?.into(),
         _ => return Err(ApiError::bad_request("GitOps observation outcome status must be observed or failed")),
     };
     append_gitops_change_set_audit_event(&state.store,&change_set,&format!("gitops_change_set.delivery_observation_{}",request.status),Some("agent:git-observer".to_string()),None,json!({"execution_id":request.execution_id,"gitops_delivery_plan_artifact_id":plan.id,"observation_artifact_id":artifact.id})).await?;
@@ -1562,7 +1586,10 @@ pub(in crate::app) async fn current_gitops_delivery_observation(
         .get_gitops_change_set(gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", gitops_change_set_id))?;
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     let execution = artifacts
         .iter()
         .find(|artifact| {
@@ -1600,7 +1627,10 @@ pub(in crate::app) async fn current_gitops_delivery_execution(
         .get_gitops_change_set(gitops_change_set_id)
         .await?
         .ok_or_else(|| ApiError::not_found("gitops_change_set", gitops_change_set_id))?;
-    let artifacts = state.store.list_artifacts(&change_set.run_id).await?;
+    let artifacts = state
+        .store
+        .list_artifacts(super::legacy::run_id(&change_set)?)
+        .await?;
     let execution = artifacts
         .iter()
         .find(|artifact| {
@@ -1703,7 +1733,7 @@ pub(in crate::app) async fn persist_gitops_delivery_result(
         .create_artifact(CreateArtifact {
             id: format!("art_{}_gitops_delivery_result", unique_suffix()),
             session_id: change_set.session_id.clone(),
-            run_id: Some(change_set.run_id.clone()),
+            run_id: change_set.run_id.clone(),
             kind: "gitops_delivery_result".to_string(),
             label: format!("GitOps delivery {} for {}", status, change_set.id),
             mime_type: Some("application/json".to_string()),
