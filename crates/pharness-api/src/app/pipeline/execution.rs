@@ -1096,6 +1096,7 @@ pub(in crate::app) fn build_pipeline_run_manifest(
             "pharness.lucas.engineering/source-commit": merge_commit_sha,
         });
     }
+    super::lucas::constrain_finance_build(&mut manifest, execution.production_impacting)?;
     Ok(manifest)
 }
 

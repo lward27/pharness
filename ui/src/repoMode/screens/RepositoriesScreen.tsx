@@ -4,6 +4,7 @@ import { query, sendJson } from "../api";
 import { actionEffectTone, ActionDialog, Empty, LinkButton, ResourceState, SectionHeader, Status, type ServerAction } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
+import { ListPagination } from "../ListPagination";
 import { EvidenceReferences, FactGrid, formatMoment, Freshness, humanize, repositoryLabel, RawRecord, RecordList } from "../presentation";
 
 export function RepositoriesScreen({ operatorName }: { operatorName?: string }) {
@@ -13,11 +14,12 @@ export function RepositoriesScreen({ operatorName }: { operatorName?: string }) 
   const resource = useResource<any>(query("/api/repositories", { search, limit, offset }));
   const products = useResource<any>("/api/products");
   const [registering, setRegistering] = useState(false);
-  return <ResourceState status={resource.status} error={resource.error}>
+  return <>
     <SectionHeader eyebrow="Source registry" title="Repositories" summary="Registration, contract readiness, coding readiness, and capability posture remain separate facts." action={<button className="repo-primary" type="button" onClick={() => setRegistering(value => !value)}><Plus size={17} />Register Repository</button>} />
     {registering ? <RepositoryRegistration products={products.data?.products || []} operatorName={operatorName} onCancel={() => setRegistering(false)} /> : null}
     <div className="repo-filterbar"><MagnifyingGlass size={18} /><input aria-label="Search Repositories" placeholder="Search registered repositories" value={search} onChange={event => { setSearch(event.target.value); setOffset(0); }} /></div>
-    <div className="repo-table" aria-label="Repositories">
+    <ResourceState status={resource.status} error={resource.error}>
+    <div className="repo-table" role="region" aria-label="Repositories" tabIndex={0}>
       <div className="repo-table-head" aria-hidden="true"><span>Repository</span><span>Registration</span><span>Contract</span><span>Coding</span><span>Freshness</span></div>
       {(resource.data?.repositories || []).map((repository: any) => <button type="button" className="repo-table-row" key={repository.id} aria-label={`Open Repository ${repositoryLabel(repository)}`} onClick={() => navigate(`repositories/${repository.id}/overview`)}>
         <span><strong>{repositoryLabel(repository)}</strong><small>{repository.product_bindings?.map((binding: any) => binding.display_name).join(" · ") || "Unbound"}</small></span>
@@ -27,9 +29,10 @@ export function RepositoriesScreen({ operatorName }: { operatorName?: string }) 
         <span><Status value={repository.freshness || "unavailable"} /><small>{repository.stale_reasons?.join(" · ")}</small></span>
       </button>)}
     </div>
-    {resource.data?.count > limit ? <nav className="repo-pagination" aria-label="Repository pages"><button type="button" disabled={offset === 0} onClick={() => setOffset(value => Math.max(0,value-limit))}>Previous</button><span>{offset + 1}–{Math.min(offset + limit,resource.data.count)} of {resource.data.count}</span><button type="button" disabled={offset + limit >= resource.data.count} onClick={() => setOffset(value => value+limit)}>Next</button></nav> : null}
-    {!resource.data?.repositories?.length ? <Empty title="No Repositories registered" message="Select a Product, then register a GitHub HTTPS Repository at a full immutable commit SHA." /> : null}
-  </ResourceState>;
+    <ListPagination label="Repository" count={resource.data?.count} visibleCount={resource.data?.repositories?.length || 0} limit={limit} offset={offset} onOffsetChange={setOffset} />
+    {!resource.data?.repositories?.length ? <Empty title={offset > 0 ? "No results on this page" : search.trim() ? "No matching Repositories" : "No Repositories registered"} message={offset > 0 ? "The result set may have changed. Use Previous to return to an earlier page." : search.trim() ? "Try a different search or clear it to see registered Repositories." : "Select a Product, then register a GitHub HTTPS Repository at a full immutable commit SHA."} /> : null}
+    </ResourceState>
+  </>;
 }
 
 function RepositoryRegistration({ products, operatorName, onCancel }: { products:any[]; operatorName?:string; onCancel:()=>void }) {

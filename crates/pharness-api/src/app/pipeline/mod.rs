@@ -7,6 +7,7 @@ pub(super) mod evidence;
 pub(super) mod execution;
 pub(super) mod handoff;
 pub(super) mod intents;
+mod lucas;
 pub(super) mod readiness;
 pub(super) mod state;
 

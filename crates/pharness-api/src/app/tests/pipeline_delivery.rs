@@ -89,6 +89,87 @@ fn builds_a_constrained_tekton_pipeline_run_manifest() {
     assert_eq!(retry_manifest["metadata"]["name"], "pharness-pint-123-2");
 }
 
+#[test]
+fn finance_builds_cannot_inherit_deployment_identity_or_replace_tested_inputs() {
+    let revision = "0123456789abcdef0123456789abcdef01234567";
+    let mut intent: StoredPipelineIntent = serde_json::from_value(json!({
+        "id":"pint_finance", "change_set_id":"cset_finance", "work_plan_id":"wplan_finance",
+        "session_id":"ses_finance", "status":"approved", "title":"Finance build",
+        "summary":"Build observed source", "risk_level":"high",
+        "intent_kind":"tekton_build_test_package", "created_at":"1",
+        "intent_json":{
+            "source_provenance":{"merge_commit_sha":revision},
+            "execution":{
+                "enabled":true, "namespace":"tekton-pipelines",
+                "pipeline_ref":"pharness-yfinance-build", "params":{"revision":revision},
+                "workspaces":[{"name":"shared-data","volume_claim_template":{"storage":"1Gi"}}]
+            }
+        }
+    }))
+    .unwrap();
+    for pipeline in ["pharness-yfinance-build", "pharness-finance-frontend-build"] {
+        intent.intent_json["execution"]["pipeline_ref"] = json!(pipeline);
+        let execution = tekton_execution_spec(&intent.intent_json).unwrap();
+        let manifest = build_pipeline_run_manifest(&intent, &execution).unwrap();
+        assert_eq!(
+            manifest["spec"]["taskRunTemplate"]["serviceAccountName"],
+            "pharness-finance-build"
+        );
+        assert_eq!(
+            manifest["spec"]["taskRunTemplate"]["podTemplate"],
+            json!({
+                "nodeSelector":{"kubernetes.io/arch":"amd64"}, "securityContext":{"fsGroup":65532}
+            })
+        );
+        assert_eq!(
+            manifest["spec"]["workspaces"][0]["volumeClaimTemplate"]["spec"]["storageClassName"],
+            "local-path"
+        );
+        assert_eq!(manifest["spec"]["timeouts"]["pipeline"], "1h0m0s");
+        for (pointer, value) in [
+            ("/execution/namespace", json!("apps-prod")),
+            ("/execution/production_impacting", json!(true)),
+            ("/execution/params", json!({"revision":"main"})),
+            ("/execution/params", json!({"revision":"f".repeat(40)})),
+            (
+                "/execution/params",
+                json!({"revision":revision.to_uppercase()}),
+            ),
+            (
+                "/execution/params",
+                json!({"revision":revision,"dockerfile":"./unchecked.Dockerfile"}),
+            ),
+            (
+                "/execution/params",
+                json!({"revision":revision,"context":"./unchecked"}),
+            ),
+            (
+                "/execution/params",
+                json!({"revision":revision,"image":"registry.test/other"}),
+            ),
+            (
+                "/execution/workspaces",
+                json!([{"name":"shared-data","persistent_volume_claim":"production-data"}]),
+            ),
+            (
+                "/execution/workspaces",
+                json!([{"name":"shared-data","volume_claim_template":{"storage":"10Gi"}}]),
+            ),
+            ("/execution/workspaces", json!([])),
+        ] {
+            let mut changed = intent.clone();
+            // The production flag is normally omitted by default.
+            changed.intent_json["execution"]["production_impacting"] = json!(false);
+            *changed.intent_json.pointer_mut(pointer).unwrap() = value;
+            let execution = tekton_execution_spec(&changed.intent_json).unwrap();
+            assert!(
+                build_pipeline_run_manifest(&changed, &execution).is_err(),
+                "{pipeline}: {pointer}"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn failed_pipeline_intent_requires_review_and_preserves_evidence_for_one_retry() {
     let state = test_state().await;

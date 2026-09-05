@@ -5,6 +5,7 @@ import { getJson, query, sendJson } from "../api";
 import { Empty, ResourceState, SectionHeader, Status } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
+import { ListPagination } from "../ListPagination";
 import { DataLifecycleScreen } from "./DataLifecycleScreen";
 
 export function AgentsScreen() {
@@ -14,18 +15,20 @@ export function AgentsScreen() {
   const runs = useResource<any>(query("/api/runs", { lifecycle, limit, offset }));
   const profiles = useResource<any>("/api/agent-profiles");
   const selectLifecycle = (value: "current" | "history") => { setLifecycle(value); setOffset(0); };
-  return <ResourceState status={runs.status} error={runs.error}>
+  return <>
     <SectionHeader eyebrow="Execution" title="Agents" summary="Active AgentRuns are separate from immutable Run History. Compiled profiles are read-only." />
     <div className="repo-list-controls"><div className="repo-segmented"><button type="button" className={lifecycle === "current" ? "is-active" : ""} onClick={() => selectLifecycle("current")}>Active Runs</button><button type="button" className={lifecycle === "history" ? "is-active" : ""} onClick={() => selectLifecycle("history")}>Run History</button></div></div>
-    <div className="repo-two-columns"><section className="repo-panel repo-span-2"><header><h2>{lifecycle === "current" ? "Active AgentRuns" : "Run History"}</h2><span className="repo-count">{runs.data?.count || 0}</span></header>
+    <div className="repo-two-columns"><section className="repo-panel repo-span-2"><header><h2>{lifecycle === "current" ? "Active AgentRuns" : "Run History"}</h2></header>
+      <ResourceState status={runs.status} error={runs.error}>
       <div className="repo-table" role="region" aria-label={`${lifecycle === "current" ? "Active" : "Historical"} AgentRuns table`} tabIndex={0}>
         <div className="repo-table-head"><span>Agent</span><span>Product / WorkItem</span><span>StageExecution</span><span>Status</span><span>Budget</span></div>
         {(runs.data?.runs || []).map((run:any) => <button type="button" className="repo-table-row" key={run.id} onClick={() => navigate(`agents/runs/${run.id}`)}><span><strong>{run.ownership?.agent_profile_id || "Legacy run"}</strong><small className="repo-mono">{run.id}</small></span><span><strong>{run.ownership?.product_id || "Unassigned"}</strong><small>{run.ownership?.work_item_id || run.task}</small></span><span className="repo-mono">{run.ownership?.stage_execution_id || "Not stage-owned"}</span><span><Status value={run.status} /><small>{run.retention_state === "compacted" ? "Raw detail intentionally expired" : "Raw detail retained"}</small></span><span>{run.budget_consumption?.turns_used ?? "Unavailable"}/{run.budget_consumption?.allowed_turns ?? run.max_turns ?? "unavailable"} turns</span></button>)}
       </div>
-      {!runs.data?.runs?.length ? <Empty title={lifecycle === "current" ? "No agents running" : "No Run history"} message="AgentRuns appear here with their Product, WorkItem, stage, profile, budget, approvals, and evidence ownership." /> : null}
-      {runs.data?.count > limit ? <nav className="repo-pagination" aria-label="AgentRun pages"><button type="button" disabled={offset === 0} onClick={() => setOffset(value => Math.max(0,value-limit))}>Previous</button><span>{offset+1}–{Math.min(offset+limit,runs.data.count)} of {runs.data.count}</span><button type="button" disabled={offset+limit >= runs.data.count} onClick={() => setOffset(value => value+limit)}>Next</button></nav> : null}
-    </section><section className="repo-panel repo-span-2"><header><h2>Compiled AgentProfiles</h2><Status value="read only" /></header><div className="repo-card-grid repo-three">{(profiles.data?.agent_profiles || []).map((profile:any) => <article className="repo-profile" key={profile.id}><Robot size={22} /><div><strong>{profile.id}</strong><span>{profile.version}</span></div><p>{profile.allowed_tools?.join(" · ") || profile.tool_allowlist?.join(" · ")}</p><small className="repo-mono">{profile.profile_hash}</small></article>)}</div></section></div>
-  </ResourceState>;
+      {!runs.data?.runs?.length ? <Empty title={offset > 0 ? "No results on this page" : lifecycle === "current" ? "No agents running" : "No Run history"} message={offset > 0 ? "The result set may have changed. Use Previous to return to an earlier page." : "AgentRuns appear here with their Product, WorkItem, stage, profile, budget, approvals, and evidence ownership."} /> : null}
+      <ListPagination label="AgentRun" count={runs.data?.count} visibleCount={runs.data?.runs?.length || 0} limit={limit} offset={offset} onOffsetChange={setOffset} />
+      </ResourceState>
+    </section><section className="repo-panel repo-span-2"><header><h2>Compiled AgentProfiles</h2><Status value="read only" /></header><ResourceState status={profiles.status} error={profiles.error}><div className="repo-card-grid repo-three">{(profiles.data?.agent_profiles || []).map((profile:any) => <article className="repo-profile" key={profile.id}><Robot size={22} /><div><strong>{profile.id}</strong><span>{profile.version}</span></div><p>{profile.allowed_tools?.join(" · ") || profile.tool_allowlist?.join(" · ")}</p><small className="repo-mono">{profile.profile_hash}</small></article>)}</div>{!profiles.data?.agent_profiles?.length ? <Empty title="No compiled AgentProfiles" message="No profiles were returned by the API." /> : null}</ResourceState></section></div>
+  </>;
 }
 
 export function AgentRunScreen({ runId, operatorName }: { runId:string; operatorName?:string }) { return <div className="repo-run-screen"><button type="button" className="repo-back" onClick={() => navigate("agents")}>← Agents</button><RunDetailView runId={runId} onOpenQueue={() => navigate("agents")} operatorName={operatorName} /></div>; }

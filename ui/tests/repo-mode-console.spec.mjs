@@ -446,6 +446,6 @@ test("Repo Mode state catalog remains legible", async ({ page }) => {
 test("initial route failure is explicit rather than empty or stale", async ({ page }) => {
   await mockRepoModeApi(page,{"/api/organization/overview":{__status:503,body:{error:"overview unavailable"}}});
   await page.goto("/#/overview");
-  await expect(page.getByRole("alert")).toContainText("503");
+  await expect(page.getByRole("alert")).toHaveText("overview unavailable");
   await expect(page.getByText("No Products registered")).toHaveCount(0);
 });

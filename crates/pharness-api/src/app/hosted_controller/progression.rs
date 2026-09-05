@@ -41,12 +41,14 @@ pub(super) async fn advance(
                     | "approve_work_plan"
                     | "authorize_stage_chain"
                     | "approve_change_set"
+                    | "authorize_source_delivery"
             )
     });
     let (action, input_hash, resource) = if let Some(action) = candidate {
         let permission = match action.id.as_str() {
             "start_planner" | "approve_work_plan" => HostedAutomaticAction::Plan,
             "authorize_stage_chain" => HostedAutomaticAction::Implement,
+            "authorize_source_delivery" => HostedAutomaticAction::SourceDelivery,
             _ => HostedAutomaticAction::Verify,
         };
         require_authority(snapshot, permission)?;
@@ -112,6 +114,8 @@ pub(super) async fn advance(
     let repo_lock = format!("repository:{}", snapshot.metadata.repository_id);
     let keys = if runs_worker {
         vec!["coding", repo_lock.as_str()]
+    } else if action == "authorize_source_delivery" {
+        vec![repo_lock.as_str()]
     } else {
         Vec::new()
     };
