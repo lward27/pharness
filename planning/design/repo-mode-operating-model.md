@@ -1,5 +1,9 @@
 # PHarness Repo Mode operating model
 
+> Historical source-only contract. Retained for the meaning of shipped and in-flight
+> legacy work. New direction is the [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md);
+> do not start a competing Repo Mode implementation from this document.
+
 Status: living design
 
 Last decision round: 2026-08-24

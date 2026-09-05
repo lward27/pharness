@@ -1,6 +1,12 @@
 # PHarness operator information architecture
 
-Status: living design
+Status: living design; updated by ASTRA M10.
+
+Current authority: [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
+The deployed Lamina console is the baseline. Source-only examples below describe
+legacy records; new hosted work continues through release and runtime verification.
+GET/navigation stays read-only while the authorized backend controller advances work.
+The M10 acceptance matrix owns final presentation and interaction changes.
 
 Last decision round: 2026-08-24
 
@@ -296,26 +302,10 @@ must survive smaller screens:
 - Never use color alone to distinguish unavailable, waiting, failed, and
   complete.
 
-## Repo Mode V1 screen decision
+## Current screen implementation direction
 
-The V1 operator milestone covers Organization Overview, Product detail,
-Repository onboarding and readiness, WorkItem creation and detail, and active
-AgentRun drill-down. WorkItem Overview is the default operational screen.
-Current Stage, sealed StageOutcomes, Delivery, Evidence, and History remain
-separate, comprehensible sections under the same intent.
-
-StageOutcome presentation distinguishes verified facts, outputs, acceptance,
-claims, contradictions, risks, freshness, and provenance. The supplied dark,
-dense Product-dashboard concepts remain a visual north star, but every visible
-state must be backed by the API and progressively disclosed.
-
-The exact screen scope, interaction behavior, responsive order, acceptance
-journey, and Plan Mode instructions are recorded in
-[`repo-mode-v1-screen-contract.md`](repo-mode-v1-screen-contract.md).
-
-Product Graph, broad AgentProfile management, multi-agent swarm visualization,
-and secondary-persona specialization are later operator-design work and do not
-block Repo Mode V1.
-
-Do not treat the supplied screenshots as authorization to invent aggregate
-metrics, agent swarms, connected capabilities, or Product health claims.
+The accepted Lamina implementation and selected `Pharness Console.dc.html` are the
+visual baseline. M10 preserves the established eight navigation destinations and
+puts the request, current condition, blocker/wait, and next action before lifecycle
+detail. Historical source-only records stay understandable without implying deployment.
+Do not start a separate Repo Mode screen plan or preserve a competing operational shell.

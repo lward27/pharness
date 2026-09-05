@@ -2,10 +2,24 @@
 
 Status: living design
 
-Last decision round: 2026-08-24
+Last decision round: 2026-09-04
 
 Upstream authority:
 [`product-vision-and-boundaries.md`](product-vision-and-boundaries.md)
+
+## Hosted workflow direction
+
+The [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) extends the existing
+outcome machinery across discover, plan, implement, test, verify, source_delivery,
+release, and observe. Build, staging, and production evidence remain distinguishable
+within release. New hosted work cannot complete at source merge. Legacy source-only
+inapplicable tails and completed records retain their original meaning.
+
+Normalized caveats must retain submitted risks/contradictions. Agent claims are not
+verified facts, and unresolved contradictions cannot be sealed as unconditional success.
+Missing runtime telemetry is inconclusive. Restored service after rollback does not mean
+the requested change succeeded. These are M03/M05/M08/M09 requirements, not a claim that
+all current normalization and release paths already satisfy them.
 
 ## Purpose
 

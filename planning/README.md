@@ -1,98 +1,63 @@
 # PHarness documentation map
 
-Last organized: 2026-09-04
+Last organized: 2026-09-04. Current program: [ASTRA autonomous SDLC](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
 
-PHarness documentation is organized by purpose and lifecycle so an agent can
-distinguish current work from shipped behavior and historical context before it
-acts.
+## Choose an entry point
 
-The current stable release baseline is GitOps commit
-`2d15c7c860233601f7715836c5ecd43a06179cad`. Its compiled source revision is
-`83a2689c877a3f48688d1d457c34e83474698c46`; immutable artifact identities,
-live revision checks, and the enabled Lamina console acceptance are recorded in
-the [dated release evidence](evidence/smoke-results/pharness-lamina-operator-console-release-2026-09-04.md).
-
-## Start here
-
-| Directory | Meaning | Use it when |
+| Purpose | Read first | Meaning |
 | --- | --- | --- |
-| [`active/`](active/README.md) | Approved work that has not finished | Selecting or continuing the next implementation slice |
-| [`architecture/`](architecture/README.md) | Current structural maps and architecture entry points | Understanding ownership, dependencies, and invariants |
-| [`design/`](design/README.md) | Living product and interaction principles | Evaluating how a proposed change should behave |
-| [`implemented/`](implemented/README.md) | Shipped milestones and capability decision records | Understanding why existing behavior was built |
-| [`operations/`](operations/README.md) | Current, bounded validation playbooks | Running a reviewed smoke or release verification |
-| [`evidence/`](evidence/README.md) | Dated assessments, evaluations, and observed results | Comparing a claim with recorded evidence |
-| [`presentations/`](presentations/README.md) | Demo scripts, slides, and presentation sources | Preparing external communication, not implementation truth |
-| [`archive/`](archive/README.md) | Superseded plans, old versions, and retained scratch notes | Historical research only |
+| Getting started | [README](../README.md), [current baseline](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md) | What exists, what is deployed, and what is not yet proven |
+| Development | [architecture](architecture/README.md), [UI guidance](../ui/AGENTS.md) | Ownership, invariants, and implementation checks |
+| Operation | [operations](operations/README.md) | Scoped runbooks and release verification |
+| Reference | [product vision](design/product-vision-and-boundaries.md), [product model](design/product-model.md), [stage outcomes](design/stage-outcomes-and-evidence-handoffs.md) | Current direction and semantic contracts |
+| Roadmap | [ASTRA master and twelve milestones](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), [active index](active/README.md) | Approved work and acceptance gates |
+| Evidence | [evidence](evidence/README.md), [implemented records](implemented/README.md), [archive](archive/README.md) | Dated proof, shipped decisions, and superseded history |
 
-## Current work
+## Current implementation and release
 
-The current implementation and qualification milestone is
-[`Coding Reliability and Alternative-Model Qualification`](active/PHarness-Coding-Reliability-and-Alternative-Model-Qualification.md).
-The [`Finance Metadata Reliability Campaign`](active/PHarness-Finance-Metadata-Reliability-Campaign.md)
-is paused after FRC-1 and resumes at FRC-2 only after the frozen offline coding
-benchmark and disposable repair smoke pass. It continues to keep each change
-single-repository while recording backend-to-frontend merge order and pinned
-context for a later DeliveryPlan design.
+The starting source/configuration baseline is main
+`c36b46aceb72f3d7097bc0bdee74810c745f7c0c`, observed live in Argo on 2026-09-04.
+The compiled release source is `83a2689c877a3f48688d1d457c34e83474698c46`.
+These identities differ intentionally: configuration/evidence commits do not imply
+that images were rebuilt. The [Lamina release evidence](evidence/smoke-results/pharness-lamina-operator-console-release-2026-09-04.md)
+records its prior acceptance. Refresh the [baseline addendum](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md)
+and milestone evidence before relying on any current-state claim.
 
-The latest completed Product/UI milestone is the
-[`Lamina operator-console redesign`](implemented/milestones/pharness-lamina-operator-console-redesign-milestone-2026-09-04.md).
+Lamina is shipped. The reviewed source-closure fix is already upstream. Both the
+yfinance Market endpoint and frontend Market Overview exist on their current main
+branches. Earlier Finance campaign text is historical source-only evidence, not
+an instruction to recreate those features. Gateway coding qualification and the
+continuous hosted lifecycle remain unaccepted.
 
-The approved
-[`Repo Mode V1 product contract`](design/repo-mode-v1-product-contract.md) and
-[`Repo Mode V1 screen contract`](design/repo-mode-v1-screen-contract.md) remain
-the design authorities for the shipped V1. Future work must begin from a new
-reviewed active milestone instead of replaying either completed plan.
+## Authority and lifecycle
 
-## Source-of-truth order
+The owner's approved ASTRA decisions govern new work. Executable source, schemas,
+tests, and observed immutable deployment evidence establish what currently exists;
+when implementation differs from the approved direction, record the gap rather than
+claiming the future behavior has shipped. Accepted ADRs and living contracts explain
+boundaries; dated evidence and archives must keep their original scope.
 
-When documents disagree, use this order:
+Use the numbered program as the single implementation ledger. Keep its documents
+in place as status changes, linking from active/implemented indexes. Older active
+plans are subordinate references or superseded work, as marked in their headers.
+The Repo Mode product/screen contracts describe the shipped legacy boundary;
+they are not competing entry points for a new roadmap.
 
-1. Executable code, tests, database migrations, schemas, and deployed immutable
-   release provenance.
-2. Accepted ADRs under [`../docs/adr/`](../docs/adr/) and current architecture
-   maps under [`architecture/`](architecture/README.md).
-3. The current active milestone and its explicit behavior invariants.
-4. Implemented capability records and current operational playbooks.
-5. Dated evidence.
-6. Archived material.
+## Long-running execution
 
-An archived document is never authorization to implement, deploy, or mutate an
-external system.
-
-## Long-horizon agent workflow
-
-1. Read this index and [`active/README.md`](active/README.md).
-2. Resolve the exact Git revision and inspect the current working tree before
-   relying on line counts, routes, or screenshots in a document.
-3. Read only the architecture, design, implemented records, and evidence needed
-   for the current slice.
-4. Preserve the stable characterization fixture and external-effect boundaries.
-5. Keep one implementation milestone active at a time.
-6. When a milestone ships, move it to `implemented/milestones/`, record its
-   source/release provenance, and update this index.
-7. When a plan is superseded without shipping, move it to `archive/` and name
-   its replacement in the archive index.
+Read the master and next eligible milestone; inspect exact source, remote main,
+worktree state, and relevant live targets. Implement in isolated `codex/` worktrees,
+retain user files, validate meaningful behavior, and record evidence before closing
+a gate. Continue independent work when one dependency is externally blocked.
+Never equate test success, healthy infrastructure, or elapsed time with acceptance.
 
 ## Documentation rules
 
-- Use dated filenames for evidence and milestone snapshots.
-- Use durable, repository-relative links; do not commit machine-local absolute
-  paths.
-- Put executable operational commands only in `operations/` and state their
-  scope, prerequisites, external effects, and cleanup behavior.
-- Keep observed results in `evidence/`; do not rewrite them into current truth.
-- Do not duplicate documents across lifecycle directories. Link to them.
-- Never store credentials, Secret values, authorization headers, or kubeconfig
-  contents in documentation.
-
-## Code-adjacent design sources
-
-Some design sources intentionally remain beside the code they govern:
-
-- [`../ui/AGENTS.md`](../ui/AGENTS.md) contains the current operator-console
-  interaction invariants used by implementation agents.
-- [`../ui/design-qa.md`](../ui/design-qa.md) and its adjacent images support the
-  UI comparison harness and must retain their code-relative paths.
-- [`../docs/adr/0001-local-first-cluster-native.md`](../docs/adr/0001-local-first-cluster-native.md)
-  is the accepted architecture decision record.
+- New program, assessment, and acceptance Markdown uses `ASTRA-`; existing canonical
+  documentation keeps its established filename.
+- Use repository-relative links and explicit revisions/dates, not machine-local paths.
+- Keep results in `evidence/` and executable operational procedures in `operations/`.
+- Mark historical scope and replacement links; do not rewrite dated results.
+- Distinguish implemented, deployed, qualified, and accepted behavior.
+- Do not store credentials, Secret values, authorization headers, or kubeconfig contents.
+- [Presentations](presentations/README.md) support communication, not implementation truth.

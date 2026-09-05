@@ -1,5 +1,9 @@
 # PHarness Repo Mode V1 Product and Control-Plane Milestone
 
+> Current status (2026-09-04): **Historical source-only implementation**.
+> Replacement/authority: [ASTRA](../programs/autonomous-sdlc/ASTRA-05-UNIFIED-SDLC-CONTRACT.md).
+> Preserve its implemented behavior for legacy work. New hosted convergence is governed by ASTRA M05–M10.
+
 ## Summary
 
 Implement the approved Repo Mode V1 contract against baseline `d4502359cc63b2d64a43ac8ca62627e633ac8408`, re-characterizing `main` before execution. The milestone ends when PHarness can register and onboard a GitHub repository, run a fixed Planner → Builder → Tester → Verifier chain, deliver one reviewed source PR, observe its manual merge and provider checks, and close the WorkItem with controller-sealed evidence.

@@ -1,0 +1,9 @@
+{
+  "status": "degraded",
+  "context": "lucas_engineering",
+  "namespace": "pharness",
+  "lookback": "30m",
+  "node_not_ready": 0,
+  "nonrunning_pods": 62,
+  "failed_checks": 0
+}

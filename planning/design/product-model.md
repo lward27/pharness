@@ -2,10 +2,17 @@
 
 Status: living design
 
-Last decision round: 2026-08-24
+Last decision round: 2026-09-04
 
 Upstream authority:
 [`product-vision-and-boundaries.md`](product-vision-and-boundaries.md)
+
+## Current direction and compatibility
+
+The [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) owns new hosted
+workflow implementation. The entities below describe semantics, not a promise that
+every listed concept has a database table or is exposed by the current UI. Source-only
+references describe legacy records; they do not authorize new source-only product modes.
 
 ## Purpose
 
@@ -94,9 +101,10 @@ The initial Product registration contains:
 - A human-readable description.
 - An accountable owner.
 
-Repo Mode requires at least one registered Repository before work can begin.
-It does not require a Service or Environment. This keeps repository-only value
-possible without manufacturing a runtime model that PHarness cannot observe.
+Legacy source-only WorkItems required a registered Repository without a hosting target.
+New hosted WorkItems require a validated Repository plus versioned native delivery and
+verification bindings. Missing readiness blocks creation/progression; it does not silently
+fall back to source-only completion.
 
 Deterministic Repository discovery records source facts. An AgentRun may then
 propose Services and RepositoryBindings for operator review. Approved mappings
@@ -169,14 +177,16 @@ The effective pointer is a controller decision, not a mutation of the sealed
 outcome. Supersession and staleness are relationships between outcomes, not
 ways to rewrite them.
 
-## Repo Mode mutation boundary
+## Application mutation boundary
 
 The Product may supply context from several registered Repositories, but an
-initial Repo Mode WorkItem mutates exactly one Repository. The mutable
+hosted WorkItem mutates exactly one application Repository. The mutable
 Repository and pinned source revision are immutable WorkItem inputs. Other
 registered Repositories may be pinned as read-only context.
 
-Changing the mutable Repository creates a new linked WorkItem. Future
+Separately authorized GitOps updates are delivery effects, not permission to edit a
+second application Repository. Changing the mutable Repository creates a new linked
+WorkItem. Future
 multi-Repository mutation requires a DeliveryPlan that makes merge,
 compatibility, promotion, failure, and recovery order explicit.
 
@@ -186,10 +196,11 @@ A Release is an immutable promoted outcome for one Product and Environment.
 It binds the promoted source and artifact provenance, applicable WorkItems,
 deployment evidence, verification result, and rollback relationship.
 
-A source pull request or merge is not a Release. Repo Mode may complete a
-WorkItem after observing its source merge while Release remains unavailable.
-Connected modes may continue the same WorkItem through deployment and
-observation when the Product has the required environment capabilities.
+A source pull request or merge is not a Release. Legacy source-only WorkItems retain
+their observed-merge completion and unavailable Release. New hosted WorkItems remain
+nonterminal until the approved target has deployed and runtime acceptance is verified.
+Production GitOps merge requires human approval bound to the exact artifact and evidence.
+Successful rollback records recovered service while the requested WorkItem remains failed.
 
 Product dashboards may summarize currently deployed Releases, but release
 state never replaces WorkItem lifecycle state.
@@ -236,13 +247,10 @@ informal list. Its future contract needs dependency validation,
 partial-completion semantics, compatibility evidence, operator overrides, and
 recovery ownership.
 
-## Deferred design and implementation mapping
+## Implementation mapping
 
-Environment topology, promotion relationships, DeliveryPlan, and
-cross-Product access are later-mode design work and do not block initial Repo
-Mode. The first implementation milestone must map the settled Repo Mode
-entities onto existing PHarness resources and migrations before adding new
-persistence.
-
-Do not infer database tables directly from this document. First characterize
-the current resource model and preserve its working behavior.
+M05 maps the hosted contract onto existing WorkItem/stage/effect resources before adding
+persistence. Preserve compatible readers and additive migrations. Environment promotion
+and observation for the two Finance applications are in scope now; generic topology,
+DeliveryPlan, and cross-Product mutation remain deferred. Historical in-flight work keeps
+its pinned contract and all prior outcomes remain immutable.
