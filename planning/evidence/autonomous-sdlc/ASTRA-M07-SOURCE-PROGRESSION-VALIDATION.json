@@ -1,0 +1,36 @@
+{
+  "verified_at": "2026-09-05T16:09:50.154663+00:00",
+  "source_base": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "source_file_sha256": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "69c0f8e4a61ecd93896802ab06b096bc158e6fb3dd60a77abf05c7d5e94a4757",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "e50aa6d4339dd27cd11637dc15fbbf7d4ad07f0135b4ea007b144bac8e8a6551",
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "d8cf71a5c7a95624a6d4ef219fa07d793aee35cb8d3cf53cd272fb8b1bd9a3af",
+    "crates/pharness-api/src/app/hosted_controller/source.rs": "6b0ffdefcc82d3a57af7cb23a4553a401fc140c3de12a9e1bb1616959e01b8f7",
+    "crates/pharness-api/src/app/tests/mod.rs": "806577697ffbd52b65336819dc3ab551c91272a830193a68e012c56f5574dee5",
+    "crates/pharness-api/src/app/tests/hosted_source_controller.rs": "f411afb9a292d3717e3a6cb22cdeb25f1707393448be544efb72db693f2ec53c",
+    "crates/pharness-api/src/dispatch.rs": "6578a2a18ee46dd52a0a442867189d9d0be83319ec5b377968723f5f3bbdef56",
+    "crates/pharness-api/src/dispatch/source_delivery.rs": "ad8e15966878ab9dcfd886b63ef37443d70c05cca18d99341e33bc9fd2a65364"
+  },
+  "validation": {
+    "api_full_suite": "257 passed before one final test-only addition",
+    "final_targeted_suite": "7 passed, including the added late-callback regression; 258 distinct API tests verified across these runs",
+    "clippy_all_targets": "passed with warnings denied",
+    "module_boundaries": "passed",
+    "dependency_parser": "5 passed",
+    "format_and_diff": "passed"
+  },
+  "log_sha256": {
+    "api-tests": "9c82834f388c99c8d420c2c6ea9d75a331d2d4316a017cfd22f0c9a9c15045ff",
+    "focused-final": "d874515887d9b0f86771b59f3adcc59f20c69ef05037e89dcb1f1a6517167bdb",
+    "clippy-final": "2df721af20e751aac5daded1846f2aea98289294c4b8a986152429e1d26054a0",
+    "architecture-final": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3",
+    "architecture": "4ecd494c3f967482d229766b1c220c4d9cedcab8f65c4f13766d2a9360c761b6"
+  },
+  "proof_scope": "Deterministic temporary SQLite and Kubernetes dispatcher fixtures. No GitHub mutation, real build, deployment or provider qualification performed by these tests.",
+  "remaining_gaps": [
+    "Automatic GitHub source merge and required-check enforcement are not part of this slice.",
+    "Source-to-Tekton dispatch remains separate implementation work.",
+    "A terminal source Job without its callback remains blocked with its identity and lock retained; remote-result reconstruction remains unproven.",
+    "No live hosted request, restart proof or autonomous Finance acceptance is claimed."
+  ]
+}
