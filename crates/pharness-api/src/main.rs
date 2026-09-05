@@ -235,6 +235,9 @@ fn worker_job_env(config: &ApiRuntimeConfig) -> Vec<(String, String)> {
     if let Some(url) = &config.cluster.loki_url {
         env.push(("PHARNESS_LOKI_URL".to_string(), url.clone()));
     }
+    if let Some(url) = &config.cluster.tempo_url {
+        env.push(("PHARNESS_TEMPO_URL".to_string(), url.clone()));
+    }
     if !config.cluster.registry_aliases.is_empty() {
         env.push((
             "PHARNESS_REGISTRY_ALIASES".to_string(),

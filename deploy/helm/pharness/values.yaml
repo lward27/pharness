@@ -94,6 +94,8 @@ api:
     argocdNamespace: argocd
     prometheusUrl: http://prometheus-server.monitoring.svc.cluster.local:80
     lokiUrl: http://loki.monitoring.svc.cluster.local:3100
+    # Enable with the next compatible runtime release: http://tempo.monitoring.svc.cluster.local:3200
+    tempoUrl: ""
     registryAliases: docker-registry.registry.svc.cluster.local:5000=registry.lucas.engineering
   resources:
     requests:

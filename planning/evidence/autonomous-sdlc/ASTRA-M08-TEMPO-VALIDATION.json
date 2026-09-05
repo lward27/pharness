@@ -1,0 +1,58 @@
+{
+  "recorded_at": "2026-09-05T18:39:31.643869+00:00",
+  "base_source_revision": "fb68b7fc6b0acf6dd8bf71fc4e13fd5c25ba2603",
+  "branch": "codex/astra-runtime-verification",
+  "changes": "Bounded native Tempo sample reader and optional disabled configuration; no database or agent-tool changes",
+  "source_sha256": {
+    "config/pharness.example.toml": "5e5b28fc4547722bc99c8bb0164d20d11dcd1b244052d08da2b19e25eff7e7df",
+    "crates/pharness-api/src/app/system.rs": "480290b44c650df70cd216d35c0297f9dd1ac2ec593d4ba88476d91bd92b32ab",
+    "crates/pharness-api/src/main.rs": "cca3bf669693a2c3118eacd49839acd4bb073d33ca7bde8792a7f5d03be7f1e8",
+    "crates/pharness-config/src/lib.rs": "cdee4b035b61b82ebc698d981505b20e4916cf5128a512cafbf50145a1cb5d73",
+    "crates/pharness-core/src/tools/cluster.rs": "4824bd00e97db58529e39ad6afd673803cb9f602ed42872499281300553ccfc2",
+    "crates/pharness-core/src/tools/mod.rs": "0f33fabfa07b7f4965a036cffb4ab05f81f1332998ae40a0b05821b02511f0b3",
+    "deploy/helm/pharness/templates/api.yaml": "985cca85c608aac8dfcc77d4e6db44344f5d9353057e48b026c7cc2133aca680",
+    "deploy/helm/pharness/values.yaml": "c750c29bded57bdb98a938dcc975fb53c798421cf784ef191a2e93041831eb86",
+    "crates/pharness-core/src/tools/cluster/tempo.rs": "8c87ea483f63a090be479fecb681531055f4eb884e63e9e38031d76408de2258",
+    "crates/pharness-core/src/tools/cluster/tempo/tests.rs": "ae73126eb8047f7cb4c3d63e802adaae49ca6bb1a9429a358dcb00e0b85ee83c"
+  },
+  "tests": {
+    "core_and_configuration": {
+      "passed": 180,
+      "failed": 0,
+      "ignored_live_test": 1
+    },
+    "live_finance_tempo_sample": {
+      "passed": 1,
+      "execution": "explicit read-only local observation, not a deployment acceptance"
+    },
+    "clippy": "passed: pharness-core, pharness-config and pharness-api, all targets, warnings denied",
+    "architecture": "passed, including five dependency-parser tests",
+    "default_helm_render": {
+      "unchanged": true,
+      "resources": 50,
+      "enabled_render": "PHARNESS_TEMPO_URL=http://tempo.monitoring.svc.cluster.local:3200"
+    },
+    "default_live_configuration_enabled": false
+  },
+  "logs": {
+    "/private/tmp/astra-m08-tempo-final-tests-2.log": {
+      "sha256": "0f5407c2409d38faf1d3719357da7af70ee0c0f458c324556765d49d10cd4189"
+    },
+    "/private/tmp/astra-m08-tempo-live-final.log": {
+      "sha256": "74e4eaf27ea1e1d2e8b6ae0b1f3bedab03aa89c3e3c9ad1fa08e93726189451f"
+    },
+    "/private/tmp/astra-m08-tempo-clippy-final.log": {
+      "sha256": "a5f495fa711a6e909c799565954223692e6860b647a2735087699bd6ca060d27"
+    },
+    "/private/tmp/astra-m08-tempo-architecture.log": {
+      "sha256": "5a82a68697699aba86ab630fabb5a1dacd7f816573d73e4f60108410c784977c"
+    }
+  },
+  "intermediate_failures": [
+    "Initial live reader rejected legitimate unpadded Tempo trace IDs; fixed with identity normalization and regression tests.",
+    "First new normalization test used two accidentally overlong test strings; corrected the fixtures, retaining rejection of overlong IDs.",
+    "Initial Clippy requested clamp instead of manual min/max.",
+    "Initial render comparison used a Ruby YAML keyword unsupported by the installed version; rerun without that keyword passed."
+  ],
+  "milestone_accepted": false
+}
