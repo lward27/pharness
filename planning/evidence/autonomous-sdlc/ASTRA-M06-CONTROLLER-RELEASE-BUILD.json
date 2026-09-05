@@ -1,0 +1,115 @@
+{
+  "verified_at": "2026-09-05T16:12:04.864457+00:00",
+  "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "cluster": "lucas_engineering",
+  "builder": "rancher-desktop",
+  "platform": "linux/amd64",
+  "uncached_amd64_execution": "passed",
+  "images": [
+    {
+      "component": "runtime",
+      "image_url": "registry.lucas.engineering/pharness-runtime",
+      "digest": "sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d",
+      "immutable_ref": "registry.lucas.engineering/pharness-runtime@sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d",
+      "archive_sha256": "69d3995724d8e5967680ece6dd05765c5ad7132aad81bcb4ce912cf70f50d9bd",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T14:52:28.578147+00:00",
+      "registry_inspection_sha256": "a4f2750bb776a96a4b10b33f8e2bd297fbe993eca82182bd88db1a8b5a727be1"
+    },
+    {
+      "component": "ui",
+      "image_url": "registry.lucas.engineering/pharness-ui",
+      "digest": "sha256:1324f357883c4d9930dc6c9cbecd27c5ab316646774eefd24973f96f2768e3ef",
+      "immutable_ref": "registry.lucas.engineering/pharness-ui@sha256:1324f357883c4d9930dc6c9cbecd27c5ab316646774eefd24973f96f2768e3ef",
+      "archive_sha256": "fc28e188ccd216673878e4ea41a01e76648c2c51c15b0df4cdb2cd3e4cbb1d95",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T14:54:19.607121+00:00",
+      "registry_inspection_sha256": "0c5d607e6002f24f9f0c67662e17c7652417f8e8da6d595f26cd1e946ffb3ef4"
+    },
+    {
+      "component": "python-runner",
+      "image_url": "registry.lucas.engineering/pharness-python-runner",
+      "digest": "sha256:e7992e58091d7f5857c3034afddaefd1466e978a32b6f4b78280aa6937eb514b",
+      "immutable_ref": "registry.lucas.engineering/pharness-python-runner@sha256:e7992e58091d7f5857c3034afddaefd1466e978a32b6f4b78280aa6937eb514b",
+      "archive_sha256": "6c9e76ace7f3a0680eb6cea7feb805c828d9a16fb3427dddb3977f0710a9cde1",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T15:10:14.396042+00:00",
+      "registry_inspection_sha256": "7f8421d1be42e20ef4a809e866b4103b915623380c93ac41dc42f3cc3fa90be6"
+    },
+    {
+      "component": "node-runner",
+      "image_url": "registry.lucas.engineering/pharness-node-runner",
+      "digest": "sha256:81074b9f17683377026c124ded3c3af3beed8715058e13827a6d1215e8894c5f",
+      "immutable_ref": "registry.lucas.engineering/pharness-node-runner@sha256:81074b9f17683377026c124ded3c3af3beed8715058e13827a6d1215e8894c5f",
+      "archive_sha256": "dfa61fe424895174b4b2dbbb6e037273e877e36bcf86155785d25979eb48b3fc",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T15:37:56.819534+00:00",
+      "registry_inspection_sha256": "438886e6eb87cbe4bf94e1dac46c8bfea5e5100018252596f4f32a7070bcc514"
+    },
+    {
+      "component": "model-gateway",
+      "image_url": "registry.lucas.engineering/pharness-model-gateway",
+      "digest": "sha256:b8ba037ab2f8c59bc6f81661676a4bbeefb27b655f8b2d1799eba9025d8b2b63",
+      "immutable_ref": "registry.lucas.engineering/pharness-model-gateway@sha256:b8ba037ab2f8c59bc6f81661676a4bbeefb27b655f8b2d1799eba9025d8b2b63",
+      "archive_sha256": "9014f2e42e2df763cc9def3cb89a0072b41f2f917e3a75731a67833bdfb93b3a",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T15:40:57.213194+00:00",
+      "registry_inspection_sha256": "876335f491d0638ccc6bceefb7fec26770ba6c4e67c11a8c1e865a835c107879"
+    },
+    {
+      "component": "eval-runner",
+      "image_url": "registry.lucas.engineering/pharness-eval-runner",
+      "digest": "sha256:15f0f1a1dd392b209283a4fe84337e8d6899ed5bba1dbaa16ba768a580ba0910",
+      "immutable_ref": "registry.lucas.engineering/pharness-eval-runner@sha256:15f0f1a1dd392b209283a4fe84337e8d6899ed5bba1dbaa16ba768a580ba0910",
+      "archive_sha256": "f2e98e7aebf70802f378a156b7d5c098a0575af7ed173df013685e66ac161ed9",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T16:00:46.194822+00:00",
+      "registry_inspection_sha256": "b3f732caba15c091c705dfd3ce1743ee29d582cecb855b5a3efb89b9e45fe2ff"
+    },
+    {
+      "component": "codex-host",
+      "image_url": "registry.lucas.engineering/pharness-codex-host",
+      "digest": "sha256:994ff6440a5ebbb63c8e7c457bc6956b1e911dac1499ed4809be1484ee212130",
+      "immutable_ref": "registry.lucas.engineering/pharness-codex-host@sha256:994ff6440a5ebbb63c8e7c457bc6956b1e911dac1499ed4809be1484ee212130",
+      "archive_sha256": "16083a930dc1350746845674e4f52114dcacd8aff93333937aae6249af0906db",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-05T16:11:22.779047+00:00",
+      "registry_inspection_sha256": "eac6729c486284356db3ae8468fa77621eae112e4aeb906070fdd003c5dc9134"
+    }
+  ],
+  "native_bundle": {
+    "verified_at": "2026-09-05T15:42:18.089943+00:00",
+    "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+    "filename": "pharness-codex-host-48c77b7b4438d621ff9563b913857bcf771f1800-linux-amd64.tar.gz",
+    "local_path": "/Users/wardl/Personal/apps/pharness-release-artifacts/48c77b7b4438d621ff9563b913857bcf771f1800/pharness-codex-host-48c77b7b4438d621ff9563b913857bcf771f1800-linux-amd64.tar.gz",
+    "sha256": "a0f88d77dd55d8cf1234c6709fff9792831c95e2d59a59799a336708e4cb7013",
+    "bytes": 231643979,
+    "codex_version": "0.150.1",
+    "checksummed_files": 13,
+    "all_checksums_verified": true,
+    "linux_runtime_bundle_verification": "passed via Dockerfile.codex-host bundle-verification target",
+    "appledouble_members": 0,
+    "build_log_sha256": "2acf7b6cf5a29ce7d44711271d722ec7466bacbb37f62f396eab7636731c541a"
+  },
+  "log_sha256": {
+    "astra-controller-amd64-check.log": "8f9b194855a4b8d6827135274e3a8c29e119a3bdca7b1cf579c5e8a8359b9713",
+    "astra-m06-controller-build.log": "31d2c4692213b8d833aaaa9dc91caa036e54cdfe0e9b6c8a1cb7944e0310ab68",
+    "astra-m06-local-artifacts.log": "2acf7b6cf5a29ce7d44711271d722ec7466bacbb37f62f396eab7636731c541a",
+    "astra-m06-publish-remaining.log": "3922d0fdc22f2aaa79d08b5393bdd8026fc6ec21504e375d0bbad2c26385317f"
+  },
+  "scope": "Immutable artifact set only. Live migration preservation, gateway qualification, controller acceptance and autonomous Finance delivery remain separate. No SBOM, signature or provenance attestation is claimed."
+}
