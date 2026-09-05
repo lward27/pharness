@@ -4,6 +4,7 @@ import { LinkButton, OutcomeDetails, Status } from "./components";
 import { FactGrid, formatMoment, humanize } from "./presentation";
 import { useDialog } from "./useDialog";
 import { useResource } from "./useResource";
+import { hostedStages } from "./workItemPresentation";
 
 export const lifecycleStages = ["discover", "plan", "implement", "test", "verify", "source_delivery"] as const;
 export type TimelineInterval = {
@@ -35,7 +36,7 @@ function duration(ms: number) {
 }
 const intervalLabel = (entry: TimelineInterval) => entry.kind === "delivery_wait" ? "PR delivery · includes waits" : `${entry.correction_of ? "Repair" : entry.diagnosis_of ? "Diagnosis" : humanize(entry.stage_key)} ${entry.sequence}${entry.kind === "marker" ? " · sealed" : ""}${["failed","cancelled","blocked"].includes(entry.status) ? ` · ${entry.status}` : ""}`;
 
-export function LifecycleTimeline({ projection, outcomes = [], workItemId }: { projection?: TimelineProjection; outcomes?: any[]; workItemId: string }) {
+export function LifecycleTimeline({ projection, outcomes = [], workItemId, hosted = false }: { projection?: TimelineProjection; outcomes?: any[]; workItemId: string; hosted?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const entries = projection?.intervals || [];
   const selected = entries.find(entry => entry.id === selectedId);
@@ -49,7 +50,7 @@ export function LifecycleTimeline({ projection, outcomes = [], workItemId }: { p
     {!projection ? <p className="repo-warning">Timeline projection unavailable. Stage Outcomes and History retain the recorded evidence.</p> : null}
     <div className="lamina-timeline-scroll" role="region" aria-label="Lifecycle time lanes; scroll horizontally for the full axis" tabIndex={0}>
       <div className="lamina-time-axis"><span>Stage / outcome</span><div>{[0, .25, .5, .75, 1].map(position => <time key={position} title={range ? formatMoment(String(range.start + extent * position)) : undefined}>{range ? new Date(range.start + extent * position).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "—"}</time>)}</div></div>
-      {lifecycleStages.map(stage => {
+      {(hosted ? hostedStages : lifecycleStages).map(stage => {
         const lane = entries.filter(entry => entry.stage_key === stage);
         const outcome = outcomes.find(entry => entry.stage_key === stage);
         const current = lane.find(entry => entry.is_current);

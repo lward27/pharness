@@ -1,6 +1,7 @@
 # ASTRA M10: Console convergence and polish
 
-Status: planned.
+Status: initial console corrections validated locally; remaining scope, route retirement and M09 state integration gates open.
+Evidence: [initial implementation and visual review](../../evidence/autonomous-sdlc/ASTRA-M10-CONSOLE-CONVERGENCE-AND-POLISH.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: May begin after M05; closes against M09 behavior.
 

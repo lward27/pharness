@@ -1,0 +1,92 @@
+{
+  "verified_at": "2026-09-05T14:19:19.004604+00:00",
+  "base_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "branch": "codex/astra-console-convergence",
+  "unit_tests": 79,
+  "browser_checks_distinct": 109,
+  "presentation_browser_checks": 108,
+  "real_controller_journey_checks": 1,
+  "real_controller_display_configurations": [
+    "lamina",
+    "preceding_flagged_shell"
+  ],
+  "intentional_mobile_journey_duplicate_skip": true,
+  "build": "passed",
+  "scenarios": [
+    "hosted pending release and observe",
+    "legacy source-only completion",
+    "configuration unavailable and keyboard retry",
+    "same-record stale retention and disabled workflow controls",
+    "desktop and 390px",
+    "dark and light themes"
+  ],
+  "accessibility": "WCAG2 A/AA automated checks, keyboard interaction and document overflow",
+  "source_manifest": {
+    "ui/src/App.jsx": "da11690fa6f29f046eafd4d5f865e23de8b2ef16f5dbcd70b04a568753e0664f",
+    "ui/src/App.test.tsx": "f896bd329f159f4f8690519106382d3c15b574f3e80f8c6fe68a0c685b965513",
+    "ui/src/repoMode/LifecycleTimeline.tsx": "dc07429a0315cf6ede68def674f9c0b11a9683996c52b202060226d0a254a107",
+    "ui/src/repoMode/screens/RepositoriesScreen.tsx": "45cdd2c9367826231e734163904bd06c516c1b17c8ee46ef3745dad47cd92be2",
+    "ui/src/repoMode/screens/WorkItemScreen.test.tsx": "f502cae146d8af372b401ecd937f298224af155079264422dcddfc2ead74cf9e",
+    "ui/src/repoMode/screens/WorkItemsScreen.tsx": "4747b00a8efa13cb05fec857e28fe178f68e58ad9393fe0ba921e46eb6446002",
+    "ui/src/repoMode/styles/screens.css": "c70bff5ac6e2c2af02fc2888596d82e588a1557d819e85cc650962f2881bc34d",
+    "ui/src/repoMode/workItemPresentation.test.ts": "da6d9c3e8839f26e3832b094014381bed96fba4bd782c55ea6490f6a6af5d8c7",
+    "ui/src/repoMode/workItemPresentation.ts": "eb73aef24021b0f2bf7e6c1dc9feb5882884f4f65976144cd0c50804023cd757",
+    "ui/src/views/WorkItemNewView.tsx": "ef2d0581482db7451182da526727279e06247ebad7b60a5a474a85b5f643522b",
+    "ui/tests/hosted-console.spec.mjs": "c9f12005a7ce011c405d16d9e488f29b38f319b465fbd4ae39caa3d209dcda6b",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-paused-light-tablet-desktop-darwin.png": "c1d62f3f858e62863a459051554b25d2f3d7fc07abeb65499c54b648dad15048",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-paused-light-tablet-mobile-darwin.png": "c1d62f3f858e62863a459051554b25d2f3d7fc07abeb65499c54b648dad15048",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-source-completed-desktop-desktop-darwin.png": "f2ace3940000d59dc747882694242d5960ec49a05942317fc7c95c5011fe4b29",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-source-completed-mobile-mobile-darwin.png": "d15b111167315d89d31dbf60d62eaa515d7cd35ac4c1dc8616730df70e1cfc15",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-workitem-desktop-desktop-darwin.png": "d45c3744e2ea12ce2d6df980103749aa8a5d8510e43321805889d6306ac87909",
+    "ui/tests/lamina-console.spec.mjs-snapshots/lamina-workitem-mobile-mobile-darwin.png": "7778fcfd0b1e320a67de57fdd432d5743d491a6a56c37978f3965ac7bf893c16",
+    "ui/tests/operator-console.spec.mjs": "d6b51429ef9bc45f9382134baead4a7b45fbc3d889d6d4286df37d2fa5fb024d",
+    "ui/tests/operator-console.spec.mjs-snapshots/work-item-preparation-blocked-desktop-darwin.png": "681b2735a9c46c28fcca7f0427ce3a7da786fe77c7f88830468678e8fa5eb117",
+    "ui/tests/operator-console.spec.mjs-snapshots/work-item-preparation-blocked-mobile-darwin.png": "6d0e58afd40b600ac00c0cf18faebce58e939b8da184428ad43e2af46d51407f",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-completed-delivery-desktop-desktop-darwin.png": "f83ddd287cdb0b910e61a1aa7f0dc5cfbc7d6806a5f8e79ada502ec0f64c3172",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-completed-delivery-mobile-mobile-darwin.png": "f65cd07946f098ed8d8d25757e3361209e1230fefff10fbec35e956810625d6b",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-planner-review-desktop-darwin.png": "7f6da6aea4e119efcab5ad9d45512e2f0bfbdead3b7e5e683a2cd3a79670b93a",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-planner-review-mobile-darwin.png": "69987c16644041e00ebab5c276b8f57b7ae97310177216270caf2a6afc480a43",
+    "ui/tests/repo-mode-real-server.spec.mjs": "6486699aaa99527bc86429c957cfeab81274095098b16201e87bf7e4e4304973",
+    "ui/tests/repo-mode-real-server.spec.mjs-snapshots/lamina-real-completed-desktop-desktop-darwin.png": "0a6ea80e72ea000b64766de3395c90d49cc032dfd69ec9de92720ec865e08140",
+    "ui/tests/repo-mode-real-server.spec.mjs-snapshots/lamina-real-completed-mobile-desktop-darwin.png": "1eb4c577891edc788421717e88a967cd48496624c62180b82a715392e36dd1d1",
+    "ui/tests/repo-mode-real-server.spec.mjs-snapshots/repo-mode-real-completed-desktop-desktop-darwin.png": "a75e3602905b491766f156b1fa9864e85631730ee7512c4659405382320b2d87",
+    "ui/tests/repo-mode-real-server.spec.mjs-snapshots/repo-mode-real-completed-mobile-desktop-darwin.png": "1d4fa4b2b9c070c9530286c7463ca298f0c67d248be9ac233b61fe82e6221169"
+  },
+  "logs": [
+    {
+      "file": "/private/tmp/astra-m10-unit-tests.log",
+      "sha256": "ad8d25b7c71f9966735a47f1ac590c1661cf0a8354ed5bdfe5b9bb66511d3b7d"
+    },
+    {
+      "file": "/private/tmp/astra-m10-build.log",
+      "sha256": "35707ae9af82620057c413ecfd8e928a39ef91a9f4e9fda884868fcaf0219f31"
+    },
+    {
+      "file": "/private/tmp/astra-m10-browser-final.log",
+      "sha256": "f5dd6d117bfef41a4d07d86284024f8994763f318eb1709958b08b494ae035e0"
+    },
+    {
+      "file": "/private/tmp/astra-m10-hosted-browser-final.log",
+      "sha256": "3286b6b7fc16a147845d0ce9a5146921d2359b4e972e57e216919b75f684907f"
+    },
+    {
+      "file": "/private/tmp/astra-m10-real-api-browser-final.log",
+      "sha256": "28dcc7dcc816cc57fec789b69a10152a8c6a25a88974df6f2b0387398cdc8e47"
+    },
+    {
+      "file": "/private/tmp/astra-m10-real-api-legacy-final.log",
+      "sha256": "b7617ad4cbda77388c7d43fbf0bec5a74f69a5350737ef41e69b035e48be0eec"
+    }
+  ],
+  "screenshots": {
+    "ASTRA-hosted-delivery-light-desktop.png": "1ddf91c16ab953f105cec9dfb07f4639d28056299ca6466edf8c0dc1b4936da2",
+    "ASTRA-hosted-delivery-light-mobile.png": "8bb2fdec9bfeffa0403cef692748ba238b600aaa9fd4da38b7363ae2507fb687",
+    "ASTRA-hosted-overview-dark-desktop.png": "858ca00f900f98524b5892abe073d1e3bdff6992b4843e9aec8d26199f796ee1",
+    "ASTRA-hosted-overview-dark-mobile.png": "435666c597b0b5056a7c19f45bedea542e88ffc0ab1a93afa1c3f7e9e850dafe",
+    "ASTRA-hosted-overview-light-desktop.png": "11f3caaa7dbab34fd6507db479ab4f675c42d09c494b5f620d16471979f0b46b",
+    "ASTRA-hosted-overview-light-mobile.png": "9d405fb3946ace211fa0ab95806f7b27b58f597895f229e3bb000d5b0f085b1d",
+    "ASTRA-hosted-stale-controls-desktop.png": "7814743dbf02ac53963f981edb4bc79b42e0d276467b06a2fae3c3e90b3a8b79",
+    "ASTRA-hosted-stale-controls-mobile.png": "a6b14189616bb20158c299ab0bc14740783a2d694860e6684a96a51393c9f044"
+  },
+  "scope": "Local preparation, no live provider or deployment proof, no M11 work submitted. Remaining M10 gates are explicitly open."
+}

@@ -240,3 +240,35 @@ describe("stage inference authorization", () => {
 function json(value:any) {
   return new Response(JSON.stringify(value),{status:200,headers:{"content-type":"application/json"}});
 }
+
+describe("hosted delivery presentation", () => {
+  afterEach(() => {cleanup(); vi.unstubAllGlobals();});
+  const hostedFlow = () => ({
+    ...completedFlow,
+    work_item:{...completedFlow.work_item,workflow_kind:"hosted_sdlc",status:"running",closed_at:null,closure_reason:null},
+    reconcile_preview:{boundary:"release"},
+    delivery_configuration:{kind:"hosted_sdlc",release:{required:true,steps:[{key:"build",pipeline_contract_id:"pipeline_finance"},{key:"staging",deployment_contract_id:"deployment_staging"},{key:"production",deployment_contract_id:"deployment_production",approval_boundary:"before_gitops_merge"}]},observe:{required:true},required_evidence:["image_digest","runtime_verification"]},
+    repo_mode:{...completedFlow.repo_mode,effective_stage_outcomes:completedFlow.repo_mode.effective_stage_outcomes.slice(0,1)},
+  });
+  it("keeps unevidenced release and observation required after source merge", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(hostedFlow())));
+    render(<WorkItemScreen workItemId="hosted" section="delivery" operatorName="lucas" />);
+    expect(await screen.findByText("Required release evidence")).toBeInTheDocument();
+    expect(screen.getByText("pipeline_finance")).toBeInTheDocument();
+    expect(screen.getByText("deployment_staging")).toBeInTheDocument();
+    expect(screen.getByText("deployment_production")).toBeInTheDocument();
+    expect(screen.getByText(/Production approval must precede/)).toBeInTheDocument();
+    expect(screen.getByText(/No release outcome is recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/No observation outcome is recorded/)).toBeInTheDocument();
+    expect(screen.queryByText("inapplicable", {exact:true})).not.toBeInTheDocument();
+    expect(screen.queryByText("Source Delivery succeeded", {exact:true})).not.toBeInTheDocument();
+  });
+  it("renders all eight hosted stage outcomes without reclassifying legacy history", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(hostedFlow())));
+    render(<WorkItemScreen workItemId="hosted" section="stage-outcomes" operatorName="lucas" />);
+    await screen.findByRole("heading",{name:"Normalize periods"});
+    expect(document.querySelectorAll(".repo-outcome-card")).toHaveLength(8);
+    expect(screen.getByRole("heading", {name:/^release$/i})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {name:/^observe$/i})).toBeInTheDocument();
+  });
+});
