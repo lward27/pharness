@@ -1,0 +1,37 @@
+{
+  "observed_at": "2026-09-05T16:13:55.712828+00:00",
+  "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "cluster": "lucas_engineering",
+  "previous_runtime_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "active_jobs": [],
+  "hosted_creation_enabled": false,
+  "coding_reliability_v2_enabled": false,
+  "native_kubernetes_host_enabled": false,
+  "api_replicas": 1,
+  "feature_workflow_retention_organization_configuration_unchanged": true,
+  "rendered_objects": 53,
+  "dry_run_namespaces": [
+    "pharness",
+    "apps-prod",
+    "argocd",
+    "tekton-pipelines"
+  ],
+  "cluster_scoped_objects": 2,
+  "validation_correction": "Initial dry-run applied one namespace override to a chart containing multiple explicit namespaces and was rejected for those objects. Repeated using each rendered namespace; all 53 objects passed without applying changes.",
+  "log_sha256": {
+    "astra-m06-production-helm-lint.log": "e3f780a4098c4c06647382480e14da108ceb4554fb4b478804ae29a6f02fbe40",
+    "astra-m06-dryrun-pharness.log": "f32469a2c0edeb210d9fc517ad2cf81a264414f09ae6b28d3338f8b29ac66a76",
+    "astra-m06-dryrun-cluster-scope.log": "bd3010a456736a2f3fe0a53d46fa3bd3e939eee08600326e63a7c15484814a1d",
+    "astra-m06-dryrun-apps-prod.log": "843ce786e460a52f326a3f6daa7d8d9a819fcc718bd986bc762e1de334390ace",
+    "astra-m06-dryrun-argocd.log": "05c674d36e2cb633ea2e3de46a225d25181b85819c84982a8724d976e119dad8",
+    "astra-m06-dryrun-tekton-pipelines.log": "5657f0ae5a556cc2d94ff5c670c3baf487de1555f15a781523ca947c55ade532"
+  },
+  "rollback_floor_recorded_before_migration": true,
+  "live_deployment_claimed": false,
+  "run_status_counts": {
+    "completed": 68,
+    "failed": 12,
+    "cancelled": 2
+  },
+  "active_runs": 0
+}
