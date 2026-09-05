@@ -10,6 +10,9 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+mod tempo;
+pub use tempo::FinanceTraceWindow;
+
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 512 * 1024;
 const MAX_PROMETHEUS_RESULTS: usize = 20;
@@ -35,6 +38,7 @@ pub struct ReadOnlyClusterTools {
     argocd_namespace: String,
     prometheus_url: Option<String>,
     loki_url: Option<String>,
+    tempo_url: Option<String>,
     registry_aliases: RegistryAliases,
     include_related_resource_lookups: bool,
     timeout_ms: u64,
@@ -49,6 +53,7 @@ impl Default for ReadOnlyClusterTools {
             argocd_namespace: "argocd".to_string(),
             prometheus_url: None,
             loki_url: None,
+            tempo_url: None,
             registry_aliases: RegistryAliases::default(),
             include_related_resource_lookups: true,
             timeout_ms: DEFAULT_TIMEOUT_MS,
@@ -67,6 +72,7 @@ impl ReadOnlyClusterTools {
                 .unwrap_or_else(|_| "argocd".to_string()),
             prometheus_url: std::env::var("PHARNESS_PROMETHEUS_URL").ok(),
             loki_url: std::env::var("PHARNESS_LOKI_URL").ok(),
+            tempo_url: std::env::var("PHARNESS_TEMPO_URL").ok(),
             registry_aliases: std::env::var("PHARNESS_REGISTRY_ALIASES")
                 .map(|value| RegistryAliases::parse(&value))
                 .unwrap_or_default(),
@@ -95,6 +101,11 @@ impl ReadOnlyClusterTools {
 
     pub fn with_loki_url_option(mut self, url: Option<String>) -> Self {
         self.loki_url = url;
+        self
+    }
+
+    pub fn with_tempo_url_option(mut self, url: Option<String>) -> Self {
+        self.tempo_url = url;
         self
     }
 
@@ -146,6 +157,12 @@ impl ReadOnlyClusterTools {
 
     pub fn loki_configured(&self) -> bool {
         self.loki_url.is_some()
+    }
+
+    pub fn tempo_configured(&self) -> bool {
+        self.tempo_url
+            .as_ref()
+            .is_some_and(|url| !url.trim().is_empty())
     }
 
     pub fn registry_alias_count(&self) -> usize {

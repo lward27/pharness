@@ -1,8 +1,13 @@
 # ASTRA M08: Staging and runtime verification
 
-Status: planned.
+Status: bounded native Tempo reader implemented and locally validated; deployment, controller integration and acceptance remain open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
+
+The [native Tempo reader evidence](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md)
+records the tested finite query, a real staging trace sample, explicit collection
+limits and inconclusive behavior. It is not deployed, does not establish release
+identity, and cannot satisfy this milestone's staging or promotion gates alone.
 
 ## Objective and scope
 
@@ -68,4 +73,3 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
-

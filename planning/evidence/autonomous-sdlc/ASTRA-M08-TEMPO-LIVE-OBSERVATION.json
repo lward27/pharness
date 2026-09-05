@@ -1,0 +1,1083 @@
+{
+  "observed_at": "2026-09-05T18:39:31.643869+00:00",
+  "base_source_revision": "fb68b7fc6b0acf6dd8bf71fc4e13fd5c25ba2603",
+  "execution": "local compiled Rust reader through existing loopback-only Kubernetes port forward",
+  "cluster_context": "lucas_engineering",
+  "tempo_service": "monitoring/tempo:3200",
+  "deployed_reader": false,
+  "application_deployment_effects": false,
+  "initial_observation": {
+    "status": "error",
+    "summary": "Finance trace observation is inconclusive",
+    "content": {
+      "deployment_correlation": "not_established",
+      "http_status": 200,
+      "limits": {
+        "max_window_age_seconds": 60,
+        "response_bytes": 524288,
+        "spans_per_trace": 3,
+        "timeout_ms": 15000,
+        "traces": 20
+      },
+      "namespace": "apps-staging",
+      "observed_at_unix_seconds": 1788633237,
+      "query": "{resource.service.name=\"yfinance-wrapper\" && resource.service.namespace=\"apps-staging\"}",
+      "reasons": [
+        "malformed_or_unrelated_trace_sample"
+      ],
+      "release_verification": "not_evaluated",
+      "response_bytes": 35350,
+      "response_sha256": "sha256:8d04dcadeba08cb4965fca1e6f2441f79c754213dd6b1cc05a59bfe5cebf061a",
+      "sample": {
+        "absence_of_errors_established": false,
+        "limit_reached": true,
+        "malformed": true,
+        "newest_match_age_seconds": 18,
+        "newest_matching_span_unix_nano": 1788633219717045368,
+        "returned_trace_count": 20,
+        "search_jobs_complete": true,
+        "search_metrics": {
+          "completed_jobs": 3,
+          "inspected_bytes": 4757259,
+          "total_jobs": 3
+        },
+        "traces": [
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633219717045368,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 80668,
+                "span_id": "891b767dc7121390",
+                "start_unix_nano": 1788633219715987157
+              },
+              {
+                "duration_nanos": 42073,
+                "span_id": "1af4f0a3ec299796",
+                "start_unix_nano": 1788633219717045368
+              },
+              {
+                "duration_nanos": 2126177,
+                "span_id": "4930c421774782cd",
+                "start_unix_nano": 1788633219715282423
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633219715282423,
+            "trace_id": "5c631381fa57eef55445c71879eafe1c"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633209718232836,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 119540,
+                "span_id": "f6153a98396d3ab9",
+                "start_unix_nano": 1788633209717108650
+              },
+              {
+                "duration_nanos": 40963,
+                "span_id": "d2311eeb536c0684",
+                "start_unix_nano": 1788633209718232836
+              },
+              {
+                "duration_nanos": 2259741,
+                "span_id": "8bcd467d015d02e4",
+                "start_unix_nano": 1788633209716303563
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633209716303563,
+            "trace_id": "9a0b196519bfcfb36eb9049be90033ae"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633189718084888,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 99827,
+                "span_id": "9dc72b70d10dfac0",
+                "start_unix_nano": 1788633189717067455
+              },
+              {
+                "duration_nanos": 39400,
+                "span_id": "23f4b077aa740056",
+                "start_unix_nano": 1788633189718084888
+              },
+              {
+                "duration_nanos": 2011222,
+                "span_id": "b4adf3e791fe35fc",
+                "start_unix_nano": 1788633189716426950
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633189716426950,
+            "trace_id": "e3013bc8eef120c5795d16c27412d13e"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633179717562609,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 84362,
+                "span_id": "25341b9b6e8488f3",
+                "start_unix_nano": 1788633179716090026
+              },
+              {
+                "duration_nanos": 47103,
+                "span_id": "b41b479ee045826e",
+                "start_unix_nano": 1788633179717562609
+              },
+              {
+                "duration_nanos": 2629024,
+                "span_id": "c49b55c1da7dbbc8",
+                "start_unix_nano": 1788633179715329089
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633179715329089,
+            "trace_id": "3cbc59fe412c09b5c292045dc67f5265"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633169717536248,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 76567,
+                "span_id": "f0fad6244d308a9b",
+                "start_unix_nano": 1788633169716224848
+              },
+              {
+                "duration_nanos": 43200,
+                "span_id": "7e863c570f0ff364",
+                "start_unix_nano": 1788633169717536248
+              },
+              {
+                "duration_nanos": 2475175,
+                "span_id": "9a8b8cc05e155499",
+                "start_unix_nano": 1788633169715533434
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633169715533434,
+            "trace_id": "9917ae7e86c7cee0c135e9b6871e824c"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633159718223337,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 83108,
+                "span_id": "f197501dd07390fd",
+                "start_unix_nano": 1788633159717145248
+              },
+              {
+                "duration_nanos": 42919,
+                "span_id": "c8b305e15dd62a0d",
+                "start_unix_nano": 1788633159718223337
+              },
+              {
+                "duration_nanos": 2204434,
+                "span_id": "87237b5a146f2abb",
+                "start_unix_nano": 1788633159716400432
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633159716400432,
+            "trace_id": "57711763f023d3290f334910e7392702"
+          },
+          {
+            "duration_ms": 3,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633149720223628,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 122830,
+                "span_id": "456a3a887eca28dd",
+                "start_unix_nano": 1788633149718681550
+              },
+              {
+                "duration_nanos": 65151,
+                "span_id": "7b9fcf6a95168def",
+                "start_unix_nano": 1788633149720223628
+              },
+              {
+                "duration_nanos": 3082058,
+                "span_id": "c20924431892c297",
+                "start_unix_nano": 1788633149717568979
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633149717568979,
+            "trace_id": "4ba087a0537a465f0aedebc8ffc6e1b8"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633139719234672,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 91421,
+                "span_id": "bb25c86c61b8ccb9",
+                "start_unix_nano": 1788633139718082331
+              },
+              {
+                "duration_nanos": 41626,
+                "span_id": "665dda247175a71d",
+                "start_unix_nano": 1788633139719234672
+              },
+              {
+                "duration_nanos": 2362569,
+                "span_id": "1de0351768c37dc9",
+                "start_unix_nano": 1788633139717255858
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633139717255858,
+            "trace_id": "dc10fc36c56f711bdbd4cb060ba1b92a"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633129719178666,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 82071,
+                "span_id": "208c25e9a0ace083",
+                "start_unix_nano": 1788633129717914570
+              },
+              {
+                "duration_nanos": 43253,
+                "span_id": "794e325f5e5af2c3",
+                "start_unix_nano": 1788633129719178666
+              },
+              {
+                "duration_nanos": 2473854,
+                "span_id": "2a1458b92b71d213",
+                "start_unix_nano": 1788633129717084226
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633129717084226,
+            "trace_id": "cbb17c80e2b89fd2e84f51d7df3983da"
+          },
+          {
+            "duration_ms": 3,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632999719861387,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 106308,
+                "span_id": "45d47d39bd02d74a",
+                "start_unix_nano": 1788632999718435237
+              },
+              {
+                "duration_nanos": 67031,
+                "span_id": "02ba2f868795ff87",
+                "start_unix_nano": 1788632999719861387
+              },
+              {
+                "duration_nanos": 3047704,
+                "span_id": "584eb2e5532939f3",
+                "start_unix_nano": 1788632999717246745
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632999717246745,
+            "trace_id": "ade6a9490738c663dd45cd9c0e14aaab"
+          },
+          {
+            "duration_ms": 4,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632989721293523,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 103248,
+                "span_id": "c2e0de2d45c1f031",
+                "start_unix_nano": 1788632989719132579
+              },
+              {
+                "duration_nanos": 50823,
+                "span_id": "45b7fa194697ae2a",
+                "start_unix_nano": 1788632989721293523
+              },
+              {
+                "duration_nanos": 4175858,
+                "span_id": "14538adaef9c269b",
+                "start_unix_nano": 1788632989717802023
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632989717802023,
+            "trace_id": "8ae5d33fed2f0897e5f2b1cb22ee093b"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632979718532009,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 132268,
+                "span_id": "1d4b0dda397e82bc",
+                "start_unix_nano": 1788632979717322918
+              },
+              {
+                "duration_nanos": 49891,
+                "span_id": "567d41ad12d5b80c",
+                "start_unix_nano": 1788632979718532009
+              },
+              {
+                "duration_nanos": 2648072,
+                "span_id": "92d4183eb5ce6dcf",
+                "start_unix_nano": 1788632979716428543
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632979716428543,
+            "trace_id": "ee5b8e84f2d9577d835e0eb999888735"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632969717986743,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 80421,
+                "span_id": "b4a2c2212e3840b7",
+                "start_unix_nano": 1788632969716879753
+              },
+              {
+                "duration_nanos": 39495,
+                "span_id": "3664486f9ec96594",
+                "start_unix_nano": 1788632969717986743
+              },
+              {
+                "duration_nanos": 2158194,
+                "span_id": "0afe289df562e858",
+                "start_unix_nano": 1788632969716139503
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632969716139503,
+            "trace_id": "7aa99a7259c03e168200d91dda320c57"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632959719483050,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 98208,
+                "span_id": "0b0440ff79b67193",
+                "start_unix_nano": 1788632959718200240
+              },
+              {
+                "duration_nanos": 43890,
+                "span_id": "9f9ea88c1cd65003",
+                "start_unix_nano": 1788632959719483050
+              },
+              {
+                "duration_nanos": 2603876,
+                "span_id": "b1067232648fa634",
+                "start_unix_nano": 1788632959717254422
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632959717254422,
+            "trace_id": "33e75e879f573262009701a2a0ef4d0a"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632949717627244,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 84794,
+                "span_id": "889c2737fcf24a2e",
+                "start_unix_nano": 1788632949716391469
+              },
+              {
+                "duration_nanos": 44794,
+                "span_id": "9fa0846dd70dc0b6",
+                "start_unix_nano": 1788632949717627244
+              },
+              {
+                "duration_nanos": 2480110,
+                "span_id": "d71de8cc4ac584dc",
+                "start_unix_nano": 1788632949715546479
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632949715546479,
+            "trace_id": "d6a587576a6e367d09dcda3c1f1de04a"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788632939716946713,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 81968,
+                "span_id": "13e0db09dc212bcb",
+                "start_unix_nano": 1788632939715870500
+              },
+              {
+                "duration_nanos": 43063,
+                "span_id": "c50188c8f226c382",
+                "start_unix_nano": 1788632939716946713
+              },
+              {
+                "duration_nanos": 2141772,
+                "span_id": "35b489a16e64d6ca",
+                "start_unix_nano": 1788632939715174438
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788632939715174438,
+            "trace_id": "78ff31cf924a6f8ff8b8bb4a62a9da61"
+          }
+        ],
+        "window_age_seconds": 1
+      },
+      "sample_state": "inconclusive",
+      "schema_version": "pharness.dev/finance-trace-observation/v1alpha1",
+      "search_is_exhaustive": false,
+      "service": "yfinance-wrapper",
+      "source": "tempo",
+      "window": {
+        "end_unix_seconds": 1788633236,
+        "namespace": "apps-staging",
+        "start_unix_seconds": 1788632936
+      }
+    }
+  },
+  "initial_failure_diagnosis": "Tempo returned four trace IDs with 30 or 31 hex characters. The initial parser incorrectly required 32. A bounded read of the same window confirmed this format; normalization now left-pads the numeric ID and checks duplicates after normalization.",
+  "final_observation": {
+    "status": "ok",
+    "summary": "collected a bounded Finance trace sample; release verification remains separate",
+    "content": {
+      "deployment_correlation": "not_established",
+      "http_status": 200,
+      "limits": {
+        "max_window_age_seconds": 60,
+        "response_bytes": 524288,
+        "spans_per_trace": 3,
+        "timeout_ms": 15000,
+        "traces": 20
+      },
+      "namespace": "apps-staging",
+      "observed_at_unix_seconds": 1788633438,
+      "query": "{resource.service.name=\"yfinance-wrapper\" && resource.service.namespace=\"apps-staging\"}",
+      "reasons": [],
+      "release_verification": "not_evaluated",
+      "response_bytes": 35343,
+      "response_sha256": "sha256:79502df31f33c191d4b730821c0400cdadb2b48b5e3659afe3fef999fd1fe79b",
+      "sample": {
+        "absence_of_errors_established": false,
+        "limit_reached": true,
+        "malformed": false,
+        "newest_match_age_seconds": 19,
+        "newest_matching_span_unix_nano": 1788633419718004803,
+        "returned_trace_count": 20,
+        "search_jobs_complete": true,
+        "search_metrics": {
+          "completed_jobs": 3,
+          "inspected_bytes": 5862067,
+          "total_jobs": 3
+        },
+        "traces": [
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633419718004803,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 71941,
+                "span_id": "dec5cfcb4efe217e",
+                "start_unix_nano": 1788633419716966919
+              },
+              {
+                "duration_nanos": 61106,
+                "span_id": "33203468194165cd",
+                "start_unix_nano": 1788633419718004803
+              },
+              {
+                "duration_nanos": 2037942,
+                "span_id": "692b8cc3e63bbb96",
+                "start_unix_nano": 1788633419716320668
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633419716320668,
+            "trace_id": "1d2ef96565ee93643fac09974ce8380f"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633409717281604,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 76533,
+                "span_id": "df9e9bd4ba3dc801",
+                "start_unix_nano": 1788633409716236498
+              },
+              {
+                "duration_nanos": 65530,
+                "span_id": "3c0122e9710d486a",
+                "start_unix_nano": 1788633409717281604
+              },
+              {
+                "duration_nanos": 2110311,
+                "span_id": "d33a96637e618d1b",
+                "start_unix_nano": 1788633409715590161
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633409715590161,
+            "trace_id": "46c8929fb1e753dbaea97cc1e380782d"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633399716882229,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 77414,
+                "span_id": "bfe15c0ed114cac6",
+                "start_unix_nano": 1788633399715882323
+              },
+              {
+                "duration_nanos": 41723,
+                "span_id": "c63b56e997c50e47",
+                "start_unix_nano": 1788633399716882229
+              },
+              {
+                "duration_nanos": 2045749,
+                "span_id": "7b4fa9817542063e",
+                "start_unix_nano": 1788633399715203455
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633399715203455,
+            "trace_id": "81e44cd7c7e627dfd00409c8de18eadb"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633389717379556,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 75368,
+                "span_id": "f6f660e5b8cfbb77",
+                "start_unix_nano": 1788633389716357307
+              },
+              {
+                "duration_nanos": 40184,
+                "span_id": "60d372dac0d15bd6",
+                "start_unix_nano": 1788633389717379556
+              },
+              {
+                "duration_nanos": 2035621,
+                "span_id": "373595395234a554",
+                "start_unix_nano": 1788633389715689277
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633389715689277,
+            "trace_id": "c8ccfac156edb71fca76329b31cb51b6"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633379717807494,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 75991,
+                "span_id": "f3f61a3e82fb4ce5",
+                "start_unix_nano": 1788633379716446356
+              },
+              {
+                "duration_nanos": 54463,
+                "span_id": "d1aa1ac194508f68",
+                "start_unix_nano": 1788633379717807494
+              },
+              {
+                "duration_nanos": 2529590,
+                "span_id": "7fefcc2367440f21",
+                "start_unix_nano": 1788633379715804796
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633379715804796,
+            "trace_id": "742aacb77bf70021be14791e20c4dbff"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633369717553735,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 75570,
+                "span_id": "0cfde7b0bacca6bb",
+                "start_unix_nano": 1788633369716537949
+              },
+              {
+                "duration_nanos": 39864,
+                "span_id": "24e40b9f6a4e6cf3",
+                "start_unix_nano": 1788633369717553735
+              },
+              {
+                "duration_nanos": 2028755,
+                "span_id": "7e80595b369c89e6",
+                "start_unix_nano": 1788633369715911529
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633369715911529,
+            "trace_id": "706d479c0cfc6ec221006ec973105e70"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633359717163136,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 76099,
+                "span_id": "becd1bb49c089165",
+                "start_unix_nano": 1788633359716159806
+              },
+              {
+                "duration_nanos": 41680,
+                "span_id": "d3f8fb61fd741ed3",
+                "start_unix_nano": 1788633359717163136
+              },
+              {
+                "duration_nanos": 2022617,
+                "span_id": "2601dad845757f6f",
+                "start_unix_nano": 1788633359715480807
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633359715480807,
+            "trace_id": "9a4b62fe9586b8098b54fc32b3a46ab3"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633349718538907,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 78314,
+                "span_id": "977aaf24e2516b3d",
+                "start_unix_nano": 1788633349717344548
+              },
+              {
+                "duration_nanos": 43260,
+                "span_id": "ca65a7e11d6e672b",
+                "start_unix_nano": 1788633349718538907
+              },
+              {
+                "duration_nanos": 2338118,
+                "span_id": "633cfdcd412687ee",
+                "start_unix_nano": 1788633349716622271
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633349716622271,
+            "trace_id": "be938f8166a3c28a36ee9d16bdc1f4a4"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633339717863442,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 131527,
+                "span_id": "e3fba0c9b31c5ae6",
+                "start_unix_nano": 1788633339716739363
+              },
+              {
+                "duration_nanos": 46173,
+                "span_id": "4234dd312ee0543a",
+                "start_unix_nano": 1788633339717863442
+              },
+              {
+                "duration_nanos": 2206524,
+                "span_id": "084dce9bea237658",
+                "start_unix_nano": 1788633339716044436
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633339716044436,
+            "trace_id": "a074d80572b9faf01a140fe0a867ae78"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633329717685110,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 74498,
+                "span_id": "f375578e03588825",
+                "start_unix_nano": 1788633329716678588
+              },
+              {
+                "duration_nanos": 41721,
+                "span_id": "41e9ec270231c0d8",
+                "start_unix_nano": 1788633329717685110
+              },
+              {
+                "duration_nanos": 2037457,
+                "span_id": "f428a9ef7f06830a",
+                "start_unix_nano": 1788633329716006062
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633329716006062,
+            "trace_id": "afc22326d4156e93379a7c06429effd0"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633319717408964,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 75348,
+                "span_id": "4cdd4e910234525c",
+                "start_unix_nano": 1788633319716305760
+              },
+              {
+                "duration_nanos": 42122,
+                "span_id": "eaa488604d8c602b",
+                "start_unix_nano": 1788633319717408964
+              },
+              {
+                "duration_nanos": 2213536,
+                "span_id": "5b814e080fb99b83",
+                "start_unix_nano": 1788633319715602912
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633319715602912,
+            "trace_id": "1ed10b1a922cadaee8c7f5ba1b094616"
+          },
+          {
+            "duration_ms": 1,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633309717401152,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 70847,
+                "span_id": "4593fb8649336f01",
+                "start_unix_nano": 1788633309716464171
+              },
+              {
+                "duration_nanos": 38163,
+                "span_id": "1a4b87b4811d0dff",
+                "start_unix_nano": 1788633309717401152
+              },
+              {
+                "duration_nanos": 1824988,
+                "span_id": "b3120f0bf99fc98c",
+                "start_unix_nano": 1788633309715865475
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633309715865475,
+            "trace_id": "188193fb202e9f5aa05640adeffac784"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633299717678917,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 79681,
+                "span_id": "27d065d3b9306823",
+                "start_unix_nano": 1788633299716646965
+              },
+              {
+                "duration_nanos": 41850,
+                "span_id": "4e062427c1307861",
+                "start_unix_nano": 1788633299717678917
+              },
+              {
+                "duration_nanos": 2105681,
+                "span_id": "195fec6026011b0f",
+                "start_unix_nano": 1788633299715978740
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633299715978740,
+            "trace_id": "55adabbf53b8f5fe41fe15f3bb721cb0"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633289717558101,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 71821,
+                "span_id": "5fd9ccecae039a39",
+                "start_unix_nano": 1788633289716463701
+              },
+              {
+                "duration_nanos": 41355,
+                "span_id": "42605b86a0293300",
+                "start_unix_nano": 1788633289717558101
+              },
+              {
+                "duration_nanos": 2087448,
+                "span_id": "5416a358ba045bc0",
+                "start_unix_nano": 1788633289715822140
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633289715822140,
+            "trace_id": "df505a52c66f39b093688b31579df7bc"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633279718016268,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 76400,
+                "span_id": "d5bc1e721d144612",
+                "start_unix_nano": 1788633279716991424
+              },
+              {
+                "duration_nanos": 43356,
+                "span_id": "e28800ed34e38dfa",
+                "start_unix_nano": 1788633279718016268
+              },
+              {
+                "duration_nanos": 2046630,
+                "span_id": "f5b0cef0b0564a33",
+                "start_unix_nano": 1788633279716311042
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633279716311042,
+            "trace_id": "b25068a8468763228398addf1f14ca4e"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633269717717590,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 111750,
+                "span_id": "ad0a108b6cd4b5a8",
+                "start_unix_nano": 1788633269716702645
+              },
+              {
+                "duration_nanos": 41716,
+                "span_id": "8d21b51808ea097a",
+                "start_unix_nano": 1788633269717717590
+              },
+              {
+                "duration_nanos": 2016384,
+                "span_id": "f242b7b5b1162a47",
+                "start_unix_nano": 1788633269716070803
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633269716070803,
+            "trace_id": "03e2648bf3da479b41cc7cd9b8d5ae09"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633259717146234,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 78073,
+                "span_id": "8a5c1b0c4c6daba8",
+                "start_unix_nano": 1788633259716079075
+              },
+              {
+                "duration_nanos": 43171,
+                "span_id": "ae15f0008ecd52b9",
+                "start_unix_nano": 1788633259717146234
+              },
+              {
+                "duration_nanos": 2126369,
+                "span_id": "7358390493649866",
+                "start_unix_nano": 1788633259715374271
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633259715374271,
+            "trace_id": "e44f3abfdbc7b9bfe173587866ed7d20"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633249716947829,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 76451,
+                "span_id": "11432ecc260e5b18",
+                "start_unix_nano": 1788633249715911362
+              },
+              {
+                "duration_nanos": 41917,
+                "span_id": "99f036ed945a6fc3",
+                "start_unix_nano": 1788633249716947829
+              },
+              {
+                "duration_nanos": 2059528,
+                "span_id": "8314259d3aa71224",
+                "start_unix_nano": 1788633249715226869
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633249715226869,
+            "trace_id": "9dfba4a03f45f75c30b16a9e598ea9a2"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633239716402118,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 65800,
+                "span_id": "0b2376f35d9b1c77",
+                "start_unix_nano": 1788633239715387825
+              },
+              {
+                "duration_nanos": 57214,
+                "span_id": "9cc33f6988ad741b",
+                "start_unix_nano": 1788633239716402118
+              },
+              {
+                "duration_nanos": 2047684,
+                "span_id": "f8375595dea8560f",
+                "start_unix_nano": 1788633239714833746
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633239714833746,
+            "trace_id": "000e503d1099abe5f41ffaee35d5ff80"
+          },
+          {
+            "duration_ms": 2,
+            "namespace": "apps-staging",
+            "newest_matching_span_unix_nano": 1788633229717048483,
+            "returned_span_count": 3,
+            "service": "yfinance-wrapper",
+            "spans": [
+              {
+                "duration_nanos": 78124,
+                "span_id": "ef5a6b0050ccfc51",
+                "start_unix_nano": 1788633229715971402
+              },
+              {
+                "duration_nanos": 43833,
+                "span_id": "394b7d7d3cfec199",
+                "start_unix_nano": 1788633229717048483
+              },
+              {
+                "duration_nanos": 2126324,
+                "span_id": "726b974ec580a649",
+                "start_unix_nano": 1788633229715277153
+              }
+            ],
+            "spans_truncated": false,
+            "start_unix_nano": 1788633229715277153,
+            "trace_id": "873aff34422ec4bb797b0fb4d25add86"
+          }
+        ],
+        "window_age_seconds": 1
+      },
+      "sample_state": "sample_available",
+      "schema_version": "pharness.dev/finance-trace-observation/v1alpha1",
+      "search_is_exhaustive": false,
+      "service": "yfinance-wrapper",
+      "source": "tempo",
+      "window": {
+        "end_unix_seconds": 1788633437,
+        "namespace": "apps-staging",
+        "start_unix_seconds": 1788633137
+      }
+    }
+  },
+  "acceptance_claim": "Native trace collection only. No release verdict, image/trace correlation, source progression, staging deployment, or M08 acceptance."
+}

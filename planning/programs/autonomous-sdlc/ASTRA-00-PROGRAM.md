@@ -61,25 +61,28 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder passed; onboarding failed; other stages running/pending | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder passed; onboarding, Planner and Test Diagnosis failed; harness contract corrections and remaining stages open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
-| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
+| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | bounded Tempo reader locally validated; deployment, staging progression and acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections deployed; list consistency validated in PR 337; remaining deployment and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
 Next eligible: finish M04 qualification on immutable runtime `48c77b7` and continue
-M07 source-to-build integration and M10 refinement. After live history preservation passed at 16:20 UTC, the gateway protocol checks
+M08 staging integration and M10 refinement. After live history preservation passed at 16:20 UTC, the gateway protocol checks
 passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
 with two frozen attempts. Both finished 24/24 on the first pass, with every stack
 8/8 and no reported hidden-test false passes or policy violations.
 [Builder qualification](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
 is passed. [Onboarding failed 0/12 in both attempts](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md)
-despite passing 30 protocol checks. Planner is running; Repair and the other required
-stage qualifications remain open. The diagnostic correction retains concrete tool
+despite passing 30 protocol checks. Planner subsequently scored 4/12 and 7/12;
+Test Diagnosis scored 0/12 in both attempts. Inspection found a Test Diagnosis
+scorer/tool-schema mismatch and an overbroad Planner substring check. These require
+contract-aligned regression fixes and fresh qualification, not reclassification of
+the recorded results as passes. Verifier and Repair remain open. The diagnostic correction retains concrete tool
 validation errors without changing fixtures, gates, profiles or limits.
 Keep qualification Jobs serial. All original thresholds, fixtures, profiles and
 execution limits remain in force. The exact-runtime creation gate also requires
@@ -120,6 +123,7 @@ Current evidence entry points:
 - [M03 integrity acceptance](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md): evidence normalization and architecture checks.
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
 - [M07 real build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md): both actual Finance Tekton builds and registry identities; these program-operated builds do not count as autonomous WorkItems.
+- [M08 native Tempo reader](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md): bounded collection and a real staging trace sample; the reader is not deployed or integrated into staging progression.
 - [M10 visual and interaction evidence](../../evidence/autonomous-sdlc/ASTRA-M10-LIST-CONSISTENCY.md): 94 unit checks and 116 distinct browser checks across the documented runs; deployment, delivery-dependent states and owner walkthrough remain open.
 
 [Execution history](ASTRA-PROGRAM-EXECUTION-HISTORY.md) retains prior source

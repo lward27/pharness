@@ -37,6 +37,8 @@ kubectl_bin = "kubectl"
 argocd_namespace = "argocd"
 prometheus_url = ""
 loki_url = ""
+# Native Finance release reader; leave blank when Tempo is unavailable.
+tempo_url = ""
 tool_timeout_ms = 15000
 tool_max_output_bytes = 524288
 gitops_source_of_truth = true

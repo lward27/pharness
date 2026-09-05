@@ -285,6 +285,7 @@ pub struct ClusterConfig {
     pub argocd_namespace: String,
     pub prometheus_url: Option<String>,
     pub loki_url: Option<String>,
+    pub tempo_url: Option<String>,
     pub registry_aliases: Vec<String>,
     pub timeout_ms: u64,
     pub max_output_bytes: usize,
@@ -315,6 +316,7 @@ impl ApiRuntimeConfig {
             .with_argocd_namespace(self.cluster.argocd_namespace.clone())
             .with_prometheus_url_option(self.cluster.prometheus_url.clone())
             .with_loki_url_option(self.cluster.loki_url.clone())
+            .with_tempo_url_option(self.cluster.tempo_url.clone())
             .with_registry_aliases(self.cluster.registry_aliases.join(","))
             .with_timeout_ms(self.cluster.timeout_ms)
             .with_max_output_bytes(self.cluster.max_output_bytes)
@@ -408,6 +410,7 @@ impl ApiRuntimeConfig {
                 argocd_namespace: DEFAULT_ARGOCD_NAMESPACE.to_string(),
                 prometheus_url: None,
                 loki_url: None,
+                tempo_url: None,
                 registry_aliases: Vec::new(),
                 timeout_ms: DEFAULT_CLUSTER_TIMEOUT_MS,
                 max_output_bytes: DEFAULT_CLUSTER_MAX_OUTPUT_BYTES,
@@ -602,6 +605,9 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = cluster.loki_url {
                 self.cluster.loki_url = blank_to_none(value);
+            }
+            if let Some(value) = cluster.tempo_url {
+                self.cluster.tempo_url = blank_to_none(value);
             }
             if let Some(value) = cluster.registry_aliases {
                 self.cluster.registry_aliases = value;
@@ -981,6 +987,9 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_LOKI_URL") {
             self.cluster.loki_url = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_TEMPO_URL") {
+            self.cluster.tempo_url = blank_to_none(value.clone());
         }
         if let Some(value) = env.get("PHARNESS_REGISTRY_ALIASES") {
             self.cluster.registry_aliases = split_registry_aliases(value);
@@ -1627,6 +1636,7 @@ struct FileClusterConfig {
     argocd_namespace: Option<String>,
     prometheus_url: Option<String>,
     loki_url: Option<String>,
+    tempo_url: Option<String>,
     registry_aliases: Option<Vec<String>>,
     tool_timeout_ms: Option<u64>,
     tool_max_output_bytes: Option<usize>,
@@ -2036,6 +2046,8 @@ mod tests {
         assert_eq!(config.cluster.argocd_namespace, "argocd");
         assert!(config.cluster.prometheus_url.is_none());
         assert!(config.cluster.loki_url.is_none());
+        assert!(config.cluster.tempo_url.is_none());
+        assert!(!config.cluster_tools().tempo_configured());
         assert!(config.cluster.registry_aliases.is_empty());
         assert_eq!(config.policy.mode, PolicyMode::Default);
         assert_eq!(config.policy.environment, "local");
@@ -2096,6 +2108,7 @@ kubectl_bin = "kubectl-test"
 argocd_namespace = "argo-system"
 prometheus_url = "http://prometheus.test"
 loki_url = "http://loki.test"
+tempo_url = "http://tempo.test"
 registry_aliases = ["internal.registry=external.registry"]
 tool_timeout_ms = 2222
 tool_max_output_bytes = 3333
@@ -2157,6 +2170,11 @@ deny_secret_access = true
             Some("http://prometheus.test")
         );
         assert_eq!(config.cluster.loki_url.as_deref(), Some("http://loki.test"));
+        assert_eq!(
+            config.cluster.tempo_url.as_deref(),
+            Some("http://tempo.test")
+        );
+        assert!(config.cluster_tools().tempo_configured());
         assert_eq!(
             config.cluster.registry_aliases,
             vec!["internal.registry=external.registry"]
@@ -2254,6 +2272,10 @@ registry_aliases = ["file.registry=public.registry"]
             "http://loki.env".to_string(),
         );
         env.insert(
+            "PHARNESS_TEMPO_URL".to_string(),
+            "http://tempo.env".to_string(),
+        );
+        env.insert(
             "PHARNESS_REGISTRY_ALIASES".to_string(),
             "env.registry=public.registry".to_string(),
         );
@@ -2327,6 +2349,10 @@ registry_aliases = ["file.registry=public.registry"]
         );
         assert_eq!(config.cluster.argocd_namespace, "from-env");
         assert_eq!(config.cluster.loki_url.as_deref(), Some("http://loki.env"));
+        assert_eq!(
+            config.cluster.tempo_url.as_deref(),
+            Some("http://tempo.env")
+        );
         assert_eq!(
             config.cluster.registry_aliases,
             vec!["env.registry=public.registry"]

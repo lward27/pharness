@@ -339,6 +339,10 @@ spec:
               value: {{ .Values.api.cluster.prometheusUrl | quote }}
             - name: PHARNESS_LOKI_URL
               value: {{ .Values.api.cluster.lokiUrl | quote }}
+            {{- if .Values.api.cluster.tempoUrl }}
+            - name: PHARNESS_TEMPO_URL
+              value: {{ .Values.api.cluster.tempoUrl | quote }}
+            {{- end }}
             - name: PHARNESS_REGISTRY_ALIASES
               value: {{ .Values.api.cluster.registryAliases | quote }}
             - name: PHARNESS_POLICY_SUBJECT
