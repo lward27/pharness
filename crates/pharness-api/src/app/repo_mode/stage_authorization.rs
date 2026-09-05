@@ -320,6 +320,12 @@ pub(in crate::app) async fn authorize_repo_stage_chain(
             "agent_execution_selections":planned_execution,
         })),
         Err(error) => {
+            // Hosted dispatch may have crossed an external boundary even when
+            // its acknowledgement was lost. Keep the original bounded grant;
+            // the persisted operation must reconcile it without minting another.
+            if metadata.workflow_policy.is_some() {
+                return Err(error);
+            }
             state
                 .store
                 .revoke_stage_chain_authorization(

@@ -2,6 +2,7 @@
 
 mod agent_execution;
 mod data_lifecycle;
+mod hosted_controller;
 mod inference;
 mod models;
 mod onboarding;
@@ -16,6 +17,10 @@ pub use agent_execution::{
     EnrollAgentHost, StoredAgentExecutionPolicyQualification, StoredAgentExecutionSelection,
     StoredAgentHost, StoredAgentHostCapabilitySnapshot, StoredAgentHostEnrollment,
     StoredAgentLease,
+};
+pub use hosted_controller::{
+    BeginWorkflowOperation, FinishWorkflowReconciliation, StoredWorkflowOperation,
+    StoredWorkflowReconciliation,
 };
 pub use models::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,

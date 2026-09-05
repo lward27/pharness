@@ -163,22 +163,53 @@ pub(super) async fn internal_environment_preparation_with_token(
             .error
             .clone()
             .unwrap_or_else(|| "environment preparation failed".to_string());
-        let preparation = state
-            .store
-            .update_environment_preparation(UpdateEnvironmentPreparation {
-                id: preparation.id,
-                status: "failed".to_string(),
-                project_contract_json: request.project_contract,
-                project_contract_hash: request.project_contract_hash,
-                environment_snapshot_json: None,
-                logs_json: request.logs,
-                error: Some(error.clone()),
-            })
-            .await?;
+        let update = UpdateEnvironmentPreparation {
+            id: preparation.id,
+            status: "failed".into(),
+            project_contract_json: request.project_contract,
+            project_contract_hash: request.project_contract_hash,
+            environment_snapshot_json: None,
+            logs_json: request.logs,
+            error: Some(error.clone()),
+        };
+        let preparation = if run
+            .execution_target_json
+            .get("hosted_workflow_policy_hash")
+            .is_some()
+        {
+            state
+                .store
+                .fail_hosted_preparation(&run_id, update)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict(
+                        "preparation already has a newer result; failure callback was not applied",
+                    )
+                })?
+        } else {
+            state.store.update_environment_preparation(update).await?
+        };
         state
             .store
             .set_work_item_environment_snapshot(&work_item.id, "failed", None, None, None)
             .await?;
+        if run
+            .execution_target_json
+            .get("hosted_workflow_policy_hash")
+            .is_some()
+        {
+            crate::worker::fail_run_from_dispatch(
+                &state.store,
+                &run_id,
+                format!("environment preparation failed: {error}"),
+            )
+            .await?;
+            state
+                .store
+                .wake_workflow(&work_item.id, current_millis() as i64)
+                .await?;
+            return Ok(Json(preparation.into()));
+        }
         state
             .store
             .complete_run(
@@ -278,33 +309,53 @@ pub(super) async fn internal_environment_preparation_with_token(
             "WorkItem acceptance command is not declared by prepared contract",
         ));
     }
-    let preparation = state
-        .store
-        .update_environment_preparation(UpdateEnvironmentPreparation {
-            id: preparation.id,
-            status: "succeeded".to_string(),
-            project_contract_json: Some(contract_json.clone()),
-            project_contract_hash: Some(contract_hash.clone()),
-            environment_snapshot_json: Some(snapshot_json.clone()),
-            logs_json: request.logs,
-            error: None,
-        })
-        .await?;
-    state
-        .store
-        .set_work_item_environment_snapshot(
-            &work_item.id,
-            "succeeded",
-            Some(preparation.id.clone()),
-            Some(contract_json),
-            Some(contract_hash),
-        )
-        .await?;
-    let run = state
-        .store
-        .set_run_environment_snapshot(&run_id, snapshot_json)
-        .await?;
-    if dispatch_legacy_worker {
+    let update = UpdateEnvironmentPreparation {
+        id: preparation.id,
+        status: "succeeded".into(),
+        project_contract_json: Some(contract_json.clone()),
+        project_contract_hash: Some(contract_hash.clone()),
+        environment_snapshot_json: Some(snapshot_json.clone()),
+        logs_json: request.logs,
+        error: None,
+    };
+    let (preparation, run) = if run
+        .execution_target_json
+        .get("hosted_workflow_policy_hash")
+        .is_some()
+    {
+        let pair = state
+            .store
+            .complete_hosted_preparation(&run_id, update)
+            .await?;
+        state
+            .store
+            .wake_workflow(&work_item.id, current_millis() as i64)
+            .await?;
+        pair
+    } else {
+        let preparation = state.store.update_environment_preparation(update).await?;
+        state
+            .store
+            .set_work_item_environment_snapshot(
+                &work_item.id,
+                "succeeded",
+                Some(preparation.id.clone()),
+                Some(contract_json),
+                Some(contract_hash),
+            )
+            .await?;
+        let run = state
+            .store
+            .set_run_environment_snapshot(&run_id, snapshot_json)
+            .await?;
+        (preparation, run)
+    };
+    if dispatch_legacy_worker
+        && run
+            .execution_target_json
+            .get("hosted_workflow_policy_hash")
+            .is_none()
+    {
         state.worker.spawn_run(run.clone(), run.cwd.clone());
     }
     Ok(Json(preparation.into()))
@@ -557,7 +608,21 @@ pub(super) async fn internal_ingest_outcome(
 
     super::products::finalize_repository_onboarding_proposer_run(&state, &run).await?;
 
-    if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
+    if run
+        .execution_target_json
+        .get("hosted_workflow_policy_hash")
+        .is_some()
+    {
+        let work_item_id = run
+            .execution_target_json
+            .pointer("/run_scope/work_item_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::conflict("hosted Run has no WorkItem binding"))?;
+        state
+            .store
+            .wake_workflow(work_item_id, current_millis() as i64)
+            .await?;
+    } else if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
         tracing::error!(run_id=%run.id, ?error, "authorized Repo Mode stage continuation failed");
         super::repo_mode::record_repo_chain_continuation_failure(&state, &run).await?;
     }

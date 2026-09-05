@@ -23,7 +23,7 @@ const MERGE_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 pub(super) struct RepoDeliveryFixture {
     pub(super) state: super::AppState,
     pub(super) work_item_id: String,
-    intent_id: String,
+    pub(super) intent_id: String,
 }
 
 #[tokio::test]
@@ -659,7 +659,7 @@ pub(super) async fn repo_fixture_for_source(
             head_branch: format!("pharness/{work_item_id}/source"),
             patch_artifact_id: Some(format!("artifact_{suffix}")),
             patch_hash: format!("sha256:{}", "f".repeat(64)),
-            authorization: json!({"actor":"operator","reason":"reviewed source mutation"}),
+            authorization: json!({"actor":"operator","reason":"reviewed source mutation", "workflow_policy_hash":state.store.get_repo_work_item_metadata(&work_item_id).await.unwrap().unwrap().workflow_policy_hash}),
             created_by: "operator".into(),
             creation_reason: "deliver approved ChangeSet".into(),
         })

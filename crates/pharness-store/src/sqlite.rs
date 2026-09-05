@@ -33,8 +33,10 @@ use thiserror::Error;
 
 mod agent_execution;
 mod data_lifecycle;
+mod hosted_controller;
 mod inference;
 mod onboarding;
+mod preparation;
 mod product;
 mod repo_mode;
 mod subject_preparation;
@@ -7104,7 +7106,7 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 52);
+        assert_eq!(latest, 53);
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));

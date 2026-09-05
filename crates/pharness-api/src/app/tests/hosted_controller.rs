@@ -1,0 +1,1232 @@
+use super::execute_work_item_action;
+use super::repo_mode_v1::repo_fixture_with_workflow;
+use crate::app::repo_mode::repo_work_item_flow;
+use crate::dto::ExecuteWorkItemActionRequest;
+use axum::extract::{Path, State};
+use axum::Json;
+
+fn request(hash: &str) -> ExecuteWorkItemActionRequest {
+    ExecuteWorkItemActionRequest {
+        actor: Some("operator".into()),
+        reason: "bounded workflow control test".into(),
+        state_hash: hash.into(),
+        inference_policies: None,
+        execution_policies: None,
+    }
+}
+
+#[tokio::test]
+async fn hosted_flow_reads_do_not_claim_or_advance_and_hide_routine_manual_actions() {
+    let fixture = repo_fixture_with_workflow("hosted_read_only_control", false, true).await;
+    let before = fixture
+        .state
+        .store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap();
+    let stages = fixture
+        .state
+        .store
+        .list_stage_executions(&fixture.work_item_id)
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        let flow = repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+            .await
+            .unwrap();
+        assert!(!flow.reconcile_preview.can_apply);
+        assert_eq!(
+            flow.action_rail
+                .iter()
+                .map(|a| a.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["pause_workflow", "cancel_workflow"]
+        );
+        assert_eq!(
+            flow.repo_mode.unwrap()["workflow_control"]["control"],
+            "active"
+        );
+    }
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap(),
+        before
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .list_stage_executions(&fixture.work_item_id)
+            .await
+            .unwrap(),
+        stages
+    );
+}
+
+#[tokio::test]
+async fn hosted_controls_are_versioned_and_never_rebind_budget_or_authorization() {
+    let fixture = repo_fixture_with_workflow("hosted_versioned_control", false, true).await;
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap();
+    let item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let flow = repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    let hash = flow.action_rail[0].state_hash.clone();
+    let Json(paused) = execute_work_item_action(
+        State(fixture.state.clone()),
+        None,
+        Path((fixture.work_item_id.clone(), "pause_workflow".into())),
+        Json(request(&hash)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(paused["workflow_control"]["control"], "paused");
+    assert_eq!(
+        paused["workflow_control"]["observation_and_authorized_recovery_continue"],
+        true
+    );
+    assert!(execute_work_item_action(
+        State(fixture.state.clone()),
+        None,
+        Path((fixture.work_item_id.clone(), "pause_workflow".into())),
+        Json(request(&hash))
+    )
+    .await
+    .is_err());
+    let flow = repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    assert_eq!(flow.action_rail[0].id, "resume_workflow");
+    let Json(resumed) = execute_work_item_action(
+        State(fixture.state.clone()),
+        None,
+        Path((fixture.work_item_id.clone(), "resume_workflow".into())),
+        Json(request(&flow.action_rail[0].state_hash)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(resumed["workflow_control"]["control"], "active");
+    let flow = repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    let Json(cancelled) = execute_work_item_action(
+        State(fixture.state.clone()),
+        None,
+        Path((fixture.work_item_id.clone(), "cancel_workflow".into())),
+        Json(request(&flow.action_rail[1].state_hash)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(cancelled["workflow_control"]["control"], "cancelled");
+    let flow = repo_work_item_flow(&fixture.state, &fixture.work_item_id)
+        .await
+        .unwrap();
+    assert!(flow.action_rail.is_empty());
+    assert_eq!(
+        flow.repo_mode.unwrap()["workflow_control"]["control"],
+        "cancelled"
+    );
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_repo_work_item_metadata(&fixture.work_item_id)
+            .await
+            .unwrap(),
+        metadata
+    );
+    let after = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.run_budget, item.run_budget);
+    assert_eq!(after.attempt_count, item.attempt_count);
+}
+
+#[tokio::test]
+async fn legacy_actions_remain_available_but_hosted_routine_clicks_are_retired() {
+    let legacy = repo_fixture_with_workflow("legacy_controls", false, false).await;
+    let flow = repo_work_item_flow(&legacy.state, &legacy.work_item_id)
+        .await
+        .unwrap();
+    assert!(flow.action_rail.iter().any(|a| a.id == "start_planner"));
+    let hosted = repo_fixture_with_workflow("hosted_retired_click", false, true).await;
+    let before = hosted
+        .state
+        .store
+        .list_stage_executions(&hosted.work_item_id)
+        .await
+        .unwrap();
+    let flow = repo_work_item_flow(&hosted.state, &hosted.work_item_id)
+        .await
+        .unwrap();
+    let result = execute_work_item_action(
+        State(hosted.state.clone()),
+        None,
+        Path((hosted.work_item_id.clone(), "start_planner".into())),
+        Json(request(&flow.action_rail[0].state_hash)),
+    )
+    .await;
+    assert!(result.is_err());
+    assert_eq!(
+        hosted
+            .state
+            .store
+            .list_stage_executions(&hosted.work_item_id)
+            .await
+            .unwrap(),
+        before
+    );
+}
+
+#[tokio::test]
+async fn scheduler_leaves_legacy_idle_and_records_unqualified_hosted_blocker() {
+    use crate::app::hosted_controller::reconcile_once;
+    let legacy = repo_fixture_with_workflow("scheduler_legacy", false, false).await;
+    assert!(!reconcile_once(&legacy.state, "api").await.unwrap());
+    let fixture = repo_fixture_with_workflow("scheduler_unqualified", false, true).await;
+    assert!(reconcile_once(&fixture.state, "api").await.unwrap());
+    let control = fixture
+        .state
+        .store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked");
+    assert!(control.claim_owner.is_none());
+    assert!(
+        control.condition_reason.contains("gateway")
+            || control.condition_reason.contains("profile"),
+        "{}",
+        control.condition_reason
+    );
+    assert!(fixture
+        .state
+        .store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(!reconcile_once(&fixture.state, "api").await.unwrap());
+}
+
+async fn completed_planner(
+    fixture: &super::repo_mode_v1::RepoDeliveryFixture,
+    contradictions: &[&str],
+) -> pharness_store::StoredRun {
+    planner_fixture(fixture, contradictions, true).await
+}
+
+async fn planner_fixture(
+    fixture: &super::repo_mode_v1::RepoDeliveryFixture,
+    contradictions: &[&str],
+    sealed: bool,
+) -> pharness_store::StoredRun {
+    use pharness_core::{RunId, SessionId};
+    use pharness_store::{CreateAgentContextPack, CreateRun, CreateSession, CreateStageExecution};
+    use serde_json::json;
+    let store = &fixture.state.store;
+    let metadata = store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let id = format!("run_recover_{}", fixture.work_item_id);
+    let session = SessionId::new(format!("ses_recover_{}", fixture.work_item_id));
+    let stage = format!("stage_recover_{}", fixture.work_item_id);
+    let context = format!("context_recover_{}", fixture.work_item_id);
+    store
+        .create_session(CreateSession {
+            id: session.clone(),
+            title: "Recovery fixture".into(),
+            cwd: "/workspace".into(),
+        })
+        .await
+        .unwrap();
+    let run = store.create_run(CreateRun {
+        id:RunId::new(id), session_id:session, user_task:"Bounded planner fixture".into(), cwd:"/workspace".into(), max_turns:10, initial_status:if sealed { "completed" } else { "running" }.into(),
+        execution_target_json:json!({"hosted_workflow_policy_hash":metadata.workflow_policy_hash,
+            "run_scope":{"work_item_id":fixture.work_item_id}, "repo_mode":{"stage_execution_id":stage,"stage":"plan"}}),
+    }).await.unwrap();
+    store
+        .create_stage_execution(CreateStageExecution {
+            id: stage.clone(),
+            work_item_id: fixture.work_item_id.clone(),
+            stage_key: "plan".into(),
+            sequence: 1,
+            status: "completed".into(),
+            agent_profile_id: Some("repo-planner".into()),
+            agent_profile_version: Some("fixture".into()),
+            agent_profile_hash: Some("sha256:fixture".into()),
+            context_pack_id: None,
+            run_id: Some(run.id.clone()),
+            workspace_id: None,
+            input_snapshot: json!({}),
+            input_hash: "sha256:fixture".into(),
+        })
+        .await
+        .unwrap();
+    store
+        .create_agent_context_pack(CreateAgentContextPack {
+            id: context,
+            work_item_id: fixture.work_item_id.clone(),
+            stage_execution_id: stage,
+            context: json!({"schema_version":pharness_core::AGENT_CONTEXT_SCHEMA}),
+            estimated_tokens: 10,
+            content_hash: "sha256:fixture".into(),
+        })
+        .await
+        .unwrap();
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let document = json!({"title":"Bounded fixture", "summary":"Preserve existing behavior", "steps":[{"title":"Test", "description":"Run existing checks", "acceptance_names":["unit"]}], "risk_level":"low"});
+    let plan = store
+        .revise_work_plan(
+            &plan.id,
+            pharness_store::UpdateWorkPlanRevision {
+                title: None,
+                summary: None,
+                risk_level: None,
+                requires_approval: None,
+                work_plan_json: document.clone(),
+                session_id: Some(run.session_id.clone()),
+                run_id: Some(run.id.clone()),
+                actor: Some("controller".into()),
+                reason: Some("Validated Planner fixture".into()),
+            },
+        )
+        .await
+        .unwrap();
+    if !sealed {
+        return run;
+    }
+    let outcome = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"work_item_id":fixture.work_item_id,"stage_execution_id":format!("stage_recover_{}",fixture.work_item_id),"stage":"plan","status":"succeeded","contradictions":contradictions,"outputs":[{"kind":"work_plan","id":plan.id,"revision":plan.revision}],"agent_claims":[{"kind":"planner_submission","document":document}]});
+    store
+        .seal_stage_outcome(pharness_store::SealStageOutcome {
+            id: format!("outcome_recover_{}", fixture.work_item_id),
+            stage_execution_id: format!("stage_recover_{}", fixture.work_item_id),
+            work_item_id: fixture.work_item_id.clone(),
+            stage_key: "plan".into(),
+            status: "succeeded".into(),
+            content_hash: pharness_core::canonical_json_sha256(&outcome).unwrap(),
+            outcome,
+            state_version: metadata.state_version,
+            supersedes_outcome_id: None,
+            effective: true,
+            actor: "controller".into(),
+            reason: "Validated Planner fixture".into(),
+        })
+        .await
+        .unwrap();
+    run
+}
+
+#[tokio::test]
+async fn scheduler_applies_saved_plan_authority_once_without_a_browser_action() {
+    use crate::app::hosted_controller::reconcile_once;
+    let fixture = repo_fixture_with_workflow("scheduler_plan", false, true).await;
+    completed_planner(&fixture, &[]).await;
+    let plan = fixture
+        .state
+        .store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .update_work_plan_status(&plan.id, "proposed", Some("fixture".into()), None)
+        .await
+        .unwrap();
+    assert!(reconcile_once(&fixture.state, "api").await.unwrap());
+    let approved = fixture
+        .state
+        .store
+        .get_work_plan(&plan.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(approved.status, "approved");
+    let recorded = fixture
+        .state
+        .store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        recorded.condition, "progressing",
+        "{}",
+        recorded.condition_reason
+    );
+    assert!(fixture
+        .state
+        .store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(!reconcile_once(&fixture.state, "replacement-api")
+        .await
+        .unwrap());
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap(),
+        approved
+    );
+}
+
+#[tokio::test]
+async fn scheduler_adopts_lost_acknowledgement_and_observes_terminal_run_while_paused() {
+    use crate::app::{clock::current_millis, hosted_controller::reconcile_once};
+    use pharness_store::{BeginWorkflowOperation, RunListFilter};
+    use serde_json::json;
+    let fixture = repo_fixture_with_workflow("scheduler_recovery", false, true).await;
+    let store = &fixture.state.store;
+    let time = current_millis() as i64;
+    let claim = store
+        .claim_due_workflow("departed-api", time, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: "op_lost_ack",
+                action: "start_planner",
+                input_hash: "sha256:fixture",
+                effect: "development",
+                resource_keys: &["coding"],
+            },
+            time,
+        )
+        .await
+        .unwrap();
+    store
+        .record_workflow_operation(
+            &claim,
+            "op_lost_ack",
+            "running",
+            &json!({"action_resource":fixture.work_item_id,"before_run_ids":[]}),
+            "dispatch recorded",
+            time,
+        )
+        .await
+        .unwrap();
+    let run = completed_planner(&fixture, &[]).await;
+    store
+        .set_workflow_control(
+            &fixture.work_item_id,
+            1,
+            "paused",
+            "operator",
+            "pause while worker finishes",
+            current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    assert!(reconcile_once(&fixture.state, "replacement-api")
+        .await
+        .unwrap());
+    let op = store
+        .get_workflow_operation("op_lost_ack")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "succeeded");
+    assert_eq!(op.resource_refs["run_id"], run.id.as_str());
+    assert_eq!(op.resource_refs["terminal_run_status"], "completed");
+    assert_eq!(
+        store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .control,
+        "paused"
+    );
+    for _ in 0..2 {
+        store
+            .wake_workflow(&fixture.work_item_id, current_millis() as i64)
+            .await
+            .unwrap();
+        assert!(reconcile_once(&fixture.state, "replacement-api")
+            .await
+            .unwrap());
+    }
+    assert_eq!(
+        store
+            .list_runs(RunListFilter {
+                work_item_id: Some(fixture.work_item_id.clone()),
+                limit: 200,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(store.get_run(&run.id).await.unwrap().unwrap(), run);
+}
+
+#[tokio::test]
+async fn scheduler_rejects_changed_plan_revision_and_unresolved_contradictions() {
+    use crate::app::hosted_controller::reconcile_once;
+    for conflict in [false, true] {
+        let fixture = repo_fixture_with_workflow(
+            if conflict {
+                "scheduler_contradiction"
+            } else {
+                "scheduler_stale_plan"
+            },
+            false,
+            true,
+        )
+        .await;
+        let contradictions = if conflict {
+            vec!["Unresolved conflicting requirement"]
+        } else {
+            vec![]
+        };
+        completed_planner(&fixture, &contradictions).await;
+        let plan = fixture
+            .state
+            .store
+            .get_work_plan_by_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        if !conflict {
+            fixture
+                .state
+                .store
+                .revise_work_plan(
+                    &plan.id,
+                    pharness_store::UpdateWorkPlanRevision {
+                        title: None,
+                        summary: None,
+                        risk_level: None,
+                        requires_approval: None,
+                        work_plan_json: serde_json::json!({"summary":"Changed after validation"}),
+                        session_id: None,
+                        run_id: None,
+                        actor: Some("operator".into()),
+                        reason: Some("Changed fixture".into()),
+                    },
+                )
+                .await
+                .unwrap();
+        }
+        fixture
+            .state
+            .store
+            .update_work_plan_status(&plan.id, "proposed", Some("fixture".into()), None)
+            .await
+            .unwrap();
+        assert!(reconcile_once(&fixture.state, "api").await.unwrap());
+        assert_eq!(
+            fixture
+                .state
+                .store
+                .get_work_plan(&plan.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "proposed"
+        );
+        let control = fixture
+            .state
+            .store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(control.condition, "blocked");
+        assert!(
+            control.condition_reason.contains(if conflict {
+                "contradictions"
+            } else {
+                "revision"
+            }),
+            "{}",
+            control.condition_reason
+        );
+        assert!(fixture
+            .state
+            .store
+            .active_workflow_operation(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .is_none());
+    }
+}
+
+#[tokio::test]
+async fn unchanged_wait_expiry_does_not_create_another_run_or_extend_its_budget() {
+    use crate::app::{
+        clock::current_millis, hosted_controller::reconcile_once, CONTROLLER_WAIT_MAX_CHECKS,
+    };
+    use pharness_store::FinishWorkflowReconciliation;
+    let fixture = repo_fixture_with_workflow("scheduler_wait_limit", false, true).await;
+    assert!(reconcile_once(&fixture.state, "api").await.unwrap());
+    let store = &fixture.state.store;
+    let original = store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let hash = store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .observed_state_hash
+        .unwrap();
+    // Advance the persisted unchanged-observation count with a synthetic clock;
+    // no wall-clock sleep or external worker is needed to exercise the limit.
+    for tick in 0..=CONTROLLER_WAIT_MAX_CHECKS {
+        let time = current_millis() as i64 + i64::from(tick) * 2;
+        store
+            .wake_workflow(&fixture.work_item_id, time)
+            .await
+            .unwrap();
+        let claim = store
+            .claim_due_workflow("fixture-observer", time, 60_000)
+            .await
+            .unwrap()
+            .unwrap();
+        store
+            .finish_workflow_reconciliation(
+                &claim,
+                FinishWorkflowReconciliation {
+                    next_due_at: time + 1,
+                    condition: "waiting",
+                    reason: "unchanged fixture",
+                    observed_state_hash: Some(&hash),
+                },
+                time,
+            )
+            .await
+            .unwrap();
+    }
+    store
+        .wake_workflow(&fixture.work_item_id, current_millis() as i64)
+        .await
+        .unwrap();
+    assert!(reconcile_once(&fixture.state, "replacement-api")
+        .await
+        .unwrap());
+    let control = store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        control.condition, "wait_expired",
+        "{}",
+        control.condition_reason
+    );
+    assert!(store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        store
+            .get_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap(),
+        original
+    );
+}
+
+#[tokio::test]
+async fn signed_hosted_preparation_queues_existing_run_atomically_and_rejects_invalid_or_duplicate_callbacks(
+) {
+    use crate::app::runs::{
+        internal_environment_preparation_with_token, InternalEnvironmentPreparationRequest,
+    };
+    use hmac::{Hmac, Mac};
+    use pharness_core::{
+        EnvironmentProfile, EnvironmentProfileLimits, PreparationStrategy, RunId, SessionId,
+    };
+    use pharness_store::{CreateEnvironmentPreparation, CreateRun, CreateSession, CreateWorkspace};
+    use serde_json::json;
+    use sha2::Sha256;
+    let mut fixture = repo_fixture_with_workflow("signed_hosted_preparation", false, true).await;
+    let item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let profile = EnvironmentProfile {
+        id: "python-3.11".into(),
+        active: true,
+        image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+        revision: "b".repeat(40),
+        platform: "linux/amd64".into(),
+        required_executables: vec![
+            "pharness-worker".into(),
+            "git".into(),
+            "python".into(),
+            "pip".into(),
+        ],
+        preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+        service_account: "pharness-python-runner".into(),
+        repository_allowlist: vec![item.source_repo.clone()],
+        limits: EnvironmentProfileLimits {
+            cpu: "1".into(),
+            memory: "1Gi".into(),
+            ephemeral_storage: "2Gi".into(),
+        },
+    };
+    fixture.state.environment_profiles = std::sync::Arc::new(vec![profile.clone()]);
+    let store = &fixture.state.store;
+    let session = SessionId::new("session_signed_preparation");
+    let run_id = RunId::new("run_signed_preparation");
+    store
+        .create_session(CreateSession {
+            id: session.clone(),
+            title: "Signed fixture".into(),
+            cwd: "/workspace".into(),
+        })
+        .await
+        .unwrap();
+    let run=store.create_run(CreateRun{id:run_id.clone(),session_id:session,user_task:"Signed fixture".into(),cwd:"/workspace".into(),max_turns:10,initial_status:"preparing".into(),execution_target_json:json!({"hosted_workflow_policy_hash":metadata.workflow_policy_hash,"run_scope":{"work_item_id":fixture.work_item_id}})}).await.unwrap();
+    store
+        .create_workspace(CreateWorkspace {
+            id: "workspace_signed".into(),
+            work_item_id: fixture.work_item_id.clone(),
+            run_id: Some(run_id.clone()),
+            status: "declared".into(),
+            source_repo: item.source_repo.clone(),
+            source_ref: "main".into(),
+            resolved_commit: item.source_commit.clone(),
+            branch: Some("pharness/fixture".into()),
+            retention_status: "retained".into(),
+            actor: Some("fixture".into()),
+            reason: Some("fixture".into()),
+        })
+        .await
+        .unwrap();
+    let preparation = store
+        .create_environment_preparation(CreateEnvironmentPreparation {
+            id: "prep_signed".into(),
+            work_item_id: fixture.work_item_id.clone(),
+            workspace_id: "workspace_signed".into(),
+            run_id: Some(run_id.clone()),
+            status: "queued".into(),
+            environment_profile_id: profile.id.clone(),
+            source_commit: item.source_commit.clone().unwrap(),
+        })
+        .await
+        .unwrap();
+    let snapshot = json!({"source_sha":item.source_commit,"manifest_sha256":item.repository_contract_hash,"dependency_lock_sha256":format!("sha256:{}","d".repeat(64)),"runner_image_digest":profile.image,"runner_revision":profile.revision,"os":"linux","architecture":"amd64","effective_user":"65532","writable_paths":["src/**"],"unavailable_tools":[],"agent_network":"denied","package_installation":"preparation_only","acceptance_commands":[{"name":"unit","command":"python -m unittest discover -s tests -v"}],"preparation_evidence":[]});
+    let token = "fixture-only-snapshot-key";
+    let mut mac = Hmac::<Sha256>::new_from_slice(token.as_bytes()).unwrap();
+    mac.update(snapshot.to_string().as_bytes());
+    let signature = format!("hmac-sha256:{:x}", mac.finalize().into_bytes());
+    let request = |signature: &str| {
+        serde_json::from_value::<InternalEnvironmentPreparationRequest>(json!({"status":"succeeded","project_contract":item.repository_contract_json,"project_contract_hash":item.repository_contract_hash,"environment_snapshot":snapshot,"snapshot_signature":signature,"logs":[]})).unwrap()
+    };
+    assert!(internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request("invalid"),
+        token,
+        true
+    )
+    .await
+    .is_err());
+    assert_eq!(store.get_run(&run_id).await.unwrap().unwrap(), run);
+    assert_eq!(
+        store
+            .get_environment_preparation(&preparation.id)
+            .await
+            .unwrap()
+            .unwrap(),
+        preparation
+    );
+    let accepted = internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request(&signature),
+        token,
+        true,
+    )
+    .await
+    .unwrap();
+    assert_eq!(accepted.0.status, "succeeded");
+    let queued = store.get_run(&run_id).await.unwrap().unwrap();
+    assert_eq!(queued.status, "queued");
+    assert_eq!(
+        queued.execution_target_json["environment_snapshot"],
+        snapshot
+    );
+    assert_eq!(queued.run_budget, run.run_budget);
+    let completed = store
+        .get_environment_preparation(&preparation.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        store
+            .mark_environment_preparation_dispatched(&preparation.id, "late-job-ack")
+            .await
+            .unwrap(),
+        completed
+    );
+    assert!(internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request(&signature),
+        token,
+        true
+    )
+    .await
+    .is_err());
+    assert_eq!(store.get_run(&run_id).await.unwrap().unwrap(), queued);
+}
+
+#[tokio::test]
+async fn terminal_normalization_survives_interruption_without_another_plan_or_run() {
+    use pharness_core::{AgentEvent, EventId, EventKind};
+    use pharness_runhost::AttemptOutcome;
+    use pharness_store::SqliteStore;
+    use serde_json::json;
+    use sqlx::Connection;
+    let directory =
+        std::env::temp_dir().join(format!("pharness-terminal-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir(&directory).unwrap();
+    let database = directory.join("state.sqlite");
+    let mut state = super::characterization::test_state().await;
+    state.store = std::sync::Arc::new(SqliteStore::connect(&database).await.unwrap());
+    let policy = serde_json::from_str(include_str!(
+        "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+    ))
+    .unwrap();
+    let fixture = super::repo_mode_v1::repo_fixture_with_policy(
+        "terminal_interruption",
+        false,
+        state,
+        Some(policy),
+    )
+    .await;
+    let store = &fixture.state.store;
+    let run = planner_fixture(&fixture, &[], false).await;
+    let stage = run.execution_target_json["repo_mode"]["stage_execution_id"]
+        .as_str()
+        .unwrap();
+    let mut db = sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new().filename(&database),
+    )
+    .await
+    .unwrap();
+    // Start after the Planner document is durable, before the worker callback
+    // seals its stage. Existing immutable outcome protections remain enabled.
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let plan = store
+        .update_work_plan_status(&plan.id, "proposed", Some("fixture".into()), None)
+        .await
+        .unwrap();
+    store.append_event(&AgentEvent {
+        event_id:EventId::new("event_terminal_plan"), session_id:run.session_id.clone(), run_id:run.id.clone(), seq:1, kind:EventKind::ToolFinished,
+        payload:json!({"status":"ok","content":{"structured_submission":true,"kind":"work_plan","document":plan.work_plan_json}}),
+    }).await.unwrap();
+    sqlx::query("CREATE TRIGGER interrupt_stage_seal BEFORE INSERT ON stage_outcomes BEGIN SELECT RAISE(ABORT,'injected interruption before sealing'); END").execute(&mut db).await.unwrap();
+    let mut consumption = run.budget_consumption.clone();
+    consumption.turns_used = 1;
+    consumption.tokens_used = 10;
+    let outcome = AttemptOutcome {
+        status: "completed".into(),
+        turns: 1,
+        summary: Some("Original worker result".into()),
+        error: None,
+        approval: None,
+        workspace_evidence: None,
+        budget_extension: None,
+        consumption,
+    };
+    let error = crate::worker::finish_run_from_attempt(store, &run, outcome.clone())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("injected interruption"));
+    let terminal = store.get_run(&run.id).await.unwrap().unwrap();
+    assert_eq!(terminal.status, "completed");
+    assert_eq!(
+        terminal.result_json.as_ref().unwrap()["terminal_attempt"],
+        serde_json::to_value(&outcome).unwrap()
+    );
+    assert!(store
+        .get_stage_outcome_for_execution(stage)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        store
+            .get_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .revision,
+        plan.revision
+    );
+    sqlx::query("DROP TRIGGER interrupt_stage_seal")
+        .execute(&mut db)
+        .await
+        .unwrap();
+    let restarted = SqliteStore::connect(&database).await.unwrap();
+    crate::worker::reconcile_terminal_hosted_run(&restarted, &terminal)
+        .await
+        .unwrap();
+    let sealed = restarted
+        .get_stage_outcome_for_execution(stage)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(sealed.status, "succeeded");
+    let item = restarted
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    for _ in 0..3 {
+        crate::worker::reconcile_terminal_hosted_run(&restarted, &terminal)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        restarted
+            .get_stage_outcome_for_execution(stage)
+            .await
+            .unwrap()
+            .unwrap(),
+        sealed
+    );
+    assert_eq!(
+        restarted
+            .get_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .revision,
+        plan.revision
+    );
+    assert_eq!(
+        restarted
+            .get_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap(),
+        item
+    );
+    assert_eq!(restarted.get_run(&run.id).await.unwrap().unwrap(), terminal);
+    // A stale callback cannot replace the accepted result or consumption.
+    assert!(crate::worker::finish_run_from_attempt(
+        &restarted,
+        &run,
+        AttemptOutcome::failed("late failure")
+    )
+    .await
+    .is_err());
+    assert_eq!(restarted.get_run(&run.id).await.unwrap().unwrap(), terminal);
+    db.close().await.unwrap();
+    drop(restarted);
+    drop(fixture);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[tokio::test]
+async fn terminal_recovery_blocks_missing_or_inconsistent_original_evidence() {
+    use pharness_runhost::AttemptOutcome;
+    use serde_json::json;
+    for corrupted in [false, true] {
+        let fixture =
+            repo_fixture_with_workflow(&format!("terminal_missing_{corrupted}"), false, true).await;
+        let run = planner_fixture(&fixture, &[], false).await;
+        let mut result = json!({"status":"completed","turns":0});
+        if corrupted {
+            let mut outcome = AttemptOutcome::failed("inconsistent saved status");
+            outcome.consumption = run.budget_consumption.clone();
+            result["terminal_attempt"] = serde_json::to_value(outcome).unwrap();
+        }
+        fixture
+            .state
+            .store
+            .complete_run(&run.id, "completed", result, None)
+            .await
+            .unwrap();
+        let before = fixture.state.store.get_run(&run.id).await.unwrap().unwrap();
+        let plan = fixture
+            .state
+            .store
+            .get_work_plan_by_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            crate::worker::reconcile_terminal_hosted_run(&fixture.state.store, &before)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            fixture.state.store.get_run(&run.id).await.unwrap().unwrap(),
+            before
+        );
+        assert_eq!(
+            fixture
+                .state
+                .store
+                .get_work_plan(&plan.id)
+                .await
+                .unwrap()
+                .unwrap(),
+            plan
+        );
+        assert!(fixture
+            .state
+            .store
+            .get_stage_outcome_for_execution(
+                run.execution_target_json["repo_mode"]["stage_execution_id"]
+                    .as_str()
+                    .unwrap()
+            )
+            .await
+            .unwrap()
+            .is_none());
+    }
+}
+
+#[tokio::test]
+async fn hosted_source_jobs_reconcile_lost_acknowledgement_without_another_job() {
+    use crate::dispatch::{
+        KubectlFixture, SourceDeliveryExecutionRequest, SourceDeliveryObservationRequest,
+    };
+    use serde_json::Value;
+    for observer in [false, true] {
+        let fake = KubectlFixture::new(false);
+        let suffix = format!("source_recovery_{observer}");
+        let state = super::characterization::test_state_with_git_observer(
+            fake.command.clone(),
+            format!("https://github.com/example/repo-{suffix}.git"),
+        )
+        .await;
+        let policy = serde_json::from_str(include_str!(
+            "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+        ))
+        .unwrap();
+        let fixture =
+            super::repo_mode_v1::repo_fixture_with_policy(&suffix, true, state, Some(policy)).await;
+        let intent = fixture
+            .state
+            .store
+            .get_source_delivery_intent(&fixture.intent_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(intent.authorization["workflow_policy_hash"].is_string());
+        for _ in 0..3 {
+            if observer {
+                fixture
+                    .state
+                    .worker
+                    .dispatch_source_delivery_observation(SourceDeliveryObservationRequest {
+                        source_delivery_intent_id: intent.id.clone(),
+                        execution_id: intent.observer_execution_id.clone().unwrap(),
+                    })
+                    .await
+                    .unwrap();
+            } else {
+                fixture
+                    .state
+                    .worker
+                    .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+                        source_delivery_intent_id: intent.id.clone(),
+                        execution_id: intent.writer_execution_id.clone().unwrap(),
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
+        assert_eq!(fake.creates(), 1);
+        let mut job: Value =
+            serde_json::from_slice(&std::fs::read(fake.dir.join("job.json")).unwrap()).unwrap();
+        assert!(
+            job["metadata"]["annotations"]["pharness.lucas.engineering/dispatch-hash"].is_string()
+        );
+        job["spec"]["template"]["spec"]["containers"][0]["image"] =
+            serde_json::json!("unrelated:image");
+        std::fs::write(fake.dir.join("job.json"), job.to_string()).unwrap();
+        let blocked = if observer {
+            fixture
+                .state
+                .worker
+                .dispatch_source_delivery_observation(SourceDeliveryObservationRequest {
+                    source_delivery_intent_id: intent.id.clone(),
+                    execution_id: intent.observer_execution_id.clone().unwrap(),
+                })
+                .await
+                .is_err()
+        } else {
+            fixture
+                .state
+                .worker
+                .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+                    source_delivery_intent_id: intent.id.clone(),
+                    execution_id: intent.writer_execution_id.clone().unwrap(),
+                })
+                .await
+                .is_err()
+        };
+        assert!(blocked);
+        assert_eq!(fake.creates(), 1);
+        assert_eq!(
+            fixture
+                .state
+                .store
+                .get_source_delivery_intent(&intent.id)
+                .await
+                .unwrap()
+                .unwrap(),
+            intent
+        );
+    }
+}
+
+#[tokio::test]
+async fn hosted_source_publication_persists_execution_before_uncertain_dispatch() {
+    use crate::dispatch::KubectlFixture;
+    use pharness_core::{RunId, SessionId};
+    use pharness_store::{CreateArtifact, CreateChangeSet, CreateRun};
+    use serde_json::json;
+    use sha2::Digest;
+    let fake = KubectlFixture::new(true);
+    let suffix = "source_order";
+    let source = format!("https://github.com/example/repo-{suffix}.git");
+    let state =
+        super::characterization::test_state_with_git_observer(fake.command.clone(), source.clone())
+            .await;
+    let policy = serde_json::from_str(include_str!(
+        "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+    ))
+    .unwrap();
+    let fixture =
+        super::repo_mode_v1::repo_fixture_with_policy(suffix, false, state, Some(policy)).await;
+    let store = &fixture.state.store;
+    let run = store
+        .create_run(CreateRun {
+            id: RunId::new("run_source_order"),
+            session_id: SessionId::new("ses_source_order"),
+            user_task: "Verified fixture".into(),
+            cwd: "/workspace".into(),
+            max_turns: 2,
+            initial_status: "completed".into(),
+            execution_target_json: json!({}),
+        })
+        .await
+        .unwrap();
+    let diff="diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-old\n+new\n";
+    let patch = store
+        .create_artifact(CreateArtifact {
+            id: "art_source_order".into(),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "workspace_git_diff".into(),
+            label: "Verified source fixture".into(),
+            mime_type: Some("text/x-diff".into()),
+            path: None,
+            content_text: Some(diff.into()),
+            content_json: None,
+        })
+        .await
+        .unwrap();
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let change=store.create_change_set(CreateChangeSet{id:"cset_source_order".into(),work_item_id:Some(fixture.work_item_id.clone()),work_plan_id:plan.id,remediation_plan_id:None,incident_id:None,session_id:run.session_id.clone(),run_id:Some(run.id),status:"approved".into(),title:"Bounded source fixture".into(),summary:"Exact approved patch".into(),risk_level:"low".into(),material_hash:format!("sha256:{}","b".repeat(64)),resource_namespace:None,resource_kind:Some("Repository".into()),resource_name:Some(source),change_set_json:json!({"patch":{"artifact_id":patch.id,"hash":format!("sha256:{:x}",sha2::Sha256::digest(diff.as_bytes()))}})}).await.unwrap();
+    let result = crate::app::repo_mode::authorize_and_dispatch_source_delivery(
+        &fixture.state,
+        &fixture.work_item_id,
+        "controller:hosted-workflow",
+        "Recorded source authority",
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["status"], "dispatch_unconfirmed");
+    let intent = store
+        .get_source_delivery_intent_by_subject("work_item_change_set", &change.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(intent.status, "writer_dispatched");
+    assert_eq!(
+        intent.authorization["writer_execution_id"],
+        intent.writer_execution_id.as_deref().unwrap()
+    );
+    assert!(intent.authorization["workflow_policy_hash"].is_string());
+    assert_eq!(fake.creates(), 0);
+    assert!(
+        crate::app::repo_mode::authorize_and_dispatch_source_delivery(
+            &fixture.state,
+            &fixture.work_item_id,
+            "controller:hosted-workflow",
+            "Retry cannot create another intent"
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        store
+            .get_source_delivery_intent(&intent.id)
+            .await
+            .unwrap()
+            .unwrap(),
+        intent
+    );
+}

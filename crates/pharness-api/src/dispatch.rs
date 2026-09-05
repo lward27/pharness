@@ -18,9 +18,14 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod recovery;
+#[cfg(test)]
+pub(crate) use recovery::tests::KubectlFixture;
+
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
 const CHAINED_RUN_HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(250);
+static RUN_ADMISSION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub(crate) const RUN_ID_LABEL: &str = "pharness.lucas.engineering/run-id";
 const WORKSPACE_ID_LABEL: &str = "pharness.lucas.engineering/workspace-id";
 const JOB_NAME_LABEL: &str = "app.kubernetes.io/name";
@@ -169,6 +174,12 @@ pub struct CapabilityVerificationOutcome {
 #[derive(Debug, Clone)]
 pub struct EnvironmentPreparationReceipt {
     pub job_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvironmentPreparationJobObservation {
+    pub job_name: String,
+    pub status: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -461,6 +472,51 @@ impl RunDispatcher {
                 anyhow::bail!("immutable environment profiles are unavailable in local worker mode")
             }
         }
+    }
+
+    /// Observe only the exact immutable preparation Job for an existing Run.
+    /// A missing Job is distinct from an unavailable or conflicting observation.
+    pub async fn observe_hosted_preparation(
+        &self,
+        run: &StoredRun,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<Option<EnvironmentPreparationJobObservation>> {
+        let Self::Kubernetes(dispatcher) = self else {
+            anyhow::bail!("hosted preparation observation requires kubernetes_job worker mode");
+        };
+        if !recovery::is_hosted(run) {
+            anyhow::bail!("preparation recovery requires hosted authority");
+        }
+        let manifest =
+            recovery::bind_manifest(dispatcher.environment_preparation_job_manifest(run, profile));
+        Ok(recovery::find_exact_job(
+            &dispatcher.kubectl_bin,
+            &dispatcher.config.namespace,
+            &manifest,
+        )
+        .await?
+        .map(|job| {
+            let terminal = job
+                .pointer("/status/conditions")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|c| {
+                    c["status"] == "True"
+                        && matches!(c["type"].as_str(), Some("Complete" | "Failed"))
+                });
+            EnvironmentPreparationJobObservation {
+                job_name: manifest["metadata"]["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .into(),
+                status: match terminal.and_then(|c| c["type"].as_str()) {
+                    Some("Failed") => "failed",
+                    Some("Complete") => "completed",
+                    _ => "active",
+                },
+            }
+        }))
     }
 
     pub fn source_reader_available(&self) -> bool {
@@ -855,6 +911,12 @@ impl KubernetesJobDispatcher {
                 .await
             {
                 tracing::error!(run_id = %run_id, %error, "failed to launch worker job");
+                if recovery::is_hosted(&run) {
+                    // A failed response does not prove that Kubernetes rejected
+                    // the request. Keep the durable Run for exact-Job recovery.
+                    tracing::warn!(run_id = %run_id, "hosted dispatch awaits reconciliation; Run was not sealed failed");
+                    return;
+                }
                 let _ = fail_run_from_job_creation(
                     &self.store,
                     &run_id,
@@ -1327,12 +1389,33 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         approval: Option<&StoredApproval>,
         predecessor_run_id: Option<&str>,
     ) -> anyhow::Result<()> {
+        // SQLite is single-writer, but HTTP handlers and spawned dispatch tasks
+        // are concurrent. Keep capacity observation and Job creation together.
+        let _admission = RUN_ADMISSION.lock().await;
+        let hosted_manifest = recovery::is_hosted(run)
+            .then(|| recovery::bind_manifest(self.job_manifest(run, approval)));
+        if let Some(manifest) = &hosted_manifest {
+            if recovery::find_exact_job(&self.kubectl_bin, &self.config.namespace, manifest)
+                .await?
+                .is_some()
+            {
+                return Ok(());
+            }
+        }
         if let Some(predecessor_run_id) = predecessor_run_id {
             self.await_chained_run_capacity(predecessor_run_id).await?;
         } else {
             self.ensure_run_job_capacity().await?;
         }
         self.ensure_workspace_claim(run).await?;
+        if let Some(manifest) = hosted_manifest {
+            return recovery::create_or_reconcile_job(
+                &self.kubectl_bin,
+                &self.config.namespace,
+                &manifest,
+            )
+            .await;
+        }
         let manifest = self.job_manifest(run, approval);
         let payload = serde_json::to_vec(&manifest)?;
 
@@ -1372,11 +1455,30 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         profile
             .validate()
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let _admission = RUN_ADMISSION.lock().await;
+        let job_name = environment_preparation_job_name(run.id.as_str());
+        let manifest = self.environment_preparation_job_manifest(run, profile);
+        let hosted = recovery::is_hosted(run);
+        let manifest = if hosted {
+            recovery::bind_manifest(manifest)
+        } else {
+            manifest
+        };
+        if hosted
+            && recovery::find_exact_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?
+                .is_some()
+        {
+            return Ok(EnvironmentPreparationReceipt { job_name });
+        }
         self.ensure_run_job_capacity().await?;
         self.ensure_workspace_claim(run).await?;
-        let manifest = self.environment_preparation_job_manifest(run, profile);
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
-        let job_name = environment_preparation_job_name(run.id.as_str());
+        if hosted {
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(run_id = %run.id, job = %job_name, profile = %profile.id, "created isolated environment preparation job");
         Ok(EnvironmentPreparationReceipt { job_name })
     }
@@ -1559,10 +1661,9 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         manifest
     }
 
-    /// The API is deliberately single-replica while SQLite is the durable
-    /// store, so this read-before-create admission check is sufficient for the
-    /// first bounded coding-worker pool. A future multi-worker controller must
-    /// replace it with durable queue admission.
+    /// The caller holds RUN_ADMISSION across this observation and creation.
+    /// Persisted hosted operation locks survive restarts; this process lock also
+    /// serializes legacy dispatches sharing the same single-replica worker pool.
     async fn list_run_jobs_for_capacity(&self) -> anyhow::Result<serde_json::Value> {
         let selector = format!("{JOB_NAME_LABEL}={JOB_NAME_VALUE}");
         let output = tokio::process::Command::new(&self.kubectl_bin)
@@ -1711,7 +1812,23 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             &request.source_delivery_intent_id,
             "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
         )?;
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let intent = self
+            .store
+            .get_source_delivery_intent(&request.source_delivery_intent_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
+        if intent
+            .authorization
+            .get("workflow_policy_hash")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        {
+            manifest = recovery::bind_manifest(manifest);
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(
             source_delivery_intent_id = %request.source_delivery_intent_id,
             execution_id = %request.execution_id,
@@ -1777,7 +1894,23 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             &request.source_delivery_intent_id,
             "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
         )?;
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let intent = self
+            .store
+            .get_source_delivery_intent(&request.source_delivery_intent_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
+        if intent
+            .authorization
+            .get("workflow_policy_hash")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        {
+            manifest = recovery::bind_manifest(manifest);
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(
             source_delivery_intent_id = %request.source_delivery_intent_id,
             execution_id = %request.execution_id,
@@ -3485,13 +3618,21 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 // version before the corresponding Repo Mode StageExecution
                 // could be sealed. The stage finalizer is idempotent and is a
                 // no-op for non-Repo-Mode runs.
-                let error = run.error.clone().unwrap_or_else(|| failure.to_string());
-                sync_repo_stage_run(
-                    &self.store,
-                    &run,
-                    &pharness_runhost::AttemptOutcome::failed(error),
-                )
-                .await?;
+                if run
+                    .execution_target_json
+                    .get("hosted_workflow_policy_hash")
+                    .is_some()
+                {
+                    crate::worker::reconcile_terminal_hosted_run(&self.store, &run).await?;
+                } else {
+                    let error = run.error.clone().unwrap_or_else(|| failure.to_string());
+                    sync_repo_stage_run(
+                        &self.store,
+                        &run,
+                        &pharness_runhost::AttemptOutcome::failed(error),
+                    )
+                    .await?;
+                }
             }
 
             // A proposer can fail in an init container before its worker can
@@ -4534,6 +4675,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hosted_preparation_recovers_lost_ack_and_observes_terminal_job_without_recreating_it()
+    {
+        let fixture = super::recovery::tests::KubectlFixture::new(false);
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.kubectl_bin = fixture.command.clone();
+        let mut run = test_run();
+        run.execution_target_json["hosted_workflow_policy_hash"] = json!("sha256:fixture");
+        let profile = EnvironmentProfile {
+            id: "python-3.11".into(),
+            active: true,
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec![
+                "pharness-worker".into(),
+                "git".into(),
+                "python".into(),
+                "pip".into(),
+            ],
+            preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+            service_account: "pharness-python-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/test.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "1".into(),
+                memory: "1Gi".into(),
+                ephemeral_storage: "2Gi".into(),
+            },
+        };
+        let first = dispatcher
+            .create_environment_preparation_job(&run, &profile)
+            .await
+            .unwrap();
+        let second = dispatcher
+            .create_environment_preparation_job(&run, &profile)
+            .await
+            .unwrap();
+        assert_eq!(first.job_name, second.job_name);
+        assert_eq!(fixture.creates(), 1);
+        let mut job: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(fixture.dir.join("job.json")).unwrap()).unwrap();
+        job["status"] = json!({"conditions":[{"type":"Complete","status":"True"}]});
+        std::fs::write(fixture.dir.join("job.json"), job.to_string()).unwrap();
+        let worker = super::RunDispatcher::Kubernetes(std::sync::Arc::new(dispatcher));
+        let observed = worker
+            .observe_hosted_preparation(&run, &profile)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed.status, "completed");
+        assert_eq!(observed.job_name, first.job_name);
+        assert_eq!(fixture.creates(), 1);
+        job["spec"]["template"]["spec"]["containers"][0]["image"] = json!("changed-image");
+        std::fs::write(fixture.dir.join("job.json"), job.to_string()).unwrap();
+        assert!(worker
+            .observe_hosted_preparation(&run, &profile)
+            .await
+            .is_err());
+        assert_eq!(fixture.creates(), 1);
+    }
+
+    #[tokio::test]
     async fn preparation_manifest_uses_only_the_preparation_proxy() {
         let mut dispatcher = test_dispatcher(None).await;
         dispatcher.config.source_reader_token_secret_name = Some("source-reader-token".into());
@@ -5123,6 +5325,64 @@ mod tests {
             manifest.pointer("/spec/activeDeadlineSeconds"),
             Some(&json!(600 + NETWORK_POLICY_STABILIZATION_SECONDS))
         );
+    }
+
+    #[tokio::test]
+    async fn simultaneous_legacy_and_hosted_dispatch_share_one_worker_slot() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!(
+            "pharness-admission-{}",
+            uuid::Uuid::now_v7().simple()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let kubectl = root.join("kubectl");
+        // Capture an empty capacity response before delaying it. Without an
+        // admission lock, both callers observe zero Jobs and create two.
+        let script = format!(
+            r#"#!/usr/bin/env python3
+import json,pathlib,sys,time
+root=pathlib.Path({root:?})
+args=sys.argv[1:]
+if args[:2]==['get','jobs']:
+    jobs=[json.loads(p.read_text()) for p in root.glob('job-*.json')]
+    time.sleep(.1)
+    print(json.dumps({{'items':jobs}}))
+elif args[:2]==['get','job']:
+    p=root/('job-'+args[2]+'.json')
+    if p.exists():print(p.read_text())
+elif args[0]=='get':
+    print('persistentvolumeclaim/already-provisioned')
+elif args[0]=='create':
+    job=json.load(sys.stdin)
+    assert job['kind']=='Job'
+    job['status']={{'active':1}}
+    (root/('job-'+job['metadata']['name']+'.json')).write_text(json.dumps(job))
+    with (root/'creates').open('a') as f:f.write('x')
+else:sys.exit(99)
+"#,
+            root = root.to_str().unwrap()
+        );
+        std::fs::write(&kubectl, script).unwrap();
+        std::fs::set_permissions(&kubectl, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.kubectl_bin = kubectl.to_str().unwrap().into();
+        dispatcher.config.max_concurrent_run_jobs = 1;
+        let mut legacy = test_run();
+        legacy.id = RunId::new("run_legacy_admission");
+        let mut hosted = test_run();
+        hosted.id = RunId::new("run_hosted_admission");
+        hosted.execution_target_json["hosted_workflow_policy_hash"] = json!("sha256:fixture");
+        let (a, b) = tokio::join!(
+            dispatcher.create_job(&legacy, None, None),
+            dispatcher.create_job(&hosted, None, None)
+        );
+        assert_ne!(
+            a.is_ok(),
+            b.is_ok(),
+            "exactly one Run should be admitted: {a:?}, {b:?}"
+        );
+        assert_eq!(std::fs::read(root.join("creates")).unwrap().len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     async fn test_dispatcher(node_hostname: Option<String>) -> KubernetesJobDispatcher {
