@@ -27,6 +27,14 @@ environment. Locks remain held when an API claim expires or an operation's outco
 is unknown; only a reconciled terminal operation releases them. This prevents a
 restart from being interpreted as permission to dispatch another external effect.
 
+Hosted worker dispatch now records a hash of the intended Job manifest and checks
+the exact deterministic name before creation. Existing Jobs must match every
+requested value; Kubernetes defaults and status are permitted, while changed
+images, credentials, command arguments, added containers/environment entries, and
+terminating Jobs require intervention. A lost create acknowledgement triggers a
+bounded re-read of that same Job. An uncertain hosted dispatch no longer seals its
+Run as failed. Existing source-only dispatch retains its previous behavior.
+
 ## Validation
 
 The full store suite passed **51 tests**, including five new tests covering
@@ -37,9 +45,16 @@ Store Clippy passed for all targets with warnings denied. See
 [validation evidence](ASTRA-M06-PERSISTENCE-VALIDATION.json) for exact source hashes,
 log hashes, and the validation boundary. These counts overlap and are not additive.
 
+The complete API/admin suite also passed **240 tests** after the worker-dispatch
+change, including three new adapter regressions. The 32-test dispatch subset is
+part of that total. With the store results this is **291 distinct tests**. API
+Clippy, formatting and architecture checks pass. See
+[dispatch recovery evidence](ASTRA-M06-DISPATCH-RECOVERY-VALIDATION.json). The
+adapter uses a local fake Kubernetes executable with no cluster credentials.
+
 ## Remaining implementation and acceptance
 
-The API loop, routine progression, dispatch recovery, operator control routes,
+The API loop, routine progression, scheduling of dispatch recovery, operator control routes,
 callback integration and their adapter tests remain to be implemented. No autonomous
 workflow or cluster recovery is claimed by the persistence tests. M05 compatible
 readers and qualification remain dependencies; this independent preparation does

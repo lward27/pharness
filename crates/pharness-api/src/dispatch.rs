@@ -18,6 +18,8 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod recovery;
+
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
 const CHAINED_RUN_HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -855,6 +857,12 @@ impl KubernetesJobDispatcher {
                 .await
             {
                 tracing::error!(run_id = %run_id, %error, "failed to launch worker job");
+                if recovery::is_hosted(&run) {
+                    // A failed response does not prove that Kubernetes rejected
+                    // the request. Keep the durable Run for exact-Job recovery.
+                    tracing::warn!(run_id = %run_id, "hosted dispatch awaits reconciliation; Run was not sealed failed");
+                    return;
+                }
                 let _ = fail_run_from_job_creation(
                     &self.store,
                     &run_id,
@@ -1327,12 +1335,30 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         approval: Option<&StoredApproval>,
         predecessor_run_id: Option<&str>,
     ) -> anyhow::Result<()> {
+        let hosted_manifest = recovery::is_hosted(run)
+            .then(|| recovery::bind_manifest(self.job_manifest(run, approval)));
+        if let Some(manifest) = &hosted_manifest {
+            if recovery::find_exact_job(&self.kubectl_bin, &self.config.namespace, manifest)
+                .await?
+                .is_some()
+            {
+                return Ok(());
+            }
+        }
         if let Some(predecessor_run_id) = predecessor_run_id {
             self.await_chained_run_capacity(predecessor_run_id).await?;
         } else {
             self.ensure_run_job_capacity().await?;
         }
         self.ensure_workspace_claim(run).await?;
+        if let Some(manifest) = hosted_manifest {
+            return recovery::create_or_reconcile_job(
+                &self.kubectl_bin,
+                &self.config.namespace,
+                &manifest,
+            )
+            .await;
+        }
         let manifest = self.job_manifest(run, approval);
         let payload = serde_json::to_vec(&manifest)?;
 
