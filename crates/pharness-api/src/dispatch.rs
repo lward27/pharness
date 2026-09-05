@@ -19,8 +19,10 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod recovery;
+mod source_delivery;
 #[cfg(test)]
 pub(crate) use recovery::tests::KubectlFixture;
+pub use source_delivery::SourceJobKind;
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
@@ -1794,50 +1796,6 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         Ok(GitDeliveryExecutionReceipt { job_name })
     }
 
-    async fn create_source_delivery_writer_job(
-        &self,
-        request: &SourceDeliveryExecutionRequest,
-    ) -> anyhow::Result<GitDeliveryExecutionReceipt> {
-        if !self.git_writer_available() {
-            anyhow::bail!("Git writer executor is not configured");
-        }
-        let legacy = GitDeliveryExecutionRequest {
-            change_set_id: request.source_delivery_intent_id.clone(),
-            execution_id: request.execution_id.clone(),
-        };
-        let job_name = git_writer_job_name(&request.execution_id);
-        let mut manifest = self.git_writer_job_manifest(&legacy, &job_name);
-        bind_source_delivery_manifest(
-            &mut manifest,
-            &request.source_delivery_intent_id,
-            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
-        )?;
-        let intent = self
-            .store
-            .get_source_delivery_intent(&request.source_delivery_intent_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
-        if intent
-            .authorization
-            .get("workflow_policy_hash")
-            .and_then(serde_json::Value::as_str)
-            .is_some()
-        {
-            manifest = recovery::bind_manifest(manifest);
-            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
-                .await?;
-        } else {
-            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
-        }
-        tracing::info!(
-            source_delivery_intent_id = %request.source_delivery_intent_id,
-            execution_id = %request.execution_id,
-            job = %job_name,
-            "created source delivery writer job"
-        );
-        Ok(GitDeliveryExecutionReceipt { job_name })
-    }
-
     async fn create_argo_executor_job(
         &self,
         request: &ArgoSyncExecutionRequest,
@@ -1872,50 +1830,6 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             execution_id = %request.execution_id,
             job = %job_name,
             "created Git observer job"
-        );
-        Ok(GitDeliveryObservationReceipt { job_name })
-    }
-
-    async fn create_source_delivery_observer_job(
-        &self,
-        request: &SourceDeliveryObservationRequest,
-    ) -> anyhow::Result<GitDeliveryObservationReceipt> {
-        if !self.git_observer_available() {
-            anyhow::bail!("Git observer executor is not configured");
-        }
-        let legacy = GitDeliveryObservationRequest {
-            change_set_id: request.source_delivery_intent_id.clone(),
-            execution_id: request.execution_id.clone(),
-        };
-        let job_name = git_observer_job_name(&request.execution_id);
-        let mut manifest = self.git_observer_job_manifest(&legacy, &job_name);
-        bind_source_delivery_manifest(
-            &mut manifest,
-            &request.source_delivery_intent_id,
-            "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
-        )?;
-        let intent = self
-            .store
-            .get_source_delivery_intent(&request.source_delivery_intent_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
-        if intent
-            .authorization
-            .get("workflow_policy_hash")
-            .and_then(serde_json::Value::as_str)
-            .is_some()
-        {
-            manifest = recovery::bind_manifest(manifest);
-            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
-                .await?;
-        } else {
-            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
-        }
-        tracing::info!(
-            source_delivery_intent_id = %request.source_delivery_intent_id,
-            execution_id = %request.execution_id,
-            job = %job_name,
-            "created source delivery observer job"
         );
         Ok(GitDeliveryObservationReceipt { job_name })
     }

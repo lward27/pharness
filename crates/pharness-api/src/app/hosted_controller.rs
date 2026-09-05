@@ -4,6 +4,7 @@ mod operations;
 mod preparation;
 mod progression;
 mod scheduler;
+mod source;
 mod state;
 
 #[cfg(test)]

@@ -170,6 +170,9 @@ pub(super) async fn reconcile_operation(
         return Box::pin(execute_operation(state, claim, snapshot, operation, refs)).await;
     }
     let mut refs = operation.resource_refs.clone();
+    if operation.action == "authorize_source_delivery" {
+        return super::source::reconcile(state, claim, snapshot, &operation, expired).await;
+    }
     if matches!(
         operation.action.as_str(),
         "approve_work_plan" | "approve_change_set"
