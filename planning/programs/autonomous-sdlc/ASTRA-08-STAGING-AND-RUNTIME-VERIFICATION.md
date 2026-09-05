@@ -1,20 +1,18 @@
 # ASTRA M08: Staging and runtime verification
 
-Status: bounded native Tempo reader, separate deployment records and durable staging GitOps handoff implemented with local validation. These slices are not deployed; Argo/runtime verification and real staging acceptance remain open.
+Status: basic Tempo reader, schema-54 delivery records and durable staging foundation deployed in source `19b0c55`. New native Finance identity, probe, signal and trace integration remains in development; autonomous staging acceptance is open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
 
 The [native Tempo reader evidence](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md)
 records the tested finite query, a real staging trace sample, explicit collection
-limits and inconclusive behavior. It is not deployed, does not establish release
-identity, and cannot satisfy this milestone's staging or promotion gates alone.
+limits and inconclusive behavior. The basic reader is deployed but its live Tempo endpoint is not yet configured. It does not establish release identity and cannot satisfy staging or promotion gates alone.
 
 The [delivery-record compatibility slice](../../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md)
 extends the existing build/deployment/GitOps graph for separate staging and
 production records. Schema 54 preserves historical values and rejects legacy
 advancement of hosted deployments. The SQLite uniqueness change requires a
-transactional table replacement; the live-copy migration check and compatible
-reader deployment are still required before any hosted writes. This does not
+transactional table replacement; the isolated migration and [live preservation checks](../../evidence/autonomous-sdlc/ASTRA-19B0C55-LIVE-PRESERVATION.md) passed before hosted writes. Hosted creation remains disabled. This does not
 establish a deployed candidate, production approval or release verification.
 
 The [durable staging GitOps slice](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS.md)
