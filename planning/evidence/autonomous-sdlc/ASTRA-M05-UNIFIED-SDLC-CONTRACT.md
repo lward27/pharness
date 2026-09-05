@@ -117,6 +117,21 @@ re-export; callers now import the owning authorization module directly. The
 unnecessary re-export was removed, rather than weakening the boundary check.
 The last import-only correction also passed the API compiler/linter with warnings denied.
 
+After merging the M04 protocol and stage-report repairs, combined source
+`1406174ae6a41a35beeef943d799bb86a78c4441` passed the full workspace:
+**616 Rust tests**, full workspace/all-target Clippy with warnings denied,
+formatting, and architecture checks. The UI build and **73 unit tests** passed.
+**103 distinct browser checks passed** across desktop and phone-width projects;
+the mobile copy of the real-server journey is intentionally skipped. That journey
+initially exceeded its setup timeout while compiling alongside another build. A
+separate fixture build followed by the unchanged real-server test passed in 31.7
+seconds. No test limits or screenshot baselines were changed. An initial shared
+Cargo cache collision was also resolved using a worktree-local target directory.
+[Combined validation evidence](ASTRA-M05-COMBINED-SOURCE-VALIDATION.json) records
+per-binary results, commands, log hashes, and the local Node 24 versus release
+Node 22 distinction. These results supersede the earlier subset counts; they are
+not added to them and do not constitute M04 or M11 acceptance.
+
 The JSON fixture under `crates/pharness-core/tests/fixtures` is test data. It is
 not a qualified provider profile or live delivery evidence.
 
