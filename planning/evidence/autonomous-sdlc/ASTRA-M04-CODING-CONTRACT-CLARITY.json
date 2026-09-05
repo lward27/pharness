@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-05T12:49:08.972255+00:00",
+  "base_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "prompt_revision": "2026-09-05.1",
+  "source_sha256": {
+    "crates/pharness-runhost/src/prompt.rs": "94749a5395db58b4ed1f1b6caf057b43011fbf5e19b07305b711f81d40ae8631",
+    "crates/pharness-eval/src/coding_v2.rs": "20fa46054b1a3a729f36a91b4dc514fa5df155a6eb9d8d9f92d31d91cf052585"
+  },
+  "validation": {
+    "runhost_tests": 28,
+    "clippy": "runhost all targets, warnings denied: passed",
+    "format": "passed",
+    "frozen_fixture_diff": ""
+  },
+  "log_sha256": {
+    "/private/tmp/astra-m04-contract-clarity-tests.log": "6085a99f5d20ce9e478048d8ec9c29219628fbfe3e27465171b11460ee9be36f",
+    "/private/tmp/astra-m04-contract-clarity-clippy.log": "9f6c6c63e651427bd5691e850fa77020cfbc10d104851bf9b50bd741df57b71f"
+  },
+  "limitations": [
+    "Instruction and tool-description clarification only; runtime command policy unchanged",
+    "Not deployed or live-qualified",
+    "No model, provider, budget, task or gate changed"
+  ]
+}
