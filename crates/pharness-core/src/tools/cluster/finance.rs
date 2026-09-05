@@ -7,6 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod identity;
 mod kubernetes;
 mod probes;
+mod signals;
+pub use signals::FinanceRuntimeWindow;
 #[cfg(test)]
 mod tests;
 
