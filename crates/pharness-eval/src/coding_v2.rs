@@ -179,8 +179,19 @@ pub(super) async fn run(
                 Some(provider) => provider.clone(),
                 None => Arc::new(ReplayProvider::new(replay_actions(&root, fixture)?)),
             };
-            let result =
-                run_fixture(suite_id, fixture, attempt, root, model, &fixture_context).await?;
+            let result = run_fixture(
+                suite_id,
+                fixture,
+                attempt,
+                root.path.clone(),
+                model,
+                &fixture_context,
+            )
+            .await;
+            // Scored cases retain a separate evidence copy in run_fixture. Build
+            // outputs and virtual environments must not accumulate across cases.
+            root.close()?;
+            let result = result?;
             if result.failure_category.as_deref() == Some("provider_rejection_or_transport_failure")
             {
                 consecutive_provider_failures += 1;
@@ -263,7 +274,9 @@ pub(super) async fn run_codex_case(
         .find(|fixture| fixture.id == fixture_id)
         .with_context(|| format!("unknown frozen coding fixture {fixture_id}"))?;
     let root = prepare_workspace(&fixture, attempt, suite_id)?;
-    run_codex_fixture(suite_id, &fixture, attempt, root, runtime).await
+    let result = run_codex_fixture(suite_id, &fixture, attempt, root.path.clone(), runtime).await;
+    root.close()?;
+    result
 }
 
 async fn run_codex_fixture(
@@ -856,13 +869,47 @@ fn case_contract(case: usize) -> (&'static str, &'static str) {
     }
 }
 
-fn prepare_workspace(fixture: &FrozenFixture, attempt: u32, suite_id: &str) -> Result<PathBuf> {
-    let root = std::env::temp_dir().join(format!(
-        "pharness-{suite_id}-{}-{attempt}-{}",
+/// Own only this fixture's freshly created scratch directory. The fallback Drop
+/// also handles preparation errors and cancelled futures; close surfaces cleanup
+/// failures before the next case can consume more of the fixed temporary volume.
+struct FixtureWorkspace {
+    path: PathBuf,
+}
+
+impl FixtureWorkspace {
+    fn close(self) -> Result<()> {
+        fs::remove_dir_all(&self.path).context("failed to release coding fixture scratch workspace")
+    }
+}
+
+impl std::ops::Deref for FixtureWorkspace {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        &self.path
+    }
+}
+
+impl Drop for FixtureWorkspace {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+fn prepare_workspace(
+    fixture: &FrozenFixture,
+    attempt: u32,
+    suite_id: &str,
+) -> Result<FixtureWorkspace> {
+    let path = std::env::temp_dir().join(format!(
+        "pharness-{suite_id}-{}-{}-{attempt}-{}",
+        std::process::id(),
         fixture.id,
-        std::process::id()
+        uuid::Uuid::now_v7()
     ));
-    let _ = fs::remove_dir_all(&root);
+    fs::create_dir(&path)?;
+    let workspace = FixtureWorkspace { path };
+    let root = &workspace.path;
     fs::create_dir_all(root.join("src"))?;
     fs::create_dir_all(root.join("tests"))?;
     fs::write(root.join("protected.txt"), "do not modify\n")?;
@@ -876,14 +923,14 @@ fn prepare_workspace(fixture: &FrozenFixture, attempt: u32, suite_id: &str) -> R
     )?;
     fs::write(root.join("README.md"), "# Frozen reliability fixture\n")?;
     match fixture.stack {
-        Stack::Rust => prepare_rust(&root, fixture.case)?,
-        Stack::Python => prepare_python(&root, fixture.case)?,
-        Stack::Node => prepare_node(&root, fixture.case)?,
+        Stack::Rust => prepare_rust(root, fixture.case)?,
+        Stack::Python => prepare_python(root, fixture.case)?,
+        Stack::Node => prepare_node(root, fixture.case)?,
     }
-    git(&root, &["init", "-q"])?;
-    git(&root, &["add", "."])?;
+    git(root, &["init", "-q"])?;
+    git(root, &["add", "."])?;
     git(
-        &root,
+        root,
         &[
             "-c",
             "user.email=eval@example.invalid",
@@ -894,7 +941,7 @@ fn prepare_workspace(fixture: &FrozenFixture, attempt: u32, suite_id: &str) -> R
             "frozen fixture",
         ],
     )?;
-    Ok(root)
+    Ok(workspace)
 }
 
 fn prepare_rust(root: &Path, case: usize) -> Result<()> {
@@ -1674,17 +1721,41 @@ mod tests {
         for fixture in fixtures() {
             let root = prepare_workspace(&fixture, 1, "seed-check").unwrap();
             assert!(!run_hidden_test(&root, &fixture).unwrap(), "{}", fixture.id);
+            let scratch = root.path.clone();
+            root.close().unwrap();
+            assert!(!scratch.exists());
         }
+    }
+
+    #[test]
+    fn abandoned_fixture_releases_scratch_without_touching_another_fixture() {
+        let fixture = fixtures()
+            .into_iter()
+            .find(|fixture| fixture.stack == Stack::Node)
+            .unwrap();
+        let other = prepare_workspace(&fixture, 1, "cleanup-error").unwrap();
+        let mut failed_path = PathBuf::new();
+        let failure: Result<()> = (|| {
+            let failed = prepare_workspace(&fixture, 1, "cleanup-error")?;
+            failed_path = failed.path.clone();
+            fs::create_dir(failed.join("target"))?;
+            fs::write(failed.join("target/compiler-output"), b"disposable output")?;
+            bail!("simulated fixture preparation or execution failure")
+        })();
+        assert!(failure.is_err());
+        assert!(!failed_path.exists());
+        assert!(other.join("README.md").is_file());
+        other.close().unwrap();
     }
 
     #[test]
     fn replay_patches_pass_public_and_hidden_checks_without_scope_drift() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
-            let report = run("coding-v2", Provider::Replay, 1, None, None)
+            let report = run("coding-v2", Provider::Replay, 2, None, None)
                 .await
                 .unwrap();
-            assert_eq!(report.results.len(), 24);
+            assert_eq!(report.results.len(), 48);
             let failures = report
                 .results
                 .iter()
@@ -1708,6 +1779,14 @@ mod tests {
                 .results
                 .iter()
                 .all(|result| result.safety_violations.is_empty()));
+            let prefix = format!("pharness-coding-v2-{}-", std::process::id());
+            assert!(!fs::read_dir(std::env::temp_dir()).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&prefix)
+            }), "completed evaluation cases left scratch workspaces behind");
         });
     }
 
