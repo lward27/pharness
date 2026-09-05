@@ -144,10 +144,30 @@ Clippy with warnings denied, formatting and architecture checks pass. See
 [terminal normalization validation](ASTRA-M06-TERMINAL-NORMALIZATION-VALIDATION.json).
 This remains undeployed controller implementation, not live recovery acceptance.
 
+## Source publication dispatch boundary
+
+Initial publication records its writer identity in the immutable authorization
+and persists the current execution before creating a Job. The existing explicit
+retry follows that same ordering. Dispatch acknowledgement reads the latest intent
+so a fast callback is not overwritten. Hosted dispatch uncertainty retains its
+writer or observer identity for reconciliation; it does not become permission to
+allocate another operation.
+
+Hosted source writer/observer Jobs use exact manifest hashes and the existing
+lost-acknowledgement adapter. Deterministic tests prove repeated dispatch reuses
+one Job, rejects a conflicting Job, and preserves the publication intent when
+observation is unavailable. These tests exercise the control-plane boundary;
+they do not prove GitHub source effects or automatic source merge.
+
+All **254 API tests** and one admin test pass, with 53 unchanged passing store tests
+(**308 distinct tests**). Clippy, formatting and architecture checks pass. See
+[source dispatch validation](ASTRA-M06-SOURCE-DISPATCH-VALIDATION.json).
+
 ## Remaining implementation and acceptance
 
-Incomplete multi-record pre-dispatch startup still needs interruption recovery. Source writer/observer persistence ordering and the delivery
-adapters are not integrated into this scheduler. Production approvals, rollback,
+Incomplete multi-record pre-dispatch startup still needs interruption recovery. The source writer/observer dispatch boundary is prepared, but controller source
+progression, remote-effect recovery and delivery adapters are not integrated into
+this scheduler. Production approvals, rollback,
 and terminal cancellation must close against those actual operations. A real
 active-workflow restart and duplicate source/pipeline/deployment acceptance remain
 open. The local fixtures are not a live autonomous Finance result.
