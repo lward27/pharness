@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recordedNumber, recordedPair, workItemPosition } from "./workItemPresentation";
+import { recordedNumber, recordedPair, workItemCondition, workItemPosition } from "./workItemPresentation";
 
 describe("recorded WorkItem presentation", () => {
   const previous = { id:"old", stage_key:"plan", status:"completed", run_id:"historical-run" };
@@ -26,5 +26,28 @@ describe("recorded WorkItem presentation", () => {
     expect(recordedNumber(null)).toBe("Unavailable");
     expect(recordedNumber(0)).toBe("0");
     expect(recordedPair(400000,1000000)).toBe("400K / 1M");
+  });
+  it("keeps hosted release and runtime verification beyond the source merge", () => {
+    const flow:any = {work_item:{workflow_kind:"hosted_sdlc"},repo_mode:{effective_stage_outcomes:[{stage_key:"source_delivery",status:"succeeded"}]},reconcile_preview:{boundary:"release"}};
+    expect(workItemPosition(flow).stage).toBe("release");
+    flow.reconcile_preview.boundary = "observe";
+    expect(workItemPosition(flow).stage).toBe("observe");
+    delete flow.reconcile_preview;
+    flow.repo_mode.effective_stage_outcomes.unshift({stage_key:"observe",status:"failed"},{stage_key:"release",status:"succeeded"});
+    expect(workItemPosition(flow).stage).toBe("observe");
+  });
+  it("shows the recorded blocker without declaring an unknown condition healthy", () => {
+    const flow:any = {work_item:{status_reason:"Old reason"},action_rail:[{blockers:[{code:"evidence_missing",summary:"Runtime telemetry is unavailable"}]}]};
+    expect(workItemCondition(flow)).toBe("Runtime telemetry is unavailable");
+    expect(workItemCondition({work_item:{}})).toBe("No wait reason recorded");
+  });
+  it("keeps workflow controls separate from the lifecycle boundary and next decision", () => {
+    const pause={id:"pause_workflow",effect_class:"workflow_control",lifecycle_stage:"workflow"};
+    const flow:any={work_item:{workflow_kind:"hosted_sdlc",status_reason:"Older stage reason"},action_rail:[pause],reconcile_preview:{boundary:"release"},repo_mode:{workflow_control:{reason:"Waiting for the recorded build"}}};
+    const position=workItemPosition(flow);
+    expect(position.action).toBeUndefined();
+    expect(position.controls).toEqual([pause]);
+    expect(position.stage).toBe("release");
+    expect(workItemCondition(flow)).toBe("Waiting for the recorded build");
   });
 });

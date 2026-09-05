@@ -500,14 +500,17 @@ export function LegacyApp() {
 
 export function App() {
   const [cutover, setCutover] = useState({ status: "loading", enabled: false, configuration: null });
+  const [configurationAttempt, setConfigurationAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
+    setCutover({ status: "loading", enabled: false, configuration: null });
     fetchJson("/api/config/effective", {signal:controller.signal})
       .then((config) => { if (active) setCutover({ status: "ready", enabled: config?.features?.repo_mode_v1?.ui_enabled === true, configuration: config }); })
-      .catch(() => { if (active) setCutover({ status: "ready", enabled: false }); });
+      .catch(() => { if (active) setCutover({ status: "error", enabled: false, configuration: null }); });
     return () => { active = false; controller.abort(); };
-  }, []);
+  }, [configurationAttempt]);
   if (cutover.status === "loading") return <div className="repo-boot" role="status">Loading PHarness operator experience…</div>;
-  return cutover.enabled ? <Suspense fallback={<div className="repo-boot" role="status">Loading Repo Mode operator experience…</div>}><RepoModeApp configuration={cutover.configuration} /></Suspense> : <LegacyApp />;
+  if (cutover.status === "error") return <main className="repo-boot"><section role="alert"><h1>PHarness is unavailable</h1><p>The console could not load its configuration. Retry to reconnect.</p><button type="button" onClick={() => setConfigurationAttempt(value => value + 1)}>Retry connection</button></section></main>;
+  return cutover.enabled ? <Suspense fallback={<div className="repo-boot" role="status">Loading PHarness operator experience…</div>}><RepoModeApp configuration={cutover.configuration} /></Suspense> : <LegacyApp />;
 }
