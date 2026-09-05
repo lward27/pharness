@@ -110,3 +110,7 @@ API/controller journey with both console flags passed again without updating
 visual baselines. The [combined validation manifest](ASTRA-M10-COMBINED-CONTROLLER-VALIDATION.json)
 binds the logs to that source. This verifies source-only compatibility; hosted
 release acceptance remains open.
+
+PR 334 merged at `ca98fa7c7474902d206e130ca14eddddec8d82a7` on 2026-09-05 at
+14:36 UTC. This source merge has not yet changed the live image. Final production
+and recovery projections, route retirement and milestone acceptance remain open.

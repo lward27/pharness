@@ -1,0 +1,35 @@
+{
+  "observed_at": "2026-09-05T12:27:25.479897+00:00",
+  "source_merge": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "argo_revision": "db84b797f1bbc833ba86844874d1d041bc33ab72",
+  "argo_sync": "Synced",
+  "argo_health": "Healthy",
+  "api_pod": "pharness-api-748c9c5dcf-rx8vm",
+  "api_uid": "b08506fe-a7e2-4ee2-8047-d556e5d53e27",
+  "api_container_status": [
+    {
+      "name": "api",
+      "ready": true,
+      "restarts": 0,
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:65efb3acfa245ad6d56f88a7bc1a3d471637bdac24756ca708234c61784286f4"
+    }
+  ],
+  "coding_evaluation": {
+    "http_status": 200,
+    "id": "infeval_01a07160294f7ce393d8a45d3ee23f7d",
+    "status": "running",
+    "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b"
+  },
+  "claim": "source publication is separate from runtime activation",
+  "followup_observations": [
+    {
+      "observed_at": "2026-09-05T12:31:27.713986+00:00",
+      "argo_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+      "argo_sync": "Synced",
+      "argo_health": "Healthy",
+      "api_uid": "b08506fe-a7e2-4ee2-8047-d556e5d53e27",
+      "api_ready": true,
+      "api_restarts": 0
+    }
+  ]
+}

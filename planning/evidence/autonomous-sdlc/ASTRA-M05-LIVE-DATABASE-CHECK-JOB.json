@@ -1,0 +1,86 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-m05-live-schema-0052-20260905",
+    "namespace": "pharness",
+    "labels": {
+      "app.kubernetes.io/part-of": "pharness",
+      "pharness.dev/program": "astra-autonomous-sdlc",
+      "pharness.dev/purpose": "verify-live-0052"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 120,
+    "template": {
+      "metadata": {
+        "labels": {
+          "pharness.dev/purpose": "verify-live-0052"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ubuntu-lucas-engineering"
+        },
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "pharness-api-data-finance-20260827"
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "verify",
+            "image": "registry.lucas.engineering/pharness-python-runner@sha256:058e0e2a9c59fb47a7a89eae567e3f0f87a394e1cf050ab2ebc7d71106672152",
+            "command": [
+              "python",
+              "-c",
+              "import sqlite3,json,pathlib,hashlib\nroot=pathlib.Path(\"/data/archives/ASTRA-pre-0052-20260905\")\noriginal=sqlite3.connect(\"file:\"+str(root/\"pharness.db\")+\"?mode=ro\",uri=True)\nchanged=sqlite3.connect(\"file:/data/pharness.db?mode=ro\",uri=True)\nchanged.execute(\"BEGIN\")\nassert changed.execute(\"PRAGMA integrity_check\").fetchone()[0]==\"ok\"\nversions=changed.execute(\"SELECT version,success FROM _sqlx_migrations ORDER BY version\").fetchall()\nassert len(versions)==52 and versions[-1]==(52,1)\nassert changed.execute(\"SELECT count(*) FROM work_items WHERE workflow_policy_json IS NOT NULL OR workflow_policy_hash IS NOT NULL\").fetchone()[0]==0\nquery=\"SELECT id,status,source_commit,closed_at,closure_reason,state_version FROM work_items ORDER BY id\"\nassert changed.execute(query).fetchall()==original.execute(query).fetchall()\ncounts={}\nfor table in [\"work_items\",\"runs\",\"stage_executions\",\"stage_outcomes\",\"evidence_validations\",\"audit_events\",\"retention_holds\",\"products\",\"repositories\",\"database_generations\"]:\n a=original.execute(\"SELECT count(*) FROM \"+table).fetchone()[0]\n b=changed.execute(\"SELECT count(*) FROM \"+table).fetchone()[0]\n assert a==b,(table,a,b)\n counts[table]=b\nassert changed.execute(\"SELECT * FROM database_generations\").fetchall()==original.execute(\"SELECT * FROM database_generations\").fetchall()\nprint(json.dumps({\"integrity\":\"ok\",\"maximum_migration\":52,\"applied_migrations\":len(versions),\"legacy_policy_rows\":0,\"historical_work_items_identical\":True,\"preserved_counts\":counts,\"source_migration_unchanged\":original.execute(\"SELECT max(version) FROM _sqlx_migrations\").fetchone()[0]}))\n"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data",
+                "readOnly": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

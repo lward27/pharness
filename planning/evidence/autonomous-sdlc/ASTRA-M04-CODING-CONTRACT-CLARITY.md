@@ -28,3 +28,10 @@ revision checks, then publish one complete immutable image set and native bundle
 for the new merged source. Refresh each required target's calibration and run the
 unchanged qualification gates serially. Keep hosted creation and V2 disabled until
 their respective acceptance requirements are satisfied.
+
+## Source integration
+
+PR 331 merged on 2026-09-05 at 14:11 UTC as `4c40b10c0b2f71ab92d464528145e178222a3368`.
+The live reader at `2249950` does not include this clarification. The next immutable
+release and fresh live qualification remain required; previous failed runs are
+retained without regrading.

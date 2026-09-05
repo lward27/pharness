@@ -1,11 +1,15 @@
 # ASTRA M05: Hosted contract implementation evidence
 
-Status: tested reader, creation, and stage-authority preparation; **milestone acceptance remains open**.
+Status: compatible reader deployed; creation and stage-authority preparation tested; **milestone acceptance remains open**.
 Observed 2026-09-05. Implementation base: PHarness
 `fd740927110366a983de6bb0d3bc6c576577708b`, including M03 and the M04 evaluator
 scratch-lifecycle repair. The compiled cluster runtime is now
-`fd740927110366a983de6bb0d3bc6c576577708b`; none of the M05 Rust code or migration
-has been deployed. Hosted creation remains disabled by default.
+`2249950d225a4632b24235c2b6f2d8469a774243`, deployed through
+[PR 333](https://github.com/lward27/pharness/pull/333), release commit
+`8ca88f32e3d50f8430cf5a486912ebe6d00a392d`. Its seven immutable images and native
+bundle are verified. The live Finance database is on migration 0052 with historical
+records preserved. Hosted creation and Coding Reliability V2 remain disabled.
+[Release and rollback floor](ASTRA-M05-COMPATIBLE-READER-RELEASE.md).
 
 ## Implemented and tested
 
@@ -165,12 +169,12 @@ Migration 0052 is additive but raises the executable-reader floor: the previous
 SQLx migrator rejects an applied migration it does not know. **Even a deployment
 with hosted writes disabled cannot subsequently roll back to the schema-51
 binary.** The minimum rollback release must include 0052 and the hosted readers.
-No such release is deployed yet; record its immutable release identity before
-applying 0052. Do not remove the migration or reset Finance's database generation.
+The 2249950 release is the retained compatible floor, recorded before
+applying 0052 and now verified live. Do not remove the migration or reset Finance's database generation.
 
 Creating new hosted work currently requires current-runtime gateway qualification
 as well as matching profile, policy, and target hashes. The earlier evaluation on
-runtime 83a2689 failed; fresh M04 qualification follows the fd74092 release.
+runtime 83a2689 failed; fresh M04 qualification must follow the next release containing the prompt clarification.
 Results for either runtime cannot silently qualify an unbuilt M05 API revision.
 Keep qualification provenance explicit at cutover.
 
@@ -181,17 +185,45 @@ Keep qualification provenance explicit at cutover.
    Deterministic fixtures do not establish positive live hosted creation.
 2. Stage-entry and resume enforcement now pass deterministic tests. Validate the
    actual deployed reader/gateway/worker path and saved policy under real hosted
-   creation before closing the milestone. No new M05 code has been deployed.
+   creation before closing the milestone. The reader is deployed; positive live hosted creation still awaits qualified execution and the delivery gates.
 3. Represent individually inspectable build/staging/production evidence through
    the existing release/effect records and test completion against those records.
    The database's eight-stage guard is a necessary floor, not a complete proof of
    the delivery evidence chain implemented by M07–M09.
-4. Deploy a compatible reader release before any hosted writes. Verify live
-   schema/generation preservation, paused and partially completed reads, positive
-   creation under qualified bindings, and all retirement routes.
+4. The compatible reader and live schema/generation preservation are verified.
+   Finish positive creation under qualified bindings and every retirement route
+   before enabling hosted writes. Historical pending and closed records remain unchanged.
 5. Complete M06's durable reconciliation before describing routine progression
    as autonomous. Browser-independent behavior is not provided by this slice.
 
 Do not enable hosted creation or close M05 based on this document's test count.
 The [milestone](../../programs/autonomous-sdlc/ASTRA-05-UNIFIED-SDLC-CONTRACT.md)
 and [master](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) retain their gates.
+
+## Real Finance data compatibility check (2026-09-05 13:39 UTC)
+
+A consistent read-only snapshot of the live schema-51 database is retained at
+`/data/archives/ASTRA-pre-0052-20260905` on
+`pharness-api-data-finance-20260827`. Its 21,204,992-byte database has SHA-256
+`fbc7e2873e71202ae90fcb1fe28e6f160e189e9adc5c29ab395cb39ce7c29d3f`.
+The archive and source pass integrity checks. This snapshot is on the existing
+volume; it is not a separate disaster-recovery backup. See
+[archive evidence](ASTRA-M05-DATABASE-ARCHIVE-VERIFIED.json).
+
+The published runtime image from source `2249950` started in draining mode against
+an isolated temporary copy and applied migration 0052. The migration container had
+no access to the live PVC; copy/verification containers mounted it read-only.
+The API health check passed. All historical WorkItem status, source, closure and
+version fields matched the archive. All new workflow policy fields remained null.
+Counts were preserved: 14 WorkItems, 82 Runs, 102 stage executions/outcomes,
+83 evidence validations, 260 audit records and four retention holds. Database
+generation was identical; the original archive remained on schema 0051. See
+[clone migration evidence](ASTRA-M05-CLONE-MIGRATION-VERIFIED.json).
+
+The later live rollout is verified at 14:07 UTC against the exact Argo revision
+and all five Deployment image identities, with zero restarts. At 14:08 UTC a
+separate read-only Job confirmed live migration 0052, integrity and the same record
+counts and historical WorkItem fields. The generation and four retention holds
+remain unchanged. See [live deployment evidence](ASTRA-M05-READER-RELEASE-OBSERVED.json)
+and [live database comparison](ASTRA-M05-LIVE-DATABASE-VERIFIED.json).
+Neither check created hosted work or closed M05/M04 acceptance.

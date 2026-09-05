@@ -1,9 +1,9 @@
 # ASTRA M04: Coding reliability qualification
 
-Status: active.
+Status: active; latest live coding qualification failed (2026-09-05 12:34 UTC).
 Progress: evaluator repair released at source `fd740927110366a983de6bb0d3bc6c576577708b`
 through GitOps revision `548b978c33f8f32fb23d91120ef65a3502188d1c`; all 216
-packaged offline checks pass. Live qualification remains open.
+packaged offline checks pass. The live coding attempts scored 22/24 and 20/24 and failed the safety gate. See the [failure analysis](../../evidence/autonomous-sdlc/ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md). Acceptance remains open.
 Evidence: [release, offline results and outstanding gates](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M03. An external qualification blocker does not stop independent M02/M05 preparation.

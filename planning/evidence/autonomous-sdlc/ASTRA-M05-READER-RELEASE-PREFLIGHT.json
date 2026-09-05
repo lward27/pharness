@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-09-05T12:28:16.248745+00:00",
+  "revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "pull_request": "https://github.com/lward27/pharness/pull/328",
+  "merged_at": "2026-09-05T12:26:25Z",
+  "source_validation": "ASTRA-M05-COMBINED-SOURCE-VALIDATION.json",
+  "chart_validation": "ASTRA-M05-DISABLED-ROLLOUT-COMPARISON.json",
+  "builder": "rancher-desktop",
+  "docker_context": "rancher-desktop",
+  "platform": "linux/amd64",
+  "uncached_execution": "uname -m == x86_64; getconf LONG_BIT == 64; passed",
+  "components": [
+    "runtime",
+    "ui",
+    "python-runner",
+    "node-runner",
+    "model-gateway",
+    "eval-runner",
+    "codex-host"
+  ],
+  "preflight_log_sha256": "d5418f7f6d6f42660003b1be31ebd7ee66946bc8ff09b11bac1b6dbd98ead9e9",
+  "build_complete": false,
+  "deployed": false,
+  "hosted_creation_enabled": false
+}

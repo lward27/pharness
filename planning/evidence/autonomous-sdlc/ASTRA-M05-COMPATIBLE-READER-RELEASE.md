@@ -1,6 +1,6 @@
 # ASTRA M05: Compatible reader release and rollback floor
 
-Status: artifacts verified; live rollout pending. Recorded before applying migration 0052 on 2026-09-05.
+Status: release and live data preservation verified on 2026-09-05. The rollback floor was recorded before applying migration 0052.
 
 The earliest retained compatible reader is PHarness source
 `2249950d225a4632b24235c2b6f2d8469a774243`. After migration 0052 is applied, recover forward using
@@ -72,3 +72,14 @@ Future migration 0053 requires its own compatible reader floor.
 This release prepares the hosted contract. It does not qualify a coding profile,
 enable autonomous requests, demonstrate delivery, or authorize Finance production.
 Live observation and the remaining milestone gates must be recorded separately.
+
+## Live observation
+
+PR 333 merged at 14:02 UTC as `8ca88f32e3d50f8430cf5a486912ebe6d00a392d`.
+Argo auto-sync and all five long-running Deployment identities were verified at
+14:07 UTC; each Pod was ready with zero restarts. A repository-cache refresh was
+requested before Argo reconciled; no manual sync receipt was substituted.
+[Deployment evidence](ASTRA-M05-READER-RELEASE-OBSERVED.json). At 14:08 UTC the
+[read-only live database check](ASTRA-M05-LIVE-DATABASE-VERIFIED.json) confirmed
+52 successful migrations and all original counts/history unchanged. Hosted
+creation and Coding Reliability V2 remain disabled.
