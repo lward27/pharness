@@ -1,0 +1,58 @@
+{
+  "observed_at": "2026-09-05T13:00:05.469608+00:00",
+  "base_revision": "51485bae06992d0b2318363d8d961bc9af52ef74",
+  "source_sha256": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "32586ac35b834566d944c26768ab04c2ebba14a195cb20e562700a122b0dc64d",
+    "crates/pharness-api/src/app/mod.rs": "a55cb4290de0d8a3c2ab950390507c91a3f7267c315560caa80edec434930089",
+    "crates/pharness-api/src/app/repo_mode/mod.rs": "ec2af28976c851cb3708dba07c25a2756bf712c7f0cf2ab0867c74e2649bf24f",
+    "crates/pharness-api/src/app/repo_mode/projection.rs": "a914eb5690a4d638d7bb428203bbd9e2b421c111f998d3389808171583cb4b2f",
+    "crates/pharness-api/src/app/runs.rs": "61129a55f505b98ec00a8ab405f65c1f2994d8042a7dff959a99bb6199dfbfc6",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "8cd3c779c77f4cac1b65aa606c3ca5ccdae32b652c7224babc338d4b09c5b8a5",
+    "crates/pharness-store/migrations/0053_hosted_reconciliation.sql": "16907f1406e8592473b4d2ad9ba1595c0348e5b06c33da773c2a95e5bb65900b",
+    "crates/pharness-store/src/hosted_controller.rs": "a1ff32ae30e15b55503e9564c2d5f8006c7f43bb2349a26bb53e5c2acbcbc431",
+    "crates/pharness-store/src/sqlite/hosted_controller.rs": "fba2d66b98c21259bd2e8169b1614db25a079f3c796f9b8f971e1d8042a02e18",
+    "crates/pharness-store/src/sqlite/hosted_controller/tests.rs": "67e5aff5b07dd68f21aadd0ae59a7fb3561db793dda562bc08030c86ef16ee0b",
+    "crates/pharness-api/src/app/hosted_controller/approval.rs": "d1f5b9552cde1a1db4bcc63e9a18c6573dc3e28a22b248cd2e391721ccd5feb6",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "178902708ba1e3c16ad30c7bf6d630e0e886d4fb1ce874ce143c6df474e04fe4",
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "66b50073398db41119dc11487ff90202fa7b83c52d15d4e6821949d15ff608e7",
+    "crates/pharness-api/src/app/hosted_controller/scheduler.rs": "8e4f011c3090bca92dfb345c6c1504984b2ffcfedeec5986791c5ac756421eac",
+    "crates/pharness-api/src/app/hosted_controller/state.rs": "02be742f95a415fc4dab2834836cb482a1c93afad86ee88c728330a4f9d8e8a9"
+  },
+  "validation": {
+    "api_tests": 248,
+    "admin_tests": 1,
+    "store_tests": 52,
+    "distinct_total": 301,
+    "controller_subset_included_in_api": 8,
+    "store_controller_subset_included_in_store": 6,
+    "clippy": "API and store all targets, warnings denied: passed",
+    "architecture": "passed after removing new import cycle; parser 5/5 passed",
+    "format": "passed",
+    "test_environment": "local SQLite and adapter fixtures; no live application changes"
+  },
+  "log_sha256": {
+    "/private/tmp/astra-m06-controller-final-api-tests.log": "f2134ee5a0e45184821cdd74a64372c96ecc3a3f91d48d2775505d5fffe762af",
+    "/private/tmp/astra-m06-controller-full-tests.log": "d32f92f4c941a489c6d2fc6e68caa16694b03ca36e0e2d07941f777b67d82466",
+    "/private/tmp/astra-m06-controller-final-clippy.log": "187ce30c58fa85e2ab79cd0341f0ac16813ac06431a484af24bb0d04fba64861",
+    "/private/tmp/astra-m06-controller-boundaries.log": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+    "/private/tmp/astra-m06-scheduler-final-tests.log": "97d70336ad14535a0969c107d065517ad30b5719c56a34c6436a512369a242bb"
+  },
+  "scenarios": [
+    "Continuous API-owned claims, persisted due times and finite unchanged waits",
+    "Read-only flow and legacy work never enroll or progress through the hosted controller",
+    "Unqualified gateway produces a persisted blocker without allocating an operation",
+    "Automatic plan approval requires the exact sealed Planner revision and no unresolved contradictions",
+    "Paused workflow adopts a uniquely matching terminal Run after lost acknowledgement without creating another Run",
+    "Versioned pause/resume/cancel preserve budgets and policy",
+    "Pending undispatched work relinquishes coding capacity; resume must reacquire its original immutable lock set",
+    "Once dispatch begins, claims or pause cannot release unknown external resource locks",
+    "Callback wakeups preserve claim fencing and do not execute hosted stage continuation directly"
+  ],
+  "remaining": [
+    "Environment preparation lost-ack recovery and incomplete startup handling",
+    "Source writer/observer durable ordering and progression; M07 delivery adapters",
+    "Production approval/recovery integration and full pause/cancel terminal lifecycle",
+    "Live restart recovery and duplicate source/pipeline/deployment acceptance",
+    "Schema 0053 is not deployed; record a compatible rollback release before applying it"
+  ]
+}

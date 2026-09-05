@@ -1,0 +1,35 @@
+{
+  "observed_at": "2026-09-05T12:42:42.445438+00:00",
+  "base_revision": "3a2e369fe106b5785720dd0e4e88d4fb3d763249",
+  "source_sha256": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "cce4d26569a8f59a5935be9e1c12c45218e74740cdacbb69caac4c19e68dca54",
+    "crates/pharness-api/src/app/hosted_controller/control.rs": "eea5f7ef9e7fec000cd8c198c9ea22d7c8b0af4ae61a571b33beb436cfa76c01",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "4c92640e2143d8b5b502d88f44b95004b0ecdbaf6ba1140a1076adf42fcb8289",
+    "crates/pharness-api/src/app/repo_mode/projection.rs": "82d995f45a6b0bcb4cd0db66bdd0e9f303db71e798afe3311fe38e9cb2e88539",
+    "crates/pharness-api/src/app/work_items/actions.rs": "e8c0fac4a3a24941845f2e95862f35448f6aded2480d48e9619d827984965039",
+    "crates/pharness-api/src/dispatch.rs": "252b1b78d9865a3209cde87b987e4e474dea8ffa32cd233636ee294722dc2738"
+  },
+  "validation": {
+    "api_tests": 243,
+    "admin_tests": 1,
+    "store_tests_previously_passed_unchanged": 51,
+    "distinct_api_admin_store": 295,
+    "hosted_subset_included_in_api": 16,
+    "clippy": "API all targets, warnings denied: passed after two unused result warnings were corrected",
+    "format": "passed",
+    "architecture": "passed"
+  },
+  "api_log_sha256": "a021e6bd3189e477efa9743553b5fb6fead2c54cab440362786459b9c654189b",
+  "scenarios": [
+    "Repeated flow GETs do not claim, dispatch, or advance hosted work",
+    "Pause/resume/cancel are bound to the current control version and preserve budget and policy",
+    "Cancellation cannot resume; legacy action surface remains unchanged",
+    "Manual routine hosted advancement returns a retirement response",
+    "Simultaneous legacy and hosted worker dispatches share one capacity slot"
+  ],
+  "limits": [
+    "Local adapter fixtures; no cluster credentials used",
+    "Continuous reconciliation and active-workflow restart acceptance remain open",
+    "No M06 source or schema deployed"
+  ]
+}
