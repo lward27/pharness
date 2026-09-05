@@ -1,0 +1,116 @@
+{
+  "observed_at": "2026-09-05T18:37:35.500737+00:00",
+  "http_status": 200,
+  "evaluation": {
+    "id": "infeval_01a072dc9abd71228667105507171ced",
+    "status": "running",
+    "suite_id": "verifier-v2",
+    "suite_hash": "sha256:e289d5d349dcd5be7b13ba0c4f65a19c75a77643b6b9f0462291370fe0076b92",
+    "attempts": 2,
+    "agent_profile_id": "repo-verifier",
+    "agent_profile_hash": "sha256:aeaa88ae5a6fdca7932f7091fdcc7e0be79129ef03bfc4658616cb9d594d6614",
+    "target_id": "fireworks-glm-5p3",
+    "target_revision": "v1",
+    "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+    "policy_id": "verifier-glm-5p3-v2",
+    "policy_revision": "v1",
+    "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+    "resolved_binding": {
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "target": {
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "target_id": "fireworks-glm-5p3",
+        "revision": "v1",
+        "display_name": "Fireworks GLM-5.3",
+        "backend_kind": "fireworks",
+        "protocol": "openai_chat_completions_v1",
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/glm-5p3",
+        "authentication_binding": "fireworks-api-key",
+        "transport": {
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "stream_idle_timeout_seconds": 120,
+          "max_attempts": 3,
+          "allow_insecure_private_http": false
+        },
+        "capabilities": {
+          "native_tools": true,
+          "streaming": true,
+          "json_schema": false,
+          "stream_options": true,
+          "reasoning_efforts": [],
+          "reasoning_context_modes": [],
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "context_limit_tokens": 1048576,
+        "output_limit_tokens": 16384,
+        "allowed_stages": [
+          "verify"
+        ],
+        "selectable": true,
+        "config_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708"
+      },
+      "policy": {
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "policy_id": "verifier-glm-5p3-v2",
+        "revision": "v1",
+        "display_name": "Reliability V2 verifier GLM-5.3",
+        "eligible_profiles": [
+          "repo-verifier"
+        ],
+        "eligible_stages": [
+          "verify"
+        ],
+        "target": {
+          "target_id": "fireworks-glm-5p3",
+          "revision": "v1"
+        },
+        "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "temperature_milli": 0,
+        "max_output_tokens": 8192,
+        "max_input_tokens": 65536,
+        "tool_protocol": "native_tools",
+        "tool_choice": "auto",
+        "transport_max_attempts": 3,
+        "selectable": true,
+        "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb"
+      },
+      "prompt_version": "2026-09-05.1",
+      "stage_prompt": {
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "prompt_id": "repo-verifier-v2",
+        "revision": "2026-09-05.1",
+        "stage": "verify",
+        "content_hash": "sha256:b514ff0facd9da3965c19f176484876fb957d9a8bc32ab81b2c7d8f2fc8167fc"
+      },
+      "tool_schema_hash": "sha256:5a36ae6672b08d77b14d573efd8c03e88b594a1b51b1b33d7e17ef46b6a8f2f6",
+      "context_policy_hash": "sha256:bb1dbbddd6159aa29ef9d5ab4f59239ba440b506e913e6cbfcae1e87bd92d99e",
+      "protocol_calibration_hash": "sha256:1b0baed3abf90f932c1c6aa42da620aba6fffbc6e423f8a5ad23a4ca1c2fca65",
+      "profile_budget_hash": "sha256:af7531cd834f2843cf8a6a23beca2abd44d3b10016db55e044f1bdb281a1c461",
+      "base_agent_profile_hash": "sha256:d403e594158fe3434f192592698bd5da763dcb2449081b8c376e88fe44bd9ae0",
+      "agent_profile_hash": "sha256:aeaa88ae5a6fdca7932f7091fdcc7e0be79129ef03bfc4658616cb9d594d6614",
+      "binding_hash": "sha256:a640c9b17bf86e88fccbb27b0306d3afa656b2a851b2e3f376ae1e8e4eb17019"
+    },
+    "binding_hash": "sha256:a640c9b17bf86e88fccbb27b0306d3afa656b2a851b2e3f376ae1e8e4eb17019",
+    "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+    "actor": "lucas",
+    "reason": "ASTRA M04 frozen stage qualification on exact 48c77b7 runtime; primary candidate, unchanged limits, no source or deployment effects",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "job_name": "pharness-inference-eval-71818fb6cbc3",
+    "report": null,
+    "report_hash": null,
+    "failure": null,
+    "qualification_id": null,
+    "created_at": "1788633455293",
+    "started_at": "1788633455585",
+    "finished_at": null
+  }
+}

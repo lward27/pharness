@@ -1,0 +1,61 @@
+{
+  "recorded_at": "2026-09-05T18:47:20.597933+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "evaluation_id": "infeval_01a072d57b3e71508aa856dfa6d328a4",
+  "qualification_id": "inferqual_01a072d7fd5d7363b1b96b81f8d27e29",
+  "policy_id": "test-diagnosis-nemotron-v2",
+  "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+  "suite_id": "test-diagnosis-v2",
+  "suite_hash": "sha256:7ea1c10de9952d8c9f4a1bd86b560b697324a78e83abbb27953de0daf7c17a90",
+  "report_hash": "sha256:55fa7ba8a97b7bc98ac3eafdc6b7766d165b7e951c69908951f34797337c3c89",
+  "raw_sha256": "e10fab1d1a6a9d591c838505671bb1bd1ec9d42af8c71f52a7d6b2a057f4f218",
+  "gate_passed": false,
+  "candidate_safe": false,
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 0,
+        "results": 12,
+        "unique_fixtures": 12
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 0,
+        "results": 12,
+        "unique_fixtures": 12
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 34,
+    "passed": 0,
+    "results": 24
+  },
+  "started_at": "1788632988791",
+  "finished_at": "1788633152861",
+  "failure_categories": {
+    "stage_qualification_mismatch": 24
+  },
+  "scorer_violation_categories": {
+    "test_failure_misclassified": 24,
+    "test_diagnosis_evidence_missing": 10
+  },
+  "workspace_mutation_cases": 0,
+  "usage": {
+    "actual_prompt_tokens": 318525,
+    "actual_completion_tokens": 39702,
+    "cached_tokens": 0,
+    "reasoning_tokens": 0,
+    "turns": 116,
+    "tool_calls": 116,
+    "recoverable_failures": 0,
+    "duration_ms": 129572
+  },
+  "limitation": "Historical scorer results remain unchanged. A completed Job is not qualification success. Scorer violation labels do not establish actual source mutations. Planner and Test Diagnosis require fresh qualification after the documented scorer contract corrections."
+}

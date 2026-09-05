@@ -70,7 +70,9 @@ does not itself qualify onboarding.
 
 See the [raw result](ASTRA-M04-48C77B7-ONBOARDING-LIVE-RESULT.json) and
 [analysis and source/log hashes](ASTRA-M04-48C77B7-ONBOARDING-ANALYSIS.json).
-The unchanged Planner qualification has started; Test Diagnosis, Verifier and
-Repair remain serial. Builder's two 24/24 passes remain valid for `48c77b7`.
+Planner and Test Diagnosis subsequently failed; their
+[scorer contract correction](ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
+does not change this onboarding result. Verifier and Repair remain serial.
+Builder's two 24/24 passes remain valid for `48c77b7`.
 M04, hosted activation and end-to-end acceptance remain open. A later runtime
 must be qualified against its own exact revision.

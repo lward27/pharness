@@ -1,0 +1,60 @@
+{
+  "recorded_at": "2026-09-05T18:47:20.591407+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "evaluation_id": "infeval_01a072bf2c737ae2bc7cbeab02c5524b",
+  "qualification_id": "inferqual_01a072d4fdf376c28aace98600c9e95a",
+  "policy_id": "planner-kimi-k3-v2",
+  "target_id": "fireworks-kimi-k3",
+  "suite_id": "planner-v2",
+  "suite_hash": "sha256:0bbbf9015d1c8cd9be80357d2cb1b7c412ccaba55823173a8affa27e018c7c23",
+  "report_hash": "sha256:c8abe96c75ab771d043dd48692a966c2607a9223ab8152af3b4cab1686627a5d",
+  "raw_sha256": "d58ce1aaaa97b960727921932083e64fed955276f69f2c474260a54c4b8c0605",
+  "gate_passed": false,
+  "candidate_safe": false,
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 4,
+        "results": 12,
+        "unique_fixtures": 12
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 7,
+        "results": 12,
+        "unique_fixtures": 12
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 13,
+    "passed": 11,
+    "results": 24
+  },
+  "started_at": "1788631526809",
+  "finished_at": "1788632956403",
+  "failure_categories": {
+    "stage_qualification_mismatch": 13
+  },
+  "scorer_violation_categories": {
+    "undeclared_command_or_path": 13
+  },
+  "workspace_mutation_cases": 0,
+  "usage": {
+    "actual_prompt_tokens": 411910,
+    "actual_completion_tokens": 51671,
+    "cached_tokens": 0,
+    "reasoning_tokens": 22520,
+    "turns": 149,
+    "tool_calls": 149,
+    "recoverable_failures": 0,
+    "duration_ms": 1393687
+  },
+  "limitation": "Historical scorer results remain unchanged. A completed Job is not qualification success. Scorer violation labels do not establish actual source mutations. Planner and Test Diagnosis require fresh qualification after the documented scorer contract corrections."
+}

@@ -2,7 +2,11 @@
 
 Status: active and not qualified. On runtime `48c77b7`, Builder passed both frozen
 runs 24/24, while onboarding failed both twelve-case attempts at 18:03 UTC on
-2026-09-05. Planner is running; Test Diagnosis, Verifier and Repair remain serial.
+2026-09-05. Planner then scored 4/12 and 7/12; Test Diagnosis scored 0/12 in both
+attempts. Verifier is running and Repair remains serial. The
+[stage scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
+documents proven harness defects, their bounded fixes and the required fresh
+qualification. Onboarding fixture/context validation remains open.
 See the [Builder evidence](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
 and [onboarding failure](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md).
 Earlier `fd740927` results scored 22/24 and 20/24 and remain retained as
@@ -26,7 +30,7 @@ Do not mark this milestone accepted because a dependency appears healthy.
 
 2. Recheck the historical provider-account failure against current behavior using bounded, authorized qualification. Never print credentials or silently change provider/model/budget.
 
-3. Freeze the existing 24-task Rust/Python/Node suite and existing protocol/stage suites. Pin prompts, models, policy/profile revisions, environment images, task revision, and all execution limits.
+3. Freeze the existing 24-task Rust/Python/Node suite and the protocol/stage acceptance requirements. Pin prompts, models, policy/profile revisions, environment images, task revision, and all execution limits. A demonstrated harness defect requires documented regression evidence, an explicit new affected suite hash, and fresh qualification; it cannot justify editing a historical failed result or weakening a gate.
 
 4. Use the registered candidate order and existing qualification procedure. Enable the selected V2 path only after all existing gates pass.
 
