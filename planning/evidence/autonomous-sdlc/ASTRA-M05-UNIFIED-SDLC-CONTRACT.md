@@ -143,8 +143,11 @@ yfinance production and frontend staging contracts with actual returned IDs.
 coordinates and states the metadata-only effects. No WorkItem, PipelineRun,
 deployment intent, approval or cluster mutation was created.
 
-The prepared Helm values bind yfinance to those IDs and expose the configuration
-through the API environment with hosted creation disabled. Frontend production
+The prepared Helm values bind yfinance to those IDs. With hosted creation
+disabled, the API uses its safe empty default and the complete rendered chart
+matches current main byte for byte. The environment entry appears at cutover;
+publishing reader source therefore does not restart the current evaluator API.
+[Rollout comparison](ASTRA-M05-DISABLED-ROLLOUT-COMPARISON.json) records this boundary. Frontend production
 registration awaits the M05 compatible API; its actual Pipeline and registration
 remain M07. The chart renders and lints with the disabled binding; the API Deployment passes
 server-side dry-run in namespace `pharness`. See the

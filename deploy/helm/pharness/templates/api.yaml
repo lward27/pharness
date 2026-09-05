@@ -197,8 +197,10 @@ spec:
               value: {{ .Values.features.repoModeV1.designOverhaulEnabled | default false | quote }}
             - name: PHARNESS_CODING_RELIABILITY_V2_ENABLED
               value: {{ .Values.features.codingReliabilityV2.enabled | quote }}
+            {{- if .Values.hostedWorkflow.enabled }}
             - name: PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON
               value: {{ .Values.hostedWorkflow | toJson | quote }}
+            {{- end }}
             - name: PHARNESS_ORGANIZATION_ID
               value: {{ .Values.organization.id | quote }}
             - name: PHARNESS_ORGANIZATION_KEY

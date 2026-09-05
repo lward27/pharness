@@ -32,7 +32,7 @@ count alone is not a complete evidence chain.
 
 ## Authoritative configuration
 
-`deploy/helm/pharness/values.yaml` owns `hostedWorkflow`. The API Deployment passes
+`deploy/helm/pharness/values.yaml` owns `hostedWorkflow`. When enabled, the API Deployment passes
 it as `PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON`. The reader default and committed
 Helm setting are disabled. The chart currently declares only the verified yfinance
 binding; frontend registration completes after the compatible M05 API and M07
@@ -89,11 +89,14 @@ historical, paused and partial reads. An older image must not misread hosted wor
 or be used after this migration. Restore forward with the retained compatible
 reader if a subsequent release fails; do not remove migration history or reset data.
 
-Merging the M05 chart preparation adds an API environment entry even while hosted
-creation is disabled. Argo can therefore restart the existing API before new
-images are published. Wait for active qualification and execution to finish before
-merging that chart change; verify the known old runtime remains healthy while the
-new image set is built. No migration 0052 runs until the new reader binary starts.
+The chart omits the hosted environment entry while creation is disabled. The
+complete disabled Helm output matches current main byte for byte, so publishing
+reader source does not restart the running API. Enabling hosted creation later
+adds the configuration and intentionally rolls the API. Merge the immutable image
+pins only after active qualification and ordinary Runs reach a safe boundary.
+[Rollout comparison](../evidence/autonomous-sdlc/ASTRA-M05-DISABLED-ROLLOUT-COMPARISON.json)
+records this check. This replaces the earlier unconditional environment entry,
+which would have restarted the API during the current evaluation.
 
 Hosted cutover requires qualified gateway/V2 execution, usable contracts, durable
 progression and accepted delivery behavior. Only then enable creation through the
