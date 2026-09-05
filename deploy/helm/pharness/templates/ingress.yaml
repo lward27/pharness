@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/part-of: pharness
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    cert-manager.io/private-key-rotation-policy: "Never"
+    cert-manager.io/revision-history-limit: "2147483647"
     # The console injects the operator bearer server-side, so the public
     # surface must carry its own authentication.
     nginx.ingress.kubernetes.io/auth-type: basic
@@ -45,6 +47,8 @@ metadata:
     app.kubernetes.io/part-of: pharness
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    cert-manager.io/private-key-rotation-policy: "Never"
+    cert-manager.io/revision-history-limit: "2147483647"
     # The host protocol already requires an enrollment or host/lease bearer
     # credential. This exact prefix must not inherit console Basic Auth because
     # HTTP carries only one Authorization header.
@@ -79,6 +83,8 @@ metadata:
     app.kubernetes.io/part-of: pharness
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    cert-manager.io/private-key-rotation-policy: "Never"
+    cert-manager.io/revision-history-limit: "2147483647"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
 spec:
