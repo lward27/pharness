@@ -194,3 +194,13 @@ The live Finance database is now on schema 0052 under source `2249950`. Migratio
 continuation, build/deployment integration, terminal cancellation and live recovery
 acceptance remain open; source validation does not waive those gates. The next
 release must retain a schema-53 compatible recovery image before applying 0053.
+
+## Source integration and migration boundary
+
+PR 332 merged on 2026-09-05 at 14:31 UTC as `ba8ce03e4dfd3df5815c897a69276858b53aacb2`.
+Schema 0053 remains undeployed. The verified [pre-0053 snapshot](ASTRA-M06-DATABASE-ARCHIVE-VERIFIED.json)
+contains the existing Finance generation on schema 0052 with 14 WorkItems and
+82 Runs. Validate an isolated copy with the immutable release image and record
+its compatible rollback floor before deploying. The controller has no live hosted
+work to advance while creation remains disabled; that idle fact is not restart
+or autonomous-delivery acceptance.

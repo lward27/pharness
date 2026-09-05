@@ -63,11 +63,11 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
 | M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
-| M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller integrated on isolated branch; gate open | M05. |
+| M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller merged; deployment and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
-| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections tested on isolated branch; gate open | May begin after M05; closes against M09 behavior. |
+| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections in PR 334; gate open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
@@ -98,9 +98,8 @@ AMD64 release and native bundle were verified and deployed through PR 333, merge
 `8ca88f32e3d50f8430cf5a486912ebe6d00a392d`. Argo and all five long-running
 Deployment image identities matched; hosted creation and Coding Reliability V2
 remain disabled. See [reader release and rollback floor](../../evidence/autonomous-sdlc/ASTRA-M05-COMPATIBLE-READER-RELEASE.md).
-M04 contract clarification is committed at `be8bf8c` in
-[PR 331](https://github.com/lward27/pharness/pull/331); 28 runhost tests and Clippy
-pass. Its live qualification follows a new immutable release; the current reader
+M04 contract clarification merged through [PR 331](https://github.com/lward27/pharness/pull/331)
+at `4c40b10c0b2f71ab92d464528145e178222a3368`. Its 28 runhost tests and Clippy pass. Its live qualification follows a new immutable release; the current reader
 release does not include that clarification. Neither source merge nor provider
 diagnostics close M04.
 
@@ -109,11 +108,22 @@ M06 engineering progression is integrated at `e1709a2` on
 recovery `bded5a1`, and controls/admission `51485ba`. Atomic preparation recovery follows at `f755915`, with 304 distinct API/admin/store
 tests passing. Terminal normalization recovery follows at `1dc8c97`, with 306
 distinct passing API/admin/store tests. Source delivery dispatch ordering follows at `deb7ebf`, with 308
-distinct passing tests. These controller changes are in [draft PR 332](https://github.com/lward27/pharness/pull/332).
+distinct passing tests. These controller changes merged through [PR 332](https://github.com/lward27/pharness/pull/332)
+at `ba8ce03e4dfd3df5815c897a69276858b53aacb2`. Full combined validation passed
+641 workspace tests, Clippy, formatting and architecture checks; see the
+[combined validation record](../../evidence/autonomous-sdlc/ASTRA-M06-COMBINED-WORKSPACE-VALIDATION.json).
 Controller delivery integration, terminal cancellation and live acceptance remain open. These independent preparations do
 not waive M05 or M04 gates. See
 [controller evidence](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
+M10 initial console corrections are in [PR 334](https://github.com/lward27/pharness/pull/334).
+The documented objective checks and subjective remaining concerns do not close M10.
+
 Schema 0052 is applied to the live Finance database; 0053 remains undeployed.
+A new 21,213,184-byte pre-0053 snapshot preserves the same 14 WorkItems and 82 Runs;
+its [verified manifest](../../evidence/autonomous-sdlc/ASTRA-M06-DATABASE-ARCHIVE-VERIFIED.json)
+is retained. Clone migration and a compatible immutable schema-53 rollback floor
+are required before the controller release. Neither snapshot is an independent
+disaster-recovery backup.
 A verified 21,204,992-byte pre-0052 snapshot is retained on its existing PVC.
 The immutable 2249950 reader successfully migrated an isolated copy to 0052 while
 preserving its 14 WorkItems, 82 Runs, evidence, audit records and four holds; see
