@@ -521,18 +521,6 @@ async fn build_repo_work_item_preflight(
             "Repo Mode max_attempts must be between one and three",
         ));
     }
-    let planner_profile = state
-        .compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
-        )
-        .into_iter()
-        .find(|profile| profile.id == "repo-planner")
-        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
     let environment_profile_id = contract
         .as_ref()
         .map(|contract| contract.environment_profile.as_str());
@@ -566,9 +554,25 @@ async fn build_repo_work_item_preflight(
         }),
         None => Value::Null,
     };
-    let planner_inference = if planner_execution_binding.is_some() {
+    let planner_inference = if state.hosted_workflow.enabled {
+        // The hosted policy resolves the Planner's actual target and profile
+        // below. The worker's legacy default model is not its authorization.
+        Value::Null
+    } else if planner_execution_binding.is_some() {
         json!({"mode":"not_selected","reason":"Planner uses an agent execution policy"})
     } else if state.inference.enabled {
+        let planner_profile = state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repo-planner")
+            .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
         match crate::app::inference::preview_selection(
             state,
             pharness_core::InferenceStage::Plan,
@@ -579,11 +583,6 @@ async fn build_repo_work_item_preflight(
         .await
         {
             Ok(selection) => selection,
-            Err(error) if state.hosted_workflow.enabled => {
-                blockers
-                    .push(json!({"code":"hosted_planner_not_qualified","summary":error.message}));
-                Value::Null
-            }
             Err(error) => return Err(error),
         }
     } else {
@@ -666,6 +665,10 @@ async fn build_repo_work_item_preflight(
             None
         }
     };
+    let planner_inference = workflow_policy
+        .as_ref()
+        .map(|policy| policy.stage_inference["plan"].clone())
+        .unwrap_or(planner_inference);
     let predicted_mutations = if blockers.is_empty() && workflow_policy.is_some() {
         vec![
             "create_hosted_work_item".into(),

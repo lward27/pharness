@@ -68,9 +68,12 @@ M09 still owns hosted approval and production promotion.
 
 ## Validation
 
-448 tests passed across API/admin, configuration, core and store suites:
-1 admin, 233 API, 16 configuration, 144 core unit, 6 existing core integration,
-2 hosted contract integration and 46 store tests. No production database was used.
+449 distinct tests passed across API/admin, configuration, core and store suites:
+1 admin, 234 API, 16 configuration, 144 core unit, 6 existing core integration,
+2 hosted contract integration and 46 store tests. The four-crate run passed 448
+tests; after the final readiness regression was added, all 234 API tests and the
+admin test passed again. Unchanged core/configuration/store results are not counted
+twice. No production database was used.
 The earlier 441-test run is retained as historical preparation evidence, not added
 to this total. The SQL migration-count assertion was updated to 52.
 
@@ -80,7 +83,9 @@ creation; invalid/unqualified readiness without inserted work; hosted source mer
 remaining nonterminal; duplicate source completion; qualification/live-tool hash
 separation; the two-run requirement; changed defaults/profile/backend/limits;
 missing resume markers; successful repair selection/resume; and frontend declaration
-without legacy production authorization.
+without legacy production authorization. The readiness response reports the exact
+Planner binding saved in the policy, even when the worker default differs; a
+contract that disables its health probe is rejected.
 
 Clippy passed for all four changed crates and targets with warnings denied.
 Formatting and architecture boundary checks pass, including all five dependency

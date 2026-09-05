@@ -1,7 +1,7 @@
 pub(super) mod stages;
 
 use crate::app::deployment::contracts::{
-    deployment_contract_spec, validate_deployment_contract_spec,
+    deployment_contract_spec, validate_deployment_contract_spec, VerificationRequirement,
 };
 use crate::app::hashing::canonical_material_hash;
 use crate::app::pipeline::contracts::{pipeline_contract_spec, validate_pipeline_contract_spec};
@@ -93,12 +93,13 @@ pub(super) async fn resolve_policy(
             || spec.workload_name.as_deref().map_or(true, str::is_empty)
             || spec.service_name.as_deref().map_or(true, str::is_empty)
             || spec.service_port.is_none()
+            || spec.post_sync_verification.service_healthz != VerificationRequirement::Required
             || spec
                 .health_path
                 .as_deref()
                 .map_or(true, |path| !path.starts_with('/'))
         {
-            return Err(ApiError::conflict("hosted DeploymentContracts require an exact Deployment, Service, port, and probe path"));
+            return Err(ApiError::conflict("hosted DeploymentContracts require an exact Deployment, Service, port, and required health probe"));
         }
     }
     let mut profiles = Vec::new();
