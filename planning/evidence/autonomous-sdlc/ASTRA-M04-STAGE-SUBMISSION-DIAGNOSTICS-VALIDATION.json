@@ -1,0 +1,62 @@
+{
+  "recorded_at": "2026-09-05T21:00:06.966928+00:00",
+  "source_base": "5d35fad3bbcb9cbd0b7d3397829b5496e73094bc",
+  "branch": "codex/astra-verifier-evidence-diagnostics",
+  "scope": "Stage qualification diagnostic retention only; no scorer, suite, model, profile or budget changes",
+  "validation": {
+    "eval_unit_tests": 35,
+    "failed": 0,
+    "ignored": 0,
+    "focused_submission_tests": 5,
+    "focused_count_is_included_in_total": true,
+    "clippy": "passed all pharness-eval targets with warnings denied",
+    "verifier_replay_cases": 48,
+    "verifier_replay_passed": 48,
+    "retained_complete_submissions": 48,
+    "historical_live_report_readable": true,
+    "historical_live_passes_unchanged": 3,
+    "frozen_invariants": {
+      "scorer": {
+        "unchanged": true,
+        "sha256": "0e362ec5c79266ed3ca3ee97b6c7d92708b34939fa59b5522f73e40e17173d52"
+      },
+      "verifier_fixtures": {
+        "unchanged": true,
+        "sha256": "c8cef53ce62335a3e7e67c8a4c5351688aa519bd5a871f34e15956e33c7d1d88"
+      }
+    },
+    "replay_is_live_qualification": false,
+    "deployed": false,
+    "relative_document_links_checked": 75,
+    "architecture": "passed module boundaries and five dependency parser tests",
+    "formatting": "passed",
+    "diff_check": "passed"
+  },
+  "replay": {
+    "artifact": "ASTRA-M04-VERIFIER-SUBMISSION-REPLAY.json",
+    "sha256": "6b8e583c8ef1712d7ff5e6cb59cd712b6f909fda7cd3c90ebd73d8c7cfafe753",
+    "suite_hash": "sha256:e289d5d349dcd5be7b13ba0c4f65a19c75a77643b6b9f0462291370fe0076b92",
+    "provider": "replay",
+    "model": "stage-replay-v2"
+  },
+  "source_file_sha256": {
+    "crates/pharness-eval/src/coding_v2.rs": "7a48b3550c0622a9a3bcb7789252527e9bbd2009394fba8c9717c2b11245626a",
+    "crates/pharness-eval/src/main.rs": "6d177f16e6e7496f4853b7a4ef612cb5dd69a094f0561d93b46b423cc795ef5e",
+    "crates/pharness-eval/src/stage_suites.rs": "2481ee78d29d25d5e38f3a3ec088cfdaad47d7f9cb5cc11e95a727e03c1b4e29",
+    "crates/pharness-eval/src/stage_suites/submission_evidence.rs": "b93c8d5841c1356b80a42173ec9e1a855f23dab83ab224bec8b0c396fc3f7597"
+  },
+  "local_logs": {
+    "tests": {
+      "path": "/private/tmp/astra-m04-submission-diagnostics-tests-final.log",
+      "sha256": "958e56bee8be6da23e4b51bded1a45a606cbdc51ef1389cd343406410a1f633c"
+    },
+    "clippy": {
+      "path": "/private/tmp/astra-m04-submission-diagnostics-clippy.log",
+      "sha256": "261247d63a8b05ec5619ce46d42b8e14a3c2f9e19a394072e7aee7176f47a5e8"
+    },
+    "focused": {
+      "path": "/private/tmp/astra-m04-submission-diagnostics-focus.log",
+      "sha256": "eb1feccf6e05a8a6b0f2a8111ac895d36c4a14a4e64b1b8868b584b87c99b506"
+    }
+  }
+}

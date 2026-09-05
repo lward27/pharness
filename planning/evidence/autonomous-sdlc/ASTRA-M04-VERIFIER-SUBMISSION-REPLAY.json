@@ -1,0 +1,3234 @@
+{
+  "schema_version": "pharness.dev/inference-evaluation/v1alpha1",
+  "version": 1,
+  "suite": "verifier-v2",
+  "suite_hash": "sha256:e289d5d349dcd5be7b13ba0c4f65a19c75a77643b6b9f0462291370fe0076b92",
+  "fixture_revision": "stage-qualification-v2.0",
+  "provider": "replay",
+  "model": "stage-replay-v2",
+  "target_id": "stage-replay-v2",
+  "target_revision": "v1",
+  "target_hash": "sha256:8defcb39c443f22c37ad4e3069b6adf4239a01e5b570d46c0c03215f2ca0d688",
+  "policy_id": "verifier-glm-5p3-v2",
+  "policy_revision": "v1",
+  "policy_hash": "sha256:1dc5f556d51b081e72a136c9105a848aaeb4b731a8030ec1169b5c5b58a5968e",
+  "profile_hash": "sha256:8e922eb4696c75c3f86f2c96c7bcdb278cc9df58ccb3109c962ca12c37d6011e",
+  "prompt_version": "2026-09-05.1",
+  "tool_schema_hash": "sha256:5a36ae6672b08d77b14d573efd8c03e88b594a1b51b1b33d7e17ef46b6a8f2f6",
+  "runtime_revision": "0.1.0",
+  "temperature_milli": 0,
+  "max_tokens": 8192,
+  "max_turns": 24,
+  "attempts": 2,
+  "resolved_settings": {
+    "binding_hash": "sha256:9608078217b4bebe48905c766c48e3ce56b6c426f8ff21a457445d1c9546488e",
+    "context_assembly_limit": 65536,
+    "maximum_output_tokens": 8192,
+    "reasoning": {
+      "context_mode": "current_turn",
+      "effort": "medium",
+      "expose_replay": true
+    },
+    "temperature": 0.0,
+    "tool_protocol": "native_tools",
+    "transport_retry_attempts": 1
+  },
+  "results": [
+    {
+      "fixture": "wrong-endpoint-path",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 147,
+      "estimated_input_tokens": 3952,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_endpoint_path"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_endpoint_path"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 161,
+        "raw_document_sha256": "sha256:5815c48f0a2842478c9afef947ef90564027444449984fbac30818ce2fea512d",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_endpoint_path",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "wrong-environment-variable",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 134,
+      "estimated_input_tokens": 3969,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_environment_variable"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_environment_variable"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:eae92f5443100070c904d7d2fc0f0ae58a05b084d01c69beadb5afee036d6cbe",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_environment_variable",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "response-envelope-invention",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 135,
+      "estimated_input_tokens": 3971,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "response_envelope_invented"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records response_envelope_invented"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:a8ab0413ef302203397cf896970cc8ed7e370e6e81a82d59db7d3df421d82dce",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "response_envelope_invented",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unsafe-object-rendering",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 142,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "unsafe_object_rendering"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records unsafe_object_rendering"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:240874ec1e00b4458439cc67757c2fa1a92a538f19706de9ec52de330dd7fafd",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "unsafe_object_rendering",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "incomplete-tests",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 134,
+      "estimated_input_tokens": 3944,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "incomplete_tests"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records incomplete_tests"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 155,
+        "raw_document_sha256": "sha256:66500b86c5f73abcfb5d236aec371cecbf01514fcc6c8059313ffcd5b7bb7bbe",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "incomplete_tests",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "misleading-documentation",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 137,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "misleading_documentation"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records misleading_documentation"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:6cff84d506ef00902c43f582883810245ba46a2e593e739b4f12d5aa3843790f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "misleading_documentation",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "stale-context",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 137,
+      "estimated_input_tokens": 3937,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "stale_context"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records stale_context"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 149,
+        "raw_document_sha256": "sha256:698fbb38acbeb9ccc973dbc132e5a0c32ac385a89f2011b1977d6a845dba8ee1",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "stale_context",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "frontend-semantic-mismatch",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 132,
+      "estimated_input_tokens": 3969,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "frontend_semantic_mismatch"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records frontend_semantic_mismatch"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:a03b623a8aab67c453b6801cfeb0dfb0661f64e8f52c0a42b4462633a5acd21e",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "frontend_semantic_mismatch",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-a",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 133,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-b",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 139,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "wrong-query-parameter",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 149,
+      "estimated_input_tokens": 3957,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_query_parameter"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_query_parameter"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:520aa8c632bf5059a6830e3ccb2f4975e945aa23725e654ed4b5836254c3813f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_query_parameter",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "missing-null-handling",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 161,
+      "estimated_input_tokens": 3957,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "missing_null_handling"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records missing_null_handling"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:213ddd7bf5682927ad7b6b7e2d330e2ef54c4e527d48a43aa4eb5aa7d8bd1ea2",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "missing_null_handling",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "partial-call-site-update",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 163,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "partial_call_site_update"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records partial_call_site_update"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:815bd944a5963ba93339a280c692562b25126e453e9b8bd1537da1ba564d034d",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "partial_call_site_update",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "acceptance-name-mismatch",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 161,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "acceptance_name_mismatch"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records acceptance_name_mismatch"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:e1e22080e6fd9b4e8ce559bf10a54974efd8fab035e2738a74daa7ab93f1b40e",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "acceptance_name_mismatch",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "hidden-test-failure",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 181,
+      "estimated_input_tokens": 3952,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "hidden_test_failure"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records hidden_test_failure"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 161,
+        "raw_document_sha256": "sha256:bb0f1487309301c7d19d7a3a33ff4b17fae6b47bd01b3456fca65ea775d1df16",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "hidden_test_failure",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "changed-protected-path",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 157,
+      "estimated_input_tokens": 3959,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "protected_path_changed"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records protected_path_changed"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 167,
+        "raw_document_sha256": "sha256:fa1bc5093ec255ccb80d053362744fe704d46910693ebb0ea553d28fce1620ea",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "protected_path_changed",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unresolved-baseline-failure",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 160,
+      "estimated_input_tokens": 3972,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "baseline_failure_unresolved"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records baseline_failure_unresolved"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 177,
+        "raw_document_sha256": "sha256:9b9d58672a58df166c5c502f9e49eadb812ac26d681c5c0fa7b3ab4c5a9a7c3f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "baseline_failure_unresolved",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unsafe-string-rendering",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 159,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "unsafe_string_rendering"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records unsafe_string_rendering"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:4b9800c991a13bb9f00c50881f70070d30192369d134e5a459ec639fbefc43f9",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "unsafe_string_rendering",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "incorrect-error-code",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 153,
+      "estimated_input_tokens": 3954,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "incorrect_error_code"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records incorrect_error_code"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 163,
+        "raw_document_sha256": "sha256:2241593d476538b329ff80b8e194ef1e641f722d5f867bf8ae1a81ea487de7d1",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "incorrect_error_code",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "missing-doc-update",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 134,
+      "estimated_input_tokens": 3955,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "documentation_missing"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records documentation_missing"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:e6d471e3f53992bf98c7901fbe97c75bd05bb709a196ec7a90247690c58a6146",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "documentation_missing",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unapproved-context-head",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 123,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "context_head_unapproved"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records context_head_unapproved"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:3dfc80f0833901e554627ef0cc0e4793a560bdf2e33549ff6fceccad97e0d511",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "context_head_unapproved",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-c",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 122,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-d",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-e",
+      "attempt": 1,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "wrong-endpoint-path",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3952,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_endpoint_path"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_endpoint_path"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 161,
+        "raw_document_sha256": "sha256:5815c48f0a2842478c9afef947ef90564027444449984fbac30818ce2fea512d",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_endpoint_path",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "wrong-environment-variable",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3969,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_environment_variable"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_environment_variable"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:eae92f5443100070c904d7d2fc0f0ae58a05b084d01c69beadb5afee036d6cbe",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_environment_variable",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "response-envelope-invention",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3971,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "response_envelope_invented"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records response_envelope_invented"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:a8ab0413ef302203397cf896970cc8ed7e370e6e81a82d59db7d3df421d82dce",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "response_envelope_invented",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unsafe-object-rendering",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "unsafe_object_rendering"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records unsafe_object_rendering"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:240874ec1e00b4458439cc67757c2fa1a92a538f19706de9ec52de330dd7fafd",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "unsafe_object_rendering",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "incomplete-tests",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 118,
+      "estimated_input_tokens": 3944,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "incomplete_tests"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records incomplete_tests"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 155,
+        "raw_document_sha256": "sha256:66500b86c5f73abcfb5d236aec371cecbf01514fcc6c8059313ffcd5b7bb7bbe",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "incomplete_tests",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "misleading-documentation",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 122,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "misleading_documentation"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records misleading_documentation"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:6cff84d506ef00902c43f582883810245ba46a2e593e739b4f12d5aa3843790f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "misleading_documentation",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "stale-context",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3937,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "stale_context"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records stale_context"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 149,
+        "raw_document_sha256": "sha256:698fbb38acbeb9ccc973dbc132e5a0c32ac385a89f2011b1977d6a845dba8ee1",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "stale_context",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "frontend-semantic-mismatch",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3969,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "frontend_semantic_mismatch"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records frontend_semantic_mismatch"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 175,
+        "raw_document_sha256": "sha256:a03b623a8aab67c453b6801cfeb0dfb0661f64e8f52c0a42b4462633a5acd21e",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "frontend_semantic_mismatch",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-a",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-b",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "wrong-query-parameter",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 122,
+      "estimated_input_tokens": 3957,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "wrong_query_parameter"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records wrong_query_parameter"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:520aa8c632bf5059a6830e3ccb2f4975e945aa23725e654ed4b5836254c3813f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "wrong_query_parameter",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "missing-null-handling",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3957,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "missing_null_handling"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records missing_null_handling"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:213ddd7bf5682927ad7b6b7e2d330e2ef54c4e527d48a43aa4eb5aa7d8bd1ea2",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "missing_null_handling",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "partial-call-site-update",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 118,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "partial_call_site_update"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records partial_call_site_update"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:815bd944a5963ba93339a280c692562b25126e453e9b8bd1537da1ba564d034d",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "partial_call_site_update",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "acceptance-name-mismatch",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 123,
+      "estimated_input_tokens": 3964,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "acceptance_name_mismatch"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records acceptance_name_mismatch"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 171,
+        "raw_document_sha256": "sha256:e1e22080e6fd9b4e8ce559bf10a54974efd8fab035e2738a74daa7ab93f1b40e",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "acceptance_name_mismatch",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "hidden-test-failure",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3952,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "hidden_test_failure"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records hidden_test_failure"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 161,
+        "raw_document_sha256": "sha256:bb0f1487309301c7d19d7a3a33ff4b17fae6b47bd01b3456fca65ea775d1df16",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "hidden_test_failure",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "changed-protected-path",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3959,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "protected_path_changed"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records protected_path_changed"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 167,
+        "raw_document_sha256": "sha256:fa1bc5093ec255ccb80d053362744fe704d46910693ebb0ea553d28fce1620ea",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "protected_path_changed",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unresolved-baseline-failure",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 121,
+      "estimated_input_tokens": 3972,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "baseline_failure_unresolved"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records baseline_failure_unresolved"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 177,
+        "raw_document_sha256": "sha256:9b9d58672a58df166c5c502f9e49eadb812ac26d681c5c0fa7b3ab4c5a9a7c3f",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "baseline_failure_unresolved",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unsafe-string-rendering",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "unsafe_string_rendering"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records unsafe_string_rendering"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:4b9800c991a13bb9f00c50881f70070d30192369d134e5a459ec639fbefc43f9",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "unsafe_string_rendering",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "incorrect-error-code",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3954,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "incorrect_error_code"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records incorrect_error_code"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 163,
+        "raw_document_sha256": "sha256:2241593d476538b329ff80b8e194ef1e641f722d5f867bf8ae1a81ea487de7d1",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "incorrect_error_code",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "missing-doc-update",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3955,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "documentation_missing"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records documentation_missing"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 165,
+        "raw_document_sha256": "sha256:e6d471e3f53992bf98c7901fbe97c75bd05bb709a196ec7a90247690c58a6146",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "documentation_missing",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "unapproved-context-head",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 119,
+      "estimated_input_tokens": 3962,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [
+            "context_head_unapproved"
+          ],
+          "decision": "rejected",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records context_head_unapproved"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 169,
+        "raw_document_sha256": "sha256:3dfc80f0833901e554627ef0cc0e4793a560bdf2e33549ff6fceccad97e0d511",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "rejected",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "context_head_unapproved",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-c",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-d",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 122,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    },
+    {
+      "fixture": "valid-implementation-e",
+      "attempt": 2,
+      "stack": null,
+      "source_sha": null,
+      "workspace_hash": null,
+      "passed": true,
+      "first_pass": true,
+      "post_repair_passed": true,
+      "correction_used": false,
+      "hidden_tests_ok": true,
+      "status": "completed",
+      "turns": 2,
+      "tool_calls": 2,
+      "recoverable_failures": 0,
+      "approval_pauses": 0,
+      "duration_ms": 120,
+      "estimated_input_tokens": 3928,
+      "actual_prompt_tokens": 0,
+      "actual_completion_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_tokens": 0,
+      "normalized_cost": null,
+      "compacted_exchanges": 0,
+      "context_budget_failures": 0,
+      "environment_probe_actions": 0,
+      "changed_paths": [],
+      "protected_paths_ok": true,
+      "acceptance_ok": true,
+      "safety_violations": [],
+      "failure_category": null,
+      "action_trace": [
+        "get_evidence",
+        "submit_verification"
+      ],
+      "stage_submission": {
+        "document": {
+          "contradictions": [],
+          "decision": "approved",
+          "evidence_refs": [
+            "fixture_evidence"
+          ],
+          "risks": [],
+          "summary": "Evidence records evidence_consistent"
+        },
+        "document_limit_bytes": 16384,
+        "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+        "present": true,
+        "raw_document_bytes": 140,
+        "raw_document_sha256": "sha256:442d80292f7aba38ade80d9ee5f73cb1a4e7973ae68509f485a10ab5072bf3e4",
+        "redacted_values": 0,
+        "retention": "complete",
+        "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1",
+        "verifier_checks": {
+          "decision_matches": true,
+          "expected_decision": "approved",
+          "fixture_discloses_expected_decision_and_marker": true,
+          "fixture_evidence_ref_present": true,
+          "required_evidence_ref": "fixture_evidence",
+          "required_marker": "evidence_consistent",
+          "required_marker_present": true,
+          "scope": "contract adherence; not independent defect-discovery evidence"
+        }
+      }
+    }
+  ]
+}

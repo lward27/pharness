@@ -28,6 +28,7 @@ use std::time::Instant;
 
 mod integrity;
 mod onboarding;
+mod submission_evidence;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SuiteKind {
@@ -527,6 +528,11 @@ async fn run_codex_fixture(
         failure_detail: (!passed).then(|| error.unwrap_or_else(|| "stage gate failed".into())),
         action_trace: events.iter().map(|event| event.method.clone()).collect(),
         failure_diff: None,
+        stage_submission: Some(submission_evidence::capture(
+            suite,
+            fixture,
+            structured.as_ref(),
+        )?),
     })
 }
 
@@ -741,6 +747,11 @@ async fn run_fixture(
         failure_detail,
         action_trace,
         failure_diff: None,
+        stage_submission: Some(submission_evidence::capture(
+            suite,
+            fixture,
+            submission.as_ref(),
+        )?),
     })
 }
 

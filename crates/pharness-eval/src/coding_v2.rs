@@ -480,6 +480,7 @@ async fn run_codex_fixture(
         failure_detail: (!passed).then(|| error.unwrap_or_else(|| "fixture gate failed".into())),
         action_trace: events.iter().map(|event| event.method.clone()).collect(),
         failure_diff,
+        stage_submission: None,
     })
 }
 
@@ -801,6 +802,7 @@ async fn run_fixture(
         failure_detail,
         action_trace,
         failure_diff,
+        stage_submission: None,
     })
 }
 
