@@ -87,9 +87,10 @@ Fresh gateway calibration passed for Builder and Planner. MiniMax's malformed
 history rejection exposed a protocol compatibility defect; that repair and complete
 stage-report guards merged in PR 330 at `db84b797f1bbc833ba86844874d1d041bc33ab72`.
 The current coding evaluation remains on fd74092. Publish/requalify the new runtime
-after it finishes. Keep qualification jobs serial and hold the M05 chart merge
-until the evaluation is terminal, because the new API environment entry triggers
-a restart. Neither code merge nor provider diagnostics close M04.
+after it finishes. Keep qualification jobs serial. M05 now omits its environment entry while
+creation is disabled; the complete rendered chart matches main, allowing reader
+source publication without interrupting evaluation. Hold the actual image-pin
+release until the active evaluation is terminal. Neither code merge nor provider diagnostics close M04.
 See [M02 evidence](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
 A real external blocker may suspend its dependent work but never waive its gate.
