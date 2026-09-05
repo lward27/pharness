@@ -2,7 +2,7 @@
 # not borrow the model worker's broad observer identity or add a new executor.
 # These reads can be prepared before hosted creation is enabled. No mutation,
 # Secret, pod log, exec, port-forward, watch or cluster-wide list is granted.
-{{- range $namespace := list "apps-staging" "apps" }}
+{{- range $namespace := list "apps-staging" "apps-prod" }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
