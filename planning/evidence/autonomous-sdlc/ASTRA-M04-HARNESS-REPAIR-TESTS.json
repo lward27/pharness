@@ -1,0 +1,20 @@
+{
+  "source_base": "548b978c33f8f32fb23d91120ef65a3502188d1c",
+  "source_file_sha256": {
+    "crates/pharness-openai-compatible/src/types.rs": "9817b3107c030fb92994d464048ea0fda86dc81b58fe3f657169d87acd614560",
+    "crates/pharness-openai-compatible/src/client.rs": "9985d0dd6990ae70cc8ec76543f03967a506121d9331583c094ccb5628d7fa34",
+    "crates/pharness-eval/src/main.rs": "dc4a33461befb235c9b427136189f0959bdcaa1a086345b52eadedf2c4e6207a",
+    "crates/pharness-api/src/app/inference.rs": "48161a583d86377cd39359b2c0ca945d2b90ca2297eac54dc5f60e79693349ef"
+  },
+  "rust_tests": {
+    "consumer_suites": 288,
+    "new_stage_gate_tests": 2,
+    "core_protocol_tests": 5,
+    "distinct_total": 295
+  },
+  "dependency_parser_tests": 5,
+  "clippy": "passed with warnings denied",
+  "formatting": "passed",
+  "architecture_boundaries": "passed",
+  "live_qualification": false
+}

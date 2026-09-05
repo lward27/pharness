@@ -763,6 +763,44 @@ fn qualification_gate(report: &EvalReport) -> (bool, serde_json::Value) {
     if matches!(report.suite.as_str(), "coding-v2" | "repair-v2") {
         return coding_reliability_gate(report);
     }
+    let expected_per_attempt = match report.suite.as_str() {
+        "onboarding-v2" | "planner-v2" | "test-diagnosis-v2" => Some(12),
+        "verifier-v2" => Some(24),
+        _ => None,
+    };
+    let mut complete = true;
+    let mut per_attempt_quality = true;
+    let mut attempts = Vec::new();
+    if let Some(expected) = expected_per_attempt {
+        complete = report.attempts > 0
+            && total == (report.attempts as usize).saturating_mul(expected)
+            && !report
+                .resolved_settings
+                .get("infrastructure_abort")
+                .is_some_and(|value| !value.is_null());
+        for attempt in 1..=report.attempts {
+            let rows = report
+                .results
+                .iter()
+                .filter(|row| row.attempt == attempt)
+                .collect::<Vec<_>>();
+            let unique = rows
+                .iter()
+                .map(|row| &row.fixture)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len();
+            let successes = rows.iter().filter(|row| row.passed).count();
+            let attempt_complete = rows.len() == expected && unique == expected;
+            complete &= attempt_complete;
+            if report.suite == "planner-v2" {
+                per_attempt_quality &= successes >= 11;
+            }
+            attempts.push(serde_json::json!({
+                "attempt":attempt,"results":rows.len(),"expected_results":expected,
+                "unique_fixtures":unique,"passed":successes,"complete":attempt_complete,
+            }));
+        }
+    }
     let passed_gate = match report.suite.as_str() {
         "onboarding-v1" | "planner-v1" | "tester-v1" => passed == total,
         "verifier-v1" => {
@@ -776,13 +814,15 @@ fn qualification_gate(report: &EvalReport) -> (bool, serde_json::Value) {
         _ => true,
     };
     (
-        passed_gate,
+        passed_gate && complete && per_attempt_quality,
         serde_json::json!({
             "results":total,
             "passed":passed,
             "false_approvals":false_approvals,
             "false_rejections":false_rejections,
             "other_quality_failures":typed_or_quality_failures,
+            "infrastructure_valid":complete,
+            "attempts":attempts,
         }),
     )
 }
@@ -2201,7 +2241,7 @@ impl ModelProvider for ReplayProvider {
 mod tests {
     use super::{
         bounded_eval_diagnostic, builder_report_metadata, coding_reliability_gate,
-        is_direct_to_gateway_transport_pair, metrics_from_events, replay_suite,
+        is_direct_to_gateway_transport_pair, metrics_from_events, qualification_gate, replay_suite,
         unexpected_changed_paths, EvalReport, EvalResult, FIXTURES,
     };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles, AgentEvent, EventKind};
@@ -2326,9 +2366,8 @@ mod tests {
         assert_eq!(metrics_from_events(&events).environment_probe_actions, 3);
     }
 
-    #[test]
-    fn coding_gate_marks_provider_abort_as_invalid_infrastructure() {
-        let report = EvalReport {
+    fn incomplete_evaluation_report() -> EvalReport {
+        EvalReport {
             schema_version: "pharness.dev/inference-evaluation/v1alpha1".into(),
             version: 2,
             suite: "coding-v2".into(),
@@ -2391,7 +2430,12 @@ mod tests {
                 action_trace: Vec::new(),
                 failure_diff: None,
             }],
-        };
+        }
+    }
+
+    #[test]
+    fn coding_gate_marks_provider_abort_as_invalid_infrastructure() {
+        let report = incomplete_evaluation_report();
 
         let (passed, details) = coding_reliability_gate(&report);
 
@@ -2400,5 +2444,79 @@ mod tests {
         assert_eq!(details["provider_failures"], 1);
         assert_eq!(details["observed_results"], 1);
         assert_eq!(details["expected_results"], 48);
+    }
+
+    fn complete_stage_report(suite: &str, count: usize) -> EvalReport {
+        let mut report = incomplete_evaluation_report();
+        report.suite = suite.into();
+        report.resolved_settings = serde_json::json!({});
+        let mut row = report.results[0].clone();
+        row.passed = true;
+        row.acceptance_ok = true;
+        row.failure_category = None;
+        row.stop_reason_code = None;
+        row.status = "completed".into();
+        report.results = (1..=2)
+            .flat_map(|attempt| {
+                (0..count)
+                    .map(|index| {
+                        let mut row = row.clone();
+                        row.attempt = attempt;
+                        row.fixture = format!("case-{index}");
+                        row
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        report
+    }
+
+    #[test]
+    fn stage_qualification_rejects_empty_partial_duplicate_and_aborted_reports() {
+        for (suite, count) in [
+            ("onboarding-v2", 12),
+            ("planner-v2", 12),
+            ("test-diagnosis-v2", 12),
+            ("verifier-v2", 24),
+        ] {
+            assert!(qualification_gate(&complete_stage_report(suite, count)).0);
+            for defect in ["empty", "partial", "duplicate", "wrong_attempt", "aborted"] {
+                let mut report = complete_stage_report(suite, count);
+                match defect {
+                    "empty" => report.results.clear(),
+                    "partial" => {
+                        report.results.pop();
+                    }
+                    "duplicate" => report.results[1].fixture = report.results[0].fixture.clone(),
+                    "wrong_attempt" => report.results[0].attempt = 0,
+                    "aborted" => {
+                        report.resolved_settings = serde_json::json!({"infrastructure_abort":{"reason":"provider_failure"}})
+                    }
+                    _ => unreachable!(),
+                }
+                let (passed, details) = qualification_gate(&report);
+                assert!(!passed, "{suite}: {defect}");
+                assert_eq!(details["infrastructure_valid"], false, "{suite}: {defect}");
+            }
+        }
+    }
+
+    #[test]
+    fn planner_qualification_threshold_must_pass_in_each_independent_attempt() {
+        let mut report = complete_stage_report("planner-v2", 12);
+        report.results[0].passed = false;
+        report.results[12].passed = false;
+        assert!(
+            qualification_gate(&report).0,
+            "11/12 in each attempt meets the existing threshold"
+        );
+        report.results[0].passed = true;
+        report.results[13].passed = false;
+        let (passed, details) = qualification_gate(&report);
+        assert!(
+            !passed,
+            "12/12 followed by 10/12 must not average into a pass"
+        );
+        assert_eq!(details["infrastructure_valid"], true);
     }
 }

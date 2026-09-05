@@ -595,6 +595,29 @@ mod tests {
     }
 
     #[test]
+    fn malformed_current_actions_and_history_envelopes_remain_non_executable() {
+        for arguments in [
+            "{",
+            "[]",
+            r#"{"_pharness_protocol_error":{"kind":"invalid_tool_arguments","execution":"rejected","raw_arguments":"{"}}"#,
+        ] {
+            let aggregate = OpenAiStreamAggregate {
+                tool_calls: vec![AccumulatedToolCall {
+                    index: 0,
+                    id: Some("invalid-call".into()),
+                    name: Some("read_file".into()),
+                    arguments: arguments.into(),
+                    ..AccumulatedToolCall::default()
+                }],
+                ..OpenAiStreamAggregate::default()
+            };
+            let error =
+                aggregate_to_model_turn(aggregate, ToolProtocolMode::NativeTools).unwrap_err();
+            assert!(matches!(error, ProviderError::Protocol { .. }));
+        }
+    }
+
+    #[test]
     fn rejects_multiple_actions_in_one_turn() {
         let aggregate = OpenAiStreamAggregate {
             tool_calls: vec![

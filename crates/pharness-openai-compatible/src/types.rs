@@ -217,12 +217,30 @@ pub struct MessageToolCall {
 
 impl From<pharness_core::ModelToolCall> for MessageToolCall {
     fn from(tool_call: pharness_core::ModelToolCall) -> Self {
+        // Some providers reject malformed historical arguments before the
+        // model can process the controller's recovery message. Preserve the
+        // rejected bytes inside a valid, explicitly non-executed envelope on
+        // the outgoing history only. Live action parsing remains strict.
+        let arguments = if serde_json::from_str::<serde_json::Value>(&tool_call.arguments)
+            .is_ok_and(|value| value.is_object())
+        {
+            tool_call.arguments
+        } else {
+            serde_json::json!({
+                "_pharness_protocol_error": {
+                    "kind": "invalid_tool_arguments",
+                    "execution": "rejected",
+                    "raw_arguments": tool_call.arguments,
+                }
+            })
+            .to_string()
+        };
         Self {
             id: tool_call.id,
             tool_type: "function".to_string(),
             function: MessageFunctionCall {
                 name: tool_call.name,
-                arguments: tool_call.arguments,
+                arguments,
             },
         }
     }
@@ -455,6 +473,69 @@ mod tests {
         );
         assert!(value["messages"][1].get("reasoning").is_none());
         assert!(value["messages"][1].get("reasoning_details").is_none());
+    }
+
+    #[test]
+    fn rejected_tool_history_remains_visible_without_invalid_provider_json() {
+        for backend in [
+            InferenceBackendKind::Fireworks,
+            InferenceBackendKind::Openrouter,
+        ] {
+            for rejected in ["{", "", "null", "[]", "42", "\"raw text\""] {
+                let mut original = request();
+                original.messages.push(ModelMessage {
+                    role: ModelRole::Assistant,
+                    content: String::new(),
+                    tool_call_id: None,
+                    tool_calls: vec![pharness_core::ModelToolCall {
+                        id: "rejected-call".into(),
+                        name: "verification_complete".into(),
+                        arguments: rejected.into(),
+                    }],
+                    reasoning: None,
+                });
+                original.messages.push(ModelMessage {
+                    role: ModelRole::Tool,
+                    content: r#"{"status":"error","error":{"kind":"malformed_arguments"}}"#.into(),
+                    tool_call_id: Some("rejected-call".into()),
+                    tool_calls: Vec::new(),
+                    reasoning: None,
+                });
+                let wire =
+                    build_chat_request(backend, "model", original.clone(), &policy(), true, None);
+                let call = &wire.messages[1].tool_calls[0];
+                assert_eq!(call.id, "rejected-call");
+                assert_eq!(call.function.name, "verification_complete");
+                let arguments: serde_json::Value =
+                    serde_json::from_str(&call.function.arguments).unwrap();
+                assert_eq!(
+                    arguments["_pharness_protocol_error"]["raw_arguments"],
+                    rejected
+                );
+                assert_eq!(
+                    arguments["_pharness_protocol_error"]["execution"],
+                    "rejected"
+                );
+                assert_eq!(
+                    wire.messages[2].tool_call_id.as_deref(),
+                    Some("rejected-call")
+                );
+                assert_eq!(wire.messages[2].content, original.messages[2].content);
+                assert_eq!(original.messages[1].tool_calls[0].arguments, rejected);
+                assert_eq!(wire.max_tokens, policy().max_output_tokens);
+            }
+        }
+    }
+
+    #[test]
+    fn valid_historical_tool_arguments_keep_their_exact_bytes() {
+        let raw = "{ \"path\": \"src/lib.rs\", \"nested\": {\"enabled\":true} }";
+        let call = super::MessageToolCall::from(pharness_core::ModelToolCall {
+            id: "valid-call".into(),
+            name: "read_file".into(),
+            arguments: raw.into(),
+        });
+        assert_eq!(call.function.arguments, raw);
     }
 
     #[test]

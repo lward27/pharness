@@ -2005,7 +2005,7 @@ async fn execute_protocol_calibration_case(
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         return Err(format!(
-            "gateway protocol verification returned {status}: {}",
+            "protocol case {case} attempt {attempt}: gateway verification returned {status}: {}",
             body.chars().take(500).collect::<String>()
         ));
     }
