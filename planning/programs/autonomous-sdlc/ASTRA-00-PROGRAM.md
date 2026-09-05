@@ -88,7 +88,11 @@ suite revisions to V2.1, and adds bounded contract diagnostics. The subsequent
 [onboarding correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
 retains blocked proposals without invented contracts, guards approval/source effects,
 and uses real discovery for twelve distinct V2.1 fixtures. It requires compatible
-API/worker/UI deployment and fresh live qualification. Existing failed results remain unchanged. Verifier and Repair remain open. The diagnostic correction retains concrete tool
+API/worker/UI deployment and fresh live qualification. Existing failed results remain unchanged.
+[Verifier finished at 20:14 UTC with 1/24 and 2/24 passes](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-VERIFIER-FAILURE.md).
+Its zero reported false approvals do not override 43 evidence/marker mismatches
+and two missing submissions. Repair then passed protocol calibration and started
+two frozen attempts; its result remains pending. The diagnostic correction retains concrete tool
 validation errors without changing fixtures, gates, profiles or limits.
 Keep qualification Jobs serial. The frozen coding suite, thresholds, profiles and
 execution limits remain in force. Scorer repairs require explicit suite revisions
