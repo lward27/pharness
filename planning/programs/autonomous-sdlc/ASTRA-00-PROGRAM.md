@@ -67,7 +67,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
-| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections in PR 334; gate open | May begin after M05; closes against M09 behavior. |
+| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections merged; deployment and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
@@ -115,8 +115,11 @@ at `ba8ce03e4dfd3df5815c897a69276858b53aacb2`. Full combined validation passed
 Controller delivery integration, terminal cancellation and live acceptance remain open. These independent preparations do
 not waive M05 or M04 gates. See
 [controller evidence](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
-M10 initial console corrections are in [PR 334](https://github.com/lward27/pharness/pull/334).
-The documented objective checks and subjective remaining concerns do not close M10.
+M10 initial console corrections merged through [PR 334](https://github.com/lward27/pharness/pull/334)
+at `ca98fa7c7474902d206e130ca14eddddec8d82a7`. All 79 UI unit checks, the production build,
+and the real API journey with both console flags passed against combined M04/M06 source.
+See the [console evidence and subjective review](../../evidence/autonomous-sdlc/ASTRA-M10-CONSOLE-CONVERGENCE-AND-POLISH.md).
+The documented remaining concerns and delivery dependencies keep M10 open.
 
 Schema 0052 is applied to the live Finance database; 0053 remains undeployed.
 A new 21,213,184-byte pre-0053 snapshot preserves the same 14 WorkItems and 82 Runs;
