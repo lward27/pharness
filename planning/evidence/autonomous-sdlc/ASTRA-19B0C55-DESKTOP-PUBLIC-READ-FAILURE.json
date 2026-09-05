@@ -1,0 +1,11 @@
+{
+  "recorded_at": "2026-09-05T22:13:37.837681+00:00",
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "builder": "lucas-desktop",
+  "build_and_push": "succeeded",
+  "runtime_digest": "sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+  "failed_boundary": "Python public registry manifest read returned Cloudflare HTTP 403",
+  "continuation": "Verify the already published exact digest over the existing private registry route with the original hostname and trusted CA; do not rebuild the runtime or disable TLS verification. Continue the other components from the same sealed source.",
+  "build_log_sha256": "0c0de68f32968ff5c1b4bb0e6edb9f8a642d625acbf82f2205cdb04f917f01e3",
+  "live_release_changed": false
+}

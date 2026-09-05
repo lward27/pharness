@@ -1,0 +1,60 @@
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 399B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3
+#2 DONE 0.9s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/3] FROM docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3
+#4 resolve docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3 done
+#4 sha256:e6f31ffc071e5560b82a8685fba8214954e5721e3e49269d00958316edbe89fe 0B / 3.84MB 0.2s
+#4 sha256:e6f31ffc071e5560b82a8685fba8214954e5721e3e49269d00958316edbe89fe 1.05MB / 3.84MB 0.3s
+#4 sha256:e6f31ffc071e5560b82a8685fba8214954e5721e3e49269d00958316edbe89fe 3.15MB / 3.84MB 0.5s
+#4 sha256:e6f31ffc071e5560b82a8685fba8214954e5721e3e49269d00958316edbe89fe 3.84MB / 3.84MB 0.5s done
+#4 extracting sha256:e6f31ffc071e5560b82a8685fba8214954e5721e3e49269d00958316edbe89fe 0.1s done
+#4 DONE 0.7s
+
+#5 [2/3] RUN test "$(uname -m)" = x86_64 && echo ASTRA_UNCACHED_AMD64_EXECUTION_PASSED
+#5 0.082 ASTRA_UNCACHED_AMD64_EXECUTION_PASSED
+#5 DONE 0.1s
+
+#6 [3/3] RUN dd if=/dev/urandom of=/payload.bin bs=1048576 count=112 && test "$(wc -c </payload.bin)" = 117440512
+#6 0.582 112+0 records in
+#6 0.582 112+0 records out
+#6 0.582 117440512 bytes (112.0MB) copied, 0.448428 seconds, 249.8MB/s
+#6 DONE 1.8s
+
+#7 exporting to image
+#7 exporting layers
+#7 exporting layers 2.6s done
+#7 ...
+
+#8 [auth] sharing credentials for registry.lucas.engineering
+#8 DONE 0.0s
+
+#7 exporting to image
+#7 exporting manifest sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d 0.0s done
+#7 exporting config sha256:eb53626c5c019956306e5b0cfa3e824883613afd51b6ac0170eba58c41ebdf0d 0.0s done
+#7 pushing layers
+#7 pushing layers 60.3s done
+#7 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-desktop-return-20260905@sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d
+#7 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-desktop-return-20260905@sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d 10.1s done
+#7 DONE 73.1s
+{
+  "containerimage.config.digest": "sha256:eb53626c5c019956306e5b0cfa3e824883613afd51b6ac0170eba58c41ebdf0d",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d",
+    "size": 862,
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d",
+  "image.name": "registry.lucas.engineering/buildkit-smoke:astra-desktop-return-20260905"
+}

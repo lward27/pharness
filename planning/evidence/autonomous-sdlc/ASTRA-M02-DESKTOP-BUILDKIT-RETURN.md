@@ -1,0 +1,15 @@
+# ASTRA M02: Desktop BuildKit restored
+
+The desktop is the active Tekton build host again. This removes the temporary Mac/VPN forwarding dependency from the cluster build path. **This is platform readiness, not acceptance of autonomous Finance delivery or the 24-hour operating gate.**
+
+The owner reported the endpoint available on 2026-09-05. Live checks found the K3s BuildKit v0.32.2 service running at `192.168.50.145:12340`, with an 8 GiB service limit, zero service restarts and about 300 GiB free storage. The local Docker client uses the existing `lucas-desktop` builder through an SSH forward; mutual TLS remains end to end. No desktop host configuration changed.
+
+[GitOps PR 54](https://github.com/lward27/lucas_engineering/pull/54) changed only the existing EndpointSlice address and documentation. Source `9af2adbdc25342ab13a8f699cf0919bacef1e05a` merged as `202be9039eef831ece0a4d1c5022d71efbe75b31`. Helm lint/render, the scoped server dry-run and the zero-active-PipelineRun check passed. The Service, Task, namespaces, TLS identity, credentials and result contract are unchanged. A normal Argo refresh was requested; no forced sync or direct EndpointSlice patch was used.
+
+The [Argo/endpoint observation](ASTRA-M02-DESKTOP-ENDPOINT-OBSERVED.json) confirms the exact merged revision as Synced/Healthy and the live desktop address at 22:11:41 UTC. The [Service-routed build](ASTRA-M02-DESKTOP-SERVICE-BUILD-VERIFIED.json) ran from 22:11:42 to 22:12:53 UTC, executed uncached AMD64 instructions and published `sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01`. Independent private TLS reads verified its manifest and configuration hashes.
+
+Before switching the route, a [direct cluster probe](ASTRA-M02-DESKTOP-RETURN-PREMERGE-VALIDATION.json) built and uploaded a 112 MiB random layer. Rancher Desktop then pulled and ran that exact digest with networking disabled, checking AMD64 and payload size. [Local worker inspection](ASTRA-M02-DESKTOP-RETURN-LOCAL-PREFLIGHT.json) and [uncached execution log](ASTRA-M02-DESKTOP-AMD64-EXECUTION.log) preserve the distinct client-side check.
+
+The Mac container and its cache are retained. Its forwarding process was closed during the failed local release recovery and is not an active fallback until explicitly restored and reverified. Saved Rancher Desktop memory was changed from 4 to 6 GiB, but the observed VM remained at 4 GiB; a saved setting is not capacity proof. The failed Mac release build published no image. The subsequent PHarness release uses the desktop and must retain its own source, artifact, migration and live-release evidence.
+
+Recovery is the documented manual fallback procedure in [the authoritative GitOps guide](https://github.com/lward27/lucas_engineering/blob/202be9039eef831ece0a4d1c5022d71efbe75b31/ops/buildkit-macos/ASTRA-MACOS-BUILDER.md): verify Mac address and capacity, restore its dedicated daemon/forward, pass TLS/AMD64/registry checks, reconcile active builds, and submit the scoped endpoint change. Do not silently change a build's backend or delete caches. No destructive operation was performed.

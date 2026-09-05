@@ -1,0 +1,10 @@
+{
+  "recorded_at": "2026-09-05T22:04:02.563565+00:00",
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "exit_code": 125,
+  "reason": "Ephemeral registry credential directory omitted the local Docker CLI plugin path. Buildx was not discovered.",
+  "build_dispatched": false,
+  "images_published": 0,
+  "correction": "Reference the existing CLI plugins alongside the existing contexts and Buildx metadata; credentials remain owner-only and removed when the process exits.",
+  "log_sha256": "de016440f348d03c532c848004b204e9d318e5ed36b3bdbc651e5dd687a4ddb8"
+}

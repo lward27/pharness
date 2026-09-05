@@ -5,6 +5,12 @@ Evidence: [current M02 execution record](../../evidence/autonomous-sdlc/ASTRA-M0
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M01. May proceed independently of M03.
 
+The owner-reported desktop return was [revalidated and restored through GitOps](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md)
+on 2026-09-05. Tekton again uses the existing desktop endpoint, with unchanged Service/Task/TLS
+identities. Direct and Service-routed uncached AMD64 builds and registry verification passed.
+The Mac container/cache are retained, but its stopped forward is not an active fallback.
+This refresh establishes platform readiness, not autonomous delivery or 24-hour acceptance.
+
 ## Objective and scope
 
 Provide verified, finite hosting bindings and safe staging prerequisites for the two Finance applications.

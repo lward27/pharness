@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-09-05T22:13:21.425992+00:00",
+  "cluster": "lucas_engineering",
+  "namespace": "tekton-pipelines",
+  "job": "astra-m02-desktop-service-build-20260905",
+  "job_uid": "1b7a0917-7127-48f5-8491-a53e7d3ed65d",
+  "started_at": "2026-09-05T22:11:42Z",
+  "completed_at": "2026-09-05T22:12:53Z",
+  "service": "k3s-buildkit.tekton-pipelines.svc.cluster.local:12340",
+  "endpoint": "192.168.50.145:12340",
+  "gitops_revision": "202be9039eef831ece0a4d1c5022d71efbe75b31",
+  "mutual_tls": true,
+  "uncached_amd64_execution": true,
+  "digest": "sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01",
+  "registry_manifest_hash_verified": true,
+  "registry_config_hash_verified": true,
+  "log_sha256": "cec0820bd0c905ee78e11a7a4ee3bf1e0d4061ce9528f7d97e9988cdb7d54f4f",
+  "metadata": {
+    "containerimage.config.digest": "sha256:e0ba8549cb9e237f164470730508d6fec6a3506e8caa3137f73b8c549012a99a",
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01",
+      "size": 668,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "containerimage.digest": "sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01",
+    "image.name": "registry.lucas.engineering/buildkit-smoke:astra-desktop-service-20260905"
+  },
+  "scope": "Restored Service route and real build/push; no application source or deployment acceptance claim"
+}

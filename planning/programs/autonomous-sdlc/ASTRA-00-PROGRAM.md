@@ -132,9 +132,15 @@ reads are now [verified as authorized](../../evidence/autonomous-sdlc/ASTRA-M07-
 Main branches remain unprotected pending the separate owner decision.
 That dependent gate cannot be waived; independent implementation can continue.
 
+A complete [compatible release of the corrections](../../evidence/autonomous-sdlc/ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md)
+has been built from `19b0c55c48e3614d0b4507d56df3029a52475618`, with all seven immutable
+images, the native bundle and a passing isolated migration/history check. Its pin is prepared;
+exact live rollout and database preservation must precede fresh qualification. Schema 54
+requires a compatible reader immediately, including when no hosted WorkItems exist.
+
 Current evidence entry points:
 
-- [M02 platform acceptance](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md): supported certificate controller, trusted TLS, isolated staging and the owner-authorized Mac BuildKit path.
+- [M02 platform acceptance](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md): supported certificate controller, trusted TLS and isolated staging; the [desktop BuildKit return](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md) restores the verified native AMD64 path.
 - [M03 integrity acceptance](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md): evidence normalization and architecture checks.
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
 - [M07 real build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md): both actual Finance Tekton builds and registry identities; these program-operated builds do not count as autonomous WorkItems.
