@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod recovery;
+#[cfg(test)]
+pub(crate) use recovery::tests::KubectlFixture;
 
 const REAPER_INTERVAL: Duration = Duration::from_secs(30);
 const CHAINED_RUN_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
@@ -1810,7 +1812,23 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             &request.source_delivery_intent_id,
             "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
         )?;
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let intent = self
+            .store
+            .get_source_delivery_intent(&request.source_delivery_intent_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
+        if intent
+            .authorization
+            .get("workflow_policy_hash")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        {
+            manifest = recovery::bind_manifest(manifest);
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(
             source_delivery_intent_id = %request.source_delivery_intent_id,
             execution_id = %request.execution_id,
@@ -1876,7 +1894,23 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             &request.source_delivery_intent_id,
             "PHARNESS_SOURCE_DELIVERY_INTENT_ID",
         )?;
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        let intent = self
+            .store
+            .get_source_delivery_intent(&request.source_delivery_intent_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("source delivery intent is unavailable"))?;
+        if intent
+            .authorization
+            .get("workflow_policy_hash")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        {
+            manifest = recovery::bind_manifest(manifest);
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(
             source_delivery_intent_id = %request.source_delivery_intent_id,
             execution_id = %request.execution_id,

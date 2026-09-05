@@ -1,0 +1,43 @@
+{
+  "observed_at": "2026-09-05T13:44:43.350419+00:00",
+  "base_revision": "1dc8c97125a05c7bbd9b3944c40f3ed60c99f4b1",
+  "source_sha256": {
+    "crates/pharness-api/src/app/repo_mode/mod.rs": "e93412359edf344a342bb2702a5f56f0a4bd4b97293b3961fdfc22a169bb7375",
+    "crates/pharness-api/src/app/repo_mode/source_delivery.rs": "d940cb84793c947f84241dbb94453e7a4ec86d1049d59a2555b62faec2a852f2",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "24ddaab2f40c05a9e2f1e242262e10b688f89b474045649f6ee53b89ba35a42c",
+    "crates/pharness-api/src/app/tests/repo_mode_v1.rs": "5bf74f5ac92b2ddb1ba96a1d441580e6fb7815d22bcaf102430cbdba5b435ee5",
+    "crates/pharness-api/src/dispatch.rs": "5240bcf9079e8cc0ae16d327d12736bf44445efb4da84f134f62c6cd3ad1a1de",
+    "crates/pharness-api/src/dispatch/recovery/tests.rs": "bd97ed28c3c0524ee6cf25b6698fbe52f4f98c1f0f448de4b5d327f7a95f279a"
+  },
+  "validation": {
+    "api_tests": 254,
+    "admin_tests": 1,
+    "unchanged_store_tests": 53,
+    "distinct_total": 308,
+    "clippy": "API and store all targets, warnings denied: passed",
+    "architecture": "passed, parser 5/5",
+    "format": "passed",
+    "environment": "temporary SQLite and deterministic kubectl adapter fixtures; no GitHub or cluster source writes"
+  },
+  "log_sha256": {
+    "/private/tmp/astra-m06-source-final-tests.log": "4b7751e6a1e19a32bb64b2d73e78ecf55296c2ccf669b9f2c7fd5bdaed18f105",
+    "/private/tmp/astra-m06-source-clippy.log": "4b31cea2313050d174e520b1fc1a2a745f84b672899f986e1769083189abac72",
+    "/private/tmp/astra-m06-source-boundaries.log": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3",
+    "/private/tmp/astra-m06-source-recovery-tests.log": "6caa533a7411d4f3d44b78b518a80837d783d53e044f7ee282339f4fe7d1db00",
+    "/private/tmp/astra-m06-preparation-full-tests.log": "7925f666481834c80357b1d960d274438d8a20556feb5545237ee63976028e73"
+  },
+  "scenarios": [
+    "Initial source publication records its planned writer identity in immutable authorization and saves writer_dispatched before creating the Job",
+    "The existing explicit source retry also saves its new execution identity before dispatch",
+    "A late acknowledgement reads the latest intent and preserves callback progress",
+    "Hosted writer and observer dispatch uncertainty retains the current execution identity instead of authorizing a replacement",
+    "Lost Job-create acknowledgements and repeated dispatch adopt the exact writer/observer Job; conflicting manifests are rejected without replacement",
+    "A second publication cannot allocate another intent for the approved ChangeSet"
+  ],
+  "remaining": [
+    "Controller source progression and remote branch/PR effect reconciliation remain M07 integration",
+    "Automatic exact-head source merge, actual Tekton build and deployment/recovery adapters are not implemented by this slice",
+    "Incomplete pre-dispatch startup and terminal cancellation remain open",
+    "Schema 0053 and live restart/duplicate-effect acceptance are not deployed or proven"
+  ]
+}

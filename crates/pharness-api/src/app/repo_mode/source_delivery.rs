@@ -22,7 +22,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-pub(super) async fn authorize_and_dispatch_source_delivery(
+pub(in crate::app) async fn authorize_and_dispatch_source_delivery(
     state: &AppState,
     work_item_id: &str,
     actor: &str,
@@ -131,6 +131,8 @@ pub(super) async fn authorize_and_dispatch_source_delivery(
         "schema_version":"pharness.dev/source-delivery-authorization/v1alpha1",
         "actor":actor,
         "reason":reason,
+        "workflow_policy_hash":metadata.workflow_policy_hash,
+        "writer_execution_id":execution_id,
         "work_item_id":work_item_id,
         "work_item_state_hash":repo_work_item_state_hash(&metadata)?,
         "work_plan":{"id":plan.id,"revision":plan.revision},
@@ -161,6 +163,23 @@ pub(super) async fn authorize_and_dispatch_source_delivery(
             creation_reason: reason.into(),
         })
         .await?;
+    // The worker's context request can arrive before Job creation returns.
+    // Persist its identity first; acknowledgement must not overwrite a callback.
+    let intent = state
+        .store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "writer_dispatched",
+            Some(&execution_id),
+            None,
+            None,
+            None,
+            None,
+            actor,
+            reason,
+        )
+        .await?;
     match state
         .worker
         .dispatch_source_delivery(SourceDeliveryExecutionRequest {
@@ -172,29 +191,27 @@ pub(super) async fn authorize_and_dispatch_source_delivery(
         Ok(receipt) => {
             let intent = state
                 .store
-                .update_source_delivery_intent(
-                    &intent.id,
-                    intent.state_version,
-                    "writer_dispatched",
-                    Some(&execution_id),
-                    None,
-                    None,
-                    None,
-                    None,
-                    actor,
-                    reason,
-                )
-                .await?;
-            let item = state
-                .store
-                .update_repo_work_item_status(
-                    work_item_id,
-                    "executing",
-                    actor,
-                    "isolated Git writer dispatched from exact SourceDeliveryIntent",
-                    false,
-                )
-                .await?;
+                .get_source_delivery_intent(&intent.id)
+                .await?
+                .ok_or_else(|| ApiError::conflict("source delivery disappeared after dispatch"))?;
+            let item = if intent.status == "writer_dispatched" {
+                state
+                    .store
+                    .update_repo_work_item_status(
+                        work_item_id,
+                        "executing",
+                        actor,
+                        "isolated Git writer dispatched from exact SourceDeliveryIntent",
+                        false,
+                    )
+                    .await?
+            } else {
+                state
+                    .store
+                    .get_work_item(work_item_id)
+                    .await?
+                    .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?
+            };
             append_repo_audit(
                 state,
                 work_item_id,
@@ -209,6 +226,24 @@ pub(super) async fn authorize_and_dispatch_source_delivery(
             )
         }
         Err(error) => {
+            let current = state
+                .store
+                .get_source_delivery_intent(&intent.id)
+                .await?
+                .ok_or_else(|| ApiError::conflict("source delivery disappeared during dispatch"))?;
+            if current.status != "writer_dispatched"
+                || current.state_version != intent.state_version
+            {
+                return Ok(
+                    json!({"source_delivery_intent":current,"status":"callback_already_recorded"}),
+                );
+            }
+            if metadata.workflow_policy_hash.is_some() {
+                tracing::warn!(source_delivery_intent_id=%intent.id, %error, "Hosted source writer acknowledgement is unconfirmed; execution identity is retained");
+                return Ok(
+                    json!({"source_delivery_intent":current,"status":"dispatch_unconfirmed"}),
+                );
+            }
             let intent = state
                 .store
                 .update_source_delivery_intent(
@@ -378,14 +413,6 @@ pub(super) async fn retry_repo_source_delivery(
     }
 
     let execution_id = new_prefixed_id("srcexec");
-    let receipt = state
-        .worker
-        .dispatch_source_delivery(SourceDeliveryExecutionRequest {
-            source_delivery_intent_id: intent.id.clone(),
-            execution_id: execution_id.clone(),
-        })
-        .await
-        .map_err(|_| ApiError::conflict("Git writer retry dispatch could not complete"))?;
     let prior_failure = intent.status_reason.clone();
     let intent = state
         .store
@@ -402,16 +429,37 @@ pub(super) async fn retry_repo_source_delivery(
             reason,
         )
         .await?;
-    let item = state
+    let receipt = state
+        .worker
+        .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+            source_delivery_intent_id: intent.id.clone(),
+            execution_id: execution_id.clone(),
+        })
+        .await
+        .map_err(|_| ApiError::unavailable("Git writer retry acknowledgement is unconfirmed; the existing execution identity is retained"))?;
+    let intent = state
         .store
-        .update_repo_work_item_status(
-            work_item_id,
-            "executing",
-            actor,
-            "isolated Git writer retry dispatched from the unchanged SourceDeliveryIntent",
-            false,
-        )
-        .await?;
+        .get_source_delivery_intent(&intent.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("source delivery disappeared after retry dispatch"))?;
+    let item = if intent.status == "writer_dispatched" {
+        state
+            .store
+            .update_repo_work_item_status(
+                work_item_id,
+                "executing",
+                actor,
+                "isolated Git writer retry dispatched from the unchanged SourceDeliveryIntent",
+                false,
+            )
+            .await?
+    } else {
+        state
+            .store
+            .get_work_item(work_item_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?
+    };
     append_repo_audit(
         state,
         work_item_id,
@@ -510,8 +558,41 @@ pub(super) async fn dispatch_source_delivery_observation(
         })
         .await
     {
-        Ok(receipt) => Ok(json!({"source_delivery_intent":dispatched,"job_name":receipt.job_name})),
+        Ok(receipt) => {
+            let current = state
+                .store
+                .get_source_delivery_intent(&intent.id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict("source delivery disappeared after observation dispatch")
+                })?;
+            Ok(json!({"source_delivery_intent":current,"job_name":receipt.job_name}))
+        }
         Err(error) => {
+            let current = state
+                .store
+                .get_source_delivery_intent(&intent.id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::conflict("source observation disappeared during dispatch")
+                })?;
+            if current.status != "observer_dispatched"
+                || current.state_version != dispatched.state_version
+            {
+                return Ok(
+                    json!({"source_delivery_intent":current,"status":"callback_already_recorded"}),
+                );
+            }
+            if repo_metadata(state, work_item_id)
+                .await?
+                .workflow_policy_hash
+                .is_some()
+            {
+                tracing::warn!(source_delivery_intent_id=%intent.id, %error, "Hosted source observer acknowledgement is unconfirmed; execution identity is retained");
+                return Ok(
+                    json!({"source_delivery_intent":current,"status":"dispatch_unconfirmed"}),
+                );
+            }
             let restored = state
                 .store
                 .update_source_delivery_intent(

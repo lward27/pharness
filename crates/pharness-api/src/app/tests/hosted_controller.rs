@@ -1040,3 +1040,193 @@ async fn terminal_recovery_blocks_missing_or_inconsistent_original_evidence() {
             .is_none());
     }
 }
+
+#[tokio::test]
+async fn hosted_source_jobs_reconcile_lost_acknowledgement_without_another_job() {
+    use crate::dispatch::{
+        KubectlFixture, SourceDeliveryExecutionRequest, SourceDeliveryObservationRequest,
+    };
+    use serde_json::Value;
+    for observer in [false, true] {
+        let fake = KubectlFixture::new(false);
+        let suffix = format!("source_recovery_{observer}");
+        let state = super::characterization::test_state_with_git_observer(
+            fake.command.clone(),
+            format!("https://github.com/example/repo-{suffix}.git"),
+        )
+        .await;
+        let policy = serde_json::from_str(include_str!(
+            "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+        ))
+        .unwrap();
+        let fixture =
+            super::repo_mode_v1::repo_fixture_with_policy(&suffix, true, state, Some(policy)).await;
+        let intent = fixture
+            .state
+            .store
+            .get_source_delivery_intent(&fixture.intent_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(intent.authorization["workflow_policy_hash"].is_string());
+        for _ in 0..3 {
+            if observer {
+                fixture
+                    .state
+                    .worker
+                    .dispatch_source_delivery_observation(SourceDeliveryObservationRequest {
+                        source_delivery_intent_id: intent.id.clone(),
+                        execution_id: intent.observer_execution_id.clone().unwrap(),
+                    })
+                    .await
+                    .unwrap();
+            } else {
+                fixture
+                    .state
+                    .worker
+                    .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+                        source_delivery_intent_id: intent.id.clone(),
+                        execution_id: intent.writer_execution_id.clone().unwrap(),
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
+        assert_eq!(fake.creates(), 1);
+        let mut job: Value =
+            serde_json::from_slice(&std::fs::read(fake.dir.join("job.json")).unwrap()).unwrap();
+        assert!(
+            job["metadata"]["annotations"]["pharness.lucas.engineering/dispatch-hash"].is_string()
+        );
+        job["spec"]["template"]["spec"]["containers"][0]["image"] =
+            serde_json::json!("unrelated:image");
+        std::fs::write(fake.dir.join("job.json"), job.to_string()).unwrap();
+        let blocked = if observer {
+            fixture
+                .state
+                .worker
+                .dispatch_source_delivery_observation(SourceDeliveryObservationRequest {
+                    source_delivery_intent_id: intent.id.clone(),
+                    execution_id: intent.observer_execution_id.clone().unwrap(),
+                })
+                .await
+                .is_err()
+        } else {
+            fixture
+                .state
+                .worker
+                .dispatch_source_delivery(SourceDeliveryExecutionRequest {
+                    source_delivery_intent_id: intent.id.clone(),
+                    execution_id: intent.writer_execution_id.clone().unwrap(),
+                })
+                .await
+                .is_err()
+        };
+        assert!(blocked);
+        assert_eq!(fake.creates(), 1);
+        assert_eq!(
+            fixture
+                .state
+                .store
+                .get_source_delivery_intent(&intent.id)
+                .await
+                .unwrap()
+                .unwrap(),
+            intent
+        );
+    }
+}
+
+#[tokio::test]
+async fn hosted_source_publication_persists_execution_before_uncertain_dispatch() {
+    use crate::dispatch::KubectlFixture;
+    use pharness_core::{RunId, SessionId};
+    use pharness_store::{CreateArtifact, CreateChangeSet, CreateRun};
+    use serde_json::json;
+    use sha2::Digest;
+    let fake = KubectlFixture::new(true);
+    let suffix = "source_order";
+    let source = format!("https://github.com/example/repo-{suffix}.git");
+    let state =
+        super::characterization::test_state_with_git_observer(fake.command.clone(), source.clone())
+            .await;
+    let policy = serde_json::from_str(include_str!(
+        "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+    ))
+    .unwrap();
+    let fixture =
+        super::repo_mode_v1::repo_fixture_with_policy(suffix, false, state, Some(policy)).await;
+    let store = &fixture.state.store;
+    let run = store
+        .create_run(CreateRun {
+            id: RunId::new("run_source_order"),
+            session_id: SessionId::new("ses_source_order"),
+            user_task: "Verified fixture".into(),
+            cwd: "/workspace".into(),
+            max_turns: 2,
+            initial_status: "completed".into(),
+            execution_target_json: json!({}),
+        })
+        .await
+        .unwrap();
+    let diff="diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-old\n+new\n";
+    let patch = store
+        .create_artifact(CreateArtifact {
+            id: "art_source_order".into(),
+            session_id: run.session_id.clone(),
+            run_id: Some(run.id.clone()),
+            kind: "workspace_git_diff".into(),
+            label: "Verified source fixture".into(),
+            mime_type: Some("text/x-diff".into()),
+            path: None,
+            content_text: Some(diff.into()),
+            content_json: None,
+        })
+        .await
+        .unwrap();
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let change=store.create_change_set(CreateChangeSet{id:"cset_source_order".into(),work_item_id:Some(fixture.work_item_id.clone()),work_plan_id:plan.id,remediation_plan_id:None,incident_id:None,session_id:run.session_id.clone(),run_id:Some(run.id),status:"approved".into(),title:"Bounded source fixture".into(),summary:"Exact approved patch".into(),risk_level:"low".into(),material_hash:format!("sha256:{}","b".repeat(64)),resource_namespace:None,resource_kind:Some("Repository".into()),resource_name:Some(source),change_set_json:json!({"patch":{"artifact_id":patch.id,"hash":format!("sha256:{:x}",sha2::Sha256::digest(diff.as_bytes()))}})}).await.unwrap();
+    let result = crate::app::repo_mode::authorize_and_dispatch_source_delivery(
+        &fixture.state,
+        &fixture.work_item_id,
+        "controller:hosted-workflow",
+        "Recorded source authority",
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["status"], "dispatch_unconfirmed");
+    let intent = store
+        .get_source_delivery_intent_by_subject("work_item_change_set", &change.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(intent.status, "writer_dispatched");
+    assert_eq!(
+        intent.authorization["writer_execution_id"],
+        intent.writer_execution_id.as_deref().unwrap()
+    );
+    assert!(intent.authorization["workflow_policy_hash"].is_string());
+    assert_eq!(fake.creates(), 0);
+    assert!(
+        crate::app::repo_mode::authorize_and_dispatch_source_delivery(
+            &fixture.state,
+            &fixture.work_item_id,
+            "controller:hosted-workflow",
+            "Retry cannot create another intent"
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        store
+            .get_source_delivery_intent(&intent.id)
+            .await
+            .unwrap()
+            .unwrap(),
+        intent
+    );
+}
