@@ -1,6 +1,10 @@
 # ASTRA M04: Coding reliability qualification
 
 Status: active.
+Progress: evaluator repair released at source `fd740927110366a983de6bb0d3bc6c576577708b`
+through GitOps revision `548b978c33f8f32fb23d91120ef65a3502188d1c`; all 216
+packaged offline checks pass. Live qualification remains open.
+Evidence: [release, offline results and outstanding gates](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M03. An external qualification blocker does not stop independent M02/M05 preparation.
 
@@ -67,4 +71,3 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
-

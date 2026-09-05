@@ -1,0 +1,80 @@
+[
+  {
+    "capability": "source_writer",
+    "repository_id": "repo_01a04369f6387e6095aee4047ed2224f",
+    "observed_at": "2026-09-05T10:06:18.386717+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "source_writer",
+      "status": "available",
+      "summary": "Isolated identity verified repository_push for https://github.com/lward27/yfinance_wrapper.git",
+      "verified_at": "1788602778377",
+      "expires_at": "1788603678377"
+    }
+  },
+  {
+    "capability": "source_observer",
+    "repository_id": "repo_01a04369f6387e6095aee4047ed2224f",
+    "observed_at": "2026-09-05T10:06:27.096664+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "source_observer",
+      "status": "available",
+      "summary": "Isolated identity verified repository_pull_rules_checks_statuses for https://github.com/lward27/yfinance_wrapper.git",
+      "verified_at": "1788602787155",
+      "expires_at": "1788603687155"
+    }
+  },
+  {
+    "capability": "source_writer",
+    "repository_id": "repo_01a04369f1057e13a13c24233d4e278a",
+    "observed_at": "2026-09-05T10:06:36.898157+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "source_writer",
+      "status": "available",
+      "summary": "Isolated identity verified repository_push for https://github.com/lward27/finance-frontend.git",
+      "verified_at": "1788602796877",
+      "expires_at": "1788603696877"
+    }
+  },
+  {
+    "capability": "source_observer",
+    "repository_id": "repo_01a04369f1057e13a13c24233d4e278a",
+    "observed_at": "2026-09-05T10:06:44.061796+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "source_observer",
+      "status": "available",
+      "summary": "Isolated identity verified repository_pull_rules_checks_statuses for https://github.com/lward27/finance-frontend.git",
+      "verified_at": "1788602804091",
+      "expires_at": "1788603704091"
+    }
+  },
+  {
+    "capability": "gitops_writer",
+    "repository_id": null,
+    "observed_at": "2026-09-05T10:06:52.322900+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "gitops_writer",
+      "status": "unavailable",
+      "summary": "Isolated identity did not verify repository_push for https://github.com/lward27/lucas_engineering.git",
+      "verified_at": "1788602812383",
+      "expires_at": "1788603712383"
+    }
+  },
+  {
+    "capability": "gitops_observer",
+    "repository_id": null,
+    "observed_at": "2026-09-05T10:06:59.485609+00:00",
+    "http_status": 200,
+    "response": {
+      "capability": "gitops_observer",
+      "status": "available",
+      "summary": "Isolated identity verified repository_pull for https://github.com/lward27/lucas_engineering.git",
+      "verified_at": "1788602819543",
+      "expires_at": "1788603719543"
+    }
+  }
+]

@@ -1,0 +1,71 @@
+{
+  "observed_at": "2026-09-05T11:22:48.977406+00:00",
+  "image": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169",
+  "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "environment": {
+    "docker_context": "rancher-desktop",
+    "platform": "linux/amd64",
+    "network": "none",
+    "cpus": 2,
+    "memory": "2g",
+    "tmp_bytes_limit": 1073741824,
+    "work_bytes_limit": 4294967296,
+    "artifact_dir": "/work/artifacts",
+    "credentials": "none",
+    "repository_mounts": "none"
+  },
+  "provider": "replay",
+  "live_model_qualification": false,
+  "suites": [
+    {
+      "suite": "coding-v2",
+      "attempts": 2,
+      "results": 48,
+      "passed": 48,
+      "duration_seconds": 258.3,
+      "evidence": "ASTRA-M04-FD740-REPLAY-CODING-V2.json"
+    },
+    {
+      "suite": "repair-v2",
+      "attempts": 2,
+      "results": 48,
+      "passed": 48,
+      "duration_seconds": 256.18,
+      "evidence": "ASTRA-M04-FD740-REPLAY-REPAIR-V2.json"
+    },
+    {
+      "suite": "onboarding-v2",
+      "attempts": 2,
+      "results": 24,
+      "passed": 24,
+      "duration_seconds": 6.31,
+      "evidence": "ASTRA-M04-FD740-REPLAY-ONBOARDING-V2.json"
+    },
+    {
+      "suite": "planner-v2",
+      "attempts": 2,
+      "results": 24,
+      "passed": 24,
+      "duration_seconds": 6.3,
+      "evidence": "ASTRA-M04-FD740-REPLAY-PLANNER-V2.json"
+    },
+    {
+      "suite": "test-diagnosis-v2",
+      "attempts": 2,
+      "results": 24,
+      "passed": 24,
+      "duration_seconds": 6.26,
+      "evidence": "ASTRA-M04-FD740-REPLAY-TEST-DIAGNOSIS-V2.json"
+    },
+    {
+      "suite": "verifier-v2",
+      "attempts": 2,
+      "results": 48,
+      "passed": 48,
+      "duration_seconds": 12.23,
+      "evidence": "ASTRA-M04-FD740-REPLAY-VERIFIER-V2.json"
+    }
+  ],
+  "completed_at": "2026-09-05T11:31:54.580838+00:00",
+  "all_passed": true
+}

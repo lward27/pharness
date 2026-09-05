@@ -1,0 +1,139 @@
+{
+  "observed_at": "2026-09-05T12:13:14.995370+00:00",
+  "source_revision": "1406174ae6a41a35beeef943d799bb86a78c4441",
+  "rust": {
+    "command": "cargo test --workspace",
+    "distinct_passed": 616,
+    "results": [
+      {
+        "binary": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "result": "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "result": "ok. 236 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.28s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_cli-99fc47e86a0160e1)",
+        "result": "ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_codex_host-29c0c9bd706652b9)",
+        "result": "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_codex_host-ba341aa05fdd0c20)",
+        "result": "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_config-e089ebc90c014b8c)",
+        "result": "ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "result": "ok. 144 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+      },
+      {
+        "binary": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "result": "ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "result": "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+        "result": "ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 90.77s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_fireworks-bd22059e6db86a54)",
+        "result": "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_model_gateway-1eaa58c36e64c975)",
+        "result": "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+        "result": "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-59b57ecd65585e61)",
+        "result": "ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s"
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+        "result": "ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.60s"
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_worker-37e9fb2e6a68a151)",
+        "result": "ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s"
+      },
+      {
+        "binary": "Doc-tests pharness_codex_host",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_config",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_core",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_fireworks",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_openai_compatible",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_runhost",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      },
+      {
+        "binary": "Doc-tests pharness_store",
+        "result": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      }
+    ],
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings: passed",
+    "format": "cargo fmt --all -- --check: passed",
+    "architecture": "app module boundaries and 5 parser tests: passed",
+    "cache": "worktree-local target; initial shared-target build failed on conflicting branch artifacts, isolated build and full suite passed"
+  },
+  "ui": {
+    "node": "24.19.0",
+    "npm": "11.12.1",
+    "install": "npm ci: passed",
+    "build": "npm run build: passed",
+    "unit_tests": {
+      "passed": 73,
+      "files": 24
+    },
+    "browser_tests": {
+      "distinct_passed": 103,
+      "skipped": 1,
+      "initial": "102 passed; 1 desktop real-server beforeAll timeout during concurrent cold Rust compilation; 1 mobile real-server intentionally skipped",
+      "targeted_recheck": "cargo build -p pharness-api --features ui-e2e followed by npm run test:visual -- --project=desktop tests/repo-mode-real-server.spec.mjs: 1 passed in 31.7s",
+      "baselines_updated": false,
+      "app_patches_generated": false
+    },
+    "release_builder_difference": "The existing immutable UI Docker build uses pinned Node 22; local checks here used bundled Node 24."
+  },
+  "log_sha256": {
+    "isolated-workspace-tests": "72939ac8a86af1aa715cd40ef07782c70ecb381234136bb8039af94e3d4615a5",
+    "isolated-workspace-clippy": "c435aca06a4b1050677d440730b5d93486140df1d00f301d6a72c3671172b6cb",
+    "isolated-boundaries": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+    "ui-build": "3bf4fb8ac3634e34051d98c804f41c5b929a48b44b7bfd7f656fc33df4ac2248",
+    "ui-tests": "298480b393cbd5f3f821d5c110b9597d695f6ca36620b3e617901e70de2e35e1",
+    "ui-visual": "e7ab7722821c9d975480105f7b55815b786df72b63cb876cae4ecf54e54d6396",
+    "ui-api-build": "d5bd9b2731a858ddc2f9d3c8173215886a01965355af57cb82d9896cd1c108af",
+    "ui-real-server-recheck": "2311132f206d25b871022cc5b7a521f1f8a6bd0396f9861917babf65696947e1"
+  },
+  "limitations": [
+    "Local deterministic validation is not gateway qualification or hosted runtime acceptance.",
+    "0052 is not deployed and hosted creation remains disabled."
+  ]
+}

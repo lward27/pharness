@@ -1,6 +1,7 @@
 # ASTRA M05: Unified hosted SDLC contract
 
-Status: planned.
+Status: reader, creation and stage-entry preparation tested; live acceptance open.
+Evidence: [current implementation evidence](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings.
 
@@ -71,4 +72,3 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
-

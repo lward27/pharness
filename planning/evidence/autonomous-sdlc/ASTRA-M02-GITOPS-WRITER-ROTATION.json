@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-09-05T10:18:08.510485+00:00",
+  "status": 200,
+  "capability": "gitops_writer",
+  "data": {
+    "capability": "gitops_writer",
+    "status": "available",
+    "summary": "Isolated identity verified repository_push for https://github.com/lward27/lucas_engineering.git",
+    "verified_at": "1788603488479",
+    "expires_at": "1788604388479"
+  }
+}

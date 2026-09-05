@@ -1,0 +1,7 @@
+{
+  "observed_at": "2026-09-05T11:46:51.474248+00:00",
+  "http_status": 409,
+  "evaluation": {
+    "error": "{\"error\":\"another inference qualification is already queued or running (infeval_01a07160294f7ce393d8a45d3ee23f7d)\"}"
+  }
+}

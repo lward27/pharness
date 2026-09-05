@@ -1,0 +1,42 @@
+{
+  "observed_at": "2026-09-05T11:30:02.702611+00:00",
+  "cluster": "lucas_engineering",
+  "release_branch_revision": "97939e141cea1422be551b2a7d15311929c89829",
+  "source_revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "changed_files": [
+    "deploy/helm/pharness/values.yaml",
+    "deploy/helm/pharness/files/agent-execution-registry.json"
+  ],
+  "review": "Only immutable image pins, source revisions and derived registry hashes change. No authority, budgets, replicas, storage, feature flags or schema change.",
+  "helm_lint": "passed",
+  "server_dry_run_resources": 53,
+  "rendered_sha256": "fb5877a3827e7ef569e5b48ba564da85e21d558b2acca4b364bdb7cb8dfe5644",
+  "active_run_check": {
+    "running": {
+      "count": 0,
+      "run_ids": []
+    },
+    "queued": {
+      "count": 0,
+      "run_ids": []
+    },
+    "preparing": {
+      "count": 0,
+      "run_ids": []
+    },
+    "paused": {
+      "count": 0,
+      "run_ids": []
+    }
+  },
+  "database_generation": {
+    "created_at": "1787837185820",
+    "id": "dbgen_finance_20260827",
+    "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+    "purpose": "clean-finance-product-generation",
+    "schema_version": "0049"
+  },
+  "before_runtime_revision": "83a2689c877a3f48688d1d457c34e83474698c46",
+  "limits_or_gate_increases": false,
+  "merge_status": "not_merged"
+}

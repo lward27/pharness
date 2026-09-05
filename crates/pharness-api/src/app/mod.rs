@@ -30,6 +30,7 @@ mod evidence;
 mod execution_checks;
 mod gitops;
 mod hashing;
+mod hosted_workflow;
 mod identifiers;
 mod inference;
 mod internal;
@@ -160,6 +161,7 @@ pub struct AppState {
     repo_mode: RepoModeConfiguration,
     inference: Arc<pharness_config::InferenceGatewayConfig>,
     agent_execution: Arc<pharness_config::AgentExecutionBackendConfig>,
+    hosted_workflow: Arc<pharness_core::hosted_sdlc::HostedWorkflowConfig>,
 }
 
 #[cfg(test)]
@@ -206,6 +208,7 @@ pub fn router_with_inference(
         workspace,
         inference,
         pharness_config::AgentExecutionBackendConfig::disabled_default(),
+        pharness_core::hosted_sdlc::HostedWorkflowConfig::default(),
     )
 }
 
@@ -220,6 +223,7 @@ pub fn router_with_runtime_configs(
     workspace: WorkspaceProvisioner,
     inference: pharness_config::InferenceGatewayConfig,
     agent_execution: pharness_config::AgentExecutionBackendConfig,
+    hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
 ) -> Router {
     let state = AppState {
         store,
@@ -235,6 +239,7 @@ pub fn router_with_runtime_configs(
         repo_mode: RepoModeConfiguration::from_env(),
         inference: Arc::new(inference),
         agent_execution: Arc::new(agent_execution),
+        hosted_workflow: Arc::new(hosted_workflow),
     };
     data_lifecycle::spawn_retention_scheduler(state.clone());
     agent_hosts::spawn_lease_monitor(state.clone());
@@ -257,7 +262,10 @@ pub fn router_with_runtime_configs(
         .merge(deployment::router())
         .merge(releases::router())
         .merge(approvals::router())
-        .route_layer(middleware::from_fn(enforce_operational_mode))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_operational_mode,
+        ))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_operator_token,
@@ -304,14 +312,18 @@ impl OperationalMode {
     }
 }
 
-async fn enforce_operational_mode(request: Request<axum::body::Body>, next: Next) -> Response {
+async fn enforce_operational_mode(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
     let path = request.uri().path();
     let mode = OperationalMode::from_env();
     match operational_mutation_decision(
         mode,
         request.method(),
         path,
-        RepoModeConfiguration::from_env().legacy_work_item_creation_enabled,
+        state.repo_mode.legacy_work_item_creation_enabled && !state.hosted_workflow.enabled,
     ) {
         OperationalMutationDecision::Allowed => next.run(request).await,
         OperationalMutationDecision::Blocked => (
@@ -324,9 +336,9 @@ async fn enforce_operational_mode(request: Request<axum::body::Body>, next: Next
         )
             .into_response(),
         OperationalMutationDecision::LegacyCreationDisabled => (
-            StatusCode::CONFLICT,
+            StatusCode::GONE,
             Json(json!({
-                "error":"legacy WorkItem creation is disabled; create a Product-scoped Repo Mode WorkItem",
+                "error":"this WorkItem creation route is retired; submit work through its Product workflow",
                 "code":"legacy_work_item_creation_disabled",
                 "route":"/api/products/:product_id/work-items",
             })),

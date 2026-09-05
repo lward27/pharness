@@ -1,0 +1,441 @@
+{
+  "observed_at": "2026-09-05T09:40:45.361159+00:00",
+  "version": "v1.19.6",
+  "expected_gitops_revision": "be91ca643a54953f07050765c0465ad698b2a54c",
+  "argo_revision": "be91ca643a54953f07050765c0465ad698b2a54c",
+  "argo_sync": "Synced",
+  "argo_health": "Healthy",
+  "operation": "Succeeded",
+  "passed": true,
+  "deployments": [
+    {
+      "name": "cert-manager",
+      "images": [
+        "quay.io/jetstack/cert-manager-controller:v1.19.6"
+      ],
+      "observed_generation": 16,
+      "generation": 16,
+      "ready": 1,
+      "updated": 1,
+      "replicas": 1
+    },
+    {
+      "name": "cert-manager-cainjector",
+      "images": [
+        "quay.io/jetstack/cert-manager-cainjector:v1.19.6"
+      ],
+      "observed_generation": 9,
+      "generation": 9,
+      "ready": 1,
+      "updated": 1,
+      "replicas": 1
+    },
+    {
+      "name": "cert-manager-webhook",
+      "images": [
+        "quay.io/jetstack/cert-manager-webhook:v1.19.6"
+      ],
+      "observed_generation": 9,
+      "generation": 9,
+      "ready": 1,
+      "updated": 1,
+      "replicas": 1
+    }
+  ],
+  "pod_images": [
+    {
+      "pod": "cert-manager-5774c65775-skzlj",
+      "images": [
+        {
+          "image": "quay.io/jetstack/cert-manager-controller:v1.19.6",
+          "image_id": "quay.io/jetstack/cert-manager-controller@sha256:c6a328f6095a02731e943c95d5e61bdc3b87373cc9fbd915f73d8615cda766f9",
+          "ready": true,
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "pod": "cert-manager-cainjector-697d9c99bd-knpxg",
+      "images": [
+        {
+          "image": "quay.io/jetstack/cert-manager-cainjector:v1.19.6",
+          "image_id": "quay.io/jetstack/cert-manager-cainjector@sha256:f7ce571e372f28229cab2e07c803e2dc0b37c5642818a097ab42a19af182a329",
+          "ready": true,
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "pod": "cert-manager-webhook-7dcbd578cf-lk5z8",
+      "images": [
+        {
+          "image": "quay.io/jetstack/cert-manager-webhook:v1.19.6",
+          "image_id": "quay.io/jetstack/cert-manager-webhook@sha256:c4b7103d6c1edb196ee448660835b9a5d0fb3f9064019d881fd56e94859df288",
+          "ready": true,
+          "restarts": 0
+        }
+      ]
+    }
+  ],
+  "certificates": [
+    {
+      "name": "clawspace-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:15:18Z"
+    },
+    {
+      "name": "datalog-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:15:17Z"
+    },
+    {
+      "name": "finance-db-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:16:18Z"
+    },
+    {
+      "name": "finance-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:15:18Z"
+    },
+    {
+      "name": "openclaw-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:15:17Z"
+    },
+    {
+      "name": "rag-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:15:18Z"
+    },
+    {
+      "name": "yfinance-lucas-engineering-tls",
+      "namespace": "apps-prod",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:16:19Z"
+    },
+    {
+      "name": "argocd-server-tls",
+      "namespace": "argocd",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:16:19Z"
+    },
+    {
+      "name": "blog-lucas-engineering-tls",
+      "namespace": "blog",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:16:20Z"
+    },
+    {
+      "name": "code-server-lucas-engineering-tls",
+      "namespace": "code-server",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:34:40Z"
+    },
+    {
+      "name": "admin-reefusion-lucas-engineering-tls",
+      "namespace": "directus",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:35:40Z"
+    },
+    {
+      "name": "epheros-lucas-engineering-tls",
+      "namespace": "epheros",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T02:02:38Z"
+    },
+    {
+      "name": "escape-api-lucas-engineering-tls",
+      "namespace": "escape",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:34:40Z"
+    },
+    {
+      "name": "escape-lucas-engineering-tls",
+      "namespace": "escape",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:34:38Z"
+    },
+    {
+      "name": "draw-lucas-engineering-tls",
+      "namespace": "excalidraw",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:34:38Z"
+    },
+    {
+      "name": "draw-room-lucas-engineering-tls",
+      "namespace": "excalidraw",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:29:18Z"
+    },
+    {
+      "name": "forge-admin-lucas-engineering-tls",
+      "namespace": "forge-platform",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:18:37Z"
+    },
+    {
+      "name": "forge-lucas-engineering-tls",
+      "namespace": "forge-platform",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:18:45Z"
+    },
+    {
+      "name": "forge-portal-lucas-engineering-tls",
+      "namespace": "forge-platform",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:34:40Z"
+    },
+    {
+      "name": "hermes-lucas-engineering-tls",
+      "namespace": "hermes-agent",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:18:44Z"
+    },
+    {
+      "name": "home-lucas-engineering-tls",
+      "namespace": "homepage",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:18:39Z"
+    },
+    {
+      "name": "grafana-lucas-engineering-tls",
+      "namespace": "monitoring",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:18:42Z"
+    },
+    {
+      "name": "otel-lucas-engineering-tls",
+      "namespace": "monitoring",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:29:18Z"
+    },
+    {
+      "name": "prometheus-lucas-engineering-tls",
+      "namespace": "monitoring",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:29:18Z"
+    },
+    {
+      "name": "uptime-lucas-engineering-tls",
+      "namespace": "monitoring",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:29:28Z"
+    },
+    {
+      "name": "odoo-lucas-engineering-tls",
+      "namespace": "odoo",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 2,
+      "not_after": "2026-12-04T01:29:18Z"
+    },
+    {
+      "name": "pharness-api-lucas-engineering-tls",
+      "namespace": "pharness",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 1,
+      "not_after": "2026-12-04T00:54:31Z"
+    },
+    {
+      "name": "pharness-lucas-engineering-tls",
+      "namespace": "pharness",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 1,
+      "not_after": "2026-12-04T01:57:37Z"
+    },
+    {
+      "name": "registry-lucas-engineering-tls",
+      "namespace": "registry",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:30:20Z"
+    },
+    {
+      "name": "tekton-lucas-engineering-tls",
+      "namespace": "tekton-pipelines",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:30:20Z"
+    },
+    {
+      "name": "tekton-webhooks-lucas-engineering-tls",
+      "namespace": "tekton-pipelines",
+      "ready": "True",
+      "rotation_policy": "Never",
+      "history_limit": 2147483647,
+      "revision": 3,
+      "not_after": "2026-12-04T01:30:20Z"
+    }
+  ],
+  "certificate_request_uids": [
+    "0092b330-0caf-489a-84af-888301621ed1",
+    "05875f97-6a9b-4c2a-bf07-4735d8626ee8",
+    "11a62529-2ead-42cf-a666-0654d5d4e276",
+    "1274bbcd-99e6-453b-9880-3ed7280d0177",
+    "1cff73aa-c8f9-488d-a99c-530f39b5c7db",
+    "1d320100-7193-4d19-90ef-97ba4d08a044",
+    "236c3e0f-a17e-42f3-a07a-b7815db40427",
+    "23e9b5c0-52cf-4ddc-91c5-23e8085cbf65",
+    "260054ec-3fb4-4285-a73d-ffa4faff6415",
+    "263c4e6e-c4af-4236-8161-ce109e9cfb8a",
+    "2b925f1e-7eda-43e9-abad-8f0892a489b4",
+    "2ea5ed72-a1f3-4085-8f9e-1fe95a3850d6",
+    "326843c9-68e6-465c-8de8-6ee6a23841da",
+    "33ba5986-743d-4e36-a641-3d14d14458f9",
+    "348ed42b-15a4-40a0-a04c-17a75fbf6c24",
+    "3a969c69-5ca7-4db0-9090-e6409c9ddecf",
+    "3e5d304c-85be-46d6-a896-c9388454735a",
+    "3ef05598-fa69-4a37-905e-d8228973c62b",
+    "44527be4-ee19-4e63-8943-aeb9051a83c9",
+    "46d94b0f-b140-4ff7-8710-10d36ed97d0e",
+    "4a6d79eb-2e3e-49a4-8bb7-7100e10ae47b",
+    "4e6c66b6-bb17-4601-8f3b-be473d77abdd",
+    "4e7e1377-1e75-430c-b5fa-e230de130a4b",
+    "4ee73a6a-0682-4390-b351-f015117af6d0",
+    "51d9f69a-ebe2-49f8-8a31-4317c13fc9a7",
+    "51f004f7-f9e3-4ef1-a819-570c693f9bf8",
+    "5680c1d6-5abf-4d39-8f81-c96971ddc752",
+    "59bf55fc-25c0-40af-90d7-5faf6a6fae9e",
+    "5d7d953f-8c96-40ec-86b0-88308ef47f54",
+    "5eab7603-2ecd-4a57-a6e1-477afe0e20c1",
+    "5f37dae9-394c-4acf-9b72-9015d93e7270",
+    "787bffb2-adae-4bbf-9374-05136696b1e3",
+    "7a8523c2-4e9a-4e33-b6be-9184ae18cf6e",
+    "7f56f69e-8a05-402d-b813-c02f4beec0e0",
+    "80c3e67e-823a-4fad-8ab2-730ce67edaf3",
+    "8136e1e4-368c-480a-a2bb-0f6cf8f6bb9f",
+    "8814f1ca-b125-4c50-b9a6-5ce129c056b3",
+    "89237115-974e-4038-b871-3f08b6438179",
+    "892d7d26-a6cd-486d-a429-1b09621ba278",
+    "8a7c30ce-58fe-4433-95a7-8f1daca431f1",
+    "8b393005-406c-4d3b-922e-2a52aacafcb4",
+    "947199b2-c250-4d29-8f61-7d82c0ea1dc1",
+    "959f9a80-5452-4ae2-b450-d33c18eb30ed",
+    "994ca2ba-bf6f-4e42-8a19-473b1d6d2109",
+    "996a822c-8762-4263-b16f-33421059cae5",
+    "9997c4be-beef-4262-99b1-760a565cdc64",
+    "9dec128a-a579-49a8-9186-fa9c0ea24386",
+    "a0e6a3c1-d3c3-4baa-8d7c-7adb3979dd13",
+    "a4045e64-7c17-400d-b1a6-894c6b688b55",
+    "ab119739-4a24-4ade-a895-9b8324c3aba3",
+    "ab436991-cc93-42df-9432-9b39b8dc255b",
+    "acf19920-74e1-445b-aac5-6f976d9a58b8",
+    "affbc5a6-1c14-4016-8df9-56d4786af201",
+    "b52fd239-4a9d-4b66-b1c9-c7230288685a",
+    "bbdc47de-4afb-4837-a392-ed45aa2f811d",
+    "bf7e6c68-24bf-48a3-b17a-351fc868cccb",
+    "c59a9a95-f52a-467d-b1a1-8acb214f3d2a",
+    "c69a0773-f103-404d-ac53-a8524b6b9df6",
+    "ce6857c8-80c8-427b-8326-53eb06b79bff",
+    "d8f2ee62-9e05-4ca1-9a52-84ad04d18af7",
+    "dc5702d7-8c16-40fc-ab71-f3521cac06d2",
+    "e23a4523-928f-454f-945f-90a28f262017",
+    "e41038f8-480b-4879-a115-0799a73092c1",
+    "e4a53672-e8c2-47eb-8203-d1f2d895b6d4",
+    "e6e22468-0fbb-4f54-b533-549eb186b2b1",
+    "e76982b2-4b53-41e3-8d1c-de479ed258d9",
+    "eadb2689-f60e-4db8-ba37-cf99c5cc5c31",
+    "ed036d54-848e-498c-9ed9-34823b0a139d",
+    "ed2716da-d886-47bc-98d1-35a00b6f752a",
+    "ed69220e-ba86-4979-a7b3-6185179637ed",
+    "ee29ebb5-016f-4da7-a43c-45acc1cf7f25",
+    "f26fba58-5fdb-41b8-99ee-c7c53da2a504",
+    "f49be294-f5ff-4b97-92ea-d24a1f21f931",
+    "f5eb0df6-e367-48d5-bcdc-2f671fc2df49",
+    "f786f226-1557-432b-9395-7ab3b1ef1c2a",
+    "fa3601e1-102b-4c4a-a8c2-17b0590a7f83",
+    "faddd8cd-b128-4b4c-87f5-68a506af1eb8",
+    "fe3fcc9d-6bfc-48c7-b33d-696cd337ab4d"
+  ]
+}

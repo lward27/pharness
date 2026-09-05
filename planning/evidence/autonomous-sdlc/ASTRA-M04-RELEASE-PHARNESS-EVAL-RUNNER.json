@@ -1,0 +1,112 @@
+{
+  "started_at": "2026-09-05T10:53:03.417174+00:00",
+  "completed_at": "2026-09-05T11:12:23.019180+00:00",
+  "component": "eval-runner",
+  "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "builder": "rancher-desktop",
+  "platform": "linux/amd64",
+  "image_url": "registry.lucas.engineering/pharness-eval-runner",
+  "digest": "sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169",
+  "immutable_ref": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169",
+  "archive_sha256": "175e5ca97f1d310cd53fae30adc91550948061fa8b88c60adc71724253f360c5",
+  "all_content_hashes_verified": true,
+  "oci_source": "https://github.com/lward27/pharness",
+  "oci_revision_verified": true,
+  "destination_tls_verified": true,
+  "transport": "OCI archive; authenticated 8 MiB chunks through existing registry-write-gateway private NodePort 192.168.20.210:32443 with original hostname and trusted private CA",
+  "blob_results": [
+    {
+      "digest": "sha256:0088f0e83573b076151235884151b0864216bbb7318118e8f3d74f00432c8893",
+      "bytes": 353,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:013634040cec61eda7919c9682291bc50456a54539f410ef5233821fb9a8c4d9",
+      "bytes": 3318,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:1af3417e4a7043e88d7db71eef49587d0b1b3432cee3a38bcff9f8a7e4dbddd3",
+      "bytes": 5967333,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:2254049a7d7763ea7d56bf06d9a6d5cb882d88b136a84c18c254ead00ac5c874",
+      "bytes": 448,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:337a0fd923397c32981c54b144fa8803d2dafedecd71cfddb1944e90e0cfde83",
+      "bytes": 21953126,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:422d924a2f960efca3026f15ae146a007c7c1ecbec577bed24d3b4015f0784f0",
+      "bytes": 115724659,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+      "bytes": 32,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:8a6cd191432bea0c80b09fd73b03e56f6c594dfe5bda48f983c5132a13aab753",
+      "bytes": 271296,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:900491bce5d2984430701e0703278734f3ccc5412b3e80af3cbaa87d22bad4ab",
+      "bytes": 12756,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:9803e0ff8c3d881aa142790ec91f17a1a6fa25189d082c58f4e66cbba4253b66",
+      "bytes": 1713026,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:9d4e350af009884475bf5ba054e51de66967065ef98a8e55700f3f2a0249f720",
+      "bytes": 105529000,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:a82db95c01928dce3a29c0d23bcd2588dafeba6f24ae23115195e3e3d6cc5437",
+      "bytes": 50779298,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:a8ac7f6c67abc236e4c745052c404112b8fab6fe8ac3a329d1ef3b867ad67c71",
+      "bytes": 28232655,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:abfb0d899da7016b4abb073ec58e1f9953ac6855d17f59624404855d6e2c953e",
+      "bytes": 8148828,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:b41acc104c81e5296f782b8a1dc7dffe790442a1a161891bd579b61eef1d8a65",
+      "bytes": 4419529,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:c7cd0d90a819bfef2dd209a6b83263e89131dbbfdd4f253c3380b0fe0d67b28d",
+      "bytes": 205712221,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:cf1d2344f86e0c46039371ec9846a646bbbccc427d5d5810f522504692836204",
+      "bytes": 105529124,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:fed10098d92c263103fe290d22ea9dfd4ba9d4ba43513f5ef6325b38e9f5f9f8",
+      "bytes": 104290,
+      "result": "uploaded"
+    }
+  ],
+  "sbom_verified": false,
+  "signature_verified": false,
+  "provenance_verified": false
+}

@@ -1,0 +1,54 @@
+{
+  "evaluation_id": "infeval_01a070d9cc217571ae42e952c28c69c7",
+  "runtime_revision": "83a2689c877a3f48688d1d457c34e83474698c46",
+  "observed_at": "2026-09-05T09:57:07.855829+00:00",
+  "job_name": "pharness-inference-eval-f54b7c034ff1",
+  "job_uid": "c0cb42e9-ccaa-4fd1-8b9a-f809e55667eb",
+  "deadline_seconds": 7215,
+  "pod_reason": "Evicted",
+  "pod_message": "Usage of EmptyDir volume \"tmp\" exceeds the limit \"1Gi\". ",
+  "containers": [
+    {
+      "name": "evaluate",
+      "state": {
+        "terminated": {
+          "containerID": "containerd://8a50fa71a5b2494109cf4a6aac92dd2882bca8802ce1b4a7ba62b7d3872d6cf6",
+          "exitCode": 137,
+          "finishedAt": "2026-09-05T09:51:06Z",
+          "reason": "Error",
+          "startedAt": "2026-09-05T09:21:16Z"
+        }
+      }
+    }
+  ],
+  "resources": [
+    {
+      "limits": {
+        "cpu": "2",
+        "ephemeral-storage": "4Gi",
+        "memory": "2Gi"
+      },
+      "requests": {
+        "cpu": "250m",
+        "ephemeral-storage": "1Gi",
+        "memory": "512Mi"
+      }
+    }
+  ],
+  "volume_limits": [
+    {
+      "name": "work",
+      "empty_dir": {
+        "sizeLimit": "4Gi"
+      }
+    },
+    {
+      "name": "tmp",
+      "empty_dir": {
+        "sizeLimit": "1Gi"
+      }
+    }
+  ],
+  "qualification_report_produced": false,
+  "qualification_accepted": false
+}

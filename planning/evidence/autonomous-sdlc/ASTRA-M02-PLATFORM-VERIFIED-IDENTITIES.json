@@ -1,0 +1,302 @@
+{
+  "observed_at": "2026-09-05T10:39:22.350316+00:00",
+  "cluster": "lucas_engineering",
+  "gitops_revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+  "applications": [
+    {
+      "name": "yfinance-staging",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "apps-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "charts/finance-staging/yfinance",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "main"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-05T10:11:29Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "finance-frontend-staging",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "apps-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "charts/finance-staging/frontend",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "main"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-05T01:28:38Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "yfinance-wrapper",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "apps-prod",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "charts/yfinance-wrapper",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-04T12:32:03Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "finance-frontend",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "apps-prod",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "charts/finance-frontend",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-05T01:28:21Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "docker-registry",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "registry",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "jsonPointers": [
+                "/data/haSharedSecret"
+              ],
+              "kind": "Secret",
+              "name": "docker-registry-secret",
+              "namespace": "registry"
+            },
+            {
+              "group": "apps",
+              "jsonPointers": [
+                "/spec/template/metadata/annotations/checksum~1secret"
+              ],
+              "kind": "Deployment",
+              "name": "docker-registry",
+              "namespace": "registry"
+            }
+          ],
+          "source": {
+            "path": "charts/docker-registry",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-05T10:27:53Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "tekton-ci",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "tekton-pipelines",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "charts/tekton-ci",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-08-24T00:38:45Z",
+        "status": "Healthy"
+      }
+    },
+    {
+      "name": "tekton-pipeline",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "tekton-pipelines",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status",
+                "/spec/conversion",
+                "/spec/preserveUnknownFields"
+              ],
+              "kind": "CustomResourceDefinition",
+              "managedFieldsManagers": [
+                "webhook"
+              ]
+            }
+          ],
+          "source": {
+            "path": "charts/tekton-pipeline",
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-09-05T10:38:27Z",
+        "status": "Healthy"
+      }
+    }
+  ],
+  "pods": [
+    {
+      "namespace": "apps-staging",
+      "name": "finance-frontend-67c58fbcfd-d64zb",
+      "uid": "c0f54d05-77e5-46ea-9ddb-576a13e07e65",
+      "node": "ubuntu-lucas-engineering",
+      "containers": [
+        {
+          "name": "finance-frontend",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:38eabd447d628e0aa1fc2ff16011b02cca0f622045ec7999faa10313609026f6",
+          "image_id": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+        }
+      ]
+    },
+    {
+      "namespace": "apps-staging",
+      "name": "yfinance-wrapper-66b99984d9-w7qq6",
+      "uid": "e763137d-8b31-411c-b27d-127166e0de98",
+      "node": "ubuntu-lucas-engineering",
+      "containers": [
+        {
+          "name": "yfinance-wrapper",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:fd6acdb929c78eed9adc15fbd123fcb898d1c168c782528e588c04372a5a9c64",
+          "image_id": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+        }
+      ]
+    },
+    {
+      "namespace": "apps-prod",
+      "name": "finance-frontend-77d8696c66-jd6q5",
+      "uid": "8c4450e3-e46d-4512-8c67-4186db5318f9",
+      "node": "ubuntu-lucas-engineering",
+      "containers": [
+        {
+          "name": "finance-frontend",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:38eabd447d628e0aa1fc2ff16011b02cca0f622045ec7999faa10313609026f6",
+          "image_id": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+        }
+      ]
+    },
+    {
+      "namespace": "apps-prod",
+      "name": "yfinance-wrapper-d88db787f-zbfck",
+      "uid": "65695015-ffe5-4e6f-9823-977ea6d03226",
+      "node": "ubuntu-lucas-engineering-2",
+      "containers": [
+        {
+          "name": "yfinance-wrapper",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:fd6acdb929c78eed9adc15fbd123fcb898d1c168c782528e588c04372a5a9c64",
+          "image_id": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+        }
+      ]
+    },
+    {
+      "namespace": "registry",
+      "name": "docker-registry-5dd7cb8849-gc89j",
+      "uid": "2a17ac85-8614-485e-bc52-9f6744dcb476",
+      "node": "ubuntu-lucas-engineering",
+      "containers": [
+        {
+          "name": "docker-registry",
+          "ready": true,
+          "restart_count": 0,
+          "image": "docker.io/library/registry:3.0.0",
+          "image_id": "docker.io/library/registry@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e"
+        }
+      ]
+    },
+    {
+      "namespace": "registry",
+      "name": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "uid": "b3c4ba43-1165-4390-80a3-1c7c7cb4d7f0",
+      "node": "ubuntu-lucas-engineering",
+      "containers": [
+        {
+          "name": "nginx",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:7312fa98595737958df41e20f21a2880dd9775f455c6bf76e638024dc755d201",
+          "image_id": "docker.io/nginxinc/nginx-unprivileged@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
+        }
+      ]
+    },
+    {
+      "namespace": "registry",
+      "name": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "uid": "1dc55e2b-83db-40d8-a74a-52cb3c507865",
+      "node": "ubuntu-lucas-engineering-2",
+      "containers": [
+        {
+          "name": "nginx",
+          "ready": true,
+          "restart_count": 0,
+          "image": "sha256:7312fa98595737958df41e20f21a2880dd9775f455c6bf76e638024dc755d201",
+          "image_id": "docker.io/nginxinc/nginx-unprivileged@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
+        }
+      ]
+    }
+  ],
+  "tekton_observed_at": "2026-09-05T10:44:25.698656+00:00"
+}

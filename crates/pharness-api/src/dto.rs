@@ -602,6 +602,9 @@ pub struct WorkItemResponse {
     pub state_version: Option<u64>,
     pub closed_at: Option<String>,
     pub closure_reason: Option<String>,
+    pub workflow_kind: String,
+    pub workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
+    pub workflow_policy_hash: Option<String>,
 }
 
 impl From<StoredWorkItem> for WorkItemResponse {
@@ -658,6 +661,9 @@ impl From<StoredWorkItem> for WorkItemResponse {
             state_version: None,
             closed_at: None,
             closure_reason: None,
+            workflow_kind: "legacy".into(),
+            workflow_policy: None,
+            workflow_policy_hash: None,
         }
     }
 }
@@ -681,6 +687,14 @@ impl WorkItemResponse {
         self.state_version = Some(metadata.state_version);
         self.closed_at = metadata.closed_at.clone();
         self.closure_reason = metadata.closure_reason.clone();
+        self.workflow_kind = if metadata.workflow_policy.is_some() {
+            "hosted_sdlc"
+        } else {
+            "source_only"
+        }
+        .into();
+        self.workflow_policy = metadata.workflow_policy.clone();
+        self.workflow_policy_hash = metadata.workflow_policy_hash.clone();
         self
     }
 }

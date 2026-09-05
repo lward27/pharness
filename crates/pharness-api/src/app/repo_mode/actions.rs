@@ -7,7 +7,8 @@ use super::source_delivery::{
     authorize_and_dispatch_source_delivery, dispatch_source_delivery_observation,
     retry_repo_source_delivery,
 };
-use super::stages::{authorize_repo_stage_chain, start_repo_followup_stage, start_repo_planner};
+use super::stage_authorization::authorize_repo_stage_chain;
+use super::stages::{start_repo_followup_stage, start_repo_planner};
 use super::state::{append_repo_audit, repo_metadata, repo_work_item_state_hash};
 use crate::app::clock::current_millis;
 use crate::app::hashing::canonical_material_hash;

@@ -1,0 +1,191 @@
+{
+  "frontend": {
+    "job": "astra-m02-staging-frontend-isolation-after",
+    "uid": "0f22bd20-0989-430d-a6f7-5113f78ad44c",
+    "connections": [
+      {
+        "role": "finance-frontend",
+        "name": "production_database_private",
+        "host": "finance-app-database-service.apps-prod.svc.cluster.local",
+        "port": 8091,
+        "addresses": [
+          "10.43.222.39"
+        ],
+        "connected": false,
+        "error_type": "ConnectionRefusedError",
+        "elapsed_seconds": 0.014
+      },
+      {
+        "role": "finance-frontend",
+        "name": "production_backend_private",
+        "host": "yfinance-wrapper.apps-prod.svc.cluster.local",
+        "port": 8090,
+        "addresses": [
+          "10.43.96.180"
+        ],
+        "connected": false,
+        "error_type": "ConnectionRefusedError",
+        "elapsed_seconds": 0.086
+      },
+      {
+        "role": "finance-frontend",
+        "name": "production_database_public",
+        "host": "finance-db.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 0.006
+      },
+      {
+        "role": "finance-frontend",
+        "name": "production_backend_public",
+        "host": "yfinance.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 0.091
+      },
+      {
+        "role": "finance-frontend",
+        "name": "production_frontend_public",
+        "host": "finance.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 2.074
+      },
+      {
+        "role": "finance-frontend",
+        "name": "staging_backend",
+        "host": "yfinance-wrapper.apps-staging.svc.cluster.local",
+        "port": 8090,
+        "addresses": [
+          "10.43.210.193"
+        ],
+        "connected": true,
+        "elapsed_seconds": 0.008
+      }
+    ]
+  },
+  "backend": {
+    "job": "astra-m02-staging-backend-isolation-after",
+    "uid": "b065e8c5-d1d5-42cd-9da8-de7dc6c08914",
+    "connections": [
+      {
+        "role": "yfinance-wrapper",
+        "name": "production_database_private",
+        "host": "finance-app-database-service.apps-prod.svc.cluster.local",
+        "port": 8091,
+        "addresses": [
+          "10.43.222.39"
+        ],
+        "connected": false,
+        "error_type": "ConnectionRefusedError",
+        "elapsed_seconds": 0.012
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "production_backend_private",
+        "host": "yfinance-wrapper.apps-prod.svc.cluster.local",
+        "port": 8090,
+        "addresses": [
+          "10.43.96.180"
+        ],
+        "connected": false,
+        "error_type": "ConnectionRefusedError",
+        "elapsed_seconds": 0.092
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "production_database_public",
+        "host": "finance-db.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 0.005
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "production_backend_public",
+        "host": "yfinance.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 0.005
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "production_frontend_public",
+        "host": "finance.lucas.engineering",
+        "port": 443,
+        "addresses": [
+          "104.21.29.83",
+          "172.67.148.161",
+          "2606:4700:3031::6815:1d53",
+          "2606:4700:3033::ac43:94a1"
+        ],
+        "connected": false,
+        "error_type": "OSError",
+        "elapsed_seconds": 2.142
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "yahoo_upstream",
+        "host": "query1.finance.yahoo.com",
+        "port": 443,
+        "addresses": [
+          "2001:4998:15c:807::",
+          "2001:4998:15c:807::1",
+          "69.147.92.11",
+          "69.147.92.12"
+        ],
+        "connected": true,
+        "elapsed_seconds": 0.063
+      },
+      {
+        "role": "yfinance-wrapper",
+        "name": "telemetry_collector",
+        "host": "opentelemetry-collector.monitoring.svc.cluster.local",
+        "port": 4317,
+        "addresses": [
+          "10.43.37.54"
+        ],
+        "connected": true,
+        "elapsed_seconds": 0.007
+      }
+    ]
+  },
+  "observed_at": "2026-09-05T10:19:34.205487+00:00",
+  "gitops_revision": "516c7fcbda998b337303fc761f6e1a9efcc4497f",
+  "scope": "Bounded TCP connections from application policy identities. No production HTTP writes."
+}

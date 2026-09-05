@@ -1,0 +1,109 @@
+{
+  "observed_at": "2026-09-05T10:56:45.821385+00:00",
+  "cluster": "lucas_engineering",
+  "argo_sync": {
+    "comparedTo": {
+      "destination": {
+        "namespace": "pharness",
+        "server": "https://kubernetes.default.svc"
+      },
+      "source": {
+        "helm": {
+          "valueFiles": [
+            "values-yfinance-production.yaml"
+          ]
+        },
+        "path": "deploy/helm/pharness",
+        "repoURL": "https://github.com/lward27/pharness.git",
+        "targetRevision": "HEAD"
+      }
+    },
+    "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+    "status": "Synced"
+  },
+  "argo_health": {
+    "lastTransitionTime": "2026-09-04T19:24:42Z",
+    "status": "Healthy"
+  },
+  "pods": [
+    {
+      "name": "pharness-api-9b9fd4fc5-l9qqq",
+      "uid": "b054f69f-ad7d-4378-a7cb-81f5651e7e8b",
+      "containers": [
+        {
+          "name": "api",
+          "ready": true,
+          "image_id": "registry.lucas.engineering/pharness-runtime@sha256:59530854356d2c8888f0e1715a2d5fab4d0a708bf1212b92a4fc50ed64d5c64d",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "pharness-coding-egress-proxy-5944785bfd-h7qxg",
+      "uid": "ed16aac6-7974-4235-a262-be48c8241365",
+      "containers": [
+        {
+          "name": "proxy",
+          "ready": true,
+          "image_id": "registry.lucas.engineering/pharness-runtime@sha256:59530854356d2c8888f0e1715a2d5fab4d0a708bf1212b92a4fc50ed64d5c64d",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "pharness-model-gateway-748d97b54-28b84",
+      "uid": "e43cee25-92aa-46ae-8894-898794774957",
+      "containers": [
+        {
+          "name": "gateway",
+          "ready": true,
+          "image_id": "registry.lucas.engineering/pharness-model-gateway@sha256:e696f3c1f573a5edfb3ffbb2dce799721d3bd20d3db9858a813e2caf56403672",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "pharness-preparation-egress-proxy-55ff9cc8f9-t5wtw",
+      "uid": "a9d3450f-b5d6-40bb-80b5-ab0de73b1461",
+      "containers": [
+        {
+          "name": "proxy",
+          "ready": true,
+          "image_id": "registry.lucas.engineering/pharness-runtime@sha256:59530854356d2c8888f0e1715a2d5fab4d0a708bf1212b92a4fc50ed64d5c64d",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "pharness-ui-7dc8fdcb5-zt54b",
+      "uid": "e0121b3d-5eaf-4f9b-840c-6fafd45fa628",
+      "containers": [
+        {
+          "name": "ui",
+          "ready": true,
+          "image_id": "registry.lucas.engineering/pharness-ui@sha256:8945c2e59469fcbd3973e66e282e5c82c607bc9c5656fe154285962f9744c68e",
+          "restarts": 0
+        }
+      ]
+    }
+  ],
+  "run_statuses": {
+    "running": {
+      "count": 0,
+      "run_ids": []
+    },
+    "queued": {
+      "count": 0,
+      "run_ids": []
+    },
+    "preparing": {
+      "count": 0,
+      "run_ids": []
+    },
+    "paused": {
+      "count": 0,
+      "run_ids": []
+    }
+  },
+  "scope": "pre-release identity and active work check; no full journey claim"
+}
