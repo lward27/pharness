@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-05T11:20:44.063779+00:00",
+  "image": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169",
+  "classification": "local_test_setup_noexec_tmpfs",
+  "provider": "replay",
+  "qualification_result": null,
+  "error": "warning: unused import: `crate::retry_delay_ms`\n --> src/consumer.rs:1:5\n  |\n1 | use crate::retry_delay_ms;\n  |     ^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nerror: test failed, to rerun pass `--lib`\n\nCaused by:\n  process didn't exit successfully: `/tmp/pharness-coding-v2-1-rust-localized-normalization-1-01a0714b-365f-7fd0-9ed0-bef2736f6ab2/target/debug/deps/pharness_frozen-1d5bf9d38af75c7c --quiet` (exit status: 127)\nwarning: unused import: `crate::retry_delay_ms`\n --> src/consumer.rs:1:5\n  |\n1 | use crate::retry_delay_ms;\n  |     ^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nerror: test failed, to rerun pass `--lib`\n\nCaused by:\n  process didn't exit successfully: `/tmp/pharness-coding-v2-1-rust-localized-normalization-1-01a0714b-365f-7fd0-9ed0-bef2736f6ab2/target/debug/deps/pharness_frozen-1d5bf9d38af75c7c --quiet` (exit status: 127)\nError: Permission denied (os error 13)\n",
+  "diagnostic": "Docker tmpfs default included noexec; copied executable returned permission denied. /work remained writable.",
+  "correction": "Explicit exec mount option; same 1 GiB tmpfs and 2 GiB container memory, CPU and protocol limits. The cluster EmptyDir permits compiled test execution.",
+  "corrected_probe": {
+    "exit_code": 0,
+    "mount": "tmpfs /tmp tmpfs rw,nosuid,nodev,relatime,size=1048576k,inode64 0 0"
+  }
+}

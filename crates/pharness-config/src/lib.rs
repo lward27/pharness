@@ -68,6 +68,7 @@ pub struct ApiRuntimeConfig {
     pub worker: WorkerConfig,
     pub inference: InferenceGatewayConfig,
     pub agent_execution: AgentExecutionBackendConfig,
+    pub hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
 }
 
 #[derive(Clone)]
@@ -343,6 +344,10 @@ impl ApiRuntimeConfig {
         reject_invalid_source_reader(&config.worker.kubernetes)?;
         config.inference.registry.finalize_hashes()?;
         config.agent_execution.registry.finalize_hashes()?;
+        config
+            .hosted_workflow
+            .validate()
+            .map_err(anyhow::Error::msg)?;
         if config.agent_execution.enabled && config.agent_execution.registry.policies.is_empty() {
             bail!("enabled Codex agent backend requires at least one agent execution policy");
         }
@@ -491,6 +496,7 @@ impl ApiRuntimeConfig {
             },
             inference: InferenceGatewayConfig::legacy_default(),
             agent_execution: AgentExecutionBackendConfig::disabled_default(),
+            hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig::default(),
         })
     }
 
@@ -860,6 +866,11 @@ impl ApiRuntimeConfig {
     }
 
     fn apply_env(&mut self, env: &BTreeMap<String, String>) -> anyhow::Result<()> {
+        if let Some(value) = env.get("PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON") {
+            self.hosted_workflow = serde_json::from_str(value).context(
+                "PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON must contain a valid hosted configuration",
+            )?;
+        }
         if let Some(value) = env.get("PHARNESS_BIND") {
             self.api.bind = parse_socket_addr(value, "PHARNESS_BIND")?;
         }
@@ -2606,5 +2617,22 @@ gitops_writer_allowed_repos = ["https://github.com/example/finance-gitops.git"]
         let path = std::env::temp_dir().join(format!("pharness-config-{suffix}-{sequence}.toml"));
         fs::write(&path, content).unwrap();
         path
+    }
+
+    #[test]
+    fn hosted_configuration_is_disabled_by_default_and_rejects_incomplete_cutover() {
+        let config = ApiRuntimeConfig::from_sources(None, &BTreeMap::new()).unwrap();
+        assert!(!config.hosted_workflow.enabled);
+        let mut env = BTreeMap::new();
+        env.insert(
+            "PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON".into(),
+            r#"{"enabled":true,"bindings":[]}"#.into(),
+        );
+        assert!(ApiRuntimeConfig::from_sources(None, &env).is_err());
+        env.insert(
+            "PHARNESS_HOSTED_WORKFLOW_CONFIG_JSON".into(),
+            r#"{"enabled":false,"production_auto_merge":true}"#.into(),
+        );
+        assert!(ApiRuntimeConfig::from_sources(None, &env).is_err());
     }
 }

@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-09-05T11:22:48.856126+00:00",
+  "classification": "local_test_setup_missing_artifact_directory",
+  "provider": "replay",
+  "qualification_result": null,
+  "error": "warning: unused import: `crate::retry_delay_ms`\n --> src/consumer.rs:1:5\n  |\n1 | use crate::retry_delay_ms;\n  |     ^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `crate::retry_delay_ms`\n --> src/consumer.rs:1:5\n  |\n1 | use crate::retry_delay_ms;\n  |     ^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nError: Permission denied (os error 13)\n",
+  "cause": "The standalone evaluator defaults to its compile-time build directory. The cluster dispatcher sets PHARNESS_EVAL_ARTIFACT_DIR=/work/artifacts; the local replay wrapper omitted it.",
+  "correction": "Set the dispatcher artifact directory and writable /work mount. Keep CPU 2, memory 2 GiB, /tmp 1 GiB and /work 4 GiB ceilings. Read the explicit JSON report separately from subprocess test output. No gateway or source change."
+}

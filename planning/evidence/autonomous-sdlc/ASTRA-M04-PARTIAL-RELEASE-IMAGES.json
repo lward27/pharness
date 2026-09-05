@@ -1,0 +1,81 @@
+{
+  "observed_at": "2026-09-05T11:25:55.344380+00:00",
+  "release_complete": false,
+  "images": [
+    {
+      "component": "runtime",
+      "digest": "sha256:65efb3acfa245ad6d56f88a7bc1a3d471637bdac24756ca708234c61784286f4",
+      "image_url": "registry.lucas.engineering/pharness-runtime",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "ui",
+      "digest": "sha256:e1f96bf42fb56c42fd78596d12b8c23411e7b93d65e68674c820823ded703cf6",
+      "image_url": "registry.lucas.engineering/pharness-ui",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "python-runner",
+      "digest": "sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+      "image_url": "registry.lucas.engineering/pharness-python-runner",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "node-runner",
+      "digest": "sha256:9ae690af17c529468d04e0eb4e49513b44ed0ebbabeba6ee780b3f6ffa3cead6",
+      "image_url": "registry.lucas.engineering/pharness-node-runner",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "model-gateway",
+      "digest": "sha256:c8f1c5be988ade9299e33e84a4b461cf8909196fd6b1f75dfb3089533d81e428",
+      "image_url": "registry.lucas.engineering/pharness-model-gateway",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "eval-runner",
+      "digest": "sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169",
+      "image_url": "registry.lucas.engineering/pharness-eval-runner",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    },
+    {
+      "component": "codex-host",
+      "digest": "sha256:0c013e76ec058b5b4c93f1c8b53298defd276aa2df31c2e2ba0bf9e0835001a4",
+      "image_url": "registry.lucas.engineering/pharness-codex-host",
+      "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "oci_source_verified": true,
+      "registry_read": "normal public TLS; Docker client"
+    }
+  ],
+  "remaining": [
+    "native bundle",
+    "GitOps release pins",
+    "observed rollout"
+  ]
+}

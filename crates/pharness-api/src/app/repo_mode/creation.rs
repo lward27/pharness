@@ -23,7 +23,9 @@ pub(super) struct RepoWorkItemPreflightRequest {
     title: String,
     intent: String,
     repository_id: String,
-    source_commit: String,
+    #[serde(default)]
+    source_commit: Option<String>,
+    #[serde(default)]
     acceptance_command_names: Vec<String>,
     #[serde(default)]
     context_repositories: Vec<ContextRepositoryRequest>,
@@ -43,7 +45,9 @@ pub(super) struct CreateRepoWorkItemRequest {
     title: String,
     intent: String,
     repository_id: String,
-    source_commit: String,
+    #[serde(default)]
+    source_commit: Option<String>,
+    #[serde(default)]
     acceptance_command_names: Vec<String>,
     #[serde(default)]
     context_repositories: Vec<ContextRepositoryRequest>,
@@ -83,6 +87,7 @@ pub(super) struct RepoWorkItemPreflightResponse {
     warnings: Vec<Value>,
     predicted_mutations: Vec<String>,
     authorization_boundaries: Vec<Value>,
+    workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
     preflight_hash: String,
 }
 
@@ -161,7 +166,12 @@ pub(super) async fn create_repo_work_item(
             contract_version: "pharness.dev/v1alpha1".into(),
             title: preflight_request.title.trim().into(),
             intent: preflight_request.intent.trim().into(),
-            acceptance_command_names: preflight_request.acceptance_command_names,
+            acceptance_command_names: preflight
+                .selected_acceptance
+                .iter()
+                .filter_map(|entry| entry.get("name").and_then(Value::as_str))
+                .map(str::to_string)
+                .collect(),
             acceptance_commands: preflight
                 .selected_acceptance
                 .iter()
@@ -183,39 +193,63 @@ pub(super) async fn create_repo_work_item(
                 .repository_contract_hash
                 .clone()
                 .ok_or_else(|| ApiError::conflict("RepositoryContract hash is missing"))?,
+            workflow_policy: preflight.workflow_policy.clone(),
             actor: actor.clone(),
         })
         .await?;
-    let planner_profile = state
-        .compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
+    let planner_profile = if let Some(policy) = &preflight.workflow_policy {
+        policy
+            .agent_profiles
+            .iter()
+            .find(|profile| profile.id == "repo-planner")
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("hosted Planner profile is unavailable"))?
+    } else {
+        state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repo-planner")
+            .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?
+    };
+    let pinned_planner_policy = preflight
+        .workflow_policy
+        .as_ref()
+        .map(|policy| {
+            serde_json::from_value::<pharness_core::InferencePolicyRef>(
+                policy.stage_inference["plan"]["policy"].clone(),
+            )
+        })
+        .transpose()
+        .map_err(|_| ApiError::conflict("hosted Planner policy is invalid"))?;
+    let planner_execution_selection = if preflight.workflow_policy.is_some() {
+        None
+    } else {
+        crate::app::agent_hosts::create_planned_execution_selection(
+            &state,
+            crate::app::agent_hosts::PlannedExecutionSelectionRequest {
+                subject_kind: "work_item",
+                subject_id: &work_item_id,
+                stage_key: "plan",
+                stage: pharness_core::InferenceStage::Plan,
+                environment_profile_id: preflight
+                    .environment_profile_id
+                    .as_deref()
+                    .ok_or_else(|| ApiError::conflict("EnvironmentProfile is missing"))?,
+                requested: preflight_request.planner_execution_policy.as_ref(),
+                actor: &actor,
+                reason: &reason,
+                state_hash: &preflight.preflight_hash,
+            },
         )
-        .into_iter()
-        .find(|profile| profile.id == "repo-planner")
-        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
-    let planner_execution_selection = crate::app::agent_hosts::create_planned_execution_selection(
-        &state,
-        crate::app::agent_hosts::PlannedExecutionSelectionRequest {
-            subject_kind: "work_item",
-            subject_id: &work_item_id,
-            stage_key: "plan",
-            stage: pharness_core::InferenceStage::Plan,
-            environment_profile_id: preflight
-                .environment_profile_id
-                .as_deref()
-                .ok_or_else(|| ApiError::conflict("EnvironmentProfile is missing"))?,
-            requested: preflight_request.planner_execution_policy.as_ref(),
-            actor: &actor,
-            reason: &reason,
-            state_hash: &preflight.preflight_hash,
-        },
-    )
-    .await?;
+        .await?
+    };
     let planner_selection = if planner_execution_selection.is_none() && state.inference.enabled {
         Some(
             crate::app::inference::create_planned_selection(
@@ -226,7 +260,9 @@ pub(super) async fn create_repo_work_item(
                     stage: pharness_core::InferenceStage::Plan,
                     profile: &serde_json::to_value(&planner_profile)
                         .map_err(|error| ApiError::internal(error.to_string()))?,
-                    requested: preflight_request.planner_inference_policy.as_ref(),
+                    requested: pinned_planner_policy
+                        .as_ref()
+                        .or(preflight_request.planner_inference_policy.as_ref()),
                     actor: &actor,
                     reason: &reason,
                     state_hash: &preflight.preflight_hash,
@@ -318,6 +354,7 @@ pub(super) async fn create_repo_work_item(
         })
         .await?;
     let metadata = repo_metadata(&state, &work_item_id).await?;
+    let work_item = crate::dto::WorkItemResponse::from(work_item).with_repo_metadata(&metadata);
     Ok(Json(json!({
         "work_item": work_item,
         "repo_mode": metadata,
@@ -341,14 +378,13 @@ async fn build_repo_work_item_preflight(
             "title must be 1-200 characters and intent must be 1-8000 characters",
         ));
     }
-    if !is_git_sha(&request.source_commit) {
+    if request
+        .source_commit
+        .as_deref()
+        .is_some_and(|sha| !is_git_sha(sha))
+    {
         return Err(ApiError::bad_request(
             "source_commit must be a full 40-character Git object ID",
-        ));
-    }
-    if request.acceptance_command_names.is_empty() {
-        return Err(ApiError::bad_request(
-            "at least one acceptance command name is required",
         ));
     }
     let unique_names = request
@@ -386,7 +422,11 @@ async fn build_repo_work_item_preflight(
         .store
         .get_repository_binding(product_id, &repository.id)
         .await?;
-    let source_commit = request.source_commit.to_ascii_lowercase();
+    let source_commit = request
+        .source_commit
+        .as_deref()
+        .unwrap_or(&repository.registered_commit)
+        .to_ascii_lowercase();
     let readiness = state
         .store
         .latest_repository_readiness_assessment(&repository.id, &source_commit)
@@ -430,7 +470,16 @@ async fn build_repo_work_item_preflight(
             }
             None => blockers.push(json!({"code":"environment_profile_unavailable","summary":"the active RepositoryContract profile is inactive or does not allow this repository"})),
         }
-        for name in &request.acceptance_command_names {
+        let acceptance_names = if request.acceptance_command_names.is_empty() {
+            contract
+                .acceptance_commands
+                .iter()
+                .map(|command| command.name.clone())
+                .collect()
+        } else {
+            request.acceptance_command_names.clone()
+        };
+        for name in &acceptance_names {
             if let Some(command) = contract.command(name) {
                 selected_acceptance.push(json!({"name":command.name,"command":command.command}));
             } else {
@@ -473,33 +522,25 @@ async fn build_repo_work_item_preflight(
             "Repo Mode max_attempts must be between one and three",
         ));
     }
-    let planner_profile = state
-        .compiled_agent_profiles(
-            state
-                .worker
-                .config_json()
-                .get("model")
-                .and_then(Value::as_str)
-                .unwrap_or("unconfigured"),
-        )
-        .into_iter()
-        .find(|profile| profile.id == "repo-planner")
-        .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
     let environment_profile_id = contract
         .as_ref()
         .map(|contract| contract.environment_profile.as_str());
-    let planner_execution_binding = match environment_profile_id {
-        Some(profile_id) => {
-            crate::app::agent_hosts::resolve_execution_binding_auto_auth(
-                state,
-                pharness_core::InferenceStage::Plan,
-                profile_id,
-                request.planner_execution_policy.as_ref(),
-            )
-            .await?
-        }
-        None => None,
-    };
+    if state.hosted_workflow.enabled && request.planner_execution_policy.is_some() {
+        blockers.push(json!({"code":"hosted_gateway_required","summary":"hosted work uses the qualified gateway; native execution policies are deferred"}));
+    }
+    let planner_execution_binding =
+        match environment_profile_id.filter(|_| !state.hosted_workflow.enabled) {
+            Some(profile_id) => {
+                crate::app::agent_hosts::resolve_execution_binding_auto_auth(
+                    state,
+                    pharness_core::InferenceStage::Plan,
+                    profile_id,
+                    request.planner_execution_policy.as_ref(),
+                )
+                .await?
+            }
+            None => None,
+        };
     let planner_execution = match &planner_execution_binding {
         Some(binding) => json!({
             "mode":"codex_app_server",
@@ -514,17 +555,37 @@ async fn build_repo_work_item_preflight(
         }),
         None => Value::Null,
     };
-    let planner_inference = if planner_execution_binding.is_some() {
+    let planner_inference = if state.hosted_workflow.enabled {
+        // The hosted policy resolves the Planner's actual target and profile
+        // below. The worker's legacy default model is not its authorization.
+        Value::Null
+    } else if planner_execution_binding.is_some() {
         json!({"mode":"not_selected","reason":"Planner uses an agent execution policy"})
     } else if state.inference.enabled {
-        crate::app::inference::preview_selection(
+        let planner_profile = state
+            .compiled_agent_profiles(
+                state
+                    .worker
+                    .config_json()
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unconfigured"),
+            )
+            .into_iter()
+            .find(|profile| profile.id == "repo-planner")
+            .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?;
+        match crate::app::inference::preview_selection(
             state,
             pharness_core::InferenceStage::Plan,
             &serde_json::to_value(&planner_profile)
                 .map_err(|error| ApiError::internal(error.to_string()))?,
             request.planner_inference_policy.as_ref(),
         )
-        .await?
+        .await
+        {
+            Ok(selection) => selection,
+            Err(error) => return Err(error),
+        }
     } else {
         json!({"mode":"direct_fireworks","policy":{"policy_id":"fireworks-legacy-v1","revision":"v1"}})
     };
@@ -589,7 +650,33 @@ async fn build_repo_work_item_preflight(
             .cloned()
             .unwrap_or_default(),
     );
-    let predicted_mutations = if blockers.is_empty() {
+    let workflow_policy = match crate::app::hosted_workflow::resolve_policy(
+        state,
+        product_id,
+        &repository,
+        &budget,
+        max_attempts,
+        request.planner_inference_policy.as_ref(),
+    )
+    .await
+    {
+        Ok(policy) => policy,
+        Err(error) => {
+            blockers.push(json!({"code":"hosted_workflow_not_ready","summary":error.message}));
+            None
+        }
+    };
+    let planner_inference = workflow_policy
+        .as_ref()
+        .map(|policy| policy.stage_inference["plan"].clone())
+        .unwrap_or(planner_inference);
+    let predicted_mutations = if blockers.is_empty() && workflow_policy.is_some() {
+        vec![
+            "create_hosted_work_item".into(),
+            "seal_discover_stage_from_readiness".into(),
+            "record_authorized_workflow".into(),
+        ]
+    } else if blockers.is_empty() {
         vec![
             "create_repo_work_item".into(),
             "seal_discover_stage_from_readiness".into(),
@@ -598,33 +685,41 @@ async fn build_repo_work_item_preflight(
     } else {
         Vec::new()
     };
-    let authorization_boundaries = vec![
-        json!({
-            "boundary":"planner_model_execution",
-            "authorization":"explicit_work_item_action",
-            "effect":"Run the pinned repo-planner profile against the sealed context pack",
-        }),
-        json!({
-            "boundary":"stage_chain",
-            "authorization":"approved_work_plan_and_exact_chain_grant",
-            "effect":"Authorize one bounded Builder, Tester, and Verifier sequence",
-        }),
-        json!({
-            "boundary":"workspace_write",
-            "authorization":"attempt_scoped_writable_path_grant",
-            "effect":"Write only inside RepositoryContract-declared paths in one durable workspace",
-        }),
-        json!({
-            "boundary":"source_delivery",
-            "authorization":"approved_change_set_and_source_mutation_grant",
-            "effect":"Create one pull request for the exact approved head and patch",
-        }),
-        json!({
-            "boundary":"merge",
-            "authorization":"manual_provider_action",
-            "effect":"PHarness observes but never performs the source merge",
-        }),
-    ];
+    let authorization_boundaries = if let Some(policy) = &workflow_policy {
+        vec![
+            json!({"boundary":"automatic_workflow","authorization":"immutable_workflow_policy","actions":policy.automatic_actions,"effect":"advance authorized engineering work, source delivery, build, staging, and observation within the recorded limits"}),
+            json!({"boundary":"production_gitops_merge","authorization":"human_approval_of_exact_digest_diff_and_staging_evidence","effect":"production approval is required before merging the GitOps change"}),
+            json!({"boundary":"release_recovery","authorization":policy.rollback,"effect":"at most one safe rollback to the preceding verified deployment; recovery cannot turn failed work into success"}),
+        ]
+    } else {
+        vec![
+            json!({
+                "boundary":"planner_model_execution",
+                "authorization":"explicit_work_item_action",
+                "effect":"Run the pinned repo-planner profile against the sealed context pack",
+            }),
+            json!({
+                "boundary":"stage_chain",
+                "authorization":"approved_work_plan_and_exact_chain_grant",
+                "effect":"Authorize one bounded Builder, Tester, and Verifier sequence",
+            }),
+            json!({
+                "boundary":"workspace_write",
+                "authorization":"attempt_scoped_writable_path_grant",
+                "effect":"Write only inside RepositoryContract-declared paths in one durable workspace",
+            }),
+            json!({
+                "boundary":"source_delivery",
+                "authorization":"approved_change_set_and_source_mutation_grant",
+                "effect":"Create one pull request for the exact approved head and patch",
+            }),
+            json!({
+                "boundary":"merge",
+                "authorization":"manual_provider_action",
+                "effect":"PHarness observes but never performs the source merge",
+            }),
+        ]
+    };
     let material = json!({
         "schema_version":"pharness.dev/repo-work-item-preflight/v1alpha1",
         "product_id":product_id,
@@ -650,6 +745,7 @@ async fn build_repo_work_item_preflight(
         "warnings":warnings,
         "predicted_mutations":predicted_mutations,
         "authorization_boundaries":authorization_boundaries,
+        "workflow_policy":workflow_policy,
     });
     let preflight_hash = canonical_material_hash(&material)?;
     Ok(RepoWorkItemPreflightResponse {
@@ -676,6 +772,7 @@ async fn build_repo_work_item_preflight(
         warnings,
         predicted_mutations,
         authorization_boundaries,
+        workflow_policy,
         preflight_hash,
     })
 }

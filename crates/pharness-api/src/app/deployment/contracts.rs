@@ -86,15 +86,20 @@ pub(in crate::app) async fn create_deployment_contract(
         || target_namespace == PROTECTED_NAMESPACE
         || argo_application == PROTECTED_ARGO_APPLICATION
     {
-        if target_environment != PROTECTED_ENVIRONMENT
-            || target_namespace != PROTECTED_NAMESPACE
-            || argo_application != PROTECTED_ARGO_APPLICATION
-        {
+        if target_environment != PROTECTED_ENVIRONMENT || target_namespace != PROTECTED_NAMESPACE {
             return Err(ApiError::bad_request(
-                "production DeploymentContract target must exactly match production/apps-prod/yfinance-wrapper",
+                "production DeploymentContract must use production/apps-prod and an exact Finance target",
             ));
         }
-        validate_protected_production_deployment_contract(&contract_spec)?;
+        match argo_application.as_str() {
+            PROTECTED_ARGO_APPLICATION => {
+                validate_protected_production_deployment_contract(&contract_spec)?
+            }
+            "finance-frontend" => validate_finance_frontend_contract(&contract_spec)?,
+            _ => return Err(ApiError::bad_request(
+                "production DeploymentContract target must be yfinance-wrapper or finance-frontend",
+            )),
+        }
     }
     let actor = identity
         .map(|Extension(OperatorIdentity(name))| name)
@@ -249,6 +254,21 @@ pub(in crate::app) fn validate_protected_production_deployment_contract(
         return Err(ApiError::bad_request(
             "protected production DeploymentContract must pin Deployment/yfinance-wrapper and the exact yfinance-wrapper:8090/healthz check",
         ));
+    }
+    Ok(())
+}
+
+/// A finite hosted binding may be registered before hosted promotion is enabled.
+/// This does not widen the legacy executor's protected-yfinance envelope.
+fn validate_finance_frontend_contract(contract: &DeploymentContractSpec) -> Result<(), ApiError> {
+    if contract.workload_kind.as_deref() != Some("Deployment")
+        || contract.workload_name.as_deref() != Some("finance-frontend")
+        || contract.service_name.as_deref() != Some("finance-frontend")
+        || contract.service_port != Some(8080)
+        || contract.health_path.as_deref() != Some("/")
+        || contract.post_sync_verification.service_healthz != VerificationRequirement::Required
+    {
+        return Err(ApiError::bad_request("Finance frontend DeploymentContract must pin Deployment/finance-frontend and the exact finance-frontend:8080/ check"));
     }
     Ok(())
 }

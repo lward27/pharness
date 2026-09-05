@@ -1,6 +1,7 @@
 # ASTRA M02: Finance platform readiness
 
-Status: active.
+Status: accepted platform prerequisites on 2026-09-05. Downstream delivery gates remain open.
+Evidence: [current M02 execution record](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M01. May proceed independently of M03.
 
@@ -20,7 +21,7 @@ Do not mark this milestone accepted because a dependency appears healthy.
 
 3. Capture the running frontend imageID and pin that exact digest instead of latest. Record whether its original build source is known; do not invent provenance.
 
-4. Create internal staging deployments in apps-staging for yfinance-wrapper-staging and finance-frontend-staging using existing manifests. Do not inherit production Ingress or production mutation permissions.
+4. Create internal staging deployments in apps-staging for Deployment/yfinance-wrapper and Deployment/finance-frontend using existing manifests. Do not inherit production Ingress or production mutation permissions.
 
 5. Bind exact source repositories, GitOps paths, Tekton pipelines, Argo applications, registry names, service ports, observability queries, and rollback baselines. Prepare a non-secret runtime-config.json ConfigMap mount for M11; existing frontend behavior remains unchanged until its application change.
 
@@ -34,11 +35,11 @@ Preserve immutable historical evidence, existing Finance data generation, and ad
 
 ## Tests and acceptance
 
-- [ ] Relevant Finance HTTPS endpoints validate with their normal certificate chain.
-- [ ] Current running frontend digest is preserved in GitOps and remains healthy; no mutable production image reference remains for either target.
-- [ ] Staging resources render and pass server dry-run, then reconcile through Argo with production isolation demonstrated.
-- [ ] Bindings identify exact targets and fresh app-scoped telemetry. Missing signals and external credentials are explicit blockers, not readiness success.
-- [ ] Staging frontend completeness is explicitly pending M11; M02 does not claim its future runtime-config behavior exists.
+- [x] Relevant Finance HTTPS endpoints validate with their normal certificate chain; origin HTTP health passes. Public automated probes receive Cloudflare HTTP 403, recorded separately.
+- [x] Current running frontend digest is preserved in GitOps and remains healthy; no mutable production image reference remains for either target.
+- [x] Staging resources render and pass server dry-run, then reconcile through Argo with production isolation demonstrated.
+- [x] Finite coordinates and fresh app-scoped signals are recorded; separate worker checks passed. Runtime contract registration is M05; the real frontend Pipeline is M07. Missing frontend traces/request metrics remain explicit for M08.
+- [x] Staging frontend completeness is explicitly pending M11; M02 does not claim its future runtime-config behavior exists.
 
 Render Helm/Kustomize, inspect exact resource diff, server dry-run, apply via GitOps, then check Argo revision, imageID, HTTPS, endpoint reachability, and isolation. Never dump Secret values or workload environments.
 

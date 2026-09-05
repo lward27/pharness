@@ -23,6 +23,8 @@ pub struct CreateRepoWorkItem {
     pub max_attempts: u32,
     pub repository_contract_json: serde_json::Value,
     pub repository_contract_hash: String,
+    #[serde(default)]
+    pub workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
     pub actor: String,
 }
 
@@ -42,6 +44,8 @@ pub struct StoredRepoWorkItemMetadata {
     pub state_version: u64,
     pub closed_at: Option<String>,
     pub closure_reason: Option<String>,
+    pub workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
+    pub workflow_policy_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

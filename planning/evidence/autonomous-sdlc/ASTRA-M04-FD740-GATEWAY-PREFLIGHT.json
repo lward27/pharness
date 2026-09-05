@@ -1,0 +1,306 @@
+{
+  "observed_at": "2026-09-05T11:42:02.282654+00:00",
+  "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "http_status": 200,
+  "verification": {
+    "id": "inferverify_01a0715fb0dd7692b69337183ca36f29",
+    "target_id": "fireworks-kimi-k2p7-code",
+    "target_revision": "v1",
+    "target_hash": "sha256:140673a01301eb631aa62af78b9f5313ba745f577799be311dd4ed6bb98f97f9",
+    "status": "passed",
+    "reachability": "reachable",
+    "model_visible": true,
+    "streaming_compatible": true,
+    "tool_compatible": true,
+    "observed_capabilities": {
+      "native_tools": true,
+      "protocol": "openai_chat_completions_v1",
+      "protocol_calibration": {
+        "calibration_hash": "sha256:7727458b359955432230dffea1f1d9f722ce6af1c0267c28f29ee243674b5858",
+        "cases": [
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "single_tool_call",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "multi_turn_continuation",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "tool_failure_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "long_terminal_submission",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "reasoning_replay",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "missing_action_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "malformed_arguments_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "multiple_actions_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "streaming_usage",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 1,
+            "case": "provider_error_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "single_tool_call",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "multi_turn_continuation",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "tool_failure_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "long_terminal_submission",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "reasoning_replay",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "missing_action_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "malformed_arguments_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "multiple_actions_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "streaming_usage",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 2,
+            "case": "provider_error_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "single_tool_call",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "multi_turn_continuation",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "tool_failure_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "long_terminal_submission",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "reasoning_replay",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "missing_action_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "malformed_arguments_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "multiple_actions_correction",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "streaming_usage",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          },
+          {
+            "arguments_valid": true,
+            "attempt": 3,
+            "case": "provider_error_recovery",
+            "finish_reason": "tool_calls",
+            "reasoning_observed": true,
+            "tool_name": "verification_complete",
+            "usage_observed": true
+          }
+        ],
+        "passed": 30,
+        "required": 30,
+        "schema_version": "pharness.dev/inference-protocol-calibration/v1alpha1"
+      },
+      "registry_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+      "streaming": true
+    },
+    "sanitized_failure": null,
+    "actor": "lucas",
+    "reason": "ASTRA M04 exact-runtime gateway qualification after evaluator scratch cleanup; preserve frozen tasks and all execution limits",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "created_at": "1788608522332",
+    "expires_at": "1788609391"
+  }
+}

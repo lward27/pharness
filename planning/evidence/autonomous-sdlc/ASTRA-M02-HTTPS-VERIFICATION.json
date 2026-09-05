@@ -1,0 +1,53 @@
+{
+  "observed_at": "2026-09-05T09:13:28.185364+00:00",
+  "controller_before_upgrade": "v1.14.5",
+  "endpoints": [
+    {
+      "host": "finance.lucas.engineering",
+      "path": "/",
+      "tls_verified": true,
+      "not_after": "Dec  3 00:25:47 2026 GMT",
+      "http_status": 403
+    },
+    {
+      "host": "finance-db.lucas.engineering",
+      "path": "/healthz",
+      "tls_verified": true,
+      "not_after": "Dec  3 00:25:47 2026 GMT",
+      "http_status": 403
+    },
+    {
+      "host": "yfinance.lucas.engineering",
+      "path": "/healthz",
+      "tls_verified": true,
+      "not_after": "Dec  3 00:25:47 2026 GMT",
+      "http_status": 403
+    }
+  ],
+  "origin_via_ingress_port_forward": {
+    "observed_at": "2026-09-05T09:16:34.502272+00:00",
+    "endpoints": [
+      {
+        "host": "finance.lucas.engineering",
+        "path": "/",
+        "tls_verified": true,
+        "not_after": "Dec  4 01:15:18 2026 GMT",
+        "response_status": "HTTP/1.1 200 OK"
+      },
+      {
+        "host": "finance-db.lucas.engineering",
+        "path": "/healthz",
+        "tls_verified": true,
+        "not_after": "Dec  4 01:16:18 2026 GMT",
+        "response_status": "HTTP/1.1 200 OK"
+      },
+      {
+        "host": "yfinance.lucas.engineering",
+        "path": "/healthz",
+        "tls_verified": true,
+        "not_after": "Dec  4 01:16:19 2026 GMT",
+        "response_status": "HTTP/1.1 200 OK"
+      }
+    ]
+  }
+}

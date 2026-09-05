@@ -45,6 +45,13 @@ pub(in crate::app) async fn seal_repo_inapplicable_tail(
     store: &pharness_store::SqliteStore,
     work_item_id: &str,
 ) -> Result<(), ApiError> {
+    let metadata = store
+        .get_repo_work_item_metadata(work_item_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("repo_work_item", work_item_id))?;
+    if metadata.workflow_policy.is_some() {
+        return Ok(());
+    }
     let existing = store.list_effective_stage_outcomes(work_item_id).await?;
     for stage in [
         pharness_core::RepoStageKey::Release,
@@ -147,7 +154,7 @@ pub(super) async fn repo_metadata(
 pub(in crate::app) fn repo_work_item_state_hash(
     metadata: &StoredRepoWorkItemMetadata,
 ) -> Result<String, ApiError> {
-    canonical_material_hash(&json!({
+    let mut material = json!({
         "work_item_id": metadata.work_item_id,
         "state_version": metadata.state_version,
         "product_model_snapshot_id": metadata.product_model_snapshot_id,
@@ -155,5 +162,9 @@ pub(in crate::app) fn repo_work_item_state_hash(
         "repository_contract_version_id": metadata.repository_contract_version_id,
         "current_stage_execution_id": metadata.current_stage_execution_id,
         "closed_at": metadata.closed_at,
-    }))
+    });
+    if let Some(hash) = &metadata.workflow_policy_hash {
+        material["workflow_policy_hash"] = json!(hash);
+    }
+    canonical_material_hash(&material)
 }

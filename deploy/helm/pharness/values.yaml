@@ -12,8 +12,34 @@ features:
   codingReliabilityV2:
     # Enables immutable V2 stage prompts, terminal typed submissions,
     # controller-owned deterministic Test, and one bounded repair execution
-    # for future Repo Mode WorkItems only.
+    # for future engineering WorkItems only.
     enabled: false
+
+# Reader/contract preparation only. Keep creation disabled until the hosted
+# controller and delivery gates are accepted; the live runtime still uses 0051.
+# These IDs were returned by the supported API in dbgen_finance_20260827.
+hostedWorkflow:
+  enabled: false
+  bindings:
+    - schema_version: pharness.dev/lucas-delivery-binding/v1alpha1
+      id: finance-yfinance
+      revision: v1
+      product_id: prod_01a043699d65721193e7e75d38654a2d
+      repository_id: repo_01a04369f6387e6095aee4047ed2224f
+      source_repo: https://github.com/lward27/yfinance_wrapper.git
+      source_ref: main
+      cluster_context: lucas_engineering
+      pipeline_contract_id: pcontract_1788605350565822945
+      image_name: registry.lucas.engineering/yfinance_wrapper
+      gitops_repo: https://github.com/lward27/lucas_engineering.git
+      gitops_ref: main
+      staging:
+        deployment_contract_id: dcontract_1788605351039034558
+        kustomization_path: charts/finance-staging/yfinance/kustomization.yaml
+      production:
+        deployment_contract_id: dcontract_1788605351512248801
+        kustomization_path: charts/yfinance-wrapper/kustomization.yaml
+      rollback_permitted: true
 
 organization:
   id: org_lucas_engineering

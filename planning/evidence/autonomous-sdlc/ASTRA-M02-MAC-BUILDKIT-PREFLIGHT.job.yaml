@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: astra-m02-mac-buildkit-rpc-20260905
+  namespace: tekton-pipelines
+  labels:
+    pharness.dev/program: astra-autonomous-sdlc
+spec:
+  activeDeadlineSeconds: 60
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        pharness.dev/program: astra-autonomous-sdlc
+        tekton.dev/task: remote-buildkit
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: probe
+          image: docker.io/moby/buildkit@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9
+          command: [buildctl]
+          args:
+            - --addr
+            - tcp://192.168.2.2:12340
+            - --tlsservername
+            - buildkit-k3s.lucas.internal
+            - --tlscacert
+            - /var/run/buildkit-tls/ca.pem
+            - --tlscert
+            - /var/run/buildkit-tls/cert.pem
+            - --tlskey
+            - /var/run/buildkit-tls/key.pem
+            - debug
+            - workers
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 128Mi}
+          volumeMounts:
+            - name: tls
+              mountPath: /var/run/buildkit-tls
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: remote-buildkit-client-tls
+            defaultMode: 0400

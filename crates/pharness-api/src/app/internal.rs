@@ -250,6 +250,9 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
             "/api/internal/repository-readiness-preparations/:preparation_id/outcome",
             post(internal_repository_readiness_outcome),
         )
-        .route_layer(middleware::from_fn(enforce_operational_mode))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_operational_mode,
+        ))
         .route_layer(middleware::from_fn_with_state(state, require_worker_token))
 }

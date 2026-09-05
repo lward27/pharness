@@ -1,0 +1,107 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-m02-staging-frontend-isolation-before",
+    "namespace": "apps-staging",
+    "labels": {
+      "astra-program": "autonomous-sdlc"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 100,
+    "ttlSecondsAfterFinished": 86400,
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "finance-frontend",
+          "astra-probe": "astra-m02-staging-frontend-isolation-before"
+        }
+      },
+      "spec": {
+        "automountServiceAccountToken": false,
+        "restartPolicy": "Never",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "initContainers": [
+          {
+            "name": "probe",
+            "image": "registry.lucas.engineering/pharness-runtime@sha256:59530854356d2c8888f0e1715a2d5fab4d0a708bf1212b92a4fc50ed64d5c64d",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "python3",
+              "-c",
+              "import json,socket,time,urllib.request,urllib.error,os\nrole=os.environ['ROLE'];time.sleep(10)\ntargets=[('production_database_private','finance-app-database-service.apps-prod.svc.cluster.local',8091),('production_backend_private','yfinance-wrapper.apps-prod.svc.cluster.local',8090),('production_database_public','finance-db.lucas.engineering',443),('production_backend_public','yfinance.lucas.engineering',443),('production_frontend_public','finance.lucas.engineering',443)]\nif role=='finance-frontend':targets.append(('staging_backend','yfinance-wrapper.apps-staging.svc.cluster.local',8090))\nelse:targets.extend([('yahoo_upstream','query1.finance.yahoo.com',443),('telemetry_collector','opentelemetry-collector.monitoring.svc.cluster.local',4317)])\nfor name,host,port in targets:\n start=time.monotonic();r={'role':role,'name':name,'host':host,'port':port}\n try:\n  addresses=sorted({i[4][0] for i in socket.getaddrinfo(host,port,type=socket.SOCK_STREAM)});r['addresses']=addresses\n  with socket.create_connection((host,port),timeout=3):pass\n  r['connected']=True\n except Exception as e:r.update(connected=False,error_type=type(e).__name__)\n r['elapsed_seconds']=round(time.monotonic()-start,3);print(json.dumps(r),flush=True)\n"
+            ],
+            "env": [
+              {
+                "name": "ROLE",
+                "value": "finance-frontend"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "32Mi"
+              },
+              "limits": {
+                "cpu": "100m",
+                "memory": "64Mi"
+              }
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "complete",
+            "image": "registry.lucas.engineering/pharness-runtime@sha256:59530854356d2c8888f0e1715a2d5fab4d0a708bf1212b92a4fc50ed64d5c64d",
+            "command": [
+              "/bin/true"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": 9
+              },
+              "periodSeconds": 1
+            },
+            "resources": {
+              "requests": {
+                "cpu": "5m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "25m",
+                "memory": "32Mi"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

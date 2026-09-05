@@ -1,0 +1,28 @@
+{
+  "observed_at": "2026-09-05T11:49:04.158176+00:00",
+  "purpose": "diagnose exact primary MiniMax protocol rejection; direct provider response cannot qualify gateway",
+  "qualification_accepted": false,
+  "model": "accounts/fireworks/models/minimax-m3",
+  "max_tokens": 8192,
+  "temperature": 0.1,
+  "stream": true,
+  "tool_choice": "auto",
+  "parallel_tool_calls": false,
+  "http_status": 200,
+  "tool_call_deltas": 9,
+  "usage": {
+    "prompt_tokens": 402,
+    "total_tokens": 454,
+    "completion_tokens": 52,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 19
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 19
+    }
+  },
+  "elapsed_seconds": 1.37
+}

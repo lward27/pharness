@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-05T12:25:19.326613+00:00",
+  "main_revision": "db84b797f1bbc833ba86844874d1d041bc33ab72",
+  "disabled_templates_identical_to_main": {
+    "api.yaml": "8cdd996c9c5f23b1633af345adc5f6c5ce4166bf475e16a178ff097ab11c3f9c",
+    "ui.yaml": "f85198d1dcc83c1b7de20cb14df65b2e0157a8a2b33e3d72206ed23d0169edfa",
+    "model-gateway.yaml": "93b1b667140774b970de6811f3d58155c79889ff04a7b15ccfaeb6a9644e4974"
+  },
+  "enabled_configuration_rendered": true,
+  "purpose": "Publish compatible-reader source without restarting the live API during qualification; apply immutable image pins only after the evaluation is terminal.",
+  "complete_disabled_chart_identical_to_main": true,
+  "complete_disabled_chart_sha256": "b297713dda182165f72b1b8e59315afb51a753f64a5a358bac7b1517996e9931",
+  "enabled_api_server_dry_run": "all 7 API-template resources accepted, no resources changed"
+}

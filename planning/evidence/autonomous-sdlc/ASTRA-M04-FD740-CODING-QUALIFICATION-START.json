@@ -1,0 +1,124 @@
+{
+  "observed_at": "2026-09-05T11:42:02.829660+00:00",
+  "http_status": 200,
+  "evaluation": {
+    "id": "infeval_01a07160294f7ce393d8a45d3ee23f7d",
+    "status": "running",
+    "suite_id": "coding-v2",
+    "suite_hash": "sha256:4bf3fce21f86369794ac6e57816436ff331e7dd607eb303baaf720c885583767",
+    "attempts": 2,
+    "agent_profile_id": "repo-builder",
+    "agent_profile_hash": "sha256:83af7b08765fd2ad0b1c0facbf5bbe6fd687c34ac26ec2a698b115239cb5bca2",
+    "target_id": "fireworks-kimi-k2p7-code",
+    "target_revision": "v1",
+    "target_hash": "sha256:140673a01301eb631aa62af78b9f5313ba745f577799be311dd4ed6bb98f97f9",
+    "policy_id": "builder-kimi-k2p7-code-v2",
+    "policy_revision": "v1",
+    "policy_hash": "sha256:7815a223a991c4e23f9e6716561f869ba33f4a2e6490ba18ab8967b8377d4e77",
+    "resolved_binding": {
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "target": {
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "target_id": "fireworks-kimi-k2p7-code",
+        "revision": "v1",
+        "display_name": "Fireworks Kimi K2.7 Code",
+        "backend_kind": "fireworks",
+        "protocol": "openai_chat_completions_v1",
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/kimi-k2p7-code",
+        "authentication_binding": "fireworks-api-key",
+        "transport": {
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "stream_idle_timeout_seconds": 120,
+          "max_attempts": 3,
+          "allow_insecure_private_http": false
+        },
+        "capabilities": {
+          "native_tools": true,
+          "streaming": true,
+          "json_schema": false,
+          "stream_options": true,
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "reasoning_context_modes": [
+            "current_turn",
+            "all_turns"
+          ],
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "context_limit_tokens": 262144,
+        "output_limit_tokens": 16384,
+        "allowed_stages": [
+          "implement"
+        ],
+        "selectable": true,
+        "config_hash": "sha256:140673a01301eb631aa62af78b9f5313ba745f577799be311dd4ed6bb98f97f9"
+      },
+      "policy": {
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "policy_id": "builder-kimi-k2p7-code-v2",
+        "revision": "v1",
+        "display_name": "Reliability V2 builder Kimi K2.7 Code",
+        "eligible_profiles": [
+          "repo-builder"
+        ],
+        "eligible_stages": [
+          "implement"
+        ],
+        "target": {
+          "target_id": "fireworks-kimi-k2p7-code",
+          "revision": "v1"
+        },
+        "target_hash": "sha256:140673a01301eb631aa62af78b9f5313ba745f577799be311dd4ed6bb98f97f9",
+        "reasoning": {
+          "effort": "medium",
+          "context_mode": "current_turn",
+          "expose_replay": true
+        },
+        "temperature_milli": 100,
+        "max_output_tokens": 16384,
+        "max_input_tokens": 98304,
+        "tool_protocol": "native_tools",
+        "tool_choice": "auto",
+        "transport_max_attempts": 3,
+        "selectable": true,
+        "policy_hash": "sha256:7815a223a991c4e23f9e6716561f869ba33f4a2e6490ba18ab8967b8377d4e77"
+      },
+      "prompt_version": "2026-08-31.5",
+      "stage_prompt": {
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "prompt_id": "repo-builder-v2",
+        "revision": "2026-08-31.5",
+        "stage": "implement",
+        "content_hash": "sha256:2e69b8c1bfa483f5ade2dec2e77fe7afa1b0a7b46170a27589c679750defb7b5"
+      },
+      "tool_schema_hash": "sha256:1a2a259efd161bbf0c0c913d64ee3ba43d08c8c476684fdcd8e04bb909416830",
+      "context_policy_hash": "sha256:c31f66b6adfa4d4d99b229ce2272bb6d2bd0fe34afa40ccecab40afd6db8c82e",
+      "protocol_calibration_hash": "sha256:76a442f1a10fa94aec3503f180759c6a39c54804973379cc5668da7961fac85c",
+      "profile_budget_hash": "sha256:50b72695989cb6bbe290d98ecf5397ef1f0ff3425900f0497eaf5168351de684",
+      "base_agent_profile_hash": "sha256:8ce8c2a16336a806295144e4c3daeb1a2f3f00bff6284e9a78f3f93a42f84c05",
+      "agent_profile_hash": "sha256:83af7b08765fd2ad0b1c0facbf5bbe6fd687c34ac26ec2a698b115239cb5bca2",
+      "binding_hash": "sha256:ca5f413e38918f18fdfd954e1710c55d32a404ad1f88201bd3596ad659e0744a"
+    },
+    "binding_hash": "sha256:ca5f413e38918f18fdfd954e1710c55d32a404ad1f88201bd3596ad659e0744a",
+    "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+    "actor": "lucas",
+    "reason": "ASTRA M04 exact-runtime gateway qualification after evaluator scratch cleanup; preserve frozen tasks and all execution limits",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "job_name": "pharness-inference-eval-9459930dae6f",
+    "report": null,
+    "report_hash": null,
+    "failure": null,
+    "qualification_id": null,
+    "created_at": "1788608522575",
+    "started_at": "1788608522882",
+    "finished_at": null
+  }
+}

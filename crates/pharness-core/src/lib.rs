@@ -4,6 +4,7 @@ pub mod agent;
 pub mod agent_execution;
 pub mod events;
 pub mod execution;
+pub mod hosted_sdlc;
 pub mod ids;
 pub mod inference;
 pub mod model;

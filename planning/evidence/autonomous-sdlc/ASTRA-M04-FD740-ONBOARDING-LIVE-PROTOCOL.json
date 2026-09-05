@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-09-05T11:44:58.181657+00:00",
+  "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "http_status": 200,
+  "verification": {
+    "id": "inferverify_01a07162be5d7ae2a975f57f72681474",
+    "target_id": "fireworks-minimax-m3",
+    "target_revision": "v1",
+    "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+    "status": "failed",
+    "reachability": "unavailable",
+    "model_visible": false,
+    "streaming_compatible": false,
+    "tool_compatible": false,
+    "observed_capabilities": {
+      "native_tools": false,
+      "protocol": "openai_chat_completions_v1",
+      "protocol_calibration": null,
+      "registry_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+      "streaming": false
+    },
+    "sanitized_failure": "gateway protocol verification returned 400 Bad Request: {\"error\":{\"message\":\"upstream rejected the request (invalid_request_error)\",\"type\":\"upstream_error\"}}",
+    "actor": "lucas",
+    "reason": "ASTRA M04 frozen stage qualification on exact fd74092 runtime; primary candidate, unchanged limits, no source or deployment effects",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "created_at": "1788608698247",
+    "expires_at": "1788609591"
+  }
+}

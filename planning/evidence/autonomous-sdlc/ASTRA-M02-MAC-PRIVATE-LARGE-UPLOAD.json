@@ -1,0 +1,72 @@
+{
+  "observed_at": "2026-09-05T10:38:26.150836+00:00",
+  "cluster": "lucas_engineering",
+  "gitops_revision": "137262f4377c5f1d19379f73e83249d66d09a0fd",
+  "job": {
+    "name": "astra-m02-mac-private-large-upload-20260905",
+    "uid": "e5465e9d-6e2c-47f7-ae7d-04129f272e75",
+    "status": {
+      "completionTime": "2026-09-05T10:33:16Z",
+      "conditions": [
+        {
+          "lastProbeTime": "2026-09-05T10:33:16Z",
+          "lastTransitionTime": "2026-09-05T10:33:16Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "SuccessCriteriaMet"
+        },
+        {
+          "lastProbeTime": "2026-09-05T10:33:16Z",
+          "lastTransitionTime": "2026-09-05T10:33:16Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "Complete"
+        }
+      ],
+      "ready": 0,
+      "startTime": "2026-09-05T10:29:44Z",
+      "succeeded": 1,
+      "terminating": 0,
+      "uncountedTerminatedPods": {}
+    },
+    "active_deadline_seconds": 360
+  },
+  "pod": {
+    "name": "astra-m02-mac-private-large-upload-20260905-vmhhg",
+    "uid": "729db559-41e9-48a6-a62f-b697bdc86d9b",
+    "node": "ubuntu-lucas-engineering",
+    "container_exit_codes": [
+      0
+    ]
+  },
+  "builder": "owner-authorized M1 Mac; Rancher Desktop; existing Tekton remote BuildKit Service; mTLS",
+  "private_registry_transport": "registry.lucas.engineering SNI and private CA; Mac VPN to 192.168.20.210:32443; no disabled TLS verification",
+  "uncached_amd64_execution": true,
+  "random_payload_bytes": 117440512,
+  "metadata": {
+    "containerimage.config.digest": "sha256:f186ae1795eae6cebff1624f21391b06dbb0783ee1dcc1277e7368aded0fd702",
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144",
+      "size": 896,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "containerimage.digest": "sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144",
+    "image.name": "registry.lucas.engineering/buildkit-smoke:astra-mac-private-large-20260905"
+  },
+  "large_push_completed": true,
+  "sanitized_log": "#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 402B 0.2s done\n#1 DONE 0.2s\n\n#2 [internal] load metadata for docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3\n#2 DONE 0.9s\n\n#3 [internal] load .dockerignore\n#3 transferring context: 2B 0.1s done\n#3 DONE 0.1s\n\n#4 [1/3] FROM docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3\n#4 resolve docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3 done\n#4 CACHED\n\n#5 [2/3] RUN test \"$(uname -m)\" = x86_64 && echo ASTRA_UNCACHED_AMD64_EXECUTION_PASSED\n#5 0.108 ASTRA_UNCACHED_AMD64_EXECUTION_PASSED\n#5 DONE 0.1s\n\n#6 [3/3] RUN dd if=/dev/urandom of=/payload.bin bs=1048576 count=112 && test \"$(wc -c </payload.bin)\" = 117440512\n#6 0.352 112+0 records in\n#6 0.352 112+0 records out\n#6 0.353 117440512 bytes (112.0MB) copied, 0.243505 seconds, 459.9MB/s\n#6 DONE 2.9s\n\n#7 exporting to image\n#7 exporting layers\n#7 exporting layers 1.9s done\n#7 exporting manifest sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144 0.0s done\n#7 exporting config sha256:f186ae1795eae6cebff1624f21391b06dbb0783ee1dcc1277e7368aded0fd702 done\n#7 pushing layers\n#7 ...\n\n#8 [auth] sharing credentials for registry.lucas.engineering\n#8 DONE 0.0s\n\n#7 exporting to image\n#7 pushing layers 180.3s done\n#7 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-mac-private-large-20260905@sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144\n#7 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-mac-private-large-20260905@sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144 20.0s done\n#7 DONE 202.2s\n{\n  \"containerimage.config.digest\": \"sha256:f186ae1795eae6cebff1624f21391b06dbb0783ee1dcc1277e7368aded0fd702\",\n  \"containerimage.descriptor\": {\n    \"mediaType\": \"application/vnd.docker.distribution.manifest.v2+json\",\n    \"digest\": \"sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144\",\n    \"size\": 896,\n    \"platform\": {\n      \"architecture\": \"amd64\",\n      \"os\": \"linux\"\n    }\n  },\n  \"containerimage.digest\": \"sha256:355e86491465573b4f9e8c41b56e5b28714e74710b88191e399819040b10a144\",\n  \"image.name\": \"registry.lucas.engineering/buildkit-smoke:astra-mac-private-large-20260905\"\n}",
+  "scope_limit": "Infrastructure probe, not application source-to-runtime or autonomous acceptance. Mac must remain awake with VPN and forwarding active.",
+  "exact_digest_pull_run": {
+    "builder": "rancher-desktop",
+    "platform": "linux/amd64",
+    "network": "none",
+    "result": "passed",
+    "payload_bytes_verified": 117440512
+  }
+}

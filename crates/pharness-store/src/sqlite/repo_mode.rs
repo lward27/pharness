@@ -143,6 +143,26 @@ impl SqliteStore {
         let context = serde_json::to_string(&item.context_repositories)?;
         let budget = serde_json::to_string(&item.run_budget)?;
         let contract = serde_json::to_string(&item.repository_contract_json)?;
+        let workflow_policy = item.workflow_policy.as_ref();
+        if let Some(policy) = workflow_policy {
+            policy.validate().map_err(StoreError::Conflict)?;
+            if policy.delivery_binding.product_id != item.product_id
+                || policy.delivery_binding.repository_id != item.repository_id
+                || policy.delivery_binding.source_repo != item.source_repo
+                || policy.delivery_binding.source_ref != item.source_ref
+                || policy.builder_budget != item.run_budget
+                || policy.max_attempts != item.max_attempts
+            {
+                return Err(StoreError::Conflict(
+                    "hosted workflow policy does not match the WorkItem scope or limits".into(),
+                ));
+            }
+        }
+        let workflow_json = workflow_policy.map(serde_json::to_value).transpose()?;
+        let workflow_hash = workflow_json
+            .as_ref()
+            .map(pharness_core::canonical_json_sha256)
+            .transpose()?;
         sqlx::query(
             r#"
             INSERT INTO work_items (
@@ -153,11 +173,12 @@ impl SqliteStore {
               mode, product_id, mutable_repository_id, product_model_snapshot_id,
               product_model_snapshot_hash, repository_contract_version_id, contract_version,
               selected_acceptance_names_json, context_repository_snapshots_json, state_version,
-              created_at, updated_at, status_changed_at, status_changed_by, status_reason
+              created_at, updated_at, status_changed_at, status_changed_by, status_reason,
+              workflow_policy_json, workflow_policy_hash
             ) VALUES (
-              ?1, 'proposed', ?2, ?3, ?4, ?5, ?6, ?7, 'repository', 0, ?8, ?9, ?10,
+              ?1, 'proposed', ?2, ?3, ?4, ?5, ?6, ?7, ?26, ?27, ?8, ?9, ?10,
               'operator', ?11, ?12, ?13, ?14, 'ready', 'repo', ?15, ?16, ?17, ?18,
-              ?19, ?20, ?21, ?22, 1, ?23, ?23, ?23, ?10, 'Repo Mode WorkItem created'
+              ?19, ?20, ?21, ?22, 1, ?23, ?23, ?23, ?10, ?28, ?24, ?25
             )
             "#,
         )
@@ -184,6 +205,24 @@ impl SqliteStore {
         .bind(names)
         .bind(context)
         .bind(&now)
+        .bind(
+            workflow_json
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+        )
+        .bind(workflow_hash)
+        .bind(if workflow_policy.is_some() {
+            "production"
+        } else {
+            "repository"
+        })
+        .bind(if workflow_policy.is_some() { 1 } else { 0 })
+        .bind(if workflow_policy.is_some() {
+            "Hosted WorkItem created; production approval is required before GitOps merge"
+        } else {
+            "Source-only WorkItem created under the legacy contract"
+        })
         .execute(&self.pool)
         .await?;
         self.get_work_item(&item.id)
@@ -203,7 +242,8 @@ impl SqliteStore {
             SELECT id, mode, product_id, mutable_repository_id, product_model_snapshot_id,
                    product_model_snapshot_hash, repository_contract_version_id, contract_version,
                    selected_acceptance_names_json, context_repository_snapshots_json,
-                   current_stage_execution_id, state_version, closed_at, closure_reason
+                   current_stage_execution_id, state_version, closed_at, closure_reason,
+                   workflow_policy_json, workflow_policy_hash
             FROM work_items WHERE id = ?1 AND mode = 'repo'
             "#,
         )
@@ -1047,6 +1087,25 @@ fn source_delivery_intent_select(where_clause: &str) -> String {
 fn row_to_repo_metadata(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredRepoWorkItemMetadata, StoreError> {
+    let policy_json = row.try_get::<Option<String>, _>("workflow_policy_json")?;
+    let workflow_policy_hash = row.try_get::<Option<String>, _>("workflow_policy_hash")?;
+    let workflow_policy = policy_json
+        .as_deref()
+        .map(serde_json::from_str::<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>)
+        .transpose()?;
+    if let Some(policy) = &workflow_policy {
+        policy.validate().map_err(StoreError::Conflict)?;
+        let hash = pharness_core::canonical_json_sha256(&serde_json::to_value(policy)?)?;
+        if workflow_policy_hash.as_deref() != Some(hash.as_str()) {
+            return Err(StoreError::Conflict(
+                "stored workflow policy hash does not match".into(),
+            ));
+        }
+    } else if workflow_policy_hash.is_some() {
+        return Err(StoreError::Conflict(
+            "stored workflow policy is missing".into(),
+        ));
+    }
     Ok(StoredRepoWorkItemMetadata {
         work_item_id: row.try_get("id")?,
         mode: row.try_get("mode")?,
@@ -1066,6 +1125,8 @@ fn row_to_repo_metadata(
         state_version: row.try_get::<i64, _>("state_version")? as u64,
         closed_at: row.try_get("closed_at")?,
         closure_reason: row.try_get("closure_reason")?,
+        workflow_policy,
+        workflow_policy_hash,
     })
 }
 
@@ -1799,6 +1860,7 @@ mod tests {
         insert_stage_chain_scope(&store).await;
         let item = store
             .create_repo_work_item(CreateRepoWorkItem {
+            workflow_policy: None,
                 id: "witem_created".into(),
                 product_id: "prod_test".into(),
                 repository_id: "repo_test".into(),
@@ -1830,5 +1892,176 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(metadata.context_repositories.as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn hosted_policy_and_scope_are_immutable_and_legacy_completion_still_works() {
+        let store = store_with_repo_work_item().await;
+        insert_stage_chain_scope(&store).await;
+        let policy: pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot =
+            serde_json::from_str(include_str!(
+                "../../../pharness-core/tests/fixtures/hosted-workflow.json"
+            ))
+            .unwrap();
+        let item = CreateRepoWorkItem {
+            id: "witem_hosted".into(),
+            product_id: "prod_test".into(),
+            repository_id: "repo_test".into(),
+            product_model_snapshot_id: "pmodel_test".into(),
+            product_model_snapshot_hash: "sha256:model".into(),
+            repository_contract_version_id: "rcontract_test".into(),
+            contract_version: "pharness.dev/v1alpha1".into(),
+            title: "Hosted change".into(),
+            intent: "Continue through verified production delivery".into(),
+            acceptance_command_names: vec!["unit".into()],
+            acceptance_commands: vec!["cargo test".into()],
+            context_repositories: json!([]),
+            source_repo: "https://github.com/example/repo.git".into(),
+            source_ref: "main".into(),
+            source_commit: "a".repeat(40),
+            environment_profile_id: "rust".into(),
+            run_budget: policy.builder_budget.clone(),
+            max_attempts: policy.max_attempts,
+            repository_contract_json: json!({"api_version":"pharness.dev/v1alpha1"}),
+            repository_contract_hash: "sha256:contract".into(),
+            workflow_policy: Some(policy.clone()),
+            actor: "operator".into(),
+        };
+        let mut mismatched = item.clone();
+        mismatched.source_repo = "https://github.com/example/other.git".into();
+        assert!(store.create_repo_work_item(mismatched).await.is_err());
+        store.create_repo_work_item(item).await.unwrap();
+        let before = store
+            .get_repo_work_item_metadata("witem_hosted")
+            .await
+            .unwrap()
+            .unwrap();
+        for statement in [
+            "UPDATE work_items SET workflow_policy_json = NULL, workflow_policy_hash = NULL WHERE id = 'witem_hosted'",
+            "UPDATE work_items SET source_commit = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' WHERE id = 'witem_hosted'",
+            "UPDATE work_items SET mode = NULL WHERE id = 'witem_hosted'",
+            "UPDATE work_items SET max_attempts = 3 WHERE id = 'witem_hosted'",
+            "UPDATE work_items SET status = 'completed' WHERE id = 'witem_hosted'",
+        ] {
+            assert!(sqlx::query(statement).execute(&store.pool).await.is_err(), "{statement}");
+        }
+        // Pausing does not replace the immutable authorization or erase history.
+        store
+            .update_repo_work_item_status(
+                "witem_hosted",
+                "paused",
+                "operator",
+                "pause development",
+                false,
+            )
+            .await
+            .unwrap();
+        let paused = store
+            .get_repo_work_item_metadata("witem_hosted")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(paused.workflow_policy, Some(policy));
+        assert_eq!(paused.workflow_policy_hash, before.workflow_policy_hash);
+        assert!(paused.closed_at.is_none());
+        store
+            .update_repo_work_item_status(
+                "witem_repo",
+                "completed",
+                "legacy-controller",
+                "legacy source-only result",
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .get_work_item("witem_repo")
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            "completed"
+        );
+        assert!(store
+            .create_stage_execution(CreateStageExecution {
+                id: "stage_release_inapplicable".into(),
+                work_item_id: "witem_hosted".into(),
+                stage_key: "release".into(),
+                sequence: 1,
+                status: "inapplicable".into(),
+                agent_profile_id: None,
+                agent_profile_version: None,
+                agent_profile_hash: None,
+                context_pack_id: None,
+                run_id: None,
+                workspace_id: None,
+                input_snapshot: json!({"source_only":true}),
+                input_hash: "sha256:legacy".into(),
+            })
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn hosted_migration_preserves_schema_51_history_and_rejects_an_older_migrator() {
+        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+        use std::borrow::Cow;
+        use std::str::FromStr;
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let current = sqlx::migrate!("./migrations");
+        let legacy = sqlx::migrate::Migrator {
+            migrations: Cow::Owned(
+                current
+                    .iter()
+                    .filter(|migration| migration.version <= 51)
+                    .cloned()
+                    .collect(),
+            ),
+            ..sqlx::migrate::Migrator::DEFAULT
+        };
+        legacy.run(&pool).await.unwrap();
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT MAX(version) FROM _sqlx_migrations")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            51
+        );
+        sqlx::query("INSERT INTO work_items (id, status, title, intent, acceptance_criteria_json, source_repo, source_ref, target_environment, production_impacting, max_attempts, max_elapsed_seconds, created_at, updated_at, status_changed_at, mode, state_version, closed_at, closure_reason) VALUES ('old_completed', 'completed', 'Preserved history', 'Source-only work', '[]', 'https://github.com/example/repo.git', 'main', 'repository', 0, 2, 3600, '100', '200', '200', 'repo', 8, '200', 'source merge verified')").execute(&pool).await.unwrap();
+        current.run(&pool).await.unwrap();
+        let row = sqlx::query("SELECT status, state_version, closed_at, closure_reason, workflow_policy_json, workflow_policy_hash FROM work_items WHERE id = 'old_completed'").fetch_one(&pool).await.unwrap();
+        assert_eq!(row.get::<String, _>("status"), "completed");
+        assert_eq!(row.get::<i64, _>("state_version"), 8);
+        assert_eq!(row.get::<String, _>("closed_at"), "200");
+        assert_eq!(
+            row.get::<String, _>("closure_reason"),
+            "source merge verified"
+        );
+        assert!(row
+            .get::<Option<String>, _>("workflow_policy_json")
+            .is_none());
+        assert!(row
+            .get::<Option<String>, _>("workflow_policy_hash")
+            .is_none());
+        assert!(matches!(
+            legacy.run(&pool).await,
+            Err(sqlx::migrate::MigrateError::VersionMissing(52))
+        ));
+        current.run(&pool).await.unwrap();
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM work_items")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            1
+        );
     }
 }

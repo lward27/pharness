@@ -1,0 +1,83 @@
+{
+  "before": {
+    "observed_at": "2026-09-05T09:47:24.074034+00:00",
+    "revision": "cf95a7500305c5c5e2c9a9eebe40be6ff38d3cd8",
+    "health": "Healthy",
+    "sync_options": [
+      "CreateNamespace=true",
+      "RespectIgnoreDifferences=true"
+    ],
+    "ignore_rules": [
+      {
+        "group": "",
+        "jsonPointers": [
+          "/data/haSharedSecret"
+        ],
+        "kind": "Secret",
+        "name": "docker-registry-secret",
+        "namespace": "registry"
+      },
+      {
+        "group": "apps",
+        "jsonPointers": [
+          "/spec/template/metadata/annotations/checksum~1secret"
+        ],
+        "kind": "Deployment",
+        "name": "docker-registry",
+        "namespace": "registry"
+      }
+    ],
+    "deployment_generation": 455,
+    "pod_template": {
+      "annotations": {
+        "checksum/config": "35c9fb134d3efffac08f7a0b485f61ac94ebd8207d0d64bb3088b0b882e52e7c",
+        "checksum/secret": "463e66a7a1dcdd826fcf02278ace3cb5aaee80f861df6183ed4743ff917b1f97",
+        "kubectl.kubernetes.io/restartedAt": "2026-03-24T01:23:44Z"
+      },
+      "labels": {
+        "app": "docker-registry",
+        "release": "docker-registry"
+      }
+    },
+    "pods": [
+      {
+        "name": "docker-registry-5dd7cb8849-gc89j",
+        "uid": "2a17ac85-8614-485e-bc52-9f6744dcb476",
+        "restarts": [
+          0
+        ]
+      }
+    ]
+  },
+  "after_hard_refresh": {
+    "observed_at": "2026-09-05T09:48:07.325808+00:00",
+    "revision": "cf95a7500305c5c5e2c9a9eebe40be6ff38d3cd8",
+    "synced": "Synced",
+    "health": "Healthy",
+    "deployment_generation": 455,
+    "pod_uids": [
+      "2a17ac85-8614-485e-bc52-9f6744dcb476"
+    ],
+    "pod_template": {
+      "annotations": {
+        "checksum/config": "35c9fb134d3efffac08f7a0b485f61ac94ebd8207d0d64bb3088b0b882e52e7c",
+        "checksum/secret": "463e66a7a1dcdd826fcf02278ace3cb5aaee80f861df6183ed4743ff917b1f97",
+        "kubectl.kubernetes.io/restartedAt": "2026-03-24T01:23:44Z"
+      },
+      "labels": {
+        "app": "docker-registry",
+        "release": "docker-registry"
+      }
+    }
+  },
+  "after_next_gitops_commit": {
+    "observed_at": "2026-09-05T10:01:12.515384+00:00",
+    "revision": "e70ac07b28904777a087dee6daabbc213faa8d51",
+    "deployment_generation": 455,
+    "pod_uids": [
+      "2a17ac85-8614-485e-bc52-9f6744dcb476"
+    ]
+  },
+  "stable_across_next_commit": true,
+  "expected_next_revision": "e70ac07b28904777a087dee6daabbc213faa8d51"
+}

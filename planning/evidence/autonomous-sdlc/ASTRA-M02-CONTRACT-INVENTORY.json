@@ -1,0 +1,20 @@
+{
+  "/api/pipeline-contracts?limit=100": {
+    "status": 200,
+    "data": {
+      "pipeline_contracts": [],
+      "count": 0,
+      "limit": 100,
+      "offset": 0
+    }
+  },
+  "/api/deployment-contracts?limit=100": {
+    "status": 200,
+    "data": {
+      "deployment_contracts": [],
+      "count": 0,
+      "limit": 100,
+      "offset": 0
+    }
+  }
+}

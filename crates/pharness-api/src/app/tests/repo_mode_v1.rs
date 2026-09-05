@@ -20,9 +20,9 @@ const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEAD_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const MERGE_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 
-struct RepoDeliveryFixture {
-    state: super::AppState,
-    work_item_id: String,
+pub(super) struct RepoDeliveryFixture {
+    pub(super) state: super::AppState,
+    pub(super) work_item_id: String,
     intent_id: String,
 }
 
@@ -330,7 +330,39 @@ async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
 // Verification tests stop at the approved plan; source-delivery tests retain
 // the original fixture's ChangeSet and provider observer state.
 async fn repo_fixture(suffix: &str, with_source_delivery: bool) -> RepoDeliveryFixture {
-    let state = test_state().await;
+    repo_fixture_with_workflow(suffix, with_source_delivery, false).await
+}
+
+pub(super) async fn repo_fixture_with_workflow(
+    suffix: &str,
+    with_source_delivery: bool,
+    hosted: bool,
+) -> RepoDeliveryFixture {
+    let policy = hosted.then(|| {
+        serde_json::from_str(include_str!(
+            "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+        ))
+        .unwrap()
+    });
+    repo_fixture_with_policy(suffix, with_source_delivery, test_state().await, policy).await
+}
+
+pub(super) async fn repo_fixture_with_policy(
+    suffix: &str,
+    with_source_delivery: bool,
+    state: super::AppState,
+    workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
+) -> RepoDeliveryFixture {
+    repo_fixture_for_source(suffix, with_source_delivery, state, workflow_policy, None).await
+}
+
+pub(super) async fn repo_fixture_for_source(
+    suffix: &str,
+    with_source_delivery: bool,
+    state: super::AppState,
+    workflow_policy: Option<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>,
+    source_repo: Option<&str>,
+) -> RepoDeliveryFixture {
     state
         .store
         .ensure_bootstrap_organization(&state.repo_mode.organization)
@@ -366,8 +398,8 @@ async fn repo_fixture(suffix: &str, with_source_delivery: bool) -> RepoDeliveryF
             repository: StoredRepositoryDraft {
                 id: repository_id.clone(),
                 provider: "github".into(),
-                external_id: format!("example/repo-{suffix}"),
-                canonical_url: format!("https://github.com/example/repo-{suffix}.git"),
+                external_id: source_repo.map(|url| url.trim_start_matches("https://github.com/").trim_end_matches(".git").to_string()).unwrap_or_else(|| format!("example/repo-{suffix}")),
+                canonical_url: source_repo.map(str::to_string).unwrap_or_else(|| format!("https://github.com/example/repo-{suffix}.git")),
                 default_branch: "main".into(),
                 registered_commit: SOURCE_SHA.into(),
             },
@@ -499,9 +531,18 @@ async fn repo_fixture(suffix: &str, with_source_delivery: bool) -> RepoDeliveryF
         .unwrap();
 
     let work_item_id = format!("witem_{suffix}");
+    let workflow_policy = workflow_policy.map(|mut policy| {
+        policy.delivery_binding.product_id = product_id.clone();
+        policy.delivery_binding.repository_id = repository_id.clone();
+        policy.delivery_binding.source_repo = registered.repository.canonical_url.clone();
+        policy.delivery_binding_hash =
+            pharness_core::canonical_json_sha256(&json!(policy.delivery_binding)).unwrap();
+        policy
+    });
     state
         .store
         .create_repo_work_item(CreateRepoWorkItem {
+            workflow_policy,
             id: work_item_id.clone(),
             product_id,
             repository_id: repository_id.clone(),
@@ -672,6 +713,312 @@ fn provider_observation(execution_id: &str, merged: bool) -> GitDeliveryObservat
 }
 
 #[tokio::test]
+async fn hosted_readiness_uses_repository_defaults_and_blocks_unqualified_creation() {
+    use tower::ServiceExt;
+    let mut fixture = repo_fixture("hosted_defaults", false).await;
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let old = fixture
+        .state
+        .store
+        .get_repository_contract_version(&metadata.repository_contract_version_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_repository_contract_version(CreateRepositoryContractVersion {
+            id: "rcontract_zz_ready_defaults".into(),
+            repository_id: metadata.repository_id.clone(),
+            onboarding_id: old.onboarding_id,
+            source_commit: SOURCE_SHA.into(),
+            contract: item.repository_contract_json.unwrap(),
+            content_hash: "sha256:defaults".into(),
+            merge_provenance: json!({"merge_commit_sha":SOURCE_SHA}),
+        })
+        .await
+        .unwrap();
+    let policy = serde_json::from_str::<pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot>(
+        include_str!("../../../../pharness-core/tests/fixtures/hosted-workflow.json"),
+    )
+    .unwrap();
+    let mut binding = policy.delivery_binding;
+    binding.product_id = metadata.product_id.clone();
+    binding.repository_id = metadata.repository_id.clone();
+    binding.source_repo = item.source_repo;
+    fixture.state.hosted_workflow =
+        std::sync::Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig {
+            enabled: true,
+            bindings: vec![binding],
+        });
+    let router = super::super::repo_mode::router().with_state(fixture.state.clone());
+    let input = json!({"title":"A bounded change","intent":"Improve behavior","repository_id":metadata.repository_id});
+    let response = router
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/products/{}/work-items/preflight",
+                    metadata.product_id
+                ))
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(input.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let result: Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 100_000)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(result["source_commit"], SOURCE_SHA);
+    assert_eq!(result["selected_acceptance"][0]["name"], "unit");
+    assert!(result["blockers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|b| b["code"] == "hosted_workflow_not_ready"));
+    assert!(result["workflow_policy"].is_null());
+    let before = fixture
+        .state
+        .store
+        .list_work_items(pharness_store::WorkItemListFilter::default())
+        .await
+        .unwrap()
+        .len();
+    let mut create = input;
+    create["actor"] = json!("operator");
+    create["reason"] = json!("submit bounded hosted work");
+    create["preflight_hash"] = result["preflight_hash"].clone();
+    let response = router
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(format!("/api/products/{}/work-items", metadata.product_id))
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(create.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::CONFLICT);
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .list_work_items(pharness_store::WorkItemListFilter::default())
+            .await
+            .unwrap()
+            .len(),
+        before
+    );
+}
+
+#[tokio::test]
+async fn hosted_cutover_retires_the_unscoped_creation_route() {
+    use tower::ServiceExt;
+    let mut state = test_state().await;
+    state.hosted_workflow = std::sync::Arc::new(pharness_core::hosted_sdlc::HostedWorkflowConfig {
+        enabled: true,
+        bindings: vec![],
+    });
+    assert!(state.repo_mode.legacy_work_item_creation_enabled);
+    let router = axum::Router::new()
+        .route(
+            "/api/work-items",
+            axum::routing::post(|| async { "unexpected creation" }),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state,
+            super::super::enforce_operational_mode,
+        ));
+    let response = router
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/work-items")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::GONE);
+    let body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 10_000)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["route"], "/api/products/:product_id/work-items");
+}
+
+#[tokio::test]
+async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable() {
+    let fixture = repo_fixture_with_workflow("hosted", true, true).await;
+    super::super::repo_mode::seal_repo_inapplicable_tail(
+        &fixture.state.store,
+        &fixture.work_item_id,
+    )
+    .await
+    .unwrap();
+    let Json(pre_merge) = internal_source_delivery_observation_outcome(
+        State(fixture.state.clone()),
+        Path(fixture.intent_id.clone()),
+        Json(provider_observation("observer_premerge_hosted", false)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        pre_merge["source_delivery_intent"]["status"],
+        "waiting_merge"
+    );
+    let intent = fixture
+        .state
+        .store
+        .get_source_delivery_intent(&fixture.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "observer_dispatched",
+            None,
+            Some("observer_merge_hosted"),
+            None,
+            None,
+            None,
+            "controller:repo-mode",
+            "observe source merge",
+        )
+        .await
+        .unwrap();
+    let Json(result) = internal_source_delivery_observation_outcome(
+        State(fixture.state.clone()),
+        Path(fixture.intent_id.clone()),
+        Json(provider_observation("observer_merge_hosted", true)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["delivery_status"], "succeeded");
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(metadata.closed_at.is_none());
+    assert!(metadata.workflow_policy.is_some());
+    assert!(metadata.workflow_policy_hash.is_some());
+    let Json(item) = super::get_work_item(
+        State(fixture.state.clone()),
+        Path(fixture.work_item_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(item.status, "executing");
+    assert_eq!(item.workflow_kind, "hosted_sdlc");
+    assert!(item.production_impacting);
+    let Json(flow) = super::work_item_flow(
+        State(fixture.state.clone()),
+        Path(fixture.work_item_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(flow.delivery_configuration["kind"], "hosted_sdlc");
+    assert_eq!(flow.delivery_configuration["release"]["required"], true);
+    assert_eq!(flow.delivery_configuration["observe"]["required"], true);
+    assert_eq!(
+        flow.delivery_configuration["workflow_policy_hash"],
+        json!(metadata.workflow_policy_hash)
+    );
+    assert_eq!(
+        flow.delivery_configuration["release"]["steps"][2]["approval_boundary"],
+        "before_gitops_merge"
+    );
+    for key in ["release", "observe"] {
+        let segment = flow
+            .delivery_segments
+            .iter()
+            .find(|s| s.key == key)
+            .unwrap();
+        assert_eq!(segment.status, "pending");
+        assert!(segment.resources.is_empty());
+    }
+    let outcomes = fixture
+        .state
+        .store
+        .list_effective_stage_outcomes(&fixture.work_item_id)
+        .await
+        .unwrap();
+    assert!(outcomes
+        .iter()
+        .any(|outcome| outcome.stage_key == "source_delivery" && outcome.status == "succeeded"));
+    assert!(!outcomes
+        .iter()
+        .any(|outcome| matches!(outcome.stage_key.as_str(), "release" | "observe")));
+    assert!(fixture
+        .state
+        .store
+        .update_repo_work_item_status(
+            &fixture.work_item_id,
+            "completed",
+            "old-controller",
+            "source-only closure",
+            true,
+        )
+        .await
+        .is_err());
+    // A repeated source callback may be rejected as stale, but cannot close the
+    // hosted item or create another source or deployment effect.
+    let _ = internal_source_delivery_observation_outcome(
+        State(fixture.state.clone()),
+        Path(fixture.intent_id.clone()),
+        Json(provider_observation("observer_merge_hosted", true)),
+    )
+    .await;
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .list_effective_stage_outcomes(&fixture.work_item_id)
+            .await
+            .unwrap(),
+        outcomes
+    );
+    let reread = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reread.workflow_policy_hash, metadata.workflow_policy_hash);
+    assert!(reread.closed_at.is_none());
+}
+
+#[tokio::test]
 async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge() {
     let fixture = repo_delivery_fixture("success").await;
     // Repo Mode records Release and Observe as inapplicable before source
@@ -780,6 +1127,10 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
     .await
     .unwrap();
     assert_eq!(flow.work_item.mode.as_deref(), Some("repo"));
+    assert_eq!(flow.work_item.workflow_kind, "source_only");
+    assert_eq!(flow.delivery_configuration["kind"], "repo_mode_source_only");
+    assert_eq!(flow.delivery_configuration["release"], "inapplicable");
+    assert_eq!(flow.delivery_configuration["observe"], "inapplicable");
     assert_eq!(
         flow.work_item.product_model_snapshot_id.as_deref(),
         Some(metadata.product_model_snapshot_id.as_str())

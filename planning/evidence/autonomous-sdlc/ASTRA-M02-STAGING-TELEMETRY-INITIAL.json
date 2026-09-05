@@ -1,0 +1,992 @@
+[
+  {
+    "source": "mimir",
+    "query": {
+      "query": "http_server_duration_count{job=\"apps-staging/yfinance-wrapper\"}"
+    },
+    "error": "HTTP Error 401: Unauthorized"
+  },
+  {
+    "source": "loki",
+    "query": {
+      "query": "{namespace=\"apps-staging\",service_name=\"yfinance-wrapper\"}",
+      "start": "1788602686000000000",
+      "end": "1788603286000000000",
+      "limit": "10"
+    },
+    "status": 200,
+    "result": {
+      "status": "success",
+      "data": {
+        "resultType": "streams",
+        "result": [
+          {
+            "stream": {
+              "app": "yfinance-wrapper",
+              "container": "probe",
+              "detected_level": "unknown",
+              "filename": "/var/log/pods/apps-staging_astra-m02-staging-backend-isolation-before-r2-kptd8_187a0f30-39f6-4517-b784-57456b5c7c79/probe/0.log",
+              "job": "apps-staging/yfinance-wrapper",
+              "namespace": "apps-staging",
+              "node_name": "ubuntu-lucas-engineering-2",
+              "pod": "astra-m02-staging-backend-isolation-before-r2-kptd8",
+              "service_name": "yfinance-wrapper",
+              "stream": "stdout"
+            },
+            "values": [
+              [
+                "1788603272729114521",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"telemetry_collector\", \"host\": \"opentelemetry-collector.monitoring.svc.cluster.local\", \"port\": 4317, \"addresses\": [\"10.43.37.54\"], \"connected\": true, \"elapsed_seconds\": 0.007}"
+              ],
+              [
+                "1788603272721626612",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"yahoo_upstream\", \"host\": \"query1.finance.yahoo.com\", \"port\": 443, \"addresses\": [\"2001:4998:14:800::1000\", \"2001:4998:14:800::1001\", \"209.73.179.247\", \"209.73.179.248\"], \"connected\": true, \"elapsed_seconds\": 0.053}"
+              ],
+              [
+                "1788603272668240207",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"production_frontend_public\", \"host\": \"finance.lucas.engineering\", \"port\": 443, \"addresses\": [\"104.21.29.83\", \"172.67.148.161\", \"2606:4700:3031::6815:1d53\", \"2606:4700:3033::ac43:94a1\"], \"connected\": true, \"elapsed_seconds\": 0.03}"
+              ],
+              [
+                "1788603272638196912",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"production_backend_public\", \"host\": \"yfinance.lucas.engineering\", \"port\": 443, \"addresses\": [\"104.21.29.83\", \"172.67.148.161\", \"2606:4700:3031::6815:1d53\", \"2606:4700:3033::ac43:94a1\"], \"connected\": true, \"elapsed_seconds\": 0.086}"
+              ],
+              [
+                "1788603272552130815",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"production_database_public\", \"host\": \"finance-db.lucas.engineering\", \"port\": 443, \"addresses\": [\"104.21.29.83\", \"172.67.148.161\", \"2606:4700:3031::6815:1d53\", \"2606:4700:3033::ac43:94a1\"], \"connected\": true, \"elapsed_seconds\": 0.036}"
+              ],
+              [
+                "1788603272515954871",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"production_backend_private\", \"host\": \"yfinance-wrapper.apps-prod.svc.cluster.local\", \"port\": 8090, \"addresses\": [\"10.43.96.180\"], \"connected\": false, \"error_type\": \"ConnectionRefusedError\", \"elapsed_seconds\": 0.008}"
+              ],
+              [
+                "1788603272508126487",
+                "{\"role\": \"yfinance-wrapper\", \"name\": \"production_database_private\", \"host\": \"finance-app-database-service.apps-prod.svc.cluster.local\", \"port\": 8091, \"addresses\": [\"10.43.222.39\"], \"connected\": false, \"error_type\": \"ConnectionRefusedError\", \"elapsed_seconds\": 0.089}"
+              ]
+            ]
+          },
+          {
+            "stream": {
+              "app": "yfinance-wrapper",
+              "container": "yfinance-wrapper",
+              "detected_level": "info",
+              "filename": "/var/log/pods/apps-staging_yfinance-wrapper-66b99984d9-w7qq6_e763137d-8b31-411c-b27d-127166e0de98/yfinance-wrapper/0.log",
+              "job": "apps-staging/yfinance-wrapper",
+              "namespace": "apps-staging",
+              "node_name": "ubuntu-lucas-engineering",
+              "pod": "yfinance-wrapper-66b99984d9-w7qq6",
+              "service_name": "yfinance-wrapper",
+              "stream": "stdout"
+            },
+            "values": [
+              [
+                "1788603119717874629",
+                "INFO:     10.42.0.1:40168 - \"GET /healthz HTTP/1.1\" 200 OK"
+              ],
+              [
+                "1788603109717832101",
+                "INFO:     10.42.0.1:57944 - \"GET /healthz HTTP/1.1\" 200 OK"
+              ],
+              [
+                "1788603099717490923",
+                "INFO:     10.42.0.1:38912 - \"GET /healthz HTTP/1.1\" 200 OK"
+              ]
+            ]
+          }
+        ],
+        "stats": {
+          "summary": {
+            "bytesProcessedPerSecond": 192500,
+            "linesProcessedPerSecond": 1302,
+            "totalBytesProcessed": 2365,
+            "totalLinesProcessed": 16,
+            "execTime": 0.012286,
+            "queueTime": 0.000378,
+            "subqueries": 0,
+            "totalEntriesReturned": 10,
+            "splits": 0,
+            "shards": 1,
+            "totalPostFilterLines": 16,
+            "totalStructuredMetadataBytesProcessed": 128
+          },
+          "querier": {
+            "store": {
+              "totalChunksRef": 0,
+              "totalChunksDownloaded": 0,
+              "chunksDownloadTime": 0,
+              "queryReferencedStructuredMetadata": false,
+              "queryUsedV2Engine": false,
+              "chunk": {
+                "headChunkBytes": 0,
+                "headChunkLines": 0,
+                "decompressedBytes": 0,
+                "decompressedLines": 0,
+                "compressedBytes": 0,
+                "totalDuplicates": 0,
+                "postFilterLines": 0,
+                "headChunkStructuredMetadataBytes": 0,
+                "decompressedStructuredMetadataBytes": 0
+              },
+              "chunkRefsFetchTime": 0,
+              "congestionControlLatency": 0,
+              "pipelineWrapperFilteredLines": 0,
+              "dataobj": {
+                "prePredicateDecompressedRows": 0,
+                "prePredicateDecompressedBytes": 0,
+                "prePredicateDecompressedStructuredMetadataBytes": 0,
+                "postPredicateRows": 0,
+                "postPredicateDecompressedBytes": 0,
+                "postPredicateStructuredMetadataBytes": 0,
+                "postFilterRows": 0,
+                "pagesScanned": 0,
+                "pagesDownloaded": 0,
+                "pagesDownloadedBytes": 0,
+                "pageBatches": 0,
+                "totalRowsAvailable": 0,
+                "totalPageDownloadTime": 0
+              }
+            }
+          },
+          "ingester": {
+            "totalReached": 1,
+            "totalChunksMatched": 3,
+            "totalBatches": 1,
+            "totalLinesSent": 10,
+            "store": {
+              "totalChunksRef": 0,
+              "totalChunksDownloaded": 0,
+              "chunksDownloadTime": 0,
+              "queryReferencedStructuredMetadata": false,
+              "queryUsedV2Engine": false,
+              "chunk": {
+                "headChunkBytes": 2365,
+                "headChunkLines": 16,
+                "decompressedBytes": 0,
+                "decompressedLines": 0,
+                "compressedBytes": 0,
+                "totalDuplicates": 0,
+                "postFilterLines": 16,
+                "headChunkStructuredMetadataBytes": 128,
+                "decompressedStructuredMetadataBytes": 0
+              },
+              "chunkRefsFetchTime": 428508,
+              "congestionControlLatency": 0,
+              "pipelineWrapperFilteredLines": 0,
+              "dataobj": {
+                "prePredicateDecompressedRows": 0,
+                "prePredicateDecompressedBytes": 0,
+                "prePredicateDecompressedStructuredMetadataBytes": 0,
+                "postPredicateRows": 0,
+                "postPredicateDecompressedBytes": 0,
+                "postPredicateStructuredMetadataBytes": 0,
+                "postFilterRows": 0,
+                "pagesScanned": 0,
+                "pagesDownloaded": 0,
+                "pagesDownloadedBytes": 0,
+                "pageBatches": 0,
+                "totalRowsAvailable": 0,
+                "totalPageDownloadTime": 0
+              }
+            }
+          },
+          "cache": {
+            "chunk": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "index": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "result": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "statsResult": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "volumeResult": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "seriesResult": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "labelResult": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            },
+            "instantMetricResult": {
+              "entriesFound": 0,
+              "entriesRequested": 0,
+              "entriesStored": 0,
+              "bytesReceived": 0,
+              "bytesSent": 0,
+              "requests": 0,
+              "downloadTime": 0,
+              "queryLengthServed": 0
+            }
+          },
+          "index": {
+            "totalChunks": 0,
+            "postFilterChunks": 0,
+            "shardsDuration": 0,
+            "usedBloomFilters": false
+          }
+        }
+      }
+    }
+  },
+  {
+    "source": "tempo",
+    "query": {
+      "q": "{resource.service.name=\"yfinance-wrapper\" && resource.service.namespace=\"apps-staging\"}",
+      "start": "1788602686",
+      "end": "1788603286",
+      "limit": "5"
+    },
+    "status": 200,
+    "result": {
+      "traces": [
+        {
+          "traceID": "39454d6cf42bbb7a8f191d68379202fd",
+          "rootServiceName": "yfinance-wrapper",
+          "rootTraceName": "GET /healthz",
+          "startTimeUnixNano": "1788603129716698770",
+          "durationMs": 2,
+          "spanSet": {
+            "spans": [
+              {
+                "spanID": "230039df96cc12b3",
+                "startTimeUnixNano": "1788603129717479124",
+                "durationNanos": "85581",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "13f9df174adc799d",
+                "startTimeUnixNano": "1788603129718693156",
+                "durationNanos": "42336",
+                "attributes": [
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  },
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "c02ab38d025886d5",
+                "startTimeUnixNano": "1788603129716698770",
+                "durationNanos": "2411254",
+                "attributes": [
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  },
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  }
+                ]
+              }
+            ],
+            "matched": 3
+          },
+          "spanSets": [
+            {
+              "spans": [
+                {
+                  "spanID": "230039df96cc12b3",
+                  "startTimeUnixNano": "1788603129717479124",
+                  "durationNanos": "85581",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "13f9df174adc799d",
+                  "startTimeUnixNano": "1788603129718693156",
+                  "durationNanos": "42336",
+                  "attributes": [
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    },
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "c02ab38d025886d5",
+                  "startTimeUnixNano": "1788603129716698770",
+                  "durationNanos": "2411254",
+                  "attributes": [
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    },
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "matched": 3
+            }
+          ],
+          "serviceStats": {
+            "yfinance-wrapper": {
+              "spanCount": 3
+            }
+          }
+        },
+        {
+          "traceID": "e46a0a483b978e37e035064f65e2e9e6",
+          "rootServiceName": "yfinance-wrapper",
+          "rootTraceName": "GET /healthz",
+          "startTimeUnixNano": "1788603119716057318",
+          "durationMs": 2,
+          "spanSet": {
+            "spans": [
+              {
+                "spanID": "6aef15e8d54d93b8",
+                "startTimeUnixNano": "1788603119716803129",
+                "durationNanos": "127609",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "cf257065c8c61e9f",
+                "startTimeUnixNano": "1788603119718107635",
+                "durationNanos": "70288",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "c85e2bf18b4f6658",
+                "startTimeUnixNano": "1788603119716057318",
+                "durationNanos": "2505681",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              }
+            ],
+            "matched": 3
+          },
+          "spanSets": [
+            {
+              "spans": [
+                {
+                  "spanID": "6aef15e8d54d93b8",
+                  "startTimeUnixNano": "1788603119716803129",
+                  "durationNanos": "127609",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "cf257065c8c61e9f",
+                  "startTimeUnixNano": "1788603119718107635",
+                  "durationNanos": "70288",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "c85e2bf18b4f6658",
+                  "startTimeUnixNano": "1788603119716057318",
+                  "durationNanos": "2505681",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "matched": 3
+            }
+          ],
+          "serviceStats": {
+            "yfinance-wrapper": {
+              "spanCount": 3
+            }
+          }
+        },
+        {
+          "traceID": "4acf6f41efa7276bc4967993f7a6aa63",
+          "rootServiceName": "yfinance-wrapper",
+          "rootTraceName": "GET /healthz",
+          "startTimeUnixNano": "1788603109715981508",
+          "durationMs": 2,
+          "spanSet": {
+            "spans": [
+              {
+                "spanID": "5dcb595a3dc3d6b0",
+                "startTimeUnixNano": "1788603109716804263",
+                "durationNanos": "98785",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "1de1dbcf4a7a34ef",
+                "startTimeUnixNano": "1788603109717955435",
+                "durationNanos": "48615",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "a2168fd5d00716f6",
+                "startTimeUnixNano": "1788603109715981508",
+                "durationNanos": "2405637",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              }
+            ],
+            "matched": 3
+          },
+          "spanSets": [
+            {
+              "spans": [
+                {
+                  "spanID": "5dcb595a3dc3d6b0",
+                  "startTimeUnixNano": "1788603109716804263",
+                  "durationNanos": "98785",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "1de1dbcf4a7a34ef",
+                  "startTimeUnixNano": "1788603109717955435",
+                  "durationNanos": "48615",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "a2168fd5d00716f6",
+                  "startTimeUnixNano": "1788603109715981508",
+                  "durationNanos": "2405637",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "matched": 3
+            }
+          ],
+          "serviceStats": {
+            "yfinance-wrapper": {
+              "spanCount": 3
+            }
+          }
+        },
+        {
+          "traceID": "64ae0432629a4095085b34f150da8036",
+          "rootServiceName": "yfinance-wrapper",
+          "rootTraceName": "GET /healthz",
+          "startTimeUnixNano": "1788603099715700137",
+          "durationMs": 2,
+          "spanSet": {
+            "spans": [
+              {
+                "spanID": "e7fddd4ba2240e94",
+                "startTimeUnixNano": "1788603099716549222",
+                "durationNanos": "105599",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "db65b4b54dec2eaf",
+                "startTimeUnixNano": "1788603099717738597",
+                "durationNanos": "84274",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "85f865680b2da1a8",
+                "startTimeUnixNano": "1788603099715700137",
+                "durationNanos": "2523403",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              }
+            ],
+            "matched": 3
+          },
+          "spanSets": [
+            {
+              "spans": [
+                {
+                  "spanID": "e7fddd4ba2240e94",
+                  "startTimeUnixNano": "1788603099716549222",
+                  "durationNanos": "105599",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "db65b4b54dec2eaf",
+                  "startTimeUnixNano": "1788603099717738597",
+                  "durationNanos": "84274",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "85f865680b2da1a8",
+                  "startTimeUnixNano": "1788603099715700137",
+                  "durationNanos": "2523403",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "matched": 3
+            }
+          ],
+          "serviceStats": {
+            "yfinance-wrapper": {
+              "spanCount": 3
+            }
+          }
+        },
+        {
+          "traceID": "24e2e0679f1671247ae9a4490c3be0bf",
+          "rootServiceName": "yfinance-wrapper",
+          "rootTraceName": "GET /healthz",
+          "startTimeUnixNano": "1788603089717467201",
+          "durationMs": 3,
+          "spanSet": {
+            "spans": [
+              {
+                "spanID": "d9e7ce3c80b997f1",
+                "startTimeUnixNano": "1788603089719042525",
+                "durationNanos": "126052",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "d9a9a9f48d58a691",
+                "startTimeUnixNano": "1788603089720594901",
+                "durationNanos": "111679",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              },
+              {
+                "spanID": "cd4648ebb2b7551c",
+                "startTimeUnixNano": "1788603089717467201",
+                "durationNanos": "3902572",
+                "attributes": [
+                  {
+                    "key": "service.namespace",
+                    "value": {
+                      "stringValue": "apps-staging"
+                    }
+                  },
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "yfinance-wrapper"
+                    }
+                  }
+                ]
+              }
+            ],
+            "matched": 3
+          },
+          "spanSets": [
+            {
+              "spans": [
+                {
+                  "spanID": "d9e7ce3c80b997f1",
+                  "startTimeUnixNano": "1788603089719042525",
+                  "durationNanos": "126052",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "d9a9a9f48d58a691",
+                  "startTimeUnixNano": "1788603089720594901",
+                  "durationNanos": "111679",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "spanID": "cd4648ebb2b7551c",
+                  "startTimeUnixNano": "1788603089717467201",
+                  "durationNanos": "3902572",
+                  "attributes": [
+                    {
+                      "key": "service.namespace",
+                      "value": {
+                        "stringValue": "apps-staging"
+                      }
+                    },
+                    {
+                      "key": "service.name",
+                      "value": {
+                        "stringValue": "yfinance-wrapper"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "matched": 3
+            }
+          ],
+          "serviceStats": {
+            "yfinance-wrapper": {
+              "spanCount": 3
+            }
+          }
+        }
+      ],
+      "metrics": {
+        "inspectedBytes": "8746837",
+        "completedJobs": 3,
+        "totalJobs": 3
+      }
+    }
+  }
+]
