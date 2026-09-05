@@ -2,7 +2,8 @@
 
 Status: approved implementation program; M01–M03 accepted; M04 active; M05 reader/contract implementation in progress. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `83a2689c877a3f48688d1d457c34e83474698c46`.
+Current compiled PHarness release: `fd740927110366a983de6bb0d3bc6c576577708b`, observed
+2026-09-05 through release commit `548b978c33f8f32fb23d91120ef65a3502188d1c`.
 These are starting observations, not permanent latest-version claims.
 
 ## Product promise and authority
@@ -69,8 +70,9 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: publish the M04 evaluator repair,
-then run fresh coding qualification while continuing M05 contract preparation.
+Next eligible: complete fresh live M04 qualification while continuing M05
+contract preparation. The evaluator repair is published and its exact deployed
+identity verified; all 216 packaged offline checks passed.
 The original backend artifact is restored; both staging deployments are Healthy;
 all 13 isolation checks passed. Cert-manager 1.20.3 preserves 31 ready certificates
 and 78 retained requests. The owner-authorized Mac serves Tekton's existing
@@ -78,8 +80,8 @@ BuildKit endpoint; uncached AMD64 execution, a 112 MiB private TLS push, and
 exact-digest pull/run passed. Worker capability checks passed after the GitOps
 writer credential was rotated. Runtime contract declarations remain M05 and the
 real frontend pipeline remains M07. The tested M04 scratch cleanup is merged at
-`fd740927110366a983de6bb0d3bc6c576577708b`; its release and new qualification are
-pending. M05 now enforces saved stage profiles, gateway choices and limits in
+`fd740927110366a983de6bb0d3bc6c576577708b`; its [release evidence](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md)
+does not replace the pending live model qualification. M05 now enforces saved stage profiles, gateway choices and limits in
 unpublished code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).
 See [M02 evidence](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
@@ -172,4 +174,3 @@ run meaningful checks, record exact results and limitations, commit implementati
 evidence, then update milestone/finding status. Continue eligible work until acceptance
 or a concrete external dependency requires input. Never weaken a gate, expand production
 authority, erase history, or count a manually completed step as autonomous success.
-

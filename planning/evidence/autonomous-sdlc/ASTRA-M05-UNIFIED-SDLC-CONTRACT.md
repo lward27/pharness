@@ -3,8 +3,8 @@
 Status: tested reader, creation, and stage-authority preparation; **milestone acceptance remains open**.
 Observed 2026-09-05. Implementation base: PHarness
 `fd740927110366a983de6bb0d3bc6c576577708b`, including M03 and the M04 evaluator
-scratch-lifecycle repair. The compiled cluster runtime remains
-`83a2689c877a3f48688d1d457c34e83474698c46`; none of the new Rust code or migration
+scratch-lifecycle repair. The compiled cluster runtime is now
+`fd740927110366a983de6bb0d3bc6c576577708b`; none of the M05 Rust code or migration
 has been deployed. Hosted creation remains disabled by default.
 
 ## Implemented and tested
@@ -141,9 +141,10 @@ No such release is deployed yet; record its immutable release identity before
 applying 0052. Do not remove the migration or reset Finance's database generation.
 
 Creating new hosted work currently requires current-runtime gateway qualification
-as well as matching profile, policy, and target hashes. The live M04 evaluation
-started on runtime 83a2689 is a baseline for that runtime; it is not evidence for
-an unbuilt API revision. Keep qualification provenance explicit at cutover.
+as well as matching profile, policy, and target hashes. The earlier evaluation on
+runtime 83a2689 failed; fresh M04 qualification follows the fd74092 release.
+Results for either runtime cannot silently qualify an unbuilt M05 API revision.
+Keep qualification provenance explicit at cutover.
 
 ## Remaining acceptance work
 

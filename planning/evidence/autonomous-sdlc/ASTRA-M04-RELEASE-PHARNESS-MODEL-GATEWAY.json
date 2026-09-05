@@ -1,0 +1,42 @@
+{
+  "started_at": "2026-09-05T10:46:02.604459+00:00",
+  "completed_at": "2026-09-05T10:49:42.752999+00:00",
+  "component": "model-gateway",
+  "revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "builder": "rancher-desktop",
+  "platform": "linux/amd64",
+  "image_url": "registry.lucas.engineering/pharness-model-gateway",
+  "digest": "sha256:c8f1c5be988ade9299e33e84a4b461cf8909196fd6b1f75dfb3089533d81e428",
+  "immutable_ref": "registry.lucas.engineering/pharness-model-gateway@sha256:c8f1c5be988ade9299e33e84a4b461cf8909196fd6b1f75dfb3089533d81e428",
+  "archive_sha256": "9aa4c57efc87d6456887c05135d981340778c5aed6730f216d5dad379091617d",
+  "all_content_hashes_verified": true,
+  "oci_source": "https://github.com/lward27/pharness",
+  "oci_revision_verified": true,
+  "destination_tls_verified": true,
+  "transport": "OCI archive; authenticated 8 MiB chunks through existing registry-write-gateway private NodePort 192.168.20.210:32443 with original hostname and trusted private CA",
+  "blob_results": [
+    {
+      "digest": "sha256:039e6f9f9752f74a3ff4a6a224f64c7c864da16ed98f882107704328f41b9c42",
+      "bytes": 28232590,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:561920ef7e6e3ff5702a0952406ddd02d4dc0553868c394cafcb8dca971964af",
+      "bytes": 3524188,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:6b8e25248647fdecb6c6c20042f405a1ef1bdb598571fef3eb6ff06a0c712a6c",
+      "bytes": 3027493,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:723ae4a72576cfdc3c7c115ef6cc07db02f0a7a30de5beee710b4b1acf7c41e0",
+      "bytes": 2491,
+      "result": "uploaded"
+    }
+  ],
+  "sbom_verified": false,
+  "signature_verified": false,
+  "provenance_verified": false
+}
