@@ -461,6 +461,14 @@ pub(in crate::app) fn bounded_production_grant_expiry(
     item: &StoredWorkItem,
     requested: Option<String>,
 ) -> Result<Option<String>, ApiError> {
+    bounded_production_grant_expiry_at(item, requested, current_millis())
+}
+
+pub(in crate::app) fn bounded_production_grant_expiry_at(
+    item: &StoredWorkItem,
+    requested: Option<String>,
+    now: u128,
+) -> Result<Option<String>, ApiError> {
     if !item.production_impacting {
         return Ok(requested);
     }
@@ -470,7 +478,6 @@ pub(in crate::app) fn bounded_production_grant_expiry(
     let expires_ms = expires_at
         .parse::<u128>()
         .map_err(|_| ApiError::bad_request("expires_at must be unix milliseconds"))?;
-    let now = current_millis();
     if expires_ms <= now || expires_ms > now + 30 * 60 * 1_000 {
         return Err(ApiError::bad_request(
             "production authorization must expire within the next 30 minutes",

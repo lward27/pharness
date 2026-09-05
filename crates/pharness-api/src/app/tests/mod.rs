@@ -111,7 +111,7 @@ use super::work_items::attempts::{
 use super::work_items::flow::{get_work_item, list_work_items, work_item_flow, ListWorkItemsQuery};
 use super::work_items::lifecycle::approval_gates_from_work_item;
 use super::work_items::preflight::{
-    bounded_production_grant_expiry, create_work_item, request_matches_protected_target,
+    bounded_production_grant_expiry_at, create_work_item, request_matches_protected_target,
 };
 use super::work_items::reconcile::{
     action_effect, block_work_item_from_delivery_failure, complete_work_item_from_verified_release,

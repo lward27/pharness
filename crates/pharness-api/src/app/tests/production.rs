@@ -2,7 +2,7 @@ use super::{
     action_effect, approval_gate_lifecycle_readiness,
     approval_gate_uses_dedicated_lifecycle_action, approval_gates_from_work_item,
     approve_rollback_intent, authorize_gitops_change_set_delivery, batch_decide_approval_gates,
-    block_work_item_from_delivery_failure, bounded_production_grant_expiry,
+    block_work_item_from_delivery_failure, bounded_production_grant_expiry_at,
     complete_work_item_from_verified_release, current_millis, deployment_intent_reconcile_action,
     deployment_intent_requires_execution_preflight, execute_work_item_action,
     get_run_operator_summary, git_delivery_reconcile_action, gitops_change_set_reconcile_action,
@@ -1545,15 +1545,31 @@ async fn production_authorization_rejects_expired_or_overlong_windows() {
         .await
         .unwrap()
         .unwrap();
-    let now = current_millis();
-    assert!(bounded_production_grant_expiry(&item, Some((now - 1).to_string())).is_err());
-    assert!(
-        bounded_production_grant_expiry(&item, Some((now + 30 * 60 * 1_000 + 1).to_string()))
-            .is_err()
-    );
-    assert!(
-        bounded_production_grant_expiry(&item, Some((now + 5 * 60 * 1_000).to_string())).is_ok()
-    );
+    // Keep the decision instant fixed while exercising exact millisecond
+    // boundaries; the production wrapper supplies the real clock.
+    let now = 1_700_000_000_000_u128;
+    assert!(bounded_production_grant_expiry_at(&item, None, now).is_err());
+    assert!(bounded_production_grant_expiry_at(&item, Some("invalid".into()), now).is_err());
+    assert!(bounded_production_grant_expiry_at(&item, Some((now - 1).to_string()), now).is_err());
+    assert!(bounded_production_grant_expiry_at(&item, Some(now.to_string()), now).is_err());
+    assert!(bounded_production_grant_expiry_at(
+        &item,
+        Some((now + 30 * 60 * 1_000 + 1).to_string()),
+        now
+    )
+    .is_err());
+    assert!(bounded_production_grant_expiry_at(
+        &item,
+        Some((now + 30 * 60 * 1_000).to_string()),
+        now
+    )
+    .is_ok());
+    assert!(bounded_production_grant_expiry_at(
+        &item,
+        Some((now + 5 * 60 * 1_000).to_string()),
+        now
+    )
+    .is_ok());
 }
 
 #[tokio::test]

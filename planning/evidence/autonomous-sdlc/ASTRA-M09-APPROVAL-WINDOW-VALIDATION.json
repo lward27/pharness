@@ -1,0 +1,24 @@
+{
+  "verified_at": "2026-09-05T16:31:20.393306+00:00",
+  "source_base": "f1239eab36c2078f463aab766f5946546a51f231",
+  "cause": "The test sampled wall time before the function sampled it again. Its 30-minute-plus-one-millisecond value became valid if at least one millisecond passed.",
+  "change": "Keep the production real-clock wrapper and unchanged 30-minute inequality; exercise the decision function at one fixed instant. Add exact expiry, exact 30-minute, missing and malformed-value cases.",
+  "source_file_sha256": {
+    "crates/pharness-api/src/app/work_items/preflight.rs": "dfc8def81a738d4483add5b7dc557118683610620f588ba03d9342c499e60e43",
+    "crates/pharness-api/src/app/tests/mod.rs": "747454f8ea059e59a741480ad144e207453a3ac3d08ede5bae4675aaaf43e5f2",
+    "crates/pharness-api/src/app/tests/production.rs": "acda3c95ce9b786c0bae1595dc750d6f50d30febc47e7df7d8a8a275ada074be"
+  },
+  "validation": {
+    "api_tests": 259,
+    "clippy_all_targets": "passed with warnings denied",
+    "architecture": "passed including five parser tests",
+    "format_and_diff": "passed"
+  },
+  "log_sha256": {
+    "api": "7a510bf45b46606fe23a11e60d321d31fc5e50e1583ae46043e6a70dff96daea",
+    "clippy": "1d20f462efa8582c198bfc6f2d1b237674fc8ba72617bf55c490f143038490f2",
+    "architecture": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "initial_combined_failure_log_sha256": "beb9d3fa784a4147a5c05f75d9345f29d1d805176897a67f55c98d09e4e22ce4",
+  "scope": "Deterministic approval-window regression coverage. No approval authority, deadline, live runtime or production resource was changed; M09 acceptance remains open."
+}
