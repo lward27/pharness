@@ -98,10 +98,34 @@ and the final API suite was rerun after that correction. No checker exception or
 size-limit increase was introduced. See
 [integration validation](ASTRA-M06-CONTROLLER-INTEGRATION-VALIDATION.json).
 
+## Preparation interruption recovery
+
+The next implementation slice reconciles preparation Jobs using the same exact
+manifest identity as coding Jobs. It preserves the existing Run, workspace,
+preparation and bounded authorization after a lost dispatch acknowledgement.
+A completed Job without a validated signed callback remains a failure; a Job's
+status is not an environment verification result.
+
+After signature, source, contract and runner validation, a successful hosted
+callback records the preparation, Run environment and WorkItem snapshot pointer
+in one SQLite transaction. An injected persistence failure proves those changes
+roll back together. A late dispatch acknowledgement or failure callback cannot
+reopen or overwrite an accepted result. The callback wakes the controller rather
+than dispatching the next worker directly. Paused work may observe an existing Job
+but cannot recreate an absent one. Historical partial state does not receive a
+reconstructed signature.
+
+All **304 distinct tests** passed after this slice: API 250, admin 1, store 53.
+Clippy with warnings denied, formatting and architecture checks passed. The
+three additional tests cover signed/duplicate callbacks, exact Job recovery,
+and transactional rollback with late acknowledgements. These are local tests;
+no M06 code or migration has been deployed. See
+[preparation recovery validation](ASTRA-M06-PREPARATION-RECOVERY-VALIDATION.json).
+
 ## Remaining implementation and acceptance
 
-Environment-preparation dispatch recovery and incomplete multi-record startup
-still need work. Source writer/observer persistence ordering and the delivery
+Terminal Run-to-stage normalization and incomplete multi-record startup
+still need interruption recovery. Source writer/observer persistence ordering and the delivery
 adapters are not integrated into this scheduler. Production approvals, rollback,
 and terminal cancellation must close against those actual operations. A real
 active-workflow restart and duplicate source/pipeline/deployment acceptance remain

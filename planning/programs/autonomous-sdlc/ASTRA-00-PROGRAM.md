@@ -104,9 +104,9 @@ current build's exact-main checks.
 
 M06 engineering progression is integrated at `e1709a2` on
 `codex/astra-autonomous-controller`, following persistence `9d52c9e`, dispatch
-recovery `bded5a1`, and controls/admission `51485ba`. All 301 distinct API/admin/store
-tests pass. Environment-preparation recovery, source/delivery integration, terminal
-cancellation, and live acceptance remain open. These independent preparations do
+recovery `bded5a1`, and controls/admission `51485ba`. Atomic preparation recovery follows at `f755915`, with 304 distinct API/admin/store
+tests passing. Terminal normalization recovery is under development. Source/delivery
+integration, terminal cancellation, and live acceptance remain open. These independent preparations do
 not waive M05 or M04 gates. See
 [controller evidence](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
 Neither schema 0052 nor 0053 has been applied to Finance.
