@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-05T22:01:28.475211+00:00",
+  "builder": "lucas-desktop",
+  "buildkit_version": "v0.32.2",
+  "host": "192.168.50.145",
+  "worker_hostname": "ubuntu-desktop",
+  "builder_endpoint": "tcp://127.0.0.1:12342",
+  "ssh_forward_target": "192.168.50.145:12340",
+  "tls_server_name": "buildkit-k3s.lucas.internal",
+  "mutual_tls": true,
+  "tls_verification_disabled": false,
+  "uncached_linux_amd64_execution": true,
+  "probe_exit_code": 0,
+  "buildkit_k3s_memory_max_bytes": 8589934592,
+  "host_available_memory_mib": 14047,
+  "storage_free_gib": 300,
+  "daemon_restarts": 0,
+  "host_or_daemon_configuration_changed": false,
+  "scope": "Local client execution proof; direct cluster access and registry writes still pending."
+}

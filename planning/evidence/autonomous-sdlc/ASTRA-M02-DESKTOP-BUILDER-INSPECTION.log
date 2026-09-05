@@ -1,0 +1,39 @@
+Name:          lucas-desktop
+Driver:        remote
+Last Activity: 2026-09-03 12:46:07 +0000 UTC
+
+Nodes:
+Name:             lucas-desktop0
+Endpoint:         tcp://127.0.0.1:12342
+Driver Options:   servername="buildkit-k3s.lucas.internal" cacert="/Users/wardl/.config/lucas-engineering/pki/buildkit/k3s/ca.pem" cert="/Users/wardl/.config/lucas-engineering/pki/buildkit/k3s/client-cert.pem" key="/Users/wardl/.config/lucas-engineering/pki/buildkit/k3s/client-key.pem"
+Status:           running
+BuildKit version: v0.32.2
+Platforms:        linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/386
+Labels:
+ org.mobyproject.buildkit.worker.executor:         oci
+ org.mobyproject.buildkit.worker.hostname:         ubuntu-desktop
+ org.mobyproject.buildkit.worker.network:          host
+ org.mobyproject.buildkit.worker.oci.process-mode: sandbox
+ org.mobyproject.buildkit.worker.selinux.enabled:  false
+ org.mobyproject.buildkit.worker.snapshotter:      overlayfs
+GC Policy rule#0:
+ All:            false
+ Filters:        type==source.local type==exec.cachemount type==source.git.checkout
+ Keep Duration:  48h0m0s
+ Max Used Space: 488.3MiB
+GC Policy rule#1:
+ All:            false
+ Keep Duration:  1440h0m0s
+ Reserved Space: 10GiB
+ Max Used Space: 200GiB
+ Min Free Space: 100GiB
+GC Policy rule#2:
+ All:            false
+ Reserved Space: 10GiB
+ Max Used Space: 200GiB
+ Min Free Space: 100GiB
+GC Policy rule#3:
+ All:            true
+ Reserved Space: 10GiB
+ Max Used Space: 200GiB
+ Min Free Space: 100GiB

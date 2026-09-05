@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-05T22:11:41.914260+00:00",
+  "revision": "202be9039eef831ece0a4d1c5022d71efbe75b31",
+  "sync": "Synced",
+  "health": "Healthy",
+  "addresses": [
+    [
+      "192.168.50.145"
+    ]
+  ],
+  "cluster": "lucas_engineering",
+  "namespace": "tekton-pipelines",
+  "pull_request": 54,
+  "source_head": "9af2adbdc25342ab13a8f699cf0919bacef1e05a",
+  "endpoint_uid": "485dd0ca-e2f9-4efd-a919-a6d6f5b7ed31",
+  "reconciled_at": "2026-09-05T22:11:28Z",
+  "normal_refresh_requested": true,
+  "forced_sync": false,
+  "direct_endpoint_patch": false
+}

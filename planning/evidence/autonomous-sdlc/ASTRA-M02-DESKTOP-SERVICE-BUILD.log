@@ -1,0 +1,50 @@
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 295B 0.1s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context:
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3
+#4 resolve docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN test "$(uname -m)" = x86_64 && echo ASTRA_UNCACHED_AMD64_EXECUTION_PASSED
+#5 0.075 ASTRA_UNCACHED_AMD64_EXECUTION_PASSED
+#5 DONE 0.1s
+
+#6 exporting to image
+#6 exporting layers 0.1s done
+#6 exporting manifest sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01 0.0s done
+#6 exporting config sha256:e0ba8549cb9e237f164470730508d6fec6a3506e8caa3137f73b8c549012a99a
+#6 exporting config sha256:e0ba8549cb9e237f164470730508d6fec6a3506e8caa3137f73b8c549012a99a 0.0s done
+#6 pushing layers
+#6 ...
+
+#7 [auth] sharing credentials for registry.lucas.engineering
+#7 DONE 0.0s
+
+#6 exporting to image
+#6 pushing layers 54.0s done
+#6 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-desktop-service-20260905@sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01
+#6 pushing manifest for registry.lucas.engineering/buildkit-smoke:astra-desktop-service-20260905@sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01 10.8s done
+#6 DONE 64.9s
+{
+  "containerimage.config.digest": "sha256:e0ba8549cb9e237f164470730508d6fec6a3506e8caa3137f73b8c549012a99a",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01",
+    "size": 668,
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:468ad728e2e76945db770f891d0cf7860fb9541d8a23c21643591cedea3bdf01",
+  "image.name": "registry.lucas.engineering/buildkit-smoke:astra-desktop-service-20260905"
+}

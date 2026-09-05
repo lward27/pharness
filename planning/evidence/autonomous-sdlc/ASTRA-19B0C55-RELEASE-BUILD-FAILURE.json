@@ -1,0 +1,16 @@
+{
+  "recorded_at": "2026-09-05T21:51:39.676352+00:00",
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "builder": "rancher-desktop",
+  "build_exit": 102,
+  "failure": "ResourceExhausted: cannot allocate memory during the API/worker release compilation",
+  "vm_memory_gib": 4,
+  "vm_cpus": 2,
+  "host_memory_gib": 16,
+  "host_free_memory_percent": 57,
+  "active_tekton_pipeline_runs": 0,
+  "published_images": 0,
+  "clone_job_created": false,
+  "live_deployment_changed": false,
+  "planned_recovery": "Increase only the local Rancher Desktop VM capacity to 6 GiB, restore its existing scoped BuildKit connection, retry the same clean source with the same Dockerfiles and agent limits"
+}

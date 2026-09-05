@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-09-05T22:03:22.905537+00:00",
+  "cluster": "lucas_engineering",
+  "namespace": "tekton-pipelines",
+  "job": "astra-m02-desktop-return-preflight-20260905",
+  "job_uid": "5e553e3a-d608-4134-825f-414a30b40b98",
+  "started_at": "2026-09-05T22:01:28Z",
+  "completed_at": "2026-09-05T22:02:49Z",
+  "buildkit_endpoint": "192.168.50.145:12340",
+  "uncached_amd64_execution": true,
+  "payload_bytes": 117440512,
+  "mutual_tls": true,
+  "tls_verification_disabled": false,
+  "image_ref": "registry.lucas.engineering/buildkit-smoke@sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d",
+  "metadata": {
+    "containerimage.config.digest": "sha256:eb53626c5c019956306e5b0cfa3e824883613afd51b6ac0170eba58c41ebdf0d",
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d",
+      "size": 862,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "containerimage.digest": "sha256:0152b21495be91ddd3cfc3df74dde54b20df6150652eef5697ef1ebe48c6168d",
+    "image.name": "registry.lucas.engineering/buildkit-smoke:astra-desktop-return-20260905"
+  },
+  "log_sha256": "9a6a38878d1456c54eddadeeb4541d63fcb78bc5b72acae8eb7aabe45db26824",
+  "scope": "Direct cluster-to-desktop build, authenticated TLS push and independent exact-digest pull/run passed. Service route awaits GitOps restoration.",
+  "exact_digest_pull_and_run": {
+    "completed_at": "2026-09-05T22:05:34.446136+00:00",
+    "docker_context": "rancher-desktop",
+    "platform": "linux/amd64",
+    "network": "none",
+    "payload_bytes": 117440512,
+    "exit_code": 0,
+    "log_sha256": "ec9bb5596a04e9c06ab6ba28c15ea382f6293192f870cf9cec3f42d4d2a35a97"
+  }
+}

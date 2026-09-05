@@ -1,0 +1,41 @@
+{
+  "recorded_at": "2026-09-05T22:15:51.924064+00:00",
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "job": "astra-schema0054-clone-20260905",
+  "job_uid": "15dd99bf-5753-4822-9619-0dcb65bc59cf",
+  "status": {
+    "conditions": [
+      {
+        "lastProbeTime": "2026-09-05T22:14:50Z",
+        "lastTransitionTime": "2026-09-05T22:14:50Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "FailureTarget"
+      },
+      {
+        "lastProbeTime": "2026-09-05T22:14:50Z",
+        "lastTransitionTime": "2026-09-05T22:14:50Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "Failed"
+      }
+    ],
+    "failed": 1,
+    "ready": 0,
+    "startTime": "2026-09-05T22:13:56Z",
+    "terminating": 0,
+    "uncountedTerminatedPods": {}
+  },
+  "failure": "Verification script incorrectly queried delivery_stage directly on gitops_change_sets. Schema 54 stores that field on deployment_intents; GitOps records reference the deployment.",
+  "migration_init_exit": 0,
+  "verification_exit": 1,
+  "acceptance": "failed check, not accepted",
+  "correction": "Check GitOps stages through the existing deployment_intent_id join; retain all migration, integrity, original-column fingerprint and archive checks. Two in-memory legacy/hosted cases validated the corrected join.",
+  "new_job": "astra-schema0054-clone-r2-20260905",
+  "original_job_retained": true,
+  "original_manifest_sha256": "56f6a5c0ee758d7c0041441347b07ccc72dcf4583459110f2a1d23fc54a26463",
+  "corrected_manifest_sha256": "8e06b61039dbb0c2833e1238da0b36ecab98c16a27d3601a323c43206f6d2ad3",
+  "live_database_changed": false
+}

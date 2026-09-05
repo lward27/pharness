@@ -1,0 +1,31 @@
+#0 building with "lucas-desktop" instance using remote driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 30B 0.1s
+#1 transferring dockerfile: 268B 0.6s done
+#1 DONE 0.7s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+#2 DONE 1.4s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 0.1s
+#3 transferring context: 2B 0.3s done
+#3 DONE 0.3s
+
+#4 [1/2] FROM docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+#4 resolve docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN test "$(uname -m)" = "x86_64" && test "$(dpkg --print-architecture)" = "amd64" && echo "Uncached Linux AMD64 execution passed"
+#5 0.146 Uncached Linux AMD64 execution passed
+#5 DONE 0.2s
+
+#6 exporting to oci image format
+#6 exporting layers
+#6 exporting layers 0.1s done
+#6 exporting manifest sha256:4cbb4499ce1f7e691366e8119988677e4949ade82a768e5f3a0ef86e507beccc 0.0s done
+#6 exporting config sha256:b02dfac7f2a0f92fde1d50903cf2a6267ed5fda830d809461b762cfa12eaf472 0.0s done
+#6 sending tarball
+#6 sending tarball 67.9s done
+#6 DONE 68.0s

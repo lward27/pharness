@@ -1,0 +1,13 @@
+{
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "filename": "pharness-codex-host-19b0c55c48e3614d0b4507d56df3029a52475618-linux-amd64.tar.gz",
+  "local_path": "/Users/wardl/Personal/apps/pharness-release-artifacts/19b0c55c48e3614d0b4507d56df3029a52475618/pharness-codex-host-19b0c55c48e3614d0b4507d56df3029a52475618-linux-amd64.tar.gz",
+  "sha256": "10e93e906da13ab1e433558e7f260feaefa1d4bca1a4417d19c43ba8ffe5238e",
+  "bytes": 231639409,
+  "all_checksums_verified": true,
+  "file_checksums": 13,
+  "elf_linux_amd64_headers_verified": true,
+  "codex_version": "0.150.1",
+  "runtime_bundle_verification": "build script passed the Dockerfile bundle-verification target",
+  "appledouble_entries": 0
+}
