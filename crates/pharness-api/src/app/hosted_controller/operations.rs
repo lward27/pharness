@@ -275,6 +275,9 @@ pub(super) async fn reconcile_operation(
             now(),
         )
         .await?;
+    if run.status == "preparing" {
+        return super::preparation::reconcile(state, claim, run, expired).await;
+    }
     if redispatch && run.status == "queued" && claim.control == "active" && !expired {
         if run.budget_consumption.turns_used != 0 || run.budget_consumption.tokens_used != 0 {
             return Err(ApiError::conflict(

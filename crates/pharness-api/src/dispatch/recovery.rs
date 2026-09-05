@@ -151,4 +151,4 @@ pub(super) async fn create_or_reconcile_job(
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

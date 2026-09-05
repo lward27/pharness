@@ -13,13 +13,13 @@ fn manifest() -> Value {
     }))
 }
 
-struct KubectlFixture {
-    dir: PathBuf,
-    command: String,
+pub(in crate::dispatch) struct KubectlFixture {
+    pub(in crate::dispatch) dir: PathBuf,
+    pub(in crate::dispatch) command: String,
 }
 
 impl KubectlFixture {
-    fn new(unavailable: bool) -> Self {
+    pub(in crate::dispatch) fn new(unavailable: bool) -> Self {
         let dir = std::env::temp_dir().join(format!(
             "pharness-dispatch-recovery-{}",
             uuid::Uuid::now_v7().simple()
@@ -33,6 +33,8 @@ impl KubectlFixture {
 case "$1" in
 get)
   if [ "{unavailable}" = "true" ]; then exit 9; fi
+  if [ "$2" = "jobs" ]; then printf '{{"items":[]}}'; exit 0; fi
+  if [ "$2" = "persistentvolumeclaim" ]; then printf 'existing-workspace'; exit 0; fi
   if [ -f '{dir}/job.json' ]; then cat '{dir}/job.json'; fi
   exit 0;;
 create)
@@ -55,7 +57,7 @@ esac
         }
     }
 
-    fn creates(&self) -> usize {
+    pub(in crate::dispatch) fn creates(&self) -> usize {
         std::fs::read(self.dir.join("creates"))
             .map(|bytes| bytes.len())
             .unwrap_or(0)

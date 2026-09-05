@@ -175,6 +175,12 @@ pub struct EnvironmentPreparationReceipt {
 }
 
 #[derive(Debug, Clone)]
+pub struct EnvironmentPreparationJobObservation {
+    pub job_name: String,
+    pub status: &'static str,
+}
+
+#[derive(Debug, Clone)]
 pub struct RepositoryDiscoveryRequest {
     pub discovery_id: String,
 }
@@ -464,6 +470,51 @@ impl RunDispatcher {
                 anyhow::bail!("immutable environment profiles are unavailable in local worker mode")
             }
         }
+    }
+
+    /// Observe only the exact immutable preparation Job for an existing Run.
+    /// A missing Job is distinct from an unavailable or conflicting observation.
+    pub async fn observe_hosted_preparation(
+        &self,
+        run: &StoredRun,
+        profile: &EnvironmentProfile,
+    ) -> anyhow::Result<Option<EnvironmentPreparationJobObservation>> {
+        let Self::Kubernetes(dispatcher) = self else {
+            anyhow::bail!("hosted preparation observation requires kubernetes_job worker mode");
+        };
+        if !recovery::is_hosted(run) {
+            anyhow::bail!("preparation recovery requires hosted authority");
+        }
+        let manifest =
+            recovery::bind_manifest(dispatcher.environment_preparation_job_manifest(run, profile));
+        Ok(recovery::find_exact_job(
+            &dispatcher.kubectl_bin,
+            &dispatcher.config.namespace,
+            &manifest,
+        )
+        .await?
+        .map(|job| {
+            let terminal = job
+                .pointer("/status/conditions")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|c| {
+                    c["status"] == "True"
+                        && matches!(c["type"].as_str(), Some("Complete" | "Failed"))
+                });
+            EnvironmentPreparationJobObservation {
+                job_name: manifest["metadata"]["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .into(),
+                status: match terminal.and_then(|c| c["type"].as_str()) {
+                    Some("Failed") => "failed",
+                    Some("Complete") => "completed",
+                    _ => "active",
+                },
+            }
+        }))
     }
 
     pub fn source_reader_available(&self) -> bool {
@@ -1402,11 +1453,30 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         profile
             .validate()
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let _admission = RUN_ADMISSION.lock().await;
+        let job_name = environment_preparation_job_name(run.id.as_str());
+        let manifest = self.environment_preparation_job_manifest(run, profile);
+        let hosted = recovery::is_hosted(run);
+        let manifest = if hosted {
+            recovery::bind_manifest(manifest)
+        } else {
+            manifest
+        };
+        if hosted
+            && recovery::find_exact_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?
+                .is_some()
+        {
+            return Ok(EnvironmentPreparationReceipt { job_name });
+        }
         self.ensure_run_job_capacity().await?;
         self.ensure_workspace_claim(run).await?;
-        let manifest = self.environment_preparation_job_manifest(run, profile);
-        create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
-        let job_name = environment_preparation_job_name(run.id.as_str());
+        if hosted {
+            recovery::create_or_reconcile_job(&self.kubectl_bin, &self.config.namespace, &manifest)
+                .await?;
+        } else {
+            create_job_from_manifest(&self.kubectl_bin, &self.config.namespace, &manifest).await?;
+        }
         tracing::info!(run_id = %run.id, job = %job_name, profile = %profile.id, "created isolated environment preparation job");
         Ok(EnvironmentPreparationReceipt { job_name })
     }
@@ -4560,6 +4630,67 @@ mod tests {
             ),
             Some(&json!("true"))
         );
+    }
+
+    #[tokio::test]
+    async fn hosted_preparation_recovers_lost_ack_and_observes_terminal_job_without_recreating_it()
+    {
+        let fixture = super::recovery::tests::KubectlFixture::new(false);
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.kubectl_bin = fixture.command.clone();
+        let mut run = test_run();
+        run.execution_target_json["hosted_workflow_policy_hash"] = json!("sha256:fixture");
+        let profile = EnvironmentProfile {
+            id: "python-3.11".into(),
+            active: true,
+            image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+            revision: "b".repeat(40),
+            platform: "linux/amd64".into(),
+            required_executables: vec![
+                "pharness-worker".into(),
+                "git".into(),
+                "python".into(),
+                "pip".into(),
+            ],
+            preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+            service_account: "pharness-python-runner".into(),
+            repository_allowlist: vec!["https://github.com/example/test.git".into()],
+            limits: EnvironmentProfileLimits {
+                cpu: "1".into(),
+                memory: "1Gi".into(),
+                ephemeral_storage: "2Gi".into(),
+            },
+        };
+        let first = dispatcher
+            .create_environment_preparation_job(&run, &profile)
+            .await
+            .unwrap();
+        let second = dispatcher
+            .create_environment_preparation_job(&run, &profile)
+            .await
+            .unwrap();
+        assert_eq!(first.job_name, second.job_name);
+        assert_eq!(fixture.creates(), 1);
+        let mut job: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(fixture.dir.join("job.json")).unwrap()).unwrap();
+        job["status"] = json!({"conditions":[{"type":"Complete","status":"True"}]});
+        std::fs::write(fixture.dir.join("job.json"), job.to_string()).unwrap();
+        let worker = super::RunDispatcher::Kubernetes(std::sync::Arc::new(dispatcher));
+        let observed = worker
+            .observe_hosted_preparation(&run, &profile)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed.status, "completed");
+        assert_eq!(observed.job_name, first.job_name);
+        assert_eq!(fixture.creates(), 1);
+        job["spec"]["template"]["spec"]["containers"][0]["image"] = json!("changed-image");
+        std::fs::write(fixture.dir.join("job.json"), job.to_string()).unwrap();
+        assert!(worker
+            .observe_hosted_preparation(&run, &profile)
+            .await
+            .is_err());
+        assert_eq!(fixture.creates(), 1);
     }
 
     #[tokio::test]

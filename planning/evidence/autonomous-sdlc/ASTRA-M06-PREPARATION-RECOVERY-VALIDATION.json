@@ -1,0 +1,52 @@
+{
+  "observed_at": "2026-09-05T13:19:27.874498+00:00",
+  "base_revision": "e1709a28966dade3fc6dc73dc9eb0e321d2415d3",
+  "source_sha256": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "cc673d56262f70496b0195c65d32528f935e2b3dfd7f044449d82548099384fe",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "841737404d0fdd8abd6ee93f88a57bbdf3f1221250064b5cd4fdc73cdc84a5dd",
+    "crates/pharness-api/src/app/hosted_controller/preparation.rs": "1228feea1cb419949bfec985859d49d04562e66431a7c1298d3c8a1dd6b1d2d9",
+    "crates/pharness-api/src/app/repo_mode/stage_authorization.rs": "fc3dc69b7b553ab711268d107917ce48d5f2ecbc0f126b05d943c6719883f14d",
+    "crates/pharness-api/src/app/repo_mode/stages.rs": "ccb9e8185763da9e7ac4efebeda6206ac815cf17bef33254eb7a51036cb6dd13",
+    "crates/pharness-api/src/app/runs.rs": "bc2f63989320f4cef04c18e0f176d653568943eca54a3dcde4cab041b05c71e2",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "74b118b2fd5623653aedcb35d1c5598d940e072ba3a95337269f862f99d37a6d",
+    "crates/pharness-api/src/dispatch.rs": "823865f9c2d19e666523453e8ae40b6d58204e51c5d6d4edb0d4be621212bfa8",
+    "crates/pharness-api/src/dispatch/recovery.rs": "882e3e21086b25b19f57f720c0c503f47df5515a579e3bf497b3e24a2bf56649",
+    "crates/pharness-api/src/dispatch/recovery/tests.rs": "11810df1820f2fe2bad10daccd7edce08e760442255979457b1127c3495a0f8e",
+    "crates/pharness-store/src/sqlite.rs": "2af19faf6d5898cb5d789352b0aae4077a3dff6cbe3fcaaa14a4d2b42de2b8a6",
+    "crates/pharness-store/src/sqlite/preparation.rs": "23114102fb5370e3b93b55731b49a62db0c15faf6255e7a16870f31c3aceb9cc"
+  },
+  "validation": {
+    "api_tests": 250,
+    "admin_tests": 1,
+    "store_tests": 53,
+    "distinct_total": 304,
+    "clippy": "API and store all targets with warnings denied: passed",
+    "architecture": "passed; parser 5/5 passed",
+    "format": "passed",
+    "environment": "temporary real SQLite and deterministic Job adapter fixtures; no live release or application change"
+  },
+  "log_sha256": {
+    "/private/tmp/astra-m06-preparation-full-tests.log": "7925f666481834c80357b1d960d274438d8a20556feb5545237ee63976028e73",
+    "/private/tmp/astra-m06-preparation-final-tests.log": "3ea07feeee32fce3339aa34bff02148ec56d28d86987f520b7c6783854df08a5",
+    "/private/tmp/astra-m06-preparation-store-tests.log": "052560f24087c7d03ed005ebac9192b4733239d444c1309ba53da71a0df8c661",
+    "/private/tmp/astra-m06-preparation-clippy.log": "d61c258ca122fd1ab9ea81c67f1f06b8c946996ed1e48750eead9c9afa8f28dc",
+    "/private/tmp/astra-m06-preparation-boundaries.log": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "scenarios": [
+    "Lost preparation dispatch acknowledgement adopts the exact existing Job and original Run; no new preparation or coding attempt",
+    "Terminal Job without validated signed callback cannot authorize coding or become success",
+    "Paused work may observe an existing preparation but cannot recreate an absent one",
+    "Signature and source validation precede one transaction for preparation result, Run environment and WorkItem snapshot pointer",
+    "Injected SQLite failure after the Run update rolls back the entire completion",
+    "Late dispatch acknowledgement and failure callback cannot reopen or overwrite accepted preparation",
+    "Duplicate or invalid callbacks do not dispatch a coding worker; hosted completion wakes the persisted controller",
+    "Uncertain startup preserves the existing bounded stage authorization without extending its lifetime"
+  ],
+  "remaining": [
+    "Terminal Run to stage outcome interruption recovery and partial pre-dispatch startup",
+    "Source writer and observer durable ordering; real build and deployment adapters",
+    "Terminal cancellation against actual source and release operations",
+    "Live API restart, duplicate source and deployment effects, and M11/M12 acceptance",
+    "Schema 0053 remains undeployed and requires a recorded compatible rollback release"
+  ]
+}

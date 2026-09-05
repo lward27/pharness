@@ -659,3 +659,160 @@ async fn unchanged_wait_expiry_does_not_create_another_run_or_extend_its_budget(
         original
     );
 }
+
+#[tokio::test]
+async fn signed_hosted_preparation_queues_existing_run_atomically_and_rejects_invalid_or_duplicate_callbacks(
+) {
+    use crate::app::runs::{
+        internal_environment_preparation_with_token, InternalEnvironmentPreparationRequest,
+    };
+    use hmac::{Hmac, Mac};
+    use pharness_core::{
+        EnvironmentProfile, EnvironmentProfileLimits, PreparationStrategy, RunId, SessionId,
+    };
+    use pharness_store::{CreateEnvironmentPreparation, CreateRun, CreateSession, CreateWorkspace};
+    use serde_json::json;
+    use sha2::Sha256;
+    let mut fixture = repo_fixture_with_workflow("signed_hosted_preparation", false, true).await;
+    let item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let profile = EnvironmentProfile {
+        id: "python-3.11".into(),
+        active: true,
+        image: format!("example.test/python@sha256:{}", "a".repeat(64)),
+        revision: "b".repeat(40),
+        platform: "linux/amd64".into(),
+        required_executables: vec![
+            "pharness-worker".into(),
+            "git".into(),
+            "python".into(),
+            "pip".into(),
+        ],
+        preparation_strategy: PreparationStrategy::PythonHashedRequirements,
+        service_account: "pharness-python-runner".into(),
+        repository_allowlist: vec![item.source_repo.clone()],
+        limits: EnvironmentProfileLimits {
+            cpu: "1".into(),
+            memory: "1Gi".into(),
+            ephemeral_storage: "2Gi".into(),
+        },
+    };
+    fixture.state.environment_profiles = std::sync::Arc::new(vec![profile.clone()]);
+    let store = &fixture.state.store;
+    let session = SessionId::new("session_signed_preparation");
+    let run_id = RunId::new("run_signed_preparation");
+    store
+        .create_session(CreateSession {
+            id: session.clone(),
+            title: "Signed fixture".into(),
+            cwd: "/workspace".into(),
+        })
+        .await
+        .unwrap();
+    let run=store.create_run(CreateRun{id:run_id.clone(),session_id:session,user_task:"Signed fixture".into(),cwd:"/workspace".into(),max_turns:10,initial_status:"preparing".into(),execution_target_json:json!({"hosted_workflow_policy_hash":metadata.workflow_policy_hash,"run_scope":{"work_item_id":fixture.work_item_id}})}).await.unwrap();
+    store
+        .create_workspace(CreateWorkspace {
+            id: "workspace_signed".into(),
+            work_item_id: fixture.work_item_id.clone(),
+            run_id: Some(run_id.clone()),
+            status: "declared".into(),
+            source_repo: item.source_repo.clone(),
+            source_ref: "main".into(),
+            resolved_commit: item.source_commit.clone(),
+            branch: Some("pharness/fixture".into()),
+            retention_status: "retained".into(),
+            actor: Some("fixture".into()),
+            reason: Some("fixture".into()),
+        })
+        .await
+        .unwrap();
+    let preparation = store
+        .create_environment_preparation(CreateEnvironmentPreparation {
+            id: "prep_signed".into(),
+            work_item_id: fixture.work_item_id.clone(),
+            workspace_id: "workspace_signed".into(),
+            run_id: Some(run_id.clone()),
+            status: "queued".into(),
+            environment_profile_id: profile.id.clone(),
+            source_commit: item.source_commit.clone().unwrap(),
+        })
+        .await
+        .unwrap();
+    let snapshot = json!({"source_sha":item.source_commit,"manifest_sha256":item.repository_contract_hash,"dependency_lock_sha256":format!("sha256:{}","d".repeat(64)),"runner_image_digest":profile.image,"runner_revision":profile.revision,"os":"linux","architecture":"amd64","effective_user":"65532","writable_paths":["src/**"],"unavailable_tools":[],"agent_network":"denied","package_installation":"preparation_only","acceptance_commands":[{"name":"unit","command":"python -m unittest discover -s tests -v"}],"preparation_evidence":[]});
+    let token = "fixture-only-snapshot-key";
+    let mut mac = Hmac::<Sha256>::new_from_slice(token.as_bytes()).unwrap();
+    mac.update(snapshot.to_string().as_bytes());
+    let signature = format!("hmac-sha256:{:x}", mac.finalize().into_bytes());
+    let request = |signature: &str| {
+        serde_json::from_value::<InternalEnvironmentPreparationRequest>(json!({"status":"succeeded","project_contract":item.repository_contract_json,"project_contract_hash":item.repository_contract_hash,"environment_snapshot":snapshot,"snapshot_signature":signature,"logs":[]})).unwrap()
+    };
+    assert!(internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request("invalid"),
+        token,
+        true
+    )
+    .await
+    .is_err());
+    assert_eq!(store.get_run(&run_id).await.unwrap().unwrap(), run);
+    assert_eq!(
+        store
+            .get_environment_preparation(&preparation.id)
+            .await
+            .unwrap()
+            .unwrap(),
+        preparation
+    );
+    let accepted = internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request(&signature),
+        token,
+        true,
+    )
+    .await
+    .unwrap();
+    assert_eq!(accepted.0.status, "succeeded");
+    let queued = store.get_run(&run_id).await.unwrap().unwrap();
+    assert_eq!(queued.status, "queued");
+    assert_eq!(
+        queued.execution_target_json["environment_snapshot"],
+        snapshot
+    );
+    assert_eq!(queued.run_budget, run.run_budget);
+    let completed = store
+        .get_environment_preparation(&preparation.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        store
+            .mark_environment_preparation_dispatched(&preparation.id, "late-job-ack")
+            .await
+            .unwrap(),
+        completed
+    );
+    assert!(internal_environment_preparation_with_token(
+        fixture.state.clone(),
+        run_id.to_string(),
+        request(&signature),
+        token,
+        true
+    )
+    .await
+    .is_err());
+    assert_eq!(store.get_run(&run_id).await.unwrap().unwrap(), queued);
+}

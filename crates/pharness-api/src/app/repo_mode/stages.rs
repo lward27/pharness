@@ -13,7 +13,7 @@ use pharness_core::{
 use pharness_store::{
     CreateAgentContextPack, CreateEnvironmentPreparation, CreateEvidenceValidation, CreateRun,
     CreateSession, CreateStageExecution, CreateWorkspace, StoredRepoWorkItemMetadata,
-    UpdateEnvironmentPreparation, UpdateWorkspaceExecution,
+    UpdateWorkspaceExecution,
 };
 use serde_json::{json, Value};
 
@@ -834,15 +834,7 @@ pub(super) async fn start_repo_builder(
         .map_err(|error| ApiError::internal(error.to_string()))?;
     let preparation = state
         .store
-        .update_environment_preparation(UpdateEnvironmentPreparation {
-            id: preparation.id,
-            status: "running".into(),
-            project_contract_json: None,
-            project_contract_hash: None,
-            environment_snapshot_json: None,
-            logs_json: json!([{"step":"dispatch","status":"succeeded","job_name":receipt.job_name}]),
-            error: None,
-        })
+        .mark_environment_preparation_dispatched(&preparation.id, &receipt.job_name)
         .await?;
     Ok(json!({
         "run":run,

@@ -36,6 +36,7 @@ mod data_lifecycle;
 mod hosted_controller;
 mod inference;
 mod onboarding;
+mod preparation;
 mod product;
 mod repo_mode;
 mod subject_preparation;
