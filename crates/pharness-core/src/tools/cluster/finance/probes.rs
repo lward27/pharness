@@ -114,6 +114,11 @@ async fn probe(
     let mut evidence = json!({"path":path,"method":"GET","state":"inconclusive","reason":null,"observed_at_unix_ms":started});
     let trace = e.application == FinanceApplication::Yfinance;
     evidence["backend_trace_id"] = if trace { json!(trace_id) } else { Value::Null };
+    evidence["backend_parent_span_id"] = if trace {
+        json!(&correlation[32..48])
+    } else {
+        Value::Null
+    };
     let result = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
         let url = Url::parse(&format!("{base}{path}")).map_err(|_| "invalid_probe_destination")?;
         if !url.username().is_empty()

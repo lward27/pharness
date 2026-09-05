@@ -8,6 +8,7 @@ mod identity;
 mod kubernetes;
 mod probes;
 mod signals;
+mod traces;
 pub use signals::FinanceRuntimeWindow;
 #[cfg(test)]
 mod tests;

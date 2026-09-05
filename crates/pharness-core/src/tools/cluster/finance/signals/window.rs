@@ -10,10 +10,10 @@ pub(super) struct Pod {
     pub restarts: u64,
 }
 
-pub(super) struct Context {
-    pub pods: BTreeMap<String, Pod>,
-    pub namespace: &'static str,
-    pub workload: &'static str,
+pub(in crate::tools::cluster::finance) struct Context {
+    pub(super) pods: BTreeMap<String, Pod>,
+    pub(super) namespace: &'static str,
+    pub(super) workload: &'static str,
 }
 
 impl Context {
@@ -174,7 +174,7 @@ impl Context {
         Ok(pods)
     }
 
-    pub fn log_pod<'a>(&'a self, metric: &Value) -> Result<&'a Pod, &'static str> {
+    pub(super) fn log_pod<'a>(&'a self, metric: &Value) -> Result<&'a Pod, &'static str> {
         let pod = metric["pod"]
             .as_str()
             .and_then(|name| self.pods.get(name))
