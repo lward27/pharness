@@ -305,7 +305,7 @@ async fn unavailable_configuration_returns_explicit_inconclusive_without_credent
     );
     let after = identity(&e, end * 1000, end * 1000);
     let tools = ReadOnlyClusterTools::default()
-        .with_prometheus_url("http://user:credential-canary@127.0.0.1:1");
+        .with_finance_mimir_url_option(Some("http://user:credential-canary@127.0.0.1:1".into()));
     let result = tools
         .observe_finance_signals(&e, &w, &before, &after)
         .await
@@ -314,6 +314,34 @@ async fn unavailable_configuration_returns_explicit_inconclusive_without_credent
     assert_eq!(result.content["runtime_verification"], "not_evaluated");
     assert_eq!(result.content["queries"].as_array().unwrap().len(), 7);
     assert!(!result.content.to_string().contains("credential-canary"));
+}
+
+#[tokio::test]
+async fn missing_mimir_never_falls_back_to_legacy_prometheus() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let e = expected(FinanceApplication::Yfinance);
+    let end = timestamp().unwrap() / 30_000 * 30;
+    let w = FinanceRuntimeWindow {
+        start_unix_seconds: end - 300,
+        end_unix_seconds: end,
+    };
+    let before = identity(&e, (end - 300) * 1000 - 2000, (end - 300) * 1000 - 1000);
+    let after = identity(&e, end * 1000, end * 1000);
+    let tools = ReadOnlyClusterTools::default()
+        .with_prometheus_url(format!("http://{}", listener.local_addr().unwrap()));
+    let result = tools
+        .observe_finance_signals(&e, &w, &before, &after)
+        .await
+        .unwrap();
+    assert_eq!(result.content["signal_state"], "inconclusive");
+    for q in result.content["queries"].as_array().unwrap() {
+        assert_eq!(q["reason"], "provider_not_configured");
+    }
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), listener.accept())
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]

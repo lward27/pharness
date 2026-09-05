@@ -284,6 +284,7 @@ pub struct ClusterConfig {
     pub kubectl_bin: String,
     pub argocd_namespace: String,
     pub prometheus_url: Option<String>,
+    pub finance_mimir_url: Option<String>,
     pub loki_url: Option<String>,
     pub tempo_url: Option<String>,
     pub registry_aliases: Vec<String>,
@@ -315,6 +316,7 @@ impl ApiRuntimeConfig {
             .with_kubectl_bin(self.cluster.kubectl_bin.clone())
             .with_argocd_namespace(self.cluster.argocd_namespace.clone())
             .with_prometheus_url_option(self.cluster.prometheus_url.clone())
+            .with_finance_mimir_url_option(self.cluster.finance_mimir_url.clone())
             .with_loki_url_option(self.cluster.loki_url.clone())
             .with_tempo_url_option(self.cluster.tempo_url.clone())
             .with_registry_aliases(self.cluster.registry_aliases.join(","))
@@ -409,6 +411,7 @@ impl ApiRuntimeConfig {
                 kubectl_bin: DEFAULT_KUBECTL_BIN.to_string(),
                 argocd_namespace: DEFAULT_ARGOCD_NAMESPACE.to_string(),
                 prometheus_url: None,
+                finance_mimir_url: None,
                 loki_url: None,
                 tempo_url: None,
                 registry_aliases: Vec::new(),
@@ -602,6 +605,9 @@ impl ApiRuntimeConfig {
             }
             if let Some(value) = cluster.prometheus_url {
                 self.cluster.prometheus_url = blank_to_none(value);
+            }
+            if let Some(value) = cluster.finance_mimir_url {
+                self.cluster.finance_mimir_url = blank_to_none(value);
             }
             if let Some(value) = cluster.loki_url {
                 self.cluster.loki_url = blank_to_none(value);
@@ -984,6 +990,9 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_PROMETHEUS_URL") {
             self.cluster.prometheus_url = blank_to_none(value.clone());
+        }
+        if let Some(value) = env.get("PHARNESS_FINANCE_MIMIR_URL") {
+            self.cluster.finance_mimir_url = blank_to_none(value.clone());
         }
         if let Some(value) = env.get("PHARNESS_LOKI_URL") {
             self.cluster.loki_url = blank_to_none(value.clone());
@@ -1635,6 +1644,7 @@ struct FileClusterConfig {
     kubectl_bin: Option<String>,
     argocd_namespace: Option<String>,
     prometheus_url: Option<String>,
+    finance_mimir_url: Option<String>,
     loki_url: Option<String>,
     tempo_url: Option<String>,
     registry_aliases: Option<Vec<String>>,
@@ -2031,6 +2041,41 @@ mod tests {
     static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
     #[test]
+    fn finance_metrics_do_not_replace_legacy_prometheus_inventory() {
+        let path = write_temp_config(
+            r#"[cluster]
+prometheus_url = "http://prometheus.test"
+finance_mimir_url = "http://mimir.test/prometheus"
+"#,
+        );
+        let mut env = BTreeMap::new();
+        let file = ApiRuntimeConfig::from_sources(Some(&path), &env).unwrap();
+        assert_eq!(
+            file.cluster.finance_mimir_url.as_deref(),
+            Some("http://mimir.test/prometheus")
+        );
+        assert!(file.cluster_tools().finance_mimir_configured());
+        env.insert(
+            "PHARNESS_FINANCE_MIMIR_URL".into(),
+            "http://mimir.env/prometheus".into(),
+        );
+        let overridden = ApiRuntimeConfig::from_sources(Some(&path), &env).unwrap();
+        assert_eq!(
+            overridden.cluster.finance_mimir_url.as_deref(),
+            Some("http://mimir.env/prometheus")
+        );
+        assert_eq!(
+            overridden.cluster.prometheus_url.as_deref(),
+            Some("http://prometheus.test")
+        );
+        env.insert("PHARNESS_FINANCE_MIMIR_URL".into(), " ".into());
+        let disabled = ApiRuntimeConfig::from_sources(Some(&path), &env).unwrap();
+        assert!(!disabled.cluster_tools().finance_mimir_configured());
+        assert!(disabled.cluster_tools().prometheus_configured());
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn missing_config_uses_defaults() {
         let config = ApiRuntimeConfig::from_sources(None, &BTreeMap::new()).unwrap();
 
@@ -2045,6 +2090,8 @@ mod tests {
         assert_eq!(config.model.model, "accounts/fireworks/models/kimi-k2p6");
         assert_eq!(config.cluster.argocd_namespace, "argocd");
         assert!(config.cluster.prometheus_url.is_none());
+        assert!(config.cluster.finance_mimir_url.is_none());
+        assert!(!config.cluster_tools().finance_mimir_configured());
         assert!(config.cluster.loki_url.is_none());
         assert!(config.cluster.tempo_url.is_none());
         assert!(!config.cluster_tools().tempo_configured());

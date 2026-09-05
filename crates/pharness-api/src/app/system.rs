@@ -267,6 +267,7 @@ pub(super) async fn config_effective(
             "kubectl_bin": state.cluster_tools.kubectl_bin(),
             "argocd_namespace": state.cluster_tools.argocd_namespace(),
             "prometheus_configured": state.cluster_tools.prometheus_configured(),
+            "finance_mimir_configured": state.cluster_tools.finance_mimir_configured(),
             "loki_configured": state.cluster_tools.loki_configured(),
             "tempo_configured": state.cluster_tools.tempo_configured(),
             "registry_alias_count": state.cluster_tools.registry_alias_count(),

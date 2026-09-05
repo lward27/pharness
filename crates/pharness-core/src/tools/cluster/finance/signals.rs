@@ -91,7 +91,7 @@ impl ReadOnlyClusterTools {
         let mut tasks = tokio::task::JoinSet::new();
         for query in queries {
             let base = if query.source == "mimir" {
-                self.prometheus_url.clone()
+                self.finance_mimir_url.clone()
             } else {
                 self.loki_url.clone()
             };
