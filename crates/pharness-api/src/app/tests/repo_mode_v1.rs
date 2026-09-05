@@ -324,6 +324,12 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
 }
 
 async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
+    repo_fixture(suffix, true).await
+}
+
+// Verification tests stop at the approved plan; source-delivery tests retain
+// the original fixture's ChangeSet and provider observer state.
+async fn repo_fixture(suffix: &str, with_source_delivery: bool) -> RepoDeliveryFixture {
     let state = test_state().await;
     state
         .store
@@ -568,6 +574,13 @@ async fn repo_delivery_fixture(suffix: &str) -> RepoDeliveryFixture {
         })
         .await
         .unwrap();
+    if !with_source_delivery {
+        return RepoDeliveryFixture {
+            state,
+            work_item_id,
+            intent_id: format!("srcintent_{suffix}"),
+        };
+    }
     let change_set_id = format!("cset_{suffix}");
     state
         .store
@@ -958,6 +971,182 @@ async fn repo_mode_fake_provider_closes_failed_when_merge_lacks_premerge_evidenc
         .unwrap()
         .closed_at
         .is_some());
+}
+
+#[tokio::test]
+async fn verifier_caveats_are_sealed_without_false_approval() {
+    for (suffix, contradictions, risks, expected_status) in [
+        (
+            "verifier_risk",
+            json!([]),
+            json!(["External API may rate limit"]),
+            "succeeded",
+        ),
+        (
+            "verifier_conflict",
+            json!(["Acceptance evidence contradicts the patch"]),
+            json!(["External API may rate limit"]),
+            "failed",
+        ),
+        (
+            "verifier_malformed",
+            json!([]),
+            json!({"unexpected":"not an array"}),
+            "failed",
+        ),
+    ] {
+        let fixture = repo_fixture(suffix, false).await;
+        let session_id = SessionId::new(format!("ses_{suffix}"));
+        let builder_id = RunId::new(format!("run_{suffix}_implement"));
+        let verifier_id = RunId::new(format!("run_{suffix}_verify"));
+        let verifier_execution_id = format!("stageexec_{suffix}_verify");
+        for stage in ["implement", "test", "verify"] {
+            let run_id = RunId::new(format!("run_{suffix}_{stage}"));
+            let execution_id = format!("stageexec_{suffix}_{stage}");
+            fixture.state.store.create_run(CreateRun {
+                id: run_id.clone(),
+                session_id: session_id.clone(),
+                user_task: format!("test {stage} evidence"),
+                cwd: "/workspace".into(),
+                max_turns: 2,
+                initial_status: "completed".into(),
+                execution_target_json: json!({"repo_mode":{"stage":stage,"stage_execution_id":execution_id}}),
+            }).await.unwrap();
+            fixture
+                .state
+                .store
+                .create_stage_execution(CreateStageExecution {
+                    id: execution_id.clone(),
+                    work_item_id: fixture.work_item_id.clone(),
+                    stage_key: stage.into(),
+                    sequence: 1,
+                    status: "running".into(),
+                    agent_profile_id: None,
+                    agent_profile_version: None,
+                    agent_profile_hash: None,
+                    context_pack_id: None,
+                    run_id: Some(run_id),
+                    workspace_id: None,
+                    input_hash: format!("sha256:{}", "d".repeat(64)),
+                    input_snapshot: json!({"source_commit":SOURCE_SHA}),
+                })
+                .await
+                .unwrap();
+            if stage != "verify" {
+                let document = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"stage":stage,"status":"succeeded"});
+                fixture
+                    .state
+                    .store
+                    .seal_stage_outcome(pharness_store::SealStageOutcome {
+                        id: format!("stageout_{suffix}_{stage}"),
+                        stage_execution_id: execution_id,
+                        work_item_id: fixture.work_item_id.clone(),
+                        stage_key: stage.into(),
+                        status: "succeeded".into(),
+                        content_hash: pharness_core::canonical_json_sha256(&document).unwrap(),
+                        outcome: document,
+                        state_version: 1,
+                        supersedes_outcome_id: None,
+                        effective: true,
+                        actor: "controller".into(),
+                        reason: "sealed upstream test fixture".into(),
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
+        for (kind, text, value) in [
+            ("workspace_git_diff", Some("diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n@@ -1 +1 @@\n-old\n+new\n".to_string()), None),
+            ("workspace_git_status", None, Some(json!({"changed_paths":["src/a.py"]}))),
+        ] {
+            fixture.state.store.create_artifact(pharness_store::CreateArtifact {
+                id: format!("art_{suffix}_{kind}"),
+                session_id: session_id.clone(),
+                run_id: Some(builder_id.clone()),
+                kind: kind.into(),
+                label: "sealed builder fixture".into(),
+                mime_type: None,
+                path: None,
+                content_text: text,
+                content_json: value,
+            }).await.unwrap();
+        }
+        let submission = json!({
+            "decision":"approved",
+            "summary":"Agent claims approval",
+            "evidence_refs":[format!("stageout_{suffix}_test")],
+            "contradictions":contradictions,
+            "risks":risks,
+        });
+        fixture.state.store.append_event(&pharness_core::AgentEvent {
+            event_id: pharness_core::EventId::new(format!("evt_{suffix}")),
+            session_id,
+            run_id: verifier_id.clone(),
+            seq: 1,
+            kind: pharness_core::EventKind::ToolFinished,
+            payload: json!({"status":"ok","content":{"structured_submission":true,"kind":"verification","document":submission}}),
+        }).await.unwrap();
+        let run = fixture
+            .state
+            .store
+            .get_run(&verifier_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let attempt = pharness_runhost::AttemptOutcome {
+            status: "completed".into(),
+            turns: 1,
+            summary: Some("Typed verification submitted".into()),
+            error: None,
+            approval: None,
+            workspace_evidence: None,
+            budget_extension: None,
+            consumption: Default::default(),
+        };
+        crate::worker::sync_repo_stage_run(&fixture.state.store, &run, &attempt)
+            .await
+            .unwrap();
+        let outcome = fixture
+            .state
+            .store
+            .get_stage_outcome_for_execution(&verifier_execution_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome.status, expected_status, "{suffix}");
+        assert_eq!(outcome.outcome["agent_claims"], json!([submission]));
+        if risks.is_array() {
+            assert_eq!(outcome.outcome["risks"], risks);
+        }
+        for claim in contradictions.as_array().unwrap() {
+            assert!(outcome.outcome["contradictions"]
+                .as_array()
+                .unwrap()
+                .contains(claim));
+        }
+        assert!(!outcome.outcome["verified_facts"]
+            .to_string()
+            .contains("External API may rate limit"));
+        let change_set = fixture
+            .state
+            .store
+            .get_change_set_by_work_plan(&format!("wplan_{suffix}"))
+            .await
+            .unwrap();
+        assert_eq!(change_set.is_some(), expected_status == "succeeded");
+        crate::worker::sync_repo_stage_run(&fixture.state.store, &run, &attempt)
+            .await
+            .unwrap();
+        let repeated = fixture
+            .state
+            .store
+            .get_stage_outcome_for_execution(&verifier_execution_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(repeated.id, outcome.id);
+        assert_eq!(repeated.content_hash, outcome.content_hash);
+    }
 }
 
 #[tokio::test]

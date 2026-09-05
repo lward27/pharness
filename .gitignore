@@ -1,5 +1,6 @@
 # Rust build output
 /target/
+/crates/pharness-eval/target/
 **/*.rs.bk
 
 # Frontend dependency and build output

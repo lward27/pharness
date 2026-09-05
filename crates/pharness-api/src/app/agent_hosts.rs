@@ -1858,7 +1858,12 @@ fn _policy_schema_guard() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        agent_qualification_contract, json, validate_agent_qualification_report,
+        AgentExecutionPolicyRevision, AgentExecutionQualificationContract, Value,
+        AGENT_EXECUTION_EVALUATION_SCHEMA, CODEX_PROTOCOL_CASES, CODEX_PROTOCOL_EVALUATION_SCHEMA,
+        CODEX_PROTOCOL_SUITE_ID,
+    };
     use pharness_core::AgentExecutionRegistry;
 
     fn registry() -> AgentExecutionRegistry {

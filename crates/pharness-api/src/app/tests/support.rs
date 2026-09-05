@@ -122,8 +122,8 @@ pub(super) fn routes_mounted_in_source() -> Vec<RouteInventoryEntry> {
         include_str!("../releases.rs"),
         include_str!("../approvals.rs"),
         include_str!("../internal.rs"),
-        include_str!("../products.rs"),
-        include_str!("../repo_mode.rs"),
+        include_str!("../products/mod.rs"),
+        include_str!("../repo_mode/mod.rs"),
         include_str!("../operator_experience.rs"),
         include_str!("../data_lifecycle.rs"),
     ] {

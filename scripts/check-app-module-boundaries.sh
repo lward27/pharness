@@ -40,6 +40,10 @@ if ! "$repo_root/scripts/app-module-dependencies.py" --check >/dev/null; then
   failed=1
 fi
 
+if ! PYTHONDONTWRITEBYTECODE=1 python3 "$repo_root/scripts/test_app_module_dependencies.py"; then
+  failed=1
+fi
+
 if (( failed != 0 )); then
   exit 1
 fi

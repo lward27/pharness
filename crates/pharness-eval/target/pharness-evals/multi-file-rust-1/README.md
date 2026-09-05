@@ -1,1 +1,0 @@
-# Multi-file Rust fixture

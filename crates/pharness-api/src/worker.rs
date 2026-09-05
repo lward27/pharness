@@ -1068,8 +1068,39 @@ async fn seal_repo_verify_stage(
             .iter()
             .any(|item| item.stage_key == stage && item.status == "succeeded")
     });
-    let passed =
-        outcome.status == "completed" && decision == Some("approved") && upstream_succeeded;
+    // Missing optional caveat fields remain compatible with older submissions.
+    // Present fields must be arrays; malformed input stays in agent_claims and
+    // cannot disappear behind an unconditional success status.
+    let caveats_valid = ["contradictions", "risks"].into_iter().all(|field| {
+        submission
+            .as_ref()
+            .and_then(|document| document.get(field))
+            .map_or(true, serde_json::Value::is_array)
+    });
+    let mut contradictions = submission
+        .as_ref()
+        .and_then(|document| document.get("contradictions"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let risks = submission
+        .as_ref()
+        .and_then(|document| document.get("risks"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let submitted_contradiction_count = contradictions.len();
+    let passed = outcome.status == "completed"
+        && decision == Some("approved")
+        && upstream_succeeded
+        && caveats_valid
+        && contradictions.is_empty();
+    if !caveats_valid {
+        contradictions.push(serde_json::json!({"kind":"verification_caveats_malformed"}));
+    }
+    if !passed {
+        contradictions.push(serde_json::json!({"kind":"verification_not_approved"}));
+    }
     let implement_count = store
         .list_stage_executions(&execution.work_item_id)
         .await?
@@ -1099,18 +1130,27 @@ async fn seal_repo_verify_stage(
             .to_string()
     } else {
         outcome.error.clone().unwrap_or_else(|| {
-            "Verifier rejected the change or did not submit an approved typed decision".into()
+            if !caveats_valid {
+                "Verifier submitted malformed risks or contradictions; expected arrays".into()
+            } else if submitted_contradiction_count > 0 {
+                "Verifier submitted unresolved contradictions; the change is not approved".into()
+            } else {
+                "Verifier rejected the change or did not submit an approved typed decision".into()
+            }
         })
     };
     let facts = serde_json::json!({
         "upstream_outcomes":upstream.iter().map(|item| serde_json::json!({"id":item.id,"stage":item.stage_key,"status":item.status,"hash":item.content_hash})).collect::<Vec<_>>(),
         "upstream_succeeded":upstream_succeeded,
         "typed_decision":decision,
+        "caveats_valid":caveats_valid,
+        "submitted_contradiction_count":submitted_contradiction_count,
     });
     let validation = serde_json::json!({
         "subject":{"run_id":run.id,"stage_execution_id":execution.id},
         "facts":facts,
         "status":if passed {"valid"} else {"invalid"},
+        "contradictions":contradictions,
     });
     store
         .create_evidence_validation(pharness_store::CreateEvidenceValidation {
@@ -1129,11 +1169,7 @@ async fn seal_repo_verify_stage(
                 }))
                 .collect::<Vec<_>>()),
             facts: facts.clone(),
-            contradictions: if passed {
-                serde_json::json!([])
-            } else {
-                serde_json::json!([{"kind":"verification_not_approved"}])
-            },
+            contradictions: serde_json::json!(contradictions),
             content_hash: pharness_core::canonical_json_sha256(&validation)?,
         })
         .await?;
@@ -1168,12 +1204,8 @@ async fn seal_repo_verify_stage(
             .get("chain_authorization_id")
             .map(|id| vec![serde_json::json!({"kind":"stage_chain","id":id})])
             .unwrap_or_default(),
-        contradictions: if passed {
-            Vec::new()
-        } else {
-            vec![serde_json::json!({"kind":"verification_not_approved"})]
-        },
-        risks: Vec::new(),
+        contradictions,
+        risks,
         unavailable_capabilities: Vec::new(),
         recommendations: if passed {
             vec![serde_json::json!({"next":"review_change_set"})]
