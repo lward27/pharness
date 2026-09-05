@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-05T18:37:34.958811+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "policy_id": "verifier-glm-5p3-v2",
+  "target_id": "fireworks-glm-5p3",
+  "state": "qualification_request_started",
+  "request": {
+    "actor": "lucas",
+    "reason": "ASTRA M04 frozen stage qualification on exact 48c77b7 runtime; primary candidate, unchanged limits, no source or deployment effects",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "attempts": 2
+  }
+}

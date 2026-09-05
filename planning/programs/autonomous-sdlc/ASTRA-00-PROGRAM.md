@@ -82,10 +82,14 @@ despite passing 30 protocol checks. Planner subsequently scored 4/12 and 7/12;
 Test Diagnosis scored 0/12 in both attempts. Inspection found a Test Diagnosis
 scorer/tool-schema mismatch and an overbroad Planner substring check. These require
 contract-aligned regression fixes and fresh qualification, not reclassification of
-the recorded results as passes. Verifier and Repair remain open. The diagnostic correction retains concrete tool
+the recorded results as passes. The [scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
+preserves the twelve-case scenarios and thresholds, changes the two affected
+suite revisions to V2.1, and adds bounded contract diagnostics. Onboarding's
+fixture/context concern remains open. Verifier and Repair remain open. The diagnostic correction retains concrete tool
 validation errors without changing fixtures, gates, profiles or limits.
-Keep qualification Jobs serial. All original thresholds, fixtures, profiles and
-execution limits remain in force. The exact-runtime creation gate also requires
+Keep qualification Jobs serial. The frozen coding suite, thresholds, profiles and
+execution limits remain in force. Scorer repairs require explicit suite revisions
+and fresh evidence. The exact-runtime creation gate also requires
 matching qualification on any subsequent release before activation. The earlier fd74092 runs failed; they remain
 [recorded evidence](../../evidence/autonomous-sdlc/ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md),
 not superseded passes.

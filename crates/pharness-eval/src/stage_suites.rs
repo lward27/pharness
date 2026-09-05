@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const STAGE_FIXTURE_REVISION: &str = "stage-qualification-v1.0";
+mod integrity;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SuiteKind {
@@ -41,6 +41,11 @@ enum SuiteKind {
 }
 
 impl SuiteKind {
+    fn fixture_revision(self) -> &'static str {
+        pharness_core::inference_qualification_fixture_revision(self.suite_id())
+            .expect("compiled stage suite has a fixture revision")
+    }
+
     fn parse(value: &str) -> Result<Self> {
         match value {
             "onboarding-v1" => Ok(Self::OnboardingV1),
@@ -323,7 +328,7 @@ pub(super) async fn run(
         version: 1,
         suite: suite.suite_id().into(),
         suite_hash,
-        fixture_revision: STAGE_FIXTURE_REVISION.into(),
+        fixture_revision: suite.fixture_revision().into(),
         provider: match provider {
             Provider::Replay => "replay",
             Provider::Fireworks => "fireworks",
@@ -399,7 +404,7 @@ async fn run_codex_fixture(
     context["intent"] = json!(fixture.task);
     context["controller_evidence"] = json!([{
         "id":"fixture_evidence",
-        "version":STAGE_FIXTURE_REVISION,
+        "version":suite.fixture_revision(),
         "payload":fixture.evidence,
     }]);
     let stage = suite.stage_key();
@@ -677,11 +682,19 @@ async fn run_fixture(
     );
     let metrics = metrics_from_events(&events);
     let passed = outcome.status == "completed" && acceptance_ok && violations.is_empty();
-    let (failure_action, failure_error_kind, failure_detail) = if passed {
+    let (failure_action, failure_error_kind, mut failure_detail) = if passed {
         (None, None, None)
     } else {
         eval_failure_diagnostics(&outcome, &events)
     };
+    if !passed && !acceptance_ok {
+        let detail =
+            integrity::submission_diagnostic(suite, fixture, submission.as_ref(), &violations);
+        failure_detail = Some(super::bounded_eval_diagnostic(&match failure_detail {
+            Some(prior) => format!("{prior}\n{detail}"),
+            None => detail,
+        }));
+    }
     let action_trace = eval_action_trace(&events);
     Ok(EvalResult {
         fixture: fixture.id.clone(),
@@ -745,7 +758,7 @@ fn execution_target(
     context["evidence_catalog"] = json!([{
         "id":"fixture_evidence",
         "kind":"qualification_fixture",
-        "version":STAGE_FIXTURE_REVISION,
+        "version":suite.fixture_revision(),
         "hash":evidence_hash,
     }]);
     let mut target = json!({
@@ -1130,11 +1143,10 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
             id:"act_submit".into(),
             reason:"submit evidence-bound deterministic Test diagnosis".into(),
             diagnosis:json!({
-                "classification":fixture.expected["classification"],
+                "failure_kind":integrity::expected_failure_kind(fixture),
                 "summary":format!("Controller evidence classifies this as {}", fixture.expected["classification"].as_str().unwrap_or_default()),
                 "evidence_refs":["fixture_evidence"],
-                "repairable":!matches!(fixture.expected["classification"].as_str(), Some("environment_failure" | "contract_failure" | "no_failure")),
-                "recommended_scope":"Preserve correct work and repair only the evidenced failure.",
+                "repair_recommendations":if fixture.expected["classification"]=="no_failure" {json!([])} else {json!(["Preserve correct work and repair only the evidenced failure."])},
             }),
         }),
         SuiteKind::VerifierV1 | SuiteKind::VerifierV2 => actions.push(AgentAction::SubmitVerification {
@@ -1177,7 +1189,8 @@ fn validate_submission(
             }
             profile_ok && blocker_ok
         }
-        SuiteKind::PlannerV1 | SuiteKind::PlannerV2 => {
+        SuiteKind::PlannerV2 => integrity::validate_planner(fixture, document, violations),
+        SuiteKind::PlannerV1 => {
             let marker = fixture.expected["marker"].as_str().unwrap_or_default();
             let coverage = fixture.expected["acceptance"]
                 .as_array()
@@ -1236,22 +1249,7 @@ fn validate_submission(
             }
             acceptance_names_ok && exact_commands && outcome_honest
         }
-        SuiteKind::TestDiagnosisV2 => {
-            let classification = fixture.expected["classification"]
-                .as_str()
-                .unwrap_or_default();
-            let classified = document["classification"] == classification;
-            let evidence_ok = document["evidence_refs"]
-                .as_array()
-                .is_some_and(|values| values.iter().any(|value| value == "fixture_evidence"));
-            if !classified {
-                violations.push("test_failure_misclassified".into());
-            }
-            if !evidence_ok {
-                violations.push("test_diagnosis_evidence_missing".into());
-            }
-            classified && evidence_ok
-        }
+        SuiteKind::TestDiagnosisV2 => integrity::validate_diagnosis(fixture, document, violations),
         SuiteKind::VerifierV1 | SuiteKind::VerifierV2 => {
             let expected_decision = fixture.expected["decision"].as_str().unwrap_or_default();
             let marker = fixture.expected["marker"].as_str().unwrap_or_default();

@@ -1,0 +1,102 @@
+{
+  "recorded_at": "2026-09-05T18:55:36.740121+00:00",
+  "base_revision": "3388a6ad32045db43daedc09c8cff9b59ab19203",
+  "branch": "codex/astra-stage-contract-integrity",
+  "source_sha256": {
+    "crates/pharness-core/src/inference.rs": "e933fda25e7c9c438cdc39561d7c61587ce171b0431648ff8f3ddcc3efd13b8d",
+    "crates/pharness-core/src/lib.rs": "69a17123a26dd7707a31ce851a64b251a06c9c7e7a95409fcb7015f388b0bf78",
+    "crates/pharness-eval/src/stage_suites.rs": "bce58a8a91f9e36b8cbf39054b28a14da669fdc695c2444e26bcc315281cc539",
+    "crates/pharness-eval/src/stage_suites/integrity.rs": "4440f5cc7a1cd4027bd30cf29e08a2ecc857c82c7c71b9df05780e697e92132c",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "f96eb440c7b65d6be56e793dc994af05196a3cdd1b4846de17ebc1cef8c9e616"
+  },
+  "unchanged_input_sha256": {
+    "crates/pharness-eval/src/coding_v2.rs": "20fa46054b1a3a729f36a91b4dc514fa5df155a6eb9d8d9f92d31d91cf052585",
+    "crates/pharness-eval/src/main.rs": "b259c36644e2445f3ad9eeed7cf920db18051bba7263ebe5c7b00680f7a3a743",
+    "crates/pharness-runhost/src/prompt.rs": "94749a5395db58b4ed1f1b6caf057b43011fbf5e19b07305b711f81d40ae8631",
+    "crates/pharness-core/src/repo_mode.rs": "492b62cb30fc8c631277a6fdcd1de22294616cf71b2856d870d3a926dddbe62d"
+  },
+  "suite_revisions_and_hashes": {
+    "planner-v2": {
+      "stage-qualification-v2.0": "sha256:0bbbf9015d1c8cd9be80357d2cb1b7c412ccaba55823173a8affa27e018c7c23",
+      "stage-qualification-v2.1": "sha256:844dfe9b537eca4bae9fd535d010742de6581413b1302f70ce52440835a591ad"
+    },
+    "test-diagnosis-v2": {
+      "stage-qualification-v2.0": "sha256:7ea1c10de9952d8c9f4a1bd86b560b697324a78e83abbb27953de0daf7c17a90",
+      "stage-qualification-v2.1": "sha256:bddd80856f1db11b720afc3e7ec11ee6ee22e23a22ae75924b501cc8d43a94f2"
+    }
+  },
+  "validation": {
+    "api_core_evaluator_tests": {
+      "passed": 466,
+      "failed": 0,
+      "ignored_authorized_live_tempo_test": 1,
+      "targets": {
+        "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)": {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)": {
+          "passed": 274,
+          "failed": 0,
+          "ignored": 0
+        },
+        "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)": {
+          "passed": 156,
+          "failed": 0,
+          "ignored": 1
+        },
+        "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)": {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)": {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)": {
+          "passed": 27,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    },
+    "focused_regression_recheck": {
+      "passed": 4,
+      "failed": 0,
+      "reason": "Final assertion directly reproduces the former acceptance-in-prose false pass; these four tests are already included in the distinct-test total."
+    },
+    "clippy": "passed: core, evaluator and API, all targets, warnings denied; final evaluator recheck also passed",
+    "architecture": "passed, including five dependency-parser tests",
+    "format_and_diff": "passed"
+  },
+  "logs": {
+    "/private/tmp/astra-m04-stage-contract-final-tests.log": {
+      "sha256": "92ee04c3042f95f6299b8d600cbc9ed55deae46b5d3ae46c4823d0e5ab59686b"
+    },
+    "/private/tmp/astra-m04-stage-contract-focused-final.log": {
+      "sha256": "bb96928f89577057505d26f8a5e03491935e5f61ae5b172daca33fbfeeea0a61"
+    },
+    "/private/tmp/astra-m04-stage-contract-clippy.log": {
+      "sha256": "55acce276673c8dda09eab980a612a8cc5e61606eba23736ead09120fd355b0f"
+    },
+    "/private/tmp/astra-m04-stage-contract-architecture.log": {
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    "/private/tmp/astra-m04-stage-contract-clippy-final.log": {
+      "sha256": "d05ba19e910ed3bf2d24f28daf5a48dfbdcfa16d7773c5e3fa284f5acda27b1d"
+    }
+  },
+  "unchanged": [
+    "Frozen 24-task coding suite and Repair suite",
+    "All acceptance thresholds",
+    "Model targets, policies, profiles, prompts and tool schemas",
+    "Execution and correction limits",
+    "Historical qualification verdicts and raw reports",
+    "Onboarding fixture contents, pending separate representativeness correction"
+  ],
+  "deployed": false,
+  "m04_accepted": false
+}
