@@ -1,9 +1,10 @@
 # ASTRA: Autonomous SDLC in lucas_engineering
 
-Status: approved implementation program; M01–M03 accepted; M04 active; M05 reader/contract implementation in progress. Approved by the owner on 2026-09-04.
+Status: approved implementation program; M01–M03 accepted; M04 active; M05 compatible reader deployed with creation gates open. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `fd740927110366a983de6bb0d3bc6c576577708b`, observed
-2026-09-05 through release commit `548b978c33f8f32fb23d91120ef65a3502188d1c`.
+Current compiled PHarness release: `2249950d225a4632b24235c2b6f2d8469a774243`, observed
+2026-09-05 at 14:07 UTC through release commit `8ca88f32e3d50f8430cf5a486912ebe6d00a392d`.
+Live schema 0052 and unchanged Finance history were independently verified at 14:08 UTC.
 These are starting observations, not permanent latest-version claims.
 
 ## Product promise and authority
@@ -61,17 +62,17 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
 | M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | active | M03. An external qualification blocker does not stop independent M02/M05 preparation. |
-| M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | implementation in progress; gate open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
+| M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller integrated on isolated branch; gate open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | planned | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | planned | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
-| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | planned | May begin after M05; closes against M09 behavior. |
+| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial console corrections tested on isolated branch; gate open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
 Next eligible: address the measured M04 coding failures and qualify the resulting
-immutable runtime while continuing M05 reader publication and M06 preparation.
+immutable runtime while continuing M06 and M10 preparation.
 The fd74092 live evaluation completed at 12:34 UTC and failed: 22/24 and 20/24,
 two hidden-test false passes, and one blocked write outside permitted paths.
 There were no provider or infrastructure failures in this run. See the
@@ -90,17 +91,18 @@ merged code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA
 Fresh gateway calibration passed for Builder and Planner. MiniMax's malformed
 history rejection exposed a protocol compatibility defect; that repair and complete
 stage-report guards merged in PR 330 at `db84b797f1bbc833ba86844874d1d041bc33ab72`.
-The completed coding evaluation used fd74092. Publish/requalify the new runtime
-and keep qualification jobs serial. M05 omits its environment entry while
-creation is disabled; the complete rendered chart matches main, allowing reader
-source publication without interrupting evaluation. Hold the actual image-pin
-release until active evaluations are terminal; that condition is now met. Neither code merge nor provider diagnostics close M04. M05 compatible-reader source merged in
-PR 328 at `2249950d225a4632b24235c2b6f2d8469a774243` on 2026-09-05. Its seven
-AMD64 images and native bundle are being built from that one source; the runtime
-still uses fd74092. M04 contract clarification is committed at `be8bf8c` in
-[draft PR 331](https://github.com/lward27/pharness/pull/331); 28 runhost tests and
-Clippy pass, but it is not deployed or live-qualified. Keep its merge behind the
-current build's exact-main checks.
+The completed coding evaluation used fd74092. New runtime qualification remains
+required; keep qualification jobs serial. M05 compatible-reader source merged in
+PR 328 at `2249950d225a4632b24235c2b6f2d8469a774243`. Its complete seven-image
+AMD64 release and native bundle were verified and deployed through PR 333, merge
+`8ca88f32e3d50f8430cf5a486912ebe6d00a392d`. Argo and all five long-running
+Deployment image identities matched; hosted creation and Coding Reliability V2
+remain disabled. See [reader release and rollback floor](../../evidence/autonomous-sdlc/ASTRA-M05-COMPATIBLE-READER-RELEASE.md).
+M04 contract clarification is committed at `be8bf8c` in
+[PR 331](https://github.com/lward27/pharness/pull/331); 28 runhost tests and Clippy
+pass. Its live qualification follows a new immutable release; the current reader
+release does not include that clarification. Neither source merge nor provider
+diagnostics close M04.
 
 M06 engineering progression is integrated at `e1709a2` on
 `codex/astra-autonomous-controller`, following persistence `9d52c9e`, dispatch
@@ -111,11 +113,13 @@ distinct passing tests. These controller changes are in [draft PR 332](https://g
 Controller delivery integration, terminal cancellation and live acceptance remain open. These independent preparations do
 not waive M05 or M04 gates. See
 [controller evidence](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
-Neither schema 0052 nor 0053 has been applied to the live Finance database.
+Schema 0052 is applied to the live Finance database; 0053 remains undeployed.
 A verified 21,204,992-byte pre-0052 snapshot is retained on its existing PVC.
 The immutable 2249950 reader successfully migrated an isolated copy to 0052 while
 preserving its 14 WorkItems, 82 Runs, evidence, audit records and four holds; see
-[real-data migration proof](../../evidence/autonomous-sdlc/ASTRA-M05-CLONE-MIGRATION-VERIFIED.json).
+[isolated migration proof](../../evidence/autonomous-sdlc/ASTRA-M05-CLONE-MIGRATION-VERIFIED.json).
+The subsequent live read-only comparison verified all original WorkItems, Runs,
+stage outcomes, audit records and holds unchanged; see [live preservation evidence](../../evidence/autonomous-sdlc/ASTRA-M05-LIVE-DATABASE-VERIFIED.json).
 See [M02 evidence](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
 A real external blocker may suspend its dependent work but never waive its gate.
@@ -135,7 +139,7 @@ delivery configuration, allowed automatic actions, budgets, mutable source,
 read-only dependencies, and rollback permission. Existing operator projections
 explain current state and one useful action. GET and navigation never dispatch work.
 
-Use additive migrations from the verified current schema (0051 at this baseline).
+Use additive migrations from the verified current schema (0052 after the M05 compatible-reader release).
 Preserve the Finance generation and retention/audit history. Compatible readers
 ship before hosted writes; record the minimum compatible rollback release.
 Legacy work finishes under its pinned source-only contract. Preserve source-only
