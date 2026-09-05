@@ -1,7 +1,9 @@
 # ASTRA: Hosted workflow configuration and compatibility
 
-Status: M05 implementation reference, 2026-09-05. The code is in draft PR 328;
-it is not deployed and hosted creation remains disabled. The live schema is 0051.
+Status: M05 implementation reference, 2026-09-05. Reader source merged in PR 328
+at `2249950`. Its immutable image set and native bundle are verified; hosted creation remains
+disabled and the live schema remains 0051. The actual reader successfully migrated
+an isolated copy of the Finance database to 0052; live rollout remains pending.
 Read the [program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) and
 [M05 evidence](../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md)
 for current acceptance, rather than treating configuration as proof of autonomy.
@@ -103,3 +105,9 @@ progression and accepted delivery behavior. Only then enable creation through th
 reviewed GitOps release. The old unscoped creation route returns an explicit
 retirement response; historical reads remain available. This document does not
 waive the separate M05–M11 acceptance checks or human production approval.
+
+## Retained schema-52 reader
+
+The compatible source `2249950d225a4632b24235c2b6f2d8469a774243` and its complete
+immutable image set are retained. Read the [minimum rollback release](../evidence/autonomous-sdlc/ASTRA-M05-COMPATIBLE-READER-RELEASE.md) before applying 0052 or recovering this deployment.
+Hosted writes remain disabled until the program gates pass.
