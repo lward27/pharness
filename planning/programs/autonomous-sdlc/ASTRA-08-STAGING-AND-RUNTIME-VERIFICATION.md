@@ -1,6 +1,6 @@
 # ASTRA M08: Staging and runtime verification
 
-Status: bounded native Tempo reader, separate deployment records and durable staging GitOps handoff implemented with local validation. These slices are not deployed; Argo/runtime verification and real staging acceptance remain open.
+Status: bounded native Tempo and deployment identity readers, separate deployment records and durable staging GitOps handoff implemented with local validation. These slices are not deployed; Argo/runtime verification and real staging acceptance remain open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
 
@@ -25,6 +25,12 @@ Its local tests do not establish a real GitOps mutation or running deployment.
 The operation retains its delivery locks after a committed digest while actual
 Argo and runtime verification remain pending. Production cannot be expressed by
 this authority; the existing production approval boundary is unchanged.
+
+The [native deployment identity reader](../../evidence/autonomous-sdlc/ASTRA-M08-DEPLOYMENT-IDENTITY.md)
+checks the exact Argo revision, Deployment/ReplicaSet/Pod ownership, running digest
+and ready service endpoints. Both existing staging baselines passed live read-only
+checks. It is not deployed or connected to the controller and does not establish
+a runtime observation window or application acceptance.
 
 ## Objective and scope
 

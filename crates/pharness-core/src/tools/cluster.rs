@@ -10,7 +10,9 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+mod finance;
 mod tempo;
+pub use finance::{FinanceApplication, FinanceDeploymentExpectation, FinanceEnvironment};
 pub use tempo::FinanceTraceWindow;
 
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
