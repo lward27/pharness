@@ -1,0 +1,30 @@
+{
+  "validated_at": "2026-09-05T15:22:29.176339+00:00",
+  "base_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "source_sha256": {
+    "crates/pharness-api/src/app/pipeline/execution.rs": "3f7ce6f9facdb0f185c0a6214d7a01b0405a2aa92c2b50b50f3ed8c04a26a199",
+    "crates/pharness-api/src/app/pipeline/mod.rs": "9bb6c01679a0170d5ef1a691eead0122cd18fd855441abd66fc6e6ca1efed18d",
+    "crates/pharness-api/src/app/pipeline/lucas.rs": "70b442596559bcbcd3780a041adb5bc9a6bee725f40ac946e7b30fdec11b92a5",
+    "crates/pharness-api/src/app/tests/pipeline_delivery.rs": "47466bcc3abb295811bfbca36924a4b4e07d740bb0f7dd896b83801f2db7b077"
+  },
+  "validation": {
+    "api_tests": 255,
+    "admin_tests": 1,
+    "final_affected_pipeline_tests": 16,
+    "affected_subset_included_in_total": true,
+    "clippy_all_targets_warnings_denied": true,
+    "rust_format": true,
+    "architecture_check": true,
+    "architecture_parser_regressions": 5,
+    "initial_clippy_failure": "Nonminimal boolean expression; replaced with an explicit parameter match, then reran affected tests, Clippy and architecture checks."
+  },
+  "log_sha256": {
+    "astra-m07-api-tests.log": "42710a53d12970a55bda62ab9efc1b228d46e7b9c00d13dec5bbed22429988b9",
+    "astra-m07-final-build-tests.log": "b5beffbd905d53b97c10d57bacb0baeb64cc201ba9c6790c198a53dbb9cc93b2",
+    "astra-m07-final-api-clippy.log": "4ffa5210309841d9e0b713ac8fa0794aeee60777b84edeaf84ddae73bc851d8a",
+    "astra-m07-architecture.log": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "boundary": "Finite Finance pipelines use the restricted service account, AMD64, their own 1Gi workspace, committed root build inputs and existing 60-minute timeout. 22 negative variants reject changed identity, alternate inputs, production access and reused/larger workspaces. Legacy unrelated pipelines remain unchanged. No new contract fields or migration.",
+  "deployed": false,
+  "autonomous_delivery_accepted": false
+}
