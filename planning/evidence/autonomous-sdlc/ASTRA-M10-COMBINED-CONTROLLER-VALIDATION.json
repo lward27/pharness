@@ -1,0 +1,32 @@
+{
+  "validated_at": "2026-09-05T14:35:49.410816+00:00",
+  "source_revision": "047f13eb8b4627745ebe507810e46aec297c430e",
+  "controller_merge": "ba8ce03e4dfd3df5815c897a69276858b53aacb2",
+  "unit_checks_passed": 79,
+  "production_ui_build": "passed",
+  "real_controller_source_only_journey": {
+    "lamina": "passed",
+    "preceding_flagged_shell": "passed",
+    "distinct_workflow_tests": 1,
+    "mobile_duplicate": "existing skip; both widths captured inside journey"
+  },
+  "logs": {
+    "unit": {
+      "path": "/private/tmp/astra-m10-combined-unit.log",
+      "sha256": "b45648df596d6050d5927bd44fc4bc692b82c701e357e1869d640885369b5126"
+    },
+    "build": {
+      "path": "/private/tmp/astra-m10-combined-build.log",
+      "sha256": "58db1c48aca3ca1b35681a912239681e6092f95c76a042a713ff89901b21a9a6"
+    },
+    "real-api": {
+      "path": "/private/tmp/astra-m10-combined-real-api.log",
+      "sha256": "f5dcdfd512db5e5911ae12d2a0a34fc5695e1f2bb71265b1e3055ef195d333af"
+    },
+    "legacy-api": {
+      "path": "/private/tmp/astra-m10-combined-legacy-api.log",
+      "sha256": "d51214408b2607a9b168efe8fe33e12209f3601677a3b07971843c33f0e33908"
+    }
+  },
+  "acceptance_boundary": "Revalidates compatibility after merging M06 and M04 source; not live deployment, model qualification or hosted acceptance."
+}

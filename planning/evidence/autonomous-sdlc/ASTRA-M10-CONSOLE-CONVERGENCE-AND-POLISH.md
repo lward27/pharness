@@ -101,3 +101,12 @@ not proof of production approval, a real release or runtime verification:
 - [Hosted overview, light phone](ASTRA-M10-SCREENSHOTS/ASTRA-hosted-overview-light-mobile.png)
 - [Required delivery evidence, phone](ASTRA-M10-SCREENSHOTS/ASTRA-hosted-delivery-light-mobile.png)
 - [Stale workflow controls, phone](ASTRA-M10-SCREENSHOTS/ASTRA-hosted-stale-controls-mobile.png)
+
+## Combined-source revalidation
+
+The M06 controller and M04 prompt clarification were merged into this branch at
+`047f13eb8b4627745ebe507810e46aec297c430e`. The 79 unit checks, production UI build, and real
+API/controller journey with both console flags passed again without updating
+visual baselines. The [combined validation manifest](ASTRA-M10-COMBINED-CONTROLLER-VALIDATION.json)
+binds the logs to that source. This verifies source-only compatibility; hosted
+release acceptance remains open.
