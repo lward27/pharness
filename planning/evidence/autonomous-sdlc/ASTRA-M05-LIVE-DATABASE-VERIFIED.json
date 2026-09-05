@@ -1,0 +1,38 @@
+{
+  "integrity": "ok",
+  "maximum_migration": 52,
+  "applied_migrations": 52,
+  "legacy_policy_rows": 0,
+  "historical_work_items_identical": true,
+  "preserved_counts": {
+    "work_items": 14,
+    "runs": 82,
+    "stage_executions": 102,
+    "stage_outcomes": 102,
+    "evidence_validations": 83,
+    "audit_events": 260,
+    "retention_holds": 4,
+    "products": 1,
+    "repositories": 5,
+    "database_generations": 1
+  },
+  "source_migration_unchanged": 51,
+  "observed_at": "2026-09-05T14:08:33.437804+00:00",
+  "cluster": "lucas_engineering",
+  "job": "astra-m05-live-schema-0052-20260905",
+  "job_uid": "bfe29542-8dd6-42b1-9e2c-e58bf076fdf5",
+  "pod": "astra-m05-live-schema-0052-20260905-ktjvx",
+  "pod_uid": "d20308f8-e7c7-4931-9d69-c1bde52c20f1",
+  "node": "ubuntu-lucas-engineering",
+  "source_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "gitops_revision": "8ca88f32e3d50f8430cf5a486912ebe6d00a392d",
+  "containers": [
+    {
+      "name": "verify",
+      "image_id": "registry.lucas.engineering/pharness-python-runner@sha256:058e0e2a9c59fb47a7a89eae567e3f0f87a394e1cf050ab2ebc7d71106672152",
+      "exit_code": 0,
+      "restarts": 0
+    }
+  ],
+  "scope": "Read-only transaction on the live Finance database compared to the retained pre-0052 archive; no credentials, writes, resets, or migrations performed by this check."
+}
