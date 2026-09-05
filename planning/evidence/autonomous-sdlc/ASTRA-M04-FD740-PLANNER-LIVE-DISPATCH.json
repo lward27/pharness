@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-05T11:46:51.241410+00:00",
+  "runtime_revision": "fd740927110366a983de6bb0d3bc6c576577708b",
+  "policy_id": "planner-kimi-k3-v2",
+  "target_id": "fireworks-kimi-k3",
+  "state": "qualification_request_started",
+  "request": {
+    "actor": "lucas",
+    "reason": "ASTRA M04 frozen stage qualification on exact fd74092 runtime; primary candidate, unchanged limits, no source or deployment effects",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+    "attempts": 2
+  }
+}

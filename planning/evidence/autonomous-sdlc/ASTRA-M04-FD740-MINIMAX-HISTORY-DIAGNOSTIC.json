@@ -1,0 +1,144 @@
+{
+  "observed_at": "2026-09-05T11:49:58.796096+00:00",
+  "purpose": "identify which existing protocol-history input the primary MiniMax provider rejects; direct diagnostics cannot qualify the gateway",
+  "qualification_accepted": false,
+  "model": "accounts/fireworks/models/minimax-m3",
+  "max_tokens": 8192,
+  "temperature": 0.1,
+  "stream": true,
+  "tool_choice": "auto",
+  "parallel_tool_calls": false,
+  "cases": [
+    {
+      "case": "single_tool_call",
+      "http_status": 200,
+      "tool_call_deltas": 9,
+      "usage": {
+        "prompt_tokens": 409,
+        "total_tokens": 459,
+        "completion_tokens": 50,
+        "prompt_tokens_details": {
+          "cached_tokens": 200
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 17
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 17
+        }
+      },
+      "elapsed_seconds": 1.25
+    },
+    {
+      "case": "multi_turn_continuation",
+      "http_status": 200,
+      "tool_call_deltas": 12,
+      "usage": {
+        "prompt_tokens": 488,
+        "total_tokens": 545,
+        "completion_tokens": 57,
+        "prompt_tokens_details": {
+          "cached_tokens": 209
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 21
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 21
+        }
+      },
+      "elapsed_seconds": 1.25
+    },
+    {
+      "case": "tool_failure_recovery",
+      "http_status": 200,
+      "tool_call_deltas": 10,
+      "usage": {
+        "prompt_tokens": 477,
+        "total_tokens": 559,
+        "completion_tokens": 82,
+        "prompt_tokens_details": {
+          "cached_tokens": 203
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 48
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 48
+        }
+      },
+      "elapsed_seconds": 1.17
+    },
+    {
+      "case": "long_terminal_submission",
+      "http_status": 200,
+      "tool_call_deltas": 11,
+      "usage": {
+        "prompt_tokens": 956,
+        "total_tokens": 1032,
+        "completion_tokens": 76,
+        "prompt_tokens_details": {
+          "cached_tokens": 206
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 41
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 41
+        }
+      },
+      "elapsed_seconds": 1.92
+    },
+    {
+      "case": "reasoning_replay",
+      "http_status": 200,
+      "tool_call_deltas": 10,
+      "usage": {
+        "prompt_tokens": 426,
+        "total_tokens": 469,
+        "completion_tokens": 43,
+        "prompt_tokens_details": {
+          "cached_tokens": 200
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 9
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 9
+        }
+      },
+      "elapsed_seconds": 1.23
+    },
+    {
+      "case": "missing_action_correction",
+      "http_status": 200,
+      "tool_call_deltas": 10,
+      "usage": {
+        "prompt_tokens": 427,
+        "total_tokens": 497,
+        "completion_tokens": 70,
+        "prompt_tokens_details": {
+          "cached_tokens": 203
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 36
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 36
+        }
+      },
+      "elapsed_seconds": 1.09
+    },
+    {
+      "case": "malformed_arguments_correction",
+      "http_status": 400,
+      "provider_error": {
+        "code": "invalid_request_error",
+        "type": "invalid_request_error",
+        "message": "Invalid tool call in messages: tool_calls[].function.arguments for function 'verification_complete' must be a JSON object string (or an object), got invalid JSON"
+      },
+      "elapsed_seconds": 1.28
+    }
+  ],
+  "completed_at": "2026-09-05T11:50:07.975446+00:00"
+}

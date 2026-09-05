@@ -110,6 +110,25 @@ Keep V2 and hosted creation disabled until their respective gates are satisfied.
 Record live usage, elapsed time, failures and exact immutable profile bindings.
 Do not replace missing live evidence with these deterministic replay results.
 
+### Stage checks and current blocker
+
+The primary Onboarding target's [calibration](ASTRA-M04-FD740-ONBOARDING-LIVE-PROTOCOL.json)
+failed with an upstream `invalid_request_error`. A bounded direct-provider
+[diagnostic](ASTRA-M04-FD740-MINIMAX-HISTORY-DIAGNOSTIC.json) isolated the existing
+`malformed_arguments_correction` input: MiniMax accepts the earlier histories but
+rejects invalid JSON in the historical tool call before generation. This identifies
+a transport/history compatibility defect; it is not a model score or a passing
+qualification. The original failure remains recorded. The fix must preserve the
+malformed action as a rejected, non-executing event and retain the frozen recovery
+case, rather than remove that gate or increase its limits.
+
+The registered Planner target passed [30/30 calibration](ASTRA-M04-FD740-PLANNER-LIVE-PROTOCOL.json).
+Its qualification request received a definitive 409 because the existing coding
+evaluation holds the runtime's single qualification slot. No second evaluation
+was created. [Dispatch response](ASTRA-M04-FD740-PLANNER-LIVE-START.json) records
+that deferral. Keep qualification jobs serial; refresh calibration when the slot
+is available. The diagnostic observation does not authorize a provider switch.
+
 ## Recovery and limits
 
 This release retains schema-51 compatibility. M05's additive migration has a
