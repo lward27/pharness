@@ -1,6 +1,7 @@
 # ASTRA M06: Durable autonomous controller
 
-Status: planned.
+Status: persistence preparation tested; API integration and acceptance open.
+Evidence: [current implementation boundary](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M05.
 
