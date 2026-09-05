@@ -1,0 +1,23 @@
+{
+  "recorded_at": "2026-09-05T23:20:17.829028+00:00",
+  "source_base": "34c7f811afd1780cf2973c27691bed5411910f39",
+  "render_sha256": "88e67eea0313ef2a3e0f30ab144824fc67cd3e9e75bb56dc978d4ee68ba03bbe",
+  "rbac_resources": 6,
+  "exact_role_scope_checked": true,
+  "secrets_logs_exec_mutations_cluster_lists_granted": false,
+  "namespace_scoped_list_limitation": "Pod/ReplicaSet/EndpointSlice label selectors are application validation, not an RBAC label restriction",
+  "legacy_prometheus_endpoint_unchanged": true,
+  "mimir_endpoint_scoped": true,
+  "tempo_endpoint_configured": true,
+  "hosted_and_v2_creation_disabled": true,
+  "server_dry_run": [
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)"
+  ],
+  "out_of_scope_chart_endpoint_rejected": true,
+  "applied": false
+}

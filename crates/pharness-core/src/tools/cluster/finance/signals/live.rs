@@ -12,9 +12,9 @@ async fn live_finance_five_minute_signals() {
             std::env::var("PHARNESS_FINANCE_LIVE_KUBECTL")
                 .expect("explicit cluster wrapper required"),
         )
-        .with_prometheus_url(
+        .with_finance_mimir_url_option(Some(
             std::env::var("PHARNESS_FINANCE_LIVE_MIMIR").expect("explicit Mimir endpoint required"),
-        )
+        ))
         .with_loki_url_option(Some(
             std::env::var("PHARNESS_FINANCE_LIVE_LOKI").expect("explicit Loki endpoint required"),
         ));

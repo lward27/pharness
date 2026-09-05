@@ -56,6 +56,12 @@ Tempo server span. Other backend probes still failed. The reader is not deployed
 identified missing finite Kubernetes read permissions and telemetry configuration.
 The local operator checks cannot substitute for deployed controller verification.
 
+The [finite API observer preparation](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-OBSERVER-ACCESS.md)
+adds namespace-scoped Finance reads and a separate Mimir endpoint while preserving legacy
+Prometheus inventory. Local code/chart validation and six in-cluster HTTP routing checks
+passed. The change is not deployed; effective API permissions and native controller
+execution still require observed evidence. The earlier empty-query failure is retained.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.
