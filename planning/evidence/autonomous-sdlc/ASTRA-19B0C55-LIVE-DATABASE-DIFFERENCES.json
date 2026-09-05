@@ -1,0 +1,1809 @@
+{
+  "schema_version": "pharness.dev/live-copy-migration-evidence/v1alpha1",
+  "integrity": "ok",
+  "foreign_key_violations": 0,
+  "maximum_migration": 54,
+  "applied_migrations": 54,
+  "source_migration_unchanged": 53,
+  "archive_sha256": "sha256:1531fb59c582ded308b2cd691d9dca4f5f96b76f1ca9ff02b49692613fe5aa2d",
+  "all_original_columns_identical": false,
+  "differences": {
+    "agent_host_capability_snapshots": {
+      "before": {
+        "columns": [
+          "id",
+          "host_id",
+          "platform",
+          "architecture",
+          "codex_version",
+          "podman_version",
+          "execution_mode",
+          "authentication_class",
+          "authentication_ready",
+          "supported_profiles_json",
+          "runner_images_json",
+          "available_slots",
+          "storage_json",
+          "status",
+          "blockers_json",
+          "content_hash",
+          "created_at",
+          "expires_at"
+        ],
+        "rows": 219,
+        "sha256": "f349c17f142a474cd52950bb3f7d579d483f5fdb8c779e814320e51aa841b595"
+      },
+      "after": {
+        "columns": [
+          "id",
+          "host_id",
+          "platform",
+          "architecture",
+          "codex_version",
+          "podman_version",
+          "execution_mode",
+          "authentication_class",
+          "authentication_ready",
+          "supported_profiles_json",
+          "runner_images_json",
+          "available_slots",
+          "storage_json",
+          "status",
+          "blockers_json",
+          "content_hash",
+          "created_at",
+          "expires_at"
+        ],
+        "rows": 231,
+        "sha256": "71751b9b208d41bcb7227253dbbcc92d6180fa92a39ada989954d8f33197ac7d"
+      },
+      "primary_key_columns": [
+        "id"
+      ],
+      "deleted_original_rows": 0,
+      "added_rows": 12,
+      "modified_columns": {}
+    },
+    "agent_hosts": {
+      "before": {
+        "columns": [
+          "id",
+          "display_name",
+          "host_pool",
+          "lifecycle_state",
+          "credential_hash",
+          "enrollment_id",
+          "platform",
+          "architecture",
+          "created_at",
+          "updated_at",
+          "last_contact_at",
+          "retired_at"
+        ],
+        "rows": 1,
+        "sha256": "0df70f2bb7eb4b0e84226127fd5c2cde1fc67428a7012183e64533d55b481d3c"
+      },
+      "after": {
+        "columns": [
+          "id",
+          "display_name",
+          "host_pool",
+          "lifecycle_state",
+          "credential_hash",
+          "enrollment_id",
+          "platform",
+          "architecture",
+          "created_at",
+          "updated_at",
+          "last_contact_at",
+          "retired_at"
+        ],
+        "rows": 1,
+        "sha256": "f87918578d8d93b828061085b6d58a7250e83b5c716670d8c325c92ecd018cb3"
+      },
+      "primary_key_columns": [
+        "id"
+      ],
+      "deleted_original_rows": 0,
+      "added_rows": 0,
+      "modified_columns": {
+        "updated_at": 1,
+        "last_contact_at": 1
+      }
+    },
+    "organizations": {
+      "before": {
+        "columns": [
+          "id",
+          "organization_key",
+          "display_name",
+          "created_at",
+          "updated_at"
+        ],
+        "rows": 1,
+        "sha256": "664de072df9622bc1f91ddba8845f0407dd30fde207f9d65a046faba45e8cc6a"
+      },
+      "after": {
+        "columns": [
+          "id",
+          "organization_key",
+          "display_name",
+          "created_at",
+          "updated_at"
+        ],
+        "rows": 1,
+        "sha256": "3d2a41945900245612b4c6266b12a3f138e848e91eb91250b328d18faadc0500"
+      },
+      "primary_key_columns": [
+        "id"
+      ],
+      "deleted_original_rows": 0,
+      "added_rows": 0,
+      "modified_columns": {
+        "updated_at": 1
+      }
+    }
+  },
+  "preserved_tables": 81,
+  "original_column_fingerprints": {
+    "_sqlx_migrations": {
+      "columns": [
+        "version",
+        "description",
+        "installed_on",
+        "success",
+        "checksum",
+        "execution_time"
+      ],
+      "rows": 53,
+      "sha256": "5292691077b315aafc47d9094f4c53b1c5a0fbbf60277ad78b82cf632790b89c"
+    },
+    "agent_context_packs": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "stage_execution_id",
+        "schema_version",
+        "context_json",
+        "estimated_tokens",
+        "content_hash",
+        "created_at"
+      ],
+      "rows": 73,
+      "sha256": "5ceca1e4c56ac0598de4a58ac3cd4780803d308458b9a2eb52a605ba92001a75"
+    },
+    "agent_execution_policy_qualifications": {
+      "columns": [
+        "id",
+        "policy_id",
+        "policy_revision",
+        "policy_hash",
+        "runtime_revision",
+        "suite_id",
+        "suite_hash",
+        "attempts",
+        "metrics_json",
+        "verdict",
+        "evidence_artifact_id",
+        "actor",
+        "reason",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_execution_selections": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "stage_key",
+        "policy_id",
+        "policy_revision",
+        "policy_hash",
+        "resolved_binding_json",
+        "binding_hash",
+        "actor",
+        "reason",
+        "state_hash",
+        "supersedes_selection_id",
+        "stage_execution_id",
+        "run_id",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_host_capability_snapshots": {
+      "columns": [
+        "id",
+        "host_id",
+        "platform",
+        "architecture",
+        "codex_version",
+        "podman_version",
+        "execution_mode",
+        "authentication_class",
+        "authentication_ready",
+        "supported_profiles_json",
+        "runner_images_json",
+        "available_slots",
+        "storage_json",
+        "status",
+        "blockers_json",
+        "content_hash",
+        "created_at",
+        "expires_at"
+      ],
+      "rows": 231,
+      "sha256": "71751b9b208d41bcb7227253dbbcc92d6180fa92a39ada989954d8f33197ac7d"
+    },
+    "agent_host_enrollments": {
+      "columns": [
+        "id",
+        "display_name",
+        "host_pool",
+        "token_hash",
+        "actor",
+        "reason",
+        "created_at",
+        "expires_at",
+        "consumed_at",
+        "consumed_by_host_id"
+      ],
+      "rows": 1,
+      "sha256": "8a726679f734d5ee43423649694b225e8bd3d3847c1bbb9ac43f41ea67e019e7"
+    },
+    "agent_hosts": {
+      "columns": [
+        "id",
+        "display_name",
+        "host_pool",
+        "lifecycle_state",
+        "credential_hash",
+        "enrollment_id",
+        "platform",
+        "architecture",
+        "created_at",
+        "updated_at",
+        "last_contact_at",
+        "retired_at"
+      ],
+      "rows": 1,
+      "sha256": "f87918578d8d93b828061085b6d58a7250e83b5c716670d8c325c92ecd018cb3"
+    },
+    "agent_leases": {
+      "columns": [
+        "id",
+        "run_id",
+        "stage_execution_id",
+        "host_pool",
+        "pinned_host_id",
+        "host_id",
+        "workspace_id",
+        "environment_profile_id",
+        "runner_image",
+        "binding_hash",
+        "state",
+        "lease_token_hash",
+        "remote_thread_id",
+        "completion_hash",
+        "error",
+        "created_at",
+        "claimed_at",
+        "heartbeat_at",
+        "expires_at",
+        "completed_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "approval_gates": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "gate_kind",
+        "gate_order",
+        "title",
+        "summary",
+        "risk_level",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "gate_json",
+        "created_at",
+        "decided_at",
+        "decided_by",
+        "decision_reason",
+        "stale_at",
+        "stale_by",
+        "stale_reason",
+        "origin"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "approvals": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "tool_call_id",
+        "status",
+        "kind",
+        "summary",
+        "risk_level",
+        "requested_at",
+        "decided_at",
+        "decided_by",
+        "decision_reason",
+        "action_json",
+        "resume_messages_json",
+        "turns_completed",
+        "run_scope_json",
+        "preview_json",
+        "origin"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "archive_records": {
+      "columns": [
+        "id",
+        "database_generation_id",
+        "archived_generation_id",
+        "database_claim",
+        "archive_claim",
+        "database_sha256",
+        "manifest_sha256",
+        "archive_json",
+        "status",
+        "created_at",
+        "deletion_eligible_at",
+        "deleted_at",
+        "deletion_receipt_id"
+      ],
+      "rows": 1,
+      "sha256": "89625a0767277e0ab24e46fada382c36dc90ba3cd0855615f13eee43847a7e7f"
+    },
+    "artifacts": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "kind",
+        "label",
+        "mime_type",
+        "path",
+        "content_text",
+        "content_json",
+        "created_at",
+        "content_hash",
+        "retention_class",
+        "purged_at"
+      ],
+      "rows": 38,
+      "sha256": "e3118ed4e6bc94ccd80615fd1e5842738748ffd254eaf5398d94d6afdac7413b"
+    },
+    "audit_events": {
+      "columns": [
+        "id",
+        "kind",
+        "actor",
+        "resource_kind",
+        "resource_id",
+        "run_id",
+        "payload_json",
+        "created_at",
+        "origin"
+      ],
+      "rows": 262,
+      "sha256": "352566045554106376c40f9f19e0b90f36eac9bd9bb4627d67666d306e7dfc3e"
+    },
+    "budget_extensions": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "run_id",
+        "status",
+        "turn_increment",
+        "token_increment",
+        "state_hash",
+        "requested_at",
+        "approved_at",
+        "approved_by",
+        "approval_reason"
+      ],
+      "rows": 29,
+      "sha256": "f53cd7b23fb3b45ef491bfd52daa4bf850c8ac19ba6154a1b55e2ea9b61641f4"
+    },
+    "capability_verifications": {
+      "columns": [
+        "id",
+        "capability",
+        "status",
+        "summary",
+        "principal",
+        "repository",
+        "permission",
+        "verified_at",
+        "expires_at"
+      ],
+      "rows": 156,
+      "sha256": "727df848125a4e49716399ebe925fd6637fe9b4985a4680112db9c535e76ce3f"
+    },
+    "change_sets": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "work_plan_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "material_hash",
+        "revision",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "change_set_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 9,
+      "sha256": "e8d79be03dcba363548f606c598950a94a6977cf9556aa6c01b3d48e782c6998"
+    },
+    "context_items": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "source",
+        "kind",
+        "title",
+        "content",
+        "resource_ref_id",
+        "token_estimate",
+        "metadata_json",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "controller_waits": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "session_id",
+        "run_id",
+        "status",
+        "wait_kind",
+        "subject_kind",
+        "subject_id",
+        "next_check_at",
+        "deadline_at",
+        "max_checks",
+        "check_count",
+        "data_json",
+        "created_at",
+        "updated_at",
+        "resolved_at",
+        "resolution_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "database_generations": {
+      "columns": [
+        "id",
+        "created_at",
+        "initializing_revision",
+        "schema_version",
+        "purpose"
+      ],
+      "rows": 1,
+      "sha256": "4d67ae8d94a17a8bffcb466edff0ee73a57324cee74594f24011e4bc459360b9"
+    },
+    "deployment_contracts": {
+      "columns": [
+        "id",
+        "status",
+        "target_environment",
+        "target_namespace",
+        "argo_application",
+        "version",
+        "contract_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 4,
+      "sha256": "93803196627a463905daab045fad446ac64b9f13611d4229676fac136a287ecf"
+    },
+    "deployment_intents": {
+      "columns": [
+        "id",
+        "pipeline_intent_id",
+        "change_set_id",
+        "work_plan_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "intent_kind",
+        "target_environment",
+        "target_namespace",
+        "argo_application",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "intent_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "effective_stage_outcomes": {
+      "columns": [
+        "work_item_id",
+        "stage_key",
+        "outcome_id",
+        "state_version",
+        "changed_by",
+        "change_reason",
+        "changed_at"
+      ],
+      "rows": 75,
+      "sha256": "6392e5745525cd139ccd9f9a3e2694368ce69d8d58db334efc87e4f87cd23138"
+    },
+    "environment_preparations": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "workspace_id",
+        "run_id",
+        "status",
+        "environment_profile_id",
+        "source_commit",
+        "project_contract_json",
+        "project_contract_hash",
+        "environment_snapshot_json",
+        "logs_json",
+        "error",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 20,
+      "sha256": "404f724535135a0c92f1cdac700625c5f09cdd585a41abeed2551a1dee780c67"
+    },
+    "environments": {
+      "columns": [
+        "id",
+        "name",
+        "tier",
+        "cluster",
+        "namespace",
+        "metadata_json",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "events": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "seq",
+        "type",
+        "ts",
+        "payload_json"
+      ],
+      "rows": 7462,
+      "sha256": "3d35da7c69175a3a5aca5f1044f8c15923c1f60571e74c9e75b40c5f899c38a4"
+    },
+    "evidence_retrievals": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "stage_execution_id",
+        "run_id",
+        "actor",
+        "evidence_kind",
+        "evidence_id",
+        "evidence_version",
+        "returned_hash",
+        "created_at",
+        "event_id"
+      ],
+      "rows": 70,
+      "sha256": "3861ffe11a4e4378b0e64fba76bdf9b8be74d654fe5843964c63b6015d8a5ae6"
+    },
+    "evidence_validation_references": {
+      "columns": [
+        "id",
+        "evidence_validation_id",
+        "reference_kind",
+        "reference_id",
+        "reference_hash",
+        "created_at"
+      ],
+      "rows": 144,
+      "sha256": "b6ac8639ca0bac1f70c4076df165ec72ffaa3c424e546f4d02947336aa1f8678"
+    },
+    "evidence_validations": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "stage_execution_id",
+        "validator_key",
+        "schema_version",
+        "status",
+        "subject_json",
+        "evidence_refs_json",
+        "facts_json",
+        "contradictions_json",
+        "content_hash",
+        "validated_at"
+      ],
+      "rows": 83,
+      "sha256": "32b822c691483f69e6e9eebab905610cab61c5caac3b9ec81a18f258a4f08efb"
+    },
+    "file_changes": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "tool_call_id",
+        "path",
+        "before_hash",
+        "after_hash",
+        "diff",
+        "created_at",
+        "purged_at"
+      ],
+      "rows": 156,
+      "sha256": "7bcdcb08a5c942908c52d610e421815fa0233ca2f36711b10087489dea9f17cc"
+    },
+    "gitops_change_sets": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "work_plan_id",
+        "source_change_set_id",
+        "pipeline_intent_id",
+        "deployment_intent_id",
+        "gitops_update_plan_artifact_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "material_hash",
+        "revision",
+        "gitops_repo",
+        "gitops_ref",
+        "head_branch",
+        "kustomization_path",
+        "image_name",
+        "image_ref",
+        "gitops_change_set_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "hosted_operation_locks": {
+      "columns": [
+        "resource_key",
+        "operation_id"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "hosted_operations": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "action",
+        "input_hash",
+        "effect",
+        "status",
+        "resource_keys_json",
+        "resource_refs_json",
+        "status_reason",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "hosted_reconciliations": {
+      "columns": [
+        "work_item_id",
+        "control",
+        "control_version",
+        "next_due_at",
+        "claim_owner",
+        "claim_fence",
+        "claim_until",
+        "condition",
+        "condition_reason",
+        "unchanged_checks",
+        "observed_state_hash",
+        "updated_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "incidents": {
+      "columns": [
+        "id",
+        "observation_id",
+        "session_id",
+        "run_id",
+        "status",
+        "severity",
+        "title",
+        "summary",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "data_json",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "inference_evaluation_grant_issuances": {
+      "columns": [
+        "evaluation_id",
+        "fixture_run_id",
+        "request_sequence",
+        "request_body_hash",
+        "nonce",
+        "issued_at_epoch_seconds",
+        "expires_at_epoch_seconds"
+      ],
+      "rows": 7008,
+      "sha256": "84675e374aabb5b17f42415bc29aec26696fa31e5d7ab6a776c113c5bcd0b619"
+    },
+    "inference_evaluations": {
+      "columns": [
+        "id",
+        "status",
+        "suite_id",
+        "suite_hash",
+        "attempts",
+        "agent_profile_id",
+        "agent_profile_hash",
+        "target_id",
+        "target_revision",
+        "target_hash",
+        "policy_id",
+        "policy_revision",
+        "policy_hash",
+        "resolved_binding_json",
+        "binding_hash",
+        "runtime_revision",
+        "actor",
+        "reason",
+        "config_hash",
+        "job_name",
+        "report_json",
+        "report_hash",
+        "failure",
+        "qualification_id",
+        "created_at",
+        "started_at",
+        "finished_at"
+      ],
+      "rows": 45,
+      "sha256": "2e9b868b4d26166e6aa36503773c9956f9dea37a5877fd28e45e68a45cd30dec"
+    },
+    "inference_policy_qualifications": {
+      "columns": [
+        "id",
+        "policy_id",
+        "policy_revision",
+        "policy_hash",
+        "target_id",
+        "target_revision",
+        "target_hash",
+        "agent_profile_id",
+        "agent_profile_hash",
+        "suite_id",
+        "suite_hash",
+        "runtime_revision",
+        "attempts",
+        "metrics_json",
+        "verdict",
+        "evidence_artifact_id",
+        "actor",
+        "reason",
+        "created_at"
+      ],
+      "rows": 29,
+      "sha256": "9bad4287ca994f67ea40d2697b2bc26eace516ec0d224e45d4c649f5aa46d5b7"
+    },
+    "inference_target_verifications": {
+      "columns": [
+        "id",
+        "target_id",
+        "target_revision",
+        "target_hash",
+        "status",
+        "reachability",
+        "model_visible",
+        "streaming_compatible",
+        "tool_compatible",
+        "observed_capabilities_json",
+        "sanitized_failure",
+        "actor",
+        "reason",
+        "config_hash",
+        "created_at",
+        "expires_at"
+      ],
+      "rows": 37,
+      "sha256": "be1e7738125db12f1e1ff61069be073e92314da79a9c11dcb5a96f0d1b70e698"
+    },
+    "messages": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "role",
+        "content",
+        "created_at",
+        "token_estimate",
+        "metadata_json"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "model_grant_issuances": {
+      "columns": [
+        "run_id",
+        "request_sequence",
+        "selection_id",
+        "request_body_hash",
+        "nonce",
+        "issued_at_epoch_seconds",
+        "expires_at_epoch_seconds"
+      ],
+      "rows": 130,
+      "sha256": "6be41abca435c36648c319bd04605d72106b2bbaa357a9714afc067df98a5a28"
+    },
+    "observations": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "source",
+        "kind",
+        "subject",
+        "summary",
+        "resource_ref_json",
+        "artifact_id",
+        "data_json",
+        "observed_at",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "operator_annotation_decisions": {
+      "columns": [
+        "id",
+        "annotation_id",
+        "work_item_id",
+        "decision",
+        "action_id",
+        "actor",
+        "reason",
+        "state_hash",
+        "created_at"
+      ],
+      "rows": 3,
+      "sha256": "03a6820ff7850fc494f2339f9f4455616bd18fcaa38e7dc7daceaef93b1c739d"
+    },
+    "operator_annotations": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "target_kind",
+        "target_id",
+        "statement",
+        "evidence_refs_json",
+        "requested_effect",
+        "actor",
+        "reason",
+        "state_hash",
+        "created_at"
+      ],
+      "rows": 12,
+      "sha256": "3e347788218fce6f0404072014ee3dc2f0bc235e54fd99e63d2e8413dea8918e"
+    },
+    "organizations": {
+      "columns": [
+        "id",
+        "organization_key",
+        "display_name",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 1,
+      "sha256": "3d2a41945900245612b4c6266b12a3f138e848e91eb91250b328d18faadc0500"
+    },
+    "permission_grants": {
+      "columns": [
+        "id",
+        "subject",
+        "status",
+        "reason",
+        "scope_json",
+        "policy_json",
+        "created_at",
+        "expires_at",
+        "revoked_at",
+        "revoked_by",
+        "revoke_reason"
+      ],
+      "rows": 25,
+      "sha256": "09d085893b73dbe8f041c4767bda3eece3640d08549ec5b02976cb5dd0bc752f"
+    },
+    "pipeline_contracts": {
+      "columns": [
+        "id",
+        "status",
+        "namespace",
+        "pipeline_ref",
+        "version",
+        "contract_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 2,
+      "sha256": "8ea105e6383eedc07b86c1dda5cce85c537a933f557e5d468d1eb2b9b898e031"
+    },
+    "pipeline_intents": {
+      "columns": [
+        "id",
+        "change_set_id",
+        "work_plan_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "intent_kind",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "intent_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "product_model_snapshots": {
+      "columns": [
+        "id",
+        "product_id",
+        "version",
+        "model_json",
+        "content_hash",
+        "created_by",
+        "creation_reason",
+        "created_at"
+      ],
+      "rows": 7,
+      "sha256": "19f199695b898ba11c18fbf4c25b7bee557303d05e918aa5e62601e2086956bb"
+    },
+    "products": {
+      "columns": [
+        "id",
+        "organization_id",
+        "product_key",
+        "display_name",
+        "description",
+        "owner_principal",
+        "state_version",
+        "current_model_snapshot_id",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 1,
+      "sha256": "3f810dfbaec794547953f1d8c064c3bfaf796fe91040d2439bae8a2ac2259151"
+    },
+    "provider_check_set_observations": {
+      "columns": [
+        "id",
+        "source_delivery_intent_id",
+        "phase",
+        "repository_id",
+        "pull_request_number",
+        "head_sha",
+        "required_set_hash",
+        "authoritative_rules_succeeded",
+        "status",
+        "required_checks_json",
+        "check_runs_json",
+        "commit_statuses_json",
+        "content_hash",
+        "observed_at",
+        "expires_at"
+      ],
+      "rows": 16,
+      "sha256": "a43e2db6df73c7a89f5379518e7e9be7683b2f02ebe6f5db0fd1c770f2d58200"
+    },
+    "registry_evidence": {
+      "columns": [
+        "id",
+        "release_id",
+        "deployment_intent_id",
+        "pipeline_intent_id",
+        "change_set_id",
+        "work_plan_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "registry",
+        "repository",
+        "image_ref",
+        "image_digest",
+        "tag",
+        "source",
+        "verification_status",
+        "evidence_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "releases": {
+      "columns": [
+        "id",
+        "deployment_intent_id",
+        "pipeline_intent_id",
+        "change_set_id",
+        "work_plan_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "release_kind",
+        "target_environment",
+        "target_namespace",
+        "argo_application",
+        "version",
+        "commit_sha",
+        "image_digest",
+        "rollback_ref",
+        "release_json",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "remediation_plans": {
+      "columns": [
+        "id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "requires_approval",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "plan_json",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "repositories": {
+      "columns": [
+        "id",
+        "provider",
+        "external_id",
+        "canonical_url",
+        "default_branch",
+        "registered_commit",
+        "state_version",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 5,
+      "sha256": "b9defda82b74e23c928cff3511b214e993ab7a6de82a52bb8b707a0c206ac303"
+    },
+    "repository_binding_revision_scopes": {
+      "columns": [
+        "id",
+        "binding_revision_id",
+        "path_glob",
+        "role",
+        "service_id",
+        "created_at"
+      ],
+      "rows": 18,
+      "sha256": "50f9a601db93ab615dd1627ff16b0811c50b785b8fae23392ad308648f473538"
+    },
+    "repository_binding_revisions": {
+      "columns": [
+        "id",
+        "binding_id",
+        "revision",
+        "service_ids_json",
+        "scopes_json",
+        "status",
+        "evidence_json",
+        "content_hash",
+        "reviewed_by",
+        "review_reason",
+        "created_at"
+      ],
+      "rows": 10,
+      "sha256": "df7f9d32a6eed92933f1082c338ddd4ef309b9fa7566a5aadd9bf4f3fac2490b"
+    },
+    "repository_bindings": {
+      "columns": [
+        "id",
+        "product_id",
+        "repository_id",
+        "status",
+        "current_revision_id",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 5,
+      "sha256": "b331ce1f6a82b1502bd9d4c5e64151c7ec907f8c76dd1bae7b724ddbc109d6aa"
+    },
+    "repository_contract_versions": {
+      "columns": [
+        "id",
+        "repository_id",
+        "onboarding_id",
+        "source_commit",
+        "contract_path",
+        "api_version",
+        "contract_json",
+        "content_hash",
+        "merge_provenance_json",
+        "status",
+        "created_at"
+      ],
+      "rows": 6,
+      "sha256": "5576cf546bc74a3ae63b22c1f76db3cba4441a4afa7c15d5a7a890323a5cf543"
+    },
+    "repository_discoveries": {
+      "columns": [
+        "id",
+        "onboarding_id",
+        "source_commit",
+        "resolved_commit",
+        "status",
+        "schema_version",
+        "inventory_json",
+        "content_hash",
+        "error_code",
+        "error_summary",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 11,
+      "sha256": "a7f80e0b3c5ebe6f59b90a2317b7a2f1681d2fdac2983d4645f5856ef816119d"
+    },
+    "repository_onboarding_proposals": {
+      "columns": [
+        "id",
+        "onboarding_id",
+        "revision",
+        "status",
+        "proposal_json",
+        "content_hash",
+        "discovery_id",
+        "discovery_hash",
+        "created_by",
+        "origin",
+        "created_at"
+      ],
+      "rows": 15,
+      "sha256": "b12e4cedebb3f3a92976ae1d948538553fcff378b208702f64b0a85cad3a2fef"
+    },
+    "repository_onboardings": {
+      "columns": [
+        "id",
+        "product_id",
+        "repository_id",
+        "binding_id",
+        "onboarding_kind",
+        "status",
+        "registered_commit",
+        "resolved_commit",
+        "current_discovery_id",
+        "current_proposal_revision",
+        "approved_proposal_hash",
+        "source_delivery_intent_id",
+        "contract_version_id",
+        "state_version",
+        "blockers_json",
+        "created_by",
+        "creation_reason",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason",
+        "proposer_run_id",
+        "proposer_profile_hash",
+        "proposer_stop_reason",
+        "patch_execution_id",
+        "patch_artifact_id",
+        "patch_hash",
+        "validation_execution_id",
+        "validation_stop_reason",
+        "readiness_assessment_id"
+      ],
+      "rows": 11,
+      "sha256": "ce91ae76e55c01100aa2a0744d2c103e766391248bc4f2eeb176c9f9be12b0f8"
+    },
+    "repository_readiness_assessments": {
+      "columns": [
+        "id",
+        "repository_id",
+        "source_commit",
+        "contract_version_id",
+        "contract_hash",
+        "dependency_lock_hash",
+        "environment_profile_id",
+        "environment_profile_revision",
+        "runner_image_digest",
+        "validation_policy_version",
+        "contract_status",
+        "coding_status",
+        "checks_json",
+        "blockers_json",
+        "warnings_json",
+        "evidence_refs_json",
+        "input_hash",
+        "content_hash",
+        "assessed_at",
+        "expires_at"
+      ],
+      "rows": 20,
+      "sha256": "e8efda63cd37c0b7427742c3623d8dc278c37329d07d2a5c26a1a5d33a538861"
+    },
+    "resource_refs": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "provider",
+        "kind",
+        "name",
+        "namespace",
+        "uri",
+        "metadata_json",
+        "observed_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "retention_holds": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "reason",
+        "actor",
+        "created_at",
+        "expires_at",
+        "released_at",
+        "released_by",
+        "release_reason",
+        "state_hash"
+      ],
+      "rows": 4,
+      "sha256": "2ca2edb171ac2bd63a6fe15ae449e26bfccf3ded12df8f447ced1f67ca65e8ca"
+    },
+    "retention_previews": {
+      "columns": [
+        "id",
+        "database_generation_id",
+        "policy_version",
+        "status",
+        "preview_json",
+        "content_hash",
+        "state_hash",
+        "actor",
+        "reason",
+        "created_at",
+        "expires_at",
+        "executed_at"
+      ],
+      "rows": 1,
+      "sha256": "9b9e41e093041e5551ec5e17af6a0fa9a6e75400c5a19b7abd6119229d16ba0c"
+    },
+    "retention_receipts": {
+      "columns": [
+        "id",
+        "preview_id",
+        "database_generation_id",
+        "policy_version",
+        "status",
+        "receipt_json",
+        "content_hash",
+        "actor",
+        "reason",
+        "created_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "runs": {
+      "columns": [
+        "id",
+        "session_id",
+        "environment_id",
+        "status",
+        "user_task",
+        "max_turns",
+        "started_at",
+        "finished_at",
+        "cancel_requested_at",
+        "error",
+        "execution_target_json",
+        "metadata_json",
+        "result_json",
+        "origin",
+        "created_by",
+        "run_budget_json",
+        "budget_consumption_json",
+        "stop_reason",
+        "retention_state"
+      ],
+      "rows": 82,
+      "sha256": "619d5a8b3b24c5c6c1251bf59d8c18835de9f085cd1373a88ff0ca848c9e6acd"
+    },
+    "sealed_run_summaries": {
+      "columns": [
+        "id",
+        "run_id",
+        "work_item_id",
+        "summary_json",
+        "content_hash",
+        "sealed_at",
+        "compacted_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "services": {
+      "columns": [
+        "id",
+        "product_id",
+        "service_key",
+        "display_name",
+        "description",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 6,
+      "sha256": "0bd1dd61224d19964f86613b821996f4c29f0cc7b7675c18574e81195d629564"
+    },
+    "sessions": {
+      "columns": [
+        "id",
+        "title",
+        "cwd",
+        "created_at",
+        "updated_at",
+        "archived_at",
+        "metadata_json"
+      ],
+      "rows": 82,
+      "sha256": "c53e3ced7c61ff7c1aa3f5ead61992310ede597d5dbcf4969927defd5c1ecca3"
+    },
+    "source_delivery_intents": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "repository_id",
+        "source_repo",
+        "base_ref",
+        "base_commit",
+        "head_branch",
+        "patch_artifact_id",
+        "patch_hash",
+        "status",
+        "state_version",
+        "authorization_json",
+        "writer_execution_id",
+        "observer_execution_id",
+        "pull_request_json",
+        "merge_provenance_json",
+        "provider_checks_json",
+        "created_by",
+        "creation_reason",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 9,
+      "sha256": "492b914f6799abbd4445a9dc516a3d098498bbab0d42ad59381c97ec8f0d225b"
+    },
+    "stage_chain_authorizations": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "work_plan_id",
+        "work_plan_revision",
+        "product_model_snapshot_id",
+        "product_model_snapshot_hash",
+        "repository_id",
+        "source_commit",
+        "workspace_id",
+        "writable_paths_json",
+        "profile_chain_json",
+        "budget_chain_json",
+        "state_hash",
+        "status",
+        "created_by",
+        "creation_reason",
+        "created_at",
+        "expires_at",
+        "revoked_at",
+        "revocation_reason"
+      ],
+      "rows": 27,
+      "sha256": "d6b82eaf23a15f7c008f8f3399becb7beb360748c7bb6a71f1bd569a2f478e54"
+    },
+    "stage_executions": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "stage_key",
+        "sequence",
+        "status",
+        "agent_profile_id",
+        "agent_profile_version",
+        "agent_profile_hash",
+        "context_pack_id",
+        "run_id",
+        "workspace_id",
+        "input_snapshot_json",
+        "input_hash",
+        "stop_reason",
+        "created_at",
+        "started_at",
+        "finished_at"
+      ],
+      "rows": 102,
+      "sha256": "b61ae137dc82a5401ac8b36589ceca6a0ac0d90a8780c1981e75d7469b3c0f9f"
+    },
+    "stage_inference_selections": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "stage_key",
+        "target_id",
+        "target_revision",
+        "target_hash",
+        "policy_id",
+        "policy_revision",
+        "policy_hash",
+        "effective_settings_json",
+        "resolved_binding_json",
+        "binding_hash",
+        "actor",
+        "reason",
+        "state_hash",
+        "supersedes_selection_id",
+        "stage_execution_id",
+        "run_id",
+        "created_at"
+      ],
+      "rows": 20,
+      "sha256": "1519691bbaf008550fbc2a6db29b095a501c249fad65a22ca4be1d19e0e8bf3c"
+    },
+    "stage_outcomes": {
+      "columns": [
+        "id",
+        "stage_execution_id",
+        "work_item_id",
+        "stage_key",
+        "status",
+        "schema_version",
+        "outcome_json",
+        "content_hash",
+        "state_version",
+        "supersedes_outcome_id",
+        "sealed_by",
+        "sealed_at"
+      ],
+      "rows": 102,
+      "sha256": "7b9dbc103c6c1bb0577db185ec04c164a6f1c7c87c1d35b04502d27182caab86"
+    },
+    "subject_environment_preparations": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "workspace_id",
+        "run_id",
+        "status",
+        "environment_profile_id",
+        "source_commit",
+        "input_hash",
+        "input_json",
+        "repository_contract_json",
+        "repository_contract_hash",
+        "environment_snapshot_json",
+        "acceptance_results_json",
+        "logs_json",
+        "error_code",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "updated_at"
+      ],
+      "rows": 20,
+      "sha256": "3d3c7c8058587232a8229f7a4057bedf3632184c390bbdcab14336d7ccbe89c9"
+    },
+    "subject_workspaces": {
+      "columns": [
+        "id",
+        "subject_kind",
+        "subject_id",
+        "run_id",
+        "status",
+        "source_repo",
+        "source_ref",
+        "source_commit",
+        "resolved_commit",
+        "branch",
+        "retention_status",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 20,
+      "sha256": "65c707820ba312c6d5a1ed779fb07f447157f5018f6cabe49471951680fe358a"
+    },
+    "tool_calls": {
+      "columns": [
+        "id",
+        "session_id",
+        "run_id",
+        "action_id",
+        "action_type",
+        "status",
+        "approval_id",
+        "proposed_at",
+        "started_at",
+        "finished_at",
+        "args_json",
+        "result_json",
+        "policy_json",
+        "purged_at"
+      ],
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "work_items": {
+      "columns": [
+        "id",
+        "status",
+        "title",
+        "intent",
+        "acceptance_criteria_json",
+        "source_repo",
+        "source_ref",
+        "gitops_repo",
+        "gitops_ref",
+        "target_environment",
+        "target_namespace",
+        "argo_application",
+        "production_impacting",
+        "max_attempts",
+        "max_elapsed_seconds",
+        "attempt_count",
+        "current_run_id",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason",
+        "origin",
+        "source_commit",
+        "pipeline_contract_id",
+        "deployment_contract_id",
+        "gitops_kustomization_path",
+        "gitops_image_name",
+        "workload_kind",
+        "workload_name",
+        "rollback_owner",
+        "environment_profile_id",
+        "run_budget_json",
+        "repository_contract_json",
+        "repository_contract_hash",
+        "environment_preparation_status",
+        "current_environment_snapshot_id",
+        "mode",
+        "product_id",
+        "mutable_repository_id",
+        "product_model_snapshot_id",
+        "product_model_snapshot_hash",
+        "repository_contract_version_id",
+        "selected_acceptance_names_json",
+        "context_repository_snapshots_json",
+        "current_stage_execution_id",
+        "state_version",
+        "closed_at",
+        "closure_reason",
+        "contract_version",
+        "workflow_policy_json",
+        "workflow_policy_hash"
+      ],
+      "rows": 14,
+      "sha256": "892f8bbda408a77bb71914d820d95765828d191ed8272f3459c9a6c9fdda5a3f"
+    },
+    "work_plans": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "remediation_plan_id",
+        "incident_id",
+        "session_id",
+        "run_id",
+        "status",
+        "title",
+        "summary",
+        "risk_level",
+        "requires_approval",
+        "resource_namespace",
+        "resource_kind",
+        "resource_name",
+        "work_plan_json",
+        "created_at",
+        "updated_at",
+        "revision",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 13,
+      "sha256": "d9fcb398d02f0381785b45753541af31b911f55df767981ce225ead505ea1754"
+    },
+    "workspaces": {
+      "columns": [
+        "id",
+        "work_item_id",
+        "run_id",
+        "status",
+        "source_repo",
+        "source_ref",
+        "resolved_commit",
+        "branch",
+        "retention_status",
+        "created_at",
+        "updated_at",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason"
+      ],
+      "rows": 15,
+      "sha256": "f0b1df531b74d2b94d14d79fac910b4a37c512e4cf9e7c5bfbef9ba66a712393"
+    }
+  },
+  "hosted_rows": 0,
+  "runtime_image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "scope": "read-only live schema-54 difference inventory; not acceptance",
+  "recorded_at": "2026-09-05T23:51:47.177420+00:00",
+  "job": {
+    "name": "astra-live-schema0054-compare-20260905",
+    "uid": "2dfccaee-c685-4325-9572-8821aeee93e5",
+    "status": {
+      "completionTime": "2026-09-05T23:51:38Z",
+      "conditions": [
+        {
+          "lastProbeTime": "2026-09-05T23:51:38Z",
+          "lastTransitionTime": "2026-09-05T23:51:38Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "SuccessCriteriaMet"
+        },
+        {
+          "lastProbeTime": "2026-09-05T23:51:38Z",
+          "lastTransitionTime": "2026-09-05T23:51:38Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "Complete"
+        }
+      ],
+      "ready": 0,
+      "startTime": "2026-09-05T23:51:28Z",
+      "succeeded": 1,
+      "terminating": 0,
+      "uncountedTerminatedPods": {}
+    }
+  }
+}

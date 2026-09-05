@@ -1,6 +1,8 @@
 # ASTRA: Compatible release for corrected stage qualification
 
-Status: complete artifacts and isolated migration validation; release pin prepared. Live rollout, live database preservation and fresh qualification remain required. This record does not accept autonomous delivery.
+Status: complete artifacts, isolated migration validation, exact live rollout and live database preservation passed. Fresh qualification remains required. This record does not accept autonomous delivery.
+
+The [live observation and preservation record](ASTRA-19B0C55-LIVE-PRESERVATION.md) documents the accepted deployment, retained initial checker failure and narrowly verified operational timestamp differences.
 
 ## Exact release boundary
 
@@ -34,8 +36,8 @@ The initial Mac release build failed under its observed 4 GiB VM memory limit be
 
 ## Rollout and recovery gate
 
-The reviewed release changes only Helm image/revision pins, the required agent registry image references and their derived hashes, and documentation/evidence. The [release validation](ASTRA-19B0C55-RELEASE-PIN-VALIDATION.json) verifies exact substitutions, unchanged limits and disabled gates, and strict server-side validation of all 50 rendered resources. Argo must observe the exact merged pin revision; API/UI/gateway and both egress proxies must run the expected digests, with ready Service endpoints. Configured worker and runner identities must agree. Before qualification, run the prepared read-only live schema/history check against the unchanged pre-54 archive.
+The reviewed release changes only Helm image/revision pins, the required agent registry image references and their derived hashes, and documentation/evidence. The [release validation](ASTRA-19B0C55-RELEASE-PIN-VALIDATION.json) verifies exact substitutions, unchanged limits and disabled gates, and strict server-side validation of all 50 rendered resources. Argo must observe the exact merged pin revision; API/UI/gateway and both egress proxies must run the expected digests, with ready Service endpoints. Configured worker and runner identities must agree. These live identity checks and the separate read-only schema/history check passed before qualification started; see the linked live preservation record.
 
-**Schema 54 establishes a new rollback floor as soon as migration runs, even with zero hosted WorkItems.** Source `48c77b7` is not a compatible rollback reader. This source (`19b0c55`) is the first release candidate validated against schema 54; after live acceptance it is the minimum compatible rollback release. Before that acceptance, a failed rollout requires a compatible forward repair or an explicitly reviewed archive restoration. Do not roll back code to a reader that refuses or misinterprets the current schema.
+**Schema 54 establishes a new rollback floor as soon as migration runs, even with zero hosted WorkItems.** Source `48c77b7` is not a compatible rollback reader. This source (`19b0c55`) is the first observed release validated against schema 54 and is now the minimum compatible rollback reader. Recovery requires a compatible reader/forward repair or an explicitly reviewed archive restoration. Do not roll back code to a reader that refuses or misinterprets the current schema.
 
 No Finance production image, production approval, source-branch protection, hosted WorkItem or destructive recovery is part of this PHarness release. M04 qualification and all remaining end-to-end gates stay open.

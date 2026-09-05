@@ -1,0 +1,32 @@
+{
+  "recorded_at": "2026-09-05T23:51:11.862377+00:00",
+  "job_name": "astra-live-schema0054-20260905",
+  "job_uid": "e1eec421-4c01-4730-9bed-60978012c5d5",
+  "status": {
+    "conditions": [
+      {
+        "lastProbeTime": "2026-09-05T23:49:48Z",
+        "lastTransitionTime": "2026-09-05T23:49:48Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "FailureTarget"
+      },
+      {
+        "lastProbeTime": "2026-09-05T23:49:48Z",
+        "lastTransitionTime": "2026-09-05T23:49:48Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "Failed"
+      }
+    ],
+    "failed": 1,
+    "ready": 0,
+    "startTime": "2026-09-05T23:48:16Z",
+    "terminating": 0,
+    "uncountedTerminatedPods": {}
+  },
+  "failure": "Strict whole-table equality found 12 added capability snapshots in an otherwise active database; unchanged original records and all other differences require separate verification. This is not yet an accepted preservation result.",
+  "raw_failure_log": "ASTRA-19B0C55-LIVE-DATABASE-R1-FAILURE.log"
+}

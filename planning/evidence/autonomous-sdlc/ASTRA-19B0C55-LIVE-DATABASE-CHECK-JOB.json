@@ -1,0 +1,85 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-live-schema0054-20260905",
+    "namespace": "pharness",
+    "labels": {
+      "pharness.dev/purpose": "verify-live-0054"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 120,
+    "template": {
+      "metadata": {
+        "labels": {
+          "pharness.dev/purpose": "verify-live-0054"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ubuntu-lucas-engineering"
+        },
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "pharness-api-data-finance-20260827",
+              "readOnly": true
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "verify-migration",
+            "image": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+            "command": [
+              "python",
+              "-c",
+              "import sqlite3,json,pathlib,hashlib\nroot=pathlib.Path('/data/archives/ASTRA-pre-0054-20260905')\noriginal=sqlite3.connect(\"file:\"+str(root/\"pharness.db\")+\"?mode=ro\",uri=True)\nchanged=sqlite3.connect(\"file:/data/pharness.db?mode=ro\",uri=True)\nassert \"sha256:\"+hashlib.sha256((root/\"pharness.db\").read_bytes()).hexdigest()=='sha256:1531fb59c582ded308b2cd691d9dca4f5f96b76f1ca9ff02b49692613fe5aa2d'\nchanged.execute(\"BEGIN\")\nassert changed.execute(\"PRAGMA integrity_check\").fetchone()[0]==\"ok\"\nassert changed.execute(\"PRAGMA foreign_key_check\").fetchall()==[]\nversions=changed.execute(\"SELECT version,success FROM _sqlx_migrations ORDER BY version\").fetchall()\nassert len(versions)==54 and versions[-1]==(54,1) and all(v[1]==1 for v in versions)\ndef quote(s): return '\"'+s.replace('\"','\"\"')+'\"'\ndef default(v):\n if isinstance(v,bytes): return {\"sqlite_blob_hex\":v.hex()}\n raise TypeError(type(v).__name__)\ndef fingerprint(db,table,columns,where=\"\"):\n h=hashlib.sha256(); n=0\n sql=\"SELECT \"+\",\".join(map(quote,columns))+\" FROM \"+quote(table)+where+\" ORDER BY \"+\",\".join(map(quote,columns))\n for row in db.execute(sql):\n  h.update((json.dumps(list(row),sort_keys=True,separators=(\",\",\":\"),ensure_ascii=False,default=default)+\"\\n\").encode()); n+=1\n return {\"columns\":columns,\"rows\":n,\"sha256\":h.hexdigest()}\npreserved={}\ntables=[r[0] for r in original.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name\")]\nfor table in tables:\n columns=[r[1] for r in original.execute(\"PRAGMA table_info(\"+quote(table)+\")\")]\n before=fingerprint(original,table,columns)\n after=fingerprint(changed,table,columns,\" WHERE version <= 53\" if table==\"_sqlx_migrations\" else \"\")\n assert before==after,(\"original data changed\",table,before,after)\n preserved[table]=after\nassert changed.execute(\"SELECT count(*) FROM work_items WHERE workflow_policy_json IS NOT NULL OR workflow_policy_hash IS NOT NULL\").fetchone()[0]==0\nfor table in ['hosted_reconciliations','hosted_operations','hosted_operation_locks']:\n assert changed.execute(\"SELECT count(*) FROM \"+table).fetchone()[0]==0\nassert changed.execute(\"SELECT count(*) FROM deployment_intents WHERE delivery_stage != 'legacy'\").fetchone()[0]==0\nassert changed.execute(\"SELECT count(*) FROM gitops_change_sets g JOIN deployment_intents d ON d.id=g.deployment_intent_id WHERE d.delivery_stage != 'legacy'\").fetchone()[0]==0\nprint(json.dumps({\"schema_version\":\"pharness.dev/live-copy-migration-evidence/v1alpha1\",\"integrity\":\"ok\",\"foreign_key_violations\":0,\"maximum_migration\":54,\"applied_migrations\":len(versions),\"source_migration_unchanged\":original.execute(\"SELECT max(version) FROM _sqlx_migrations\").fetchone()[0],\"archive_sha256\":'sha256:1531fb59c582ded308b2cd691d9dca4f5f96b76f1ca9ff02b49692613fe5aa2d',\"all_original_columns_identical\":True,\"preserved_tables\":len(preserved),\"original_column_fingerprints\":preserved,\"hosted_rows\":0,\"runtime_image\":'registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709',\"source_revision\":'19b0c55c48e3614d0b4507d56df3029a52475618',\"scope\":\"read-only live schema-54 verification before qualification\"}))\n"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data",
+                "readOnly": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

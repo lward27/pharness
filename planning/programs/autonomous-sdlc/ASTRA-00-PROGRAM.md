@@ -2,9 +2,11 @@
 
 Status: approved implementation program; M01–M03 accepted; M04 active; M05/M06 compatible reader deployed; hosted creation and end-to-end gates remain open. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `48c77b7b4438d621ff9563b913857bcf771f1800`, observed
-2026-09-05 at 16:19 UTC through release commit `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`.
-Live schema 0053 and unchanged Finance history were independently verified at 16:20 UTC.
+Current compiled PHarness release: `19b0c55c48e3614d0b4507d56df3029a52475618`, observed
+2026-09-05 at 23:48 UTC through release commit `f9909da0fc45ef47ed03bbffbfe5dc8fc31c62da`.
+[Live schema 0054 preservation](../../evidence/autonomous-sdlc/ASTRA-19B0C55-LIVE-PRESERVATION.md) passed at 23:53 UTC:
+all original rows and Finance/audit history are preserved; only explicitly checked
+host snapshots and operational timestamps differ. `19b0c55` is the minimum compatible rollback reader.
 These are starting observations, not permanent latest-version claims.
 
 ## Product promise and authority
@@ -61,18 +63,17 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder and seeded Repair passed on 48c77b7; Onboarding, Planner, Test Diagnosis and Verifier failed; corrected release and fresh qualification remain open | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder and seeded Repair passed on 48c77b7; Onboarding, Planner, Test Diagnosis and Verifier failed; corrected release deployed; fresh qualification running; M04 remains open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
-| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Tempo reader, separate deployment records and durable staging GitOps handoff locally checked; not deployed; Argo/runtime verification and acceptance open | M07 and usable M02 staging bindings. |
+| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Basic Tempo reader, schema-54 records and staging handoff deployed; new native runtime integration and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
-| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections deployed; list consistency validated in PR 337; remaining deployment and acceptance gates open | May begin after M05; closes against M09 behavior. |
+| M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: prepare a compatible immutable release of the M04 corrections,
-then collect fresh qualification evidence; continue M08 runtime integration and
+Next eligible: collect fresh qualification evidence on the accepted `19b0c55` release; continue M08 runtime integration and
 M10 refinement. All qualification Jobs on `48c77b7` are terminal. After live history preservation passed at 16:20 UTC, the gateway protocol checks
 passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
 with two frozen attempts. Both finished 24/24 on the first pass, with every stack
@@ -132,11 +133,11 @@ reads are now [verified as authorized](../../evidence/autonomous-sdlc/ASTRA-M07-
 Main branches remain unprotected pending the separate owner decision.
 That dependent gate cannot be waived; independent implementation can continue.
 
-A complete [compatible release of the corrections](../../evidence/autonomous-sdlc/ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md)
-has been built from `19b0c55c48e3614d0b4507d56df3029a52475618`, with all seven immutable
-images, the native bundle and a passing isolated migration/history check. Its pin is prepared;
-exact live rollout and database preservation must precede fresh qualification. Schema 54
-requires a compatible reader immediately, including when no hosted WorkItems exist.
+The [compatible correction release](../../evidence/autonomous-sdlc/ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md)
+is deployed with all seven verified artifacts and the native bundle. Exact live
+identity and schema/history preservation passed before fresh qualification began.
+Hosted creation and Coding Reliability V2 remain disabled; no autonomous acceptance
+is implied by this release.
 
 Current evidence entry points:
 
@@ -144,7 +145,7 @@ Current evidence entry points:
 - [M03 integrity acceptance](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md): evidence normalization and architecture checks.
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
 - [M07 real build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md): both actual Finance Tekton builds and registry identities; these program-operated builds do not count as autonomous WorkItems.
-- [M08 native Tempo reader](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md): bounded collection and a real staging trace sample; the reader is not deployed or integrated into staging progression.
+- [M08 native Tempo reader](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md): bounded collection and a real staging trace sample; the basic reader is deployed but its Tempo endpoint is not yet configured or integrated into staging progression.
 - [M08 delivery-record compatibility](../../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md): separate staging/production records on the same build, preserved legacy history, and rejected legacy delivery actions. Schema 54 requires the recorded live-copy check and compatible reader deployment; no hosted delivery writes or deployment acceptance are claimed.
 - [M08 durable staging GitOps handoff](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS.md): the controller records one staging authority and admission, preserves its original writer and reader Jobs, and retains uncertain or contradictory outcomes. Local tests cover automatic handoff and recovery. A committed digest remains distinct from Argo and runtime verification; no real staging release or production authorization is claimed.
 - [M10 visual and interaction evidence](../../evidence/autonomous-sdlc/ASTRA-M10-LIST-CONSISTENCY.md): 94 unit checks and 116 distinct browser checks across the documented runs; deployment, delivery-dependent states and owner walkthrough remain open.
@@ -167,7 +168,7 @@ delivery configuration, allowed automatic actions, budgets, mutable source,
 read-only dependencies, and rollback permission. Existing operator projections
 explain current state and one useful action. GET and navigation never dispatch work.
 
-Use additive migrations from the verified current schema (0053 after the M06 compatible-controller release).
+Use additive migrations from the verified current schema (0054 after the observed source-19b0c55 release).
 Preserve the Finance generation and retention/audit history. Compatible readers
 ship before hosted writes; record the minimum compatible rollback release.
 The M08 cardinality extension records one explicit SQL exception: SQLite requires
