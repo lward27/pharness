@@ -1220,11 +1220,40 @@ fn eval_failure_diagnostics(
         })
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
-    let detail = failure
+    let primary = failure
         .and_then(|event| event.payload.get("error"))
         .and_then(serde_json::Value::as_str)
-        .or(outcome.error.as_deref())
-        .map(bounded_eval_diagnostic);
+        .or(outcome.error.as_deref());
+    // A recovery ceiling or later provider/budget failure is the stop reason,
+    // but it must not erase the actual validation error the agent received.
+    // Keep that error explicitly historical: it is not proof of the cause of
+    // a subsequent provider failure, and never replaces the terminal category.
+    let previous = events.iter().rev().find_map(|event| {
+        if event.kind != EventKind::ToolFinished
+            || event.payload["status"] != "error"
+            || event.payload["content"]["recoverable"] != true
+        {
+            return None;
+        }
+        let content = &event.payload["content"];
+        Some(format!(
+            "Last recoverable tool failure ({}/{}): {}",
+            content["action"].as_str()?,
+            content["error_kind"].as_str()?,
+            content["message"].as_str()?
+        ))
+    });
+    let detail = match (primary, previous) {
+        (Some(primary), Some(previous)) => {
+            Some(bounded_eval_diagnostic(&format!("{primary}\n{previous}")))
+        }
+        (None, Some(previous)) => Some(bounded_eval_diagnostic(&format!(
+            "Run stopped with status {}\n{previous}",
+            outcome.status
+        ))),
+        (Some(primary), None) => Some(bounded_eval_diagnostic(primary)),
+        (None, None) => None,
+    };
     (action, error_kind, detail)
 }
 
@@ -2241,8 +2270,9 @@ impl ModelProvider for ReplayProvider {
 mod tests {
     use super::{
         bounded_eval_diagnostic, builder_report_metadata, coding_reliability_gate,
-        is_direct_to_gateway_transport_pair, metrics_from_events, qualification_gate, replay_suite,
-        unexpected_changed_paths, EvalReport, EvalResult, FIXTURES,
+        eval_failure_diagnostics, is_direct_to_gateway_transport_pair, metrics_from_events,
+        qualification_gate, replay_suite, unexpected_changed_paths, EvalReport, EvalResult,
+        FIXTURES,
     };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles, AgentEvent, EventKind};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
@@ -2309,6 +2339,57 @@ mod tests {
         assert!(!diagnostic.contains("do-not-retain"));
         assert!(diagnostic.ends_with("...[truncated]"));
         assert!(diagnostic.len() <= 526);
+    }
+
+    #[test]
+    fn evaluation_retains_tool_validation_without_replacing_the_terminal_failure() {
+        let event = |kind, payload| AgentEvent {
+            event_id: "event-diagnostic".into(),
+            session_id: "session-diagnostic".into(),
+            run_id: "run-diagnostic".into(),
+            seq: 1,
+            kind,
+            payload,
+        };
+        let previous = event(
+            EventKind::ToolFinished,
+            serde_json::json!({
+                "status":"error", "content":{
+                    "action":"submit_onboarding_proposal", "error_kind":"invalid_arguments",
+                    "recoverable":true, "message":"candidate dependency lock digest must be 64 hexadecimal characters"
+                }
+            }),
+        );
+        for reason in [
+            "tool_recovery_exhausted",
+            "provider protocol error (MissingAction)",
+        ] {
+            let outcome = pharness_runhost::AttemptOutcome::failed(reason);
+            let terminal = event(EventKind::RunFailed, serde_json::json!({"error":reason}));
+            let (_, _, detail) = eval_failure_diagnostics(&outcome, &[previous.clone(), terminal]);
+            let detail = detail.unwrap();
+            assert!(detail.starts_with(reason));
+            assert!(detail.contains(
+                "Last recoverable tool failure (submit_onboarding_proposal/invalid_arguments)"
+            ));
+            assert!(detail.contains("64 hexadecimal characters"));
+            assert_eq!(outcome.error.as_deref(), Some(reason));
+        }
+        let mut budget = pharness_runhost::AttemptOutcome::failed("unused");
+        budget.status = "budget_extension_required".into();
+        budget.error = None;
+        let (_, _, detail) = eval_failure_diagnostics(&budget, std::slice::from_ref(&previous));
+        assert!(detail
+            .unwrap()
+            .starts_with("Run stopped with status budget_extension_required"));
+
+        let mut sensitive = previous;
+        sensitive.payload["content"]["message"] =
+            serde_json::json!("Authorization: Bearer must-not-be-retained");
+        let (_, _, detail) = eval_failure_diagnostics(&budget, &[sensitive]);
+        assert!(!detail.unwrap().contains("must-not-be-retained"));
+        let (_, _, detail) = eval_failure_diagnostics(&budget, &[]);
+        assert!(detail.is_none(), "no historical evidence may be invented");
     }
 
     #[test]

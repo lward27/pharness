@@ -1,0 +1,59 @@
+{
+  "recorded_at": "2026-09-05T18:20:01.768755+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "evaluation_id": "infeval_01a07286ae577961a520ab17797fd2a6",
+  "qualification_id": "inferqual_01a072bd50bf73e2880bf1d38d3e82a1",
+  "reported_gate_passed": false,
+  "reported_infrastructure_valid": true,
+  "accepted_typed_submissions": 0,
+  "attempts": [
+    {
+      "attempt": 1,
+      "complete": true,
+      "expected_results": 12,
+      "passed": 0,
+      "results": 12,
+      "unique_fixtures": 12
+    },
+    {
+      "attempt": 2,
+      "complete": true,
+      "expected_results": 12,
+      "passed": 0,
+      "results": 12,
+      "unique_fixtures": 12
+    }
+  ],
+  "stop_reason_counts": {
+    "tool_recovery_exhausted": 6,
+    "soft_budget_exhaustion": 5,
+    "missing_action": 13
+  },
+  "workspace_mutation_cases": 0,
+  "usage": {
+    "actual_prompt_tokens": 1357101,
+    "actual_completion_tokens": 223429,
+    "cached_tokens": 1098140,
+    "reasoning_tokens": 147634,
+    "turns": 318,
+    "recoverable_failures": 53,
+    "duration_ms": 3545275
+  },
+  "raw_report_hash": "sha256:5cb542c3bf9d4c5bab1874b92a4a203155193cf06bc8e09733f690b663520f4a",
+  "raw_result_sha256": "843f4e79527ec34fb8f849bd4140cdec330957d1cf08a0efa8d07fd798a5058f",
+  "diagnostic_limitation": "The deployed report does not retain concrete recoverable tool-validation messages. They cannot be reconstructed from action names or terminal categories.",
+  "fixture_review_concern": "The stage workspace generator materializes the same Python scaffold for all cases, including Node and missing-lock descriptions. No fixture, threshold, prompt, profile or acceptance predicate was changed.",
+  "diagnostic_fix_validation": {
+    "source_base_revision": "94e81f89cfa6922224c23193520346a0884ced75",
+    "source_file": "crates/pharness-eval/src/main.rs",
+    "source_sha256": "b259c36644e2445f3ad9eeed7cf920db18051bba7263ebe5c7b00680f7a3a743",
+    "eval_tests_passed": 23,
+    "failed": 0,
+    "clippy": "passed, all eval targets, warnings denied",
+    "tests_log_sha256": "336e5e2ea5e043b884e872b70b3109f34b2caf656d7cebaed05643883cb0bc0f",
+    "clippy_log_sha256": "1626e627e97863973d31becc05fc0a5e27a938804b4d5dc40417169dd30b3ef9"
+  },
+  "qualification_retries_started": 0,
+  "limits_increased": false,
+  "fixture_or_gate_changes": false
+}
