@@ -930,6 +930,32 @@ async fn hosted_source_merge_remains_open_and_never_seals_release_inapplicable()
     assert_eq!(item.status, "executing");
     assert_eq!(item.workflow_kind, "hosted_sdlc");
     assert!(item.production_impacting);
+    let Json(flow) = super::work_item_flow(
+        State(fixture.state.clone()),
+        Path(fixture.work_item_id.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(flow.delivery_configuration["kind"], "hosted_sdlc");
+    assert_eq!(flow.delivery_configuration["release"]["required"], true);
+    assert_eq!(flow.delivery_configuration["observe"]["required"], true);
+    assert_eq!(
+        flow.delivery_configuration["workflow_policy_hash"],
+        json!(metadata.workflow_policy_hash)
+    );
+    assert_eq!(
+        flow.delivery_configuration["release"]["steps"][2]["approval_boundary"],
+        "before_gitops_merge"
+    );
+    for key in ["release", "observe"] {
+        let segment = flow
+            .delivery_segments
+            .iter()
+            .find(|s| s.key == key)
+            .unwrap();
+        assert_eq!(segment.status, "pending");
+        assert!(segment.resources.is_empty());
+    }
     let outcomes = fixture
         .state
         .store
@@ -1091,6 +1117,10 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
     .await
     .unwrap();
     assert_eq!(flow.work_item.mode.as_deref(), Some("repo"));
+    assert_eq!(flow.work_item.workflow_kind, "source_only");
+    assert_eq!(flow.delivery_configuration["kind"], "repo_mode_source_only");
+    assert_eq!(flow.delivery_configuration["release"], "inapplicable");
+    assert_eq!(flow.delivery_configuration["observe"], "inapplicable");
     assert_eq!(
         flow.work_item.product_model_snapshot_id.as_deref(),
         Some(metadata.product_model_snapshot_id.as_str())

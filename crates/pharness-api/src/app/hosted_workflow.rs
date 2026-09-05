@@ -1,3 +1,4 @@
+pub(super) mod projection;
 pub(super) mod stages;
 
 use crate::app::deployment::contracts::{

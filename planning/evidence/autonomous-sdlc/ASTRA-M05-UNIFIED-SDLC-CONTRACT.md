@@ -31,6 +31,12 @@ has been deployed. Hosted creation remains disabled by default.
 - Add `workflow_kind`, policy, and policy hash to compatible WorkItem reads.
   Retain the stored `mode=repo` discriminator for existing readers and migrations.
   `workflow_kind=source_only` describes historical scope; it is not hosted success.
+- Project hosted delivery from the saved authorization in WorkItem detail. List
+  required build, staging and production steps, their exact contract IDs, the
+  production approval boundary and required evidence. Unexecuted release and
+  observation remain pending with no invented resource evidence. Historical
+  source-only detail retains its original inapplicable tail. The source-merge
+  regression covers both the stored result and this console-facing response.
 
 ## Stage authority and qualification integrity
 

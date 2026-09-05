@@ -353,13 +353,10 @@ pub(in crate::app) async fn repo_work_item_flow(
         controller_waits: Vec::new(),
         audit_events: audit_events.clone(),
         action_rail,
-        delivery_configuration: json!({
-            "kind":"repo_mode_source_only",
-            "repository_id":metadata.repository_id,
-            "source_commit":work_item.source_commit,
-            "release":"inapplicable",
-            "observe":"inapplicable",
-        }),
+        delivery_configuration: crate::app::hosted_workflow::projection::delivery_configuration(
+            &metadata,
+            work_item.source_commit.as_deref(),
+        ),
         repo_mode: Some(json!({
             "metadata":metadata,
             "state_hash":repo_work_item_state_hash(&metadata)?,
