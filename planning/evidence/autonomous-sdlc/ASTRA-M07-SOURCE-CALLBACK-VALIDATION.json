@@ -1,0 +1,36 @@
+{
+  "source_base": "5b7942fc5e5aaf3aec6bb9ca6c9442adabc9dbe6",
+  "observed_at": "2026-09-05T16:46:26Z",
+  "checks": {
+    "regression_reproduced_before_fix": true,
+    "api_tests_passed": 260,
+    "focused_final_test_passed": 1,
+    "clippy_warnings_denied": true,
+    "architecture_checks": true,
+    "dependency_checker_tests_passed": 5,
+    "format_and_diff_checks": true
+  },
+  "logs": {
+    "regression_before": {
+      "path": "/private/tmp/astra-m07-source-callback-before.log",
+      "sha256": "df0ebdcd79cb266c484c951992c67e5301be27558070877ec08b49368eba146d"
+    },
+    "api_suite": {
+      "path": "/private/tmp/astra-m07-source-callback-api.log",
+      "sha256": "1fbd83bded72598991b5ac0bf802154d4c7ffc9eb112abd98824ff6c57195f77"
+    },
+    "final_focused": {
+      "path": "/private/tmp/astra-m07-source-callback-focused-final.log",
+      "sha256": "86378637e194ed3c73ac093a19fb543074c88bb7825f8f44b9817cfa4f4aab27"
+    },
+    "clippy": {
+      "path": "/private/tmp/astra-m07-source-callback-clippy-final.log",
+      "sha256": "a3172eff5d495c340e6942352def7611999109058f4e9b9da8beb01d0e6da0e1"
+    },
+    "architecture": {
+      "path": "/private/tmp/astra-m07-source-callback-architecture.log",
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    }
+  },
+  "deployed": false
+}
