@@ -88,8 +88,17 @@ The source-publication controller merged through [PR 338](https://github.com/lwa
 with its normal-callback identity regression fixed in [PR 342](https://github.com/lward27/pharness/pull/342).
 The finite build-dispatch restriction merged through [PR 336](https://github.com/lward27/pharness/pull/336),
 and the latest list polish merged through [PR 337](https://github.com/lward27/pharness/pull/337).
-These changes are not included in the deployed 48c77b7 artifacts. Automatic source
-merge and source-to-build progression remain incomplete. The proposed required
+Guarded source merge merged through [PR 344](https://github.com/lward27/pharness/pull/344)
+at `2bbc7a77152d4104651702e84bac3b1893739fc3`; its
+[validation](../../evidence/autonomous-sdlc/ASTRA-M07-GUARDED-SOURCE-MERGE.md)
+includes persisted merge admission, exact source/base checks and independent provider observation.
+The [verified build handoff](../../evidence/autonomous-sdlc/ASTRA-M07-HOSTED-BUILD-HANDOFF.md)
+merged through [PR 345](https://github.com/lward27/pharness/pull/345) at
+`252030cdd2e457e4658ed7489c7e6a833add2f28`; 464 API/core/worker checks passed.
+It binds finite build authority to sealed source and retains declared Tekton outputs
+and conflicts. Durable automatic build dispatch and recovery are the next implementation slice.
+These changes are not included in the deployed 48c77b7 artifacts. Source-to-build
+progression and live source-merge acceptance remain open. The proposed required
 Finance source checks passed in both application PRs, but applying main-branch
 protections remains [a pending owner decision](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-MERGE-DECISION.md).
 That dependent gate cannot be waived; independent implementation can continue.
