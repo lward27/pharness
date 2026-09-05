@@ -1,0 +1,108 @@
+{
+  "trace_id": "12425262477cf0d0363bdbf930901df7",
+  "http_status": 200,
+  "response_bytes": 2360,
+  "response_sha256": "5d8753e8cff36cbdfdbfcc4b38cbb920335f4ca78c6362fe101263e05030fbab",
+  "top_level_keys": [
+    "batches"
+  ],
+  "resource_batches": [
+    {
+      "resource_attribute_keys": [
+        "deployment.environment",
+        "service.namespace",
+        "telemetry.auto.version",
+        "telemetry.sdk.language",
+        "telemetry.sdk.name",
+        "telemetry.sdk.version",
+        "service.name"
+      ],
+      "resource_identity": {
+        "service.namespace": {
+          "stringValue": "apps-staging"
+        },
+        "service.name": {
+          "stringValue": "yfinance-wrapper"
+        }
+      },
+      "spans": [
+        {
+          "traceId": "EkJSYkd88NA2O9v5MJAd9w==",
+          "spanId": "lGpI9uYeoyI=",
+          "parentSpanId": "DUyJ6W/OEZk=",
+          "name": "GET /healthz http send",
+          "kind": "SPAN_KIND_INTERNAL",
+          "startTimeUnixNano": "1788643822737029167",
+          "endTimeUnixNano": "1788643822737106570",
+          "status": {},
+          "attribute_keys": [
+            "asgi.event.type",
+            "http.status_code"
+          ],
+          "identity_attributes": {
+            "http.status_code": {
+              "intValue": "200"
+            }
+          }
+        },
+        {
+          "traceId": "EkJSYkd88NA2O9v5MJAd9w==",
+          "spanId": "dYX0Ggl1h4o=",
+          "parentSpanId": "DUyJ6W/OEZk=",
+          "name": "GET /healthz http send",
+          "kind": "SPAN_KIND_INTERNAL",
+          "startTimeUnixNano": "1788643822737961644",
+          "endTimeUnixNano": "1788643822738002700",
+          "status": {},
+          "attribute_keys": [
+            "asgi.event.type"
+          ],
+          "identity_attributes": {}
+        },
+        {
+          "traceId": "EkJSYkd88NA2O9v5MJAd9w==",
+          "spanId": "DUyJ6W/OEZk=",
+          "parentSpanId": "nHMD+53QfxY=",
+          "name": "GET /healthz",
+          "kind": "SPAN_KIND_SERVER",
+          "startTimeUnixNano": "1788643822736026349",
+          "endTimeUnixNano": "1788643822738329680",
+          "status": {},
+          "attribute_keys": [
+            "http.scheme",
+            "http.host",
+            "net.host.port",
+            "http.flavor",
+            "http.target",
+            "http.server_name",
+            "http.user_agent",
+            "net.peer.ip",
+            "net.peer.port",
+            "http.route",
+            "http.method",
+            "http.url",
+            "http.status_code"
+          ],
+          "identity_attributes": {
+            "http.host": {
+              "stringValue": "127.0.0.1:8000"
+            },
+            "net.host.port": {
+              "intValue": "8000"
+            },
+            "http.route": {
+              "stringValue": "/healthz"
+            },
+            "http.method": {
+              "stringValue": "GET"
+            },
+            "http.status_code": {
+              "intValue": "200"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "Historical deterministic health-probe trace identity inspection; selected identity attributes only; no current release acceptance."
+}

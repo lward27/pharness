@@ -39,6 +39,16 @@ checks. [Baseline drift](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-BASELI
 records the discrepancy and the unproven source commit behind that image. Preserve
 these failures when defining baseline expectations and candidate acceptance.
 
+The [native window signal reader](../../evidence/autonomous-sdlc/ASTRA-M08-WINDOW-SIGNALS.md)
+passed two real five-minute staging observations at source `8173a4e83af22f1c2e178936e190644396f81ddc`.
+It binds readiness/restart metrics and Pod-UID log streams to bracketed deployment identities,
+uses all-address application HTTP counters, and rejects missing/stale evidence. Live testing
+caught Loki sampling alignment and a real Promtail out-of-memory delivery gap; both failed
+attempts remain recorded. The finite [collector recovery](../../evidence/autonomous-sdlc/ASTRA-M08-PROMTAIL-MEMORY-RECOVERY.md)
+is deployed through GitOps and fresh log coverage passed. The PHarness reader itself is not
+deployed. These results do not override backend functional failures or establish trace
+correlation, durable baseline admission, automatic staging or production readiness.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.

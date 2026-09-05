@@ -1,0 +1,257 @@
+{
+  "application": "YFINANCE",
+  "query_parameters": [
+    [
+      "query",
+      "sum by (pod,filename) (count_over_time({namespace=\"apps-staging\",container=\"yfinance-wrapper\",pod=~\"^(yfinance-wrapper-66b99984d9-w7qq6)$\",filename=~\"^(/var/log/pods/apps-staging_yfinance-wrapper-66b99984d9-w7qq6_e763137d-8b31-411c-b27d-127166e0de98/yfinance-wrapper/[0-9]+\\\\.log)$\"}[60s]))"
+    ],
+    [
+      "start",
+      "1788647387000000000"
+    ],
+    [
+      "end",
+      "1788647627000000000"
+    ],
+    [
+      "step",
+      "30"
+    ]
+  ],
+  "response_sha256": "8ffe023f91bc0130b7df8595c66b2bd029729ca04e25b5ec76f17cfed66586f9",
+  "status": "success",
+  "data": {
+    "resultType": "matrix",
+    "result": [
+      {
+        "metric": {
+          "filename": "/var/log/pods/apps-staging_yfinance-wrapper-66b99984d9-w7qq6_e763137d-8b31-411c-b27d-127166e0de98/yfinance-wrapper/0.log",
+          "pod": "yfinance-wrapper-66b99984d9-w7qq6"
+        },
+        "values": [
+          [
+            1788647370,
+            "6"
+          ],
+          [
+            1788647400,
+            "6"
+          ],
+          [
+            1788647430,
+            "6"
+          ],
+          [
+            1788647460,
+            "6"
+          ],
+          [
+            1788647490,
+            "6"
+          ],
+          [
+            1788647520,
+            "6"
+          ],
+          [
+            1788647550,
+            "6"
+          ],
+          [
+            1788647580,
+            "6"
+          ],
+          [
+            1788647610,
+            "6"
+          ]
+        ]
+      }
+    ],
+    "stats": {
+      "summary": {
+        "bytesProcessedPerSecond": 115627,
+        "linesProcessedPerSecond": 1751,
+        "totalBytesProcessed": 2178,
+        "totalLinesProcessed": 33,
+        "execTime": 0.018836407,
+        "queueTime": 0.001169815,
+        "subqueries": 0,
+        "totalEntriesReturned": 1,
+        "splits": 2,
+        "shards": 2,
+        "totalPostFilterLines": 33,
+        "totalStructuredMetadataBytesProcessed": 264
+      },
+      "querier": {
+        "store": {
+          "totalChunksRef": 0,
+          "totalChunksDownloaded": 0,
+          "chunksDownloadTime": 0,
+          "queryReferencedStructuredMetadata": false,
+          "queryUsedV2Engine": false,
+          "chunk": {
+            "headChunkBytes": 0,
+            "headChunkLines": 0,
+            "decompressedBytes": 0,
+            "decompressedLines": 0,
+            "compressedBytes": 0,
+            "totalDuplicates": 0,
+            "postFilterLines": 0,
+            "headChunkStructuredMetadataBytes": 0,
+            "decompressedStructuredMetadataBytes": 0
+          },
+          "chunkRefsFetchTime": 0,
+          "congestionControlLatency": 0,
+          "pipelineWrapperFilteredLines": 0,
+          "dataobj": {
+            "prePredicateDecompressedRows": 0,
+            "prePredicateDecompressedBytes": 0,
+            "prePredicateDecompressedStructuredMetadataBytes": 0,
+            "postPredicateRows": 0,
+            "postPredicateDecompressedBytes": 0,
+            "postPredicateStructuredMetadataBytes": 0,
+            "postFilterRows": 0,
+            "pagesScanned": 0,
+            "pagesDownloaded": 0,
+            "pagesDownloadedBytes": 0,
+            "pageBatches": 0,
+            "totalRowsAvailable": 0,
+            "totalPageDownloadTime": 0
+          }
+        }
+      },
+      "ingester": {
+        "totalReached": 2,
+        "totalChunksMatched": 2,
+        "totalBatches": 4,
+        "totalLinesSent": 33,
+        "store": {
+          "totalChunksRef": 0,
+          "totalChunksDownloaded": 0,
+          "chunksDownloadTime": 0,
+          "queryReferencedStructuredMetadata": false,
+          "queryUsedV2Engine": false,
+          "chunk": {
+            "headChunkBytes": 2178,
+            "headChunkLines": 33,
+            "decompressedBytes": 0,
+            "decompressedLines": 0,
+            "compressedBytes": 0,
+            "totalDuplicates": 0,
+            "postFilterLines": 33,
+            "headChunkStructuredMetadataBytes": 264,
+            "decompressedStructuredMetadataBytes": 0
+          },
+          "chunkRefsFetchTime": 915597,
+          "congestionControlLatency": 0,
+          "pipelineWrapperFilteredLines": 0,
+          "dataobj": {
+            "prePredicateDecompressedRows": 0,
+            "prePredicateDecompressedBytes": 0,
+            "prePredicateDecompressedStructuredMetadataBytes": 0,
+            "postPredicateRows": 0,
+            "postPredicateDecompressedBytes": 0,
+            "postPredicateStructuredMetadataBytes": 0,
+            "postFilterRows": 0,
+            "pagesScanned": 0,
+            "pagesDownloaded": 0,
+            "pagesDownloadedBytes": 0,
+            "pageBatches": 0,
+            "totalRowsAvailable": 0,
+            "totalPageDownloadTime": 0
+          }
+        }
+      },
+      "cache": {
+        "chunk": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "index": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "result": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "statsResult": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "volumeResult": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "seriesResult": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "labelResult": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        },
+        "instantMetricResult": {
+          "entriesFound": 0,
+          "entriesRequested": 0,
+          "entriesStored": 0,
+          "bytesReceived": 0,
+          "bytesSent": 0,
+          "requests": 0,
+          "downloadTime": 0,
+          "queryLengthServed": 0
+        }
+      },
+      "index": {
+        "totalChunks": 0,
+        "postFilterChunks": 0,
+        "shardsDuration": 0,
+        "usedBloomFilters": false
+      }
+    }
+  },
+  "scope": "Repeat read of the same historical failed-window query; not a new acceptance window."
+}

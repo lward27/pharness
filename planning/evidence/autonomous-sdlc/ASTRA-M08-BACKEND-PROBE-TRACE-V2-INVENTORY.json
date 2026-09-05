@@ -1,0 +1,18 @@
+{
+  "trace_id": "12425262477cf0d0363bdbf930901df7",
+  "query_parameters": {
+    "start": 1788643821,
+    "end": 1788643882
+  },
+  "response_bytes": 2414,
+  "response_sha256": "6b4a4497aa5eaf2e451b93407798c0f2443b0f58ceb70b0e36e5f1e999c495c4",
+  "top_level_keys": [
+    "trace",
+    "metrics"
+  ],
+  "status": null,
+  "trace_top_level_keys": [
+    "resourceSpans"
+  ],
+  "scope": "Bounded historical v2 trace API shape and completeness inspection; no acceptance conclusion."
+}
