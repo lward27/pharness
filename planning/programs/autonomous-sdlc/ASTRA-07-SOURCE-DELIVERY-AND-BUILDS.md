@@ -1,6 +1,6 @@
 # ASTRA M07: Exact-source delivery and real builds
 
-Status: finite pipelines and packaging merged; both real builds verified; source-controller and milestone acceptance open.
+Status: finite pipelines and packaging merged; both real builds verified; source publication and observation validated in PR 338; automatic merge, source-to-build integration and milestone acceptance open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M04 and M06.
 

@@ -224,3 +224,7 @@ registry transfer timed out; its completed local OCI artifact is retained for an
 identity-preserving retry. No partial release pins or live database migration were
 applied. Before deployment, record the complete schema-53-compatible rollback set;
 source `2249950` cannot read schema 0053 and must not be used afterward.
+
+## Compatible release verified
+
+The engineering controller in source `48c77b7b4438d621ff9563b913857bcf771f1800` was released through PR 339, GitOps revision `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`. Exact Argo/images passed at 16:19 UTC and live schema 53/history preservation at 16:20 UTC. See [the compatible release and recovery floor](ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md). Hosted creation remains disabled. This does not satisfy active-workflow restart, source-to-build delivery or M11/M12 acceptance.

@@ -5,6 +5,25 @@ Observed: 2026-09-05T00:51:25.906783+00:00. This updates the interpretation of t
 `12d36e97e7e31d01b3fcb7f1aedbb158d5f95c2d`. It does not rewrite that review.
 Implementation authority: [approved ASTRA program](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
 
+## Latest verified implementation state, 2026-09-05 at 16:20 UTC
+
+The compiled PHarness source is `48c77b7b4438d621ff9563b913857bcf771f1800`, deployed
+through release PR 339 at GitOps revision `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`.
+All five long-running image identities matched. Live schema 0053 preserves the
+original 14 WorkItems, 82 Runs, evidence/audit records and four retention holds;
+[release and recovery evidence](../autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md).
+The older baseline observations below are retained as dated history.
+
+M01–M03 are accepted. F02/F11/F12 have implementation and regression evidence in
+[M03 acceptance](../autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
+Both actual Finance Tekton builds now have verified registry/source identities,
+but they were program-operated prerequisite builds. They do not count as M11 work.
+The prior live coding evaluation completed and failed its safety/accuracy gates;
+a new exact-runtime qualification has started after a fresh 30/30 protocol pass.
+Hosted creation and Coding Reliability V2 remain disabled. M04–M12 and the broader
+F13 journey proof are not accepted. The [master ledger](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md#review-coverage-ledger)
+owns current findings and remaining gates.
+
 ## Verified starting baseline at 00:51 UTC
 
 | Concern | Current evidence | Limit |
@@ -48,7 +67,7 @@ capabilities do not demonstrate a durable continuous request-to-runtime journey.
 Reliability V2 exists but is not qualified/enabled for this program at baseline. Historical
 provider-account failure is not asserted to be a current outage until M04 tests it.
 
-## Findings that still require work
+## Findings requiring work at the starting baseline
 
 - F02: verifier normalization still drops submitted risks from top-level outcome fields
   and can normalize an approved submission without faithfully reflecting contradictions.
@@ -79,7 +98,7 @@ It did not run a live model evaluation, complete hosted WorkItem, production pro
 or representative-user usability study. Prior release test counts remain historical
 reported evidence, not checks rerun here. M01 made no cluster or application-code change.
 
-## Implementation refresh on 2026-09-05
+## Historical implementation refresh before the fd74092 release
 
 The table above preserves the original baseline. These later observations supersede
 its mutable status claims; they do not imply complete autonomous acceptance.

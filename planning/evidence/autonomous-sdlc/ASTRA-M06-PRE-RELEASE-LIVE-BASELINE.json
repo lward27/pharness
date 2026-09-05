@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-09-05T15:44:14.522237+00:00",
+  "source_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "database_generation": {
+    "created_at": "1787837185820",
+    "id": "dbgen_finance_20260827",
+    "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+    "purpose": "clean-finance-product-generation",
+    "schema_version": "0049"
+  },
+  "api_exposed_counts_unchanged_since_archive": {
+    "work_items": 14,
+    "runs": 82,
+    "stage_executions": 102,
+    "stage_outcomes": 102,
+    "evidence_validations": 83,
+    "products": 1,
+    "repositories": 5
+  },
+  "not_exposed_by_inventory_api": [
+    "audit_events",
+    "retention_holds",
+    "database_generations"
+  ],
+  "scope": "Read-only comparison before the pending schema-53 controller release. Full row/count verification remains the read-only database Job gate; no hosted work submitted."
+}

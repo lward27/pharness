@@ -108,3 +108,9 @@ M04 remains failed and hosted creation disabled. Production is unchanged. M06 ow
 the PHarness database rollback floor; these pipeline/packaging changes do not migrate
 application data. Retain failed build history and stop before deployment. Restoring
 the retired mutable frontend production webhook is not a recovery procedure.
+
+## Durable source progression follow-up
+
+[PR 338](https://github.com/lward27/pharness/pull/338), source `abca81f1f95cac45cd09e0143ae55af678fe3b7e`, adds automatic source publication and bounded observation under the recorded workflow authority. The [implementation evidence](ASTRA-M07-SOURCE-PROGRESSION.md) records 258 distinct API tests across the full and final targeted runs. It is not in the sealed 48c77b7 release. Automatic GitHub merge, source-to-build progression, missing-callback reconstruction and live acceptance remain open.
+
+PR 336 merged at 16:21 UTC as `cfae10c29afd73d0e8a4239e8c459d3236e358a7`; PR 338 merged at 16:22 UTC as `f1239eab36c2078f463aab766f5946546a51f231`. They are source changes awaiting a subsequent complete release; the running image revision remains 48c77b7.

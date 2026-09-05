@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-09-05T16:20:03.661218+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "state": "protocol_request_started",
+  "request": {
+    "actor": "lucas",
+    "reason": "ASTRA M04 exact-runtime gateway qualification after prompt contract clarification at 2026-09-05.1; preserve frozen tasks and all execution limits",
+    "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02"
+  }
+}

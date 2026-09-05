@@ -93,3 +93,7 @@ See [scoped M02 telemetry](ASTRA-M02-STAGING-TELEMETRY-VERIFIED.json).
 These are finite Lucas-specific bindings, not a provider-neutral adapter contract.
 See [M02 execution evidence](ASTRA-M02-FINANCE-PLATFORM-READINESS.md) for deployed
 identities and the exact boundary between observed, blocked, and planned behavior.
+
+## Registered frontend contract identities
+
+After the verified schema-53 reader rollout and real frontend build, M05 registered pipeline `pcontract_1788625407693432337` and production deployment `dcontract_1788625408162216483`. The existing frontend staging contract remains `dcontract_1788605351981544485`. See [registration evidence](ASTRA-M05-FRONTEND-CONTRACT-REGISTRATION.json). These are declarations of the finite targets; hosted delivery and production-approval acceptance remain open.

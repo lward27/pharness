@@ -227,3 +227,7 @@ counts and historical WorkItem fields. The generation and four retention holds
 remain unchanged. See [live deployment evidence](ASTRA-M05-READER-RELEASE-OBSERVED.json)
 and [live database comparison](ASTRA-M05-LIVE-DATABASE-VERIFIED.json).
 Neither check created hosted work or closed M05/M04 acceptance.
+
+## Frontend declarations completed after compatible rollout
+
+At 16:23 UTC the existing frontend Pipeline and production target were registered through the supported schema-53 API. Pipeline contract `pcontract_1788625407693432337` identifies the real `pharness-finance-frontend-build` Pipeline; deployment contract `dcontract_1788625408162216483` identifies `production/apps-prod/finance-frontend`. [Registration evidence](ASTRA-M05-FRONTEND-CONTRACT-REGISTRATION.json) records exact bodies and read-back identities. These metadata writes created no WorkItem, build, deployment intent or production approval. Hosted bindings and runtime-verification/approval gates still require integration.

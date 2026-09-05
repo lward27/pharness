@@ -1,0 +1,41 @@
+{
+  "verified_at": "2026-09-05T16:20:02.042853+00:00",
+  "cluster": "lucas_engineering",
+  "source_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "gitops_revision": "0bc84048e0d8817c6451e6f83dfcf250a17ab3b5",
+  "job": "astra-m06-live-schema-0053-20260905",
+  "job_uid": "df7c9f3e-4b11-4e5c-8a26-c52ad0d318d8",
+  "pod": "astra-m06-live-schema-0053-20260905-8s8l5",
+  "pod_uid": "85ce0a19-e9b0-4d31-b9b0-b1932fb5288c",
+  "node": "ubuntu-lucas-engineering",
+  "verification_image_id": "registry.lucas.engineering/pharness-python-runner@sha256:e7992e58091d7f5857c3034afddaefd1466e978a32b6f4b78280aa6937eb514b",
+  "job_completed_at": "2026-09-05T16:19:28Z",
+  "log_sha256": "0ef9a8441df1f00ab9b1c8550b2af3e7116a8182237bedc0cafae28aa5429a5c",
+  "manifest_sha256": "762b300b32346e9c0e751d715690a9c597d11f5611ed045c424ccbe0fffae6d6",
+  "result": {
+    "integrity": "ok",
+    "maximum_migration": 53,
+    "applied_migrations": 53,
+    "legacy_policy_rows": 0,
+    "historical_work_items_identical": true,
+    "preserved_counts": {
+      "work_items": 14,
+      "runs": 82,
+      "stage_executions": 102,
+      "stage_outcomes": 102,
+      "evidence_validations": 83,
+      "audit_events": 260,
+      "retention_holds": 4,
+      "products": 1,
+      "repositories": 5,
+      "database_generations": 1
+    },
+    "controller_counts": {
+      "hosted_reconciliations": 0,
+      "hosted_operations": 0,
+      "hosted_operation_locks": 0
+    },
+    "source_migration_unchanged": 52
+  },
+  "scope": "Read-only live schema and retained pre-0053 snapshot comparison. No database export, reset, generation adoption or hosted write."
+}

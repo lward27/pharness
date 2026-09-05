@@ -1,0 +1,62 @@
+{
+  "started_at": "2026-09-05T14:46:48.950272+00:00",
+  "completed_at": "2026-09-05T14:52:28.578147+00:00",
+  "component": "runtime",
+  "revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "builder": "rancher-desktop",
+  "platform": "linux/amd64",
+  "image_url": "registry.lucas.engineering/pharness-runtime",
+  "digest": "sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d",
+  "immutable_ref": "registry.lucas.engineering/pharness-runtime@sha256:42d7acbc2e425c76c7b22be58251aa2bb45f5a94b25634421f30f9d7c4dabf6d",
+  "archive_sha256": "69d3995724d8e5967680ece6dd05765c5ad7132aad81bcb4ce912cf70f50d9bd",
+  "all_content_hashes_verified": true,
+  "oci_source": "https://github.com/lward27/pharness",
+  "oci_revision_verified": true,
+  "destination_tls_verified": true,
+  "transport": "OCI archive; authenticated 8 MiB chunks through existing registry-write-gateway private NodePort 192.168.20.210:32443 with original hostname and trusted private CA",
+  "blob_results": [
+    {
+      "digest": "sha256:039e6f9f9752f74a3ff4a6a224f64c7c864da16ed98f882107704328f41b9c42",
+      "bytes": 28232590,
+      "result": "already_present"
+    },
+    {
+      "digest": "sha256:076f3e0e8b8cbed4edacf5d5189bdf8d6e7fb28257aa69fbe5174af12936ae9f",
+      "bytes": 1983885,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:0d0038a1b9479fda4672b0656494bbe7fe68336b49216409b3516dd8a8498adf",
+      "bytes": 4459343,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:2c2d5be9221b80945841c7d24515830bc740d97f7f179f5ecf53f9d4e76175fd",
+      "bytes": 18569101,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:31a3d1c60ea907f75eabc5e900dc603ca2d6ecb69f2d3fc7f398030c13350ac1",
+      "bytes": 6051369,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:5f509181a0c00a08cd90491178b9d7f52be14b18d457b6526aca813b4c920ba1",
+      "bytes": 52196155,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:9d960ac198cb0e8a10e8c96e7707c179f9824ee679a7c89515065c2fd6311f30",
+      "bytes": 6359958,
+      "result": "uploaded"
+    },
+    {
+      "digest": "sha256:f7e277fa5da4f08f90ebac3742faadf9849de8f63b43d609bb025ab58661d8a7",
+      "bytes": 3930,
+      "result": "uploaded"
+    }
+  ],
+  "sbom_verified": false,
+  "signature_verified": false,
+  "provenance_verified": false
+}

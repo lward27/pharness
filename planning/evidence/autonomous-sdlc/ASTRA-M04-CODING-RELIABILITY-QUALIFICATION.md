@@ -155,3 +155,9 @@ The Mac-backed builder depends on the Mac, Rancher Desktop, VPN and authenticate
 forward remaining available. M02 proves the working path; M12 must prove its
 operational behavior. A successful PHarness deployment is not autonomous SDLC
 acceptance and does not close F13.
+
+## Fresh qualification on source 48c77b7
+
+After the schema-53 live history comparison passed, the existing Kimi K2.7 Code gateway target passed all 30 protocol cases on immutable source `48c77b7b4438d621ff9563b913857bcf771f1800`. The two independent frozen coding runs started as `infeval_01a0725f855b7c038234cd6af3830594`, Job `pharness-inference-eval-409a7ffd9f47`. [Protocol evidence](ASTRA-M04-48C77B7-GATEWAY-PREFLIGHT.json) and [dispatch record](ASTRA-M04-48C77B7-CODING-QUALIFICATION-START.json) bind the exact runtime and policy.
+
+This run includes prompt contract clarification version `2026-09-05.1`. The model/profile, frozen fixtures, thresholds and execution limits remain unchanged. Results are pending; a protocol pass is not coding qualification. Keep other qualification Jobs serial and autonomous Finance work disabled until the complete gates pass.

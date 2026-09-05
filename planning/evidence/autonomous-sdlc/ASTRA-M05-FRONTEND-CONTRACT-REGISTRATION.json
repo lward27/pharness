@@ -1,0 +1,89 @@
+{
+  "observed_at": "2026-09-05T16:23:27.138797+00:00",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "schema": 53,
+  "generation": "dbgen_finance_20260827",
+  "platform": {
+    "pipeline_uid": "5f2833d4-23bc-4d68-8222-206b1a05564e",
+    "pipeline_resource_version": "48724188",
+    "argo_uid": "b414ec4a-1952-45c9-83d7-c989e956c11e"
+  },
+  "declarations": [
+    {
+      "kind": "pipeline",
+      "action": "created",
+      "contract": {
+        "id": "pcontract_1788625407693432337",
+        "status": "active",
+        "namespace": "tekton-pipelines",
+        "pipeline_ref": "pharness-finance-frontend-build",
+        "version": "astra-v1",
+        "contract_json": {
+          "params": [
+            {
+              "name": "revision",
+              "required": true,
+              "type": "scalar"
+            },
+            {
+              "name": "context",
+              "required": false,
+              "type": "scalar"
+            },
+            {
+              "name": "dockerfile",
+              "required": false,
+              "type": "scalar"
+            }
+          ],
+          "source_revision_param": "revision",
+          "workspaces": [
+            {
+              "binding": "volume_claim_template",
+              "name": "shared-data",
+              "required": true
+            }
+          ]
+        },
+        "created_at": "1788625407693",
+        "updated_at": "1788625407693",
+        "status_changed_at": "1788625407693",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare existing finite Finance frontend coordinates after schema 53 preservation and real Tekton build verification; metadata only, no source/build/deployment intent or production approval"
+      }
+    },
+    {
+      "kind": "deployment",
+      "action": "created",
+      "contract": {
+        "id": "dcontract_1788625408162216483",
+        "status": "active",
+        "target_environment": "production",
+        "target_namespace": "apps-prod",
+        "argo_application": "finance-frontend",
+        "version": "astra-v1",
+        "contract_json": {
+          "force": false,
+          "health_path": "/",
+          "operation": "sync",
+          "post_sync_verification": {
+            "prometheus_inventory": "disabled",
+            "service_healthz": "required"
+          },
+          "prune": false,
+          "service_name": "finance-frontend",
+          "service_port": 8080,
+          "workload_kind": "Deployment",
+          "workload_name": "finance-frontend"
+        },
+        "created_at": "1788625408162",
+        "updated_at": "1788625408162",
+        "status_changed_at": "1788625408162",
+        "status_changed_by": "lucas",
+        "status_reason": "ASTRA M05: declare existing finite Finance frontend coordinates after schema 53 preservation and real Tekton build verification; metadata only, no source/build/deployment intent or production approval"
+      }
+    }
+  ],
+  "scope": "Contract metadata only. No WorkItem, PipelineRun, deployment intent, production approval or cluster resource change.",
+  "completed_at": "2026-09-05T16:23:28.071123+00:00"
+}
