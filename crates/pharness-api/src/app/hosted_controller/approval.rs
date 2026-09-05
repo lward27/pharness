@@ -25,15 +25,20 @@ pub(super) async fn validate(
     action: &str,
     resource: &str,
 ) -> Result<(), ApiError> {
-    let plan = state
-        .store
+    validate_stored(&state.store, work_item_id, action, resource).await
+}
+
+pub(in crate::app) async fn validate_stored(
+    store: &pharness_store::SqliteStore,
+    work_item_id: &str,
+    action: &str,
+    resource: &str,
+) -> Result<(), ApiError> {
+    let plan = store
         .get_work_plan_by_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::conflict("automatic approval has no current WorkPlan"))?;
-    let outcomes = state
-        .store
-        .list_effective_stage_outcomes(work_item_id)
-        .await?;
+    let outcomes = store.list_effective_stage_outcomes(work_item_id).await?;
     if action == "approve_work_plan" {
         let outcome = outcomes
             .iter()
@@ -42,8 +47,7 @@ pub(super) async fn validate(
                 ApiError::conflict("automatic plan approval requires sealed Planner evidence")
             })?;
         successful(outcome)?;
-        let execution = state
-            .store
+        let execution = store
             .get_stage_execution(&outcome.stage_execution_id)
             .await?
             .ok_or_else(|| ApiError::conflict("Planner execution is unavailable"))?;
@@ -72,8 +76,7 @@ pub(super) async fn validate(
             ));
         }
     } else if action == "approve_change_set" {
-        let change = state
-            .store
+        let change = store
             .get_change_set_by_work_plan(&plan.id)
             .await?
             .ok_or_else(|| ApiError::conflict("automatic approval has no current ChangeSet"))?;

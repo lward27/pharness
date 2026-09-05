@@ -546,7 +546,15 @@ pub(in crate::app) fn validate_change_set_outcome_binding(
     };
     for outcome in effective_outcomes
         .iter()
-        .filter(|outcome| outcome.stage_key != "verify")
+        // A ChangeSet binds the engineering evidence available before source
+        // delivery. Later delivery/release/observation cannot retroactively be
+        // inputs to that already-approved change.
+        .filter(|outcome| {
+            !matches!(
+                outcome.stage_key.as_str(),
+                "verify" | "source_delivery" | "release" | "observe"
+            )
+        })
     {
         if !material_matches(outcome) {
             return Err(ApiError::conflict(

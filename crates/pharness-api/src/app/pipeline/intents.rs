@@ -451,6 +451,9 @@ pub(in crate::app) async fn work_item_pipeline_source_provenance(
     if change_set.work_item_id.is_none() {
         return Ok(None);
     }
+    if let Some(provenance) = super::hosted::source_provenance(store, change_set).await? {
+        return Ok(Some(provenance));
+    }
     let run_id = change_set.run_id.as_ref().ok_or_else(|| {
         ApiError::conflict("WorkItem PipelineIntent requires coding run provenance")
     })?;
@@ -840,6 +843,9 @@ pub(in crate::app) async fn create_pipeline_intent_trusted_envelope(
         .get_pipeline_intent(&pipeline_intent_id)
         .await?
         .ok_or_else(|| ApiError::not_found("pipeline_intent", &pipeline_intent_id))?;
+    if super::hosted::is_hosted(&state.store, &intent).await? {
+        return Err(ApiError::conflict("Hosted build authority is derived from the saved workflow by its controller. A manual envelope cannot extend that authority."));
+    }
     let change_set = state
         .store
         .get_change_set(&intent.change_set_id)

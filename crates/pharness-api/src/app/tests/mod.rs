@@ -195,6 +195,7 @@ mod characterization;
 mod controller;
 mod delivery_reconcile;
 mod hosted_controller;
+mod hosted_pipeline;
 mod hosted_source_controller;
 mod hosted_source_merge;
 mod hosted_stage_execution;

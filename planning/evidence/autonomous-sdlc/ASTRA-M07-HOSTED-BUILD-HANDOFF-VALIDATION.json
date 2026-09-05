@@ -1,0 +1,75 @@
+{
+  "observed_at": "2026-09-05T17:29:54.792258+00:00",
+  "source_base_revision": "2bbc7a77152d4104651702e84bac3b1893739fc3",
+  "branch": "codex/astra-build-controller",
+  "scope": "Source-to-build evidence and authorization contract; automatic build dispatch not implemented or accepted by this slice",
+  "validation": {
+    "api_tests": 270,
+    "admin_tests": 1,
+    "core_unit_tests": 148,
+    "core_type_tests": 6,
+    "hosted_contract_tests": 2,
+    "total_passed": 464,
+    "failed": 0,
+    "clippy": "passed with warnings denied on API/core all targets",
+    "architecture": "passed including five parser tests",
+    "format": "passed",
+    "diff_check": "passed",
+    "worker_tests": 37
+  },
+  "live_effects": {
+    "hosted_work_items_submitted": 0,
+    "builds_dispatched": 0,
+    "application_changes": 0,
+    "deployments": 0
+  },
+  "logs": {
+    "api_and_core": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-api-core.log",
+      "sha256": "d7dd575386f13fe6cea968365f4864f2b290feb281018757b170d7b0ab13da99"
+    },
+    "clippy": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-clippy.log",
+      "sha256": "198ed871da9ca309c0c5a755d4689ef7016efea39d969bf6bb390a651a01cb17"
+    },
+    "architecture": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-architecture-final.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    "initial_missing_delivery_stage_boundary": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-tests.log",
+      "sha256": "91c5c1497806a45773d5ea344d8c6a9458bf52953366839bb7620e9eff6b19e9"
+    },
+    "intermediate_artifact_hash_contract_mismatch": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-tests-2.log",
+      "sha256": "f3c1551058ea64cc5d33ae784d3e5ffeccfa834e2da75ed225e60f6eb4d84fcb"
+    },
+    "worker": {
+      "path": "/private/tmp/astra-m07-hosted-pipeline-worker.log",
+      "sha256": "d3f394c85f8029bc556c09172457acf86d9829a5a4dd3771570302d52f7e999f"
+    }
+  },
+  "source_files": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "0f89713413780e9973765d365dc9e62f5867b8016a653ea15c328165d44e2d9f",
+    "crates/pharness-api/src/app/hosted_controller/approval.rs": "823bd5ad5e08f28ca5b748fb19acbbd8bba65442499b514b170424b8dddd1075",
+    "crates/pharness-api/src/app/hosted_workflow.rs": "5f47e4659798cce71d6c6f0ed3f92d3b6eaa808b00beb4dacfeb40b8aeccbd42",
+    "crates/pharness-api/src/app/hosted_workflow/delivery.rs": "3edc246336b08ecbbce7b3ed4aa51093f21ff558880e1fe3da02f8913c8ca688",
+    "crates/pharness-api/src/app/pipeline/execution.rs": "7268b4da040dbc952c06ef9b18f7cfe5a811dd1f72280df218e1d356b29e2cb0",
+    "crates/pharness-api/src/app/pipeline/hosted.rs": "06cd49a3953dac584504da564e269c66887b0e50947820fbfc2483a93b74d830",
+    "crates/pharness-api/src/app/pipeline/intents.rs": "d718c11858b031b3bdea4282313847f26a5671f0e1362ed7533dbb06ddf63be9",
+    "crates/pharness-api/src/app/pipeline/mod.rs": "0e5506a5840be89743d656752e0af7b14cb179d1a07ebf632d5abc6f354f6a37",
+    "crates/pharness-api/src/app/repo_mode/projection.rs": "d23ec438ef014d1a72abde09f078f6655408153fab313985508c5d74ac73eae7",
+    "crates/pharness-api/src/app/tests/hosted_pipeline.rs": "7f81d91c8cc1ca0167721a09285151bf33d838e76ae89dd1ca4b3a7a46dc242e",
+    "crates/pharness-api/src/app/tests/hosted_source_merge.rs": "d690e1e8db7d56041f008776db0386f9ef06e928b46926cffcd19ea6246d5377",
+    "crates/pharness-api/src/app/tests/mod.rs": "908768f0045f61a6d25d5f8d156bc9b538034e84d157f2d96cf90214dfc4cfa0",
+    "crates/pharness-core/src/tools/cluster.rs": "80f3b8b5d362dff8e972d19fbfeb4ffb9a62334d182122c293d28f017e0a4b0d"
+  },
+  "remaining_gates": [
+    "Persist and reconcile one hosted source-to-Tekton operation with exact original dispatch identities",
+    "Revalidate build authority immediately before PipelineRun creation",
+    "Record duplicate-safe callbacks and recovery from missing/terminal executors without another build",
+    "Enforce declared source/image results against the actual PipelineRun and registry chain",
+    "Owner decision and live verification of source branch protections",
+    "Exact-runtime coding/stage qualification, complete release and live autonomous acceptance"
+  ]
+}

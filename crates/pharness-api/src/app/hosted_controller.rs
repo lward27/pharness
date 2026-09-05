@@ -1,4 +1,4 @@
-mod approval;
+pub(in crate::app) mod approval;
 mod control;
 mod operations;
 mod preparation;

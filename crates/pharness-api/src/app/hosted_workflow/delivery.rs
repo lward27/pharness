@@ -3,7 +3,7 @@ use pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot;
 
 /// The first hosted workflow supports the two reviewed Finance applications.
 /// Individually valid contracts must also belong to the authorized source.
-pub(super) fn validate_finance_coordinates(
+pub(in crate::app) fn validate_finance_coordinates(
     policy: &HostedWorkflowPolicySnapshot,
 ) -> Result<(), ApiError> {
     let binding = &policy.delivery_binding;

@@ -15,14 +15,43 @@ use serde_json::{json, Value};
 
 const REPO: &str = "https://github.com/lward27/yfinance_wrapper.git";
 
-async fn fixture(suffix: &str, fake: &KubectlFixture) -> RepoDeliveryFixture {
+pub(super) async fn fixture(suffix: &str, fake: &KubectlFixture) -> RepoDeliveryFixture {
+    fixture_with_policy(suffix, fake, None).await
+}
+
+pub(super) async fn fixture_with_policy(
+    suffix: &str,
+    fake: &KubectlFixture,
+    policy: Option<Value>,
+) -> RepoDeliveryFixture {
     let state =
         super::characterization::test_state_with_git_observer(fake.command.clone(), REPO.into())
             .await;
-    let policy = serde_json::from_str(include_str!(
-        "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
-    ))
-    .unwrap();
+    let policy = match policy {
+        Some(mut policy) => {
+            let p = &policy["pipeline_contract"];
+            let contract = state
+                .store
+                .create_pipeline_contract(pharness_store::CreatePipelineContract {
+                    id: p["id"].as_str().unwrap().into(),
+                    status: "active".into(),
+                    namespace: p["namespace"].as_str().unwrap().into(),
+                    pipeline_ref: p["pipeline_ref"].as_str().unwrap().into(),
+                    version: p["version"].as_str().unwrap().into(),
+                    contract_json: p["contract_json"].clone(),
+                    actor: Some("unit-test".into()),
+                    reason: Some("Finite build contract fixture".into()),
+                })
+                .await
+                .unwrap();
+            policy["pipeline_contract"] = json!(contract);
+            serde_json::from_value(policy).unwrap()
+        }
+        None => serde_json::from_str(include_str!(
+            "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+        ))
+        .unwrap(),
+    };
     let mut fixture = repo_fixture_for_source(suffix, false, state, Some(policy), Some(REPO)).await;
     let store = &fixture.state.store;
     let metadata = store
@@ -186,7 +215,7 @@ async fn fixture(suffix: &str, fake: &KubectlFixture) -> RepoDeliveryFixture {
     fixture
 }
 
-async fn tick(fixture: &RepoDeliveryFixture) {
+pub(super) async fn tick(fixture: &RepoDeliveryFixture) {
     fixture
         .state
         .store
@@ -198,7 +227,7 @@ async fn tick(fixture: &RepoDeliveryFixture) {
         .unwrap());
 }
 
-async fn authority(fixture: &RepoDeliveryFixture) -> HostedSourceMergeAuthority {
+pub(super) async fn authority(fixture: &RepoDeliveryFixture) -> HostedSourceMergeAuthority {
     let op = fixture
         .state
         .store
@@ -209,7 +238,7 @@ async fn authority(fixture: &RepoDeliveryFixture) -> HostedSourceMergeAuthority 
     serde_json::from_value(op.resource_refs["source_merge_authority"].clone()).unwrap()
 }
 
-async fn admit(
+pub(super) async fn admit(
     fixture: &RepoDeliveryFixture,
     a: &HostedSourceMergeAuthority,
 ) -> Result<Json<Value>, crate::app::ApiError> {

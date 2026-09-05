@@ -46,6 +46,9 @@ pub(in crate::app) async fn execute_pipeline_intent(
         .or_else(|| clean_optional_text(request.actor.clone()));
     let reason = clean_optional_text(request.reason.clone());
     let preflight = pipeline_intent_execution_preflight(&state, &pipeline_intent_id).await?;
+    if !request.dry_run && super::hosted::is_hosted(&state.store, &preflight.intent).await? {
+        return Err(ApiError::conflict("Hosted builds advance under their saved workflow. Resume the WorkItem to continue; this manual execution route cannot start another build."));
+    }
     if !preflight.ready || request.dry_run {
         return Ok(Json(ExecutePipelineIntentResponse {
             status: if preflight.ready { "ready" } else { "blocked" }.to_string(),
@@ -715,7 +718,17 @@ pub(in crate::app) async fn pipeline_intent_execution_preflight(
         }
         (None, None) => Vec::new(),
     };
-    let required_kinds = if execution.production_impacting {
+    let hosted = super::hosted::validate_intent(state, &intent).await?;
+    if hosted {
+        checks.push(execution_check(
+            "hosted_build_authority",
+            true,
+            "The saved workflow authorizes this finite build of the sealed source merge; production promotion remains separate",
+        ));
+    }
+    let required_kinds = if hosted {
+        [].as_slice()
+    } else if execution.production_impacting {
         ["pipeline_mutation", "production_impact"].as_slice()
     } else {
         ["pipeline_mutation"].as_slice()
@@ -1321,6 +1334,14 @@ pub(in crate::app) fn pipeline_build_output_from_analysis(
     intent: &StoredPipelineIntent,
     analysis: &Value,
 ) -> Option<PipelineBuildOutput> {
+    if intent
+        .intent_json
+        .pointer("/source_provenance/hosted")
+        .is_some()
+        && !super::hosted::valid_declared_build_output(intent, analysis)
+    {
+        return None;
+    }
     let image_url = analysis
         .pointer("/outputs/image_url")
         .and_then(Value::as_str)
