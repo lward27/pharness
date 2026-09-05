@@ -194,6 +194,7 @@ use std::sync::Arc;
 mod characterization;
 mod controller;
 mod delivery_reconcile;
+mod hosted_controller;
 mod hosted_stage_execution;
 mod pipeline_delivery;
 mod plans_changes;

@@ -22,6 +22,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod recovery;
+pub(crate) use recovery::reconcile_terminal_hosted_run;
+static RUN_FINALIZATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[derive(Clone)]
 pub struct LocalWorker {
     store: Arc<SqliteStore>,
@@ -339,8 +343,20 @@ pub struct LocalWorkerConfig {
 pub(crate) async fn finish_run_from_attempt(
     store: &SqliteStore,
     run: &StoredRun,
-    outcome: AttemptOutcome,
+    mut outcome: AttemptOutcome,
 ) -> anyhow::Result<()> {
+    let _finalization = RUN_FINALIZATION.lock().await;
+    let current = store
+        .get_run(&run.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Run disappeared before finalization"))?;
+    if matches!(
+        current.status.as_str(),
+        "completed" | "failed" | "cancelled"
+    ) {
+        anyhow::bail!("Run already has a terminal result; callback cannot replace it");
+    }
+    let run = &current;
     let consumption =
         if outcome.consumption.allowed_turns == 0 && outcome.consumption.allowed_tokens == 0 {
             run.budget_consumption.clone()
@@ -359,6 +375,7 @@ pub(crate) async fn finish_run_from_attempt(
     store
         .update_run_budget_consumption(&run.id, &consumption)
         .await?;
+    outcome.consumption = consumption;
     persist_workspace_evidence(store, run, &outcome).await?;
     let error = outcome.error.clone();
     let approval_id = if outcome.status == "approval_required" {
@@ -456,13 +473,22 @@ pub(crate) async fn finish_run_from_attempt(
         }
     }
 
-    sync_repo_stage_run(store, run, &outcome).await?;
+    sync_repo_stage_run_inner(store, run, &outcome).await?;
     sync_work_item_attempt(store, run, &outcome).await?;
 
     Ok(())
 }
 
 pub(crate) async fn sync_repo_stage_run(
+    store: &SqliteStore,
+    run: &StoredRun,
+    outcome: &AttemptOutcome,
+) -> anyhow::Result<()> {
+    let _finalization = RUN_FINALIZATION.lock().await;
+    sync_repo_stage_run_inner(store, run, outcome).await
+}
+
+async fn sync_repo_stage_run_inner(
     store: &SqliteStore,
     run: &StoredRun,
     outcome: &AttemptOutcome,
@@ -486,12 +512,11 @@ pub(crate) async fn sync_repo_stage_run(
     if execution.run_id.as_ref() != Some(&run.id) || execution.stage_key != stage {
         anyhow::bail!("Repo Mode Run does not match its StageExecution");
     }
-    if store
+    if let Some(sealed) = store
         .get_stage_outcome_for_execution(stage_execution_id)
         .await?
-        .is_some()
     {
-        return Ok(());
+        return recovery::finish_sealed_stage(store, run, &execution, &sealed).await;
     }
     if !matches!(
         outcome.status.as_str(),
@@ -915,8 +940,9 @@ async fn seal_repo_test_stage(
         "facts":facts,
         "status":if passed {"valid"} else {"invalid"},
     });
-    store
-        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+    recovery::persist_validation(
+        store,
+        pharness_store::CreateEvidenceValidation {
             id: repo_resource_id("evalid"),
             work_item_id: execution.work_item_id.clone(),
             stage_execution_id: Some(execution.id.clone()),
@@ -949,8 +975,9 @@ async fn seal_repo_test_stage(
                 serde_json::json!([{"kind":"acceptance_incomplete_or_failed"}])
             },
             content_hash: pharness_core::canonical_json_sha256(&validation)?,
-        })
-        .await?;
+        },
+    )
+    .await?;
     store
         .update_repo_work_item_status(
             &execution.work_item_id,
@@ -1152,8 +1179,9 @@ async fn seal_repo_verify_stage(
         "status":if passed {"valid"} else {"invalid"},
         "contradictions":contradictions,
     });
-    store
-        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+    recovery::persist_validation(
+        store,
+        pharness_store::CreateEvidenceValidation {
             id: repo_resource_id("evalid"),
             work_item_id: execution.work_item_id.clone(),
             stage_execution_id: Some(execution.id.clone()),
@@ -1171,8 +1199,9 @@ async fn seal_repo_verify_stage(
             facts: facts.clone(),
             contradictions: serde_json::json!(contradictions),
             content_hash: pharness_core::canonical_json_sha256(&validation)?,
-        })
-        .await?;
+        },
+    )
+    .await?;
     let metadata = store
         .get_repo_work_item_metadata(&execution.work_item_id)
         .await?
@@ -1324,6 +1353,9 @@ async fn create_repo_change_set(
     let material_hash = pharness_core::canonical_json_sha256(&material)?;
     let existing = store.get_change_set_by_work_plan(&plan.id).await?;
     if let Some(existing) = existing {
+        if existing.material_hash == material_hash && existing.change_set_json == material {
+            return Ok(existing);
+        }
         if !change_set_can_be_revised_for_work_plan(&existing, &plan) {
             anyhow::bail!(
                 "an existing Repo Mode ChangeSet is not eligible for a newer reviewed revision"
@@ -1494,8 +1526,9 @@ async fn seal_repo_implement_stage(
         "facts":facts,
         "status":if evidence_valid {"valid"} else {"invalid"},
     });
-    store
-        .create_evidence_validation(pharness_store::CreateEvidenceValidation {
+    recovery::persist_validation(
+        store,
+        pharness_store::CreateEvidenceValidation {
             id: repo_resource_id("evalid"),
             work_item_id: execution.work_item_id.clone(),
             stage_execution_id: Some(execution.id.clone()),
@@ -1510,8 +1543,9 @@ async fn seal_repo_implement_stage(
                 serde_json::json!([{"kind":"invalid_builder_workspace_evidence"}])
             },
             content_hash: pharness_core::canonical_json_sha256(&validation_material)?,
-        })
-        .await?;
+        },
+    )
+    .await?;
     store
         .update_repo_work_item_status(
             &execution.work_item_id,
@@ -1630,75 +1664,95 @@ async fn seal_repo_plan_stage(
     let submitted = structured_submission_from_events(&events, "work_plan");
     let (status, stop_reason, plan, agent_claims) = if outcome.status == "completed" {
         match submitted {
-            Some(document) => match validate_work_plan(&document, &selected_acceptance_names) {
-                Ok((title, summary, risk_level)) => {
-                    let plan = if let Some(existing) = store
-                        .get_work_plan_by_work_item(&execution.work_item_id)
-                        .await?
-                    {
-                        let revised = store
-                            .revise_work_plan(
-                                &existing.id,
-                                pharness_store::UpdateWorkPlanRevision {
-                                    title: Some(title),
-                                    summary: Some(summary),
-                                    risk_level: Some(risk_level),
-                                    requires_approval: Some(true),
-                                    work_plan_json: document.clone(),
-                                    session_id: Some(run.session_id.clone()),
+            Some(document) => {
+                match validate_work_plan(&document, &selected_acceptance_names) {
+                    Ok((title, summary, risk_level)) => {
+                        let plan = if let Some(existing) = store
+                            .get_work_plan_by_work_item(&execution.work_item_id)
+                            .await?
+                        {
+                            if existing.run_id.as_ref() == Some(&run.id)
+                                && existing.session_id == run.session_id
+                                && existing.work_plan_json == document
+                            {
+                                if existing.status == "proposed" {
+                                    existing
+                                } else {
+                                    store.update_work_plan_status(&existing.id, "proposed", Some("controller".into()), Some("Recover the validated Planner proposal before sealing".into())).await?
+                                }
+                            } else {
+                                let revised = store
+                                    .revise_work_plan(
+                                        &existing.id,
+                                        pharness_store::UpdateWorkPlanRevision {
+                                            title: Some(title),
+                                            summary: Some(summary),
+                                            risk_level: Some(risk_level),
+                                            requires_approval: Some(true),
+                                            work_plan_json: document.clone(),
+                                            session_id: Some(run.session_id.clone()),
+                                            run_id: Some(run.id.clone()),
+                                            actor: Some("controller".into()),
+                                            reason: Some(
+                                                "Planner submitted a replacement WorkPlan revision"
+                                                    .into(),
+                                            ),
+                                        },
+                                    )
+                                    .await?;
+                                store
+                                    .update_work_plan_status(
+                                        &revised.id,
+                                        "proposed",
+                                        Some("controller".into()),
+                                        Some(
+                                            "Planner submission passed controller validation"
+                                                .into(),
+                                        ),
+                                    )
+                                    .await?
+                            }
+                        } else {
+                            store
+                                .create_work_plan(CreateWorkPlan {
+                                    id: repo_resource_id("wplan"),
+                                    work_item_id: Some(execution.work_item_id.clone()),
+                                    remediation_plan_id: None,
+                                    incident_id: None,
+                                    session_id: run.session_id.clone(),
                                     run_id: Some(run.id.clone()),
-                                    actor: Some("controller".into()),
-                                    reason: Some(
-                                        "Planner submitted a replacement WorkPlan revision".into(),
-                                    ),
-                                },
-                            )
-                            .await?;
-                        store
-                            .update_work_plan_status(
-                                &revised.id,
-                                "proposed",
-                                Some("controller".into()),
-                                Some("Planner submission passed controller validation".into()),
-                            )
-                            .await?
-                    } else {
-                        store
-                            .create_work_plan(CreateWorkPlan {
-                                id: repo_resource_id("wplan"),
-                                work_item_id: Some(execution.work_item_id.clone()),
-                                remediation_plan_id: None,
-                                incident_id: None,
-                                session_id: run.session_id.clone(),
-                                run_id: Some(run.id.clone()),
-                                status: "proposed".into(),
-                                title,
-                                summary,
-                                risk_level,
-                                requires_approval: true,
-                                resource_namespace: None,
-                                resource_kind: Some("Repository".into()),
-                                resource_name: Some(work_item.source_repo.clone()),
-                                work_plan_json: document.clone(),
-                            })
-                            .await?
-                    };
-                    (
-                        "succeeded",
-                        "Planner submitted a controller-validated proposed WorkPlan".to_string(),
-                        Some(plan),
-                        vec![serde_json::json!({"kind":"planner_submission","document":document})],
-                    )
+                                    status: "proposed".into(),
+                                    title,
+                                    summary,
+                                    risk_level,
+                                    requires_approval: true,
+                                    resource_namespace: None,
+                                    resource_kind: Some("Repository".into()),
+                                    resource_name: Some(work_item.source_repo.clone()),
+                                    work_plan_json: document.clone(),
+                                })
+                                .await?
+                        };
+                        (
+                            "succeeded",
+                            "Planner submitted a controller-validated proposed WorkPlan"
+                                .to_string(),
+                            Some(plan),
+                            vec![
+                                serde_json::json!({"kind":"planner_submission","document":document}),
+                            ],
+                        )
+                    }
+                    Err(error) => (
+                        "failed",
+                        error,
+                        None,
+                        vec![
+                            serde_json::json!({"kind":"invalid_planner_submission","document":document}),
+                        ],
+                    ),
                 }
-                Err(error) => (
-                    "failed",
-                    error,
-                    None,
-                    vec![
-                        serde_json::json!({"kind":"invalid_planner_submission","document":document}),
-                    ],
-                ),
-            },
+            }
             None => (
                 "failed",
                 "Planner completed without a typed WorkPlan submission".to_string(),
@@ -2370,6 +2424,9 @@ fn result_json_for_attempt(
         "error": &outcome.error,
         "approval_id": approval_id,
         "run_scope": run_scope.to_optional_json(),
+        "terminal_attempt": (run.execution_target_json.get("hosted_workflow_policy_hash").is_some()
+            && matches!(outcome.status.as_str(), "completed" | "failed" | "cancelled"))
+            .then_some(outcome),
         "budget_extension": outcome.budget_extension.as_ref().map(|payload| serde_json::json!({
             "reason": payload.reason,
             "resume_messages": payload.resume_messages_json,
@@ -3061,10 +3118,14 @@ async fn fail_run_from_worker_boundary(
     message: String,
     preserve_budget_resume: bool,
 ) -> Result<(), StoreError> {
-    let seq = store.list_events(run_id).await?.len() as u64 + 1;
+    let _finalization = RUN_FINALIZATION.lock().await;
     let Some(run) = store.get_run(run_id).await? else {
         return Ok(());
     };
+    if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
+        return Ok(());
+    }
+    let seq = store.list_events(run_id).await?.len() as u64 + 1;
     let has_budget_resume = run.status == "queued"
         && run.budget_consumption.extensions > 0
         && run
@@ -3092,21 +3153,17 @@ async fn fail_run_from_worker_boundary(
             .mark_budget_extension_dispatch_failed(run_id, &message)
             .await?;
     } else {
-        let failed_outcome = AttemptOutcome::failed(message.clone());
+        let mut failed_outcome = AttemptOutcome::failed(message.clone());
+        failed_outcome.consumption = run.budget_consumption.clone();
         store
             .complete_run(
                 run_id,
                 "failed",
-                serde_json::json!({
-                    "status": "failed",
-                    "turns": 0,
-                    "summary": null,
-                    "error": message,
-                }),
+                result_json_for_attempt(&run, &failed_outcome, None),
                 Some(message),
             )
             .await?;
-        if let Err(error) = sync_repo_stage_run(store, &run, &failed_outcome).await {
+        if let Err(error) = sync_repo_stage_run_inner(store, &run, &failed_outcome).await {
             // The Kubernetes reaper retries this idempotent synchronization
             // for failed Jobs. Do not hide the durable Run failure if a
             // secondary stage-finalization write is temporarily unavailable.
@@ -3235,7 +3292,7 @@ mod tests {
         store
             .create_work_item(CreateWorkItem {
                 id: work_item_id.into(),
-                status: "verifying".into(),
+                status: "awaiting_approval".into(),
                 title: "capture current verifier".into(),
                 intent: "prove ChangeSet outcome ordering".into(),
                 acceptance_criteria: vec![],
@@ -3389,6 +3446,7 @@ mod tests {
             })
             .await
             .unwrap();
+        let verification = serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"status":"succeeded","contradictions":[],"recommendations":[{"next":"review_change_set"}],"stop_reason":"Verified fixture"});
         let verify_outcome = store
             .seal_stage_outcome(SealStageOutcome {
                 id: "stageout_change_set_verify".into(),
@@ -3396,8 +3454,8 @@ mod tests {
                 work_item_id: work_item_id.into(),
                 stage_key: "verify".into(),
                 status: "succeeded".into(),
-                content_hash: format!("sha256:{}", "1".repeat(64)),
-                outcome: serde_json::json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA}),
+                content_hash: pharness_core::canonical_json_sha256(&verification).unwrap(),
+                outcome: verification,
                 state_version: 1,
                 supersedes_outcome_id: None,
                 effective: true,
@@ -3435,10 +3493,60 @@ mod tests {
             })
             .await
             .unwrap();
-        let verifier_run = store.get_run(&verifier_run_id).await.unwrap().unwrap();
-        let change_set = create_repo_change_set(&store, &verifier_run, &verify_execution)
+        let mut verifier_run = store.get_run(&verifier_run_id).await.unwrap().unwrap();
+        verifier_run.execution_target_json["hosted_workflow_policy_hash"] =
+            serde_json::json!("sha256:fixture");
+        // Simulate interruption after sealing Verify and before deriving the
+        // ChangeSet. Repeated recovery must retain its identity and decisions.
+        super::recovery::finish_sealed_stage(
+            &store,
+            &verifier_run,
+            &verify_execution,
+            &verify_outcome,
+        )
+        .await
+        .unwrap();
+        let change_set = store
+            .get_change_set_by_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap();
+        for _ in 0..3 {
+            super::recovery::finish_sealed_stage(
+                &store,
+                &verifier_run,
+                &verify_execution,
+                &verify_outcome,
+            )
             .await
             .unwrap();
+            assert_eq!(
+                create_repo_change_set(&store, &verifier_run, &verify_execution)
+                    .await
+                    .unwrap(),
+                change_set
+            );
+        }
+        let approved = store
+            .update_change_set_status(&change_set.id, "approved", Some("fixture".into()), None)
+            .await
+            .unwrap();
+        super::recovery::finish_sealed_stage(
+            &store,
+            &verifier_run,
+            &verify_execution,
+            &verify_outcome,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            store
+                .get_change_set_by_work_plan(&plan.id)
+                .await
+                .unwrap()
+                .unwrap(),
+            approved
+        );
         assert_eq!(change_set.work_plan_id, plan.id);
         assert_eq!(change_set.run_id.as_ref(), Some(&builder_run_id));
         let refs = change_set.change_set_json["effective_outcomes"]

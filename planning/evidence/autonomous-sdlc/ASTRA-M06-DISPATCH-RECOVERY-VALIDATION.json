@@ -1,0 +1,30 @@
+{
+  "observed_at": "2026-09-05T12:28:49.718855+00:00",
+  "base_revision": "9d52c9e87561dc9f72497b7125b8c6e394814b1e",
+  "source_sha256": {
+    "crates/pharness-api/src/dispatch.rs": "d2df9aff89da3f85b2a0f5cd5df592854e1346db1a59c119e43847a0a8a5be6a",
+    "crates/pharness-api/src/dispatch/recovery.rs": "26884a99b6c149ecfbdf17978bcc2898f1367cb6cbe4dd833296b4e2e535a9a3",
+    "crates/pharness-api/src/dispatch/recovery/tests.rs": "0fe59e91afbbd74841257af54ddd78a3d07642d9b803531a8221bde25845443d"
+  },
+  "validation": {
+    "api_tests": 239,
+    "admin_tests": 1,
+    "dispatch_subset": 32,
+    "clippy": "API all targets, warnings denied: passed",
+    "format": "passed",
+    "architecture": "app boundaries and 5 parser tests passed"
+  },
+  "scenarios": [
+    "exact deterministic Job, dispatch hash and requested execution fields required",
+    "Kubernetes defaults and status additions allowed",
+    "changed image, name, namespace, hash, added environment and terminating Job rejected",
+    "lost create acknowledgment reconciles the existing Job",
+    "repeated dispatch creates only one Job",
+    "unavailable observation causes no create attempt",
+    "conflicting existing Job remains unchanged"
+  ],
+  "limits": [
+    "No Kubernetes credentials or external cluster used by adapter fixtures",
+    "Continuous API scheduling and hosted dispatch recovery integration remain open"
+  ]
+}

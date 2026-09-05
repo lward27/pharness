@@ -19,6 +19,25 @@ pub(in crate::app) async fn repo_work_item_flow(
     state: &AppState,
     work_item_id: &str,
 ) -> Result<WorkItemFlowResponse, ApiError> {
+    build_repo_work_item_flow(state, work_item_id, true).await
+}
+
+// The controller uses the same eligibility calculation as historical manual
+// actions, while the operator projection exposes only workflow controls.
+pub(in crate::app) async fn repo_controller_actions(
+    state: &AppState,
+    work_item_id: &str,
+) -> Result<Vec<WorkItemActionResponse>, ApiError> {
+    Ok(build_repo_work_item_flow(state, work_item_id, false)
+        .await?
+        .action_rail)
+}
+
+async fn build_repo_work_item_flow(
+    state: &AppState,
+    work_item_id: &str,
+    show_workflow_controls: bool,
+) -> Result<WorkItemFlowResponse, ApiError> {
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -241,7 +260,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         }
         None => None,
     };
-    let action_rail = derive_repo_actions(
+    let mut action_rail = derive_repo_actions(
         &metadata,
         RepoActionInputs {
             attempts: (work_item.attempt_count, work_item.max_attempts),
@@ -274,6 +293,14 @@ pub(in crate::app) async fn repo_work_item_flow(
         .into_iter()
         .map(Into::into)
         .collect();
+    let workflow_control = state
+        .store
+        .get_workflow_reconciliation(work_item_id)
+        .await?;
+    if let Some(control) = workflow_control.as_ref().filter(|_| show_workflow_controls) {
+        action_rail =
+            crate::app::hosted_controller::control_actions(control, metadata.closed_at.is_some())?;
+    }
     let first_action = action_rail.first();
     let safe_advance = first_action
         .map(|action| {
@@ -307,7 +334,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         });
     let work_item_response: crate::dto::WorkItemResponse =
         crate::dto::WorkItemResponse::from(work_item.clone()).with_repo_metadata(&metadata);
-    let reconcile_preview = ReconcileWorkItemResponse {
+    let mut reconcile_preview = ReconcileWorkItemResponse {
         action: first_action
             .map(|action| action.id.clone())
             .unwrap_or_else(|| "wait".into()),
@@ -344,6 +371,14 @@ pub(in crate::app) async fn repo_work_item_flow(
             .unwrap_or_default(),
         authorization_checks: Vec::new(),
     };
+    if let Some(control) = workflow_control.as_ref().filter(|_| show_workflow_controls) {
+        reconcile_preview.action = "controller_wait".into();
+        reconcile_preview.message = control.condition_reason.clone();
+        reconcile_preview.boundary = control.condition.clone();
+        reconcile_preview.can_apply = false;
+        reconcile_preview.effect_summary =
+            "Authorized progression is owned by the hosted controller".into();
+    }
     Ok(WorkItemFlowResponse {
         work_item: work_item_response,
         reconcile_preview,
@@ -359,6 +394,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         ),
         repo_mode: Some(json!({
             "metadata":metadata,
+            "workflow_control":workflow_control.as_ref().map(crate::app::hosted_controller::public_state),
             "state_hash":repo_work_item_state_hash(&metadata)?,
             "ownership":{
                 "product":product,
@@ -490,12 +526,12 @@ pub(super) struct ChangeSetProvenanceRepair<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum ChangeSetOutcomeBinding {
+pub(in crate::app) enum ChangeSetOutcomeBinding {
     Current,
     HistoricalVerifier { id: String, hash: String },
 }
 
-pub(super) fn validate_change_set_outcome_binding(
+pub(in crate::app) fn validate_change_set_outcome_binding(
     material_outcomes: &[Value],
     effective_outcomes: &[StoredStageOutcome],
 ) -> Result<ChangeSetOutcomeBinding, ApiError> {
