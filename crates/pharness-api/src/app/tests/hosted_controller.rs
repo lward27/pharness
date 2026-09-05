@@ -233,6 +233,14 @@ async fn completed_planner(
     fixture: &super::repo_mode_v1::RepoDeliveryFixture,
     contradictions: &[&str],
 ) -> pharness_store::StoredRun {
+    planner_fixture(fixture, contradictions, true).await
+}
+
+async fn planner_fixture(
+    fixture: &super::repo_mode_v1::RepoDeliveryFixture,
+    contradictions: &[&str],
+    sealed: bool,
+) -> pharness_store::StoredRun {
     use pharness_core::{RunId, SessionId};
     use pharness_store::{CreateAgentContextPack, CreateRun, CreateSession, CreateStageExecution};
     use serde_json::json;
@@ -255,7 +263,7 @@ async fn completed_planner(
         .await
         .unwrap();
     let run = store.create_run(CreateRun {
-        id:RunId::new(id), session_id:session, user_task:"Bounded planner fixture".into(), cwd:"/workspace".into(), max_turns:10, initial_status:"completed".into(),
+        id:RunId::new(id), session_id:session, user_task:"Bounded planner fixture".into(), cwd:"/workspace".into(), max_turns:10, initial_status:if sealed { "completed" } else { "running" }.into(),
         execution_target_json:json!({"hosted_workflow_policy_hash":metadata.workflow_policy_hash,
             "run_scope":{"work_item_id":fixture.work_item_id}, "repo_mode":{"stage_execution_id":stage,"stage":"plan"}}),
     }).await.unwrap();
@@ -311,6 +319,9 @@ async fn completed_planner(
         )
         .await
         .unwrap();
+    if !sealed {
+        return run;
+    }
     let outcome = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"work_item_id":fixture.work_item_id,"stage_execution_id":format!("stage_recover_{}",fixture.work_item_id),"stage":"plan","status":"succeeded","contradictions":contradictions,"outputs":[{"kind":"work_plan","id":plan.id,"revision":plan.revision}],"agent_claims":[{"kind":"planner_submission","document":document}]});
     store
         .seal_stage_outcome(pharness_store::SealStageOutcome {
@@ -815,4 +826,217 @@ async fn signed_hosted_preparation_queues_existing_run_atomically_and_rejects_in
     .await
     .is_err());
     assert_eq!(store.get_run(&run_id).await.unwrap().unwrap(), queued);
+}
+
+#[tokio::test]
+async fn terminal_normalization_survives_interruption_without_another_plan_or_run() {
+    use pharness_core::{AgentEvent, EventId, EventKind};
+    use pharness_runhost::AttemptOutcome;
+    use pharness_store::SqliteStore;
+    use serde_json::json;
+    use sqlx::Connection;
+    let directory =
+        std::env::temp_dir().join(format!("pharness-terminal-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir(&directory).unwrap();
+    let database = directory.join("state.sqlite");
+    let mut state = super::characterization::test_state().await;
+    state.store = std::sync::Arc::new(SqliteStore::connect(&database).await.unwrap());
+    let policy = serde_json::from_str(include_str!(
+        "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+    ))
+    .unwrap();
+    let fixture = super::repo_mode_v1::repo_fixture_with_policy(
+        "terminal_interruption",
+        false,
+        state,
+        Some(policy),
+    )
+    .await;
+    let store = &fixture.state.store;
+    let run = planner_fixture(&fixture, &[], false).await;
+    let stage = run.execution_target_json["repo_mode"]["stage_execution_id"]
+        .as_str()
+        .unwrap();
+    let mut db = sqlx::SqliteConnection::connect_with(
+        &sqlx::sqlite::SqliteConnectOptions::new().filename(&database),
+    )
+    .await
+    .unwrap();
+    // Start after the Planner document is durable, before the worker callback
+    // seals its stage. Existing immutable outcome protections remain enabled.
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let plan = store
+        .update_work_plan_status(&plan.id, "proposed", Some("fixture".into()), None)
+        .await
+        .unwrap();
+    store.append_event(&AgentEvent {
+        event_id:EventId::new("event_terminal_plan"), session_id:run.session_id.clone(), run_id:run.id.clone(), seq:1, kind:EventKind::ToolFinished,
+        payload:json!({"status":"ok","content":{"structured_submission":true,"kind":"work_plan","document":plan.work_plan_json}}),
+    }).await.unwrap();
+    sqlx::query("CREATE TRIGGER interrupt_stage_seal BEFORE INSERT ON stage_outcomes BEGIN SELECT RAISE(ABORT,'injected interruption before sealing'); END").execute(&mut db).await.unwrap();
+    let mut consumption = run.budget_consumption.clone();
+    consumption.turns_used = 1;
+    consumption.tokens_used = 10;
+    let outcome = AttemptOutcome {
+        status: "completed".into(),
+        turns: 1,
+        summary: Some("Original worker result".into()),
+        error: None,
+        approval: None,
+        workspace_evidence: None,
+        budget_extension: None,
+        consumption,
+    };
+    let error = crate::worker::finish_run_from_attempt(store, &run, outcome.clone())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("injected interruption"));
+    let terminal = store.get_run(&run.id).await.unwrap().unwrap();
+    assert_eq!(terminal.status, "completed");
+    assert_eq!(
+        terminal.result_json.as_ref().unwrap()["terminal_attempt"],
+        serde_json::to_value(&outcome).unwrap()
+    );
+    assert!(store
+        .get_stage_outcome_for_execution(stage)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        store
+            .get_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .revision,
+        plan.revision
+    );
+    sqlx::query("DROP TRIGGER interrupt_stage_seal")
+        .execute(&mut db)
+        .await
+        .unwrap();
+    let restarted = SqliteStore::connect(&database).await.unwrap();
+    crate::worker::reconcile_terminal_hosted_run(&restarted, &terminal)
+        .await
+        .unwrap();
+    let sealed = restarted
+        .get_stage_outcome_for_execution(stage)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(sealed.status, "succeeded");
+    let item = restarted
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    for _ in 0..3 {
+        crate::worker::reconcile_terminal_hosted_run(&restarted, &terminal)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        restarted
+            .get_stage_outcome_for_execution(stage)
+            .await
+            .unwrap()
+            .unwrap(),
+        sealed
+    );
+    assert_eq!(
+        restarted
+            .get_work_plan(&plan.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .revision,
+        plan.revision
+    );
+    assert_eq!(
+        restarted
+            .get_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap(),
+        item
+    );
+    assert_eq!(restarted.get_run(&run.id).await.unwrap().unwrap(), terminal);
+    // A stale callback cannot replace the accepted result or consumption.
+    assert!(crate::worker::finish_run_from_attempt(
+        &restarted,
+        &run,
+        AttemptOutcome::failed("late failure")
+    )
+    .await
+    .is_err());
+    assert_eq!(restarted.get_run(&run.id).await.unwrap().unwrap(), terminal);
+    db.close().await.unwrap();
+    drop(restarted);
+    drop(fixture);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[tokio::test]
+async fn terminal_recovery_blocks_missing_or_inconsistent_original_evidence() {
+    use pharness_runhost::AttemptOutcome;
+    use serde_json::json;
+    for corrupted in [false, true] {
+        let fixture =
+            repo_fixture_with_workflow(&format!("terminal_missing_{corrupted}"), false, true).await;
+        let run = planner_fixture(&fixture, &[], false).await;
+        let mut result = json!({"status":"completed","turns":0});
+        if corrupted {
+            let mut outcome = AttemptOutcome::failed("inconsistent saved status");
+            outcome.consumption = run.budget_consumption.clone();
+            result["terminal_attempt"] = serde_json::to_value(outcome).unwrap();
+        }
+        fixture
+            .state
+            .store
+            .complete_run(&run.id, "completed", result, None)
+            .await
+            .unwrap();
+        let before = fixture.state.store.get_run(&run.id).await.unwrap().unwrap();
+        let plan = fixture
+            .state
+            .store
+            .get_work_plan_by_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            crate::worker::reconcile_terminal_hosted_run(&fixture.state.store, &before)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            fixture.state.store.get_run(&run.id).await.unwrap().unwrap(),
+            before
+        );
+        assert_eq!(
+            fixture
+                .state
+                .store
+                .get_work_plan(&plan.id)
+                .await
+                .unwrap()
+                .unwrap(),
+            plan
+        );
+        assert!(fixture
+            .state
+            .store
+            .get_stage_outcome_for_execution(
+                run.execution_target_json["repo_mode"]["stage_execution_id"]
+                    .as_str()
+                    .unwrap()
+            )
+            .await
+            .unwrap()
+            .is_none());
+    }
 }

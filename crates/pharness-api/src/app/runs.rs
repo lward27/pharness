@@ -193,6 +193,23 @@ pub(super) async fn internal_environment_preparation_with_token(
             .store
             .set_work_item_environment_snapshot(&work_item.id, "failed", None, None, None)
             .await?;
+        if run
+            .execution_target_json
+            .get("hosted_workflow_policy_hash")
+            .is_some()
+        {
+            crate::worker::fail_run_from_dispatch(
+                &state.store,
+                &run_id,
+                format!("environment preparation failed: {error}"),
+            )
+            .await?;
+            state
+                .store
+                .wake_workflow(&work_item.id, current_millis() as i64)
+                .await?;
+            return Ok(Json(preparation.into()));
+        }
         state
             .store
             .complete_run(

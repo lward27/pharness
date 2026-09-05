@@ -247,6 +247,9 @@ pub(super) async fn reconcile_operation(
     refs["run_id"] = json!(run.id);
     refs["stage_execution_id"] = json!(execution.id);
     if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
+        crate::worker::reconcile_terminal_hosted_run(&state.store, run)
+            .await
+            .map_err(|e| ApiError::conflict(e.to_string()))?;
         refs["terminal_run_status"] = json!(run.status);
         state
             .store

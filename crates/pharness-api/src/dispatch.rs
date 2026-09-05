@@ -3584,13 +3584,21 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 // version before the corresponding Repo Mode StageExecution
                 // could be sealed. The stage finalizer is idempotent and is a
                 // no-op for non-Repo-Mode runs.
-                let error = run.error.clone().unwrap_or_else(|| failure.to_string());
-                sync_repo_stage_run(
-                    &self.store,
-                    &run,
-                    &pharness_runhost::AttemptOutcome::failed(error),
-                )
-                .await?;
+                if run
+                    .execution_target_json
+                    .get("hosted_workflow_policy_hash")
+                    .is_some()
+                {
+                    crate::worker::reconcile_terminal_hosted_run(&self.store, &run).await?;
+                } else {
+                    let error = run.error.clone().unwrap_or_else(|| failure.to_string());
+                    sync_repo_stage_run(
+                        &self.store,
+                        &run,
+                        &pharness_runhost::AttemptOutcome::failed(error),
+                    )
+                    .await?;
+                }
             }
 
             // A proposer can fail in an init container before its worker can

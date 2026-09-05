@@ -1,0 +1,46 @@
+{
+  "observed_at": "2026-09-05T13:31:50.219538+00:00",
+  "base_revision": "f755915ecdba1f659d4e6ed481e617ee7a706b47",
+  "source_sha256": {
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "36152975e94c78c6e70ec9f3ba772af4a7edf8bd4fd6a0850d156d6bda45cb1d",
+    "crates/pharness-api/src/app/runs.rs": "bd2aa00f404f71eb88f784997f650329de2e979971b8305f274015a4e3d4e613",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "d230715d8f7077f2d0675fd61c0709d05bfcf36d8727bf1b21aad02215aead09",
+    "crates/pharness-api/src/dispatch.rs": "35b80dbad4135d30686d4bad5955966b4038f42be01b3216d50f1bd17160e2e3",
+    "crates/pharness-api/src/worker.rs": "b357397940be94ca9d003d3240517b3bd97b4576c9040ee135a49374a1eb0bfd",
+    "crates/pharness-api/src/worker/recovery.rs": "39587f28aa355d3bfbd86aeff1a04e65c9e7ba527a4e6ba6fbd6cb44f0d1837b"
+  },
+  "validation": {
+    "api_tests": 252,
+    "admin_tests": 1,
+    "store_tests": 53,
+    "distinct_total": 306,
+    "store_result": "unchanged store source; retained passing preparation validation",
+    "clippy": "API and store all targets, warnings denied: passed",
+    "architecture": "passed, parser 5/5",
+    "format": "passed",
+    "scope": "local real SQLite restart and adapter tests, no live autonomous acceptance"
+  },
+  "log_sha256": {
+    "/private/tmp/astra-m06-terminal-final-tests.log": "ea74f06658d902fa2c8a19ebfed1bcb09edb5669614a763ed8b4da36eda48157",
+    "/private/tmp/astra-m06-terminal-clippy.log": "dc664965394135e958d3d33dbf072ddc79d63756b08d203d0707abc30a5db1e0",
+    "/private/tmp/astra-m06-terminal-boundaries.log": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+    "/private/tmp/astra-m06-terminal-recovery-test.log": "56a21ef45f9641361b525a1cf8ba88e1c755194bc2608a2c65604dbef12cf217",
+    "/private/tmp/astra-m06-changeset-recovery-test.log": "c49464c7e76fbbc659cedab257f81536fb3bb9ce0b4851cf2260d5c0b078c546",
+    "/private/tmp/astra-m06-preparation-full-tests.log": "7925f666481834c80357b1d960d274438d8a20556feb5545237ee63976028e73"
+  },
+  "scenarios": [
+    "Injected failure after a terminal Run is durable but before the Planner stage outcome is sealed; a newly connected store resumes original evidence",
+    "Repeated finalization preserves the same plan revision, stage outcome, Run, consumption and completed WorkItem projection",
+    "Missing or inconsistent original terminal evidence blocks recovery rather than inferring a successful stage",
+    "Interrupted Verify finalization derives the exact ChangeSet once and preserves subsequent approval on repeated recovery",
+    "Local callback and reaper finalization are serialized; stale callbacks cannot replace terminal results",
+    "Validation identities include exact facts and references so normalization retries do not create additional validation records",
+    "Hosted preparation and dispatch failures retain original terminal evidence for recovery"
+  ],
+  "remaining": [
+    "Incomplete multi-record pre-dispatch startup",
+    "Source writer and observer durable ordering and M07 delivery integration",
+    "Terminal cancellation against real source/release operations",
+    "Schema 0053 rollout and live interrupted-workflow acceptance"
+  ]
+}
