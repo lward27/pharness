@@ -1,0 +1,61 @@
+{
+  "verified_at": "2026-09-05T15:58:43.883224+00:00",
+  "source_base": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "branch": "codex/astra-console-list-consistency",
+  "unit_tests": 94,
+  "new_unit_tests": 15,
+  "browser_tests_distinct": 116,
+  "new_browser_tests": 8,
+  "browser_evidence": "115 passed in the final full presentation run; remaining mobile onboarding screenshot reviewed and passed on focused recheck",
+  "production_ui_build": "passed",
+  "real_api_journey_rerun": false,
+  "deployed": false,
+  "native_walkthrough": "Mac locked; in-app preview queued; automated browser evidence inspected",
+  "files": {
+    "ui/src/repoMode/ListPagination.tsx": "e6bc65cd42e75107111ce7960dadd76874608dc2f2ef550426c61ad5c940f75d",
+    "ui/src/repoMode/api.test.ts": "194c372cd0c573bc780b2af3aea691b544ba9e49c7cd3acb8f55def77c0c7e17",
+    "ui/src/repoMode/api.ts": "e4c7a1df12530dda154e14a8bff14e547619bafb25ec149528984492f5547c17",
+    "ui/src/repoMode/screens/ListScreens.test.tsx": "aeaedeeb76083166daf85590934090dc66fd9c617474751150b000639c047c56",
+    "ui/src/repoMode/screens/PlatformScreens.tsx": "351adee6d39f1f4a32a417de70302fbf4bc84a61c057b6c41457389d80ae2e6b",
+    "ui/src/repoMode/screens/RepositoriesScreen.tsx": "1228e9fd6ff2b3ed62d242abd297222255da494a0d60bfedb989b00135a345b3",
+    "ui/src/repoMode/screens/WorkItemsScreen.tsx": "a6f34aa154a613b957a0134e96dcb1728b0b138604f020a83915f20175d3a95a",
+    "ui/src/repoMode/styles/components.css": "e8d92596d5148d5afa5867bebb005fea03eafaf594b06c8ccb4f75a661566439",
+    "ui/tests/lamina-lists.spec.mjs": "b095c207a47e8cc9f54e35fa6be63c469c78a714e6483c0f00629d332405aa35",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-empty-dark-desktop-desktop-darwin.png": "7efd757bad320109dd3075d8203636d08d5e8e809981bbc3a6a9991a8b225ba2",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-empty-dark-mobile-mobile-darwin.png": "5d09ff841d831f1240584a4b62b9cebfccb586197eaec7f4ddccf7229d92557b",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-empty-light-desktop-desktop-darwin.png": "3a77d64106c1732f64d6be1c38035d19051e1769a0939b3b20f09847a0603c69",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-empty-light-mobile-mobile-darwin.png": "bad647d21a4b8dec302d7354bab76d905680bfca7f74e49c83fc2abec3a76b79",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-unavailable-dark-desktop-desktop-darwin.png": "06237921bb8f118a780a255db5b1200df3db6a66e9ca458cbca76a2701a7a941",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-unavailable-dark-mobile-mobile-darwin.png": "b946d3fb9b9de15f5ff86d5caa3535594414660c876e3a29df734ac165e0c480",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-unavailable-light-desktop-desktop-darwin.png": "040b2a50e87d40683392a35f86018f9bcfc7fc8a1275b7e6c7d3ac7784cc1873",
+    "ui/tests/lamina-lists.spec.mjs-snapshots/lamina-list-unavailable-light-mobile-mobile-darwin.png": "dcfc291958922de2735c9326afbe3425a6c2cede1d34d831caab64d5654a245a",
+    "ui/tests/repo-mode-console.spec.mjs": "d12edce8a397ec4064604854770a24edf2b7479328a605bda402fcca60f78b8f",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-external-and-blocked-waits-desktop-darwin.png": "44b1604507d4fadcd4059df633793dac5f06f0f327c8586de082ae7d6c21a214",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-external-and-blocked-waits-mobile-darwin.png": "95c39608abc45aadeb3888693caaa4ce3dd0e0e70fee52348b6e55a142ae0315",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-history-and-legacy-desktop-darwin.png": "b3d36d4a06678762bda9e1bb4417f5c48ab5723b164f68d932b70bcbc6b72d8b",
+    "ui/tests/repo-mode-console.spec.mjs-snapshots/repo-mode-state-history-and-legacy-mobile-darwin.png": "4a1cbb8ca84fa4fa44bc48507cf2be4bd14611000b8413e4d3e54c23826a0c8a"
+  },
+  "logs": {
+    "astra-m10-lists-accepted-unit.log": {
+      "local_path": "/private/tmp/astra-m10-lists-accepted-unit.log",
+      "sha256": "3c4be4ea038c2fe9f55ce655baa229992f39ab1e35221e144a060d07d672a6f3"
+    },
+    "astra-m10-lists-accepted-build.log": {
+      "local_path": "/private/tmp/astra-m10-lists-accepted-build.log",
+      "sha256": "759f4cba046428c3fe133d9c54851ad0e98b9cca165944c13f388fcf12292fcf"
+    },
+    "astra-m10-lists-accepted-browser.log": {
+      "local_path": "/private/tmp/astra-m10-lists-accepted-browser.log",
+      "sha256": "896d79e5de1da62647e0351a53f2f2a8931d34a09cb42b2af7235a2984a8e8a0"
+    },
+    "astra-m10-lists-reviewed-heading-verified.log": {
+      "local_path": "/private/tmp/astra-m10-lists-reviewed-heading-verified.log",
+      "sha256": "d18c1e1b45bc0a8f28cc691fcfed5af9780bd751741b780b81b0c14823a094d9"
+    },
+    "astra-m10-lists-compact-baselines.log": {
+      "local_path": "/private/tmp/astra-m10-lists-compact-baselines.log",
+      "sha256": "deb196e64caa581f474f3bef4df7cfec07ee0b0e1a897a716b5c9901f4c461be"
+    }
+  },
+  "scope": "Presentation and regression evidence; no autonomous Finance acceptance or M10 closeout claim."
+}
