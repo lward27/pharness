@@ -233,6 +233,71 @@ async fn hosted_source_controller_automatically_publishes_once_under_saved_autho
 }
 
 #[tokio::test]
+async fn hosted_source_writer_callback_preserves_operation_identity_during_observation() {
+    let fake = KubectlFixture::new(false);
+    let (fixture, change) = fixture("source_callback_progression", &fake).await;
+    tick(&fixture).await;
+    let store = &fixture.state.store;
+    let intent = store
+        .get_source_delivery_intent_by_subject("work_item_change_set", &change.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let before = store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let axum::Json(callback) = crate::app::repo_mode::internal_source_delivery_writer_outcome(
+        axum::extract::State(fixture.state.clone()),
+        axum::extract::Path(intent.id.clone()),
+        axum::Json(crate::dto::GitDeliveryOutcomeRequest {
+            execution_id: intent.writer_execution_id.clone().unwrap(),
+            status: "completed".into(),
+            branch: Some(intent.head_branch.clone()),
+            commit_sha: Some("e".repeat(40)),
+            pull_request_url: Some(format!(
+                "{}/pull/7",
+                intent.source_repo.trim_end_matches(".git")
+            )),
+            pull_request_number: Some(7),
+            error_code: None,
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        callback["source_delivery_intent"]["status"],
+        "pull_request_open"
+    );
+    tick(&fixture).await;
+    let state = store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(state.condition, "waiting", "{}", state.condition_reason);
+    let after = store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(before.id, after.id);
+    assert_eq!(before.resource_refs, after.resource_refs);
+    assert_eq!(after.status, "running");
+    assert_eq!(fake.creates(), 1);
+    assert_eq!(
+        store
+            .get_source_delivery_intent(&intent.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "pull_request_open"
+    );
+}
+
+#[tokio::test]
 async fn hosted_source_checkpoint_recovers_original_identity_but_pause_and_expiry_withhold_writes()
 {
     for control in ["active", "paused", "cancelled", "expired"] {
@@ -382,6 +447,7 @@ async fn hosted_source_callback_does_not_reset_expired_wait_or_close_the_work_it
         "waiting_merge",
         "head_drift",
         "failed",
+        "pull_request_closed",
         "merged",
     ] {
         let fake = KubectlFixture::new(false);
@@ -408,7 +474,7 @@ async fn hosted_source_callback_does_not_reset_expired_wait_or_close_the_work_it
             .unwrap()
             .unwrap();
         assert_eq!(fake.creates(), 0);
-        let terminal = matches!(status, "merged" | "failed");
+        let terminal = matches!(status, "merged" | "failed" | "pull_request_closed");
         assert_eq!(
             store
                 .active_workflow_operation(&fixture.work_item_id)
@@ -421,7 +487,7 @@ async fn hosted_source_callback_does_not_reset_expired_wait_or_close_the_work_it
             state.condition,
             match status {
                 "merged" => "progressing",
-                "failed" | "head_drift" => "blocked",
+                "failed" | "head_drift" | "pull_request_closed" => "blocked",
                 _ => "wait_expired",
             }
         );

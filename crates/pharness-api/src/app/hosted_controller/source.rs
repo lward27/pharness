@@ -55,9 +55,11 @@ pub(super) async fn reconcile(
     let expired = expired || now() >= deadline;
     let mut refs = operation.resource_refs.clone();
     refs["source_delivery_intent_id"] = json!(intent.id);
-    refs["source_status"] = json!(intent.status);
     refs["source_wait_deadline"] = json!(deadline);
-    if matches!(intent.status.as_str(), "merged" | "failed") {
+    if matches!(
+        intent.status.as_str(),
+        "merged" | "failed" | "pull_request_closed"
+    ) {
         state.store.record_workflow_operation(claim, &operation.id, "succeeded", &refs,
             "Source operation termination reconciled; the source outcome still determines delivery eligibility", now()).await?;
         return Ok(condition(
@@ -69,7 +71,7 @@ pub(super) async fn reconcile(
             if intent.status == "merged" {
                 "The exact source merge is recorded. Build, deployment, and runtime verification remain separate."
             } else {
-                "Source delivery failed. No build or deployment is authorized by this result."
+                "Source delivery failed or its pull request was closed. No build or deployment is authorized by this result."
             },
         ));
     }
@@ -117,7 +119,6 @@ pub(super) async fn reconcile(
             )
             .await?;
     }
-    refs["source_status"] = json!(intent.status);
     state
         .store
         .record_workflow_operation(
