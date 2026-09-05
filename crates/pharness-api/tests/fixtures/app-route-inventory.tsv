@@ -87,7 +87,10 @@ POST	/api/internal/runs/:run_id/mark-running	worker
 POST	/api/internal/runs/:run_id/outcome	worker
 POST	/api/internal/runs/:run_id/workspace-provisioned	worker
 GET	/api/internal/source-delivery-intents/:source_delivery_intent_id/context	worker
+GET	/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-context	worker
 GET	/api/internal/source-delivery-intents/:source_delivery_intent_id/observation-context	worker
+POST	/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-attempt	worker
+POST	/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-outcome	worker
 POST	/api/internal/source-delivery-intents/:source_delivery_intent_id/observation-outcome	worker
 POST	/api/internal/source-delivery-intents/:source_delivery_intent_id/writer-outcome	worker
 GET	/api/organization	operator

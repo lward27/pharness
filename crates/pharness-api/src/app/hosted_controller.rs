@@ -5,6 +5,7 @@ mod preparation;
 mod progression;
 mod scheduler;
 mod source;
+pub(in crate::app) mod source_merge;
 mod state;
 
 #[cfg(test)]

@@ -39,6 +39,8 @@ const CONTEXT_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
 
+mod source_merge;
+
 /// Update one declared Kustomize image entry to an immutable image digest.
 ///
 /// This supports only the standard `images` list and requires exactly one
@@ -273,6 +275,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("git_delivery") {
         return execute_git_delivery().await;
+    }
+    if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("git_delivery_merge") {
+        return source_merge::execute().await;
     }
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("git_delivery_observe") {
         return execute_git_delivery_observation().await;
@@ -2624,6 +2629,8 @@ async fn execute_git_delivery_observation() -> anyhow::Result<()> {
             "pull_request_state": observation.pull_request_state,
             "merged": observation.merged,
             "merge_commit_sha": observation.merge_commit_sha,
+            "merge_parent_shas": observation.merge_parent_shas,
+            "merge_tree_sha": observation.merge_tree_sha,
             "head_branch": observation.head_branch,
             "head_commit_sha": observation.head_commit_sha,
             "authoritative_rules_succeeded": observation.authoritative_rules_succeeded,
@@ -2766,6 +2773,7 @@ async fn execute_gitops_delivery_observation() -> anyhow::Result<()> {
     .await
     .context("failed to fetch GitOps observer context")?;
     let source_context = GitDeliveryObservationContext {
+        expected_base_commit_sha: None,
         execution_id: context.execution_id,
         repository: context.repository,
         base_ref: None,
@@ -2880,12 +2888,16 @@ struct GitDeliveryObservationContext {
     pull_request_url: String,
     pull_request_number: u64,
     github_api_url: String,
+    #[serde(default)]
+    expected_base_commit_sha: Option<String>,
 }
 
 struct GitPullRequestObservation {
     pull_request_state: String,
     merged: bool,
     merge_commit_sha: Option<String>,
+    merge_parent_shas: Option<Vec<String>>,
+    merge_tree_sha: Option<String>,
     head_branch: String,
     head_commit_sha: String,
     authoritative_rules_succeeded: bool,
@@ -2946,6 +2958,52 @@ async fn observe_github_source_delivery(
     observation.check_runs = provider.check_runs;
     observation.commit_statuses = provider.commit_statuses;
     observation.provider_check_status = provider.status;
+    if observation.merged && context.expected_base_commit_sha.is_some() {
+        let (owner, repo) = parse_github_repository(&context.repository)?;
+        let sha = observation
+            .merge_commit_sha
+            .as_deref()
+            .context("github_merge_commit_missing")?;
+        let commit = github_observer_json(
+            client,
+            &format!(
+                "{}/repos/{owner}/{repo}/git/commits/{sha}",
+                context.github_api_url
+            ),
+            Some(token),
+            false,
+            "github_merge_commit_query_unavailable",
+        )
+        .await?
+        .context("github_merge_commit_unavailable")?;
+        anyhow::ensure!(
+            commit["sha"] == sha,
+            "github_merge_commit_identity_mismatch"
+        );
+        let parents = commit["parents"]
+            .as_array()
+            .filter(|parents| parents.len() <= 8)
+            .context("github_merge_parents_unavailable")?;
+        observation.merge_parent_shas = Some(
+            parents
+                .iter()
+                .map(|parent| {
+                    parent["sha"]
+                        .as_str()
+                        .filter(|sha| is_git_sha(sha))
+                        .map(str::to_owned)
+                        .context("github_merge_parent_invalid")
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?,
+        );
+        observation.merge_tree_sha = Some(
+            commit["tree"]["sha"]
+                .as_str()
+                .filter(|sha| is_git_sha(sha))
+                .context("github_merge_tree_unavailable")?
+                .into(),
+        );
+    }
     Ok(observation)
 }
 
@@ -2993,6 +3051,8 @@ fn parse_github_pull_request_observation(
         pull_request_state: pull_request_state.expect("validated state").to_string(),
         merged,
         merge_commit_sha,
+        merge_parent_shas: None,
+        merge_tree_sha: None,
         head_branch: head_branch.expect("validated branch").to_string(),
         head_commit_sha: head_commit_sha.expect("validated sha").to_string(),
         authoritative_rules_succeeded: false,
@@ -3072,6 +3132,7 @@ async fn execute_source_observer_capability_preflight() -> anyhow::Result<()> {
         .to_string();
     let context = GitDeliveryObservationContext {
         execution_id: "source-observer-capability-preflight".to_string(),
+        expected_base_commit_sha: None,
         repository,
         base_ref: Some(base_ref.clone()),
         head_branch: base_ref,
@@ -5502,6 +5563,7 @@ package_installation: preparation_only
     fn closed_unmerged_github_pull_request_discards_synthetic_merge_sha() {
         let context = GitDeliveryObservationContext {
             execution_id: "gobserve_1".to_string(),
+            expected_base_commit_sha: None,
             repository: "https://github.com/example/gitops.git".to_string(),
             base_ref: None,
             head_branch: "pharness/gitops/revision-2".to_string(),

@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+mod source_merge;
+pub use source_merge::{HostedSourceMergeAuthority, HOSTED_SOURCE_MERGE_SCHEMA};
+
 pub const HOSTED_WORKFLOW_SCHEMA: &str = "pharness.dev/hosted-workflow/v1alpha1";
 pub const LUCAS_DELIVERY_BINDING_SCHEMA: &str = "pharness.dev/lucas-delivery-binding/v1alpha1";
 pub const HOSTED_REQUIRED_EVIDENCE: [&str; 11] = [

@@ -12,6 +12,9 @@ use super::gitops::delivery::{
     internal_gitops_delivery_outcome as internal_standard_gitops_delivery_outcome,
     InternalGitOpsDeliveryQuery,
 };
+use super::hosted_controller::source_merge::{
+    internal_source_merge_attempt, internal_source_merge_context, internal_source_merge_outcome,
+};
 use super::inference;
 use super::pipeline::execution::internal_pipeline_intent_execution_outcome;
 use super::products::{
@@ -193,6 +196,18 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/source-delivery-intents/:source_delivery_intent_id/observation-outcome",
             post(internal_source_delivery_observation_outcome),
+        )
+        .route(
+            "/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-context",
+            get(internal_source_merge_context),
+        )
+        .route(
+            "/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-attempt",
+            post(internal_source_merge_attempt),
+        )
+        .route(
+            "/api/internal/source-delivery-intents/:source_delivery_intent_id/merge-outcome",
+            post(internal_source_merge_outcome),
         )
         .route(
             "/api/internal/gitops-change-sets/:gitops_change_set_id/base-revision-context",

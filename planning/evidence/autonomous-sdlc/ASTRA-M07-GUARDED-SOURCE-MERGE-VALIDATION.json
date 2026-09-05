@@ -1,0 +1,234 @@
+{
+  "source_base": "103959f1715b54dfc21a50628c965a37964c57b8",
+  "observed_at": "2026-09-05T17:09:00Z",
+  "deployed": false,
+  "live_source_merge_performed": false,
+  "checks": {
+    "workspace_top_level_passed": 661,
+    "workspace_top_level_failed": 0,
+    "final_api_passed": 266,
+    "final_api_admin_passed": 1,
+    "clippy_warnings_denied": true,
+    "architecture_passed": true,
+    "dependency_parser_tests_passed": 5,
+    "format_and_diff_passed": true
+  },
+  "validation_sequence": "Full workspace suite passed; after Clippy-driven equivalent syntax/signature cleanup, the complete API suite, Clippy, module boundaries and formatting were rechecked. Route inventory contains three new worker-authenticated endpoints.",
+  "workspace_targets": [
+    {
+      "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+      "status": "ok",
+      "passed": 266,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_cli-99fc47e86a0160e1)",
+      "status": "ok",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_codex_host-29c0c9bd706652b9)",
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_codex_host-ba341aa05fdd0c20)",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_config-e089ebc90c014b8c)",
+      "status": "ok",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+      "status": "ok",
+      "passed": 147,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+      "status": "ok",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_fireworks-bd22059e6db86a54)",
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_model_gateway-1eaa58c36e64c975)",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-59b57ecd65585e61)",
+      "status": "ok",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+      "status": "ok",
+      "passed": 53,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/main.rs (target/debug/deps/pharness_worker-37e9fb2e6a68a151)",
+      "status": "ok",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_codex_host",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_config",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_core",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_fireworks",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_openai_compatible",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_runhost",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests pharness_store",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "code_files": {
+    "crates/pharness-api/src/app/hosted_controller.rs": "15b39e758275b9b8caa30a59462240754f77399863b9c5c2075b6f201a713140",
+    "crates/pharness-api/src/app/hosted_controller/source.rs": "92567169ed328cc5a18123430e2bf624dec3c8822d5ff12129f63a2d1e5f06da",
+    "crates/pharness-api/src/app/hosted_controller/source_merge.rs": "b0f5c1dbffcdf3f893ee5bc4d99f9dcc0dbf818aba4502dbc4efeb7a76b450a4",
+    "crates/pharness-api/src/app/hosted_controller/source_merge/receipts.rs": "28e1b1219a111c1efd8af570d23bc68fe757f78033e55b3c611afe05ff9c5d43",
+    "crates/pharness-api/src/app/internal.rs": "ff327225b206c61b38cd3fcff7c22855fdf3b242c891c6ac8ba1090dc2fc905f",
+    "crates/pharness-api/src/app/repo_mode/source_delivery.rs": "512c573c139f7fc7f3d58dccb1b1858a8f21b6938234245fee49dccd0887a418",
+    "crates/pharness-api/src/app/source/git_delivery.rs": "657cc29b561e9d7fe4859d4f8a829b796eb6e8e47154a93518c68f081724a568",
+    "crates/pharness-api/src/app/tests/characterization.rs": "4e2fdacc8311b6a7923353d5fcd154990d0de4c6acb21cca514fb37d68ec245a",
+    "crates/pharness-api/src/app/tests/hosted_source_controller.rs": "b7ce8f1cc42b1ce31fb51a140acff05a47a9a4a7867bb551375befc3f2ebc25d",
+    "crates/pharness-api/src/app/tests/hosted_source_merge.rs": "40c522134c855facf5c68fd845d39a7c5de8681367efd69c0e55ede3d8f4df32",
+    "crates/pharness-api/src/app/tests/mod.rs": "ca7a880e045f09589cc9e6268812a833091228cfeaa1446c29574687d06af760",
+    "crates/pharness-api/src/app/tests/repo_mode_v1.rs": "fd1c22e24eaf29d176e7f9b796af180bd6bff6b0b89adb97c112c2aea6ecf21f",
+    "crates/pharness-api/src/dispatch/source_delivery.rs": "cbef91f25630ef5c90cc2640d96d5c7f8f5a88e013a04c0620104b98c7aa1c57",
+    "crates/pharness-api/src/dto.rs": "5262ab62f149ccac9d20bea842ffa7ec6b0e21ca45502627fedaf5e6e6352cef",
+    "crates/pharness-api/tests/fixtures/app-route-inventory.tsv": "f947bf812ca9cee1cdd603e6165829654888392db7b57137252f9c37cad4b6cc",
+    "crates/pharness-core/src/hosted_sdlc.rs": "373c8f545b7733cb0a254658251dd8b96ad64fdb1aa83fe5ca572c1e920cf784",
+    "crates/pharness-core/src/hosted_sdlc/source_merge.rs": "0cc684824687ee6eb845f5b23007ee8ad730a4813e0bbc206fe8702b9ebbe3ed",
+    "crates/pharness-store/src/sqlite/hosted_controller.rs": "80cbb9c6d0900a6b0a50959951e29bcf1549036a5f28aeaf28b47a2b878f3513",
+    "crates/pharness-worker/src/main.rs": "52780bc1719dcb61a8d6fa34346a509d6b9c86ae3d2dc99f1e92b82be4f95a54",
+    "crates/pharness-worker/src/source_merge.rs": "7d1371cc40f0ea43333c93af25fb3a92ebddb8c6103f30aeae895ca5c6a400cc"
+  },
+  "logs": {
+    "workspace": {
+      "path": "/private/tmp/astra-m07-source-merge-workspace-verified.log",
+      "sha256": "a1247866f88aee8268816ff213a08fe30cd89b3151465aafa6987cb92f398e7d"
+    },
+    "final_api": {
+      "path": "/private/tmp/astra-m07-source-merge-api-release-check.log",
+      "sha256": "4f1efa0665d2db40f301de15b728f696c63aecf5920d8d429696fdaf8747e55b"
+    },
+    "clippy": {
+      "path": "/private/tmp/astra-m07-source-merge-clippy-release-check.log",
+      "sha256": "00830ade85f64c7421adbfd3c054c4aca0ab4438161fa218d685a6f1110ce256"
+    },
+    "architecture": {
+      "path": "/private/tmp/astra-m07-source-merge-architecture-release-check.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    "route_inventory": {
+      "path": "/private/tmp/astra-m07-source-merge-route-inventory-final.log",
+      "sha256": "bebf2fc2e2ba1e9d1156bc345b267047dd5bc71af62f8e14a93ae63b9710867b"
+    }
+  },
+  "open_gates": [
+    "owner decision and live source branch protections",
+    "merge-specific readiness and live credential checks",
+    "exact-runtime complete qualification",
+    "source-to-Tekton controller progression",
+    "immutable release of new source/worker behavior",
+    "live autonomous Finance acceptance"
+  ],
+  "upstream_before_commit": "9ec293ffe7cc11a263096345c615ee60e7c81d97",
+  "upstream_changes_since_test_base": "Builder qualification evidence only; no source implementation changed."
+}
