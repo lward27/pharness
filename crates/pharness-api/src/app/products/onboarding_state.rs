@@ -150,10 +150,20 @@ pub(super) async fn onboarding_operator_response(
     onboarding: StoredRepositoryOnboarding,
 ) -> Result<RepositoryOnboardingResponse, ApiError> {
     let mut response = onboarding_response(onboarding.clone())?;
-    if onboarding.status != "proposal_ready" {
+    if !matches!(
+        onboarding.status.as_str(),
+        "proposal_ready"
+            | "proposal_blocked"
+            | "proposal_approved"
+            | "patch_failed"
+            | "delivery_ready"
+    ) {
         return Ok(response);
     }
     if let Some(blocker) = onboarding_compatibility_blocker(state, &onboarding).await? {
+        response
+            .blockers
+            .push(json!({"code":"proposal_not_approvable","summary":blocker}));
         response.actions = vec![RepositoryOnboardingActionResponse {
             id: "refresh_onboarding".into(),
             lifecycle_stage: "proposal".into(),
@@ -166,7 +176,7 @@ pub(super) async fn onboarding_operator_response(
             }),
             status: "blocked".into(),
             effect_class: "corrective_action".into(),
-            external_effect_summary: "Register the prerequisite merge SHA and start a fresh onboarding; this immutable proposal remains historical evidence".into(),
+            external_effect_summary: "Review the reported blockers. Revise proposal mistakes against the same evidence, or register the prerequisite merge SHA and start fresh onboarding when source facts change; previous revisions remain evidence".into(),
             approval_requirements: Vec::new(),
             expected_result: "A fresh discovery and proposer Run use compatible EnvironmentProfile descriptors".into(),
             requires_confirmation: false,
@@ -197,15 +207,10 @@ async fn onboarding_compatibility_blocker(
                 )))
             }
         };
-    let contract: pharness_core::RepositoryContract =
-        match serde_json::from_value(typed.candidate_contract) {
-            Ok(contract) => contract,
-            Err(error) => {
-                return Ok(Some(format!(
-                    "stored candidate contract is invalid: {error}"
-                )))
-            }
-        };
+    let contract = match typed.approvable_contract() {
+        Ok(contract) => contract,
+        Err(error) => return Ok(Some(error)),
+    };
     let Some(discovery) = state
         .store
         .get_repository_discovery(&proposal.discovery_id)

@@ -1,3 +1,5 @@
+mod proposal_state;
+
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
     ApproveRepositoryOnboardingProposal, CreateRepositoryContractVersion,
@@ -793,6 +795,12 @@ impl SqliteStore {
         &self,
         proposal: CreateRepositoryOnboardingProposal,
     ) -> Result<StoredRepositoryOnboardingProposal, StoreError> {
+        let blockers = proposal_state::blockers(&proposal.proposal);
+        let proposed_status = if blockers.is_empty() {
+            "proposal_ready"
+        } else {
+            "proposal_blocked"
+        };
         let now = now_string();
         let mut tx = self.pool.begin().await?;
         let onboarding = sqlx::query(
@@ -818,6 +826,7 @@ impl SqliteStore {
                 "discovered"
                     | "proposal_running"
                     | "proposal_ready"
+                    | "proposal_blocked"
                     | "proposal_approved"
                     | "patch_failed"
                     | "delivery_ready"
@@ -900,9 +909,9 @@ impl SqliteStore {
         sqlx::query(
             r#"
             UPDATE repository_onboardings
-            SET status = 'proposal_ready', current_proposal_revision = ?2,
+            SET status = ?6, current_proposal_revision = ?2,
                 approved_proposal_hash = NULL, patch_execution_id = NULL,
-                patch_artifact_id = NULL, patch_hash = NULL, blockers_json = '[]',
+                patch_artifact_id = NULL, patch_hash = NULL, blockers_json = ?7,
                 state_version = state_version + 1, updated_at = ?3,
                 status_changed_at = ?3, status_changed_by = ?4,
                 status_reason = 'onboarding proposal revision created'
@@ -914,6 +923,8 @@ impl SqliteStore {
         .bind(&now)
         .bind(&proposal.actor)
         .bind(proposal.expected_state_version as i64)
+        .bind(proposed_status)
+        .bind(serde_json::to_string(&blockers)?)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -956,7 +967,7 @@ impl SqliteStore {
         let now = now_string();
         let mut tx = self.pool.begin().await?;
         let proposal = sqlx::query(
-            "SELECT onboarding_id, status, content_hash FROM repository_onboarding_proposals WHERE id = ?1",
+            "SELECT onboarding_id, status, content_hash, proposal_json FROM repository_onboarding_proposals WHERE id = ?1",
         )
         .bind(&approval.proposal_id)
         .fetch_optional(&mut *tx)
@@ -971,6 +982,14 @@ impl SqliteStore {
         {
             return Err(StoreError::Conflict(
                 "onboarding proposal approval does not match the proposed revision".into(),
+            ));
+        }
+        let document: serde_json::Value =
+            serde_json::from_str(&proposal.try_get::<String, _>("proposal_json")?)?;
+        if !proposal_state::blockers(&document).is_empty() {
+            return Err(StoreError::Conflict(
+                "onboarding proposal has unresolved blockers, conflicts, or no candidate contract"
+                    .into(),
             ));
         }
         if let Some(change) = approval.model_change {
@@ -1677,6 +1696,108 @@ mod tests {
             .unwrap();
         assert_eq!(retried.status, "proposal_running");
         assert!(retried.blockers.is_empty());
+
+        let proposal = store.create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
+            id:"rprop_blocked".into(), onboarding_id:retried.id.clone(), expected_state_version:retried.state_version,
+            proposal:json!({"candidate_contract":null,"blockers":["immutable_dependency_lock_missing"],"conflicts":["alias differs"]}),
+            content_hash:"sha256:blocked-proposal".into(), discovery_id:"rdisc_success".into(), discovery_hash:"sha256:discovery".into(),
+            actor:"agent".into(), origin:"agent".into(),
+        }).await.unwrap();
+        let blocked = store
+            .get_repository_onboarding(&retried.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(blocked.status, "proposal_blocked");
+        assert_eq!(blocked.blockers.len(), 3);
+        assert_eq!(
+            blocked.blockers[0]["summary"],
+            "immutable_dependency_lock_missing"
+        );
+        assert!(store
+            .start_repository_onboarding_proposer(
+                &blocked.id,
+                blocked.state_version,
+                "run_retry",
+                "sha256:profile",
+                "operator",
+                "retry unchanged evidence"
+            )
+            .await
+            .is_err());
+        // Simulate a historical reader that marked a contradictory proposal ready.
+        sqlx::query("UPDATE repository_onboardings SET status = 'proposal_ready' WHERE id = ?1")
+            .bind(&blocked.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        assert!(store
+            .approve_repository_onboarding_proposal(ApproveRepositoryOnboardingProposal {
+                onboarding_id: blocked.id.clone(),
+                proposal_id: proposal.id,
+                proposal_hash: proposal.content_hash,
+                expected_state_version: blocked.state_version,
+                actor: "operator".into(),
+                reason: "cannot override blockers".into(),
+                model_change: None,
+            })
+            .await
+            .is_err());
+        let unchanged = store
+            .get_repository_onboarding(&blocked.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged.state_version, blocked.state_version);
+        assert!(unchanged.approved_proposal_hash.is_none());
+        assert!(unchanged.source_delivery_intent_id.is_none());
+        assert!(store
+            .start_repository_onboarding_patch(
+                &blocked.id,
+                blocked.state_version,
+                "patch_blocked",
+                "operator",
+                "cannot materialize"
+            )
+            .await
+            .is_err());
+        // A corrected immutable revision may clear blockers; the first remains intact.
+        sqlx::query("UPDATE repository_onboardings SET status = 'proposal_blocked' WHERE id = ?1")
+            .bind(&blocked.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        store
+            .create_repository_onboarding_proposal(CreateRepositoryOnboardingProposal {
+                id: "rprop_corrected".into(),
+                onboarding_id: blocked.id.clone(),
+                expected_state_version: blocked.state_version,
+                proposal: json!({"candidate_contract":{},"blockers":[],"conflicts":[]}),
+                content_hash: "sha256:corrected".into(),
+                discovery_id: "rdisc_success".into(),
+                discovery_hash: "sha256:discovery".into(),
+                actor: "operator".into(),
+                origin: "operator".into(),
+            })
+            .await
+            .unwrap();
+        let corrected = store
+            .get_repository_onboarding(&blocked.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(corrected.status, "proposal_ready");
+        assert_eq!(corrected.current_proposal_revision, 2);
+        assert!(corrected.blockers.is_empty());
+        assert_eq!(
+            store
+                .get_repository_onboarding_proposal("rprop_blocked")
+                .await
+                .unwrap()
+                .unwrap()
+                .proposal["blockers"],
+            json!(["immutable_dependency_lock_missing"])
+        );
     }
 
     #[tokio::test]
@@ -1706,7 +1827,7 @@ mod tests {
             .unwrap();
         sqlx::query("INSERT INTO repository_discoveries (id, onboarding_id, source_commit, resolved_commit, status, schema_version, inventory_json, content_hash, created_at, updated_at) VALUES ('rdisc_model', ?1, ?2, ?2, 'succeeded', 'pharness.dev/repository-discovery/v1alpha1', '{}', 'sha256:discovery', ?3, ?3)")
             .bind(&onboarding.id).bind("a".repeat(40)).bind(now).execute(&store.pool).await.unwrap();
-        sqlx::query("INSERT INTO repository_onboarding_proposals (id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, discovery_hash, created_by, origin, created_at) VALUES ('rprop_model', ?1, 1, 'proposed', '{\"service_proposals\":[{\"service_key\":\"api\"}],\"binding_proposals\":[]}', 'sha256:proposal', 'rdisc_model', 'sha256:discovery', 'operator', 'operator', ?2)")
+        sqlx::query("INSERT INTO repository_onboarding_proposals (id, onboarding_id, revision, status, proposal_json, content_hash, discovery_id, discovery_hash, created_by, origin, created_at) VALUES ('rprop_model', ?1, 1, 'proposed', '{\"candidate_contract\":{},\"service_proposals\":[{\"service_key\":\"api\"}],\"binding_proposals\":[]}', 'sha256:proposal', 'rdisc_model', 'sha256:discovery', 'operator', 'operator', ?2)")
             .bind(&onboarding.id).bind(now).execute(&store.pool).await.unwrap();
         sqlx::query("UPDATE repository_onboardings SET status = 'proposal_ready', current_discovery_id = 'rdisc_model', current_proposal_revision = 1 WHERE id = ?1")
             .bind(&onboarding.id).execute(&store.pool).await.unwrap();
@@ -1787,7 +1908,7 @@ mod tests {
             id: "rprop_model_corrected".into(),
             onboarding_id: onboarding.id.clone(),
             expected_state_version: delivery_ready.state_version,
-            proposal: json!({}),
+            proposal: json!({"candidate_contract":{}}),
             content_hash: "sha256:proposal-corrected".into(),
             discovery_id: "rdisc_model".into(),
             discovery_hash: "sha256:discovery".into(),

@@ -31,7 +31,9 @@ pub fn canonical_json_sha256(value: &serde_json::Value) -> Result<String, serde_
     let bytes = serde_json::to_vec(&canonicalize(value))?;
     Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
 }
-pub const ONBOARDING_PROPOSAL_SCHEMA: &str = "pharness.dev/repository-onboarding-proposal/v1alpha1";
+mod onboarding;
+
+pub const ONBOARDING_PROPOSAL_SCHEMA: &str = "pharness.dev/repository-onboarding-proposal/v1alpha2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

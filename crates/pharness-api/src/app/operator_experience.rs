@@ -208,22 +208,27 @@ pub(in crate::app) async fn organization_overview_value(
                     .and_then(Value::as_array)
                     .and_then(|actions| actions.first())
                     .filter(|action| {
-                        action.get("status").and_then(Value::as_str) == Some("available")
+                        (action.get("status").and_then(Value::as_str) == Some("available")
                             && action
                                 .get("requires_confirmation")
                                 .and_then(Value::as_bool)
-                                .unwrap_or(false)
+                                .unwrap_or(false))
+                            || (action["status"] == "blocked"
+                                && action["effect_class"] == "corrective_action"
+                                && action["blockers"]
+                                    .as_array()
+                                    .is_some_and(|items| !items.is_empty()))
                     });
                 if let Some(action) = action {
                     onboarding_waits += 1;
                     onboarding_attention_items.push(json!({
-                        "kind":"human_action",
+                        "kind":if action["status"] == "blocked" {"blocked"} else {"human_action"},
                         "resource_kind":"repository_onboarding",
                         "resource_id":projection.get("id"),
                         "title":format!("Onboard {}", repository.external_id),
                         "product_id":projection.get("product_id"),
                         "repository_id":projection.get("repository_id"),
-                        "status":projection.get("status"),
+                        "status":if action["status"] == "blocked" {json!("blocked")} else {projection["status"].clone()},
                         "reason":action.get("external_effect_summary"),
                         "action":action,
                     }));

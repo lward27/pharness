@@ -2,7 +2,14 @@
 
 Status: living design
 
-Last decision round: 2026-08-24
+Current authority: [ASTRA autonomous SDLC program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
+The flow below describes the retained repository-setup implementation. Routine
+hosted WorkItems follow the authorized automatic source-delivery path in M07;
+this setup flow does not impose an extra manual merge on every product change.
+The onboarding correction described below is prepared in source on 2026-09-05;
+its immutable release and live qualification remain pending.
+
+Last decision round: 2026-09-05
 
 Upstream authorities:
 
@@ -12,8 +19,8 @@ Upstream authorities:
 
 ## Purpose
 
-This document defines how a registered Repository becomes ready for Repo Mode
-coding. It separates deterministic discovery, agent-assisted proposals, human
+This document defines how a registered Repository becomes ready for repository-scoped
+coding within the hosted SDLC. It separates deterministic discovery, agent-assisted proposals, human
 review, Git-owned execution configuration, and operational capability.
 
 Repository onboarding is itself a reviewable delivery flow. PHarness may help
@@ -84,6 +91,37 @@ the AgentRun proposal or explicit operator choice.
 
 Discovery has no writer credential and cannot modify the Repository. It uses
 the exact registered revision and records every source it inspected.
+
+## Blocked proposals and compatibility
+
+New proposals use `pharness.dev/repository-onboarding-proposal/v1alpha2`.
+A proposal may contain `candidate_contract: null` only when it reports explicit,
+nonempty blockers or conflicts. This retains a useful explanation when source
+facts cannot support a complete contract. It does not invent a lock, root,
+command, profile, or readiness result to satisfy the tool schema.
+
+Storage records `proposal_blocked` and preserves the submitted blockers and
+conflicts. Both prevent approval, patch materialization, and source authorization,
+including for older records incorrectly marked ready or approved. A complete
+candidate must still pass the existing contract and discovery/profile compatibility
+checks before approval. A forecast is an unverified agent claim, not a readiness
+assessment. Merely viewing the console never retries the proposer.
+
+The operator can correct a proposal against its unchanged discovery or start fresh
+onboarding after registering the prerequisite source commit. Each proposal revision
+is retained. Removing all blockers while leaving a null candidate is invalid.
+The API continues reading complete `v1alpha1` proposals; they receive the same
+blocker/conflict approval checks. No database columns or data-generation changes
+are required. Deploy the compatible reader and matching worker/UI before creating
+V2 proposals. After V2 records exist, releases predating this correction are not
+safe rollback readers. Record the first merged compatible release before rollout.
+
+The V2.1 qualification fixtures use actual distinct repository files and the
+production discovery reader. Missing-profile cases exercise the tool's blocked
+submission contract; production can stop earlier in readiness checking when no
+compatible environment descriptor exists. A successful fixture run does not prove
+that onboarding or delivery ran autonomously in production. See the
+[correction evidence](../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md).
 
 ## Canonical committed contract
 

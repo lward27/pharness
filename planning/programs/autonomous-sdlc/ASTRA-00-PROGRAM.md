@@ -84,8 +84,11 @@ scorer/tool-schema mismatch and an overbroad Planner substring check. These requ
 contract-aligned regression fixes and fresh qualification, not reclassification of
 the recorded results as passes. The [scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
 preserves the twelve-case scenarios and thresholds, changes the two affected
-suite revisions to V2.1, and adds bounded contract diagnostics. Onboarding's
-fixture/context concern remains open. Verifier and Repair remain open. The diagnostic correction retains concrete tool
+suite revisions to V2.1, and adds bounded contract diagnostics. The subsequent
+[onboarding correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
+retains blocked proposals without invented contracts, guards approval/source effects,
+and uses real discovery for twelve distinct V2.1 fixtures. It requires compatible
+API/worker/UI deployment and fresh live qualification. Existing failed results remain unchanged. Verifier and Repair remain open. The diagnostic correction retains concrete tool
 validation errors without changing fixtures, gates, profiles or limits.
 Keep qualification Jobs serial. The frozen coding suite, thresholds, profiles and
 execution limits remain in force. Scorer repairs require explicit suite revisions

@@ -1,0 +1,148 @@
+{
+  "recorded_at": "2026-09-05T19:34:44.725912+00:00",
+  "base_revision": "5b0d815c9a70521d843f23d78cf38c383c312ab9",
+  "branch": "codex/astra-onboarding-contract-readiness",
+  "source_sha256": {
+    "crates/pharness-api/src/app/operator_experience.rs": "1eed45e71ae26b28ace3bf637433bd20b9fed207c40f8347c1dfa1ee9b633fea",
+    "crates/pharness-api/src/app/products/onboarding.rs": "a474f80b5cfa09f8a1a25168b2dafa89d88292acf3fbd6a3ba5f66f7489823f6",
+    "crates/pharness-api/src/app/products/onboarding_execution.rs": "3df5d13a7171fa53a7fa6ea301ad327ec6bed6fc503e0b5a73be74c2789b9860",
+    "crates/pharness-api/src/app/products/onboarding_state.rs": "e29d26d250079ddbe14689284917fe72da7f55478b1a332cace11e4b4d9c9e3b",
+    "crates/pharness-api/src/app/tests/mod.rs": "d14411202685a3c81a20493671eecf64068d351384bbf809b066c6cbf1181999",
+    "crates/pharness-api/src/app/tests/onboarding_blockers.rs": "b19730ed3dcd21524e1d1306fc33cfae4be5c57e15b0bf80865b1c88baff22b7",
+    "crates/pharness-api/src/app/tests/repo_mode_v1.rs": "e65a6ed7fe40606e720e9e734585b2f0a5d22dbc4e51ac865c0c367b09502f37",
+    "crates/pharness-core/src/inference.rs": "22c5d28fba6665a287d64e3e3af020984dbba874282f2d31efde07d11bc54031",
+    "crates/pharness-core/src/repo_mode.rs": "22099825b358c418ea33ba96cd486f6088d50d337816a8ead209f30cb53df3a3",
+    "crates/pharness-core/src/repo_mode/onboarding.rs": "9ea7db2b0cf7058570c4b5372d67bcbf7e546c57579fec61b303aae8c95be48e",
+    "crates/pharness-eval/src/stage_suites.rs": "8ddb392ab6fbe8c83689d8180a362fe34ebd616759c4b0b57bf315c44525d823",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "7d76a6ceaad0459e093589a19b52afbc7540ab7338dd791af7407255ed6810d4",
+    "crates/pharness-eval/src/stage_suites/onboarding.rs": "96755a727654b14f0bc9be420a8cbd9bfbc342cbb65d7aee9794b715dd9733f5",
+    "crates/pharness-runhost/src/lib.rs": "6e6e4faf2162ff7e7dcde7b5cbcc3c5ed5e1f61eda6744440008f9414b71ccdc",
+    "crates/pharness-runhost/src/prompt.rs": "c451f8fed913f017a6a77478f0eb380803f3af76f7f079273ffce055acaeaad0",
+    "crates/pharness-store/src/sqlite/onboarding.rs": "914e9452e564dd0e0d3db170e4949284f12f617435f2e9cbf4f575f01a69b7a0",
+    "crates/pharness-store/src/sqlite/onboarding/proposal_state.rs": "350b65dd1d5fcc21899198972bdea632f2a7523dd00d3d62ab717f80b7767a26",
+    "ui/src/repoMode/screens/OnboardingScreen.test.tsx": "848dc2a85e9633dfade9310d6dadd24f556441cb580db12a748944adc6fa36cf",
+    "ui/src/repoMode/screens/RepositoriesScreen.tsx": "294269a84d5c95119531ec7b2a3e777f3436e64305b9103a7a22b806f828096f",
+    "ui/tests/onboarding-blockers.spec.mjs": "908eb1668837d36e3be9c948fa826b3149249e6879381bd66bf842af2e6f7119"
+  },
+  "unchanged_frozen_inputs_sha256": {
+    "crates/pharness-eval/src/coding_v2.rs": "20fa46054b1a3a729f36a91b4dc514fa5df155a6eb9d8d9f92d31d91cf052585",
+    "deploy/helm/pharness/files/inference-registry.json": "6e0cf3931713c0b42e1f47a15223809a6fbda5623f91aa46806f90b092f90547"
+  },
+  "unchanged_reliability_profile_definitions": true,
+  "stage_prompts": {
+    "repo-onboarding-v2": {
+      "revision": "2026-09-05.2",
+      "sha256": "1fecd476049e3822b56de1d3ac29f67e75d6a4143219b31d8584baa1872bdba5"
+    },
+    "repo-planner-v2": {
+      "revision": "2026-09-05.1",
+      "sha256": "63e197b033013a6a9b5004de27327536fb094090d04574570c5de91ee3fee1f0"
+    },
+    "repo-builder-v2": {
+      "revision": "2026-09-05.1",
+      "sha256": "5eb7a3c73ecd772a7d4aa2a5bb08f9c064d31ef2f14ed33bab2e0209882d23ed"
+    },
+    "repo-repair-v2": {
+      "revision": "2026-09-05.1",
+      "sha256": "54127092bb24ef65eac752dea0faa5d6fdae9e0d4ad2333b28dfa5bec8a6a092"
+    },
+    "repo-test-diagnoser-v2": {
+      "revision": "2026-09-05.1",
+      "sha256": "d55b68138636333864c4539c6226c2b84e53eb1908385ed5c8871dabead34456"
+    },
+    "repo-verifier-v2": {
+      "revision": "2026-09-05.1",
+      "sha256": "b514ff0facd9da3965c19f176484876fb957d9a8bc32ab81b2c7d8f2fc8167fc"
+    }
+  },
+  "onboarding_suite": {
+    "prior_revision": "stage-qualification-v2.0",
+    "prior_hash": "sha256:af8045e0d366c76d7d327eadd2682fc34497a4e3b511687037f20c5029f8056a",
+    "revision": "stage-qualification-v2.1",
+    "hash": "sha256:1ecbebcb61abc30ede919fbd248f56215066313f640cf18baed1b57f7b118d1e"
+  },
+  "local_replay": {
+    "artifact": "ASTRA-M04-ONBOARDING-V21-REPLAY.json",
+    "passed": 12,
+    "cases": 12,
+    "attempts": 1,
+    "tool_schema_hash": "sha256:e2590910fbeb270b4dd9fa41ca862c97efda05f82e5ccd471b6c2ae5c3c5a636",
+    "profile_hash": "sha256:05d7f77a73848269f1f5c1c0a086607e92807079b8077ebd35bab164f4c9d288",
+    "runtime_revision": "0.1.0",
+    "qualification": false,
+    "limitation": "Package-version runtime and deterministic replay provider; not a deployed source identity or live model qualification."
+  },
+  "validation": {
+    "distinct_rust_tests": 554,
+    "rust_targets": {
+      "api": 275,
+      "admin": 1,
+      "core": 158,
+      "core_types": 6,
+      "hosted_sdlc": 2,
+      "evaluator": 30,
+      "runhost": 28,
+      "store": 54
+    },
+    "rust_run_note": "Validated across full and focused runs. The full evaluator run passed 29 of 30; its old expected Onboarding revision assertion was then corrected and passed on a focused rerun. All other failed interim checks were resolved and rechecked. Two shared-core boundary tests and the API round-trip were rechecked after final changes. One explicitly authorized live Tempo test remains ignored here.",
+    "ui_tests": 95,
+    "ui_build": "passed",
+    "browser_cases": 4,
+    "browser_note": "New blocked view and retained proposal confirmation, each at desktop and phone widths. New blocked view covers both themes, keyboard editing, no navigation writes, no horizontal overflow, and zero WCAG2 A/AA violations. Existing confirmation uses its unchanged accessibility helper.",
+    "clippy": "passed: core, API, evaluator, runhost, store; all targets; warnings denied",
+    "architecture": "passed, including 5 parser tests",
+    "format_and_diff": "passed"
+  },
+  "compatibility": {
+    "sql_schema": 53,
+    "sql_migration": false,
+    "new_proposal_schema": "pharness.dev/repository-onboarding-proposal/v1alpha2",
+    "legacy_complete_proposals_readable": true,
+    "minimum_safe_rollback_release": "First immutable merged release containing this correction; must be pinned before V2 proposal writes",
+    "hosted_creation_enabled": false,
+    "live_qualification_completed": false
+  },
+  "resolved_interim_failures": [
+    "A shadowed local status initially rebound proposal_running instead of proposal_ready; fixed and persistence/API tests passed.",
+    "Historical test hash placeholders were replaced with syntactically valid SHA-256; incomplete retained proposals now require corrective attention.",
+    "Prior suite-revision assertion updated to explicitly include Onboarding V2.1; frozen coding/Repair assertions retained.",
+    "Two needless references fixed after Clippy rejection.",
+    "UI test DOM cleanup made explicit; browser mock now excludes Vite module requests.",
+    "New readiness wording and only two affected retained onboarding screenshot baselines were visually reviewed and updated."
+  ],
+  "logs": {
+    "/private/tmp/astra-m04-onboarding-tests-5.log": {
+      "sha256": "5da4d4f465d7ab5454d496137cece7b39bf776596cb021d7418023375aadd6d6"
+    },
+    "/private/tmp/astra-m04-onboarding-revision-test.log": {
+      "sha256": "32f8641f5eb4da6785ad81042a98c8127b4dd1e505997a9d42359f6a85fa4fb0"
+    },
+    "/private/tmp/astra-m04-onboarding-storage-runhost-tests.log": {
+      "sha256": "d614ef1ae2c2ba76778043a92db30728a4629a1e7142b7cf16b7fd0cc13e746b"
+    },
+    "/private/tmp/astra-m04-onboarding-api-final-test.log": {
+      "sha256": "3c1ad62275d8f7af23c557c5a511d83a0bc5f5b08223499b1dbb467daeac4156"
+    },
+    "/private/tmp/astra-m04-onboarding-core-final-tests.log": {
+      "sha256": "e7f2cea7d147412bc3753b9c17928d561d3ffd2e8a12ccc1821b66e14c201dc8"
+    },
+    "/private/tmp/astra-m04-onboarding-clippy-final.log": {
+      "sha256": "1227100de59d46a4fc773fb7338c403be41551bd06217963c39d2519d1ee8b58"
+    },
+    "/private/tmp/astra-m04-onboarding-architecture-final.log": {
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    },
+    "/private/tmp/astra-m04-onboarding-ui-tests-4.log": {
+      "sha256": "3208a34868ba07b8a99258315bac297a775bc24dac08c6dddba654b5099c4ba4"
+    },
+    "/private/tmp/astra-m04-onboarding-ui-build-final.log": {
+      "sha256": "aa0a828960480d57545d7765db3a0c85b0dd6d253f203d3dc94a1f044c9f8e83"
+    },
+    "/private/tmp/astra-m04-onboarding-browser-final.log": {
+      "sha256": "01de0184284c974c6116e5df34f9e2bfd412f1e8d5e8bb0496fa0ad3d3f0c8e7"
+    },
+    "/private/tmp/astra-m04-onboarding-replay.log": {
+      "sha256": "5e8ce7685a125f84a036fbfe8612e06ae3b9858d4da8966ee14ff128414971f8"
+    }
+  }
+}

@@ -44,9 +44,9 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
     match profile_id {
         "repository-onboarding-proposer" => Some(StagePromptPack {
             prompt_id: "repo-onboarding-v2",
-            revision,
+            revision: "2026-09-05.2",
             stage: pharness_core::InferenceStage::Onboarding,
-            content: r#"Use discovery evidence to propose repository configuration. Label every item as a discovered fact, proposed configuration, assumption, conflict, or blocker. Copy executable facts only from discovery and compatible profile descriptors. Do not invent roots, commands, locks, Services, or profile IDs. Submit the smallest valid onboarding proposal or an exact blocker."#,
+            content: r#"Use discovery evidence to propose repository configuration. Label every item as a discovered fact, proposed configuration, assumption, conflict, or blocker. Copy executable facts only from discovery and compatible profile descriptors. Do not invent roots, commands, locks, Services, or profile IDs. Submit the smallest valid onboarding proposal. If required facts are absent or contradictory, use candidate_contract: null and explicit blockers or conflicts. A blocked proposal is retained evidence and cannot authorize source changes."#,
         }),
         "repo-planner" => Some(StagePromptPack {
             prompt_id: "repo-planner-v2",
@@ -565,7 +565,8 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                     "discovery_id":{"type":"string","minLength":1},
                     "discovery_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
                     "candidate_contract":{
-                        "type":"object",
+                        "description":"Use null only with explicit nonempty blockers or conflicts when discovery cannot support a complete contract. Never invent missing executable facts.",
+                        "type":["object","null"],
                         "additionalProperties":false,
                         "required":[
                             "api_version","environment_profile","dependency_lock",
@@ -634,9 +635,9 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                             }
                         }
                     },
-                    "assumptions":{"type":"array","maxItems":100,"items":{"type":"string"}},
-                    "conflicts":{"type":"array","maxItems":100,"items":{"type":"string"}},
-                    "blockers":{"type":"array","maxItems":100,"items":{"type":"string"}},
+                    "assumptions":{"type":"array","maxItems":100,"items":{"type":"string","minLength":1,"maxLength":2000}},
+                    "conflicts":{"type":"array","maxItems":100,"items":{"type":"string","minLength":1,"maxLength":2000}},
+                    "blockers":{"type":"array","maxItems":100,"items":{"type":"string","minLength":1,"maxLength":2000}},
                     "readiness_forecast":{"type":"object"}
                 }
             }

@@ -172,10 +172,7 @@ pub(in crate::app) async fn internal_onboarding_patch_context(
         .get_repository(&onboarding.repository_id)
         .await?
         .ok_or_else(|| ApiError::not_found("repository", &onboarding.repository_id))?;
-    let contract: pharness_core::RepositoryContract =
-        serde_json::from_value(typed.candidate_contract.clone()).map_err(|error| {
-            ApiError::conflict(format!("approved candidate contract is invalid: {error}"))
-        })?;
+    let contract = typed.approvable_contract().map_err(ApiError::conflict)?;
     validate_onboarding_contract_compatibility(
         &state.environment_profiles,
         &repository.canonical_url,
@@ -229,6 +226,25 @@ pub(in crate::app) async fn internal_onboarding_patch_outcome(
         return Err(ApiError::conflict(
             "onboarding patch execution is already terminal",
         ));
+    }
+    if matches!(request.status.as_str(), "succeeded" | "unchanged") {
+        let proposal = state
+            .store
+            .get_current_repository_onboarding_proposal(&onboarding.id)
+            .await?
+            .filter(|proposal| {
+                proposal.status == "approved"
+                    && onboarding.approved_proposal_hash.as_deref()
+                        == Some(proposal.content_hash.as_str())
+            })
+            .ok_or_else(|| {
+                ApiError::conflict("onboarding patch requires its exact approved proposal")
+            })?;
+        let typed: pharness_core::RepositoryOnboardingProposal =
+            serde_json::from_value(proposal.proposal).map_err(|error| {
+                ApiError::conflict(format!("approved proposal is invalid: {error}"))
+            })?;
+        typed.approvable_contract().map_err(ApiError::conflict)?;
     }
     match request.status.as_str() {
         "succeeded" => {
@@ -422,6 +438,7 @@ pub(in crate::app) async fn internal_onboarding_contract_validation_context(
         serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
             ApiError::conflict(format!("approved proposal is invalid: {error}"))
         })?;
+    typed.approvable_contract().map_err(ApiError::conflict)?;
     let repository = state
         .store
         .get_repository(&onboarding.repository_id)
@@ -528,6 +545,7 @@ pub(in crate::app) async fn internal_onboarding_contract_validation_outcome(
                 serde_json::from_value(proposal.proposal.clone()).map_err(|error| {
                     ApiError::conflict(format!("approved proposal is invalid: {error}"))
                 })?;
+            typed.approvable_contract().map_err(ApiError::conflict)?;
             if typed.candidate_contract != contract_value {
                 return Err(ApiError::conflict(
                     "merged RepositoryContract differs from the approved proposal",

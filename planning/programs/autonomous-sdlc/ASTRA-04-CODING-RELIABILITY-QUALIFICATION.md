@@ -6,7 +6,10 @@ runs 24/24, while onboarding failed both twelve-case attempts at 18:03 UTC on
 attempts. Verifier is running and Repair remains serial. The
 [stage scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
 documents proven harness defects, their bounded fixes and the required fresh
-qualification. Onboarding fixture/context validation remains open.
+qualification. The [onboarding contract and fixture correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
+adds explicit blocked proposals, prevents their approval, and replaces contradictory
+V2 fixture workspaces with actual discovery. Its release and fresh live qualification
+remain open; no historical failed result is rescored.
 See the [Builder evidence](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
 and [onboarding failure](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md).
 Earlier `fd740927` results scored 22/24 and 20/24 and remain retained as

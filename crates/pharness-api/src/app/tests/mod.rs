@@ -1,3 +1,4 @@
+mod onboarding_blockers;
 mod support;
 
 use super::approval_policy::approval_gate_uses_dedicated_lifecycle_action;

@@ -113,7 +113,7 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
             "rdisc_no_change",
             SOURCE_SHA,
             &json!({"schema_version":"pharness.dev/repository-discovery/v1alpha1"}),
-            "sha256:discovery-no-change",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         )
         .await
         .unwrap();
@@ -183,7 +183,7 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
             proposal: json!({
                 "schema_version":"pharness.dev/repository-onboarding-proposal/v1alpha1",
                 "discovery_id":"rdisc_no_change",
-                "discovery_hash":"sha256:discovery-no-change",
+                "discovery_hash":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
                 "candidate_contract":candidate_contract.clone(),
                 "instructions":"Existing reviewed instructions.\n",
                 "service_proposals":[],
@@ -195,7 +195,7 @@ async fn existing_canonical_contract_records_no_change_provenance_without_a_sour
             }),
             content_hash: "sha256:proposal-no-change".into(),
             discovery_id: "rdisc_no_change".into(),
-            discovery_hash: "sha256:discovery-no-change".into(),
+            discovery_hash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".into(),
             actor: "repository-onboarding-proposer".into(),
             origin: "agent".into(),
         })
@@ -1069,7 +1069,10 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
         items.iter().any(|item| {
             item["resource_id"] == "onboard_success"
                 && item["resource_kind"] == "repository_onboarding"
-                && item["action"]["id"] == "prepare_onboarding_patch"
+                    // This source-delivery fixture retains an incomplete historical
+                    // onboarding proposal. It must not authorize a new patch.
+                    && item["action"]["id"] == "refresh_onboarding"
+                    && item["action"]["status"] == "blocked"
         })
     }));
 
