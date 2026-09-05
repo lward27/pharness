@@ -18,6 +18,26 @@ impl SqliteStore {
             .transpose()
     }
 
+    /// A callback can bring a due time forward without invalidating the owner
+    /// of an in-flight reconciliation or extending any execution allowance.
+    pub async fn wake_workflow(&self, work_item_id: &str, now: i64) -> Result<(), StoreError> {
+        sqlx::query("UPDATE hosted_reconciliations SET next_due_at = MIN(next_due_at, ?) WHERE work_item_id = ?")
+            .bind(now).bind(work_item_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn get_workflow_operation(
+        &self,
+        id: &str,
+    ) -> Result<Option<StoredWorkflowOperation>, StoreError> {
+        sqlx::query("SELECT * FROM hosted_operations WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .map(operation_from_row)
+            .transpose()
+    }
+
     /// One atomic statement arbitrates claims. A replacement claim increments
     /// its fence, so an expired owner cannot record a new dispatch or finish.
     pub async fn claim_due_workflow(
@@ -155,14 +175,31 @@ impl SqliteStore {
         {
             return Err(StoreError::Conflict("invalid hosted operation".into()));
         }
+        let mut requested_keys = operation.resource_keys.to_vec();
+        requested_keys.sort_unstable();
+        if requested_keys.iter().any(|key| key.is_empty())
+            || requested_keys.windows(2).any(|pair| pair[0] == pair[1])
+        {
+            return Err(StoreError::Conflict(
+                "resource locks must be distinct nonempty keys".into(),
+            ));
+        }
         let mut tx = self.pool.begin().await?;
         fence_claim(&mut tx, claim, now).await?;
+        if claim.control != "active" && operation.effect == "development" {
+            return Err(StoreError::Conflict(
+                "new development and promotion are paused or cancelled".into(),
+            ));
+        }
         let existing = sqlx::query("SELECT * FROM hosted_operations WHERE work_item_id = ?1 AND action = ?2 AND input_hash = ?3")
             .bind(&claim.work_item_id).bind(operation.action).bind(operation.input_hash)
             .fetch_optional(&mut *tx).await?;
         if let Some(row) = existing {
             let existing = operation_from_row(row)?;
-            if existing.id != operation.id || existing.effect != operation.effect {
+            if existing.id != operation.id
+                || existing.effect != operation.effect
+                || existing.resource_keys != requested_keys
+            {
                 return Err(StoreError::Conflict(
                     "hosted operation identity changed".into(),
                 ));
@@ -174,9 +211,12 @@ impl SqliteStore {
                 .bind(operation.id)
                 .fetch_all(&mut *tx)
                 .await?;
-                let mut expected = operation.resource_keys.to_vec();
-                expected.sort_unstable();
-                if keys != expected {
+                if keys.is_empty() && existing.status == "pending" {
+                    for key in &requested_keys {
+                        sqlx::query("INSERT INTO hosted_operation_locks(resource_key,operation_id) VALUES(?,?)")
+                            .bind(key).bind(operation.id).execute(&mut *tx).await?;
+                    }
+                } else if keys != requested_keys {
                     return Err(StoreError::Conflict(
                         "hosted operation resource locks changed".into(),
                     ));
@@ -190,9 +230,9 @@ impl SqliteStore {
                 "new development and promotion are paused or cancelled".into(),
             ));
         }
-        sqlx::query("INSERT INTO hosted_operations(id,work_item_id,action,input_hash,effect,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?6)")
+        sqlx::query("INSERT INTO hosted_operations(id,work_item_id,action,input_hash,effect,created_at,updated_at,resource_keys_json) VALUES(?1,?2,?3,?4,?5,?6,?6,?7)")
             .bind(operation.id).bind(&claim.work_item_id).bind(operation.action)
-            .bind(operation.input_hash).bind(operation.effect).bind(now).execute(&mut *tx).await?;
+            .bind(operation.input_hash).bind(operation.effect).bind(now).bind(serde_json::to_string(&requested_keys)?).execute(&mut *tx).await?;
         for key in operation.resource_keys {
             if key.is_empty() {
                 return Err(StoreError::Conflict("empty hosted resource lock".into()));
@@ -211,6 +251,27 @@ impl SqliteStore {
             .await?;
         tx.commit().await?;
         operation_from_row(row)
+    }
+
+    /// Only an operation that has never crossed its dispatch boundary may
+    /// release locks without a terminal observation. Its intended keys survive.
+    pub async fn release_pending_workflow_locks(
+        &self,
+        claim: &StoredWorkflowReconciliation,
+        operation_id: &str,
+        now: i64,
+    ) -> Result<(), StoreError> {
+        let mut tx = self.pool.begin().await?;
+        fence_claim(&mut tx, claim, now).await?;
+        let pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM hosted_operations WHERE id = ? AND work_item_id = ? AND status = 'pending' AND resource_refs_json = '{}'")
+            .bind(operation_id).bind(&claim.work_item_id).fetch_one(&mut *tx).await?;
+        require_one(pending as u64)?;
+        sqlx::query("DELETE FROM hosted_operation_locks WHERE operation_id = ?")
+            .bind(operation_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn record_workflow_operation(
@@ -318,6 +379,7 @@ fn operation_from_row(row: sqlx::sqlite::SqliteRow) -> Result<StoredWorkflowOper
         input_hash: row.try_get("input_hash")?,
         effect: row.try_get("effect")?,
         status: row.try_get("status")?,
+        resource_keys: serde_json::from_str(&row.try_get::<String, _>("resource_keys_json")?)?,
         resource_refs: serde_json::from_str(&row.try_get::<String, _>("resource_refs_json")?)?,
         status_reason: row.try_get("status_reason")?,
         created_at: row.try_get("created_at")?,

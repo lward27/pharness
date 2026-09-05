@@ -26,6 +26,100 @@ fn operation<'a>(id: &'a str, keys: &'a [&'a str]) -> BeginWorkflowOperation<'a>
 }
 
 #[tokio::test]
+async fn undispatched_pause_releases_capacity_but_resume_requires_the_original_locks() {
+    let store = SqliteStore::connect_in_memory().await.unwrap();
+    seed(&store, "a", true).await;
+    seed(&store, "b", true).await;
+    let a = store
+        .claim_due_workflow("api", 100, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    let keys = ["coding", "repository:a"];
+    store
+        .begin_workflow_operation(&a, operation("op_a", &keys), 101)
+        .await
+        .unwrap();
+    let b = store
+        .claim_due_workflow("api-b", 102, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .set_workflow_control("a", 1, "paused", "operator", "pause", 103)
+        .await
+        .unwrap();
+    let paused = store
+        .claim_due_workflow("paused", 104, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .release_pending_workflow_locks(&paused, "op_a", 105)
+        .await
+        .unwrap();
+    store
+        .begin_workflow_operation(&b, operation("op_b", &["coding"]), 106)
+        .await
+        .unwrap();
+    store
+        .set_workflow_control("a", 2, "active", "operator", "resume", 107)
+        .await
+        .unwrap();
+    let resumed = store
+        .claim_due_workflow("resumed", 108, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(store
+        .begin_workflow_operation(&resumed, operation("op_a", &[]), 109)
+        .await
+        .is_err());
+    assert!(store
+        .begin_workflow_operation(&resumed, operation("op_a", &keys), 110)
+        .await
+        .is_err());
+    store
+        .record_workflow_operation(&b, "op_b", "succeeded", &json!({}), "reconciled", 111)
+        .await
+        .unwrap();
+    store
+        .begin_workflow_operation(&resumed, operation("op_a", &keys), 112)
+        .await
+        .unwrap();
+    store
+        .record_workflow_operation(
+            &resumed,
+            "op_a",
+            "running",
+            &json!({"boundary":"entered"}),
+            "dispatch",
+            113,
+        )
+        .await
+        .unwrap();
+    assert!(store
+        .release_pending_workflow_locks(&resumed, "op_a", 114)
+        .await
+        .is_err());
+    let before = store
+        .get_workflow_reconciliation("a")
+        .await
+        .unwrap()
+        .unwrap();
+    store.wake_workflow("a", 0).await.unwrap();
+    store.wake_workflow("a", 0).await.unwrap();
+    let after = store
+        .get_workflow_reconciliation("a")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.claim_fence, before.claim_fence);
+    assert_eq!(after.claim_owner, before.claim_owner);
+    assert_eq!(after.control_version, before.control_version);
+}
+
+#[tokio::test]
 async fn due_claims_are_exclusive_fenced_and_reads_do_not_enroll_legacy_work() {
     let store = SqliteStore::connect_in_memory().await.unwrap();
     seed(&store, "legacy", false).await;

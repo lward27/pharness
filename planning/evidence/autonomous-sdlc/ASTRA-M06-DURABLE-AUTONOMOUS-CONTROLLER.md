@@ -1,6 +1,6 @@
 # ASTRA M06: Durable controller implementation evidence
 
-Status: persistence, worker dispatch recovery, and operator controls tested; continuous progression and milestone acceptance open.
+Status: continuous engineering progression integrated and locally tested; delivery integration, live recovery, and milestone acceptance open.
 Observed 2026-09-05. Worktree `pharness-astra-controller`, branch
 `codex/astra-autonomous-controller`, created from current main `db84b797` and
 merged with tested M05 preparation at `e197497`, then current main `2249950` at
@@ -25,7 +25,9 @@ cannot be rebound, and a completed result cannot be rewritten or reopened.
 
 Resource locks support one coding operation and serialization by repository and
 environment. Locks remain held when an API claim expires or an operation's outcome
-is unknown; only a reconciled terminal operation releases them. This prevents a
+is unknown; only a reconciled terminal operation releases them after dispatch. A pending
+operation that has never entered its executor may relinquish capacity while paused
+or cancelled; its immutable key set must be reacquired before it can execute. This prevents a
 restart from being interpreted as permission to dispatch another external effect.
 
 Hosted worker dispatch now records a hash of the intended Job manifest and checks
@@ -66,16 +68,49 @@ is included in the API total. Clippy, formatting, and architecture checks passed
 Two unused-result warnings in test code were corrected before final Clippy. See
 [control and admission evidence](ASTRA-M06-CONTROLS-AND-ADMISSION-VALIDATION.json).
 
+## Continuous controller integration
+
+The API now reconciles persisted hosted due times every 15 seconds in normal
+operating mode. It keeps the existing 240-check unchanged-wait bound. Each pass
+has a 60-second claim and a 45-second execution ceiling; a timeout retains any
+uncertain operation. Disabling creation does not silently revoke existing work.
+Maintenance operating modes do not start the scheduler.
+
+The controller uses existing Planner, stage-chain, deterministic Test, one Repair,
+and Verifier executors. It records the operation and pre-dispatch Run set first,
+then reconciles the exact resulting Run and stage/context identity. It can adopt
+an existing coherent Run after losing the dispatch acknowledgement, and only a
+zero-consumption queued Run is eligible for the exact-Job retry path. Running or
+partially initialized work is not blindly restarted. Hosted outcome callbacks
+bring due times forward; they no longer dispatch the next stage themselves.
+
+Automatic plan approval checks the exact sealed Planner output and revision.
+ChangeSet approval checks current successful stage evidence and material hashes.
+Changed revisions and unresolved contradictions stop automatic approval. Tool
+approvals, budget increases, broad replanning, and production promotion do not
+become automatic side effects of the old action rail.
+
+All **301 distinct tests** passed: API 248, admin 1, store 52. The eight controller
+and six store-controller checks are included in those totals. Final Clippy, format,
+and architecture checks passed. The architecture check initially caught an import
+cycle introduced during extraction; shared state now has its own ownership module,
+and the final API suite was rerun after that correction. No checker exception or
+size-limit increase was introduced. See
+[integration validation](ASTRA-M06-CONTROLLER-INTEGRATION-VALIDATION.json).
+
 ## Remaining implementation and acceptance
 
-The API loop, routine progression, scheduling of dispatch recovery, callback
-integration and their adapter tests remain to be implemented. No autonomous
-workflow or cluster recovery is claimed by the persistence tests. M05 compatible
-readers and qualification remain dependencies; this independent preparation does
-not waive those gates.
+Environment-preparation dispatch recovery and incomplete multi-record startup
+still need work. Source writer/observer persistence ordering and the delivery
+adapters are not integrated into this scheduler. Production approvals, rollback,
+and terminal cancellation must close against those actual operations. A real
+active-workflow restart and duplicate source/pipeline/deployment acceptance remain
+open. The local fixtures are not a live autonomous Finance result.
 
 Before applying 0053, publish and record a compatible rollback release that knows
-both 0052 and 0053. An older SQLx migrator rejects an unknown applied migration.
-Preserve the Finance data generation, audit history and retention policy; do not use
-a down migration or a database reset for recovery. The final acceptance gates remain
-in [M06](../../programs/autonomous-sdlc/ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md).
+both 0052 and 0053. This unpublished migration now preserves the intended lock set
+independently from held locks. An older SQLx migrator rejects an unknown applied
+migration. Preserve the Finance data generation, audit history and retention
+policy; do not use a down migration or a database reset for recovery. The final
+acceptance gates remain in
+[M06](../../programs/autonomous-sdlc/ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md).

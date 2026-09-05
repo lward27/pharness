@@ -24,6 +24,7 @@ pub struct StoredWorkflowOperation {
     pub input_hash: String,
     pub effect: String,
     pub status: String,
+    pub resource_keys: Vec<String>,
     pub resource_refs: serde_json::Value,
     pub status_reason: String,
     pub created_at: i64,

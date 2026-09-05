@@ -35,6 +35,7 @@ CREATE TABLE hosted_operations (
   input_hash TEXT NOT NULL,
   effect TEXT NOT NULL CHECK(effect IN ('development','observation','recovery')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','blocked','succeeded')),
+  resource_keys_json TEXT NOT NULL CHECK(json_valid(resource_keys_json)),
   resource_refs_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(resource_refs_json)),
   status_reason TEXT NOT NULL DEFAULT 'Dispatch identity recorded before execution',
   created_at INTEGER NOT NULL,
@@ -44,13 +45,14 @@ CREATE TABLE hosted_operations (
 CREATE UNIQUE INDEX hosted_one_active_operation ON hosted_operations(work_item_id)
  WHERE status IN ('pending','running','blocked');
 CREATE TRIGGER hosted_operation_identity_immutable
-BEFORE UPDATE OF id, work_item_id, action, input_hash, effect, created_at ON hosted_operations
+BEFORE UPDATE OF id, work_item_id, action, input_hash, effect, resource_keys_json, created_at ON hosted_operations
 BEGIN
   SELECT RAISE(ABORT, 'hosted operation identity is immutable');
 END;
 
 -- Locks do not expire with the API claim: an external operation can outlive an
--- API restart. Only a reconciled terminal operation releases its resource locks.
+-- API restart. Terminal operations release locks; a never-dispatched pending
+-- operation may relinquish them while paused and must reacquire the same set.
 CREATE TABLE hosted_operation_locks (
   resource_key TEXT PRIMARY KEY,
   operation_id TEXT NOT NULL REFERENCES hosted_operations(id)

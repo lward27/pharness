@@ -244,6 +244,7 @@ pub fn router_with_runtime_configs(
     };
     data_lifecycle::spawn_retention_scheduler(state.clone());
     agent_hosts::spawn_lease_monitor(state.clone());
+    hosted_controller::spawn(state.clone());
 
     let operator_routes = Router::new()
         .merge(runs::router())

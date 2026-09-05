@@ -557,7 +557,21 @@ pub(super) async fn internal_ingest_outcome(
 
     super::products::finalize_repository_onboarding_proposer_run(&state, &run).await?;
 
-    if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
+    if run
+        .execution_target_json
+        .get("hosted_workflow_policy_hash")
+        .is_some()
+    {
+        let work_item_id = run
+            .execution_target_json
+            .pointer("/run_scope/work_item_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::conflict("hosted Run has no WorkItem binding"))?;
+        state
+            .store
+            .wake_workflow(work_item_id, current_millis() as i64)
+            .await?;
+    } else if let Err(error) = super::repo_mode::continue_repo_stage_chain(&state, &run).await {
         tracing::error!(run_id=%run.id, ?error, "authorized Repo Mode stage continuation failed");
         super::repo_mode::record_repo_chain_continuation_failure(&state, &run).await?;
     }

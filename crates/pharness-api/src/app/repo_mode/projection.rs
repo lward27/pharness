@@ -19,6 +19,25 @@ pub(in crate::app) async fn repo_work_item_flow(
     state: &AppState,
     work_item_id: &str,
 ) -> Result<WorkItemFlowResponse, ApiError> {
+    build_repo_work_item_flow(state, work_item_id, true).await
+}
+
+// The controller uses the same eligibility calculation as historical manual
+// actions, while the operator projection exposes only workflow controls.
+pub(in crate::app) async fn repo_controller_actions(
+    state: &AppState,
+    work_item_id: &str,
+) -> Result<Vec<WorkItemActionResponse>, ApiError> {
+    Ok(build_repo_work_item_flow(state, work_item_id, false)
+        .await?
+        .action_rail)
+}
+
+async fn build_repo_work_item_flow(
+    state: &AppState,
+    work_item_id: &str,
+    show_workflow_controls: bool,
+) -> Result<WorkItemFlowResponse, ApiError> {
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
     let work_item = state
@@ -278,7 +297,7 @@ pub(in crate::app) async fn repo_work_item_flow(
         .store
         .get_workflow_reconciliation(work_item_id)
         .await?;
-    if let Some(control) = &workflow_control {
+    if let Some(control) = workflow_control.as_ref().filter(|_| show_workflow_controls) {
         action_rail =
             crate::app::hosted_controller::control_actions(control, metadata.closed_at.is_some())?;
     }
@@ -352,7 +371,7 @@ pub(in crate::app) async fn repo_work_item_flow(
             .unwrap_or_default(),
         authorization_checks: Vec::new(),
     };
-    if let Some(control) = &workflow_control {
+    if let Some(control) = workflow_control.as_ref().filter(|_| show_workflow_controls) {
         reconcile_preview.action = "controller_wait".into();
         reconcile_preview.message = control.condition_reason.clone();
         reconcile_preview.boundary = control.condition.clone();
@@ -507,12 +526,12 @@ pub(super) struct ChangeSetProvenanceRepair<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum ChangeSetOutcomeBinding {
+pub(in crate::app) enum ChangeSetOutcomeBinding {
     Current,
     HistoricalVerifier { id: String, hash: String },
 }
 
-pub(super) fn validate_change_set_outcome_binding(
+pub(in crate::app) fn validate_change_set_outcome_binding(
     material_outcomes: &[Value],
     effective_outcomes: &[StoredStageOutcome],
 ) -> Result<ChangeSetOutcomeBinding, ApiError> {
