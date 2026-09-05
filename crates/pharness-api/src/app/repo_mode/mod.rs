@@ -13,7 +13,12 @@ mod tests;
 pub(in crate::app) use self::actions::{
     execute_repo_work_item_action, RepoWorkItemActionExecutionRequest,
 };
-pub(in crate::app) use self::projection::repo_work_item_flow;
+pub(in crate::app) use self::projection::{
+    repo_controller_actions, repo_work_item_flow, validate_change_set_outcome_binding,
+    ChangeSetOutcomeBinding,
+};
+#[cfg(test)]
+pub(in crate::app) use self::source_delivery::authorize_and_dispatch_source_delivery;
 pub(in crate::app) use self::source_delivery::{
     internal_source_delivery_context, internal_source_delivery_observation_context,
     internal_source_delivery_observation_outcome, internal_source_delivery_writer_outcome,

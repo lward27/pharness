@@ -30,6 +30,7 @@ mod evidence;
 mod execution_checks;
 mod gitops;
 mod hashing;
+mod hosted_controller;
 mod hosted_workflow;
 mod identifiers;
 mod inference;
@@ -243,6 +244,7 @@ pub fn router_with_runtime_configs(
     };
     data_lifecycle::spawn_retention_scheduler(state.clone());
     agent_hosts::spawn_lease_monitor(state.clone());
+    hosted_controller::spawn(state.clone());
 
     let operator_routes = Router::new()
         .merge(runs::router())

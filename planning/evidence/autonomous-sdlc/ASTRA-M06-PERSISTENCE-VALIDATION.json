@@ -1,0 +1,38 @@
+{
+  "observed_at": "2026-09-05T12:20:36.780148+00:00",
+  "base_revision": "051dc383b81ad3f0332d9f002339fe0ba2325fd0",
+  "source_sha256": {
+    "crates/pharness-store/src/hosted_controller.rs": "d851e3de4751259690bed0afb66de6d610050b7f2e26bfc4557fe5efbfc907f2",
+    "crates/pharness-store/src/sqlite/hosted_controller.rs": "fd441c7351747de1679518793d5c49342ded0947de04d275c8932288dfa18822",
+    "crates/pharness-store/src/sqlite/hosted_controller/tests.rs": "a43b88db531d886308e0e3b7ec7817954b7da79268c87df81a5b0fbb070bf26d",
+    "crates/pharness-store/migrations/0053_hosted_reconciliation.sql": "54cad139875347894cadc6478e91a1119abc7b0ca6d07ac77813806890ca13de"
+  },
+  "validation": {
+    "store_suite": "51 passed, including 5 new reconciliation tests",
+    "final_affected_recheck": "5 passed after final claim-control fencing correction",
+    "clippy": "pharness-store all targets, warnings denied: passed",
+    "format": "cargo fmt --all: applied"
+  },
+  "scenarios": [
+    "legacy work not enrolled by reads",
+    "exclusive due claims and stale-owner rejection",
+    "persisted future due times and unchanged checks",
+    "global coding and repository/environment lock collision",
+    "expired claims retain external resource locks",
+    "pause/cancellation fence prior dispatch authority; observation/recovery remain possible",
+    "operation IDs, resource references and successful outcomes cannot be silently replaced",
+    "on-disk SQLite reopening preserves dispatch references and resource locks"
+  ],
+  "log_sha256": {
+    "store-tests": "ec8752f427c579f1b57d9372b9a072dbb45e6518350101333b0ab2e3f9b6e6f8",
+    "store-clippy": "dc3d1336bc49028f9b28ace0eb6fb63c19c7d47b9e0dddeea4376de144a6a689",
+    "store-final-tests": "0ce0101037ae9ee1c6a772eafda23a9e3d41f319a6580cadb10ed2c9711d213f",
+    "store-final-clippy": "95719728afcc30b61409d3aab3b8c231a0a270787ed8d2c67caafed065641bab"
+  },
+  "limitations": [
+    "API reconciliation loop and adapters not wired in this slice",
+    "No cluster migration or deployment",
+    "No hosted WorkItem submitted",
+    "Store fixture observations do not establish real source/build/deployment recovery"
+  ]
+}
