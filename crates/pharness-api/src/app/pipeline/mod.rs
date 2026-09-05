@@ -6,6 +6,7 @@ pub(super) mod contracts;
 pub(super) mod evidence;
 pub(super) mod execution;
 pub(super) mod handoff;
+pub(in crate::app) mod hosted;
 pub(super) mod intents;
 mod lucas;
 pub(super) mod readiness;

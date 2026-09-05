@@ -1,4 +1,4 @@
-mod delivery;
+pub(in crate::app) mod delivery;
 pub(super) mod projection;
 pub(super) mod stages;
 

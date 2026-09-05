@@ -1518,12 +1518,17 @@ fn build_pipeline_run_analysis(
 ) -> Value {
     let pipeline = analyze_tekton_run(pipeline_run);
     let pipeline_params = extract_pipeline_params(pipeline_run);
-    let pipeline_results = collect_named_results(
-        task_runs
-            .get("items")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten(),
+    let task_items_ref = task_runs.get("items").and_then(Value::as_array);
+    let mut pipeline_results = collect_named_results(task_items_ref.into_iter().flatten());
+    // The declared PipelineRun results are the delivery interface. Retain the
+    // older TaskRun result fallback for historical pipelines, but expose the
+    // boundary and any conflicting source/image values rather than hiding them.
+    let declared_results = compact_tekton_results(pipeline_run);
+    if let Some(declared) = declared_results.as_object() {
+        pipeline_results.extend(declared.clone());
+    }
+    let result_conflicts = conflicting_build_results(
+        std::iter::once(pipeline_run).chain(task_items_ref.into_iter().flatten()),
     );
     let task_items = task_runs
         .get("items")
@@ -1563,7 +1568,10 @@ fn build_pipeline_run_analysis(
             "deployment_namespace": pipeline_params.get("deployment-namespace").cloned().unwrap_or(Value::Null),
         },
         "outputs": {
-            "commit": pipeline_results.get("commit").cloned().unwrap_or(Value::Null),
+            "commit": pipeline_results.get("SOURCE_COMMIT").or_else(|| pipeline_results.get("commit")).cloned().unwrap_or(Value::Null),
+            "source_commit": declared_results.get("SOURCE_COMMIT").cloned().unwrap_or(Value::Null),
+            "declared_results": declared_results,
+            "result_conflicts": result_conflicts,
             "repo_url": pipeline_results.get("url").cloned().unwrap_or(Value::Null),
             "image_digest": pipeline_results.get("IMAGE_DIGEST").cloned().unwrap_or(Value::Null),
             "image_url": pipeline_results.get("IMAGE_URL").cloned().unwrap_or(Value::Null),
@@ -1591,6 +1599,7 @@ fn analyze_tekton_run(value: &Value) -> Value {
         "kind": value.get("kind").cloned().unwrap_or(Value::Null),
         "name": value.pointer("/metadata/name").cloned().unwrap_or(Value::Null),
         "namespace": value.pointer("/metadata/namespace").cloned().unwrap_or(Value::Null),
+        "uid": value.pointer("/metadata/uid").cloned().unwrap_or(Value::Null),
         "pipeline": value.pointer("/metadata/labels/tekton.dev~1pipeline").cloned().unwrap_or(Value::Null),
         "pipeline_task": value.pointer("/metadata/labels/tekton.dev~1pipelineTask").cloned().unwrap_or(Value::Null),
         "task": value.pointer("/metadata/labels/tekton.dev~1task").cloned().unwrap_or(Value::Null),
@@ -1866,6 +1875,34 @@ fn collect_named_results<'a>(runs: impl Iterator<Item = &'a Value>) -> Map<Strin
             .filter_map(named_value_pair)
     })
     .collect()
+}
+
+fn conflicting_build_results<'a>(runs: impl Iterator<Item = &'a Value>) -> Vec<String> {
+    let mut seen = Map::new();
+    let mut conflicts = std::collections::BTreeSet::new();
+    for run in runs {
+        for (name, value) in run
+            .pointer("/status/results")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(named_value_pair)
+        {
+            let key = match name.as_str() {
+                "SOURCE_COMMIT" | "commit" => "source_commit",
+                "IMAGE_URL" => "image_url",
+                "IMAGE_DIGEST" => "image_digest",
+                _ => continue,
+            };
+            if seen
+                .insert(key.to_string(), value.clone())
+                .is_some_and(|prior| prior != value)
+            {
+                conflicts.insert(key.to_string());
+            }
+        }
+    }
+    conflicts.into_iter().collect()
 }
 
 fn compact_tekton_results(value: &Value) -> Value {
@@ -2453,6 +2490,38 @@ mod tests {
         MAX_LOKI_LIMIT, MAX_LOKI_SINCE_SECONDS, MIN_LOKI_SINCE_SECONDS,
     };
     use crate::{AgentAction, ToolError, ToolExecutor};
+
+    #[test]
+    fn declared_pipeline_build_results_preserve_source_boundary_and_conflicts() {
+        let commit = "a".repeat(40);
+        let run = serde_json::json!({"kind":"PipelineRun","metadata":{"name":"finance-build","namespace":"tekton-pipelines","uid":"pipeline-uid"},"status":{"conditions":[{"type":"Succeeded","status":"True"}],"results":[{"name":"SOURCE_COMMIT","value":commit},{"name":"IMAGE_URL","value":"registry.lucas.engineering/yfinance_wrapper:git-source"},{"name":"IMAGE_DIGEST","value":format!("sha256:{}","b".repeat(64))}]}});
+        let mut tasks = serde_json::json!({"items":[{"metadata":{"uid":"task-uid"},"status":{"results":[{"name":"commit","value":commit},{"name":"token-result","value":"private-fixture"}]}}]});
+        let analyze = |tasks: &serde_json::Value| {
+            build_pipeline_run_analysis(
+                &run,
+                tasks,
+                serde_json::Value::Null,
+                serde_json::Value::Null,
+                &RegistryAliases::default(),
+            )
+        };
+        let result = analyze(&tasks);
+        assert_eq!(result["outputs"]["commit"], commit);
+        assert_eq!(result["outputs"]["source_commit"], commit);
+        assert_eq!(
+            result["outputs"]["declared_results"]["SOURCE_COMMIT"],
+            commit
+        );
+        assert_eq!(result["outputs"]["result_conflicts"], serde_json::json!([]));
+        assert_eq!(result["pipeline_run"]["uid"], "pipeline-uid");
+        assert_eq!(result["task_runs"][0]["uid"], "task-uid");
+        assert!(!result.to_string().contains("private-fixture"));
+        tasks["items"][0]["status"]["results"][0]["value"] = serde_json::json!("c".repeat(40));
+        assert_eq!(
+            analyze(&tasks)["outputs"]["result_conflicts"],
+            serde_json::json!(["source_commit"])
+        );
+    }
 
     #[test]
     fn redacts_secret_shaped_json_fields() {
