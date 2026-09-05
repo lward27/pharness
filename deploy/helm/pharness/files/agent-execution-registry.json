@@ -11,9 +11,9 @@
         "plan"
       ],
       "runner_images": {
-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0",
-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963",
-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:b97330d542e7918f8d9f8b3fe11b17121823704806dfb04a1fb8ebc337718fc0"
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:9ae690af17c529468d04e0eb4e49513b44ed0ebbabeba6ee780b3f6ffa3cead6",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169"
       },
       "host_pool": "codex-reliability",
       "codex_version": "codex-cli 0.150.1",
@@ -35,7 +35,7 @@
       "active_time_seconds": 600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:8cc51f8e1b64133f67d845704b3e2438a5d84273a411303a815577594f3a838d"
+      "policy_hash": "sha256:ab2b16325e7fa237a0b36357615856470c190b97187ad90228149384c0ebb1d3"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
@@ -47,9 +47,9 @@
         "implement"
       ],
       "runner_images": {
-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0",
-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963",
-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:b97330d542e7918f8d9f8b3fe11b17121823704806dfb04a1fb8ebc337718fc0"
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:9ae690af17c529468d04e0eb4e49513b44ed0ebbabeba6ee780b3f6ffa3cead6",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169"
       },
       "host_pool": "codex-reliability",
       "codex_version": "codex-cli 0.150.1",
@@ -71,7 +71,7 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:294fe721904f9fde1e7b71141fef776ddc4a9e36802afd33974df1e3f240ab17"
+      "policy_hash": "sha256:1adacd63c438aa7c5f49d778cc1caa3d806819de3b7d786e05360db44f8a0c8e"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
@@ -83,9 +83,9 @@
         "repair"
       ],
       "runner_images": {
-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0",
-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963",
-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:b97330d542e7918f8d9f8b3fe11b17121823704806dfb04a1fb8ebc337718fc0"
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:9ae690af17c529468d04e0eb4e49513b44ed0ebbabeba6ee780b3f6ffa3cead6",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169"
       },
       "host_pool": "codex-reliability",
       "codex_version": "codex-cli 0.150.1",
@@ -107,7 +107,7 @@
       "active_time_seconds": 3600,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:1d00f60afa3894012f74696797ca02c250f48b3ce4852afe1bd1e480157e1a7a"
+      "policy_hash": "sha256:3202894e280688425d6f97a5bbcc63465b5a3b53bbca5bda73d5e24892c7f483"
     },
     {
       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
@@ -119,9 +119,9 @@
         "verify"
       ],
       "runner_images": {
-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:3be5f7446e2f2201c24c4a065b18e356458ffb00c168db872dce550a4cd104d0",
-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:dda6eab96288d3060672886cb5f88b158d253ff9274fa95797b36d47c7d47963",
-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:b97330d542e7918f8d9f8b3fe11b17121823704806dfb04a1fb8ebc337718fc0"
+        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:9ae690af17c529468d04e0eb4e49513b44ed0ebbabeba6ee780b3f6ffa3cead6",
+        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:2face5c7ed25ebd7e2a14d19bfdd38b8af3b3fd780f569d96b6352101fc18169"
       },
       "host_pool": "codex-reliability",
       "codex_version": "codex-cli 0.150.1",
@@ -143,9 +143,9 @@
       "active_time_seconds": 900,
       "protocol_restart_limit": 1,
       "selectable": true,
-      "policy_hash": "sha256:9c7ffaccd79b23da00f953acbd23e6c99544231bfba7ea62738f4ec1875ab737"
+      "policy_hash": "sha256:dbe8b7d69eaa5df581e80b1d266c61a1092368cb75f45531e95f52df86a143e3"
     }
   ],
   "defaults": {},
-  "config_hash": "sha256:9951f5775d76a3d514d2a80fac0b082d1cdb1e234586d94d5d13444aa93de953"
+  "config_hash": "sha256:6004818dbb7edac27bc81f639e6ef743574cec26b41234e0b07a7a9774f2c37d"
 }
