@@ -53,13 +53,16 @@ Each binding names the Product and repository IDs, canonical source URL/main,
 GitOps URL/main, distinct staging/production contract IDs and Kustomization paths,
 and rollback permission. The API verifies registered repository identity, separate
 GitOps worker allowlists, active contract snapshots, namespace separation and
-qualified profile hashes before accepting hosted work. Empty/malformed bindings
+qualified profile hashes before accepting hosted work. Source, image, pipeline,
+GitOps paths, Argo applications and service coordinates must belong to the same
+reviewed Finance application; individually valid contracts cannot be mixed.
+Empty/malformed bindings
 block enabled creation rather than falling back to source-only semantics.
 
 ## Qualification and later stages
 
 All five V2 stage profiles require the exact frozen suite, runtime, policy and
-model-target evidence. Builder qualification still requires two independent runs.
+model-target evidence. Builder and Repair qualification require two independent runs.
 Fixture-specific qualification tool hashes and actual WorkItem tool hashes remain
 separate, with both retained in the evidence. Actual acceptance command/evidence
 constraints specialize the Run binding when it starts.
@@ -85,6 +88,12 @@ with `hostedWorkflow.enabled: false`; verify the actual schema/generation and
 historical, paused and partial reads. An older image must not misread hosted work
 or be used after this migration. Restore forward with the retained compatible
 reader if a subsequent release fails; do not remove migration history or reset data.
+
+Merging the M05 chart preparation adds an API environment entry even while hosted
+creation is disabled. Argo can therefore restart the existing API before new
+images are published. Wait for active qualification and execution to finish before
+merging that chart change; verify the known old runtime remains healthy while the
+new image set is built. No migration 0052 runs until the new reader binary starts.
 
 Hosted cutover requires qualified gateway/V2 execution, usable contracts, durable
 progression and accepted delivery behavior. Only then enable creation through the

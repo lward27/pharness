@@ -83,6 +83,13 @@ real frontend pipeline remains M07. The tested M04 scratch cleanup is merged at
 `fd740927110366a983de6bb0d3bc6c576577708b`; its [release evidence](../../evidence/autonomous-sdlc/ASTRA-M04-CODING-RELIABILITY-QUALIFICATION.md)
 does not replace the pending live model qualification. M05 now enforces saved stage profiles, gateway choices and limits in
 unpublished code; [live acceptance remains open](../../evidence/autonomous-sdlc/ASTRA-M05-UNIFIED-SDLC-CONTRACT.md).
+Fresh gateway calibration passed for Builder and Planner. MiniMax's malformed
+history rejection exposed a protocol compatibility defect; that repair and complete
+stage-report guards merged in PR 330 at `db84b797f1bbc833ba86844874d1d041bc33ab72`.
+The current coding evaluation remains on fd74092. Publish/requalify the new runtime
+after it finishes. Keep qualification jobs serial and hold the M05 chart merge
+until the evaluation is terminal, because the new API environment entry triggers
+a restart. Neither code merge nor provider diagnostics close M04.
 See [M02 evidence](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md).
 M03 implementation is `b354c2b534fb4f518a439e92bb6770c8287fd4fd`; see [its acceptance evidence](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md).
 A real external blocker may suspend its dependent work but never waive its gate.
