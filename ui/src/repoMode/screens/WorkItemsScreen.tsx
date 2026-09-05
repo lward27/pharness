@@ -9,6 +9,7 @@ import { useResource } from "../useResource";
 import { EvidenceReferences, FactGrid, formatAge, formatMoment, Freshness, humanize, repositoryLabel, RawRecord, RecordList } from "../presentation";
 import { useConsoleDesign, useOrganizationOverview } from "../ConsoleContext";
 import { LifecycleTimeline } from "../LifecycleTimeline";
+import { ListPagination } from "../ListPagination";
 import { hostedStages, isHostedWorkItem, recordedPair, workItemCondition, workItemPosition } from "../workItemPresentation";
 
 const stages = hostedStages.slice(0, 6);
@@ -17,9 +18,11 @@ export function WorkItemsScreen() {
   const [lifecycle, setLifecycle] = useState<"current" | "history">("current");
   const [search, setSearch] = useState("");
   const [offset,setOffset] = useState(0);
+  const [legacyOffset, setLegacyOffset] = useState(0);
   const limit = 50;
   const resource = useResource<any>(query("/api/work-items", { mode:"repo", lifecycle, search, include:"operator_state", limit, offset }));
-  const legacy = useResource<any>(query("/api/work-items", { mode:"legacy", lifecycle, search, include:"operator_state", limit:50 }));
+  const legacy = useResource<any>(query("/api/work-items", { mode:"legacy", lifecycle, search, include:"operator_state", limit, offset:legacyOffset }));
+  const selectLifecycle = (value: "current" | "history") => { setLifecycle(value); setOffset(0); setLegacyOffset(0); };
   const overview = useOrganizationOverview();
   const groups = useMemo(() => {
     const values = new Map<string,{productId:string;productName:string;stage:string;items:any[]}>();
@@ -33,9 +36,10 @@ export function WorkItemsScreen() {
     }
     return Array.from(values.values());
   },[resource.data,overview.data]);
-  return <ResourceState status={resource.status} error={resource.error}>
+  return <>
     <SectionHeader eyebrow="Intent ledger" title="WorkItems" summary="Current state is primary. Closed, terminal, cancelled, and superseded work remains under History." />
-    <div className="repo-list-controls"><div className="repo-segmented" role="group" aria-label="Lifecycle partition"><button type="button" className={lifecycle === "current" ? "is-active" : ""} onClick={() => {setLifecycle("current");setOffset(0);}}>Current</button><button type="button" className={lifecycle === "history" ? "is-active" : ""} onClick={() => {setLifecycle("history");setOffset(0);}}>History</button></div><label className="repo-filterbar"><MagnifyingGlass size={18} /><input aria-label="Search WorkItems" value={search} onChange={event => {setSearch(event.target.value);setOffset(0);}} placeholder="Search intent, title, or ID" /></label></div>
+    <div className="repo-list-controls"><div className="repo-segmented" role="group" aria-label="Lifecycle partition"><button type="button" className={lifecycle === "current" ? "is-active" : ""} onClick={() => selectLifecycle("current")}>Current</button><button type="button" className={lifecycle === "history" ? "is-active" : ""} onClick={() => selectLifecycle("history")}>History</button></div><label className="repo-filterbar"><MagnifyingGlass size={18} /><input aria-label="Search WorkItems" value={search} onChange={event => {setSearch(event.target.value);setOffset(0);setLegacyOffset(0);}} placeholder="Search intent, title, or ID" /></label></div>
+    <ResourceState status={resource.status} error={resource.error}>
     <div className="repo-workitem-groups">
       {groups.map(group => <section className="repo-workitem-group" key={`${group.productId}:${group.stage}`}><header><div><span className="repo-eyebrow">{group.productName}</span><h2>{group.stage.replaceAll("_"," ")}</h2></div><span className="repo-count">{group.items.length} on this page</span></header>{group.items.map((item:any) => {
         const operatorState = resource.data?.operator_state?.[item.id] || {};
@@ -49,11 +53,12 @@ export function WorkItemsScreen() {
           <LinkButton to={`work-items/${item.id}/overview`}>Open WorkItem</LinkButton>
         </article>;
       })}</section>)}
-      {!resource.data?.work_items?.length ? <Empty title={`No ${lifecycle} WorkItems`} message={lifecycle === "current" ? "Create work from a coding-ready Repository inside its Product." : "Closed and terminal work will remain here as durable history."} /> : null}
+      {!resource.data?.work_items?.length ? <Empty title={offset > 0 ? "No results on this page" : search.trim() ? "No matching WorkItems" : `No ${lifecycle} WorkItems`} message={offset > 0 ? "The result set may have changed. Use Previous to return to an earlier page." : search.trim() ? "Try a different search or clear it to see this lifecycle partition." : lifecycle === "current" ? "Create work from a coding-ready Repository inside its Product." : "Closed and terminal work will remain here as durable history."} /> : null}
     </div>
-    {resource.data?.count > limit ? <nav className="repo-pagination" aria-label="WorkItem pages"><button type="button" disabled={offset === 0} onClick={() => setOffset(value => Math.max(0,value-limit))}>Previous</button><span>{offset+1}–{Math.min(offset+limit,resource.data.count)} of {resource.data.count}</span><button type="button" disabled={offset+limit >= resource.data.count} onClick={() => setOffset(value => value+limit)}>Next</button></nav> : null}
-    {legacy.data?.count ? <section className="repo-panel repo-legacy-workitems"><header><div><span className="repo-eyebrow">Unassigned legacy</span><h2>Full-SDLC WorkItems</h2></div><span className="repo-count">{legacy.data.count}</span></header><p className="repo-muted">These records retain the existing delivery workspace and production controls. They are never attributed to a Product.</p><div className="repo-list">{legacy.data.work_items.map((item:any) => <button className="repo-list-row" type="button" key={item.id} onClick={() => navigate(`work-items/${item.id}/overview`)}><div><strong>{item.title}</strong><span>{legacy.data?.operator_state?.[item.id]?.current_boundary || item.status_reason || item.intent}</span></div><Status value={item.status} /></button>)}</div></section> : null}
-  </ResourceState>;
+    <ListPagination label="WorkItem" count={resource.data?.count} visibleCount={resource.data?.work_items?.length || 0} limit={limit} offset={offset} onOffsetChange={setOffset} />
+    </ResourceState>
+    {legacy.status !== "ready" || legacy.error || legacy.data?.count || legacyOffset > 0 ? <section className="repo-panel repo-legacy-workitems"><header><div><span className="repo-eyebrow">Original workflow contracts</span><h2>Legacy WorkItems</h2></div></header><p className="repo-muted">These records retain their original delivery workspace and production controls. They are not attributed to a Product.</p><ResourceState status={legacy.status} error={legacy.error}><div className="repo-list">{(legacy.data?.work_items || []).map((item:any) => <button className="repo-list-row" type="button" key={item.id} onClick={() => navigate(`work-items/${item.id}/overview`)}><div><strong>{item.title}</strong><span>{legacy.data?.operator_state?.[item.id]?.current_boundary || item.status_reason || item.intent}</span></div><Status value={item.status} /></button>)}</div>{!legacy.data?.work_items?.length ? <Empty title="No legacy results on this page" message="Use Previous to return to an earlier page, or adjust the search and lifecycle partition." /> : null}<ListPagination label="Legacy WorkItem" count={legacy.data?.count} visibleCount={legacy.data?.work_items?.length || 0} limit={limit} offset={legacyOffset} onOffsetChange={setLegacyOffset} /></ResourceState></section> : null}
+  </>;
 }
 
 export function Lifecycle({ stage, outcomes = [], hosted = false }: { stage:string; outcomes?:any[]; hosted?:boolean }) {

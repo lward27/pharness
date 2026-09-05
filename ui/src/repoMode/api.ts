@@ -3,7 +3,15 @@ type RequestOptions = { signal?: AbortSignal };
 async function responseJson(response: Response) {
   if (response.ok) return response.json();
   const body = await response.text();
-  const error = new Error(`${response.status} ${response.statusText}${body ? `: ${body}` : ""}`) as Error & { status?: number };
+  let detail = body.trim();
+  try {
+    const parsed = JSON.parse(body);
+    detail = typeof parsed?.error === "string" ? parsed.error : typeof parsed?.message === "string" ? parsed.message : "";
+  } catch {
+    if (detail.startsWith("<")) detail = "";
+  }
+  const fallback = `Request failed (${response.status} ${response.statusText})`.replace(/\s+\)/, ")");
+  const error = new Error(detail || fallback) as Error & { status?: number };
   error.status = response.status;
   throw error;
 }
