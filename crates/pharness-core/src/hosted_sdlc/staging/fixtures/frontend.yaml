@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: apps-staging
+resources:
+  - ../../finance-frontend
+  - network-policy.yaml
+images:
+  - name: registry.lucas.engineering/finance-frontend
+    digest: sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d
+configMapGenerator:
+  - name: finance-runtime-config
+    behavior: replace
+    files:
+      - runtime-config.json
+  - name: finance-staging-nginx
+    files:
+      - default.conf=nginx.conf
+patches:
+  - path: deployment-patch.yaml
+  - target:
+      kind: Ingress
+      name: finance-frontend
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: finance-frontend

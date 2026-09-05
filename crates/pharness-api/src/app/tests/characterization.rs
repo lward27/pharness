@@ -69,7 +69,7 @@ async fn route_inventory_matches_mounted_routes_and_auth_classes() {
     inventory.sort();
     assert_eq!(
         inventory.len(),
-        230,
+        234,
         "update the checked-in inventory only after reviewing an intentional route change"
     );
     assert_eq!(
@@ -688,8 +688,8 @@ pub(super) async fn test_state_with_hosted_build(
 ) -> AppState {
     test_state_with_delivery_namespaces(
         kubectl_bin,
-        allowed_repo.clone(),
         allowed_repo,
+        "https://github.com/lward27/lucas_engineering.git".into(),
         vec!["tekton-pipelines".into()],
     )
     .await

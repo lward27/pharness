@@ -248,7 +248,12 @@ async fn hosted_build_recovers_original_dispatch_and_admits_only_once() {
         .any(|o| matches!(o.stage_key.as_str(), "release" | "observe")));
     control(&f, "active").await;
     tick(&f).await;
-    assert_eq!(creates(&fake), 3);
+    assert_eq!(
+        creates(&fake),
+        4,
+        "the verified build automatically enters staging"
+    );
+    assert_eq!(operation(&f).await.action, "stage_verified_build");
 }
 
 #[tokio::test]
@@ -409,4 +414,25 @@ async fn expired_original_build_preparation_does_not_create_new_authority_or_job
         .await
         .unwrap()
         .is_empty());
+}
+
+pub(super) async fn verified_build(suffix: &str, fake: &KubectlFixture) -> RepoDeliveryFixture {
+    let f = start(suffix, fake).await;
+    let op = operation(&f).await;
+    let _ = admit(&f, &op).await.unwrap();
+    let mut body = observed(&op, true);
+    body["observe_only"] = json!(false);
+    let _ = outcome(&f, &op, body).await.unwrap();
+    tick(&f).await;
+    assert_eq!(
+        f.state
+            .store
+            .get_workflow_operation(&op.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "succeeded"
+    );
+    f
 }

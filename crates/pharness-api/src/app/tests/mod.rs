@@ -202,6 +202,7 @@ mod hosted_pipeline;
 mod hosted_source_controller;
 mod hosted_source_merge;
 mod hosted_stage_execution;
+mod hosted_staging;
 mod pipeline_delivery;
 mod plans_changes;
 mod production;

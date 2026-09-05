@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod hosted_build;
+mod hosted_staging;
 mod recovery;
 mod source_delivery;
 #[cfg(test)]

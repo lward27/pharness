@@ -1,0 +1,177 @@
+{
+  "recorded_at": "2026-09-05T20:48:40.127998+00:00",
+  "initial_source_base": "6f22bc832c07037b69c8a991186d96e2297b3ced",
+  "refreshed_source_base": "5c2c2b5622d70e795f24c5a1eb6e92ec533e1185",
+  "branch": "codex/astra-staging-controller",
+  "scope": "Durable finite staging GitOps controller and native worker; local implementation validation only",
+  "validation": {
+    "passed": 560,
+    "failed": 0,
+    "ignored": 1,
+    "ignored_test": "Existing explicitly gated live_finance_tempo_sample; separate live Tempo evidence retained in ASTRA-M08-TEMPO-LIVE-OBSERVATION.json",
+    "targets": [
+      {
+        "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "status": "ok",
+        "passed": 283,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "status": "ok",
+        "passed": 161,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+        "status": "ok",
+        "passed": 60,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_worker-abc537e43c889899)",
+        "status": "ok",
+        "passed": 46,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running tests/hosted_build.rs (target/debug/deps/hosted_build-1e9fa189286aeaa7)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_core",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_store",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "clippy": "passed for API/core/store/worker all targets with warnings denied",
+    "architecture": "passed module boundaries and 5 dependency-parser tests",
+    "formatting": "passed",
+    "diff_check": "passed",
+    "routes": 234,
+    "new_worker_authenticated_routes": 4,
+    "relative_document_links_checked": 67
+  },
+  "acceptance_limits": {
+    "deployed": false,
+    "live_gitops_mutation_demonstrated": false,
+    "argo_image_identity_verified": false,
+    "runtime_verified": false,
+    "production_authorized": false,
+    "m08_accepted": false,
+    "schema_migration_added": false,
+    "compatible_schema_54_reader_deployment_required": true,
+    "live_qualification_runtime_preserved": "48c77b7b4438d621ff9563b913857bcf771f1800"
+  },
+  "local_logs": {
+    "TESTS": {
+      "path": "planning/evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS-TESTS.log",
+      "sha256": "230ed72fe3e507ca54825b9b628e0ad77319f1470979c1afac9b42b33bd61e7d"
+    },
+    "CLIPPY": {
+      "path": "planning/evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS-CLIPPY.log",
+      "sha256": "b31d24206f87f5bd238ef0cf7038cf9b3630d74695180987960122c3b7e76126"
+    },
+    "ARCHITECTURE": {
+      "path": "planning/evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS-ARCHITECTURE.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    }
+  },
+  "development_failures": [
+    {
+      "path": "/private/tmp/astra-m08-staging-primitives-clippy.log",
+      "sha256": "2005a5cbfbd4f7c6a2292c2293e48c6b2cc0e058be2ecd2e601275378cd45349",
+      "disposition": "Two unnecessary returns in extracted patcher; corrected"
+    },
+    {
+      "path": "/private/tmp/astra-m08-staging-controller-check.log",
+      "sha256": "1fb19566825154e1e4da311060fec7c9943004683c91a513ec58b7b1b42f8a32",
+      "disposition": "Incorrect new store method name; corrected"
+    },
+    {
+      "path": "/private/tmp/astra-m08-staging-controller-tests.log",
+      "sha256": "90434bc9590b4d50b0b9a111b15ef86d1abfc7fd0f3133380d749938d6c5f8ec",
+      "disposition": "Four initial tests passed with unused Json-result warnings; corrected"
+    },
+    {
+      "path": "/private/tmp/astra-m08-staging-tests-all.log",
+      "sha256": "f2fa1559d4a029ee1c9767d215493576d0f84b719d033e9ae94d4548fc7f4bb4",
+      "disposition": "282 API tests passed, route inventory mismatch failed; inventory intentionally updated from 230 to 234 routes"
+    },
+    {
+      "path": "/private/tmp/astra-m08-staging-clippy-all.log",
+      "sha256": "9576c452878a7d8da6475b7ea988959921225d128c9f8470cccefbde452d4c34",
+      "disposition": "Option.is_none_or exceeds declared Rust 1.80 minimum; replaced without changing MSRV"
+    }
+  ],
+  "source_file_sha256": {
+    "Cargo.lock": "e6411d621d19d5aa44245634b1baaa3347849945abbd40697c9c281cf0b212da",
+    "crates/pharness-api/src/app/hosted_controller.rs": "964dbd034c91bfcec90f8e9cbc95bde2b6b939a291b862bb7ce8dfc2abf8ff24",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "97cbc2b49f4dc8e77d44cb87a9eb874b2d9c095c50408dd6b21229bf0ed9f0d4",
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "8cc9cd09224f50a3b49b706646c530402a70b9511448b4ca5fd2ee5af908db88",
+    "crates/pharness-api/src/app/hosted_controller/staging.rs": "6f137590be75c333fd310daa8e38fb31eb3246f9bd7431e8ffe2da36d346e535",
+    "crates/pharness-api/src/app/hosted_controller/staging/callbacks.rs": "eef9e75342ff35a202f6329e18bf14139f121f53daf7939c366f54849c7544c6",
+    "crates/pharness-api/src/app/hosted_controller/staging/callbacks/outcomes.rs": "668e9a4e02adc38f822aa08712b067e54143c7013274664f0ec0fd0826313c8d",
+    "crates/pharness-api/src/app/hosted_controller/staging/callbacks/plans.rs": "01acf7180ae38582ba5653aff40f82e6464b8daa0e0940b359812861734c96dc",
+    "crates/pharness-api/src/app/hosted_controller/staging/evidence.rs": "bcbc836bb644dbd253cbcf430e2cdb949a282305740f7cf00d063a896ff36301",
+    "crates/pharness-api/src/app/hosted_controller/staging/preparation.rs": "13fb4c12b556ad55ad19506adb731ccbe65c57a7ccf706558ca9dfbe1d0619c0",
+    "crates/pharness-api/src/app/internal.rs": "dc6ec727ad8eaaedb4939c1b38b1103f6d8c5a41c7bfb93ea3837d65fbffc041",
+    "crates/pharness-api/src/app/tests/characterization.rs": "e951cd929e3d575212a2478fd2629d87a9710f57e8e1361d8aa5250000d603d3",
+    "crates/pharness-api/src/app/tests/hosted_build.rs": "2c84b4e7338473e80b8f8d7fa8c07cf4a761a229ccebf8a5503d7d90d7b450b8",
+    "crates/pharness-api/src/app/tests/hosted_source_merge.rs": "4103690edde476d86470592ac8c05654adaf778873bfaeeced1b6353ca955f36",
+    "crates/pharness-api/src/app/tests/hosted_staging.rs": "f2a81bb0aede8c0e283a66220fbd83442709f216baa70a28b0b1eed15bc0b6d8",
+    "crates/pharness-api/src/app/tests/mod.rs": "19ab71317cfb78edd96107f2573a4af6c7dd6452d6fbb2661ae373db8843a36e",
+    "crates/pharness-api/src/dispatch.rs": "97ba3c785554e283f29a30d38ea7cc6533f73b438ba4a0d6f343a18ff4dc23fb",
+    "crates/pharness-api/src/dispatch/hosted_staging.rs": "0aa100d6482da8f9402144a91badad85d1603fd48fa6abc7df7ce652c608f3db",
+    "crates/pharness-api/tests/fixtures/app-route-inventory.tsv": "723317842840d72ab60b0563b49ae0c2379974a1c690db4356c7e2e61ef8ec6b",
+    "crates/pharness-core/src/hosted_sdlc.rs": "6256fb28005c9c1aae4a58f4bc818c4d1b648a57667edc72604bf3678b39c536",
+    "crates/pharness-core/src/hosted_sdlc/gitops_patch.rs": "ddfdfc72465e3bb6410d77a7be4798d8da84def98492f7df5b0185a05e2feb4b",
+    "crates/pharness-core/src/hosted_sdlc/staging.rs": "fad15d6dd4d64d93dd440dccd52c6375edb0589e4ff51ade67dc82b31b995b9d",
+    "crates/pharness-core/src/hosted_sdlc/staging/fixtures/frontend.yaml": "257596890c4c5aa8a12f09c930d0e4f2826934ac2e842398b993477bdcb90854",
+    "crates/pharness-core/src/hosted_sdlc/staging/fixtures/yfinance.yaml": "82c7022290a4a7963879f8626fd84eeeb1cbdd0f7e01c9b5513cc5ffab0860bf",
+    "crates/pharness-core/src/hosted_sdlc/staging/tests.rs": "a0a001e8f0fb04e9a8d142758a9b3266718acb7ce2ae43640f2e9d34f453ddfa",
+    "crates/pharness-worker/Cargo.toml": "643b6061cb6a2d9cfab199adc382ff126a31d13e5440dd0ae6aa7232a5a2c8c7",
+    "crates/pharness-worker/src/main.rs": "6f59369e54ac508cc9408e549d797f563648283044d7a1b1d743ef4630fe58be",
+    "crates/pharness-worker/src/staging_gitops.rs": "7a3b0f684a6b663c25c5e45de79861c9984067d9b9b122adc940d751aed02d38",
+    "crates/pharness-worker/src/staging_gitops/github.rs": "b3fd18967211ecca09342be44c73ce6e17a5c79565cb795f8db4f68fedb3bca2",
+    "crates/pharness-worker/src/staging_gitops/github/tests.rs": "44e63e109bf77edb76a54500fbbd81d95e9e2993559e65531a00a6cc6c143f80",
+    "crates/pharness-worker/src/staging_gitops/github/tests/flow.rs": "3eaf14c0a34332393385d75a5823bc5cf0c1b65bcda8fbf44021f8d391e27dd3"
+  }
+}
