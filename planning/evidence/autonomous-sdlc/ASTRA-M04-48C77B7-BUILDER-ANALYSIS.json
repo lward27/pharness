@@ -1,0 +1,73 @@
+{
+  "evaluation_id": "infeval_01a0725f855b7c038234cd6af3830594",
+  "qualification_id": "inferqual_01a0727ed8c87f439779e994d72ad105",
+  "runtime_revision": "48c77b7b4438d621ff9563b913857bcf771f1800",
+  "report_hash": "sha256:adcb5593be29eaa209008efcf63aca28fbcd2eeeebeb375f7f718bb54146c814",
+  "matrix": {
+    "1": {
+      "first_pass": 24,
+      "post_correction_pass": 24,
+      "corrections_used": 0,
+      "per_stack": {
+        "rust": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        },
+        "python": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        },
+        "node": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        }
+      }
+    },
+    "2": {
+      "first_pass": 24,
+      "post_correction_pass": 24,
+      "corrections_used": 0,
+      "per_stack": {
+        "rust": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        },
+        "python": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        },
+        "node": {
+          "tasks": 8,
+          "first_pass": 8,
+          "post_correction_pass": 8
+        }
+      }
+    }
+  },
+  "usage": {
+    "actual_prompt_tokens": 3773503,
+    "actual_completion_tokens": 116514,
+    "cached_tokens": 785214,
+    "reasoning_tokens": 61968,
+    "turns": 624,
+    "recoverable_failures": 51,
+    "duration_ms": 1700269
+  },
+  "hidden_test_false_passes": 0,
+  "policy_violations": 0,
+  "provider_failures": 0,
+  "first_pass_gate_passed": true,
+  "after_at_most_one_correction_numeric_gate_passed": true,
+  "actual_correction_used": false,
+  "m04_accepted": false,
+  "remaining": [
+    "repair-v2 qualification",
+    "onboarding/planner/test-diagnosis/verifier protocol and stage qualifications",
+    "matching exact-runtime qualification before hosted creation on a later release"
+  ]
+}
