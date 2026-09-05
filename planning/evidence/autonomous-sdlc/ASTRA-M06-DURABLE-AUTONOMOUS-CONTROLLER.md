@@ -122,10 +122,31 @@ and transactional rollback with late acknowledgements. These are local tests;
 no M06 code or migration has been deployed. See
 [preparation recovery validation](ASTRA-M06-PREPARATION-RECOVERY-VALIDATION.json).
 
+## Terminal evidence recovery
+
+Hosted terminal results now retain the original validated attempt and its recorded
+consumption. The controller can finish local normalization after a restart without
+another model call, Run, workspace or budget. Missing or inconsistent original
+reports block recovery. Callback and reaper finalization share a local serialization
+boundary, so a stale completion or failure cannot replace a terminal result.
+
+A SQLite trigger injects interruption after Run completion and before stage sealing.
+A newly connected store resumes the original Planner result without another plan
+revision. Repeated normalization leaves the sealed outcome, Run, consumption and
+WorkItem projection unchanged. Interrupted Verify finalization derives the same
+ChangeSet and preserves later approval. Validation records use stable identities
+bound to their complete facts and references. Immutable outcome protections remain
+enabled throughout the tests.
+
+The final API suite passes **252 tests**, plus one admin test. The unchanged store
+retains its 53 passing tests from the preparation slice: **306 distinct tests**.
+Clippy with warnings denied, formatting and architecture checks pass. See
+[terminal normalization validation](ASTRA-M06-TERMINAL-NORMALIZATION-VALIDATION.json).
+This remains undeployed controller implementation, not live recovery acceptance.
+
 ## Remaining implementation and acceptance
 
-Terminal Run-to-stage normalization and incomplete multi-record startup
-still need interruption recovery. Source writer/observer persistence ordering and the delivery
+Incomplete multi-record pre-dispatch startup still needs interruption recovery. Source writer/observer persistence ordering and the delivery
 adapters are not integrated into this scheduler. Production approvals, rollback,
 and terminal cancellation must close against those actual operations. A real
 active-workflow restart and duplicate source/pipeline/deployment acceptance remain

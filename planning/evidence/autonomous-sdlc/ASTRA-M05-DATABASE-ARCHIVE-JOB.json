@@ -1,0 +1,142 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-m05-pre0052-archive-20260905",
+    "namespace": "pharness",
+    "labels": {
+      "app.kubernetes.io/part-of": "pharness",
+      "pharness.dev/program": "astra-autonomous-sdlc",
+      "pharness.dev/purpose": "pre0052-archive"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 300,
+    "template": {
+      "metadata": {
+        "labels": {
+          "pharness.dev/purpose": "pre0052-archive"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ubuntu-lucas-engineering"
+        },
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "pharness-api-data-finance-20260827"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "128Mi"
+            }
+          }
+        ],
+        "initContainers": [
+          {
+            "name": "archive",
+            "image": "registry.lucas.engineering/pharness-runtime@sha256:12176080848f9f3e4ffd33873f697e731d2a49077059d900406f909603464171",
+            "command": [
+              "pharness-admin"
+            ],
+            "args": [
+              "data",
+              "archive",
+              "--database",
+              "/data/pharness.db",
+              "--output-dir",
+              "/data/archives/ASTRA-pre-0052-20260905"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ],
+        "containers": [
+          {
+            "name": "verify",
+            "image": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+            "command": [
+              "python",
+              "-c",
+              "import json,pathlib,hashlib\np=pathlib.Path(\"/data/archives/ASTRA-pre-0052-20260905\")\nm=json.loads((p/\"manifest.json\").read_text())\nassert m[\"integrity_check\"]==\"ok\"\nassert m[\"database_generation\"][\"id\"]==\"dbgen_finance_20260827\"\nassert max(x[\"version\"] for x in m[\"migrations\"])==51\nassert all(x[\"success\"] for x in m[\"migrations\"])\nassert m[\"table_counts\"][\"work_items\"]==14 and m[\"table_counts\"][\"runs\"]==82\nh=hashlib.sha256()\nwith (p/\"pharness.db\").open(\"rb\") as f:\n for b in iter(lambda:f.read(1048576),b\"\"):h.update(b)\nassert h.hexdigest()==m[\"archive_database_sha256\"] or \"sha256:\"+h.hexdigest()==m[\"archive_database_sha256\"]\nprint(json.dumps({\"archive_path\":str(p),\"database_sha256\":m[\"archive_database_sha256\"],\"database_bytes\":(p/\"pharness.db\").stat().st_size,\"manifest_sha256\":\"sha256:\"+hashlib.sha256((p/\"manifest.json\").read_bytes()).hexdigest(),\"integrity_check\":m[\"integrity_check\"],\"migrations\":m[\"migrations\"],\"database_generation\":m[\"database_generation\"],\"table_counts\":m[\"table_counts\"]}))\n"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data",
+                "readOnly": true
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

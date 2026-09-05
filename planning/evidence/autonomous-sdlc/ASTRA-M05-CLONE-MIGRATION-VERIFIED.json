@@ -1,0 +1,53 @@
+{
+  "integrity": "ok",
+  "maximum_migration": 52,
+  "applied_migrations": 52,
+  "legacy_policy_rows": 0,
+  "historical_work_items_identical": true,
+  "preserved_counts": {
+    "work_items": 14,
+    "runs": 82,
+    "stage_executions": 102,
+    "stage_outcomes": 102,
+    "evidence_validations": 83,
+    "audit_events": 260,
+    "retention_holds": 4,
+    "products": 1,
+    "repositories": 5,
+    "database_generations": 1
+  },
+  "source_migration_unchanged": 51,
+  "runtime_health": {
+    "ok": true
+  },
+  "observed_at": "2026-09-05T13:40:14.301477+00:00",
+  "cluster": "lucas_engineering",
+  "job": "astra-m05-clone-migration-0052-20260905",
+  "job_uid": "77aa6d90-0ec9-4de6-822b-715670bbeb6e",
+  "pod": "astra-m05-clone-migration-0052-20260905-5pdds",
+  "pod_uid": "d75e990d-b020-4be3-bc4d-c615b2a1345b",
+  "node": "ubuntu-lucas-engineering",
+  "source_revision": "2249950d225a4632b24235c2b6f2d8469a774243",
+  "source_archive_sha256": "sha256:fbc7e2873e71202ae90fcb1fe28e6f160e189e9adc5c29ab395cb39ce7c29d3f",
+  "containers": [
+    {
+      "name": "copy-archive",
+      "image_id": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+      "restarts": 0,
+      "exit_code": 0
+    },
+    {
+      "name": "migrate-reader",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:12176080848f9f3e4ffd33873f697e731d2a49077059d900406f909603464171",
+      "restarts": 0,
+      "exit_code": 0
+    },
+    {
+      "name": "verify-migration",
+      "image_id": "registry.lucas.engineering/pharness-python-runner@sha256:e96a79b465c0ccb4321d8dcde9c14e6436bfb2c7d57d397629810762e48089c1",
+      "restarts": 0,
+      "exit_code": 0
+    }
+  ],
+  "scope": "Actual immutable reader started in draining mode against an isolated copy. Original PVC mounted read-only in copy/verification containers and absent from migration container. No production migration or hosted WorkItem was performed."
+}

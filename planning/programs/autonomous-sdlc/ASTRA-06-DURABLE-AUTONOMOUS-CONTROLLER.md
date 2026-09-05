@@ -1,6 +1,6 @@
 # ASTRA M06: Durable autonomous controller
 
-Status: continuous engineering controller and atomic preparation recovery implemented and locally tested; terminal normalization, delivery integration and live acceptance remain open.
+Status: continuous engineering controller, atomic preparation and terminal evidence recovery implemented and locally tested; startup, delivery integration and live acceptance remain open.
 Evidence: [current implementation boundary](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M05.

@@ -198,3 +198,27 @@ Keep qualification provenance explicit at cutover.
 Do not enable hosted creation or close M05 based on this document's test count.
 The [milestone](../../programs/autonomous-sdlc/ASTRA-05-UNIFIED-SDLC-CONTRACT.md)
 and [master](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) retain their gates.
+
+## Real Finance data compatibility check (2026-09-05 13:39 UTC)
+
+A consistent read-only snapshot of the live schema-51 database is retained at
+`/data/archives/ASTRA-pre-0052-20260905` on
+`pharness-api-data-finance-20260827`. Its 21,204,992-byte database has SHA-256
+`fbc7e2873e71202ae90fcb1fe28e6f160e189e9adc5c29ab395cb39ce7c29d3f`.
+The archive and source pass integrity checks. This snapshot is on the existing
+volume; it is not a separate disaster-recovery backup. See
+[archive evidence](ASTRA-M05-DATABASE-ARCHIVE-VERIFIED.json).
+
+The published runtime image from source `2249950` started in draining mode against
+an isolated temporary copy and applied migration 0052. The migration container had
+no access to the live PVC; copy/verification containers mounted it read-only.
+The API health check passed. All historical WorkItem status, source, closure and
+version fields matched the archive. All new workflow policy fields remained null.
+Counts were preserved: 14 WorkItems, 82 Runs, 102 stage executions/outcomes,
+83 evidence validations, 260 audit records and four retention holds. Database
+generation was identical; the original archive remained on schema 0051. See
+[clone migration evidence](ASTRA-M05-CLONE-MIGRATION-VERIFIED.json).
+
+The actual API rollout and earliest-compatible release image set remain pending
+completion of all seven immutable images and the native bundle. This isolated
+validation creates no hosted WorkItem and does not close M05 or M04 acceptance.
