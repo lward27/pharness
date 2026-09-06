@@ -18,3 +18,4 @@ sha2.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+pharness-openai-compatible = { path = "../pharness-openai-compatible" }

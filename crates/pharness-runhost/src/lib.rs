@@ -8,11 +8,13 @@
 //! `pharness-api` (direct store access) and inside the `pharness-worker`
 //! binary (HTTP ingest against the API, which stays the sole store writer).
 
+mod context_envelope;
 mod evidence_refs;
 mod onboarding_submission;
 mod preview;
 mod prompt;
 
+pub use context_envelope::{context_policy_hash, CONTEXT_ENVELOPE_SCHEMA};
 pub use onboarding_submission::{
     onboarding_submission_contract_for_binding, ONBOARDING_SUBMISSION_CONTRACT,
 };
@@ -426,6 +428,17 @@ pub fn constrained_tool_schema_hash(
 }
 
 fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
+    profile_rules(run)?
+        .map(|rules| {
+            Ok(format!(
+                "{rules}\nAgentContext (controller-sealed, compact handoff):\n{}",
+                serde_json::to_string_pretty(&run.execution_target_json["agent_context"])?
+            ))
+        })
+        .transpose()
+}
+
+fn profile_rules(run: &RunSpec) -> anyhow::Result<Option<String>> {
     let Some(profile) = run.execution_target_json.get("agent_profile") else {
         return Ok(None);
     };
@@ -493,7 +506,7 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         "Submit the required typed stage document, then call finish."
     };
     Ok(Some(format!(
-        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, and retrieve only allowlisted evidence. {completion_instruction} You cannot authorize the next stage or declare controller success.{profile_constraint}{submission_instruction}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, and retrieve only allowlisted evidence. {completion_instruction} You cannot authorize the next stage or declare controller success.{profile_constraint}{submission_instruction}"
     )))
 }
 
@@ -896,60 +909,8 @@ pub async fn execute_attempt<B: AttemptBackend>(
     let context_budget = context_budget_for_run(&host.context_budget, spec.run.inference.as_ref());
     let outcome = match (&spec.resume, &spec.budget_resume) {
         (None, None) => {
-            let (repository_instruction_content, repository_instruction_files) =
-                repository_instructions(&cwd)?;
-            let environment_content = environment_instructions(&spec.run)?;
-            let reliability_profile = reliability_v2_profile_id(&spec.run);
-            let mut messages = vec![
-                ModelMessage::system(if reliability_profile.is_some() {
-                    repo_system_prompt()
-                } else {
-                    system_prompt()
-                }),
-                ModelMessage::system(repository_instruction_content),
-                ModelMessage::system(environment_content),
-            ];
-            if let Some(profile_id) = reliability_profile {
-                messages.push(ModelMessage::system(deterministic_repository_map(
-                    &cwd, &spec.run,
-                )?));
-                let stage_prompt = if profile_id == "repository-onboarding-proposer"
-                    && !onboarding_submission::uses_controller_binding(&spec.run)?
-                {
-                    Some(prompt::legacy_onboarding_stage_prompt())
-                } else {
-                    stage_prompt_for_profile(profile_id)
-                }
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "reliability-v2 AgentProfile {profile_id} has no immutable stage prompt"
-                    )
-                })?;
-                let revision = stage_prompt.revision_record();
-                if let Some(expected) = spec
-                    .run
-                    .inference
-                    .as_ref()
-                    .and_then(|inference| inference.binding.stage_prompt.as_ref())
-                {
-                    if expected != &revision {
-                        anyhow::bail!(
-                            "resolved inference binding stage prompt does not match the runtime prompt"
-                        );
-                    }
-                }
-                messages.push(ModelMessage::system(format!(
-                    "Stage prompt {}@{} ({}):\n{}",
-                    stage_prompt.prompt_id,
-                    stage_prompt.revision,
-                    revision.content_hash,
-                    stage_prompt.content
-                )));
-            }
-            if let Some(instruction) = profile_instruction(&spec.run)? {
-                messages.push(ModelMessage::system(instruction));
-            }
-            messages.push(ModelMessage::user(spec.run.user_task.clone()));
+            let (messages, repository_instruction_files) =
+                context_envelope::assemble(&cwd, &spec.run)?;
             let config = RunConfig {
                 session_id,
                 run_id,
@@ -986,6 +947,7 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 )?,
                 turns_completed: resume.turns_completed,
             };
+            context_envelope::validate_saved(&spec.run, &approved.resume_messages)?;
             let config = RunConfig {
                 session_id,
                 run_id,
@@ -1022,6 +984,7 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 )?,
                 turns_completed: resume.turns_completed,
             };
+            context_envelope::validate_saved(&spec.run, &resume.resume_messages)?;
             let config = RunConfig {
                 session_id,
                 run_id,

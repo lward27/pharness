@@ -169,7 +169,14 @@ where
                     &config,
                     &mut seq,
                     EventKind::RunStarted,
-                    serde_json::json!({}),
+                    if config.inference_binding.as_ref().and_then(|b| b.stage_prompt.as_ref()).is_some() {
+                        let messages = serde_json::to_value(&config.messages).expect("model messages serialize");
+                        serde_json::json!({"initial_context":{
+                            "schema_version":"pharness.dev/initial-model-context/v1",
+                            "content_hash":crate::canonical_json_sha256(&messages).expect("model message hash"),
+                            "messages":messages,
+                        }})
+                    } else {serde_json::json!({})},
                 );
                 config.messages.clone()
             }
@@ -415,6 +422,7 @@ where
                 serde_json::json!({
                     "turn": turn_index,
                     "estimated_input_tokens": estimated_request_tokens,
+                    "input_context_sha256":crate::canonical_json_sha256(&serde_json::to_value(&request_messages).expect("model messages serialize")).expect("model message hash"),
                     "packed_message_tokens":packed.estimated_input_tokens,
                     "original_message_count": packed.original_message_count,
                     "packed_message_count": messages.len(),
