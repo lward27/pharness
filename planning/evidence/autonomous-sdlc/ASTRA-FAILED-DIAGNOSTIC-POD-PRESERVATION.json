@@ -1,0 +1,89 @@
+{
+  "observed_at": "2026-09-06T20:33:50.373950+00:00",
+  "namespace": "pharness",
+  "context": "lucas_engineering",
+  "pod_deletions_performed": 0,
+  "records": [
+    {
+      "name": "astra-live-schema0054-20260905-kwhgx",
+      "uid": "507c90b3-dae7-4739-a7d1-2f9fecae63d2",
+      "phase": "Failed",
+      "job": "astra-live-schema0054-20260905",
+      "job_conditions": [
+        {
+          "lastProbeTime": "2026-09-05T23:49:48Z",
+          "lastTransitionTime": "2026-09-05T23:49:48Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "FailureTarget"
+        },
+        {
+          "lastProbeTime": "2026-09-05T23:49:48Z",
+          "lastTransitionTime": "2026-09-05T23:49:48Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "Failed"
+        }
+      ],
+      "logs_available": true,
+      "bounded_log_or_retrieval_error": "2026-09-05T23:49:29.288276647Z Traceback (most recent call last):\n2026-09-05T23:49:29.288400983Z   File \"<string>\", line 27, in <module>\n2026-09-05T23:49:29.288415293Z AssertionError: ('original data changed', 'agent_host_capability_snapshots', {'columns': ['id', 'host_id', 'platform', 'architecture', 'codex_version', 'podman_version', 'execution_mode', 'authentication_class', 'authentication_ready', 'supported_profiles_json', 'runner_images_json', 'available_slots', 'storage_json', 'status', 'blockers_json', 'content_hash', 'created_at', 'expires_at'], 'rows': 219, 'sha256': 'f349c17f142a474cd52950bb3f7d579d483f5fdb8c779e814320e51aa841b595'}, {'columns': ['id', 'host_id', 'platform', 'architecture', 'codex_version', 'podman_version', 'execution_mode', 'authentication_class', 'authentication_ready', 'supported_profiles_json', 'runner_images_json', 'available_slots', 'storage_json', 'status', 'blockers_json', 'content_hash', 'created_at', 'expires_at'], 'rows': 231, 'sha256': '71751b9b208d41bcb7227253dbbcc92d6180fa92a39ada989954d8f33197ac7d'})\n",
+      "safe_to_delete_pod": true
+    },
+    {
+      "name": "astra-m08-finance-routing-20260905-wnx5j",
+      "uid": "84d2abbb-04db-44a4-96d9-2fe5eecbe123",
+      "phase": "Failed",
+      "job": "astra-m08-finance-routing-20260905",
+      "job_conditions": [
+        {
+          "lastProbeTime": "2026-09-05T23:22:46Z",
+          "lastTransitionTime": "2026-09-05T23:22:46Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "FailureTarget"
+        },
+        {
+          "lastProbeTime": "2026-09-05T23:22:46Z",
+          "lastTransitionTime": "2026-09-05T23:22:46Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "Failed"
+        }
+      ],
+      "logs_available": true,
+      "bounded_log_or_retrieval_error": "2026-09-05T23:22:27.955626055Z {\"observed_at\": \"2026-09-05T23:22:27.955101+00:00\", \"namespace\": \"pharness\", \"service_account\": \"pharness-api\", \"service_account_token_mounted\": false, \"results\": [{\"name\": \"mimir\", \"method\": \"GET\", \"url\": \"http://mimir-gateway.monitoring.svc.cluster.local:80/prometheus/api/v1/query?query=up%7Bnamespace%3D%22apps-staging%22%2Cjob%3D%22yfinance-wrapper%22%7D\", \"http_status\": 200, \"bytes\": 63, \"sha256\": \"664b0f4a552599ac59d91a24f7e6ea8c7a4499ad237fb76aa25c33d8c25f6ec2\", \"state\": \"inconclusive\", \"error_type\": \"AssertionError\", \"elapsed_ms\": 192}, {\"name\": \"loki\", \"method\": \"GET\", \"url\": \"http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/query?query=sum%28count_over_time%28%7Bnamespace%3D%22apps-staging%22%2Ccontainer%3D%22yfinance-wrapper%22%7D%5B60s%5D%29%29&time=1788650547638552948\", \"http_status\": 200, \"bytes\": 3536, \"sha256\": \"cd3e883577390557eef148cf1a19a3d87e2fc56505cee1df0ce6964d17a4d54d\", \"series\": 1, \"positive_samples\": true, \"state\": \"passed\", \"elapsed_ms\": 206}, {\"name\": \"tempo\", \"method\": \"GET\", \"url\": \"http://tempo.monitoring.svc.cluster.local:3200/api/v2/traces/5bc9c8913a4d880a09cf1de1fccb5200?start=1788649500&end=1788649800\", \"http_status\": 200, \"bytes\": 2414, \"sha256\": \"44e5b8e4a4f888d5b4dd2e09f11a4ddd28372ea9b41180dc21d14e751cef22f7\", \"resource_batches\": 1, \"state\": \"passed\", \"elapsed_ms\": 214}, {\"name\": \"yfinance-health\", \"method\": \"GET\", \"url\": \"http://yfinance-wrapper.apps-staging.svc.cluster.local:8090/healthz\", \"http_status\": 200, \"bytes\": 15, \"sha256\": \"a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288\", \"state\": \"passed\", \"elapsed_ms\": 158}, {\"name\": \"frontend-config\", \"method\": \"GET\", \"url\": \"http://finance-frontend.apps-staging.svc.cluster.local:8080/runtime-config.json\", \"http_status\": 200, \"bytes\": 149, \"sha256\": \"9ed4a12d192fa8fc6125ea2bfe24aea44841de7146657be4b2976b44a525398c\", \"environment\": \"staging\", \"state\": \"passed\", \"elapsed_ms\": 104}], \"scope\": \"Routing and bounded response presence from a separate in-cluster Job only. No API image or RBAC deployment, exact native reader execution, runtime window, production action or hosted acceptance.\"}\n",
+      "safe_to_delete_pod": true
+    },
+    {
+      "name": "astra-schema0054-clone-20260905-lsq8k",
+      "uid": "e928784b-6a75-443a-b2d8-2397473d8c28",
+      "phase": "Failed",
+      "job": "astra-schema0054-clone-20260905",
+      "job_conditions": [
+        {
+          "lastProbeTime": "2026-09-05T22:14:50Z",
+          "lastTransitionTime": "2026-09-05T22:14:50Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "FailureTarget"
+        },
+        {
+          "lastProbeTime": "2026-09-05T22:14:50Z",
+          "lastTransitionTime": "2026-09-05T22:14:50Z",
+          "message": "Job has reached the specified backoff limit",
+          "reason": "BackoffLimitExceeded",
+          "status": "True",
+          "type": "Failed"
+        }
+      ],
+      "logs_available": true,
+      "bounded_log_or_retrieval_error": "2026-09-05T22:14:47.050287647Z Traceback (most recent call last):\n2026-09-05T22:14:47.050373215Z   File \"<string>\", line 32, in <module>\n2026-09-05T22:14:47.050380588Z sqlite3.OperationalError: no such column: delivery_stage\n",
+      "safe_to_delete_pod": true
+    }
+  ]
+}

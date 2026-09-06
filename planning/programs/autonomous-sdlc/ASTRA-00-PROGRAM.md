@@ -2,12 +2,15 @@
 
 Status: approved implementation program; M01–M03 accepted; M04 active; M05/M06 compatible reader deployed; hosted creation and end-to-end gates remain open. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `19b0c55c48e3614d0b4507d56df3029a52475618`, observed
-2026-09-05 at 23:48 UTC through release commit `f9909da0fc45ef47ed03bbffbfe5dc8fc31c62da`.
-[Live schema 0054 preservation](../../evidence/autonomous-sdlc/ASTRA-19B0C55-LIVE-PRESERVATION.md) passed at 23:53 UTC:
-all original rows and Finance/audit history are preserved; only explicitly checked
-host snapshots and operational timestamps differ. `19b0c55` is the minimum compatible rollback reader.
+Current compiled PHarness release: `92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267`, observed
+2026-09-06 at 13:54 UTC through release commit `4bf9f0ae73a3ed2ef25e9bca53090e0edecf32f6`.
+[Live schema 0055 preservation and internal service checks](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) pass:
+all original application and audit data is preserved across 81 tables; only explicitly
+checked host snapshots and operational timestamps differ. `92f8f1b` is the minimum compatible reader.
+The runtime remains unqualified for autonomous Finance work.
 These are starting observations, not permanent latest-version claims.
+
+Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The first diagnostic completed with a failed result and no qualification; retired temporary helpers are historical only.
 
 ## Product promise and authority
 
@@ -63,7 +66,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–C and D diagnostic path locally validated; immutable diagnostic release and small canaries next; historical coding passes retained; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–D deployed, live preservation and service checks pass; first small canary failed; inspect native scope evidence; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
@@ -94,19 +97,20 @@ are locally validated on `f0c7afd` (627 passing component tests; one existing li
 test ignored). Partial results cannot qualify a policy. The current schema-54
 [Finance database snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
 is verified, and the [real schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves all original columns in all 81 tables. The [complete diagnostic release](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) has seven verified images, a verified native bundle and validated pins.
-**Next eligible: publish the M04D pins, verify the live schema-55 reader and preserved data, then run small gateway canaries and the connected loop.** Broad
+The [matching deployment, live data preservation and full internal service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass.
+**Next eligible: inspect the failed source-92 Onboarding diagnostic and its native scope grading, then continue bounded canaries/controls and the connected loop.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.
 The prepared Finance production-baseline change has not been approved; M04 approval
 does not authorize its merge or count as M11 production approval.
 
-Runtime `19b0c55` remains unqualified: Onboarding 0/12 twice, Planner 6/12 and 7/12,
+Historical runtime `19b0c55` was unqualified: Onboarding 0/12 twice, Planner 6/12 and 7/12,
 Test Diagnosis 1/12 twice, and [Verifier 1/24 twice](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-VERIFIER-ANALYSIS.md). Builder and
 seeded Repair on earlier `48c77b7` passed 24/24 twice, 8/8 per stack; actual failed
 Builder-to-repair handoff and blind semantic verification remain unproven. Retain
-all failed evidence. The merged context/evidence corrections need deployment and
-fresh qualification; old success cannot qualify a new runtime.
+all failed evidence. The context/evidence corrections are now deployed in `92f8f1b` and need fresh
+qualification; old success cannot qualify this runtime.
 
 M07 source/build controller foundations are deployed. Both real Finance builds and
 the owner-approved, enforced source protections are evidenced; the autonomous

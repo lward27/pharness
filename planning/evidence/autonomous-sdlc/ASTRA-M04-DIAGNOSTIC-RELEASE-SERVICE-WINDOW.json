@@ -1,0 +1,51 @@
+{
+  "source_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "gitops_revision": "4bf9f0ae73a3ed2ef25e9bca53090e0edecf32f6",
+  "cluster": "lucas_engineering",
+  "namespace": "pharness",
+  "duration_seconds": 300,
+  "pod_ids": [
+    {
+      "deployment": "pharness-api",
+      "pod": "pharness-api-7b47849fdf-6zsdf",
+      "pod_uid": "2cd6d350-5519-46cf-8ad9-2148aa036290",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db"
+    },
+    {
+      "deployment": "pharness-coding-egress-proxy",
+      "pod": "pharness-coding-egress-proxy-6c6c758955-gl5c8",
+      "pod_uid": "4ee9714d-5d5b-42d5-bece-49e94cfe1efc",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db"
+    },
+    {
+      "deployment": "pharness-model-gateway",
+      "pod": "pharness-model-gateway-649dfdddfb-4qpql",
+      "pod_uid": "3738924e-7f40-49de-bbe3-8e0761c434e3",
+      "image_id": "registry.lucas.engineering/pharness-model-gateway@sha256:893e4a96c7afa22ae5e90ec1b1ae7a82874d4c7fc0a19df7e5009539445cad27"
+    },
+    {
+      "deployment": "pharness-preparation-egress-proxy",
+      "pod": "pharness-preparation-egress-proxy-66685cb946-cv2pw",
+      "pod_uid": "7e70707c-679c-4f0a-af39-89d505419f66",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db"
+    },
+    {
+      "deployment": "pharness-ui",
+      "pod": "pharness-ui-95c696d9b-pl2g8",
+      "pod_uid": "f33815e4-073e-48b3-ae0f-719760fbcee1",
+      "image_id": "registry.lucas.engineering/pharness-ui@sha256:60ea61d3eb41a09b6a9d6e155a1fa0f8b096cef8a32519b9480ecd5c3ecd3bc7"
+    }
+  ],
+  "scope": "Read-only internal PHarness diagnostic-release service checks. Not coding qualification, public ingress acceptance or Finance runtime verification.",
+  "samples": [],
+  "queries": {},
+  "limitations": [
+    "The public console returned HTTP 403 before the image pin; public API DNS did not resolve from this computer. This window uses authorized localhost port-forwards over the cluster connection.",
+    "No application-level PHarness trace or supported latency SLO is claimed. Latency and resource usage are observations."
+  ],
+  "started_at": "2026-09-06T14:34:42.779356+00:00",
+  "start": 1788705282.7799091,
+  "outcome": "requires_investigation",
+  "failure": "URLError: <urlopen error [Errno 61] Connection refused>",
+  "finished_at": "2026-09-06T14:34:42.795213+00:00"
+}
