@@ -61,3 +61,20 @@ No new database migration is required. Preserve schema 54 and the Finance genera
 The v1alpha2 staging writer/API must be released before any such hosted authority is
 enabled; record that release as the compatible active-writer floor. Keep hosted
 creation disabled until its qualification and acceptance prerequisites pass.
+
+## Integration with the stage-contract correction — 2026-09-06
+
+Merged source `06ead42711492377dba03da67cd9d7ec2dfa29a8` also includes the
+M04 reference guards and Planner/Test Diagnosis V2.2 corrections from main
+`04dbaeab51d9de939f0743d587c3aa3d10c21a8f`. The complete workspace passed
+**786 tests**, with six explicit live readers ignored. Clippy across all eight
+affected packages, formatting and architecture checks passed. An initial Clippy
+invocation used a nonexistent package name and ran no checks; the corrected run
+passed and both outputs are retained. The chart is byte-identical to the prior
+render validation. [Combined validation](ASTRA-M08-COMBINED-STAGE-CONTRACT-VALIDATION.json)
+records exact changed-source and log hashes.
+
+The implementation remains unreleased and autonomous M08 acceptance remains open.
+The owner has now requested an M04 process reassessment; passing local integration
+tests does not resolve that qualification-design question. The current source-19
+Verifier evaluation remains separate, and no production authority is inferred.

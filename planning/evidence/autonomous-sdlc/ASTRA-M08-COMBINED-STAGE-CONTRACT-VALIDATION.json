@@ -1,0 +1,190 @@
+{
+  "source_revision": "06ead42711492377dba03da67cd9d7ec2dfa29a8",
+  "cargo_exit_code": 0,
+  "top_level_results": [
+    {
+      "test_binary": "pharness_admin-be61ae81602deb87",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_api-d93c3e7f119ebbf6",
+      "passed": 298,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_cli-99fc47e86a0160e1",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-29c0c9bd706652b9",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-ba341aa05fdd0c20",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_config-e089ebc90c014b8c",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-238941fb1e3d81a7",
+      "passed": 198,
+      "failed": 0,
+      "ignored": 6
+    },
+    {
+      "test_binary": "core_types-49742792ce738f1d",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "hosted_sdlc-ebb0b1db1f0fe293",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_eval-9654469e5ad2fff2",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_fireworks-bd22059e6db86a54",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_model_gateway-1eaa58c36e64c975",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_openai_compatible-2b437d7941fff989",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-59b57ecd65585e61",
+      "passed": 30,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_store-2826119f05e4e8d3",
+      "passed": 60,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_worker-abc537e43c889899",
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "hosted_build-1e9fa189286aeaa7",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_config-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_fireworks-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_openai_compatible-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_store-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 786,
+  "ignored": 6,
+  "counting_rule": "Last summary per top-level Cargo test binary; nested benchmark child tests are not counted again.",
+  "observed_at": "2026-09-06T11:03:41.425499+00:00",
+  "clippy_eight_affected_packages_all_targets": "passed",
+  "format": "passed",
+  "architecture": "passed",
+  "initial_clippy_invocation": "No checks ran: package pharness-model-transport does not exist; corrected to pharness-openai-compatible for the successful invocation.",
+  "changed_source_sha256": {
+    "crates/pharness-core/src/inference.rs": "348520e082f4f1d111b993dbec5a819dd2fea4cd039f7f19886fbe760286a1e0",
+    "crates/pharness-eval/src/stage_suites.rs": "101778a92f5922b0302e158cc7dc6ef3bc9358b1ad5327410f4adb9b23a45bf6",
+    "crates/pharness-eval/src/stage_suites/diagnosis.rs": "b3fa5dd95cf8dbfad123a276117825567cde4a4fed2a250462a9fab4c1225065",
+    "crates/pharness-eval/src/stage_suites/integrity.rs": "4995a469f7770d8cd66facc864ae8e0cf8ff28dbc18282d454cac5b8425bb88d",
+    "crates/pharness-eval/src/stage_suites/integrity/planner_boundary.rs": "eae236358ff97e4aff6227ccd31121b652b3de09a1bd8d626334ed6668e054e6",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "f2cb05365154c8238ca935166184887a7681adedf9816a2e1391204897c4fcfb",
+    "crates/pharness-runhost/src/evidence_refs.rs": "5ce89719e16d91f1836e128231a38f487410727737d7ef928c3dd0641e8244e9",
+    "crates/pharness-runhost/src/lib.rs": "80a9527dd8785539d570ddf17b22edb509cdfeb9ab5659cfdb6351379b0ce845",
+    "crates/pharness-runhost/src/prompt.rs": "21abc9fefa6b5d4a25628d27012c4577903c326087410122f5d8bdc01db9a4ed"
+  },
+  "deployment_chart_unchanged_from_prior_validation": true,
+  "deployed": false,
+  "autonomous_staging_accepted": false,
+  "logs": [
+    {
+      "path": "ASTRA-M08-COMBINED-STAGE-CONTRACT-TESTS.log",
+      "sha256": "6470a52d47fa011585f654eef467f844257ea5ded77b425f09032651c17fb766"
+    },
+    {
+      "path": "ASTRA-M08-COMBINED-STAGE-CONTRACT-CLIPPY.log",
+      "sha256": "a35e059339ebd9689e212cf9ce6c2cf657942d6a4acdcdf59234e7ce2bf91b50"
+    },
+    {
+      "path": "ASTRA-M08-COMBINED-STAGE-CONTRACT-CLIPPY-INVOCATION-ERROR.log",
+      "sha256": "0c3080ddba03d1f92ff7defd34fee89a92bd195dddb951dea1607b79656c8d51"
+    },
+    {
+      "path": "ASTRA-M08-COMBINED-STAGE-CONTRACT-ARCHITECTURE.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    }
+  ]
+}
