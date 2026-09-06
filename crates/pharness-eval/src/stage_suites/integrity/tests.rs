@@ -144,32 +144,30 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 
 #[test]
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
-    for id in ["onboarding-v2", "test-diagnosis-v2"] {
+    for (id, revision) in [
+        ("onboarding-v2", "stage-qualification-v2.1"),
+        ("planner-v2", "stage-qualification-v2.2"),
+        ("test-diagnosis-v2", "stage-qualification-v2.2"),
+    ] {
         assert_eq!(
             pharness_core::inference_qualification_fixture_revision(id).unwrap(),
-            "stage-qualification-v2.1"
+            revision
         );
-        let old = pharness_core::canonical_json_sha256(&json!({
-            "schema_version":pharness_core::INFERENCE_QUALIFICATION_SUITE_SCHEMA,
-            "suite_id":id,"fixture_revision":"stage-qualification-v2.0"}))
-        .unwrap();
-        assert_ne!(
-            old,
-            pharness_core::inference_qualification_suite_hash(id).unwrap()
-        );
+        for old_revision in ["stage-qualification-v2.0", "stage-qualification-v2.1"] {
+            if old_revision == revision {
+                continue;
+            }
+            let old = pharness_core::canonical_json_sha256(&json!({
+                "schema_version":pharness_core::INFERENCE_QUALIFICATION_SUITE_SCHEMA,
+                "suite_id":id,"fixture_revision":old_revision
+            }))
+            .unwrap();
+            assert_ne!(
+                old,
+                pharness_core::inference_qualification_suite_hash(id).unwrap()
+            );
+        }
     }
-    assert_eq!(
-        pharness_core::inference_qualification_fixture_revision("planner-v2").unwrap(),
-        "stage-qualification-v2.2"
-    );
-    assert_ne!(
-        pharness_core::canonical_json_sha256(&json!({
-            "schema_version":pharness_core::INFERENCE_QUALIFICATION_SUITE_SCHEMA,
-            "suite_id":"planner-v2","fixture_revision":"stage-qualification-v2.1"
-        }))
-        .unwrap(),
-        pharness_core::inference_qualification_suite_hash("planner-v2").unwrap()
-    );
     for (id, revision) in [
         ("coding-v2", "coding-reliability-v2.1"),
         ("repair-v2", "repair-reliability-v2.1"),

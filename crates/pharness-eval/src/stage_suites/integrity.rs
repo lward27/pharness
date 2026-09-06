@@ -142,6 +142,17 @@ fn path_within(allowed: &str, path: &str) -> bool {
 }
 
 pub(super) fn expected_failure_kind(fixture: &StageFixture) -> &'static str {
+    if let Some(kind) = fixture.expected["failure_kind"].as_str() {
+        return match kind {
+            "compilation" => "compilation",
+            "assertion" => "assertion",
+            "lint" => "lint",
+            "semantic_test" => "semantic_test",
+            "structural_environment" => "structural_environment",
+            "unknown" => "unknown",
+            _ => unreachable!("compiled fixture failure kind"),
+        };
+    }
     match fixture.expected["classification"].as_str() {
         Some("assertion_failure") => "assertion",
         Some("compile_failure") => "compilation",

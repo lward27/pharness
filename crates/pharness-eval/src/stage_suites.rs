@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+mod diagnosis;
 mod integrity;
 mod onboarding;
 mod submission_evidence;
@@ -1012,7 +1013,8 @@ fn test_diagnosis_fixtures() -> Result<Vec<StageFixture>> {
     ];
     Ok(cases
         .into_iter()
-        .map(|(id, classification)| StageFixture {
+        .map(|(id, classification)| {
+            let mut fixture = StageFixture {
             id: id.into(),
             task: format!(
                 "Diagnose the controller-recorded deterministic Test result as {classification}. Do not modify source and submit one typed diagnosis."
@@ -1028,6 +1030,9 @@ fn test_diagnosis_fixtures() -> Result<Vec<StageFixture>> {
                 "bounded_output":format!("fixture {classification}"),
             }),
             expected: json!({"classification":classification}),
+            };
+            diagnosis::populate(&mut fixture);
+            fixture
         })
         .collect())
 }
@@ -1330,12 +1335,20 @@ fn prepare_workspace(suite: SuiteKind, fixture: &StageFixture, attempt: u32) -> 
     }
     fs::create_dir_all(root.join("src"))?;
     fs::create_dir_all(root.join("tests"))?;
-    fs::write(root.join("README.md"), "# Qualification fixture\n")?;
-    fs::write(root.join("requirements.lock"), "fixture==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n")?;
-    fs::write(root.join("src/app.py"), "VALUE = 1\n")?;
-    fs::write(root.join("tests/pass_test.py"), "import unittest\nclass Pass(unittest.TestCase):\n    def test_pass(self): self.assertTrue(True)\n")?;
-    let should_fail = fixture.expected["has_failure"].as_bool() == Some(true);
-    fs::write(root.join("tests/fail_test.py"), format!("import unittest\nclass MaybeFail(unittest.TestCase):\n    def test_value(self): self.assertTrue({})\n", if should_fail {"False"} else {"True"}))?;
+    if suite == SuiteKind::TestDiagnosisV2 {
+        let files: std::collections::BTreeMap<String, String> =
+            serde_json::from_value(fixture.expected["workspace_files"].clone())?;
+        for (path, content) in files {
+            fs::write(root.join(path), content)?;
+        }
+    } else {
+        fs::write(root.join("README.md"), "# Qualification fixture\n")?;
+        fs::write(root.join("requirements.lock"), "fixture==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n")?;
+        fs::write(root.join("src/app.py"), "VALUE = 1\n")?;
+        fs::write(root.join("tests/pass_test.py"), "import unittest\nclass Pass(unittest.TestCase):\n    def test_pass(self): self.assertTrue(True)\n")?;
+        let should_fail = fixture.expected["has_failure"].as_bool() == Some(true);
+        fs::write(root.join("tests/fail_test.py"), format!("import unittest\nclass MaybeFail(unittest.TestCase):\n    def test_value(self): self.assertTrue({})\n", if should_fail {"False"} else {"True"}))?;
+    }
     fs::write(
         root.join(".gitignore"),
         "__pycache__/\n*.pyc\n.pharness-runtime/\n",
