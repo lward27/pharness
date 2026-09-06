@@ -73,19 +73,17 @@ pub(super) fn prepare(
         "__pycache__/\n*.pyc\n.pharness-runtime/\n",
     )?;
     git(root, &["init", "-q"])?;
-    git(root, &["add", "."])?;
-    git(
-        root,
-        &[
-            "-c",
-            "user.email=eval@example.invalid",
-            "-c",
-            "user.name=PHarness Eval",
-            "commit",
-            "-qm",
-            "source baseline",
-        ],
-    )?;
+    let retained_reference = if let Some(files) = spec.get("retained_reference_files") {
+        write_files(root, files)?;
+        commit_snapshot(root)?;
+        Some(
+            json!({"source_commit":git_lines(root,&["rev-parse","HEAD"])?.remove(0),"source_content_hash":source_hash(root)?,"path":spec["retained_reference_path"],"content":files[spec["retained_reference_path"].as_str().context("reference path")?]}),
+        )
+    } else {
+        None
+    };
+    write_files(root, &spec["baseline_files"])?;
+    commit_snapshot(root)?;
     let baseline_sha = git_lines(root, &["rev-parse", "HEAD"])?.remove(0);
     let contract_value = contract(spec, &fixture.context["writable_paths"])?;
     let native_contract: pharness_core::RepositoryContract =
@@ -131,12 +129,34 @@ pub(super) fn prepare(
         "semantic_receipt":semantic,
         "meaning":"Recorded command outcomes and source facts; no overall correctness verdict is supplied."
     });
-    if spec.pointer("/options/stale") == Some(&json!(true)) {
-        prepared.evidence["retained_reference"] = json!({"content":"Use /quote for the request route","content_hash":canonical_json_sha256(&spec["baseline_files"])?});
+    if let Some(reference) = retained_reference {
+        prepared.evidence["retained_reference"] = reference;
     }
     prepared.expected["prepared_source_hash"] = json!(candidate_hash);
     prepared.expected["prepared_base_sha"] = json!(baseline_sha);
     Ok(prepared)
+}
+
+fn commit_snapshot(root: &Path) -> Result<()> {
+    git(root, &["add", "."])?;
+    let status = Command::new("git")
+        .current_dir(root)
+        .args([
+            "-c",
+            "user.email=eval@example.invalid",
+            "-c",
+            "user.name=PHarness Eval",
+            "commit",
+            "-qm",
+            "source snapshot",
+        ])
+        .env("GIT_AUTHOR_DATE", "2000-01-01T00:00:00Z")
+        .env("GIT_COMMITTER_DATE", "2000-01-01T00:00:00Z")
+        .status()?;
+    if !status.success() {
+        bail!("could not commit the compiled fixture snapshot");
+    }
+    Ok(())
 }
 
 pub(super) fn contract(spec: &Value, writable: &Value) -> Result<Value> {

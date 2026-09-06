@@ -266,3 +266,31 @@ fn readonly_check_detects_second_edits_to_an_already_dirty_candidate() {
     assert_ne!(initial, fingerprint(&root).unwrap());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn stale_planner_reference_is_a_real_ancestor_and_controls_preserve_edge_behavior() {
+    let fixture = fixtures(SuiteKind::PlannerV2)
+        .unwrap()
+        .into_iter()
+        .find(|f| f.id == "stale-context-revision")
+        .unwrap();
+    let (prepared, root) = prepare_case(SuiteKind::PlannerV2, &fixture, 75).unwrap();
+    let reference = &prepared.evidence["retained_reference"];
+    assert_eq!(
+        reference["source_commit"],
+        git_lines(&root, &["rev-parse", "HEAD^"]).unwrap()[0]
+    );
+    assert_ne!(
+        reference["source_content_hash"],
+        prepared.context["source"]["candidate_content_hash"]
+    );
+    assert!(reference["content"].as_str().unwrap().contains("/v0/quote"));
+    std::fs::remove_dir_all(root).unwrap();
+    for (id,oracle) in [("valid-implementation-c","from src.app import handle; assert handle('/api/quote', {'symbol':'\\u2003'}, {'MARKET_API_URL':'x'})[0] == 422"),("valid-implementation-d","import {renderQuote} from './src/quote.mjs'; import assert from 'node:assert/strict'; assert.equal(renderQuote({symbol:'ABC'}),'<span>ABC: Unavailable</span>');")] {
+        let fixture=fixtures(SuiteKind::VerifierV2).unwrap().into_iter().find(|f|f.id==id).unwrap();
+        let (_,root)=prepare_case(SuiteKind::VerifierV2,&fixture,76).unwrap();
+        let mut spec=fixture.expected["measurement"].clone();spec["oracle"]=json!(oracle);
+        assert_eq!(oracle_receipt(&root,&spec,&source_hash(&root).unwrap()).unwrap()["exit_code"],0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

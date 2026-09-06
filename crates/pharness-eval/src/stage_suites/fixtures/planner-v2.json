@@ -659,7 +659,15 @@
       "environment_profile": "python-3.11",
       "options": {
         "stale": true
-      }
+      },
+      "retained_reference_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/v0/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/v0/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/v0/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/v0/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /v0/quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "retained_reference_path": "README.md"
     }
   },
   {
