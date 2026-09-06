@@ -8,6 +8,8 @@ use axum::Json;
 use pharness_core::hosted_sdlc::staging::{HostedStagingAuthority, StagingGitOpsPlan, PLAN_SCHEMA};
 use pharness_store::{DeliveryStage, StoredWorkflowOperation};
 use serde_json::{json, Value};
+mod baseline;
+mod native;
 
 fn request<T: serde::de::DeserializeOwned>(value: Value) -> Json<T> {
     Json(serde_json::from_value(value).unwrap())
@@ -37,7 +39,9 @@ async fn start(
     StoredWorkflowOperation,
     HostedStagingAuthority,
 ) {
-    let f = verified_build(suffix, fake).await;
+    let mut f = verified_build(suffix, fake).await;
+    f.state.cluster_tools = native::tools(fake);
+    staging::seed_pending(&f.state, &f.work_item_id, now() - 600_000).await;
     tick(&f).await;
     let op = operation(&f).await;
     let control = f
@@ -154,6 +158,7 @@ async fn staging_reclaims_expired_owner_without_replacing_authority_or_repeating
     let (f, op, a) = start("staging_restart", &fake).await;
     let p = plan(&a);
     let _ = save(&f, &a, &p).await.unwrap();
+    native::seed(&f, &fake, &a, &p).await;
     let past = now() - 120_000;
     f.state
         .store
@@ -173,7 +178,13 @@ async fn staging_reclaims_expired_owner_without_replacing_authority_or_repeating
     assert_eq!(creates(&fake), 2);
     let current = operation(&f).await;
     assert_eq!(current.id, op.id);
-    assert_eq!(current.resource_refs, op.resource_refs);
+    let mut recovered_refs = current.resource_refs.clone();
+    assert!(recovered_refs
+        .as_object_mut()
+        .unwrap()
+        .remove("staging_baseline")
+        .is_some());
+    assert_eq!(recovered_refs, op.resource_refs);
     assert!(f
         .state
         .store
@@ -286,6 +297,7 @@ async fn unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commi
     let (f, _, a) = start("staging_unconfirmed", &fake).await;
     let p = plan(&a);
     let _ = save(&f, &a, &p).await.unwrap();
+    native::seed(&f, &fake, &a, &p).await;
     let _ = admit(&f, &a, &p).await.unwrap();
     let body = json!({"execution_id":a.execution_id,"authority_hash":a.material_hash().unwrap(),"status":"unconfirmed","error_code":"staging_commit_not_established","checked_at_ms":now(),"observe_only":false});
     let first = outcome(&f, &a, body.clone()).await.unwrap();
@@ -317,7 +329,10 @@ async fn staging_progresses_from_verified_build_and_preserves_distinct_completio
     let (f, op, a) = start("staging_normal", &fake).await;
     let original = op.resource_refs.clone();
     let p = plan(&a);
-    assert_eq!(context(&f, &a, false).await.unwrap().0["may_advance"], true);
+    assert_eq!(
+        context(&f, &a, false).await.unwrap().0["may_advance"],
+        false
+    );
     assert_eq!(context(&f, &a, false).await.unwrap().0["plan"], Value::Null);
     assert!(context(&f, &a, true).await.is_err());
     assert!(f
@@ -342,6 +357,7 @@ async fn staging_progresses_from_verified_build_and_preserves_distinct_completio
         outcome(&f, &a, observed(&a, &p)).await.is_err(),
         "a plausible commit cannot replace admission"
     );
+    native::seed(&f, &fake, &a, &p).await;
     assert_eq!(admit(&f, &a, &p).await.unwrap().0["admitted"], true);
     assert!(admit(&f, &a, &p).await.is_err());
     assert_eq!(
@@ -418,6 +434,7 @@ async fn staging_pause_blocks_writes_but_allows_one_reader_to_recover_unknown_co
     tick(&f).await;
     assert_eq!(creates(&fake), 2);
     control(&f, "active").await;
+    native::seed(&f, &fake, &a, &p).await;
     let _ = admit(&f, &a, &p).await.unwrap();
     control(&f, "paused").await;
     let dispatch = &op.resource_refs["staging_dispatch"];
@@ -498,6 +515,7 @@ async fn staging_partial_plan_is_read_only_until_serialized_admission_repairs_li
         .await
         .unwrap()
         .is_none());
+    native::seed(&f, &fake, &a, &p).await;
     let _ = admit(&f, &a, &p).await.unwrap();
     let change = f
         .state
@@ -521,6 +539,7 @@ async fn staging_rejects_changed_build_and_contradictory_or_misbound_observation
     let (f, _, a) = start("staging_integrity", &fake).await;
     let p = plan(&a);
     let _ = save(&f, &a, &p).await.unwrap();
+    native::seed(&f, &fake, &a, &p).await;
     let _ = admit(&f, &a, &p).await.unwrap();
     let body = observed(&a, &p);
     for (pointer, bad) in [

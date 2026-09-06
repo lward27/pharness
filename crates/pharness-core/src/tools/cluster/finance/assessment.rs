@@ -33,6 +33,33 @@ pub struct FinanceRuntimeEvidence {
 }
 
 impl FinanceRuntimeEvidence {
+    /// Revalidate a completed baseline against another native identity read.
+    /// This preserves the original evidence hashes and never refreshes its window.
+    pub fn validate_current_deployment(
+        &self,
+        current: &Value,
+        now_ms: u64,
+    ) -> Result<(), &'static str> {
+        if self.assess(now_ms)["runtime_verification"] != "passed" {
+            return Err("runtime_baseline_is_not_passed_and_fresh");
+        }
+        if current["started_at_unix_ms"].as_u64().unwrap_or_default()
+            < self.identity_after["completed_at_unix_ms"]
+                .as_u64()
+                .unwrap_or(u64::MAX)
+        {
+            return Err("current_identity_predates_baseline_completion");
+        }
+        WindowContext::validate(
+            &self.expected,
+            &self.window,
+            &self.identity_before,
+            current,
+            now_ms,
+        )?;
+        Ok(())
+    }
+
     /// Pure assessment of one completed window. No queries, retries, incident
     /// creation, promotion, rollback or WorkItem closure occur here.
     pub fn assess(&self, now_unix_ms: u64) -> Value {

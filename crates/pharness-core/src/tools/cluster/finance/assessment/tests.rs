@@ -111,6 +111,44 @@ fn complete_bound_evidence_passes_without_granting_work_item_success_or_rollback
 }
 
 #[test]
+fn admission_identity_must_be_later_unchanged_and_within_the_original_window_expiry() {
+    let e = fixture(
+        FinanceApplication::Yfinance,
+        FinanceVerificationPhase::Baseline,
+    );
+    let end = e.window.end_unix_seconds * 1000;
+    let mut current = e.identity_after.clone();
+    current["started_at_unix_ms"] = json!(end + 500);
+    current["completed_at_unix_ms"] = json!(end + 700);
+    e.validate_current_deployment(&current, end + 1000).unwrap();
+    for (pointer, value) in [
+        ("/started_at_unix_ms", json!(end)),
+        ("/identity/pods/0/restart_count", json!(1)),
+        ("/identity/service/uid", json!("other-service")),
+        ("/identity/template_hash", json!("changed-config")),
+        (
+            "/identity/pods/0/uid",
+            json!("00000000-0000-0000-0000-000000000000"),
+        ),
+    ] {
+        let mut changed = current.clone();
+        *changed.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            e.validate_current_deployment(&changed, end + 1000).is_err(),
+            "{pointer}"
+        );
+    }
+    assert!(e
+        .validate_current_deployment(&current, end + 60_001)
+        .is_err());
+    assert_eq!(
+        e.assess(end + 1000)["runtime_verification"],
+        "passed",
+        "the original record was not rewritten for admission"
+    );
+}
+
+#[test]
 fn missing_stale_cross_release_and_short_windows_never_pass() {
     let e = fixture(
         FinanceApplication::Yfinance,

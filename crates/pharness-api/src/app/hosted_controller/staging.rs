@@ -6,9 +6,14 @@ use pharness_store::{
 };
 use serde_json::{json, Value};
 
+mod baseline;
 mod callbacks;
 mod evidence;
 mod preparation;
+#[cfg(test)]
+pub(in crate::app) use baseline::test_support::{
+    seed_baseline, seed_inputs, seed_pending, seed_window,
+};
 pub(in crate::app) use callbacks::{
     internal_staging_attempt, internal_staging_context, internal_staging_outcome,
     internal_staging_plan,
@@ -142,6 +147,11 @@ pub(super) async fn reconcile(
         .get_artifact(&artifact_id("attempt", execution))
         .await?
         .is_some();
+    if !admitted {
+        if let Some(condition) = baseline::reconcile(state, claim, &saved, expired).await? {
+            return Ok(condition);
+        }
+    }
     let recover = !admitted && claim.control == "active" && !expired;
     if recover {
         preparation::validate_current(state, &saved, true).await?;
