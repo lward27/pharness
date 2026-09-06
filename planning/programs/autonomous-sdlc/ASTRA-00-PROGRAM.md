@@ -9,6 +9,19 @@ all original rows and Finance/audit history are preserved; only explicitly check
 host snapshots and operational timestamps differ. `19b0c55` is the minimum compatible rollback reader.
 These are starting observations, not permanent latest-version claims.
 
+The [M08 runtime assessment](../../evidence/autonomous-sdlc/ASTRA-M08-RUNTIME-ASSESSMENT.md)
+passed a complete native five-minute staging evidence bundle. The
+[baseline admission implementation](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-BASELINE-ADMISSION.md)
+adds one persisted observation window before a staging write, with fresh identity
+revalidation and expiry enforced by the writer. It remains unreleased and does not
+close autonomous staging, production or Finance acceptance. Its v1alpha2 staging
+authority requires a newer compatible writer before any such authority is enabled.
+
+The [durable candidate controller](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-CANDIDATE-VERIFICATION.md)
+passes 302 API/admin checks in the current combined source and retains original
+baseline/commit/window evidence across interruptions. It is not deployed. Staging
+success remains separate from production authority and WorkItem completion.
+
 ## Product promise and authority
 
 Retire Repo Mode as a separate product experience while preserving its discovery,
@@ -67,7 +80,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
-| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Basic Tempo reader, schema-54 records and staging handoff deployed; new native runtime integration and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
+| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Baseline/current-source live observations pass; finite native readers, baseline admission and durable candidate controller locally validated; integration with M04A–D passes 816 workspace checks; release and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | initial decision-material contract validated in draft; integration and acceptance open | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
@@ -127,6 +140,12 @@ Current evidence entry points:
 - [M08 native Tempo reader](../../evidence/autonomous-sdlc/ASTRA-M08-BOUNDED-TEMPO-READER.md): bounded collection and a real staging trace sample; the basic reader is deployed but its Tempo endpoint is not yet configured or integrated into staging progression.
 - [M08 delivery-record compatibility](../../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md): separate staging/production records on the same build, preserved legacy history, and rejected legacy delivery actions. Schema 54 requires the recorded live-copy check and compatible reader deployment; no hosted delivery writes or deployment acceptance are claimed.
 - [M08 durable staging GitOps handoff](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-STAGING-GITOPS.md): the controller records one staging authority and admission, preserves its original writer and reader Jobs, and retains uncertain or contradictory outcomes. Local tests cover automatic handoff and recovery. A committed digest remains distinct from Argo and runtime verification; no real staging release or production authorization is claimed.
+- [M08 deployment identity](../../evidence/autonomous-sdlc/ASTRA-M08-DEPLOYMENT-IDENTITY.md): finite bounded reads connect the expected Argo revision, current Deployment and ReplicaSet, running Pod digest and ready Service endpoints. Two live checks cover the existing staging baselines; runtime windows and release acceptance remain open.
+- [M08 functional probes and baseline drift](../../evidence/autonomous-sdlc/ASTRA-M08-FUNCTIONAL-PROBES.md): bounded implementation and automatic checks pass; the existing backend staging image fails current-source validation and market-route expectations. Frontend HTTP checks pass but do not prove browser initialization. No runtime window or delivery acceptance is claimed.
+- [M08 full-window metrics and logs](../../evidence/autonomous-sdlc/ASTRA-M08-WINDOW-SIGNALS.md): both five-minute staging windows passed after a scoped GitOps collector-memory recovery. The earlier timing and actual log-loss failures remain retained. Application functional failures and durable progression remain separate open gates.
+- [M08 exact health-request trace](../../evidence/autonomous-sdlc/ASTRA-M08-HEALTH-TRACE-CORRELATION.md): a real five-minute staging check ties the native health request to its server span; functional failures remain failed. Deployment access/configuration and controller integration remain open.
+- [M08 finite API observer preparation](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-OBSERVER-ACCESS.md): scoped roles and separate Mimir configuration pass local checks; six in-cluster routing checks pass. The API reader/permissions are not deployed, and durable runtime integration remains required.
+- [M08 current-source staging baseline](../../evidence/autonomous-sdlc/ASTRA-M08-YFINANCE-CURRENT-STAGING-BASELINE.md): the existing tested backend image now runs in staging and passes one shared five-minute functional/metrics/log/trace check. Production is unchanged; this program-operated correction is not autonomous acceptance.
 - [M10 visual and interaction evidence](../../evidence/autonomous-sdlc/ASTRA-M10-LIST-CONSISTENCY.md): 94 unit checks and 116 distinct browser checks across the documented runs; deployment, delivery-dependent states and owner walkthrough remain open.
 
 [Execution history](ASTRA-PROGRAM-EXECUTION-HISTORY.md) retains prior source

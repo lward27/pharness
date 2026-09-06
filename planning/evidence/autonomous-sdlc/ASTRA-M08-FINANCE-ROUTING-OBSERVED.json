@@ -1,0 +1,145 @@
+{
+  "recorded_at": "2026-09-05T23:23:03.303198+00:00",
+  "job": "astra-m08-finance-routing-20260905",
+  "uid": "2f7088d3-8e86-481c-ba7c-af443b349f10",
+  "status": {
+    "conditions": [
+      {
+        "lastProbeTime": "2026-09-05T23:22:46Z",
+        "lastTransitionTime": "2026-09-05T23:22:46Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "FailureTarget"
+      },
+      {
+        "lastProbeTime": "2026-09-05T23:22:46Z",
+        "lastTransitionTime": "2026-09-05T23:22:46Z",
+        "message": "Job has reached the specified backoff limit",
+        "reason": "BackoffLimitExceeded",
+        "status": "True",
+        "type": "Failed"
+      }
+    ],
+    "failed": 1,
+    "ready": 0,
+    "startTime": "2026-09-05T23:21:02Z",
+    "terminating": 0,
+    "uncountedTerminatedPods": {}
+  },
+  "pod": {
+    "name": "astra-m08-finance-routing-20260905-wnx5j",
+    "uid": "84d2abbb-04db-44a4-96d9-2fe5eecbe123",
+    "node": "ubuntu-lucas-engineering-2",
+    "phase": "Failed",
+    "containers": [
+      {
+        "allocatedResources": {
+          "cpu": "25m",
+          "memory": "32Mi"
+        },
+        "containerID": "containerd://8bfa182d5fd5c6d5a923828019c0be5b8225fe0bcfc30c0cc390ac3e7a030e9e",
+        "image": "sha256:8be9fa5f65bf53ff7fcced53e3b1d6f3c387ad1688f87d6f24621c5998995133",
+        "imageID": "registry.lucas.engineering/pharness-python-runner@sha256:e7992e58091d7f5857c3034afddaefd1466e978a32b6f4b78280aa6937eb514b",
+        "lastState": {},
+        "name": "readiness",
+        "ready": false,
+        "resources": {
+          "limits": {
+            "cpu": "250m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "25m",
+            "memory": "32Mi"
+          }
+        },
+        "restartCount": 0,
+        "started": false,
+        "state": {
+          "terminated": {
+            "containerID": "containerd://8bfa182d5fd5c6d5a923828019c0be5b8225fe0bcfc30c0cc390ac3e7a030e9e",
+            "exitCode": 1,
+            "finishedAt": "2026-09-05T23:22:28Z",
+            "reason": "Error",
+            "startedAt": "2026-09-05T23:22:24Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 65532,
+            "supplementalGroups": [
+              65532
+            ],
+            "uid": 65532
+          }
+        }
+      }
+    ]
+  },
+  "observation": {
+    "observed_at": "2026-09-05T23:22:27.955101+00:00",
+    "namespace": "pharness",
+    "service_account": "pharness-api",
+    "service_account_token_mounted": false,
+    "results": [
+      {
+        "name": "mimir",
+        "method": "GET",
+        "url": "http://mimir-gateway.monitoring.svc.cluster.local:80/prometheus/api/v1/query?query=up%7Bnamespace%3D%22apps-staging%22%2Cjob%3D%22yfinance-wrapper%22%7D",
+        "http_status": 200,
+        "bytes": 63,
+        "sha256": "664b0f4a552599ac59d91a24f7e6ea8c7a4499ad237fb76aa25c33d8c25f6ec2",
+        "state": "inconclusive",
+        "error_type": "AssertionError",
+        "elapsed_ms": 192
+      },
+      {
+        "name": "loki",
+        "method": "GET",
+        "url": "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/query?query=sum%28count_over_time%28%7Bnamespace%3D%22apps-staging%22%2Ccontainer%3D%22yfinance-wrapper%22%7D%5B60s%5D%29%29&time=1788650547638552948",
+        "http_status": 200,
+        "bytes": 3536,
+        "sha256": "cd3e883577390557eef148cf1a19a3d87e2fc56505cee1df0ce6964d17a4d54d",
+        "series": 1,
+        "positive_samples": true,
+        "state": "passed",
+        "elapsed_ms": 206
+      },
+      {
+        "name": "tempo",
+        "method": "GET",
+        "url": "http://tempo.monitoring.svc.cluster.local:3200/api/v2/traces/5bc9c8913a4d880a09cf1de1fccb5200?start=1788649500&end=1788649800",
+        "http_status": 200,
+        "bytes": 2414,
+        "sha256": "44e5b8e4a4f888d5b4dd2e09f11a4ddd28372ea9b41180dc21d14e751cef22f7",
+        "resource_batches": 1,
+        "state": "passed",
+        "elapsed_ms": 214
+      },
+      {
+        "name": "yfinance-health",
+        "method": "GET",
+        "url": "http://yfinance-wrapper.apps-staging.svc.cluster.local:8090/healthz",
+        "http_status": 200,
+        "bytes": 15,
+        "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+        "state": "passed",
+        "elapsed_ms": 158
+      },
+      {
+        "name": "frontend-config",
+        "method": "GET",
+        "url": "http://finance-frontend.apps-staging.svc.cluster.local:8080/runtime-config.json",
+        "http_status": 200,
+        "bytes": 149,
+        "sha256": "9ed4a12d192fa8fc6125ea2bfe24aea44841de7146657be4b2976b44a525398c",
+        "environment": "staging",
+        "state": "passed",
+        "elapsed_ms": 104
+      }
+    ],
+    "scope": "Routing and bounded response presence from a separate in-cluster Job only. No API image or RBAC deployment, exact native reader execution, runtime window, production action or hosted acceptance."
+  },
+  "log_exit": 0
+}

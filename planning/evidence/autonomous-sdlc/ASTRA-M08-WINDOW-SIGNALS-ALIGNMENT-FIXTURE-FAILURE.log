@@ -1,0 +1,32 @@
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-runtime-evidence/crates/pharness-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.82s
+     Running unittests src/lib.rs (target/debug/deps/pharness_core-d5d05e2695986151)
+
+running 9 tests
+test tools::cluster::finance::signals::live::live_finance_five_minute_signals ... ignored, explicit read-only cluster and telemetry access; waits for an actual five-minute window
+test tools::cluster::finance::signals::tests::window_requires_elapsed_time_and_matching_bracketed_native_identities ... ok
+test tools::cluster::finance::signals::tests::query_inputs_cannot_inject_syntax_or_select_another_pod ... ok
+test tools::cluster::finance::signals::tests::complete_pod_series_are_required_and_zero_readiness_is_an_anomaly ... ok
+test tools::cluster::finance::signals::tests::request_counter_zero_absence_and_nonfinite_values_are_inconclusive ... ok
+test tools::cluster::finance::signals::tests::log_coverage_and_uid_are_required_even_when_error_vector_is_empty ... ok
+test tools::cluster::finance::signals::tests::freshness_and_restart_changes_cannot_be_green ... ok
+test tools::cluster::finance::signals::tests::provider_transport_rejects_redirects_oversized_and_malformed_bodies ... ok
+test tools::cluster::finance::signals::tests::unavailable_configuration_returns_explicit_inconclusive_without_credentials ... FAILED
+
+failures:
+
+---- tools::cluster::finance::signals::tests::unavailable_configuration_returns_explicit_inconclusive_without_credentials stdout ----
+
+thread 'tools::cluster::finance::signals::tests::unavailable_configuration_returns_explicit_inconclusive_without_credentials' (5671307) panicked at crates/pharness-core/src/tools/cluster/finance/signals/tests.rs:296:5:
+assertion `left == right` failed
+  left: 0
+ right: 7
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tools::cluster::finance::signals::tests::unavailable_configuration_returns_explicit_inconclusive_without_credentials
+
+test result: FAILED. 7 passed; 1 failed; 1 ignored; 0 measured; 179 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p pharness-core --lib`

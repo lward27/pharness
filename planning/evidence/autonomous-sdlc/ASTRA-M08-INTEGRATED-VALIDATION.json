@@ -1,0 +1,182 @@
+{
+  "source_revision": "6f40cdcd78060dd59fa3292435d5cfd76c08bbe5",
+  "cargo_exit_code": 0,
+  "top_level_results": [
+    {
+      "test_binary": "pharness_admin-be61ae81602deb87",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_api-d93c3e7f119ebbf6",
+      "passed": 298,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_cli-99fc47e86a0160e1",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-29c0c9bd706652b9",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-ba341aa05fdd0c20",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_config-e089ebc90c014b8c",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-238941fb1e3d81a7",
+      "passed": 198,
+      "failed": 0,
+      "ignored": 6
+    },
+    {
+      "test_binary": "core_types-49742792ce738f1d",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "hosted_sdlc-ebb0b1db1f0fe293",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_eval-9654469e5ad2fff2",
+      "passed": 35,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_fireworks-bd22059e6db86a54",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_model_gateway-1eaa58c36e64c975",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_openai_compatible-2b437d7941fff989",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-59b57ecd65585e61",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_store-2826119f05e4e8d3",
+      "passed": 60,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_worker-abc537e43c889899",
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "hosted_build-1e9fa189286aeaa7",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_codex_host-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_config-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_fireworks-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_openai_compatible-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_store-doc",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 782,
+  "ignored": 6,
+  "counting_rule": "Last summary per top-level Cargo test binary; nested benchmark child tests are not counted again.",
+  "observed_at": "2026-09-06T10:29:36.839575+00:00",
+  "clippy_affected_crates_all_targets": "passed",
+  "format": "passed",
+  "architecture": "passed",
+  "dependency_parser_tests_passed": 5,
+  "helm_lint": "passed; optional icon recommendation only",
+  "hosted_config_not_enabled": true,
+  "coding_reliability_v2_enabled": false,
+  "deployed": false,
+  "autonomous_staging_accepted": false,
+  "logs": [
+    {
+      "path": "ASTRA-M08-INTEGRATED-TESTS.log",
+      "sha256": "12266447a5a0fbd1bc830b4188a25ecac92fd16428fea7d6086abbda28e624af"
+    },
+    {
+      "path": "ASTRA-M08-INTEGRATED-CLIPPY.log",
+      "sha256": "eac9d933af5f4ba813f073e590f0849e927b2795f31bb3f7201ff3c62fd2dde8"
+    },
+    {
+      "path": "ASTRA-M08-INTEGRATED-ARCHITECTURE.log",
+      "sha256": "8e6ab5f75ec301683c93bf273a1e7c40bef955cfb9067695ab323295b2fb68ce"
+    },
+    {
+      "path": "ASTRA-M08-INTEGRATED-HELM.log",
+      "sha256": "e3f780a4098c4c06647382480e14da108ceb4554fb4b478804ae29a6f02fbe40"
+    }
+  ],
+  "log_whitespace_policy": "Raw logs retain trailing blank lines and intentional failing nested benchmark fixtures; top-level suites and strict source/document checks pass."
+}

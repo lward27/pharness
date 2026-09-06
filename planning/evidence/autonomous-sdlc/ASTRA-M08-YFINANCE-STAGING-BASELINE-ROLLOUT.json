@@ -1,0 +1,47 @@
+{
+  "source_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+  "gitops_revision": "04a98931af43b6ea1d189369442f6a1b76dda589",
+  "pr_number": 56,
+  "pr_url": "https://github.com/lward27/lucas_engineering/pull/56",
+  "merged_at": "2026-09-05T23:29:18Z",
+  "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+  "scope": "staging baseline repair, not autonomous acceptance",
+  "observed_at": "2026-09-05T23:32:52.451973+00:00",
+  "argo": {
+    "uid": "5783342f-a670-4c04-9cd5-da38773218eb",
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "apps-staging",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "charts/finance-staging/yfinance",
+          "repoURL": "https://github.com/lward27/lucas_engineering.git",
+          "targetRevision": "main"
+        }
+      },
+      "revision": "04a98931af43b6ea1d189369442f6a1b76dda589",
+      "status": "Synced"
+    },
+    "health": {
+      "lastTransitionTime": "2026-09-05T23:32:28Z",
+      "status": "Healthy"
+    }
+  },
+  "deployment": {
+    "uid": "d0e76091-39f1-4f2a-9664-1ba120178403",
+    "generation": 2,
+    "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+    "replicas": 1
+  },
+  "pod": {
+    "name": "yfinance-wrapper-d75f6dd89-lvj9m",
+    "uid": "712b407b-d379-49f7-8400-0c4e67f12895",
+    "image_id": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+    "restarts": 0,
+    "node": "ubuntu-lucas-engineering"
+  },
+  "production_spec_unchanged": true,
+  "runtime_verification": "pending fresh native observation"
+}
