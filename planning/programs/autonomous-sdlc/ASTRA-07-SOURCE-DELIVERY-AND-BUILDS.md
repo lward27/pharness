@@ -1,6 +1,6 @@
 # ASTRA M07: Exact-source delivery and real builds
 
-Status: finite pipelines and packaging merged; both real builds verified; source publication and observation merged in PRs 338/342; guarded automatic merge merged in PR 344; sealed build handoff and output semantics merged in PR 345; durable build dispatch/recovery implemented with 672 passing workspace tests. Deployment, branch-protection decision, source credential readiness, live acceptance and milestone acceptance remain open. See [durable build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-DURABLE-BUILD-CONTROLLER.md).
+Status: both real Finance builds verified; source publication, guarded merge and durable build foundations deployed in 19b0c55. Owner-approved source protections are applied and readable by the actual writer. Exact-runtime coding qualification, autonomous source-to-registry acceptance and milestone acceptance remain open. See [protection execution](../../evidence/autonomous-sdlc/ASTRA-M07-APPROVED-SOURCE-PROTECTION.md).
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M04 and M06.
 
