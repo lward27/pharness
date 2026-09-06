@@ -115,3 +115,12 @@ binds V2 references to controller IDs and gives Planner/Test Diagnosis explicit 
 suites with unchanged thresholds. It is locally validated and unreleased. Collect the
 currently running source-19 Verifier result; the full required qualification then runs
 on the next exact release, without repeating superseded old-source runs.
+
+## Process reassessment requested by the owner — 2026-09-06
+
+[ASTRA-M04-PROCESS-REASSESSMENT](../../evidence/autonomous-sdlc/ASTRA-M04-PROCESS-REASSESSMENT.md)
+recommends a bounded redesign of agent-facing contracts and qualification before
+more broad runs. It separates confirmed transport/evaluator defects from unisolated
+model-quality concerns. This is a review recommendation; the existing acceptance
+thresholds, runtime activation gate, models, budgets and production authority have
+not changed. The in-flight source-19 Verifier run remains recorded separately.
