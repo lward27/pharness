@@ -1,0 +1,798 @@
+[
+  {
+    "id": "cross-repository-context",
+    "spec": {
+      "public_id": "case-8fec476e0bbb9bbe",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. The other repository uses /quote, but its pinned dependency contract requires /api/quote here. Do not edit that repository.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "acceptance-boundary",
+    "spec": {
+      "public_id": "case-84bf77ff7e4f274c",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. Cover both required acceptance commands by name; compilation alone does not demonstrate behavior.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit",
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "failing-baseline",
+    "spec": {
+      "public_id": "case-377ee05d31f0322a",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. An existing /legacy behavior test fails before this change. Preserve that finding and separate it from the requested endpoint change.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n    def test_existing_contract(self): self.assertEqual(handle('/legacy', {}, {})[0], 200)\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n    def test_existing_contract(self): self.assertEqual(handle('/legacy', {}, {})[0], 200)\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": true,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {
+        "baseline_failure": true
+      }
+    }
+  },
+  {
+    "id": "ambiguous-intent",
+    "spec": {
+      "public_id": "case-a5bd2d000b72d26b",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. The requested price label has no specified rounding rule. Record the unresolved choice; preserve the existing price representation.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": true,
+      "environment_profile": "python-3.11",
+      "options": {
+        "open_question": true
+      }
+    }
+  },
+  {
+    "id": "immutable-source",
+    "spec": {
+      "public_id": "case-d023de1c2c28bf91",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. Use the pinned source snapshot and the supplied deployment variable contract. Do not switch to a moving branch.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "correction-feedback",
+    "spec": {
+      "public_id": "case-7cb04aa7535c49c8",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. Earlier feedback: the proposed plan omitted null prices. Include a null-price regression test while preserving the flat response.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit",
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "undeclared-path",
+    "spec": {
+      "public_id": "case-4b03ac7f0fc17f5a",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. The deployment configuration already supplies MARKET_API_URL; do not change deploy/service.json.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "documentation-boundary",
+    "spec": {
+      "public_id": "case-f2d91fefec6301ff",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. README still names the old endpoint. Updating it is an acceptance requirement.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "misleading-nearby-code",
+    "spec": {
+      "public_id": "case-b0422f0a3ebe69a4",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. A separate legacy route in src/legacy.py uses /quote. Leave that behavior unchanged; implement the current request in src/app.py.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n",
+        "src/legacy.py": "PATH = '/quote'\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n",
+        "src/legacy.py": "PATH = '/quote'\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit",
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {
+        "nearby": true
+      }
+    }
+  },
+  {
+    "id": "stale-context-revision",
+    "spec": {
+      "public_id": "case-563677fb455f4cc7",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. A retained reference describes the old endpoint. Its source identity predates this pinned work; use the current request and record the stale reference.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": true,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {
+        "stale": true
+      }
+    }
+  },
+  {
+    "id": "multiple-intent-clauses",
+    "spec": {
+      "public_id": "case-0aa0b65f891dd3b7",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. Cover all intent clauses: new route, configuration variable, flat envelope, invalid symbols, null prices and README.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit",
+        "compile"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/**",
+        "tests/**",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {}
+    }
+  },
+  {
+    "id": "path-intersection",
+    "spec": {
+      "public_id": "case-4174e017d4107886",
+      "requirements": "Expose /api/quote, reading symbol from the symbol query parameter and MARKET_API_URL from deployment configuration. Return the flat object {symbol, price} with status 200, preserving null prices. Blank or invalid symbols return 422 with {error: \"invalid symbol\"}; an unavailable configured service returns 503. Update README to document this contract. The unit suite must check valid quotes, blank symbols and null prices. All required unit and compile checks must pass for this exact candidate; no baseline failure is waived. Only src/**, tests/** and README.md are writable. The product dependency revision is pinned and must match the candidate context. This request allows changes only to src/app.py, tests/test_app.py and README.md, even though the repository contract is broader.",
+      "baseline_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "candidate_files": {
+        "requirements.lock": "# Declared typing support; behavioral tests use the standard library only.\ntyping-extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548\n",
+        "src/app.py": "import os\n\ndef handle(path, query, environ):\n    if path != \"/quote\":\n        return 404, {\"error\": \"not found\"}\n    symbol = query.get(\"symbol\", \"\")\n    if not isinstance(symbol, str) or not symbol.strip():\n        return 422, {\"error\": \"invalid symbol\"}\n    endpoint = environ.get(\"MARKET_API_URL\")\n    if not endpoint:\n        return 503, {\"error\": \"service unavailable\"}\n    price = query.get(\"price\", 12.5)\n    return 200, {\"symbol\": symbol, \"price\": price}\n",
+        "tests/test_app.py": "import unittest\nfrom src.app import handle\n\nclass QuoteTest(unittest.TestCase):\n    def test_quote(self):\n        self.assertEqual(handle('/quote', {'symbol': 'ABC'}, {'MARKET_API_URL': 'https://market.invalid'}), (200, {'symbol': 'ABC', 'price': 12.5}))\n    def test_invalid(self):\n        self.assertEqual(handle('/quote', {'symbol': ' '}, {'MARKET_API_URL': 'https://market.invalid'})[0], 422)\n    def test_missing_price(self):\n        self.assertIsNone(handle('/quote', {'symbol': 'ABC', 'price': None}, {'MARKET_API_URL': 'https://market.invalid'})[1]['price'])\n",
+        "README.md": "# Quote service\nGET /quote?symbol=ABC uses MARKET_API_URL and returns a flat {symbol, price} object. Blank symbols return 422. Null prices remain null.\n",
+        "deploy/service.json": "{\"replicas\":2}\n"
+      },
+      "commands": [
+        {
+          "name": "unit",
+          "argv": [
+            "python3",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_app.py",
+            "-v"
+          ],
+          "timeout_ms": 5000
+        },
+        {
+          "name": "compile",
+          "argv": [
+            "python3",
+            "-m",
+            "py_compile",
+            "src/app.py"
+          ],
+          "timeout_ms": 5000
+        }
+      ],
+      "acceptance": [
+        "unit"
+      ],
+      "required_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "writable_paths": [
+        "src/app.py",
+        "tests/test_app.py",
+        "README.md"
+      ],
+      "requires_risk": false,
+      "requires_assumption": false,
+      "environment_profile": "python-3.11",
+      "options": {
+        "narrow": true
+      }
+    }
+  }
+]

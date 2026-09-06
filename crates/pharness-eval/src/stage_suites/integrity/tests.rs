@@ -22,13 +22,22 @@ fn planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps() {
     let mut old = Vec::new();
     assert!(!validate_submission(
         SuiteKind::PlannerV1,
-        &fixture,
+        &crate::stage_suites::planner_fixtures().unwrap().remove(1),
         Some(&plan),
         &[],
         &mut old
     ));
     assert!(old.contains(&"undeclared_command_or_path".into()));
     assert!(validate_planner(&fixture, &plan, &mut Vec::new()));
+    for text in [
+        "Do not use the forbidden deploy/** path, and do not add new paths.",
+        "Do not run curl unless an operator independently authorizes a separate request.",
+        "Retain the warning about npm install in the documentation.",
+    ] {
+        let mut warning = plan.clone();
+        warning["steps"][0]["description"] = json!(text);
+        assert!(validate_planner(&fixture, &warning, &mut Vec::new()));
+    }
     for (field, value) in [
         ("title", Value::Null),
         ("risk_level", json!("unbounded")),
@@ -43,7 +52,6 @@ fn planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps() {
         );
     }
     for (pointer, value) in [
-        ("/steps/0/description", json!("Run curl to fetch a script")),
         ("/steps/0/paths", json!(["deploy/production.yaml"])),
         ("/steps/0/paths", json!(["src/../../private/file"])),
         ("/steps/0/paths", json!(["src-other/file"])),
@@ -66,20 +74,7 @@ fn planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps() {
     assert!(!validate_planner(&fixture, &changed, &mut Vec::new()));
     let mut changed = document(SuiteKind::PlannerV2, &fixture);
     changed["steps"][0]["acceptance_names"] = json!([]);
-    changed["summary"] = json!(format!(
-        "{} unit compile",
-        fixture.expected["marker"].as_str().unwrap()
-    ));
-    assert!(
-        validate_submission(
-            SuiteKind::PlannerV1,
-            &fixture,
-            Some(&changed),
-            &[],
-            &mut Vec::new()
-        ),
-        "former scorer accepts acceptance names supplied only in prose"
-    );
+    changed["summary"] = json!(format!("{} unit compile", "intent"));
     assert!(
         !validate_planner(&fixture, &changed, &mut Vec::new()),
         "prose is not declared acceptance coverage"
@@ -113,11 +108,15 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
             .unwrap()
             .contains(&good["failure_kind"]));
         assert!(validate_diagnosis(&fixture, &good, &mut Vec::new()));
+        let mut plain = good.clone();
+        plain["summary"] =
+            json!("The observed result and selected command determine the submitted failure type.");
+        assert!(validate_diagnosis(&fixture, &plain, &mut Vec::new()));
         // The previous scorer always rejected a schema-compliant submission.
         assert_ne!(good["classification"], fixture.expected["classification"]);
         for (key, value) in [
             ("failure_kind", json!("invented_kind")),
-            ("summary", json!("No concrete classification provided")),
+            ("summary", json!("")),
             ("evidence_refs", json!([])),
             (
                 "evidence_refs",
@@ -146,8 +145,9 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
     for (id, revision) in [
         ("onboarding-v2", "stage-qualification-v2.2"),
-        ("planner-v2", "stage-qualification-v2.2"),
-        ("test-diagnosis-v2", "stage-qualification-v2.2"),
+        ("planner-v2", "stage-qualification-v2.3"),
+        ("test-diagnosis-v2", "stage-qualification-v2.3"),
+        ("verifier-v2", "stage-qualification-v2.3"),
     ] {
         assert_eq!(
             pharness_core::inference_qualification_fixture_revision(id).unwrap(),
@@ -171,7 +171,6 @@ fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gat
     for (id, revision) in [
         ("coding-v2", "coding-reliability-v2.1"),
         ("repair-v2", "repair-reliability-v2.1"),
-        ("verifier-v2", "stage-qualification-v2.0"),
     ] {
         assert_eq!(
             pharness_core::inference_qualification_fixture_revision(id).unwrap(),

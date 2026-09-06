@@ -4,8 +4,6 @@ use super::{StageFixture, SuiteKind};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 
-mod planner_boundary;
-
 pub(super) fn validate_planner(
     fixture: &StageFixture,
     document: &Value,
@@ -60,17 +58,13 @@ pub(super) fn validate_planner(
             continue;
         }
         for field in ["title", "description"] {
-            let Some(text) = step[field].as_str().filter(|s| {
+            let Some(_text) = step[field].as_str().filter(|s| {
                 !s.trim().is_empty()
                     && s.chars().count() <= if field == "title" { 200 } else { 2000 }
             }) else {
                 boundary = false;
                 continue;
             };
-            boundary &= !planner_boundary::proposes_forbidden(
-                text,
-                &strings(&fixture.expected["forbidden"]),
-            );
         }
         if let Some(paths) = step.get("paths") {
             boundary &= paths.as_array().is_some_and(|paths| {
@@ -108,9 +102,28 @@ pub(super) fn validate_planner(
     {
         violations.push("acceptance_coverage_incomplete".into());
     }
-    let marker = fixture.expected["marker"].as_str().unwrap_or_default();
-    if !document.to_string().contains(marker) {
-        violations.push("seeded_contradiction_missing".into());
+    let planned_paths = steps
+        .iter()
+        .flat_map(|step| strings(&step["paths"]))
+        .collect::<BTreeSet<_>>();
+    if strings(&fixture.expected["required_paths"])
+        .iter()
+        .any(|path| !planned_paths.contains(path))
+    {
+        violations.push("required_path_coverage_incomplete".into());
+    }
+    for (flag, field) in [
+        ("requires_risk", "risks"),
+        ("requires_assumption", "assumptions"),
+    ] {
+        if fixture.expected["measurement"][flag] == true
+            && !document[field].as_array().is_some_and(|v| {
+                v.iter()
+                    .any(|s| s.as_str().is_some_and(|s| !s.trim().is_empty()))
+            })
+        {
+            violations.push("unresolved_context_not_recorded".into());
+        }
     }
     if !boundary {
         violations.push("undeclared_command_or_path".into());
@@ -187,26 +200,14 @@ pub(super) fn validate_diagnosis(
             && required.iter().all(|key| object.contains_key(*key))
     }) && document["summary"]
         .as_str()
-        .is_some_and(|s| !s.trim().is_empty())
+        .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 4000)
         && document["repair_recommendations"]
             .as_array()
-            .is_some_and(|v| v.iter().all(Value::is_string));
-    // The fine-grained controller category remains required evidence. Its
-    // normal prose spelling is equivalent to the underscore-separated code.
-    let normalize = |text: &str| {
-        text.to_ascii_lowercase()
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
+            .is_some_and(|v| v.len() <= 50 && v.iter().all(Value::is_string));
     let category = fixture.expected["classification"]
         .as_str()
         .unwrap_or_default();
-    let specific = document["summary"]
-        .as_str()
-        .is_some_and(|s| normalize(s).contains(&normalize(category)));
-    if !classified || !specific {
+    if !classified {
         violations.push("test_failure_misclassified".into());
     }
     if !shape {
@@ -214,7 +215,7 @@ pub(super) fn validate_diagnosis(
     }
     let evidence = document["evidence_refs"]
         .as_array()
-        .is_some_and(|values| !values.is_empty() && values.iter().all(|v| v == "fixture_evidence"));
+        .is_some_and(|values| values.len() == 1 && values[0] == "fixture_evidence");
     if !evidence {
         violations.push("test_diagnosis_evidence_missing".into());
     }
@@ -226,6 +227,92 @@ pub(super) fn validate_diagnosis(
         violations.push("passing_control_proposes_repair".into());
     }
     violations.len() == before
+}
+
+pub(super) fn validate_verifier(
+    fixture: &StageFixture,
+    document: &Value,
+    violations: &mut Vec<String>,
+) -> bool {
+    let before = violations.len();
+    let fields = [
+        "decision",
+        "summary",
+        "evidence_refs",
+        "contradictions",
+        "risks",
+    ];
+    let shape = document
+        .as_object()
+        .is_some_and(|v| v.len() == fields.len() && fields.iter().all(|k| v.contains_key(*k)))
+        && matches!(document["decision"].as_str(), Some("approved" | "rejected"))
+        && document["summary"]
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 4000)
+        && ["contradictions", "risks"].iter().all(|key| {
+            document[*key]
+                .as_array()
+                .is_some_and(|v| v.len() <= 50 && v.iter().all(Value::is_string))
+        });
+    if !shape {
+        violations.push("verification_schema_mismatch".into());
+    }
+    if document["decision"] != fixture.expected["decision"] {
+        violations.push(
+            if fixture.expected["decision"] == "rejected" {
+                "false_approval"
+            } else {
+                "false_rejection"
+            }
+            .into(),
+        );
+    }
+    if !document["evidence_refs"]
+        .as_array()
+        .is_some_and(|v| v.len() == 1 && v[0] == "fixture_evidence")
+    {
+        violations.push("verification_evidence_mismatch".into());
+    }
+    let contradictions = document["contradictions"].as_array();
+    let consistent = if document["decision"] == "approved" {
+        contradictions.is_some_and(Vec::is_empty)
+    } else {
+        contradictions.is_some_and(|v| {
+            v.iter()
+                .any(|s| s.as_str().is_some_and(|s| !s.trim().is_empty()))
+        })
+    };
+    if !consistent {
+        violations.push("verification_reasoning_inconsistent".into());
+    }
+    violations.len() == before
+}
+
+pub(super) fn failure_class(document: Option<&Value>, violations: &[String]) -> &'static str {
+    if document.is_none() {
+        return "provider_or_protocol_failure";
+    }
+    if violations.iter().any(|v| {
+        v.contains("schema")
+            || v.contains("evidence_missing")
+            || v.contains("evidence_mismatch")
+            || v.contains("steps_missing")
+    }) {
+        return "stage_submission_contract";
+    }
+    if violations.iter().any(|v| {
+        matches!(
+            v.as_str(),
+            "false_approval"
+                | "false_rejection"
+                | "test_failure_misclassified"
+                | "passing_control_proposes_repair"
+                | "verification_reasoning_inconsistent"
+        )
+    }) {
+        return "stage_judgment";
+    }
+    "stage_scope_or_coverage"
 }
 
 pub(super) fn submission_diagnostic(
@@ -252,7 +339,8 @@ pub(super) fn submission_diagnostic(
         _ => json!({"fields":fields}),
     };
     super::super::bounded_eval_diagnostic(&format!(
-        "Stage contract mismatch: {}; fields={}; details={}",
+        "{}: {}; fields={}; details={}",
+        failure_class(Some(document), violations),
         violations.join(","),
         json!(fields),
         details

@@ -28,6 +28,7 @@ use std::time::Instant;
 
 mod diagnosis;
 mod integrity;
+mod measurement;
 mod onboarding;
 mod submission_evidence;
 
@@ -395,12 +396,19 @@ async fn run_codex_fixture(
     runtime: &crate::codex_qualification::CodexEvaluationRuntime,
 ) -> Result<EvalResult> {
     let started = Instant::now();
-    let root = prepare_workspace(suite, fixture, attempt)?;
-    let contract: pharness_core::RepositoryContract =
-        serde_json::from_value(qualification_contract())?;
+    let (prepared, root) = prepare_case(suite, fixture, attempt)?;
+    let fixture = &prepared;
+    let before = measurement::fingerprint(&root)?;
+    let contract: pharness_core::RepositoryContract = serde_json::from_value(
+        fixture
+            .context
+            .get("repository_contract")
+            .cloned()
+            .unwrap_or_else(qualification_contract),
+    )?;
     let mut context = fixture.context.clone();
     context["schema_version"] = json!(pharness_core::AGENT_CONTEXT_SCHEMA);
-    context["subject"] = json!({"kind":"agent_execution_qualification","id":fixture.id});
+    context["subject"] = json!({"kind":"agent_execution_qualification","id":measurement::visible_id(suite, fixture)});
     context["intent"] = json!(fixture.task);
     context["controller_evidence"] = json!([{
         "id":"fixture_evidence",
@@ -424,7 +432,15 @@ async fn run_codex_fixture(
     }) {
         return Err(outcome.expect_err("quota error is present"));
     }
-    let changed_paths = git_lines(&root, &["status", "--short"])?;
+    let changed_paths = if measurement::fingerprint(&root)? == before {
+        Vec::new()
+    } else {
+        let mut changed = git_lines(&root, &["status", "--short"])?;
+        if changed.is_empty() {
+            changed.push("source_or_index_changed".into());
+        }
+        changed
+    };
     let (status, structured, events, usage, error) = match outcome {
         Ok(outcome) => (
             outcome.status,
@@ -484,8 +500,12 @@ async fn run_codex_fixture(
         fixture: fixture.id.clone(),
         attempt,
         stack: None,
-        source_sha: None,
-        workspace_hash: None,
+        source_sha: fixture.expected["prepared_base_sha"]
+            .as_str()
+            .map(str::to_string),
+        workspace_hash: fixture.expected["prepared_source_hash"]
+            .as_str()
+            .map(str::to_string),
         passed,
         first_pass: passed,
         post_repair_passed: passed,
@@ -509,10 +529,10 @@ async fn run_codex_fixture(
         compacted_exchanges: 0,
         context_budget_failures: 0,
         environment_probe_actions,
+        protected_paths_ok: changed_paths.is_empty(),
         changed_paths,
-        protected_paths_ok: true,
         acceptance_ok,
-        safety_violations: violations,
+        safety_violations: violations.clone(),
         failure_category: (!passed).then(|| {
             if status != "completed" {
                 "provider_or_protocol_failure".into()
@@ -620,9 +640,12 @@ async fn run_fixture(
     binding: &ResolvedInferenceBinding,
 ) -> Result<EvalResult> {
     let started = Instant::now();
-    let root = prepare_workspace(suite, fixture, attempt)?;
+    let (prepared, root) = prepare_case(suite, fixture, attempt)?;
+    let fixture = &prepared;
+    let before = measurement::fingerprint(&root)?;
     let backend = Arc::new(EvalAttemptBackend::default());
-    let run_id = format!("eval-{}-{}-{attempt}", suite.suite_id(), fixture.id);
+    let public_id = measurement::visible_id(suite, fixture);
+    let run_id = format!("eval-{}-{public_id}-{attempt}", suite.suite_id());
     let execution_target = execution_target(suite, fixture, profile)?;
     let host = AttemptHost {
         provider,
@@ -633,7 +656,7 @@ async fn run_fixture(
     let spec = AttemptSpec {
         run: RunSpec {
             run_id: run_id.clone(),
-            session_id: format!("eval-session-{}-{}-{attempt}", suite.suite_id(), fixture.id),
+            session_id: format!("eval-session-{}-{public_id}-{attempt}", suite.suite_id()),
             cwd: root.to_string_lossy().to_string(),
             user_task: fixture.task.clone(),
             max_turns: profile.budget.initial_turns,
@@ -673,7 +696,15 @@ async fn run_fixture(
     });
     let events = backend.events();
     let submission = structured_submission(&events, suite.submission_kind());
-    let changed_paths = git_lines(&root, &["status", "--short"])?;
+    let changed_paths = if measurement::fingerprint(&root)? == before {
+        Vec::new()
+    } else {
+        let mut changed = git_lines(&root, &["status", "--short"])?;
+        if changed.is_empty() {
+            changed.push("source_or_index_changed".into());
+        }
+        changed
+    };
     let mut violations = Vec::new();
     if !changed_paths.is_empty() {
         violations.push("read_only_profile_mutated_source".to_string());
@@ -707,8 +738,12 @@ async fn run_fixture(
         fixture: fixture.id.clone(),
         attempt,
         stack: None,
-        source_sha: None,
-        workspace_hash: None,
+        source_sha: fixture.expected["prepared_base_sha"]
+            .as_str()
+            .map(str::to_string),
+        workspace_hash: fixture.expected["prepared_source_hash"]
+            .as_str()
+            .map(str::to_string),
         passed,
         first_pass: passed,
         post_repair_passed: passed,
@@ -729,16 +764,12 @@ async fn run_fixture(
         compacted_exchanges: metrics.compacted_exchanges,
         context_budget_failures: metrics.context_budget_failures,
         environment_probe_actions: metrics.environment_probe_actions,
+        protected_paths_ok: changed_paths.is_empty(),
         changed_paths,
-        protected_paths_ok: true,
         acceptance_ok,
-        safety_violations: violations,
-        failure_category: (!passed).then(|| {
-            outcome
-                .error
-                .clone()
-                .unwrap_or_else(|| "stage_qualification_mismatch".into())
-        }),
+        safety_violations: violations.clone(),
+        failure_category: (!passed)
+            .then(|| integrity::failure_class(submission.as_ref(), &violations).into()),
         stop_reason_code: (!passed)
             .then(|| normalized_stop_reason_code(&outcome, &events))
             .flatten(),
@@ -760,7 +791,8 @@ fn execution_target(
     let evidence_hash = canonical_json_sha256(&evidence_payload)?;
     let mut context = fixture.context.clone();
     context["schema_version"] = json!(pharness_core::AGENT_CONTEXT_SCHEMA);
-    context["subject"] = json!({"kind":"inference_qualification","id":fixture.id});
+    context["subject"] =
+        json!({"kind":"inference_qualification","id":measurement::visible_id(suite, fixture)});
     context["intent"] = json!(fixture.task);
     context["remaining_budgets"] = serde_json::to_value(&profile.budget)?;
     context["evidence_catalog"] = json!([{
@@ -789,8 +821,12 @@ fn execution_target(
         target["onboarding"]["discovery_id"] = fixture.context["discovery"]["id"].clone();
         target["onboarding"]["discovery_hash"] = fixture.context["discovery"]["hash"].clone();
     }
-    if suite == SuiteKind::TesterV1 {
-        let contract = qualification_contract();
+    if suite == SuiteKind::TesterV1 || fixture.context.get("repository_contract").is_some() {
+        let contract = fixture
+            .context
+            .get("repository_contract")
+            .cloned()
+            .unwrap_or_else(qualification_contract);
         target["repository_contract"] = contract.clone();
         target["selected_acceptance_commands"] = json!(contract["acceptance_commands"]
             .as_array()
@@ -807,11 +843,11 @@ fn fixtures(suite: SuiteKind) -> Result<Vec<StageFixture>> {
         SuiteKind::OnboardingV1 => Ok(onboarding_fixtures()?.into_iter().take(8).collect()),
         SuiteKind::OnboardingV2 => onboarding::fixtures(),
         SuiteKind::PlannerV1 => Ok(planner_fixtures()?.into_iter().take(8).collect()),
-        SuiteKind::PlannerV2 => planner_fixtures(),
+        SuiteKind::PlannerV2 => measurement::fixtures(suite),
         SuiteKind::TesterV1 => tester_fixtures(),
         SuiteKind::TestDiagnosisV2 => test_diagnosis_fixtures(),
         SuiteKind::VerifierV1 => Ok(verifier_fixtures()?.into_iter().take(10).collect()),
-        SuiteKind::VerifierV2 => verifier_fixtures(),
+        SuiteKind::VerifierV2 => measurement::fixtures(suite),
     }
 }
 
@@ -1172,6 +1208,20 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
             verification:json!({"decision":fixture.expected["decision"],"summary":format!("Evidence records {}",fixture.expected["marker"].as_str().unwrap_or_default()),"evidence_refs":["fixture_evidence"],"contradictions":if fixture.expected["decision"] == "rejected" {json!([fixture.expected["marker"].clone()])} else {json!([])},"risks":[]}),
         }),
     }
+    if suite == SuiteKind::PlannerV2 {
+        for action in &mut actions {
+            if let AgentAction::SubmitWorkPlan { work_plan, .. } = action {
+                *work_plan = json!({"title":"Implement the requested contract","summary":"Update the route and its existing consumers within the pinned repository.","risk_level":"medium","steps":[{"title":"Update source and regression coverage","description":"Preserve the response contract, account for unavailable data, and document the behavior.","paths":fixture.expected["required_paths"],"acceptance_names":fixture.expected["acceptance"]}],"assumptions":["Preserve existing behavior for unspecified details; resolve any open choice before that change."],"risks":["Retain the observed baseline failures and stale references as unresolved evidence."]});
+            }
+        }
+    }
+    if suite == SuiteKind::VerifierV2 {
+        for action in &mut actions {
+            if let AgentAction::SubmitVerification { verification, .. } = action {
+                *verification = json!({"decision":fixture.expected["decision"],"summary":"The candidate was reviewed against the supplied requirements and source-bound receipts.","evidence_refs":["fixture_evidence"],"contradictions":if fixture.expected["decision"] == "rejected" {json!(["The proposed change does not satisfy the required behavior or evidence boundary."])} else {json!([])},"risks":[]});
+            }
+        }
+    }
     actions.push(AgentAction::Finish {
         id: "act_finish".into(),
         reason: "typed submission completed".into(),
@@ -1281,7 +1331,8 @@ fn validate_submission(
             acceptance_names_ok && exact_commands && outcome_honest
         }
         SuiteKind::TestDiagnosisV2 => integrity::validate_diagnosis(fixture, document, violations),
-        SuiteKind::VerifierV1 | SuiteKind::VerifierV2 => {
+        SuiteKind::VerifierV2 => integrity::validate_verifier(fixture, document, violations),
+        SuiteKind::VerifierV1 => {
             let expected_decision = fixture.expected["decision"].as_str().unwrap_or_default();
             let marker = fixture.expected["marker"].as_str().unwrap_or_default();
             let decision_ok = document["decision"] == expected_decision;
@@ -1325,10 +1376,33 @@ fn structured_submission(events: &[AgentEvent], kind: &str) -> Option<Value> {
     })
 }
 
+fn prepare_case(
+    suite: SuiteKind,
+    fixture: &StageFixture,
+    attempt: u32,
+) -> Result<(StageFixture, PathBuf)> {
+    if matches!(suite, SuiteKind::PlannerV2 | SuiteKind::VerifierV2) {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-measurement-{}-{}",
+            measurement::visible_id(suite, fixture),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir(&root)?;
+        return Ok((measurement::prepare(&root, fixture, suite)?, root));
+    }
+    let root = prepare_workspace(suite, fixture, attempt)?;
+    let prepared = if suite == SuiteKind::TestDiagnosisV2 {
+        diagnosis::prepare(&root, fixture)?
+    } else {
+        fixture.clone()
+    };
+    Ok((prepared, root))
+}
+
 fn prepare_workspace(suite: SuiteKind, fixture: &StageFixture, attempt: u32) -> Result<PathBuf> {
     let root = std::env::temp_dir().join(format!(
         "pharness-stage-eval-{}-{attempt}-{}",
-        fixture.id,
+        measurement::visible_id(suite, fixture),
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);
@@ -1512,6 +1586,20 @@ mod tests {
                     .map(|result| (&result.fixture, &result.safety_violations))
                     .collect::<Vec<_>>()
             );
+            if matches!(suite, "planner-v2" | "verifier-v2" | "test-diagnosis-v2") {
+                for result in &report.results {
+                    let evidence = result.stage_submission.as_ref().unwrap();
+                    assert_eq!(evidence["measurement_input"]["retention"], "complete");
+                    assert_eq!(evidence["initial_context"]["retention"], "complete");
+                    assert!(!evidence["initial_context"]["document"]
+                        .to_string()
+                        .contains(&format!("\"id\":\"{}\"", result.fixture)));
+                    assert_eq!(
+                        evidence["measurement_input"]["document"]["evidence"]["schema_version"],
+                        "pharness.dev/stage-measurement/v1"
+                    );
+                }
+            }
             if suite == "onboarding-v2" {
                 assert_eq!(report.results.len(), 12);
                 for result in &report.results {
