@@ -84,3 +84,5 @@ and GitOps diff, within the existing 30-minute maximum. The slice passes 212
 core-package tests but grants no production authority and implements no write path.
 Continue with the authenticated, persisted decision and native evidence integration
 listed in that report. All acceptance checkboxes above remain open.
+
+[Integration with M04A–D and current staging](../../evidence/autonomous-sdlc/ASTRA-M09-M04-PROCESS-INTEGRATION.md) passes 213 core-package checks on `b1e878d`. The production types are unchanged; all operative acceptance gates remain open.
