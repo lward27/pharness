@@ -1,0 +1,1545 @@
+   Compiling serde_core v1.0.228
+   Compiling tracing v0.1.44
+   Compiling hyper v1.9.0
+   Compiling serde_json v1.0.149
+   Compiling tower v0.5.3
+   Compiling utf8parse v0.2.2
+   Compiling toml_write v0.1.2
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling colorchoice v1.0.5
+   Compiling winnow v0.7.15
+   Compiling anstyle-parse v1.0.0
+   Compiling anstyle-query v1.1.5
+   Compiling getrandom v0.4.3
+   Compiling anstyle v1.0.14
+   Compiling strsim v0.11.1
+   Compiling clap_lex v1.1.0
+   Compiling heck v0.5.0
+   Compiling anstream v1.0.0
+   Compiling tower-http v0.6.8
+   Compiling clap_derive v4.6.1
+   Compiling tracing-subscriber v0.3.23
+   Compiling clap_builder v4.6.0
+   Compiling hyper-util v0.1.20
+   Compiling uuid v1.25.0
+   Compiling hyper-rustls v0.27.9
+   Compiling clap v4.6.1
+   Compiling serde v1.0.228
+   Compiling camino v1.2.2
+   Compiling url v2.5.8
+   Compiling serde_urlencoded v0.7.1
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling secrecy v0.8.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling toml_edit v0.22.27
+   Compiling reqwest v0.12.28
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-core)
+   Compiling toml v0.8.23
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-openai-compatible)
+   Compiling pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-fireworks)
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-runhost)
+   Compiling pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-config)
+   Compiling pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-codex-host)
+   Compiling pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.06s
+     Running unittests src/main.rs (target/debug/deps/pharness_eval-fc09ccb163a6f3d9)
+
+running 35 tests
+test codex_qualification::tests::subscription_errors_remain_distinct_from_general_provider_failures ... ok
+test codex_qualification::tests::stage_writable_roots_are_derived_only_from_stage_authority ... ok
+test coding_v2::tests::hidden_semantic_boundaries_are_explicit_in_every_stack_task ... ok
+test coding_v2::tests::fixture_scope_accepts_contract_test_files_but_rejects_toolchain_overrides ... ok
+test codex_qualification::tests::interruption_resume_budget_is_bounded_by_the_selected_policy ... ok
+test codex_qualification::tests::interruption_protocol_uses_each_policies_own_stage_contract ... ok
+test codex_qualification::tests::protocol_configs_keep_read_only_stages_without_writable_roots ... ok
+test coding_v2::tests::frozen_suite_has_eight_tasks_per_stack_and_stable_hashes ... ok
+test stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates ... ok
+test stage_suites::integrity::tests::failed_stage_diagnostics_preserve_contract_fields_without_inventing_missing_results ... ok
+test stage_suites::submission_evidence::tests::diagnostics_preserve_other_stage_documents_without_inventing_verifier_results ... ok
+test stage_suites::integrity::tests::planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps ... ok
+test stage_suites::integrity::tests::diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and_repairs ... ok
+test codex_qualification::tests::checkpoint_resume_requires_exact_policy_and_runtime_provenance ... ok
+test stage_suites::submission_evidence::tests::missing_large_deep_and_secret_shaped_submissions_remain_explicitly_incomplete ... ok
+test stage_suites::submission_evidence::tests::prior_live_verifier_report_remains_readable_without_invented_submissions ... ok
+test stage_suites::submission_evidence::tests::verifier_predicates_explain_every_failure_combination_without_changing_the_gate ... ok
+test tests::builder_report_tool_hash_matches_the_resolved_profile_contract ... ok
+test tests::coding_gate_marks_provider_abort_as_invalid_infrastructure ... ok
+test tests::evaluation_diagnostics_are_bounded_and_redact_sensitive_lines ... ok
+test tests::evaluation_metrics_count_typed_environment_probes ... ok
+test tests::evaluation_retains_tool_validation_without_replacing_the_terminal_failure ... ok
+test tests::fixture_scope_rejects_an_unexpected_changed_path ... ok
+test tests::planner_qualification_threshold_must_pass_in_each_independent_attempt ... ok
+test tests::stage_qualification_rejects_empty_partial_duplicate_and_aborted_reports ... ok
+test tests::transport_comparison_requires_direct_fireworks_as_the_gateway_baseline ... ok
+test stage_suites::submission_evidence::tests::retention_stays_bounded_when_redaction_expands_short_values ... ok
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+test coding_v2::tests::abandoned_fixture_releases_scratch_without_touching_another_fixture ... ok
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5861207) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some("   ")
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+test stage_suites::onboarding::tests::a_blocker_in_prose_cannot_substitute_for_a_blocked_proposal ... ok
+test stage_suites::onboarding::tests::scorer_rejects_fabricated_facts_and_duplicate_services ... ok
+test stage_suites::onboarding::tests::scenarios_have_real_files_and_verified_discovery_instead_of_answer_context ... ok
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5862136) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5863121) panicked at tests/pharness_hidden.rs:3:25:
+assertion failed: valid_date_range(4, 4)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5864080) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(" 5D ")
+ right: Some("5d")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test_normalizes_ticker (test_validation.ValidationTests.test_normalizes_ticker) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5865098) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(inf)
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test tests::coding_v1_replay_trajectories_pass_independent_acceptance_checks ... ok
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5866017) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(0)
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `symbol`
+  --> src/lib.rs:15:41
+   |
+15 | pub fn display_name(name: Option<&str>, symbol: &str) -> String { name.unwrap().to_string() }
+   |                                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_symbol`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5866834) panicked at src/lib.rs:15:72:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (5867574) panicked at src/lib.rs:17:46:
+attempt to multiply with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert normalize_symbol('   ') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+test stage_suites::tests::every_stage_qualification_replay_fixture_passes ... ok
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert clamp_page_size(0) == 1
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert valid_date_range(4,4) and not valid_date_range(5,4)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert normalize_period(' 5D ') == '5d' and normalize_period('all') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert safe_ratio(1,0) is None
+                                         ~~~~~~~~~~^^^^^
+  File "/private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-57417-python-ratio-and-docs-1-01a0743d-8c7d-7562-b6b8-361909a8d0f2/src/validation.py", line 19, in safe_ratio
+    return numerator / denominator
+           ~~~~~~~~~~^~~~~~~~~~~~~
+ZeroDivisionError: division by zero
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert parse_positive('0') is None and parse_positive('-1') is None and parse_positive('x') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert display_name(None,'MSFT') == 'MSFT' and display_name(' ','MSFT') == 'MSFT'
+                                         ~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-57417-python-missing-field-fallback-1-01a0743d-9d16-7980-bafe-e6d2666a4c9d/src/validation.py", line 29, in display_name
+    return name.strip()
+           ^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'strip'
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; from src.consumer import next_delay; assert retry_delay_ms(2**32) == 2**32-1 and next_delay(3) == 750
+                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-57417-node-missing-field-fallback-1-01a0743d-b079-74c1-9df8-994fc6fe3652/src/validation.js:8
+export function displayName(name, symbol) { return name.trim(); }
+                                                        ^
+
+TypeError: Cannot read properties of null (reading 'trim')
+    at displayName (file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-57417-node-missing-field-fallback-1-01a0743d-b079-74c1-9df8-994fc6fe3652/src/validation.js:8:57)
+    at file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-57417-node-missing-field-fallback-1-01a0743d-b079-74c1-9df8-994fc6fe3652/[eval1]:1:61
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:249:26)
+    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:246:20)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v26.0.0
+test coding_v2::tests::hidden_checks_reject_every_seeded_semantic_bug ... ok
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+✔ public contract (0.761042ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.003334
+✔ public contract (0.740542ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 103.201833
+✔ public contract (0.744125ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.975459
+✔ public contract (0.769375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.290958
+✔ public contract (0.754208ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.582666
+✔ public contract (0.768458ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.892833
+✔ public contract (0.773542ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104.001917
+✔ public contract (0.7565ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.51375
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test coding_v2::tests::replay_patches_pass_public_and_hidden_checks_without_scope_drift has been running for over 60 seconds
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+✔ public contract (0.851791ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 99.918375
+✔ public contract (0.764708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.051625
+✔ public contract (5.189041ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 228.039458
+✔ public contract (0.722625ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 99.249167
+✔ public contract (0.826375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.758083
+✔ public contract (0.839ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.729666
+✔ public contract (0.752333ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 103.949
+✔ public contract (0.898958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 103.170791
+test coding_v2::tests::replay_patches_pass_public_and_hidden_checks_without_scope_drift ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 91.85s
+
+     Running unittests src/lib.rs (target/debug/deps/pharness_runhost-5746a8709635bed8)
+
+running 28 tests
+test prompt::tests::worker_prompt_forbids_toolchain_discovery_before_execution ... ok
+test preview::tests::skips_secret_shaped_approval_preview ... ok
+test preview::tests::previews_patch_file_approval_with_diff ... ok
+test preview::tests::previews_write_file_approval_with_diff ... ok
+test workspace_source_tests::accepts_a_safe_https_repository_and_refs ... ok
+test workspace_source_tests::evidence_git_commands_trust_only_the_issued_workspace ... ok
+test prompt::tests::workspace_command_schema_exposes_only_verified_runner_executables ... ok
+test prompt::tests::worker_tool_schema_does_not_expose_non_resumable_approval_by_default ... ok
+test prompt::tests::onboarding_tool_schema_requires_the_controller_contract_shape ... ok
+test prompt::tests::atomic_patch_schema_exposes_its_exact_preimage_contract ... ok
+test prompt::tests::worker_tool_schema_contains_terminal_and_read_only_actions ... ok
+test workspace_source_tests::node_acceptance_keeps_all_runtime_state_under_pharness_runtime ... ok
+test workspace_source_tests::old_attempt_payload_deserializes_with_the_general_task_contract ... ok
+test workspace_source_tests::rejects_credentials_and_unsafe_refs ... ok
+test workspace_source_tests::reliability_v2_verifier_uses_terminal_submission_without_finish ... ok
+test workspace_source_tests::profile_tool_specs_expose_only_the_pinned_allowlist ... ok
+test workspace_source_tests::profile_executor_rejects_tools_outside_the_pinned_allowlist ... ok
+test workspace_source_tests::verifier_profile_preserves_submission_turns_and_avoids_redundant_reads ... ok
+test workspace_source_tests::profile_context_is_injected_and_evidence_retrieval_is_hash_bound ... ok
+test workspace_source_tests::onboarding_profile_uses_its_controller_owned_subject_stage ... ok
+test workspace_source_tests::reliability_v2_tool_hash_binds_exact_acceptance_and_evidence_ids ... ok
+test workspace_source_tests::workspace_command_rejects_package_network_and_shell_composition ... ok
+test workspace_source_tests::repository_instruction_symlink_escaping_workspace_is_ignored ... ok
+test workspace_source_tests::repository_instructions_are_bounded_and_stay_inside_the_workspace ... ok
+test workspace_source_tests::workspace_command_executes_only_the_snapshot_runtime ... ok
+test workspace_source_tests::repository_contract_paths_are_enforced_by_the_workspace_executor ... ok
+test workspace_source_tests::atomic_patch_requires_preimages_and_never_partially_applies ... ok
+test workspace_source_tests::collects_bounded_evidence_against_the_pinned_commit ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+   Doc-tests pharness_runhost
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

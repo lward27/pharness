@@ -1,0 +1,259 @@
+{
+  "model": "accounts/fireworks/models/minimax-m3",
+  "form": "joined",
+  "request": {
+    "model": "accounts/fireworks/models/minimax-m3",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Base instruction: ASTRA_ENVELOPE_SLOT_0_6a459cc7\n\nRepository instruction: ASTRA_ENVELOPE_SLOT_1_6a459cc7\n\nExecution environment: ASTRA_ENVELOPE_SLOT_2_6a459cc7\n\nRepository map: ASTRA_ENVELOPE_SLOT_3_6a459cc7\n\nStage instruction: ASTRA_ENVELOPE_SLOT_4_6a459cc7\n\nController discovery: ASTRA_ENVELOPE_SLOT_5_6a459cc7"
+      },
+      {
+        "role": "user",
+        "content": "This is a prompt-format diagnostic. Reply OK."
+      }
+    ],
+    "temperature": 0.1,
+    "max_tokens": 32,
+    "stream": false,
+    "echo": true,
+    "raw_output": true
+  },
+  "started_at": "2026-09-06T00:52:41.475845+00:00",
+  "http_status": 200,
+  "response_sha256": "98aeb8da17cde4f1c433598146195fed9671ddc69d912b39d370c9acdb3fe5e2",
+  "top_level_fields": [
+    "id",
+    "object",
+    "created",
+    "model",
+    "choices",
+    "usage"
+  ],
+  "usage": {
+    "prompt_tokens": 244,
+    "total_tokens": 276,
+    "completion_tokens": 32,
+    "prompt_tokens_details": {
+      "cached_tokens": 129
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  },
+  "strings": [
+    {
+      "path": "/id",
+      "bytes": 41,
+      "sha256": "398ce8eb2156022952b84ec43b74abee61215114ef589abdbec34013d87795e0",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/object",
+      "bytes": 15,
+      "sha256": "e5ceded10e0255cf48444c9a8e2b7e00c594910381bac03f33cda6f50b53c7fb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/model",
+      "bytes": 36,
+      "sha256": "ec112e12757d85d3fc36e7c388064a0a64aabf78eb6d7a9fb850b92fdf9a06cb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/role",
+      "bytes": 9,
+      "sha256": "a39a7ffad4a3013f29da97b84f264337f234c1cf9b3c40c7c30c677a8a18609a",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/content",
+      "bytes": 898,
+      "sha256": "5164346be98dfa0846e7cacb1bfb80ad303ebb82f148a5dcb4cd5f2399d0e29f",
+      "marker_positions": [
+        393,
+        449,
+        504,
+        552,
+        603,
+        657
+      ]
+    },
+    {
+      "path": "/choices/0/finish_reason",
+      "bytes": 6,
+      "sha256": "0f82aca66af91493b1ff401de5f1f7e3e24e14560df3f6f7e465dbc915b9947d",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/2",
+      "bytes": 171,
+      "sha256": "0202c926c4fa0c652b31cbca1cc5520f8fbd5aed73b667e05db1021da963d704",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/5",
+      "bytes": 94,
+      "sha256": "32f4d07ef112f7279830da261a372efab367000e926f97c8a7e83388aef55fbf",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/7",
+      "bytes": 271,
+      "sha256": "126d487810d53900325879f0802ae78171d6c288070b0074e56207a3c3421fb4",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/9",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/11",
+      "bytes": 322,
+      "sha256": "c0a733b6ba37d7887779f32bb62060e2b7330474f34f723f44811232f7abd8f1",
+      "marker_positions": [
+        28,
+        84,
+        139,
+        187,
+        238,
+        292
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/13",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/15",
+      "bytes": 50,
+      "sha256": "abb72ad0a343ed24f8f979eb385686477e93e10caa6d8773c63f980d6cc5c00c",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/17",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/19",
+      "bytes": 3,
+      "sha256": "4c9029e5351f4d4ced65251ab5bca0b61b3b09646b15f9ce302b59f8321cc3a7",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/completion",
+      "bytes": 1117,
+      "sha256": "94904ce46e1ed1cfb8827e9c58f00409bb7195dc47ab0d2148d3fd1ff6fd7c69",
+      "marker_positions": [
+        602,
+        658,
+        713,
+        761,
+        812,
+        866
+      ]
+    }
+  ],
+  "elapsed_seconds": 1.201,
+  "qualification_accepted": false
+}

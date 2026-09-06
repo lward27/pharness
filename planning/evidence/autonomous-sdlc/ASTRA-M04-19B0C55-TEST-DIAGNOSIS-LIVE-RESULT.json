@@ -1,0 +1,1758 @@
+{
+  "observed_at": "2026-09-06T10:11:03.205186+00:00",
+  "id": "infeval_01a0744114c97952b9aff7f0d8fdb078",
+  "status": "completed",
+  "suite_id": "test-diagnosis-v2",
+  "suite_hash": "sha256:bddd80856f1db11b720afc3e7ec11ee6ee22e23a22ae75924b501cc8d43a94f2",
+  "attempts": 2,
+  "agent_profile_id": "repo-test-diagnoser",
+  "agent_profile_hash": "sha256:894e83a7377b4cf930b0961a320821c59abc55daaaa8546a47e11136d7bef2d9",
+  "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+  "target_revision": "v1",
+  "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+  "policy_id": "test-diagnosis-nemotron-v2",
+  "policy_revision": "v1",
+  "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+  "resolved_binding": {
+    "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+    "target": {
+      "schema_version": "pharness.dev/inference-target/v1alpha1",
+      "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+      "revision": "v1",
+      "display_name": "Fireworks Nemotron Lightning 3.5 30B A3B",
+      "backend_kind": "fireworks",
+      "protocol": "openai_chat_completions_v1",
+      "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+      "upstream_model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "authentication_binding": "fireworks-api-key",
+      "transport": {
+        "connect_timeout_seconds": 5,
+        "first_response_timeout_seconds": 300,
+        "stream_idle_timeout_seconds": 120,
+        "max_attempts": 3,
+        "allow_insecure_private_http": false
+      },
+      "capabilities": {
+        "native_tools": true,
+        "streaming": true,
+        "json_schema": false,
+        "stream_options": true,
+        "reasoning_efforts": [],
+        "reasoning_context_modes": [],
+        "tool_choice_modes": [
+          "auto",
+          "required"
+        ]
+      },
+      "context_limit_tokens": 262144,
+      "output_limit_tokens": 8192,
+      "allowed_stages": [
+        "onboarding",
+        "test"
+      ],
+      "selectable": true,
+      "config_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf"
+    },
+    "policy": {
+      "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "revision": "v1",
+      "display_name": "Reliability V2 Test diagnosis Nemotron Lightning",
+      "eligible_profiles": [
+        "repo-test-diagnoser"
+      ],
+      "eligible_stages": [
+        "test"
+      ],
+      "target": {
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+        "revision": "v1"
+      },
+      "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "temperature_milli": 0,
+      "max_output_tokens": 4096,
+      "max_input_tokens": 65536,
+      "tool_protocol": "native_tools",
+      "tool_choice": "auto",
+      "transport_max_attempts": 3,
+      "selectable": true,
+      "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1"
+    },
+    "prompt_version": "2026-09-05.1",
+    "stage_prompt": {
+      "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+      "prompt_id": "repo-test-diagnoser-v2",
+      "revision": "2026-09-05.1",
+      "stage": "test",
+      "content_hash": "sha256:d55b68138636333864c4539c6226c2b84e53eb1908385ed5c8871dabead34456"
+    },
+    "tool_schema_hash": "sha256:4c3b1f68d6335b7ef3403988c5439f7460e8edd433da21185dbd5d6062a0389a",
+    "context_policy_hash": "sha256:510ca59016a957d361fef7df6bbd5a9deb028f1b42eeb1660ca9e1b91ab20700",
+    "protocol_calibration_hash": "sha256:c88a17391091e7520a55431ff1f877632be1d00fb79ef615a89b3b4b5423ab4e",
+    "profile_budget_hash": "sha256:56e4d967bf176a5fb8793a18f739975543eb362d17ca1ce55b8b20fc1ed08c70",
+    "base_agent_profile_hash": "sha256:759e17ac13b1d2ebeb3ff0a5b40e32e2dc305738f676f212cccf2d577aeeaf58",
+    "agent_profile_hash": "sha256:894e83a7377b4cf930b0961a320821c59abc55daaaa8546a47e11136d7bef2d9",
+    "binding_hash": "sha256:22a00ba0e2e93495cfc8a8f5df2663cc777c7b2506b3f93137a82a717c10ed4f"
+  },
+  "binding_hash": "sha256:22a00ba0e2e93495cfc8a8f5df2663cc777c7b2506b3f93137a82a717c10ed4f",
+  "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "actor": "lucas",
+  "reason": "ASTRA M04 corrected-runtime qualification on immutable source 19b0c55c48e3614d0b4507d56df3029a52475618; registered primary, unchanged limits, no source or deployment effects",
+  "config_hash": "sha256:0cd14616e7e2f3a0fda4e5b87a146e32b678e35c02d79c70d6296f40d01a9b02",
+  "job_name": "pharness-inference-eval-a241184fd751",
+  "report": {
+    "attempts": 2,
+    "binding_hash": "sha256:22a00ba0e2e93495cfc8a8f5df2663cc777c7b2506b3f93137a82a717c10ed4f",
+    "candidate_safe": false,
+    "gate_passed": false,
+    "infrastructure_valid": true,
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "passes": 2,
+    "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+    "policy_id": "test-diagnosis-nemotron-v2",
+    "policy_revision": "v1",
+    "profile_hash": "sha256:894e83a7377b4cf930b0961a320821c59abc55daaaa8546a47e11136d7bef2d9",
+    "prompt_version": "2026-09-05.1",
+    "provider": "gateway",
+    "report": {
+      "attempts": 2,
+      "fixture_revision": "stage-qualification-v2.1",
+      "max_tokens": 4096,
+      "max_turns": 8,
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "policy_revision": "v1",
+      "profile_hash": "sha256:894e83a7377b4cf930b0961a320821c59abc55daaaa8546a47e11136d7bef2d9",
+      "prompt_version": "2026-09-05.1",
+      "provider": "gateway",
+      "resolved_settings": {
+        "binding_hash": "sha256:22a00ba0e2e93495cfc8a8f5df2663cc777c7b2506b3f93137a82a717c10ed4f",
+        "context_assembly_limit": 65536,
+        "maximum_output_tokens": 4096,
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "temperature": 0.0,
+        "tool_protocol": "native_tools",
+        "transport_retry_attempts": 3
+      },
+      "results": [
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2161,
+          "actual_prompt_tokens": 10579,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4762,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 8226,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:fdb2195a98a51d05b1606f6705fc36d8884aadba8fcb8c99a4ef4e6bf540cef7\"],\"expected_failure_kind\":\"assertion\",\"failure_kind\":\"assertion\"}",
+          "first_pass": false,
+          "fixture": "assertion-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:fdb2195a98a51d05b1606f6705fc36d8884aadba8fcb8c99a4ef4e6bf540cef7"
+              ],
+              "failure_kind": "assertion",
+              "repair_recommendations": [
+                "Verify test execution environment matches declared acceptance conditions",
+                "Confirm assertion state expectations align with test class naming conventions (fail_test vs pass_test)",
+                "Review test isolation and any setup/teardown logic not visible in source snapshots"
+              ],
+              "summary": "Controller records assertion_failure for deterministic test stage. Evidence fixture classifies as 'assertion_failure' with exit_code 1 under 'declared-acceptance' command. Test files tests/fail_test.py (MaybeFail.test_value: self.assertTrue(True)) and tests/pass_test.py (Pass.test_pass: self.assertTrue(True)) show structurally passing assertions, but controller-determined failure persists. Likely mismatch between test naming convention and actual assertion behavior, or environment-specific assertion state not captured in source snapshots."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 969,
+            "raw_document_sha256": "sha256:9329c9e5298badbe1ea1769382fdb67e54ea50177000d52c5d9bc224b9a3af53",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1157,
+          "actual_prompt_tokens": 10561,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 3990,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 7709,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\",\"src/app.py\"],\"expected_failure_kind\":\"compilation\",\"failure_kind\":\"compilation\"}",
+          "first_pass": false,
+          "fixture": "compile-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "src/app.py"
+              ],
+              "failure_kind": "compilation",
+              "repair_recommendations": [
+                "Review tests/fail_test.py: MaybeFail.test_value asserts True, making the test always pass despite the 'fail' naming convention, which may confuse test expectations",
+                "Verify test discovery and import structure ensures both test files are properly recognized by the test runner"
+              ],
+              "summary": "Diagnostic: The controller-recorded compile_failure stems from tests/fail_test.py containing MaybeFail.test_value with self.assertTrue(True), which always passes despite the filename suggesting expected failure. tests/pass_test.py and src/app.py are syntactically valid. The mismatch between fail_test.py's naming and its passing test logic is the likely cause of the compile_failure classification."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 820,
+            "raw_document_sha256": "sha256:94026ce6ad7edcb696cd29d66e4df65b1ca393bd444177330357d224433e0c2e",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "read_file",
+            "respond",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 3694,
+          "actual_prompt_tokens": 21009,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 9814,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 19497,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:d4b52cb62cf0dd85d2af3084f28cc352e8c1bc6277ed9bb3d975634b73c61fbb\"],\"expected_failure_kind\":\"lint\",\"failure_kind\":\"lint\"}",
+          "first_pass": false,
+          "fixture": "lint-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:d4b52cb62cf0dd85d2af3084f28cc352e8c1bc6277ed9bb3d975634b73c61fbb"
+              ],
+              "failure_kind": "lint",
+              "repair_recommendations": [
+                "Verify that the test discovery mechanism (e.g., unittest.main() entry point or test runner configuration) properly includes both test classes. Missing a if __name__ == '__main__': guard or test runner invocation can cause silent test omission and trigger lint-style failures in automated pipelines.",
+                "Ensure class names accurately reflect test intent: MaybeFail suggests a test expected to fail, while test_value(self.assertTrue(True)) always passes \u2014 reconcile naming with behavior or rename to avoid confusion.",
+                "Add explicit if __name__ == '__main__': unittest.main() blocks or confirm the controller's test runner configuration covers both tests/fail_test.py and tests/pass_test.py."
+              ],
+              "summary": "The deterministic test run failed with exit code 1, classified as a lint_failure. Both test files contain structurally identical unittest scaffolding with self.assertTrue(True), so the failure is not due to assertion logic. The fixture_evidence explicitly classifies this as a lint_failure with bounded_output: \"fixture lint_failure\", indicating the controller's acceptance test harness flagged a structural/lint issue rather than a test logic error."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 1298,
+            "raw_document_sha256": "sha256:989f669ef76b4f9dd82bd33db12947e50dae70a4ac884b5a2ef2722e990069fc",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 6,
+          "turns": 7,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1883,
+          "actual_prompt_tokens": 13748,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 5136,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10945,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\",\"README.md\",\"requirements.lock\"],\"expected_failure_kind\":\"semantic_test\",\"failure_kind\":\"semantic_test\"}",
+          "first_pass": false,
+          "fixture": "semantic-hidden-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "README.md",
+                "requirements.lock"
+              ],
+              "failure_kind": "semantic_test",
+              "repair_recommendations": [
+                "Review test intent for MaybeFail class - currently self.assertTrue(True) always passes, contradicting class name suggestion of potential failure",
+                "Verify test discovery and execution configuration matches expected test patterns",
+                "Consider whether test should assertFalse or raise exception to match MaybeFail naming convention",
+                "Ensure pass_test.py test aligns with its Pass class intent"
+              ],
+              "summary": "Both tests/fail_test.py and tests/pass_test.py contain self.assertTrue(True) assertions that always pass. The MaybeFail class name suggests intentional failure behavior, creating a semantic mismatch. The test failure likely stems from this intent-implementation gap rather than a code syntax error. Recommend reviewing test design to align class names with actual test semantics, or adjusting assertions to match expected failure modes."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 990,
+            "raw_document_sha256": "sha256:41b5d821e73a689c134cf7e2c0291c642c5d62bcf2eef864e413d33474fbce40",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "search_files",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1393,
+          "actual_prompt_tokens": 13666,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4912,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 11125,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "preexisting-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test environment isolation - preexisting failure not caused by source changes",
+                "Confirm test runner configuration matches declared environment",
+                "Check for hidden dependencies or environment constraints"
+              ],
+              "summary": "Diagnosis: Controller-recorded test failure classified as preexisting_failure. Both test files contain assertTrue(True) logic that should pass, but the fixture_evidence confirms this is a preexisting structural environment issue not attributable to source modifications. The failure persists across the immutable revision and is marked as a qualification fixture (preexisting_failure). No source changes required."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 784,
+            "raw_document_sha256": "sha256:0bfcef407b82d75c8ef88ea5a3a1182b6b4835c4c34c7a9c14b47fd267432d99",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 917,
+          "actual_prompt_tokens": 10575,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 2814,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 7846,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\",\"fixture_evidence\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"semantic_test\"}",
+          "first_pass": false,
+          "fixture": "wrong-test-selection",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "fixture_evidence"
+              ],
+              "failure_kind": "semantic_test",
+              "repair_recommendations": [
+                "Verify test selection matches acceptance evidence expectations",
+                "Confirm test assertions align with declared acceptance criteria",
+                "Review test execution context for environment mismatches"
+              ],
+              "summary": "Diagnosed acceptance_evidence_mismatch: Both test files contain self.assertTrue(True) assertions that should pass, but controller recorded test failure with exit_code=1. The subject 'wrong-test-selection' indicates test selection mismatch between executed tests and acceptance evidence expectations. The fixture_evidence classifies this as acceptance_evidence_mismatch with command 'declared-acceptance'. Recommend verifying which test is actually being evaluated against the declared acceptance criteria."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 846,
+            "raw_document_sha256": "sha256:2a38dfd831c99051cae54d3197dbc95d2f2f69065f623222b3851cc9e562ce1f",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 824,
+          "actual_prompt_tokens": 10556,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 2750,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 7886,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"semantic_test\"}",
+          "first_pass": false,
+          "fixture": "timeout",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9"
+              ],
+              "failure_kind": "semantic_test",
+              "repair_recommendations": [
+                "Review test execution environment for resource constraints or timeout configuration",
+                "Verify that acceptance tests have adequate time limits and resource allocation"
+              ],
+              "summary": "Controller-recorded deterministic test failure classified as tool_timeout. The fixture evidence (sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9) confirms classification as tool_timeout with exit code 1 for the declared-acceptance command. No source modifications were made."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 629,
+            "raw_document_sha256": "sha256:9f71863bf82cab85d4cf097af393eedc1b1f049d89682068e61be0069269fa05",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 809,
+          "actual_prompt_tokens": 10562,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 3314,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 7884,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "missing-executable",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test execution environment isolation and dependencies",
+                "Check for missing executables or runtime configuration in the test environment",
+                "Ensure environment variables and paths are correctly set for test execution"
+              ],
+              "summary": "Both test files (tests/fail_test.py and tests/pass_test.py) contain identical syntactically valid unittest code with self.assertTrue(True). The controller records a deterministic test failure classified as environment_failure with exit code 1 from 'declared-acceptance' command. Since the source code is identical and functionally correct, the failure originates from the test execution environment rather than code defects. Recommend investigating environment isolation, missing dependencies, runtime configuration, and executable availability."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 927,
+            "raw_document_sha256": "sha256:051233d73c46939cccf0866009186002fe36ea47cb2b183ee868470c0a55fc66",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1562,
+          "actual_prompt_tokens": 13802,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4221,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10884,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "contract-mismatch",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify contract alignment between test expectations and fixture qualification",
+                "Ensure test classes match declared contract semantics",
+                "Check that MaybeFail and Pass test classes conform to contract-specified test behavior"
+              ],
+              "summary": "Controller-recorded deterministic test failure classified as contract_failure. Both tests/fail_test.py (MaybeFail.test_value) and tests/pass_test.py (Pass.test_pass) contain structurally valid unittest assertions (self.assertTrue(True)), so the failure is not due to test logic errors. The fixture_evidence (sha256:54abc068f14a25a0d70f19bcd1446f99c269559ea86edd33af1a2de1b01c39f4) explicitly classifies this as 'contract_failure' with bounded_output 'fixture contract_failure', indicating a contract/metadata mismatch rather than a compilation or assertion defect. The subject is a contract-mismatch inference_qualification. Recommend verifying contract alignment and ensuring test class semantics match the declared contract specification."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 1125,
+            "raw_document_sha256": "sha256:44f433876fbbf9d06d6a57735783c71078f1b87d25ae80433093d9e4dbd5cc45",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1322,
+          "actual_prompt_tokens": 13746,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4644,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10531,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\",\"requirements.lock\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"assertion\"}",
+          "first_pass": false,
+          "fixture": "single-localized-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "requirements.lock"
+              ],
+              "failure_kind": "assertion",
+              "repair_recommendations": [
+                "Verify test class discovery and import paths are resolvable by test runner",
+                "Confirm test runner configuration matches tracked test file locations",
+                "Check that unittest discovery finds both test modules"
+              ],
+              "summary": "Both test files contain structurally valid unittest classes with assertTrue(True), yet controller recorded deterministic failure with exit code 1. The fixture evidence classifies this as localized_repair, suggesting a test discovery or environment configuration issue rather than logic error. Tests likely not being discovered/executed by the test runner despite passing syntax checks."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 757,
+            "raw_document_sha256": "sha256:6a52bd096d2727e1f05e0e4fd96014d13d2f71f374bc6fab76fc72c456dfd20d",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2722,
+          "actual_prompt_tokens": 17175,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 7292,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 15237,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\",\"src/app.py\",\"requirements.lock\",\"fixture_evidence\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "multiple-related-failures",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "src/app.py",
+                "requirements.lock",
+                "fixture_evidence"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test discovery configuration ensures both test classes (MaybeFail, Pass) are loaded by the test runner",
+                "Confirm the test runner path includes the tests/ directory",
+                "Check that the Python environment satisfies requirements.lock (fixture==1 with declared hash)",
+                "Inspect for hidden import errors or missing test runner dependencies that prevent test execution"
+              ],
+              "summary": "Controller records test failure with exit code 1 despite both tests/fail_test.py and tests/pass_test.py containing assertTrue(True) which should pass. Fixture evidence (fixture_evidence) classifies this as coherent_repair, indicating a structural/environment root cause rather than a test logic bug. The most likely issue is test discovery failure or environment misconfiguration preventing the tests from executing properly."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 986,
+            "raw_document_sha256": "sha256:a91c0954fb430e94489f11c0093a6723e376d317ab240d63e00805a612652536",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 6,
+          "turns": 6,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": true,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 943,
+          "actual_prompt_tokens": 10583,
+          "approval_pauses": 0,
+          "attempt": 1,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 2900,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 8207,
+          "failure_category": null,
+          "first_pass": true,
+          "fixture": "passing-control",
+          "hidden_tests_ok": true,
+          "normalized_cost": null,
+          "passed": true,
+          "post_repair_passed": true,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence"
+              ],
+              "failure_kind": "unknown",
+              "repair_recommendations": [],
+              "summary": "Controller-recorded deterministic test result is classified as no_failure. Both tests/fail_test.py and tests/pass_test.py contain simple unittest assertions (assertTrue(True)) that pass with exit code 0. The fixture_evidence confirms no_failure classification with exit_code 0. No source modifications needed."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 413,
+            "raw_document_sha256": "sha256:ee7bac6857d43827171a9f74638a57314709a50d2e6187c7490918e9cba6f943",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 3149,
+          "actual_prompt_tokens": 17100,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 7582,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 15972,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:fdb2195a98a51d05b1606f6705fc36d8884aadba8fcb8c99a4ef4e6bf540cef7\"],\"expected_failure_kind\":\"assertion\",\"failure_kind\":\"assertion\"}",
+          "first_pass": false,
+          "fixture": "assertion-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:fdb2195a98a51d05b1606f6705fc36d8884aadba8fcb8c99a4ef4e6bf540cef7"
+              ],
+              "failure_kind": "assertion",
+              "repair_recommendations": [
+                "Review assertion logic in test files for correctness",
+                "Verify test environment isolation and dependencies"
+              ],
+              "summary": "Controller-recorded deterministic test failure classified as assertion_failure per qualification fixture evidence (sha256:fdb2195a98a51d05b1606f6705fc36d8884aadba8fcb8c99a4ef4e6bf540cef7). The fixture explicitly bounds output as 'fixture assertion_failure' with exit_code 1, confirming assertion-level failure mode. Source files (tests/fail_test.py, tests/pass_test.py, src/app.py) remain unmodified. Diagnosis ties conclusion to controller-sealed fixture evidence rather than source inspection."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 763,
+            "raw_document_sha256": "sha256:0f73d40657de91ae3caea58ee71cefe7d807f7873faab78025db55f53b003be2",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 6,
+          "turns": 6,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1245,
+          "actual_prompt_tokens": 13727,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4189,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10686,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:91ccd7bcee976b7ed250d5fefa1c3dcb931d3fddf6e6713569b0301c3e105c51\"],\"expected_failure_kind\":\"compilation\",\"failure_kind\":\"compilation\"}",
+          "first_pass": false,
+          "fixture": "compile-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:91ccd7bcee976b7ed250d5fefa1c3dcb931d3fddf6e6713569b0301c3e105c51"
+              ],
+              "failure_kind": "compilation",
+              "repair_recommendations": [
+                "Verify test environment setup and dependencies are correctly configured for the test framework",
+                "Check that the Python interpreter version matches the expected runtime",
+                "Ensure src/app.py and test files have valid syntax and imports"
+              ],
+              "summary": "Diagnosed as compile_failure: The test execution exited with code 1 during declared-acceptance. Both test files contain valid unittest syntax (import unittest, assertTrue), but the compile step failed, likely due to missing environment configuration or interpreter mismatch. No source modifications were made."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 706,
+            "raw_document_sha256": "sha256:ebaa87d5cb9d6b52d30b69a648f3664c824ba9813779b285a44f8c87c5f128da",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": true,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2584,
+          "actual_prompt_tokens": 13702,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 6262,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 12140,
+          "failure_category": null,
+          "first_pass": true,
+          "fixture": "lint-failure",
+          "hidden_tests_ok": true,
+          "normalized_cost": null,
+          "passed": true,
+          "post_repair_passed": true,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence"
+              ],
+              "failure_kind": "lint",
+              "repair_recommendations": [
+                "Review test file linting configuration for style violations causing declared-acceptance exit code 1",
+                "Add missing lint suppressions or fix identified style issues in tests/fail_test.py and tests/pass_test.py"
+              ],
+              "summary": "The controller-recorded deterministic test failure is classified as a lint_failure based on fixture_evidence (sha256:d4b52cb62cf0dd85d2af3084f28cc352e8c1bc6277ed9bb3d975634b73c61fbb). The declared-acceptance command exited with code 1, indicating a linting issue rather than an assertion or compilation failure. Both test files contain unittest structures (MaybeFail/test_value in fail_test.py, Pass/test_pass in pass_test.py) but a lint rule in the declared-acceptance pipeline is rejecting them with exit code 1."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 824,
+            "raw_document_sha256": "sha256:6a5a8fabc45f04c1b741f50dfc99435e2abededdb6410011c05f6cf471a46fc2",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2094,
+          "actual_prompt_tokens": 13762,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4988,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 11237,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"semantic_test\",\"failure_kind\":\"semantic_test\"}",
+          "first_pass": false,
+          "fixture": "semantic-hidden-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "semantic_test",
+              "repair_recommendations": [
+                "Rename MaybeFail class to Pass if test is always intended to pass, or add conditional logic to MaybeFail to reflect its name",
+                "Ensure test class names accurately reflect expected test behavior"
+              ],
+              "summary": "The controller-recorded test failure is classified as semantic_test_failure. Both tests/fail_test.py and tests/pass_test.py contain identical test logic (self.assertTrue(True)), but fail_test.py uses the class name 'MaybeFail' while pass_test.py uses 'Pass'. This naming-semantics mismatch creates a semantic test failure: the 'MaybeFail' name suggests the test should sometimes fail or represent uncertain behavior, yet the assertion always passes. The fixture evidence (fixture_evidence) confirms classification as semantic_test_failure with exit_code 1. Minimal repair: align class names with test behavior, or add conditional assertion to match the 'MaybeFail' semantic intent."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 1027,
+            "raw_document_sha256": "sha256:094b6b851ebaad4e4b64065ee91592737a15be73eace3de59c2c2383ca3f4bbf",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2144,
+          "actual_prompt_tokens": 13796,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 7533,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 11159,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:93fbd4e7cbe4aa50faccbbe7a4148cca171bdc17b386a7185902f0b71ec294cc\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "preexisting-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:93fbd4e7cbe4aa50faccbbe7a4148cca171bdc17b386a7185902f0b71ec294cc"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Investigate test runner configuration and environment setup for deterministic test failures",
+                "Verify that test discovery and execution environment matches declared expectations",
+                "Check for hidden test configuration or fixture interference"
+              ],
+              "summary": "Both fail_test.py and pass_test.py contain trivial assertions (self.assertTrue(True)) that should always pass. The controller records a deterministic test failure with exit code 1 classified as preexisting_failure. The evidence fixture indicates a structural/environment issue rather than a test logic bug, as the test assertions are unconditionally true."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 769,
+            "raw_document_sha256": "sha256:2ee81c8efc0321323614011a2e99f215c0ef4b736f7ded25298cea37cb1271de",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 790,
+          "actual_prompt_tokens": 10589,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 3081,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 7785,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"semantic_test\"}",
+          "first_pass": false,
+          "fixture": "wrong-test-selection",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence"
+              ],
+              "failure_kind": "semantic_test",
+              "repair_recommendations": [
+                "Verify which test file was actually executed against the acceptance evidence",
+                "Confirm test selection matches the expected acceptance criteria",
+                "Ensure test class/method names align with controller's declared acceptance expectations"
+              ],
+              "summary": "Diagnosis: Controller recorded deterministic test failure classified as acceptance_evidence_mismatch. Both test files contain unittest tests that assert True and should pass logically. The subject 'wrong-test-selection' indicates the failure stems from test selection mismatch rather than test logic error. The executed test likely does not match the acceptance evidence expectations - either the wrong test file was selected or the acceptance criteria reference a different test variant. Recommendation: Verify which specific test was run (fail_test.py vs pass_test.py) and confirm it aligns with the controller's declared acceptance evidence. No source modifications needed; resolve by correcting test selection to match acceptance criteria."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 1087,
+            "raw_document_sha256": "sha256:c6f4caef9c09d0e5bdb73d6dc18e8109c98502dbe2bfd814102408cabc404021",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 4,
+          "turns": 4,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 890,
+          "actual_prompt_tokens": 13777,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 5879,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10409,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "timeout",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test execution environment has adequate resources (memory, time) for test suite",
+                "Check for hidden test infrastructure constraints or resource limits",
+                "Ensure test runner timeout configuration matches expected execution profile"
+              ],
+              "summary": "The controller-recorded test failure is classified as tool_timeout. Evidence from the qualification fixture (sha256:9102aec43d31865264aac8522110d980d4d48247d421dd679c927657e9cfe6e9) confirms classification as tool_timeout with exit code 1 and declared-acceptance command. The test files (tests/fail_test.py, tests/pass_test.py) contain simple unittest assertions that should complete quickly, suggesting the timeout originates from environment constraints rather than test logic errors."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 896,
+            "raw_document_sha256": "sha256:13d97cdf9e066f6881526afebc70a0fcbb3c4b9308e129bfb90c8950926de477",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "search_files",
+            "search_files",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1715,
+          "actual_prompt_tokens": 24194,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 5800,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 18957,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\",\"src/app.py\",\"requirements.lock\",\"README.md\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "missing-executable",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "src/app.py",
+                "requirements.lock",
+                "README.md"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test execution environment has required executables (python/unittest available)",
+                "Confirm requirements.lock includes necessary test dependencies",
+                "Ensure working directory has correct Python path and module installation"
+              ],
+              "summary": "Test stage failed as environment_failure with subject 'missing-executable'. Both test files contain valid test logic (self.assertTrue(True)) but the deterministic test execution failed due to missing test execution environment. The requirements.lock only declares 'fixture==1' placeholder without actual test runner dependencies. The environment lacks the necessary executable/context to run unittest-based tests, causing environment_failure despite correct test assertions."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 889,
+            "raw_document_sha256": "sha256:1b1229e67405e992ea9bb096e417fe68ceeb4936951a09a7d111e6524b3ce488",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 8,
+          "turns": 8,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 1593,
+          "actual_prompt_tokens": 13727,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 5456,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 10655,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\",\"src/app.py\"],\"expected_failure_kind\":\"structural_environment\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "contract-mismatch",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py",
+                "src/app.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test execution environment and runner configuration",
+                "Check for import or dependency issues preventing test execution",
+                "Validate that test discovery and collection properly includes both test files"
+              ],
+              "summary": "The controller recorded a contract_failure with exit code 1 from 'declared-acceptance' command. Both test files contain trivial self.assertTrue(True) assertions that should pass. The failure likely stems from test execution environment issues (missing runner configuration, import problems, or test collection failure) rather than assertion failures. Evidence shows fixture_evidence marks this as a contract-level failure with exit code 1, suggesting the test process itself failed to execute assertions properly."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 893,
+            "raw_document_sha256": "sha256:5b51c35b56807105c547fed1af86346205c05cc2fa4fe265850843f1eaaa2ae6",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "get_evidence",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 2218,
+          "actual_prompt_tokens": 13724,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 6837,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 11033,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"fixture_evidence\",\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "single-localized-failure",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "fixture_evidence",
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test runner configuration and test discovery settings",
+                "Check Python environment and unittest configuration",
+                "Ensure test files are properly importable as test modules"
+              ],
+              "summary": "Controller-recorded test stage failure with exit code 1 despite both test files containing self.assertTrue(True) assertions that should pass. The failure is classified as localized_repair per fixture evidence. Both fail_test.py and pass_test.py appear syntactically valid but the test runner exits with code 1, suggesting a test execution environment or configuration issue rather than a source code bug."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 741,
+            "raw_document_sha256": "sha256:eb28f76a15baaa776bc4216547973e4aa54100feb2d3056ac9dde55f67be999f",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 5,
+          "turns": 5,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 984,
+          "actual_prompt_tokens": 7602,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 4191,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 5577,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_failure_misclassified,test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"structural_environment\"}",
+          "first_pass": false,
+          "fixture": "multiple-related-failures",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_failure_misclassified",
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "structural_environment",
+              "repair_recommendations": [
+                "Verify test discovery configuration ensures both test files are included in the test run",
+                "Confirm unittest runner path and module imports are correctly configured",
+                "Check for missing __init__.py or package configuration that may prevent test discovery",
+                "Ensure test execution environment matches the controller's expected structure"
+              ],
+              "summary": "Both tests contain valid unittest assertions (assertTrue(True)) that should pass. The controller-recorded test failure likely stems from test discovery or structural environment misconfiguration rather than source code bugs. The fail_test.py defines MaybeFail.test_value and pass_test.py defines Pass.test_pass; both are standard unittest patterns. Investigate test runner configuration, module paths, and ensure the test files are properly discoverable by the execution framework."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 957,
+            "raw_document_sha256": "sha256:75da581fb931c6b105d2459452ca0271b7dd96c40fffb604e4becb74b2bfb78f",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 3,
+          "turns": 3,
+          "workspace_hash": null
+        },
+        {
+          "acceptance_ok": false,
+          "action_trace": [
+            "read_file",
+            "read_file",
+            "submit_test_diagnosis"
+          ],
+          "actual_completion_tokens": 673,
+          "actual_prompt_tokens": 7608,
+          "approval_pauses": 0,
+          "attempt": 2,
+          "cached_tokens": 0,
+          "changed_paths": [],
+          "compacted_exchanges": 0,
+          "context_budget_failures": 0,
+          "correction_used": false,
+          "duration_ms": 2705,
+          "environment_probe_actions": 0,
+          "estimated_input_tokens": 5572,
+          "failure_category": "stage_qualification_mismatch",
+          "failure_detail": "Stage contract mismatch: test_diagnosis_evidence_missing; fields=[\"evidence_refs\",\"failure_kind\",\"repair_recommendations\",\"summary\"]; details={\"classification\":null,\"evidence_refs\":[\"tests/fail_test.py\",\"tests/pass_test.py\"],\"expected_failure_kind\":\"unknown\",\"failure_kind\":\"unknown\"}",
+          "first_pass": false,
+          "fixture": "passing-control",
+          "hidden_tests_ok": false,
+          "normalized_cost": null,
+          "passed": false,
+          "post_repair_passed": false,
+          "protected_paths_ok": true,
+          "reasoning_tokens": 0,
+          "recoverable_failures": 0,
+          "safety_violations": [
+            "test_diagnosis_evidence_missing"
+          ],
+          "source_sha": null,
+          "stack": null,
+          "stage_submission": {
+            "document": {
+              "evidence_refs": [
+                "tests/fail_test.py",
+                "tests/pass_test.py"
+              ],
+              "failure_kind": "unknown",
+              "repair_recommendations": [],
+              "summary": "Both test files (tests/fail_test.py and tests/pass_test.py) contain passing test cases that assert True. The MaybeFail test and the Pass test both trivially pass with no failures. The controller-recorded test result shows status 'succeeded' with no failures detected. No source modifications are needed."
+            },
+            "document_limit_bytes": 16384,
+            "meaning": "accepted typed submission retained for diagnosis; qualification outcome remains independently scored",
+            "present": true,
+            "raw_document_bytes": 430,
+            "raw_document_sha256": "sha256:0a5a2eb5123f35259733492174ddd7b8ab958fc2ee236758af15a9dd87cd1ef9",
+            "redacted_values": 0,
+            "retention": "complete",
+            "schema_version": "pharness.dev/stage-submission-evidence/v1alpha1"
+          },
+          "status": "completed",
+          "tool_calls": 3,
+          "turns": 3,
+          "workspace_hash": null
+        }
+      ],
+      "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+      "schema_version": "pharness.dev/inference-evaluation/v1alpha1",
+      "suite": "test-diagnosis-v2",
+      "suite_hash": "sha256:bddd80856f1db11b720afc3e7ec11ee6ee22e23a22ae75924b501cc8d43a94f2",
+      "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+      "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+      "target_revision": "v1",
+      "temperature_milli": 0,
+      "tool_schema_hash": "sha256:4c3b1f68d6335b7ef3403988c5439f7460e8edd433da21185dbd5d6062a0389a",
+      "version": 1
+    },
+    "results": 24,
+    "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+    "schema_version": "pharness.dev/inference-evaluation/v1alpha1",
+    "stage_gate": {
+      "attempts": [
+        {
+          "attempt": 1,
+          "complete": true,
+          "expected_results": 12,
+          "passed": 1,
+          "results": 12,
+          "unique_fixtures": 12
+        },
+        {
+          "attempt": 2,
+          "complete": true,
+          "expected_results": 12,
+          "passed": 1,
+          "results": 12,
+          "unique_fixtures": 12
+        }
+      ],
+      "false_approvals": 0,
+      "false_rejections": 0,
+      "infrastructure_valid": true,
+      "other_quality_failures": 31,
+      "passed": 2,
+      "results": 24
+    },
+    "suite_hash": "sha256:bddd80856f1db11b720afc3e7ec11ee6ee22e23a22ae75924b501cc8d43a94f2",
+    "suite_id": "test-diagnosis-v2",
+    "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+    "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+    "target_revision": "v1",
+    "tool_schema_hash": "sha256:4c3b1f68d6335b7ef3403988c5439f7460e8edd433da21185dbd5d6062a0389a"
+  },
+  "report_hash": "sha256:bb2365876f4679bedf9a6f602f9c70eb2d3322dd1f2c2c6662c4a339a183c0c2",
+  "failure": null,
+  "qualification_id": "inferqual_01a074438beb7161979ea66ad164e7c2",
+  "created_at": "1788656817353",
+  "started_at": "1788656817655",
+  "finished_at": "1788656978923"
+}
