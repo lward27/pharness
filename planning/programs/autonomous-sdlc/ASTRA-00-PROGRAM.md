@@ -88,14 +88,14 @@ is locally validated; stored proposals retain original discovery identity.
 [M04B context delivery and replay](../../evidence/autonomous-sdlc/ASTRA-M04-CONTEXT-ENVELOPE.md)
 also pass local checks; live provider canaries remain pending.
 **Next eligible: M04C valid stage measurements, then small M04D live canaries.** Validate
-these and the stage measurements before new broad qualification. Retain the already
-running source-19 Verifier result without starting another old-suite batch. M08 and
+these and the stage measurements before new broad qualification. The source-19 Verifier has completed; retain its failed result without starting
+another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.
 The prepared Finance production-baseline change has not been approved; M04 approval
 does not authorize its merge or count as M11 production approval.
 
 Runtime `19b0c55` remains unqualified: Onboarding 0/12 twice, Planner 6/12 and 7/12,
-Test Diagnosis 1/12 twice. Verifier is still in progress at this update. Builder and
+Test Diagnosis 1/12 twice, and [Verifier 1/24 twice](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-VERIFIER-ANALYSIS.md). Builder and
 seeded Repair on earlier `48c77b7` passed 24/24 twice, 8/8 per stack; actual failed
 Builder-to-repair handoff and blind semantic verification remain unproven. Retain
 all failed evidence. The merged context/evidence corrections need deployment and

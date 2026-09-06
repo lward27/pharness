@@ -80,10 +80,10 @@ qualification or model switch is justified by these local passes.
 Builder and seeded Repair on `48c77b7` each passed both 24-case attempts, 8/8 per
 stack. This is meaningful bounded editing evidence; it neither proves the connected
 handoff nor qualifies a later runtime. On `19b0c55`, Onboarding failed 0/12 twice,
-Planner scored 6/12 and 7/12, and Test Diagnosis scored 1/12 twice. Its already-running
-Verifier evaluation is `infeval_01a07635d61a78b0825b6ee3c8ee3578`; retain its terminal
-result without launching another old-suite batch. It tests protocol conventions and
-must not be presented as blind semantic verification.
+Planner scored 6/12 and 7/12, and Test Diagnosis scored 1/12 twice. Its [Verifier result](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-VERIFIER-ANALYSIS.md)
+is now terminal: 1/24 in each attempt, gate failed. Retain that unchanged result
+without launching another old-suite batch. It tests protocol conventions and must
+not be presented as blind semantic verification.
 
 The merged [context transport correction](../../evidence/autonomous-sdlc/ASTRA-M04-SYSTEM-CONTEXT-DELIVERY.md)
 and [stage evidence correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-EVIDENCE-CONTRACT.md)

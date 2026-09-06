@@ -1,0 +1,30 @@
+{
+  "source_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "evaluation_id": "infeval_01a07635d61a78b0825b6ee3c8ee3578",
+  "qualification_id": "inferqual_01a0768b002e78c2aa881f8d0cbac0b0",
+  "report_hash": "sha256:7aefafbedc0d9e53f678b089f0d543c4c260f738c5dd17d790c2fcc2577d06fd",
+  "observed_at": "2026-09-06T11:47:09.023295+00:00",
+  "gate_passed": false,
+  "infrastructure_valid": true,
+  "attempts": [
+    {
+      "attempt": 1,
+      "passed": 1,
+      "total": 24
+    },
+    {
+      "attempt": 2,
+      "passed": 1,
+      "total": 24
+    }
+  ],
+  "accepted_typed_submissions": 47,
+  "matching_expected_verdicts": 47,
+  "exact_evidence_references": 2,
+  "required_marker_present": 47,
+  "violations": {
+    "verification_evidence_mismatch": 45,
+    "typed_submission_missing": 1
+  },
+  "meaning": "Historical protocol-only failure. Inputs disclosed expected decisions and markers and provided generic workspaces. Not blind semantic verification; never rescore as a pass."
+}
