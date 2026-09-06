@@ -322,7 +322,9 @@ mod tests {
     use super::*;
 
     fn proposal(fixture: &StageFixture) -> Value {
-        match replay_actions(SuiteKind::OnboardingV2, fixture)
+        // The scorer consumes the full controller ToolFinished document.
+        // The shared-runner replay test covers binding the V2 model submission.
+        match replay_actions(SuiteKind::OnboardingV1, fixture)
             .unwrap()
             .remove(0)
         {

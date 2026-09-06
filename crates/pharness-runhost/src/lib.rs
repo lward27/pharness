@@ -9,9 +9,13 @@
 //! binary (HTTP ingest against the API, which stays the sole store writer).
 
 mod evidence_refs;
+mod onboarding_submission;
 mod preview;
 mod prompt;
 
+pub use onboarding_submission::{
+    onboarding_submission_contract_for_binding, ONBOARDING_SUBMISSION_CONTRACT,
+};
 pub use preview::approval_preview_for_action;
 pub use prompt::{
     repo_system_prompt, stage_prompt_for_profile, system_prompt, tool_schema_hash_for_profile,
@@ -271,6 +275,7 @@ fn tool_specs_for_run(
     run: &RunSpec,
     allowed: Option<&BTreeSet<String>>,
 ) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
+    let controller_bound_onboarding = onboarding_submission::uses_controller_binding(run)?;
     let all = worker_tool_specs();
     let Some(allowed) = allowed else {
         return Ok(all);
@@ -336,6 +341,7 @@ fn tool_specs_for_run(
         &acceptance_names,
         &evidence_ids,
         reliability_v2_profile_id(run).is_some(),
+        controller_bound_onboarding,
     )
 }
 
@@ -344,9 +350,13 @@ fn constrain_tool_specs(
     acceptance_names: &[String],
     evidence_ids: &[String],
     bound_submission_refs: bool,
+    controller_bound_onboarding: bool,
 ) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
     for spec in &mut specs {
         match spec.name.as_str() {
+            "submit_onboarding_proposal" if controller_bound_onboarding => {
+                onboarding_submission::constrain_schema(&mut spec.parameters_schema);
+            }
             "run_acceptance_command" if !acceptance_names.is_empty() => {
                 spec.parameters_schema["properties"]["name"]["enum"] =
                     serde_json::json!(acceptance_names);
@@ -409,7 +419,7 @@ pub fn constrained_tool_schema_hash(
         .into_iter()
         .filter(|spec| allowed.contains(&spec.name))
         .collect::<Vec<_>>();
-    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids, true)?;
+    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids, true, true)?;
     Ok(pharness_core::canonical_json_sha256(
         &serde_json::to_value(constrained)?,
     )?)
@@ -472,13 +482,18 @@ fn profile_instruction(run: &RunSpec) -> anyhow::Result<Option<String>> {
         }
         _ => "",
     };
+    let submission_instruction = if onboarding_submission::uses_controller_binding(run)? {
+        " The controller attaches schema_version, discovery_id and discovery_hash from the original Run; omit those fields from proposal."
+    } else {
+        ""
+    };
     let completion_instruction = if is_reliability_v2 {
         "The typed stage submission is terminal; do not call finish after it."
     } else {
         "Submit the required typed stage document, then call finish."
     };
     Ok(Some(format!(
-        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, and retrieve only allowlisted evidence. {completion_instruction} You cannot authorize the next stage or declare controller success.{profile_constraint}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
+        "You are executing the immutable PHarness AgentProfile {id} for the {stage} stage. Use only the exposed tools. Treat verified facts as authoritative, keep agent claims explicitly separate, and retrieve only allowlisted evidence. {completion_instruction} You cannot authorize the next stage or declare controller success.{profile_constraint}{submission_instruction}\nAgentContext (controller-sealed, compact handoff):\n{serialized_context}"
     )))
 }
 
@@ -898,7 +913,14 @@ pub async fn execute_attempt<B: AttemptBackend>(
                 messages.push(ModelMessage::system(deterministic_repository_map(
                     &cwd, &spec.run,
                 )?));
-                let stage_prompt = stage_prompt_for_profile(profile_id).ok_or_else(|| {
+                let stage_prompt = if profile_id == "repository-onboarding-proposer"
+                    && !onboarding_submission::uses_controller_binding(&spec.run)?
+                {
+                    Some(prompt::legacy_onboarding_stage_prompt())
+                } else {
+                    stage_prompt_for_profile(profile_id)
+                }
+                .ok_or_else(|| {
                     anyhow::anyhow!(
                         "reliability-v2 AgentProfile {profile_id} has no immutable stage prompt"
                     )
@@ -1378,7 +1400,7 @@ struct ProjectTools {
     evidence_catalog: Vec<serde_json::Value>,
     evidence_payloads: Vec<serde_json::Value>,
     bound_submission_refs: bool,
-    onboarding_discovery: Option<(String, String)>,
+    onboarding_discovery: Option<onboarding_submission::OnboardingBinding>,
 }
 
 impl ProjectTools {
@@ -1418,15 +1440,7 @@ impl ProjectTools {
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
-        let onboarding_discovery = run
-            .execution_target_json
-            .pointer("/agent_context/discovery")
-            .and_then(|discovery| {
-                Some((
-                    discovery.get("id")?.as_str()?.to_string(),
-                    discovery.get("hash")?.as_str()?.to_string(),
-                ))
-            });
+        let onboarding_discovery = onboarding_submission::OnboardingBinding::for_run(run)?;
         Ok(Self {
             workspace: workspace.to_path_buf(),
             canonical_workspace: workspace.canonicalize()?,
@@ -2182,25 +2196,15 @@ fn onboarding_submission(
     tools: &ProjectTools,
     document: &serde_json::Value,
 ) -> Result<ToolResult, ToolError> {
-    let proposal: pharness_core::RepositoryOnboardingProposal =
-        serde_json::from_value(document.clone()).map_err(|error| ToolError::InvalidArguments {
-            message: format!("repository onboarding proposal is invalid: {error}"),
-        })?;
-    let Some((discovery_id, discovery_hash)) = &tools.onboarding_discovery else {
-        return Err(ToolError::InvalidArguments {
-            message: "repository onboarding proposal has no controller-bound discovery".into(),
-        });
-    };
-    if &proposal.discovery_id != discovery_id || &proposal.discovery_hash != discovery_hash {
-        return Err(ToolError::InvalidArguments {
-            message: "repository onboarding proposal does not match its controller-bound discovery"
-                .into(),
-        });
-    }
-    proposal
-        .validate_submission()
-        .map_err(|message| ToolError::InvalidArguments { message })?;
-    structured_submission("repository_onboarding_proposal", document)
+    let binding =
+        tools
+            .onboarding_discovery
+            .as_ref()
+            .ok_or_else(|| ToolError::InvalidArguments {
+                message: "repository onboarding proposal has no controller-bound discovery".into(),
+            })?;
+    let document = binding.bind(document)?;
+    structured_submission("repository_onboarding_proposal", &document)
 }
 
 fn structured_submission(
