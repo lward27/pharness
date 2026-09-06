@@ -1,0 +1,55 @@
+{
+  "observed_at": "2026-09-06T13:52:10.252957+00:00",
+  "pull_request": {
+    "baseRefName": "main",
+    "headRefOid": "bfefad93fb8a8a35c43770e5b91091a994ffb77c",
+    "isDraft": false,
+    "mergeStateStatus": "CLEAN",
+    "state": "OPEN",
+    "statusCheckRollup": [],
+    "url": "https://github.com/lward27/pharness/pull/372"
+  },
+  "argo_revision_before": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "runtime_revision_before": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "database_generation": {
+    "created_at": "1787837185820",
+    "id": "dbgen_finance_20260827",
+    "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+    "purpose": "clean-finance-product-generation",
+    "schema_version": "0049"
+  },
+  "deployments": [
+    {
+      "name": "pharness-api",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+      "ready_replicas": 1,
+      "generation": 188
+    },
+    {
+      "name": "pharness-coding-egress-proxy",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+      "ready_replicas": 1,
+      "generation": 130
+    },
+    {
+      "name": "pharness-model-gateway",
+      "image": "registry.lucas.engineering/pharness-model-gateway@sha256:877c35c69c2cfcc0d3a9c16a351111b298294ad55e7cf30c875e3f2ad204f1b7",
+      "ready_replicas": 1,
+      "generation": 42
+    },
+    {
+      "name": "pharness-preparation-egress-proxy",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+      "ready_replicas": 1,
+      "generation": 130
+    },
+    {
+      "name": "pharness-ui",
+      "image": "registry.lucas.engineering/pharness-ui@sha256:1e8f81082340ec5ec98351e6eb5df0496b9b1c1b472c22ef6165237355f4999f",
+      "ready_replicas": 1,
+      "generation": 141
+    }
+  ],
+  "no_active_inference_evaluation": true,
+  "scope": "Read-only final premerge status; not rollout acceptance"
+}

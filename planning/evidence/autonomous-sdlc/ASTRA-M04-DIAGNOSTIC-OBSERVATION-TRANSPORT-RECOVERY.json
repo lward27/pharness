@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-09-06T14:37:11.788323+00:00",
+  "initial_window": "ASTRA-M04-DIAGNOSTIC-RELEASE-SERVICE-WINDOW.json",
+  "boundary": "Both local kubectl port-forward processes reported lost connection to pod. The first HTTP probe was refused before any service sample completed.",
+  "same_pods_healthy": [
+    {
+      "pod": "pharness-api-7b47849fdf-6zsdf",
+      "uid": "2cd6d350-5519-46cf-8ad9-2148aa036290",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "pharness-coding-egress-proxy-6c6c758955-gl5c8",
+      "uid": "4ee9714d-5d5b-42d5-bece-49e94cfe1efc",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "pharness-model-gateway-649dfdddfb-4qpql",
+      "uid": "3738924e-7f40-49de-bbe3-8e0761c434e3",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "pharness-preparation-egress-proxy-66685cb946-cv2pw",
+      "uid": "7e70707c-679c-4f0a-af39-89d505419f66",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "pod": "pharness-ui-95c696d9b-pl2g8",
+      "uid": "f33815e4-073e-48b3-ae0f-719760fbcee1",
+      "ready": true,
+      "restarts": 0
+    }
+  ],
+  "root_cause": "Not established; this evidence does not identify a PHarness process failure.",
+  "recovery": "Reconnect to the exact observed API/UI Pod names; keep a streaming connection lifetime and bounded per-read timeouts. Start a new complete 300-second window.",
+  "cluster_mutation": false
+}

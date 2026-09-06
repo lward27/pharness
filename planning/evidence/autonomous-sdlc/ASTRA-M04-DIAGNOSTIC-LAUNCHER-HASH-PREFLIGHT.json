@@ -1,0 +1,14 @@
+{
+  "recorded_at": "2026-09-06T14:47:21.376813+00:00",
+  "boundary": "Task-local launcher preflight, before any protocol or model POST",
+  "observed_http_status": 200,
+  "declared_source_hash_field": "",
+  "computed_native_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "cause": "The source registry intentionally leaves hashes blank for native normalization. The launcher incorrectly compared that placeholder with the API-computed hash.",
+  "correction": "Compare with the exact registry hash retained in the verified release observation, then read computed target hashes from the API under that same registry and check the declared model/stage/selection identity.",
+  "launcher_before_sha256": "10a4f7b4c91ac016bd719186b6da61538803ab7f514ace9198478d9fc4d54878",
+  "launcher_after_sha256": "b2e68b1ff5b1e2b77bcc55fe90ae58b5448f012b90a2f50ba125fb8fe77d0941",
+  "model_requests_sent_by_failed_attempt": 0,
+  "pharness_source_modified": false,
+  "qualification_guard_changed": false
+}
