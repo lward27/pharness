@@ -8,6 +8,7 @@
 //! `pharness-api` (direct store access) and inside the `pharness-worker`
 //! binary (HTTP ingest against the API, which stays the sole store writer).
 
+mod evidence_refs;
 mod preview;
 mod prompt;
 
@@ -330,13 +331,19 @@ fn tool_specs_for_run(
         .filter_map(|entry| entry.get("id").and_then(serde_json::Value::as_str))
         .map(str::to_string)
         .collect::<Vec<_>>();
-    constrain_tool_specs(filtered, &acceptance_names, &evidence_ids)
+    constrain_tool_specs(
+        filtered,
+        &acceptance_names,
+        &evidence_ids,
+        reliability_v2_profile_id(run).is_some(),
+    )
 }
 
 fn constrain_tool_specs(
     mut specs: Vec<pharness_core::ToolSpec>,
     acceptance_names: &[String],
     evidence_ids: &[String],
+    bound_submission_refs: bool,
 ) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
     for spec in &mut specs {
         match spec.name.as_str() {
@@ -351,6 +358,20 @@ fn constrain_tool_specs(
             "get_evidence" if !evidence_ids.is_empty() => {
                 spec.parameters_schema["properties"]["evidence_id"]["enum"] =
                     serde_json::json!(evidence_ids);
+            }
+            "submit_test_diagnosis" | "submit_verification" if bound_submission_refs => {
+                let document = if spec.name == "submit_test_diagnosis" {
+                    "diagnosis"
+                } else {
+                    "verification"
+                };
+                let refs = &mut spec.parameters_schema["properties"][document]["properties"]
+                    ["evidence_refs"];
+                refs["description"] = serde_json::json!("Distinct exact IDs from the controller evidence_catalog. Put source paths and content hashes in prose, not in this field.");
+                refs["uniqueItems"] = serde_json::json!(true);
+                if !evidence_ids.is_empty() {
+                    refs["items"]["enum"] = serde_json::json!(evidence_ids);
+                }
             }
             _ => {}
         }
@@ -388,7 +409,7 @@ pub fn constrained_tool_schema_hash(
         .into_iter()
         .filter(|spec| allowed.contains(&spec.name))
         .collect::<Vec<_>>();
-    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids)?;
+    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids, true)?;
     Ok(pharness_core::canonical_json_sha256(
         &serde_json::to_value(constrained)?,
     )?)
@@ -1356,6 +1377,7 @@ struct ProjectTools {
     selected_acceptance_commands: Vec<String>,
     evidence_catalog: Vec<serde_json::Value>,
     evidence_payloads: Vec<serde_json::Value>,
+    bound_submission_refs: bool,
     onboarding_discovery: Option<(String, String)>,
 }
 
@@ -1414,6 +1436,7 @@ impl ProjectTools {
             selected_acceptance_commands,
             evidence_catalog,
             evidence_payloads,
+            bound_submission_refs: reliability_v2_profile_id(run).is_some(),
             onboarding_discovery,
         })
     }
@@ -2137,9 +2160,15 @@ impl ToolExecutor for ProjectTools {
                 structured_submission("test_outcome", outcome)
             }
             pharness_core::AgentAction::SubmitTestDiagnosis { diagnosis, .. } => {
+                if self.bound_submission_refs {
+                    evidence_refs::validate(diagnosis, &self.evidence_catalog)?;
+                }
                 structured_submission("test_diagnosis", diagnosis)
             }
             pharness_core::AgentAction::SubmitVerification { verification, .. } => {
+                if self.bound_submission_refs {
+                    evidence_refs::validate(verification, &self.evidence_catalog)?;
+                }
                 structured_submission("verification", verification)
             }
             _ => Err(ToolError::UnsupportedAction {
@@ -2338,6 +2367,7 @@ mod workspace_source_tests {
             selected_acceptance_commands: vec!["echo test".into()],
             evidence_catalog: Vec::new(),
             evidence_payloads: Vec::new(),
+            bound_submission_refs: false,
             onboarding_discovery: None,
         }
     }
