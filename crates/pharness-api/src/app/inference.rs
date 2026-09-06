@@ -1,3 +1,4 @@
+mod diagnostics;
 mod qualification_binding;
 pub(super) use qualification_binding::qualification_binding_for_policy;
 
@@ -46,6 +47,8 @@ struct ConfigurationActionRequest {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct QualificationStartRequest {
+    #[serde(default)]
+    scope: pharness_core::InferenceEvaluationScope,
     actor: String,
     reason: String,
     config_hash: String,
@@ -1244,6 +1247,11 @@ async fn create_policy_qualification(
             revision: revision.clone(),
         },
     )?;
+    request
+        .scope
+        .validate(suite_id, request.attempts)
+        .map_err(ApiError::bad_request)?;
+    diagnostics::reference_inputs(&state, &request.scope, suite_id, &binding).await?;
     let suite_hash = inference_qualification_suite_hash(suite_id).map_err(|error| {
         ApiError::internal(format!("failed to hash qualification suite: {error}"))
     })?;
@@ -1284,6 +1292,7 @@ async fn create_policy_qualification(
     state
         .store
         .create_inference_evaluation(CreateInferenceEvaluation {
+            scope: request.scope,
             id: evaluation_id.clone(),
             suite_id: suite_id.into(),
             suite_hash,
@@ -1336,6 +1345,11 @@ fn qualification_from_evaluation(
     evaluation: &StoredInferenceEvaluation,
     report: Value,
 ) -> Result<CreateInferencePolicyQualification, ApiError> {
+    if evaluation.scope.case_ids().is_some() {
+        return Err(ApiError::conflict(
+            "diagnostics never create qualification records",
+        ));
+    }
     validate_qualification_report(evaluation, &report)?;
     let derived_verdict = if report["gate_passed"].as_bool() == Some(true) {
         "passed"
@@ -1410,8 +1424,16 @@ async fn internal_inference_evaluation_context(
     if evaluation.status != "running" {
         return Err(ApiError::conflict("inference evaluation is not running"));
     }
+    let reference_inputs = diagnostics::reference_inputs(
+        &state,
+        &evaluation.scope,
+        &evaluation.suite_id,
+        &evaluation.resolved_binding,
+    )
+    .await?;
     Ok(Json(json!({
         "schema_version":"pharness.dev/inference-evaluation-context/v1alpha1",
+        "scope":evaluation.scope,"reference_inputs":reference_inputs,
         "evaluation_id":evaluation.id,
         "suite_id":evaluation.suite_id,
         "suite_hash":evaluation.suite_hash,
@@ -1448,7 +1470,16 @@ async fn internal_inference_evaluation_outcome(
             "failed to hash inference evaluation report: {error}"
         ))
     })?;
-    let qualification = qualification_from_evaluation(&evaluation, request.report.clone())?;
+    validate_qualification_report(&evaluation, &request.report)?;
+    diagnostics::validate_report(&evaluation, &request.report)?;
+    let qualification = if evaluation.scope.case_ids().is_some() {
+        None
+    } else {
+        Some(qualification_from_evaluation(
+            &evaluation,
+            request.report.clone(),
+        )?)
+    };
     let completed = state
         .store
         .complete_inference_evaluation(&evaluation_id, &request.report, &report_hash, qualification)
@@ -2310,6 +2341,7 @@ mod tests {
             "gate_passed":true,
         });
         let evaluation = StoredInferenceEvaluation {
+            scope: Default::default(),
             id: "infeval_test".into(),
             status: "running".into(),
             suite_id: "planner-v1".into(),

@@ -17,6 +17,10 @@ impl SqliteStore {
             .resolved_binding
             .validate()
             .map_err(|error| StoreError::Conflict(error.to_string()))?;
+        evaluation
+            .scope
+            .validate(&evaluation.suite_id, evaluation.attempts)
+            .map_err(StoreError::Conflict)?;
         let now = now_string();
         let binding = &evaluation.resolved_binding;
         let result = sqlx::query(
@@ -25,10 +29,10 @@ impl SqliteStore {
               id, status, suite_id, suite_hash, attempts, agent_profile_id,
               agent_profile_hash, target_id, target_revision, target_hash, policy_id,
               policy_revision, policy_hash, resolved_binding_json, binding_hash,
-              runtime_revision, actor, reason, config_hash, created_at
+              runtime_revision, actor, reason, config_hash, created_at, scope_json
             )
             SELECT ?1, 'queued', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                   ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
+                   ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
             WHERE NOT EXISTS (
               SELECT 1 FROM inference_evaluations
               WHERE status IN ('queued', 'running')
@@ -54,6 +58,7 @@ impl SqliteStore {
         .bind(&evaluation.reason)
         .bind(&evaluation.config_hash)
         .bind(&now)
+        .bind(serde_json::to_string(&evaluation.scope)?)
         .execute(&self.pool)
         .await?;
         if result.rows_affected() != 1 {
@@ -145,11 +150,27 @@ impl SqliteStore {
         id: &str,
         report: &serde_json::Value,
         report_hash: &str,
-        qualification: CreateInferencePolicyQualification,
+        qualification: Option<CreateInferencePolicyQualification>,
     ) -> Result<StoredInferenceEvaluation, StoreError> {
         let now = now_string();
         let mut tx = self.pool.begin().await?;
-        sqlx::query(
+        let row = sqlx::query(
+            "SELECT scope_json FROM inference_evaluations WHERE id = ?1 AND status = 'running'",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| StoreError::Conflict("inference evaluation is not running".into()))?;
+        let scope: pharness_core::InferenceEvaluationScope =
+            serde_json::from_str(&row.try_get::<String, _>("scope_json")?)?;
+        if scope.case_ids().is_some() == qualification.is_some() {
+            return Err(StoreError::Conflict(
+                "diagnostics cannot create qualification records; full evaluations require one"
+                    .into(),
+            ));
+        }
+        if let Some(qualification) = &qualification {
+            sqlx::query(
             r#"
             INSERT INTO inference_policy_qualifications (
               id, policy_id, policy_revision, policy_hash, target_id, target_revision,
@@ -180,13 +201,14 @@ impl SqliteStore {
         .bind(&now)
         .execute(&mut *tx)
         .await?;
+        }
         let result = sqlx::query(
             "UPDATE inference_evaluations SET status = 'completed', report_json = ?2, report_hash = ?3, qualification_id = ?4, finished_at = ?5 WHERE id = ?1 AND status = 'running'",
         )
         .bind(id)
         .bind(serde_json::to_string(report)?)
         .bind(report_hash)
-        .bind(&qualification.id)
+        .bind(qualification.as_ref().map(|q| &q.id))
         .bind(&now)
         .execute(&mut *tx)
         .await?;
@@ -622,6 +644,7 @@ fn row_to_evaluation(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<StoredInferenceEvaluation, StoreError> {
     Ok(StoredInferenceEvaluation {
+        scope: serde_json::from_str(&row.try_get::<String, _>("scope_json")?)?,
         id: row.try_get("id")?,
         status: row.try_get("status")?,
         suite_id: row.try_get("suite_id")?,
@@ -659,6 +682,7 @@ fn row_to_evaluation(
 
 #[cfg(test)]
 mod tests {
+    mod diagnostics;
     use super::*;
     use crate::{CreateRun, CreateSession};
     use pharness_core::{
@@ -745,6 +769,7 @@ mod tests {
         binding.agent_profile_hash = binding.computed_agent_profile_hash().unwrap();
         binding.binding_hash = binding.computed_hash().unwrap();
         CreateInferenceEvaluation {
+            scope: Default::default(),
             id: id.into(),
             suite_id: "planner-v1".into(),
             suite_hash: "suite-hash".into(),

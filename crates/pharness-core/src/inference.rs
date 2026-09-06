@@ -1,3 +1,6 @@
+mod evaluation_scope;
+pub use evaluation_scope::{diagnostic_cases, InferenceEvaluationScope};
+
 use crate::{canonical_json_sha256, ToolChoiceMode, ToolProtocolMode};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, Mac};

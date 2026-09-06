@@ -51,7 +51,7 @@ pub(super) fn capture(
     document: Option<&Value>,
 ) -> Result<Value> {
     let mut record = capture_submission(suite, fixture, document)?;
-    if fixture.evidence["schema_version"] == "pharness.dev/stage-measurement/v1" {
+    if suite.is_v2() {
         let input =
             json!({"task":fixture.task,"context":fixture.context,"evidence":fixture.evidence});
         let bytes = serde_json::to_vec(&input)?.len();
