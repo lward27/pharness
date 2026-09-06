@@ -1,0 +1,86 @@
+{
+  "observed_at": "2026-09-06T00:59:54.962360+00:00",
+  "pharness_source_baseline": "bdf979a9b8ea375533155803010489083242545e",
+  "owner_approved": true,
+  "backend_source_merge": "97110919da6c83b84279dab02fa34426de9adc53",
+  "frontend_source_merge": "91b558003e1a9cbb64f229b0c0f97b827b328df9",
+  "source_writer_readback": "passed for both repositories",
+  "protection_verified": true,
+  "application_code_changed": false,
+  "production_changed": false,
+  "autonomous_source_merge_accepted": false,
+  "evidence": {
+    "ASTRA-M07-APPROVED-PROTECTION-API-REQUEST.json": {
+      "bytes": 550,
+      "sha256": "53cc2dbf22efa1c1f6ba5ab077dd4ea02080c9902663cf3ef198533ee42d114b"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-AUTHORITY.json": {
+      "bytes": 1035,
+      "sha256": "356a053fc7f7c13a938395f2c125372030868435672fad825c1aab032db1fa63"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-FINANCE-FRONTEND-MERGE-START.json": {
+      "bytes": 239,
+      "sha256": "6f8febab8ac7b41019f685fc69de78e2a575f4d6262bb764297aa5f6a7ee7e2e"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-FINANCE-FRONTEND-MERGE.json": {
+      "bytes": 238,
+      "sha256": "46adc4f174f376b72ac525a76e8de4454942b6e28f1cd7108bd1da6f50d18617"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-FINANCE-FRONTEND-PUT-CORRECTED-START.json": {
+      "bytes": 763,
+      "sha256": "b73f6033761bb3b333f6a099667116c3a36bfb623771b472bffc23eb0f85d262"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-FINANCE-FRONTEND-PUT-CORRECTED.json": {
+      "bytes": 1776,
+      "sha256": "9468ab6ea6ec1ad623d315bff539294845f53e2a41d41efee69810a5e3b176ac"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-FINANCE-FRONTEND-VERIFIED.json": {
+      "bytes": 1992,
+      "sha256": "fc94b586aa4611f8cc908c88529948bed43323291aa43ecde857c5f8f2a10b28"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-PREFLIGHT.json": {
+      "bytes": 15174,
+      "sha256": "82c0161945b2e85c12ba23f3226d9e7717a9ec0202430ed317aeaf4e822804f7"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-WRITER-VERIFIED.json": {
+      "bytes": 4252,
+      "sha256": "71c7a881eb985d39b9f501853ff51654d3c021129230d559971c144817874869"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-MERGE-START.json": {
+      "bytes": 239,
+      "sha256": "aeb55033041af941b46a17a4f75f1efbc9671bee9b126e80c7632a325e30647e"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-MERGE.json": {
+      "bytes": 238,
+      "sha256": "8590c8f3ae7f6922202e7643f9ee9ab0ba922bb3f7f79d0526d42f45523a400d"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-PUT-CORRECTED-START.json": {
+      "bytes": 763,
+      "sha256": "475eeeeca6a5490fb6e028a927713f9f4b622769f649e1c188828d3f06bdc3bd"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-PUT-CORRECTED.json": {
+      "bytes": 1776,
+      "sha256": "5b70bdcfbaf60b69605ffa0b463719b9ced1ffeeb2c5f39bd3081d7a3c6dbaa6"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-PUT-REJECTED.json": {
+      "bytes": 1002,
+      "sha256": "c931753eff29b621c4138e2d243058877f08c5d35b79eccbd98fc0cf8e0db515"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-PUT-START.json": {
+      "bytes": 785,
+      "sha256": "082b037be76b07310fb58393d6eab20b887d15630d63d8b4f30dece22328d5d1"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-YFINANCE_WRAPPER-VERIFIED.json": {
+      "bytes": 1992,
+      "sha256": "8b2c4d2188982be1ce8e4614861dac41fed6a2dddc217d751d79933348f58db6"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-INITIAL.log": {
+      "bytes": 890,
+      "sha256": "15b3d177155609fd4e7e646632534c34802eb743036466296e85263bf66f2058"
+    },
+    "ASTRA-M07-APPROVED-PROTECTION-RESUMED.log": {
+      "bytes": 250,
+      "sha256": "55702de71166f3558f94f59a92f16e1d57efd0a22689f2d66160378e473903c0"
+    }
+  }
+}

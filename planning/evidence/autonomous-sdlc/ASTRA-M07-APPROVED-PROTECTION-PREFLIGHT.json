@@ -1,0 +1,341 @@
+{
+  "observed_at": "2026-09-06T00:55:18.210403+00:00",
+  "repositories": [
+    {
+      "repository": "yfinance_wrapper",
+      "pull_request": 7,
+      "head": "3fe7495b23b989af70acb4c48e7661334d829d01",
+      "base": "efa6294954b01a089a65419c85542b8fc2f95c83",
+      "mergeable_state": "clean",
+      "files": [
+        {
+          "sha": "9f734411a40097ac9f396cfd1ba171ce2b54a0a7",
+          "filename": ".github/workflows/source-integrity.yml",
+          "status": "added",
+          "additions": 31,
+          "deletions": 0,
+          "changes": 31,
+          "blob_url": "https://github.com/lward27/yfinance_wrapper/blob/3fe7495b23b989af70acb4c48e7661334d829d01/.github%2Fworkflows%2Fsource-integrity.yml",
+          "raw_url": "https://github.com/lward27/yfinance_wrapper/raw/3fe7495b23b989af70acb4c48e7661334d829d01/.github%2Fworkflows%2Fsource-integrity.yml",
+          "contents_url": "https://api.github.com/repos/lward27/yfinance_wrapper/contents/.github%2Fworkflows%2Fsource-integrity.yml?ref=3fe7495b23b989af70acb4c48e7661334d829d01",
+          "patch": "@@ -0,0 +1,31 @@\n+name: Source integrity\n+\n+'on':\n+  pull_request:\n+    branches: [main]\n+  push:\n+    branches: [main]\n+\n+permissions:\n+  contents: read\n+\n+concurrency:\n+  group: source-integrity-${{ github.ref }}\n+  cancel-in-progress: true\n+\n+jobs:\n+  source-integrity:\n+    name: Source integrity\n+    runs-on: ubuntu-24.04\n+    timeout-minutes: 60\n+    steps:\n+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n+        with:\n+          persist-credentials: false\n+      - name: Test the exact proposed tree with the release Dockerfile\n+        shell: bash\n+        run: |\n+          set -euo pipefail\n+          source_revision=$(git rev-parse HEAD)\n+          docker build --platform linux/amd64 --pull \\\n+            --build-arg \"SOURCE_COMMIT=$source_revision\" ."
+        }
+      ],
+      "check": {
+        "id": 101329260312,
+        "name": "Source integrity",
+        "node_id": "CR_kwDOJ9Y8dM8AAAAXl7HPGA",
+        "head_sha": "3fe7495b23b989af70acb4c48e7661334d829d01",
+        "external_id": "1a6076cb-7109-5b81-a18d-7d5cb3d18719",
+        "url": "https://api.github.com/repos/lward27/yfinance_wrapper/check-runs/101329260312",
+        "html_url": "https://github.com/lward27/yfinance_wrapper/actions/runs/33974707112/job/101329260312",
+        "details_url": "https://github.com/lward27/yfinance_wrapper/actions/runs/33974707112/job/101329260312",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-05T15:24:36Z",
+        "completed_at": "2026-09-05T15:25:04Z",
+        "output": {
+          "title": null,
+          "summary": null,
+          "text": null,
+          "annotations_count": 0,
+          "annotations_url": "https://api.github.com/repos/lward27/yfinance_wrapper/check-runs/101329260312/annotations"
+        },
+        "check_suite": {
+          "id": 92066934699
+        },
+        "app": {
+          "id": 15368,
+          "client_id": "Iv1.05c79e9ad1f6bdfa",
+          "slug": "github-actions",
+          "node_id": "MDM6QXBwMTUzNjg=",
+          "owner": {
+            "login": "github",
+            "id": 9919,
+            "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+            "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/github",
+            "html_url": "https://github.com/github",
+            "followers_url": "https://api.github.com/users/github/followers",
+            "following_url": "https://api.github.com/users/github/following{/other_user}",
+            "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+            "organizations_url": "https://api.github.com/users/github/orgs",
+            "repos_url": "https://api.github.com/users/github/repos",
+            "events_url": "https://api.github.com/users/github/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/github/received_events",
+            "type": "Organization",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "name": "GitHub Actions",
+          "description": "Automate your workflow from idea to production",
+          "external_url": "https://help.github.com/en/actions",
+          "html_url": "https://github.com/apps/github-actions",
+          "created_at": "2018-07-30T09:30:17Z",
+          "updated_at": "2026-06-18T16:17:48Z",
+          "permissions": {
+            "actions": "write",
+            "administration": "read",
+            "artifact_metadata": "write",
+            "attestations": "write",
+            "checks": "write",
+            "code_quality": "write",
+            "contents": "write",
+            "copilot_requests": "write",
+            "deployments": "write",
+            "discussions": "write",
+            "drives": "write",
+            "issues": "write",
+            "merge_queues": "write",
+            "metadata": "read",
+            "models": "read",
+            "packages": "write",
+            "pages": "write",
+            "pull_requests": "write",
+            "repository_hooks": "write",
+            "repository_projects": "write",
+            "security_events": "write",
+            "statuses": "write",
+            "vulnerability_alerts": "read"
+          },
+          "events": [
+            "branch_protection_rule",
+            "check_run",
+            "check_suite",
+            "create",
+            "delete",
+            "deployment",
+            "deployment_status",
+            "discussion",
+            "discussion_comment",
+            "fork",
+            "gollum",
+            "issues",
+            "issue_comment",
+            "label",
+            "merge_group",
+            "milestone",
+            "page_build",
+            "public",
+            "pull_request",
+            "pull_request_review",
+            "pull_request_review_comment",
+            "push",
+            "registry_package",
+            "release",
+            "repository",
+            "repository_dispatch",
+            "status",
+            "watch",
+            "workflow_dispatch",
+            "workflow_run"
+          ]
+        },
+        "pull_requests": [
+          {
+            "url": "https://api.github.com/repos/lward27/yfinance_wrapper/pulls/7",
+            "id": 4451394135,
+            "number": 7,
+            "head": {
+              "ref": "codex/astra-required-source-checks",
+              "sha": "3fe7495b23b989af70acb4c48e7661334d829d01",
+              "repo": {
+                "id": 668351604,
+                "url": "https://api.github.com/repos/lward27/yfinance_wrapper",
+                "name": "yfinance_wrapper"
+              }
+            },
+            "base": {
+              "ref": "main",
+              "sha": "efa6294954b01a089a65419c85542b8fc2f95c83",
+              "repo": {
+                "id": 668351604,
+                "url": "https://api.github.com/repos/lward27/yfinance_wrapper",
+                "name": "yfinance_wrapper"
+              }
+            }
+          }
+        ]
+      },
+      "run": {
+        "id": 33974707112,
+        "head_sha": "3fe7495b23b989af70acb4c48e7661334d829d01",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": "https://github.com/lward27/yfinance_wrapper/actions/runs/33974707112"
+      }
+    },
+    {
+      "repository": "finance-frontend",
+      "pull_request": 8,
+      "head": "4117a2a17e665a560079190af281a8844f7ea4aa",
+      "base": "c4d64f9242f2955064f99e659bf1648ce6bc4273",
+      "mergeable_state": "clean",
+      "files": [
+        {
+          "sha": "9f734411a40097ac9f396cfd1ba171ce2b54a0a7",
+          "filename": ".github/workflows/source-integrity.yml",
+          "status": "added",
+          "additions": 31,
+          "deletions": 0,
+          "changes": 31,
+          "blob_url": "https://github.com/lward27/finance-frontend/blob/4117a2a17e665a560079190af281a8844f7ea4aa/.github%2Fworkflows%2Fsource-integrity.yml",
+          "raw_url": "https://github.com/lward27/finance-frontend/raw/4117a2a17e665a560079190af281a8844f7ea4aa/.github%2Fworkflows%2Fsource-integrity.yml",
+          "contents_url": "https://api.github.com/repos/lward27/finance-frontend/contents/.github%2Fworkflows%2Fsource-integrity.yml?ref=4117a2a17e665a560079190af281a8844f7ea4aa",
+          "patch": "@@ -0,0 +1,31 @@\n+name: Source integrity\n+\n+'on':\n+  pull_request:\n+    branches: [main]\n+  push:\n+    branches: [main]\n+\n+permissions:\n+  contents: read\n+\n+concurrency:\n+  group: source-integrity-${{ github.ref }}\n+  cancel-in-progress: true\n+\n+jobs:\n+  source-integrity:\n+    name: Source integrity\n+    runs-on: ubuntu-24.04\n+    timeout-minutes: 60\n+    steps:\n+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n+        with:\n+          persist-credentials: false\n+      - name: Test the exact proposed tree with the release Dockerfile\n+        shell: bash\n+        run: |\n+          set -euo pipefail\n+          source_revision=$(git rev-parse HEAD)\n+          docker build --platform linux/amd64 --pull \\\n+            --build-arg \"SOURCE_COMMIT=$source_revision\" ."
+        }
+      ],
+      "check": {
+        "id": 101329261903,
+        "name": "Source integrity",
+        "node_id": "CR_kwDORafBVc8AAAAXl7HVTw",
+        "head_sha": "4117a2a17e665a560079190af281a8844f7ea4aa",
+        "external_id": "e84888f5-da33-5aff-aa6a-466cfb9297dd",
+        "url": "https://api.github.com/repos/lward27/finance-frontend/check-runs/101329261903",
+        "html_url": "https://github.com/lward27/finance-frontend/actions/runs/33974707699/job/101329261903",
+        "details_url": "https://github.com/lward27/finance-frontend/actions/runs/33974707699/job/101329261903",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-05T15:24:37Z",
+        "completed_at": "2026-09-05T15:24:55Z",
+        "output": {
+          "title": null,
+          "summary": null,
+          "text": null,
+          "annotations_count": 0,
+          "annotations_url": "https://api.github.com/repos/lward27/finance-frontend/check-runs/101329261903/annotations"
+        },
+        "check_suite": {
+          "id": 92066936073
+        },
+        "app": {
+          "id": 15368,
+          "client_id": "Iv1.05c79e9ad1f6bdfa",
+          "slug": "github-actions",
+          "node_id": "MDM6QXBwMTUzNjg=",
+          "owner": {
+            "login": "github",
+            "id": 9919,
+            "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+            "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/github",
+            "html_url": "https://github.com/github",
+            "followers_url": "https://api.github.com/users/github/followers",
+            "following_url": "https://api.github.com/users/github/following{/other_user}",
+            "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+            "organizations_url": "https://api.github.com/users/github/orgs",
+            "repos_url": "https://api.github.com/users/github/repos",
+            "events_url": "https://api.github.com/users/github/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/github/received_events",
+            "type": "Organization",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "name": "GitHub Actions",
+          "description": "Automate your workflow from idea to production",
+          "external_url": "https://help.github.com/en/actions",
+          "html_url": "https://github.com/apps/github-actions",
+          "created_at": "2018-07-30T09:30:17Z",
+          "updated_at": "2026-06-18T16:17:48Z",
+          "permissions": {
+            "actions": "write",
+            "administration": "read",
+            "artifact_metadata": "write",
+            "attestations": "write",
+            "checks": "write",
+            "code_quality": "write",
+            "contents": "write",
+            "copilot_requests": "write",
+            "deployments": "write",
+            "discussions": "write",
+            "drives": "write",
+            "issues": "write",
+            "merge_queues": "write",
+            "metadata": "read",
+            "models": "read",
+            "packages": "write",
+            "pages": "write",
+            "pull_requests": "write",
+            "repository_hooks": "write",
+            "repository_projects": "write",
+            "security_events": "write",
+            "statuses": "write",
+            "vulnerability_alerts": "read"
+          },
+          "events": [
+            "branch_protection_rule",
+            "check_run",
+            "check_suite",
+            "create",
+            "delete",
+            "deployment",
+            "deployment_status",
+            "discussion",
+            "discussion_comment",
+            "fork",
+            "gollum",
+            "issues",
+            "issue_comment",
+            "label",
+            "merge_group",
+            "milestone",
+            "page_build",
+            "public",
+            "pull_request",
+            "pull_request_review",
+            "pull_request_review_comment",
+            "push",
+            "registry_package",
+            "release",
+            "repository",
+            "repository_dispatch",
+            "status",
+            "watch",
+            "workflow_dispatch",
+            "workflow_run"
+          ]
+        },
+        "pull_requests": [
+          {
+            "url": "https://api.github.com/repos/lward27/finance-frontend/pulls/8",
+            "id": 4451394176,
+            "number": 8,
+            "head": {
+              "ref": "codex/astra-required-source-checks",
+              "sha": "4117a2a17e665a560079190af281a8844f7ea4aa",
+              "repo": {
+                "id": 1168621909,
+                "url": "https://api.github.com/repos/lward27/finance-frontend",
+                "name": "finance-frontend"
+              }
+            },
+            "base": {
+              "ref": "main",
+              "sha": "c4d64f9242f2955064f99e659bf1648ce6bc4273",
+              "repo": {
+                "id": 1168621909,
+                "url": "https://api.github.com/repos/lward27/finance-frontend",
+                "name": "finance-frontend"
+              }
+            }
+          }
+        ]
+      },
+      "run": {
+        "id": 33974707699,
+        "head_sha": "4117a2a17e665a560079190af281a8844f7ea4aa",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": "https://github.com/lward27/finance-frontend/actions/runs/33974707699"
+      }
+    }
+  ]
+}

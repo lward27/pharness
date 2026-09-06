@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/private/tmp/astra-m07-apply-approved-source-protection.py", line 47, in <module>
+    applied=gh(api+'/branches/main/protection','--method','PUT','--input',str(request_file))
+  File "/private/tmp/astra-m07-apply-approved-source-protection.py", line 13, in gh
+    if result.returncode: raise RuntimeError('GitHub operation failed: '+path+' '+result.stderr[:1200])
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: GitHub operation failed: repos/lward27/yfinance_wrapper/branches/main/protection gh: Invalid request.
+
+No subschema in "anyOf" matched.
+More than one subschema in "oneOf" matched.
+Not all subschemas of "allOf" matched.
+For 'anyOf/1', {"strict" => true, "contexts" => [], "checks" => [{"context" => "Source integrity", "app_id" => 15368}]} is not a null. (HTTP 422)
+
