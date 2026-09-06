@@ -109,3 +109,9 @@ silently switch provider/budget, or claim unexecuted deployment or autonomous ac
 ## Current Builder result — 2026-09-05
 
 The exact `48c77b7` Builder passed both frozen runs 24/24 on the first pass, with every stack 8/8 and no reported hidden-test false passes or policy violations. [Pinned qualification and remaining gates](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md) distinguish the successful Builder result from the still-open M04 milestone. Other qualification Jobs remain serial. A later runtime requires matching qualification before hosted creation.
+
+The [stage evidence-contract correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-EVIDENCE-CONTRACT.md)
+binds V2 references to controller IDs and gives Planner/Test Diagnosis explicit V2.2
+suites with unchanged thresholds. It is locally validated and unreleased. Collect the
+currently running source-19 Verifier result; the full required qualification then runs
+on the next exact release, without repeating superseded old-source runs.

@@ -1,0 +1,104 @@
+{
+  "observed_at": "2026-09-06T10:37:37.297021+00:00",
+  "source_revision": "cb5142ff0e58bbb7c86e167cf50eda8a83343b70",
+  "main_baseline": "812e063e7decc19726f1540329b59c6a37ecd484",
+  "tested_source_sha256": {
+    "crates/pharness-core/src/inference.rs": "348520e082f4f1d111b993dbec5a819dd2fea4cd039f7f19886fbe760286a1e0",
+    "crates/pharness-eval/src/stage_suites.rs": "101778a92f5922b0302e158cc7dc6ef3bc9358b1ad5327410f4adb9b23a45bf6",
+    "crates/pharness-eval/src/stage_suites/diagnosis.rs": "b3fa5dd95cf8dbfad123a276117825567cde4a4fed2a250462a9fab4c1225065",
+    "crates/pharness-eval/src/stage_suites/integrity.rs": "4995a469f7770d8cd66facc864ae8e0cf8ff28dbc18282d454cac5b8425bb88d",
+    "crates/pharness-eval/src/stage_suites/integrity/planner_boundary.rs": "eae236358ff97e4aff6227ccd31121b652b3de09a1bd8d626334ed6668e054e6",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "f2cb05365154c8238ca935166184887a7681adedf9816a2e1391204897c4fcfb",
+    "crates/pharness-runhost/src/evidence_refs.rs": "5ce89719e16d91f1836e128231a38f487410727737d7ef928c3dd0641e8244e9",
+    "crates/pharness-runhost/src/lib.rs": "80a9527dd8785539d570ddf17b22edb509cdfeb9ab5659cfdb6351379b0ce845",
+    "crates/pharness-runhost/src/prompt.rs": "21abc9fefa6b5d4a25628d27012c4577903c326087410122f5d8bdc01db9a4ed"
+  },
+  "tests": [
+    {
+      "test_binary": "pharness_admin-be61ae81602deb87",
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_api-d93c3e7f119ebbf6",
+      "passed": 283,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-238941fb1e3d81a7",
+      "passed": 161,
+      "ignored": 1
+    },
+    {
+      "test_binary": "core_types-49742792ce738f1d",
+      "passed": 6,
+      "ignored": 0
+    },
+    {
+      "test_binary": "hosted_sdlc-ebb0b1db1f0fe293",
+      "passed": 2,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_eval-9654469e5ad2fff2",
+      "passed": 37,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-59b57ecd65585e61",
+      "passed": 30,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_core-doc",
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "test_binary": "pharness_runhost-doc",
+      "passed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 520,
+  "ignored": 1,
+  "cargo_exit_code": 0,
+  "clippy_affected_crates_all_targets": "passed",
+  "format": "passed",
+  "architecture": "passed",
+  "dependency_parser_tests_passed": 5,
+  "suite_revisions": {
+    "planner-v2": "stage-qualification-v2.2",
+    "test-diagnosis-v2": "stage-qualification-v2.2",
+    "onboarding-v2": "stage-qualification-v2.1",
+    "verifier-v2": "stage-qualification-v2.0",
+    "coding-v2": "coding-reliability-v2.1",
+    "repair-v2": "repair-reliability-v2.1"
+  },
+  "test_diagnosis_prompt_revision": "2026-09-06.1",
+  "frozen_coding_fixtures_changed": false,
+  "limits_thresholds_models_registry_changed": false,
+  "historical_outcomes_rescored": false,
+  "deployed": false,
+  "live_qualified": false,
+  "logs": [
+    {
+      "path": "ASTRA-M04-STAGE-EVIDENCE-CONTRACT-TESTS.log",
+      "sha256": "56b2757134fc1fd567034d8a19e665c2eb42e262f4e6e206fa078f6ab4b60356"
+    },
+    {
+      "path": "ASTRA-M04-STAGE-EVIDENCE-CONTRACT-CLIPPY.log",
+      "sha256": "f2c1a0d842f46712ec0d2374bdc6e729cb044acf5c2960b75335d0db7c7ec75a"
+    },
+    {
+      "path": "ASTRA-M04-STAGE-EVIDENCE-CONTRACT-ARCHITECTURE.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    {
+      "path": "ASTRA-M04-STAGE-EVIDENCE-CONTRACT-STAGE-CHECKS.log",
+      "sha256": "949ffb74c2239a4a2b07339532e68fe3157eb1577c6d3fae07f90679b38b362d"
+    }
+  ],
+  "prior_stage_checks": "The focused 15-case stage check preceded the final test-loop cleanup. The final full affected-package run is authoritative for the source revision above.",
+  "log_whitespace_policy": "Verbatim logs retain blank lines and intentional failing nested benchmark fixtures; final top-level summaries determine test status."
+}

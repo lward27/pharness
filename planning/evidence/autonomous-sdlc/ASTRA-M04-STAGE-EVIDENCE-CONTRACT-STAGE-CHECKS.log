@@ -1,0 +1,38 @@
+   Compiling tracing v0.1.44
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling hyper-util v0.1.20
+   Compiling tracing-subscriber v0.3.23
+   Compiling toml_edit v0.22.27
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling toml v0.8.23
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-core)
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-openai-compatible)
+   Compiling pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-fireworks)
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-runhost)
+   Compiling pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-config)
+   Compiling pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-codex-host)
+   Compiling pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-stage-evidence-contract/crates/pharness-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.82s
+     Running unittests src/main.rs (target/debug/deps/pharness_eval-fc09ccb163a6f3d9)
+
+running 15 tests
+test stage_suites::diagnosis::tests::diagnosis_snapshots_reproduce_assertion_compile_and_passing_receipts ... ok
+test stage_suites::integrity::planner_boundary::tests::direct_warnings_do_not_propose_the_operations_they_prohibit ... ok
+test stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates ... ok
+test stage_suites::integrity::tests::diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and_repairs ... ok
+test stage_suites::integrity::tests::failed_stage_diagnostics_preserve_contract_fields_without_inventing_missing_results ... ok
+test stage_suites::integrity::tests::planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps ... ok
+test stage_suites::onboarding::tests::a_blocker_in_prose_cannot_substitute_for_a_blocked_proposal ... ok
+test stage_suites::onboarding::tests::scenarios_have_real_files_and_verified_discovery_instead_of_answer_context ... ok
+test stage_suites::onboarding::tests::scorer_rejects_fabricated_facts_and_duplicate_services ... ok
+test stage_suites::submission_evidence::tests::diagnostics_preserve_other_stage_documents_without_inventing_verifier_results ... ok
+test stage_suites::submission_evidence::tests::missing_large_deep_and_secret_shaped_submissions_remain_explicitly_incomplete ... ok
+test stage_suites::submission_evidence::tests::prior_live_verifier_report_remains_readable_without_invented_submissions ... ok
+test stage_suites::submission_evidence::tests::retention_stays_bounded_when_redaction_expands_short_values ... ok
+test stage_suites::submission_evidence::tests::verifier_predicates_explain_every_failure_combination_without_changing_the_gate ... ok
+test stage_suites::tests::every_stage_qualification_replay_fixture_passes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 16.82s
+
