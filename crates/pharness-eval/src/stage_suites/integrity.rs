@@ -4,6 +4,8 @@ use super::{StageFixture, SuiteKind};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 
+mod planner_boundary;
+
 pub(super) fn validate_planner(
     fixture: &StageFixture,
     document: &Value,
@@ -65,12 +67,10 @@ pub(super) fn validate_planner(
                 boundary = false;
                 continue;
             };
-            // Executable steps stay conservative: an excluded operation belongs
-            // in risks/assumptions, rather than being proposed as a runnable step.
-            let lower = text.to_ascii_lowercase();
-            boundary &= strings(&fixture.expected["forbidden"])
-                .iter()
-                .all(|v| !lower.contains(v));
+            boundary &= !planner_boundary::proposes_forbidden(
+                text,
+                &strings(&fixture.expected["forbidden"]),
+            );
         }
         if let Some(paths) = step.get("paths") {
             boundary &= paths.as_array().is_some_and(|paths| {
@@ -142,6 +142,17 @@ fn path_within(allowed: &str, path: &str) -> bool {
 }
 
 pub(super) fn expected_failure_kind(fixture: &StageFixture) -> &'static str {
+    if let Some(kind) = fixture.expected["failure_kind"].as_str() {
+        return match kind {
+            "compilation" => "compilation",
+            "assertion" => "assertion",
+            "lint" => "lint",
+            "semantic_test" => "semantic_test",
+            "structural_environment" => "structural_environment",
+            "unknown" => "unknown",
+            _ => unreachable!("compiled fixture failure kind"),
+        };
+    }
     match fixture.expected["classification"].as_str() {
         Some("assertion_failure") => "assertion",
         Some("compile_failure") => "compilation",

@@ -281,3 +281,9 @@ authority, erase history, or count a manually completed step as autonomous succe
 The [integrated staging review](../../evidence/autonomous-sdlc/ASTRA-M08-INTEGRATION-REVIEW.md)
 records 782 passing workspace tests and the rendered finite observer permissions.
 It applies to source `6f40cdc`; integration, release and autonomous acceptance remain open.
+
+The [stage evidence-contract correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-EVIDENCE-CONTRACT.md)
+binds V2 references to controller IDs and gives Planner/Test Diagnosis explicit V2.2
+suites with unchanged thresholds. It is locally validated and unreleased. Collect the
+currently running source-19 Verifier result; the full required qualification then runs
+on the next exact release, without repeating superseded old-source runs.
