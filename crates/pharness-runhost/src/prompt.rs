@@ -68,9 +68,9 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
         }),
         "repo-test-diagnoser" => Some(StagePromptPack {
             prompt_id: "repo-test-diagnoser-v2",
-            revision,
+            revision: "2026-09-06.1",
             stage: pharness_core::InferenceStage::Test,
-            content: r#"Diagnose controller-provided deterministic command or hidden-test failures without modifying source. Tie every conclusion to exact output or evidence. Classify the failure and provide minimal repair recommendations. Do not rerun commands unless an exposed read-only tool is required to disambiguate. Submit one typed test diagnosis."#,
+            content: r#"Diagnose controller-provided deterministic command or hidden-test failures without modifying source. Tie every conclusion to exact output or evidence. Classify the observed failure type separately from its cause and repair scope. A preexisting failure may still be an assertion failure; a localized repair is not a failure type. If the output establishes a type but not a root cause, preserve that type and state that the cause is unknown. Never infer causes from file or class names. If no failure is evidenced, use unknown and propose no repair. Cite exact controller evidence_catalog IDs in evidence_refs, not hashes or file paths. Recommend only the repair supported by the result; do not change limits, contracts or the environment to obtain a pass. Do not rerun commands unless an exposed read-only tool is required to disambiguate. Submit one typed test diagnosis."#,
         }),
         "repo-verifier" => Some(StagePromptPack {
             prompt_id: "repo-verifier-v2",
