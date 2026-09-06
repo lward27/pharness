@@ -10,6 +10,7 @@ use pharness_store::{DeliveryStage, StoredWorkflowOperation};
 use serde_json::{json, Value};
 mod baseline;
 mod native;
+mod runtime;
 
 fn request<T: serde::de::DeserializeOwned>(value: Value) -> Json<T> {
     Json(serde_json::from_value(value).unwrap())
@@ -41,7 +42,7 @@ async fn start(
 ) {
     let mut f = verified_build(suffix, fake).await;
     f.state.cluster_tools = native::tools(fake);
-    staging::seed_pending(&f.state, &f.work_item_id, now() - 600_000).await;
+    staging::seed_pending(&f.state, &f.work_item_id, now() - 1_200_000).await;
     tick(&f).await;
     let op = operation(&f).await;
     let control = f

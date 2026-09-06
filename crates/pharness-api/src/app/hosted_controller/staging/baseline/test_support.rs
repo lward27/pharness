@@ -138,3 +138,54 @@ pub(in crate::app) async fn seed_window(
     }
     json!(window)
 }
+
+pub(in crate::app) async fn seed_historical_admission(
+    state: &AppState,
+    deployment: &str,
+    execution: &str,
+    evidence: FinanceRuntimeEvidence,
+) -> i64 {
+    let admitted = evidence.window.end_unix_seconds as i64 * 1000 + 20_000;
+    let mut identity = evidence.identity_after.clone();
+    identity["started_at_unix_ms"] = json!(admitted - 5_000);
+    identity["completed_at_unix_ms"] = json!(admitted - 4_000);
+    evidence
+        .validate_current_deployment(&identity, admitted as u64)
+        .unwrap();
+    seed_baseline(state, deployment, execution, evidence, None).await;
+    let saved = preparation::saved(state, deployment, execution)
+        .await
+        .unwrap();
+    records::write(
+        state,
+        &saved,
+        "admission_identity_started",
+        json!({"started_at_ms":admitted-5_000}),
+    )
+    .await
+    .unwrap();
+    records::write(
+        state,
+        &saved,
+        "admission_identity",
+        json!({"observation":identity}),
+    )
+    .await
+    .unwrap();
+    let window = records::window(state, &saved).await.unwrap().unwrap();
+    let baseline = records::read(state, &saved, "result")
+        .await
+        .unwrap()
+        .unwrap();
+    let body = json!({"execution_id":execution,"operation_id":saved.operation.id,"authority_hash":saved.authority.material_hash().unwrap(),"plan_hash":saved.plan.as_ref().unwrap().material_hash().unwrap(),"admitted_at_ms":admitted,"baseline":{"baseline_artifact_id":records::id(&saved,"result"),"baseline_sha256":super::super::hash(&baseline).unwrap(),"identity_artifact_id":records::id(&saved,"admission_identity"),"identity_sha256":super::super::hash(&identity).unwrap(),"admission_expires_at_ms":window.expires_at()}});
+    super::evidence::artifact(
+        state,
+        &saved.pipeline,
+        &super::artifact_id("attempt", execution),
+        "hosted_staging_admission",
+        body,
+    )
+    .await
+    .unwrap();
+    admitted
+}

@@ -9,7 +9,7 @@ mod collection;
 mod records;
 #[cfg(test)]
 pub(super) mod test_support;
-pub(super) use admission::{fresh, revalidate};
+pub(super) use admission::{fresh, historical, revalidate};
 
 pub(super) async fn reconcile(
     state: &AppState,

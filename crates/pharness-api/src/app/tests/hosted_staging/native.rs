@@ -91,6 +91,23 @@ pub(super) async fn evidence(
         gitops_commit_sha: p.base_commit_sha.clone(),
         image_digest: p.previous_image_digest(a).unwrap(),
     };
+    evidence_for(
+        f,
+        fake,
+        expected,
+        pharness_core::tools::FinanceVerificationPhase::Baseline,
+        age_ms,
+    )
+    .await
+}
+
+pub(super) async fn evidence_for(
+    f: &RepoDeliveryFixture,
+    fake: &KubectlFixture,
+    expected: FinanceDeploymentExpectation,
+    phase: pharness_core::tools::FinanceVerificationPhase,
+    age_ms: i64,
+) -> FinanceRuntimeEvidence {
     std::fs::write(
         fake.dir.join("native-resources.json"),
         rebound(include_str!("fixtures/native-resources.json"), &expected),
@@ -112,6 +129,7 @@ pub(super) async fn evidence(
     .unwrap();
     shift(&mut fixture, end - 1_788_653_340);
     let mut e: FinanceRuntimeEvidence = serde_json::from_value(fixture).unwrap();
+    e.phase = phase;
     e.identity_before = identity.clone();
     e.identity_after = identity;
     e.identity_before["started_at_unix_ms"] = json!((end - 300) * 1000 - 2000);
