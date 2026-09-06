@@ -1,0 +1,49 @@
+{
+  "observed_at": "2026-09-06T10:13:37.859012+00:00",
+  "source_revision": "915f3ee34a089191c0fb08a9d643ba0a3791d90e",
+  "documentation_integration_parent": "0ae42018f6e30e4bea7741884fa3493c4ffd1796",
+  "tested_source_sha256": {
+    "crates/pharness-openai-compatible/src/minimax.rs": "fe9138a965a6a03f1dcdf4128193417bc73d087b605570b3e86726c6ceb40d77",
+    "crates/pharness-openai-compatible/src/types.rs": "243110d6b7382e1645b5c26e5cd4137a013d5186e13fe37f5eea55dc372f5692",
+    "crates/pharness-openai-compatible/src/lib.rs": "1950fb2bbe217ebb1125cb72788f94c95200ad3290e9c4e47ee13510c2d6ff7f",
+    "crates/pharness-model-gateway/src/main.rs": "230a075422cb4dcec61ee335b6b97e6dc762aac95d20c9fec8877851d55dc7ff"
+  },
+  "checks": {
+    "transport_and_gateway": 21,
+    "runhost": 28,
+    "evaluation": 35,
+    "api_protocol_calibration_regression": 2,
+    "distinct_tests_passed": 86,
+    "architecture_parser_tests_passed": 5,
+    "clippy_transport_gateway_all_targets": "passed",
+    "format": "passed",
+    "architecture": "passed"
+  },
+  "logs": [
+    {
+      "path": "ASTRA-M04-SYSTEM-CONTEXT-TRANSPORT-TESTS.log",
+      "sha256": "d8fbba41eeff708052108b3c83be782a657f64a887d91215d51751415a5dded4"
+    },
+    {
+      "path": "ASTRA-M04-SYSTEM-CONTEXT-RUNHOST-EVAL-TESTS.log",
+      "sha256": "9541f53804b2c70b86ebbdaadd2350c5887d79540035f73e55044932f825e6bd"
+    },
+    {
+      "path": "ASTRA-M04-SYSTEM-CONTEXT-API-CALIBRATION-TESTS.log",
+      "sha256": "c690ee02f0f7a398cc4a91d1a5048e9a52a9b3ef172e245c86fa650da558bf56"
+    },
+    {
+      "path": "ASTRA-M04-SYSTEM-CONTEXT-CLIPPY.log",
+      "sha256": "7da9fde6dc679787dc2620d933669069a59ae34c376470d0597c21d4845a348a"
+    },
+    {
+      "path": "ASTRA-M04-SYSTEM-CONTEXT-ARCHITECTURE.log",
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    }
+  ],
+  "external_qualification": "not yet run on this source",
+  "historical_failed_runs_unchanged": true,
+  "profile_or_budget_changes": false,
+  "scope": "MiniMax Fireworks wire normalization; no schema or source-delivery changes",
+  "log_whitespace_policy": "Verbatim logs retain trailing blank lines. Strict whitespace checks pass for source, JSON and Markdown; logs are checked by recorded hashes."
+}

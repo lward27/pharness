@@ -1,0 +1,188 @@
+{
+  "model": "accounts/fireworks/models/kimi-k3",
+  "form": "separate",
+  "request": {
+    "model": "accounts/fireworks/models/kimi-k3",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Base instruction: ASTRA_ENVELOPE_SLOT_0_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository instruction: ASTRA_ENVELOPE_SLOT_1_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Execution environment: ASTRA_ENVELOPE_SLOT_2_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository map: ASTRA_ENVELOPE_SLOT_3_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Stage instruction: ASTRA_ENVELOPE_SLOT_4_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Controller discovery: ASTRA_ENVELOPE_SLOT_5_6a459cc7"
+      },
+      {
+        "role": "user",
+        "content": "This is a prompt-format diagnostic. Reply OK."
+      }
+    ],
+    "temperature": 0.1,
+    "max_tokens": 32,
+    "stream": false,
+    "echo": true,
+    "raw_output": true
+  },
+  "started_at": "2026-09-06T00:52:42.677270+00:00",
+  "http_status": 200,
+  "response_sha256": "ce89727fba0b7c0d1cbadea3716bda04d337fc163d2f6dff6ace01f31a952fcb",
+  "top_level_fields": [
+    "id",
+    "object",
+    "created",
+    "model",
+    "choices",
+    "usage"
+  ],
+  "usage": {
+    "prompt_tokens": 272,
+    "total_tokens": 304,
+    "completion_tokens": 32,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 32
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 32
+    }
+  },
+  "strings": [
+    {
+      "path": "/id",
+      "bytes": 41,
+      "sha256": "3ede9f0b02f93682d3b29946169418717341c617ce81ea6d4d7c943e675df772",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/object",
+      "bytes": 15,
+      "sha256": "e5ceded10e0255cf48444c9a8e2b7e00c594910381bac03f33cda6f50b53c7fb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/model",
+      "bytes": 33,
+      "sha256": "1e3b36d63ed19af00ae6cad8a4c884528206a8805676bd1ba7659ac3b858b111",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/role",
+      "bytes": 9,
+      "sha256": "a39a7ffad4a3013f29da97b84f264337f234c1cf9b3c40c7c30c677a8a18609a",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/content",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/reasoning_content",
+      "bytes": 157,
+      "sha256": "e2c582648887a4b0ec3d49dd9f3b37ae14181e05e7a334cbb04423772601014e",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/finish_reason",
+      "bytes": 6,
+      "sha256": "0f82aca66af91493b1ff401de5f1f7e3e24e14560df3f6f7e465dbc915b9947d",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/pretok_prompt_fragments",
+      "bytes": 1234,
+      "sha256": "cb41597aaf2424473700c4875c365b13b7b1bc9a5395f13d77910c2dca226f96",
+      "marker_positions": [
+        373,
+        500,
+        626,
+        745,
+        867,
+        992
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/completion",
+      "bytes": 1391,
+      "sha256": "7f596ed31f79e66ef60b539ec0d3c3bf7165af4801148fcf2196950c0104660d",
+      "marker_positions": [
+        373,
+        500,
+        626,
+        745,
+        867,
+        992
+      ]
+    }
+  ],
+  "elapsed_seconds": 2.161,
+  "qualification_accepted": false
+}

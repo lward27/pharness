@@ -1,5 +1,20 @@
 # ASTRA M04: Coding reliability qualification
 
+## Current qualification — 2026-09-06
+
+Runtime `19b0c55` remains unqualified. Onboarding scored 0/12 in both attempts;
+Planner scored 6/12 and 7/12; Test Diagnosis scored 1/12 in both. All results are
+retained. The [MiniMax context correction](../../evidence/autonomous-sdlc/ASTRA-M04-SYSTEM-CONTEXT-DELIVERY.md)
+passes 86 local regressions but requires deployment and fresh qualification.
+[Planner diagnosis](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-PLANNER-FAILURE.md)
+and [Test Diagnosis findings](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-TEST-DIAGNOSIS-FAILURE.md)
+separate remaining fixture/scorer defects from unsupported model claims. Fixing a
+harness defect does not retroactively qualify any run. Verifier qualification is
+in progress on source 19; all live evaluations remain serial. Hosted activation
+and autonomous Finance acceptance remain disabled/open.
+
+## Historical qualification on source 48
+
 Status: active and not qualified. On runtime `48c77b7`, Builder passed both frozen
 runs 24/24, while onboarding failed both twelve-case attempts at 18:03 UTC on
 2026-09-05. Planner then scored 4/12 and 7/12; Test Diagnosis scored 0/12 in both

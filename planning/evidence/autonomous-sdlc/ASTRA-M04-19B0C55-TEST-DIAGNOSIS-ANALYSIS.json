@@ -1,0 +1,240 @@
+{
+  "observed_at": "2026-09-06T10:13:37.859012+00:00",
+  "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "evaluation_id": "infeval_01a0744114c97952b9aff7f0d8fdb078",
+  "qualification_id": "inferqual_01a074438beb7161979ea66ad164e7c2",
+  "report_hash": "sha256:bb2365876f4679bedf9a6f602f9c70eb2d3322dd1f2c2c6662c4a339a183c0c2",
+  "gate_passed": false,
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 1,
+        "results": 12,
+        "unique_fixtures": 12
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 1,
+        "results": 12,
+        "unique_fixtures": 12
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 31,
+    "passed": 2,
+    "results": 24
+  },
+  "violations": {
+    "test_diagnosis_evidence_missing": 21,
+    "test_failure_misclassified": 10
+  },
+  "accepted_documents": 24,
+  "changed_paths": [],
+  "usage": {
+    "actual_prompt_tokens": 319870,
+    "actual_completion_tokens": 39466,
+    "cached_tokens": 0,
+    "reasoning_tokens": 0,
+    "turns": 116,
+    "tool_calls": 115,
+    "recoverable_failures": 0,
+    "context_budget_failures": 0,
+    "compacted_exchanges": 0,
+    "duration_ms": 121052
+  },
+  "diagnostic_only": true,
+  "failed_cases": [
+    {
+      "attempt": 1,
+      "fixture": "assertion-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:9329c9e5298badbe1ea1769382fdb67e54ea50177000d52c5d9bc224b9a3af53"
+    },
+    {
+      "attempt": 1,
+      "fixture": "compile-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:94026ce6ad7edcb696cd29d66e4df65b1ca393bd444177330357d224433e0c2e"
+    },
+    {
+      "attempt": 1,
+      "fixture": "lint-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:989f669ef76b4f9dd82bd33db12947e50dae70a4ac884b5a2ef2722e990069fc"
+    },
+    {
+      "attempt": 1,
+      "fixture": "semantic-hidden-failure",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:41b5d821e73a689c134cf7e2c0291c642c5d62bcf2eef864e413d33474fbce40"
+    },
+    {
+      "attempt": 1,
+      "fixture": "preexisting-failure",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:0bfcef407b82d75c8ef88ea5a3a1182b6b4835c4c34c7a9c14b47fd267432d99"
+    },
+    {
+      "attempt": 1,
+      "fixture": "wrong-test-selection",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:2a38dfd831c99051cae54d3197dbc95d2f2f69065f623222b3851cc9e562ce1f"
+    },
+    {
+      "attempt": 1,
+      "fixture": "timeout",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:9f71863bf82cab85d4cf097af393eedc1b1f049d89682068e61be0069269fa05"
+    },
+    {
+      "attempt": 1,
+      "fixture": "missing-executable",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:051233d73c46939cccf0866009186002fe36ea47cb2b183ee868470c0a55fc66"
+    },
+    {
+      "attempt": 1,
+      "fixture": "contract-mismatch",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:44f433876fbbf9d06d6a57735783c71078f1b87d25ae80433093d9e4dbd5cc45"
+    },
+    {
+      "attempt": 1,
+      "fixture": "single-localized-failure",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:6a52bd096d2727e1f05e0e4fd96014d13d2f71f374bc6fab76fc72c456dfd20d"
+    },
+    {
+      "attempt": 1,
+      "fixture": "multiple-related-failures",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:a91c0954fb430e94489f11c0093a6723e376d317ab240d63e00805a612652536"
+    },
+    {
+      "attempt": 2,
+      "fixture": "assertion-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:0f73d40657de91ae3caea58ee71cefe7d807f7873faab78025db55f53b003be2"
+    },
+    {
+      "attempt": 2,
+      "fixture": "compile-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:ebaa87d5cb9d6b52d30b69a648f3664c824ba9813779b285a44f8c87c5f128da"
+    },
+    {
+      "attempt": 2,
+      "fixture": "semantic-hidden-failure",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:094b6b851ebaad4e4b64065ee91592737a15be73eace3de59c2c2383ca3f4bbf"
+    },
+    {
+      "attempt": 2,
+      "fixture": "preexisting-failure",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:2ee81c8efc0321323614011a2e99f215c0ef4b736f7ded25298cea37cb1271de"
+    },
+    {
+      "attempt": 2,
+      "fixture": "wrong-test-selection",
+      "violations": [
+        "test_failure_misclassified"
+      ],
+      "document_hash": "sha256:c6f4caef9c09d0e5bdb73d6dc18e8109c98502dbe2bfd814102408cabc404021"
+    },
+    {
+      "attempt": 2,
+      "fixture": "timeout",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:13d97cdf9e066f6881526afebc70a0fcbb3c4b9308e129bfb90c8950926de477"
+    },
+    {
+      "attempt": 2,
+      "fixture": "missing-executable",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:1b1229e67405e992ea9bb096e417fe68ceeb4936951a09a7d111e6524b3ce488"
+    },
+    {
+      "attempt": 2,
+      "fixture": "contract-mismatch",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:5b51c35b56807105c547fed1af86346205c05cc2fa4fe265850843f1eaaa2ae6"
+    },
+    {
+      "attempt": 2,
+      "fixture": "single-localized-failure",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:eb28f76a15baaa776bc4216547973e4aa54100feb2d3056ac9dde55f67be999f"
+    },
+    {
+      "attempt": 2,
+      "fixture": "multiple-related-failures",
+      "violations": [
+        "test_failure_misclassified",
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:75da581fb931c6b105d2459452ca0271b7dd96c40fffb604e4becb74b2bfb78f"
+    },
+    {
+      "attempt": 2,
+      "fixture": "passing-control",
+      "violations": [
+        "test_diagnosis_evidence_missing"
+      ],
+      "document_hash": "sha256:0a5a2eb5123f35259733492174ddd7b8ab958fc2ee236758af15a9dd87cd1ef9"
+    }
+  ]
+}

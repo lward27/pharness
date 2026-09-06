@@ -1,0 +1,279 @@
+{
+  "model": "accounts/fireworks/models/minimax-m3",
+  "form": "separate",
+  "request": {
+    "model": "accounts/fireworks/models/minimax-m3",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Base instruction: ASTRA_ENVELOPE_SLOT_0_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository instruction: ASTRA_ENVELOPE_SLOT_1_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Execution environment: ASTRA_ENVELOPE_SLOT_2_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository map: ASTRA_ENVELOPE_SLOT_3_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Stage instruction: ASTRA_ENVELOPE_SLOT_4_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Controller discovery: ASTRA_ENVELOPE_SLOT_5_6a459cc7"
+      },
+      {
+        "role": "user",
+        "content": "This is a prompt-format diagnostic. Reply OK."
+      }
+    ],
+    "temperature": 0.1,
+    "max_tokens": 32,
+    "stream": false,
+    "echo": true,
+    "raw_output": true
+  },
+  "started_at": "2026-09-06T00:52:40.176727+00:00",
+  "http_status": 200,
+  "response_sha256": "c166773b57dc17db5c35667b33e2935bd1e7fbd78cc0b8d6eea5d26aec3380f1",
+  "top_level_fields": [
+    "id",
+    "object",
+    "created",
+    "model",
+    "choices",
+    "usage"
+  ],
+  "usage": {
+    "prompt_tokens": 149,
+    "total_tokens": 181,
+    "completion_tokens": 32,
+    "prompt_tokens_details": {
+      "cached_tokens": 111
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  },
+  "strings": [
+    {
+      "path": "/id",
+      "bytes": 41,
+      "sha256": "93680bc03456f82220a6f00dcef16d3913036e29973ebf3e8f87677db4287dec",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/object",
+      "bytes": 15,
+      "sha256": "e5ceded10e0255cf48444c9a8e2b7e00c594910381bac03f33cda6f50b53c7fb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/model",
+      "bytes": 36,
+      "sha256": "ec112e12757d85d3fc36e7c388064a0a64aabf78eb6d7a9fb850b92fdf9a06cb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/role",
+      "bytes": 9,
+      "sha256": "a39a7ffad4a3013f29da97b84f264337f234c1cf9b3c40c7c30c677a8a18609a",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/content",
+      "bytes": 611,
+      "sha256": "c05179e73b5ff710e48e84924b0ee38c214d8d9bfb1d46e1a2bf5300a5c4b140",
+      "marker_positions": [
+        393,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/finish_reason",
+      "bytes": 6,
+      "sha256": "0f82aca66af91493b1ff401de5f1f7e3e24e14560df3f6f7e465dbc915b9947d",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/2",
+      "bytes": 171,
+      "sha256": "0202c926c4fa0c652b31cbca1cc5520f8fbd5aed73b667e05db1021da963d704",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/5",
+      "bytes": 94,
+      "sha256": "32f4d07ef112f7279830da261a372efab367000e926f97c8a7e83388aef55fbf",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/7",
+      "bytes": 271,
+      "sha256": "126d487810d53900325879f0802ae78171d6c288070b0074e56207a3c3421fb4",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/9",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/11",
+      "bytes": 58,
+      "sha256": "cac7611532bbd7f9e51a72d33dc460998a2ee97e32df363e35ccf8458ec769b5",
+      "marker_positions": [
+        28,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/13",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/15",
+      "bytes": 50,
+      "sha256": "abb72ad0a343ed24f8f979eb385686477e93e10caa6d8773c63f980d6cc5c00c",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/17",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/19",
+      "bytes": 3,
+      "sha256": "4c9029e5351f4d4ced65251ab5bca0b61b3b09646b15f9ce302b59f8321cc3a7",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/completion",
+      "bytes": 830,
+      "sha256": "71b616d3497d1f6ad259e8b2717decd2b370e3acefadc2e662c0152cbca486d9",
+      "marker_positions": [
+        602,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    }
+  ],
+  "elapsed_seconds": 1.298,
+  "qualification_accepted": false
+}
