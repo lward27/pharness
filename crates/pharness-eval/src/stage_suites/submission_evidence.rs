@@ -50,6 +50,36 @@ pub(super) fn capture(
     fixture: &StageFixture,
     document: Option<&Value>,
 ) -> Result<Value> {
+    let mut record = capture_submission(suite, fixture, document)?;
+    if fixture.evidence["schema_version"] == "pharness.dev/stage-measurement/v1" {
+        let input =
+            json!({"task":fixture.task,"context":fixture.context,"evidence":fixture.evidence});
+        let bytes = serde_json::to_vec(&input)?.len();
+        let mut redactions = 0;
+        let mut retained = if bytes <= CONTEXT_LIMIT {
+            redact(input.clone(), 0, &mut redactions)
+        } else {
+            Value::Null
+        };
+        let retention =
+            if bytes > CONTEXT_LIMIT || serde_json::to_vec(&retained)?.len() > CONTEXT_LIMIT {
+                retained = Value::Null;
+                "omitted_size"
+            } else if redactions > 0 {
+                "redacted"
+            } else {
+                "complete"
+            };
+        record["measurement_input"] = json!({"schema_version":"pharness.dev/measurement-input/v1","raw_content_sha256":canonical_json_sha256(&input)?,"raw_bytes":bytes,"limit_bytes":CONTEXT_LIMIT,"retention":retention,"redacted_values":redactions,"document":retained,"meaning":"Exact public fixture input and observed receipts; private verdicts and oracle source are excluded. Initial context separately records the delivered envelope."});
+    }
+    Ok(record)
+}
+
+fn capture_submission(
+    suite: SuiteKind,
+    fixture: &StageFixture,
+    document: Option<&Value>,
+) -> Result<Value> {
     let Some(document) = document else {
         return Ok(
             json!({"schema_version":"pharness.dev/stage-submission-evidence/v1alpha1","present":false,"document":null,"meaning":"no accepted typed submission was recorded"}),
@@ -84,7 +114,7 @@ pub(super) fn capture(
         "redacted_values":redactions,
         "meaning":"accepted typed submission retained for diagnosis; qualification outcome remains independently scored"
     });
-    if matches!(suite, SuiteKind::VerifierV1 | SuiteKind::VerifierV2) {
+    if suite == SuiteKind::VerifierV1 {
         // Mirror the existing three predicates without altering the scorer,
         // fixture, prompt, acceptance gate or historical violation label.
         let marker = fixture.expected["marker"].as_str().unwrap_or_default();
@@ -98,6 +128,12 @@ pub(super) fn capture(
             "scope":"contract adherence; not independent defect-discovery evidence"
         });
     }
+    if suite == SuiteKind::VerifierV2 {
+        let mut violations = Vec::new();
+        let accepted = super::integrity::validate_verifier(fixture, document, &mut violations);
+        evidence["verifier_checks"] = json!({"expected_decision":fixture.expected["decision"],"decision_matches":document["decision"] == fixture.expected["decision"],"fixture_discloses_expected_decision_and_marker":false,"accepted":accepted,"violations":violations,"scope":"Blind verdict against a private case oracle; explanation quality requires review. No answer marker is required."});
+    }
+
     Ok(evidence)
 }
 
@@ -218,7 +254,7 @@ mod tests {
 
     #[test]
     fn verifier_predicates_explain_every_failure_combination_without_changing_the_gate() {
-        for suite in [SuiteKind::VerifierV1, SuiteKind::VerifierV2] {
+        for suite in [SuiteKind::VerifierV1] {
             let (f, original) = verification(suite);
             for decision in [false, true] {
                 for evidence in [false, true] {
@@ -268,7 +304,7 @@ mod tests {
 
     #[test]
     fn missing_large_deep_and_secret_shaped_submissions_remain_explicitly_incomplete() {
-        let (f, mut doc) = verification(SuiteKind::VerifierV2);
+        let (f, mut doc) = verification(SuiteKind::VerifierV1);
         assert_eq!(
             capture(SuiteKind::VerifierV2, &f, None).unwrap()["present"],
             false
@@ -278,7 +314,7 @@ mod tests {
         assert_eq!(oversized["retention"], "omitted_size");
         assert_eq!(oversized["document"], Value::Null);
         assert_eq!(
-            oversized["verifier_checks"]["required_marker_present"], true,
+            oversized["verifier_checks"]["decision_matches"], true,
             "diagnostics still score the original document"
         );
         let secrets = json!({"token":"fixture-value-never-retain","summary":"Authorization: Bearer fixture-value-never-retain","nested":{"api_key":"fixture-value-never-retain"}});

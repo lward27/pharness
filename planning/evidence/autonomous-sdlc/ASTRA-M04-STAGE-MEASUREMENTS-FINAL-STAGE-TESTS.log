@@ -1,0 +1,30 @@
+   Compiling pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-stage-measurements/crates/pharness-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.81s
+     Running unittests src/main.rs (target/debug/deps/pharness_eval-fc09ccb163a6f3d9)
+
+running 22 tests
+test stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates ... ok
+test stage_suites::integrity::tests::diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and_repairs ... ok
+test stage_suites::integrity::tests::failed_stage_diagnostics_preserve_contract_fields_without_inventing_missing_results ... ok
+test stage_suites::integrity::tests::planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps ... ok
+test stage_suites::diagnosis::tests::every_diagnosis_snapshot_reproduces_its_actual_receipt_without_answer_categories ... ok
+test stage_suites::measurement::tests::readonly_check_detects_second_edits_to_an_already_dirty_candidate ... ok
+test stage_suites::measurement::tests::private_answers_cannot_change_agent_input_and_case_ids_do_not_leak_verdicts ... ok
+test stage_suites::measurement::tests::revised_measurements_preserve_all_original_case_identities_and_class_balance ... ok
+test stage_suites::measurement::tests::real_verifier_sources_reproduce_defects_and_corrected_controls ... ok
+test stage_suites::measurement::tests::verdict_scoring_separates_schema_evidence_and_semantic_errors_without_markers ... ok
+test stage_suites::onboarding::tests::a_blocker_in_prose_cannot_substitute_for_a_blocked_proposal ... ok
+test stage_suites::onboarding::tests::scenarios_have_real_files_and_verified_discovery_instead_of_answer_context ... ok
+test stage_suites::measurement::tests::stale_planner_reference_is_a_real_ancestor_and_controls_preserve_edge_behavior ... ok
+test stage_suites::submission_evidence::tests::diagnostics_preserve_other_stage_documents_without_inventing_verifier_results ... ok
+test stage_suites::submission_evidence::tests::missing_large_deep_and_secret_shaped_submissions_remain_explicitly_incomplete ... ok
+test stage_suites::submission_evidence::tests::prior_live_verifier_report_remains_readable_without_invented_submissions ... ok
+test stage_suites::submission_evidence::tests::retention_stays_bounded_when_redaction_expands_short_values ... ok
+test stage_suites::submission_evidence::tests::starting_context_is_bounded_redacted_and_never_invented ... ok
+test stage_suites::submission_evidence::tests::verifier_predicates_explain_every_failure_combination_without_changing_the_gate ... ok
+test stage_suites::onboarding::tests::scorer_rejects_fabricated_facts_and_duplicate_services ... ok
+test stage_suites::tests::onboarding_v2_actions_propose_content_while_target_pins_original_identity ... ok
+test stage_suites::tests::every_stage_qualification_replay_fixture_passes ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 95.55s
+

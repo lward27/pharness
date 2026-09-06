@@ -1,0 +1,166 @@
+{
+  "status": "implemented_and_locally_validated",
+  "source_revision": "dc0f235254267b06dd3ad4db80db486bea608c80",
+  "base_main_revision": "323278cb481d361072b150f43a2517fadf2b61ee",
+  "full_component_check": {
+    "source_revision": "6c5330fb596ff4ee9f8aa6136fb09f02728a73d1",
+    "passed": 558,
+    "ignored": 1,
+    "targets": [
+      {
+        "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "status": "ok",
+        "passed": 284,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "status": "ok",
+        "passed": 161,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+        "status": "ok",
+        "passed": 43,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+        "status": "ok",
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-cc2d99e25dbc4177)",
+        "status": "ok",
+        "passed": 44,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_core",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_openai_compatible",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_runhost",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "final_affected_check": {
+    "source_revision": "dc0f235254267b06dd3ad4db80db486bea608c80",
+    "passed": 22,
+    "failed": 0,
+    "new_tests_since_full_check": 1,
+    "unchanged_checks_not_repeated": "Only the fixture controls, stale-reference ancestry and one added regression changed after the 558-test run."
+  },
+  "distinct_component_tests_covered": 559,
+  "existing_live_only_tests_ignored": 1,
+  "clippy": "five packages, all targets, warnings denied; passed",
+  "architecture_checks": 5,
+  "formatting": "passed",
+  "replays": [
+    {
+      "suite": "planner-v2",
+      "fixture_revision": "stage-qualification-v2.3",
+      "source_revision": "dc0f235254267b06dd3ad4db80db486bea608c80",
+      "provider": "replay",
+      "cases": 12,
+      "passed": 12,
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-PLANNER-REPLAY.json",
+      "sha256": "83863a81e058b70a2b77e6e824b930f7bdc92426abe7069f4b17a98bcd1a7ed1",
+      "meaning": "Actual source/receipt preparation and deterministic shared-runner replay, not model qualification"
+    },
+    {
+      "suite": "test-diagnosis-v2",
+      "fixture_revision": "stage-qualification-v2.3",
+      "source_revision": "dc0f235254267b06dd3ad4db80db486bea608c80",
+      "provider": "replay",
+      "cases": 12,
+      "passed": 12,
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-DIAGNOSIS-REPLAY.json",
+      "sha256": "4c205d7aae4e15eb45b944cce0562fb87891e4970fb58db6ce9cb11424d556cb",
+      "meaning": "Actual source/receipt preparation and deterministic shared-runner replay, not model qualification"
+    },
+    {
+      "suite": "verifier-v2",
+      "fixture_revision": "stage-qualification-v2.3",
+      "source_revision": "dc0f235254267b06dd3ad4db80db486bea608c80",
+      "provider": "replay",
+      "cases": 24,
+      "passed": 24,
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-VERIFIER-REPLAY.json",
+      "sha256": "b708188e22d1b500556129cefa9daef862522701234f2cdec934b6bf35a64fcc",
+      "meaning": "Actual source/receipt preparation and deterministic shared-runner replay, not model qualification"
+    }
+  ],
+  "logs": [
+    {
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-COMPONENT-TESTS.log",
+      "sha256": "e8a035fff12674b29589e61d90a9db3d3bebcedf300d939b70fb443b50573385"
+    },
+    {
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-FINAL-STAGE-TESTS.log",
+      "sha256": "c1c2bdd0b714579bc32025d6eb91bddea9ccd11e294ee4d6c2ad2e78f721fb58"
+    },
+    {
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-CLIPPY.log",
+      "sha256": "028edb31c711bf569e823b61ce95c8576c4efde623421b6be6c927e00d95bdaa"
+    },
+    {
+      "file": "ASTRA-M04-STAGE-MEASUREMENTS-ARCHITECTURE.log",
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    }
+  ],
+  "frozen_coding_and_repair_tasks_changed": false,
+  "numeric_qualification_gates_changed": false,
+  "model_profiles_or_budgets_changed": false,
+  "database_migration": false,
+  "deployed": false,
+  "live_model_qualified": false,
+  "limits": [
+    "Planner structural coverage does not prove reasoning quality.",
+    "Verifier expected verdicts are private; explanation quality still requires canary review.",
+    "JavaScript text behavior is exercised without claiming browser/DOM acceptance.",
+    "No live gateway canary, connected repair loop, Finance change or delivery acceptance was performed in this slice."
+  ]
+}
