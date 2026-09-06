@@ -1,0 +1,29 @@
+{
+  "application": "yfinance",
+  "read_at_unix_seconds": 1788648225,
+  "historical_window": {
+    "start_unix_seconds": 1788643582,
+    "end_unix_seconds": 1788643882
+  },
+  "query_parameters": {
+    "query": "sum by (pod,filename) (count_over_time({namespace=\"apps-staging\",container=\"yfinance-wrapper\",pod=~\"^(yfinance-wrapper-66b99984d9-w7qq6)$\",filename=~\"^(/var/log/pods/apps-staging_yfinance-wrapper-66b99984d9-w7qq6_e763137d-8b31-411c-b27d-127166e0de98/yfinance-wrapper/[0-9]+\\\\.log)$\"} |~ \"(^ERROR:|^CRITICAL:|^Traceback|HTTP/[0-9.]+\\\\\\\" 5[0-9][0-9] )\" [300s]))",
+    "time": "1788643882000000000"
+  },
+  "response_sha256": "741581d1e37dd47b3fa29dc36f298d046b6edf6f37654e9e6908bd482c29a6c9",
+  "status": "success",
+  "result_type": "vector",
+  "results": [
+    {
+      "metric": {
+        "filename": "/var/log/pods/apps-staging_yfinance-wrapper-66b99984d9-w7qq6_e763137d-8b31-411c-b27d-127166e0de98/yfinance-wrapper/0.log",
+        "pod": "yfinance-wrapper-66b99984d9-w7qq6"
+      },
+      "value": [
+        1788643882,
+        "3"
+      ]
+    }
+  ],
+  "corresponding_known_probe_status": 500,
+  "scope": "Historical query-pattern validation against retained failed functional probes; not a fresh runtime observation or release acceptance."
+}

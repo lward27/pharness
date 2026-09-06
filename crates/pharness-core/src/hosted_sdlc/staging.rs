@@ -5,7 +5,10 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub const AUTHORITY_SCHEMA: &str = "pharness.dev/hosted-staging-gitops/v1alpha1";
+// v2 writers require a fresh controller baseline admission before the one POST.
+// Older workers reject this authority instead of ignoring its admission expiry.
+pub const AUTHORITY_SCHEMA: &str = "pharness.dev/hosted-staging-gitops/v1alpha2";
+const LEGACY_AUTHORITY_SCHEMA: &str = "pharness.dev/hosted-staging-gitops/v1alpha1";
 pub const PLAN_SCHEMA: &str = "pharness.dev/hosted-staging-gitops-plan/v1alpha1";
 pub const GITOPS_REPOSITORY: &str = "https://github.com/lward27/lucas_engineering.git";
 pub const MAX_FILE_BYTES: usize = 65_536;
@@ -45,17 +48,19 @@ impl HostedStagingAuthority {
     }
 
     pub fn validate_identity(&self) -> Result<(), String> {
-        if self.schema_version != AUTHORITY_SCHEMA
-            || [
-                &self.work_item_id,
-                &self.operation_id,
-                &self.execution_id,
-                &self.pipeline_intent_id,
-                &self.deployment_intent_id,
-                &self.gitops_change_set_id,
-            ]
-            .iter()
-            .any(|id| !identity(id))
+        if !matches!(
+            self.schema_version.as_str(),
+            AUTHORITY_SCHEMA | LEGACY_AUTHORITY_SCHEMA
+        ) || [
+            &self.work_item_id,
+            &self.operation_id,
+            &self.execution_id,
+            &self.pipeline_intent_id,
+            &self.deployment_intent_id,
+            &self.gitops_change_set_id,
+        ]
+        .iter()
+        .any(|id| !identity(id))
             || !sha(&self.source_commit_sha, 40)
             || [
                 &self.workflow_policy_hash,
@@ -76,6 +81,9 @@ impl HostedStagingAuthority {
 
     pub fn validate_for_dispatch(&self, now_ms: i64) -> Result<(), String> {
         self.validate_identity()?;
+        if self.schema_version != AUTHORITY_SCHEMA {
+            return Err("historical staging authority is read-only; baseline-aware authority is required for new dispatch".into());
+        }
         if now_ms < self.created_at_ms || now_ms >= self.expires_at_ms {
             return Err("staging authority is not within its original execution window".into());
         }
@@ -107,6 +115,23 @@ pub struct StagingGitOpsPlan {
 }
 
 impl StagingGitOpsPlan {
+    pub fn previous_image_digest(
+        &self,
+        authority: &HostedStagingAuthority,
+    ) -> Result<String, String> {
+        self.validate(authority)?;
+        let document: Value = serde_yaml::from_str(&self.original_content)
+            .map_err(|_| "staging Kustomization is not valid YAML".to_string())?;
+        let (_, image) = authority.coordinates()?;
+        document["images"]
+            .as_array()
+            .and_then(|images| images.iter().find(|entry| entry["name"] == image))
+            .and_then(|entry| entry["digest"].as_str())
+            .filter(|value| digest(value))
+            .map(str::to_owned)
+            .ok_or_else(|| "staging baseline requires the original immutable image".into())
+    }
+
     pub fn validate(&self, authority: &HostedStagingAuthority) -> Result<(), String> {
         authority.validate_identity()?;
         if self.schema_version != PLAN_SCHEMA
