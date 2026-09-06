@@ -1,0 +1,14 @@
+{
+  "recorded_at": "2026-09-06T13:47:17.139318+00:00",
+  "source_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "initial_assembler_rejection": "The default packaging command created two untracked dist outputs; the strict clean-worktree check correctly refused to proceed.",
+  "relocated_only": [
+    "?? dist/pharness-codex-host-92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267-linux-amd64.tar.gz",
+    "?? dist/pharness-codex-host-92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267-linux-amd64.tar.gz.sha256"
+  ],
+  "bundle_sha256": "78fe85808d951d5e28e3b8680a6cc1a89fcdbfca22d147f577b91b73e0305d79",
+  "destination": "/Users/wardl/Personal/apps/pharness-release-artifacts/92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "worktree_clean_after_relocation": true,
+  "source_modified": false,
+  "scope": "Task-created output relocation; not a rebuild, source change or weakened clean-source gate."
+}

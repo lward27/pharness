@@ -1,0 +1,44 @@
+repository_root=/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-release
+remote=origin
+branch=main
+verified_revision=92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+worktree_clean=true
+#0 building with "lucas-desktop" instance using remote driver
+
+#1 [internal] load build definition from Dockerfile.platform-check
+#1 transferring dockerfile: 45B 0.1s
+#1 transferring dockerfile: 380B 0.4s done
+#1 DONE 0.4s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+#2 DONE 1.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 0.4s
+#3 transferring context: 2B 0.5s done
+#3 DONE 0.6s
+
+#4 [1/2] FROM docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+#4 resolve docker.io/library/debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN test "$(uname -m)" = "x86_64" && test "$(getconf LONG_BIT)" = "64"
+#5 DONE 0.1s
+WARNING: No output specified with remote driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
+{
+  "preflight": "passed",
+  "revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "builder": "lucas-desktop",
+  "platform": "linux/amd64",
+  "platform_execution": "passed",
+  "components": [
+    "runtime",
+    "ui",
+    "python-runner",
+    "node-runner",
+    "model-gateway",
+    "eval-runner",
+    "codex-host"
+  ],
+  "external_mutations": []
+}

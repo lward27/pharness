@@ -1,0 +1,158 @@
+{
+  "verified_at": "2026-09-06T13:47:22.030171+00:00",
+  "source_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "cluster": "lucas_engineering",
+  "builder": "lucas-desktop",
+  "worker_hostname": "ubuntu-desktop",
+  "platform": "linux/amd64",
+  "uncached_amd64_execution": "passed",
+  "component_tests": "627 passed across six affected packages on f0c7afd; release source differs only by evidence and merge commits; one existing live-only test ignored",
+  "images": [
+    {
+      "component": "runtime",
+      "image_url": "registry.lucas.engineering/pharness-runtime",
+      "digest": "sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db",
+      "immutable_ref": "registry.lucas.engineering/pharness-runtime@sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db",
+      "config_digest": "sha256:0f85160371351c0f3644f81f7c39a18312e085b29e3134002ad35221cf6dfbb4",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:08:48.416130+00:00",
+      "registry_inspection_sha256": "370bb6a3b4387813ca5e226335dbeaf0154fbaedeaaf2859e6ac9e008e12ce03"
+    },
+    {
+      "component": "ui",
+      "image_url": "registry.lucas.engineering/pharness-ui",
+      "digest": "sha256:60ea61d3eb41a09b6a9d6e155a1fa0f8b096cef8a32519b9480ecd5c3ecd3bc7",
+      "immutable_ref": "registry.lucas.engineering/pharness-ui@sha256:60ea61d3eb41a09b6a9d6e155a1fa0f8b096cef8a32519b9480ecd5c3ecd3bc7",
+      "config_digest": "sha256:3bfa9b1463056be1283dbd4777574ff8d4c8884712d615e0ad3046114ca5f036",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:14:05.809298+00:00",
+      "registry_inspection_sha256": "0e9782183105671dd7526d6bd7056902984410256a26ad96bf295f465c5c45ca"
+    },
+    {
+      "component": "python-runner",
+      "image_url": "registry.lucas.engineering/pharness-python-runner",
+      "digest": "sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
+      "immutable_ref": "registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
+      "config_digest": "sha256:c097b180e02aff6892408e488d0f072b0d84924120aeb61076bbc235e465df2f",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:20:20.211072+00:00",
+      "registry_inspection_sha256": "ff746cddb74e316076ea8ed2bbaee17c4b3daaa734d91ec75236a76ec7bb8bf9"
+    },
+    {
+      "component": "node-runner",
+      "image_url": "registry.lucas.engineering/pharness-node-runner",
+      "digest": "sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
+      "immutable_ref": "registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
+      "config_digest": "sha256:e9c0d3f39a21e94e6c3d3151791c1eaf2047f20395c22246f6d30c556d91c2eb",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:25:20.516931+00:00",
+      "registry_inspection_sha256": "33b0864c50ae6adfc9a079661b8e2a84376007639a5954d951b4c429625ea97c"
+    },
+    {
+      "component": "model-gateway",
+      "image_url": "registry.lucas.engineering/pharness-model-gateway",
+      "digest": "sha256:893e4a96c7afa22ae5e90ec1b1ae7a82874d4c7fc0a19df7e5009539445cad27",
+      "immutable_ref": "registry.lucas.engineering/pharness-model-gateway@sha256:893e4a96c7afa22ae5e90ec1b1ae7a82874d4c7fc0a19df7e5009539445cad27",
+      "config_digest": "sha256:c9bbbf216b213f82e50ff8d2d67997a7c53cff0b5971492b0b38ac6f9bc12438",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:27:43.188139+00:00",
+      "registry_inspection_sha256": "1f815dba86965db52a44d53cc1973f7f0cb5c12b1acbbbc91df8b2e85434e0b8"
+    },
+    {
+      "component": "eval-runner",
+      "image_url": "registry.lucas.engineering/pharness-eval-runner",
+      "digest": "sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404",
+      "immutable_ref": "registry.lucas.engineering/pharness-eval-runner@sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404",
+      "config_digest": "sha256:b0ede8280cfa66d002d52ca4413c76a16a3cfc3b22e2f4a265fc0d3c4dd4f54d",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:34:48.457477+00:00",
+      "registry_inspection_sha256": "a5e3d9408a32d4d14485b2d53cfd2247dabd77a83f40d621314baca2c167697b"
+    },
+    {
+      "component": "codex-host",
+      "image_url": "registry.lucas.engineering/pharness-codex-host",
+      "digest": "sha256:48b544714850f7c00f25f1f87fdfc9e6dfe1870bf5fd37f0c35bef05bf6c4928",
+      "immutable_ref": "registry.lucas.engineering/pharness-codex-host@sha256:48b544714850f7c00f25f1f87fdfc9e6dfe1870bf5fd37f0c35bef05bf6c4928",
+      "config_digest": "sha256:da8d982b379aa361c91e6dfa5f0be62349d9e2d9dde93acb007f4406e7bf0d6d",
+      "manifest_content_hash_verified": true,
+      "image_config_content_hash_verified": true,
+      "platform": "linux/amd64",
+      "oci_revision_verified": true,
+      "destination_tls_verified": true,
+      "completed_at": "2026-09-06T13:39:45.389327+00:00",
+      "registry_inspection_sha256": "d7e8d589a8dfe74ff22dbbed0f3e67ed0c5b422422dd70d031eb23198df6e40d"
+    }
+  ],
+  "native_bundle": {
+    "source_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+    "filename": "pharness-codex-host-92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267-linux-amd64.tar.gz",
+    "local_path": "/Users/wardl/Personal/apps/pharness-release-artifacts/92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267/pharness-codex-host-92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267-linux-amd64.tar.gz",
+    "sha256": "78fe85808d951d5e28e3b8680a6cc1a89fcdbfca22d147f577b91b73e0305d79",
+    "bytes": 231637013,
+    "all_checksums_verified": true,
+    "file_checksums": 13,
+    "elf_linux_amd64_headers_verified": true,
+    "codex_version": "0.150.1",
+    "runtime_bundle_verification": "build script passed the Dockerfile bundle-verification target",
+    "appledouble_entries": 0
+  },
+  "log_sha256": {
+    "amd64-check": "a92de0f9f9d6d75db7476d42db8e128802a2a1a1b88ed2d143d0425a34537af6",
+    "component-tests": "81fe22ec709e37b91532eb4935ec39f7debed0091a1c9972b2b0b38ea7ced195",
+    "build": "c3c695718dad8e1fb0bc65fd4ce19241aa1562a12878afee3e2a57f4da3b47f2",
+    "resume": "037680ede40ee8d93733e263c8ddd6c6b0319bb2b35f87202d1df2569736eda5"
+  },
+  "scope": "Complete immutable artifacts only. Database clone/live preservation, release deployment and stage qualification remain separately evidenced. No SBOM, signature or verified provenance attestation is claimed.",
+  "retained_logs": {
+    "amd64-check": {
+      "path": "ASTRA-M04-DIAGNOSTIC-RELEASE-AMD64-PREFLIGHT.log",
+      "sha256": "a92de0f9f9d6d75db7476d42db8e128802a2a1a1b88ed2d143d0425a34537af6",
+      "original_log_sha256": "a92de0f9f9d6d75db7476d42db8e128802a2a1a1b88ed2d143d0425a34537af6"
+    },
+    "component-tests": {
+      "path": "ASTRA-M04-DIAGNOSTIC-CANARIES-COMPONENT-TESTS.log",
+      "sha256": "81fe22ec709e37b91532eb4935ec39f7debed0091a1c9972b2b0b38ea7ced195",
+      "original_log_sha256": "81fe22ec709e37b91532eb4935ec39f7debed0091a1c9972b2b0b38ea7ced195"
+    },
+    "build": {
+      "path": "ASTRA-M04-DIAGNOSTIC-RELEASE-INITIAL-BUILD.log",
+      "sha256": "c1a02357444466fa804df560f909be14b2d426ffebaf3ea4852be73e601dadb2",
+      "original_log_sha256": "c3c695718dad8e1fb0bc65fd4ce19241aa1562a12878afee3e2a57f4da3b47f2"
+    },
+    "resume": {
+      "path": "ASTRA-M04-DIAGNOSTIC-RELEASE-RESUME-BUILD.log",
+      "sha256": "023bb8dabedc5ef79e55b6e3330b5748a741569765e8ca7dbc18ba336ea63ce6",
+      "original_log_sha256": "037680ede40ee8d93733e263c8ddd6c6b0319bb2b35f87202d1df2569736eda5"
+    },
+    "pin-preparation": {
+      "path": "ASTRA-M04-DIAGNOSTIC-RELEASE-PIN-PREPARATION.log",
+      "sha256": "18e700025bce1f26357097d4017f284225017f5e95515b08bacf0c096e229993",
+      "original_log_sha256": "b8e61e648ed070ad4e5dd27f5ad75b1f8cb4174970c2818c3233cabc441ef2f7"
+    }
+  },
+  "retained_log_normalization": "Trailing horizontal whitespace and extra final blank lines normalized for committed logs; original private log hashes remain recorded. No diagnostic text or result lines removed."
+}

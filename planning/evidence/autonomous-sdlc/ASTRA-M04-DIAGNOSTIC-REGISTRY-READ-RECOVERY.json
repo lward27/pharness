@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-09-06T13:09:45.131006+00:00",
+  "source_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "build_push": "succeeded",
+  "initial_verification": "public registry HEAD/GET HTTP 403, Server cloudflare",
+  "private_route": "192.168.20.210:32443",
+  "tls_server_name": "registry.lucas.engineering",
+  "trust": "existing registry CA; certificate chain and hostname verification enabled",
+  "runtime_digest": "sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db",
+  "manifest_config_content_hashes": "verified",
+  "platform": "linux/amd64",
+  "oci_source_revision": "verified",
+  "tag_matches_digest": true,
+  "runtime_rebuilt": false,
+  "tls_verification_disabled": false,
+  "registry_credentials_changed": false,
+  "remaining_builds": "resumed from UI after recording verified runtime; original failed verification log retained"
+}
