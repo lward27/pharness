@@ -1,0 +1,81 @@
+{
+  "observed_at": "2026-09-06T11:26:49.801239+00:00",
+  "source_revision": "8faf0fb9a0a2e679aee6cc83ed2b94373189071d",
+  "base_revision": "ddcc4b102ffe4651ca70e5f0b88e5d8f951dc5b7",
+  "scope": "M04A native submission contract; deterministic local validation only",
+  "source_files": {
+    "crates/pharness-api/src/app/products/onboarding.rs": "sha256:d7d08fad428440029ceae968dee0f02241b3b23a406d18927f579b58a0aac46c",
+    "crates/pharness-api/src/app/tests/hosted_stage_execution.rs": "sha256:e2b248341b0137ca4a067e17cd077bcc9cfe4dd3a8789f3e1e134c02fbd059a4",
+    "crates/pharness-core/src/inference.rs": "sha256:f846d5f7699bff736d600a8e3be2fd22db315bef2bb78c194a4129cbf58f718b",
+    "crates/pharness-eval/src/stage_suites.rs": "sha256:b23ba7e4ee88d24e799dcf2a511e14264274596e1df134263d90020ebc97bd52",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "sha256:fdd7f9920a1d3aedf2300ad7e5563ee4ec9328e8fa073b1059e7c975666067e0",
+    "crates/pharness-eval/src/stage_suites/onboarding.rs": "sha256:ba243ece33b440e03d570731801d30ecbe9d8c01816e4e0693374567a5fcd6da",
+    "crates/pharness-runhost/src/lib.rs": "sha256:7e7e037401332c3c3c1878f078c2c680227d590102166b211707f8ed9ad133ba",
+    "crates/pharness-runhost/src/onboarding_submission.rs": "sha256:d32fff3dcfe9ee153bc838c1035f644b7739503b6b4f61a3470c4b558278367b",
+    "crates/pharness-runhost/src/onboarding_submission/tests.rs": "sha256:232b0331b702a96a5108ebfba7ece4cf10105ac516de88e6899e391754a9874c",
+    "crates/pharness-runhost/src/prompt.rs": "sha256:f519a5a06c61476bc2bb39a1bb8c16ab97b53ec18886681848d006f851682c84"
+  },
+  "unchanged_controls": {
+    "deploy/helm/pharness/files/inference-registry.json": "sha256:6e0cf3931713c0b42e1f47a15223809a6fbda5623f91aa46806f90b092f90547",
+    "crates/pharness-eval/src/coding_v2.rs": "sha256:7a48b3550c0622a9a3bcb7789252527e9bbd2009394fba8c9717c2b11245626a",
+    "crates/pharness-core/src/repo_mode.rs": "sha256:22099825b358c418ea33ba96cd486f6088d50d337816a8ead209f30cb53df3a3",
+    "crates/pharness-api/src/app/hosted_workflow.rs": "sha256:5f47e4659798cce71d6c6f0ed3f92d3b6eaa808b00beb4dacfeb40b8aeccbd42"
+  },
+  "unchanged_onboarding_fixture_construction_sha256": "e59ebb86a55cb9640eb2af9e8402b101b05395d2cf284ca5701b9b9c3049c5cb",
+  "submission_contract": "pharness.dev/onboarding-agent-submission/v1",
+  "durable_proposal_schema": "pharness.dev/repository-onboarding-proposal/v1alpha2",
+  "stage_prompt_revision": "2026-09-06.2",
+  "suite_mapping": {
+    "suite_id": "onboarding-v2",
+    "from": "stage-qualification-v2.1",
+    "to": "stage-qualification-v2.2",
+    "cases": {
+      "python-contract": "python-contract",
+      "node-contract": "node-contract",
+      "missing-lock": "missing-lock",
+      "missing-test-root": "missing-test-root",
+      "conflicting-aliases": "conflicting-aliases",
+      "incompatible-profile": "incompatible-profile",
+      "shared-service": "shared-service",
+      "discovery-contradiction": "discovery-contradiction",
+      "local-dependency": "local-dependency",
+      "mutable-git-dependency": "mutable-git-dependency",
+      "existing-service-mapping": "existing-service-mapping",
+      "instruction-override": "instruction-override"
+    },
+    "scenario_count": 12,
+    "semantic_predicates_changed": false
+  },
+  "validation": {
+    "distinct_passing_component_tests": 530,
+    "ignored_tests": 1,
+    "api_admin": 1,
+    "api": 284,
+    "core_unit": 161,
+    "core_types": 6,
+    "hosted_sdlc": 2,
+    "eval": 38,
+    "runhost": 38,
+    "initial_failure": "One revision guard expected Onboarding v2.1; explicitly updated to approved v2.2 and rerun successfully. Other 37 evaluator tests passed, including all stage replays and frozen coding public/hidden replay checks.",
+    "clippy": "four affected packages/all targets passed; eval all targets passed again after the assertion update",
+    "architecture_tests": 5,
+    "format": "passed",
+    "whitespace": "passed"
+  },
+  "commands": [
+    "CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target cargo test --locked -p pharness-core -p pharness-runhost -p pharness-eval -p pharness-api",
+    "cargo test --locked -p pharness-eval corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates",
+    "cargo test --locked -p pharness-runhost",
+    "cargo clippy --locked -p pharness-core -p pharness-runhost -p pharness-eval -p pharness-api --all-targets -- -D warnings",
+    "cargo clippy --locked -p pharness-eval --all-targets -- -D warnings",
+    "./scripts/check-app-module-boundaries.sh",
+    "cargo fmt --all --check"
+  ],
+  "limitations": [
+    "Not deployed or live-qualified",
+    "Serialized Run reconstruction is covered; actual checkpoint and approval/budget replay context tests remain M04B",
+    "No model or registry changes",
+    "No Finance source patch or production action",
+    "Existing failed evaluations retain their recorded outcomes"
+  ]
+}

@@ -1,0 +1,52 @@
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-runhost)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.59s
+     Running unittests src/lib.rs (target/debug/deps/pharness_runhost-2b75edc7ebc92f6d)
+
+running 38 tests
+test onboarding_submission::tests::missing_and_unknown_fields_have_precise_native_rejections ... ok
+test evidence_refs::tests::runtime_rejects_unbound_references_and_accepts_one_corrected_typed_submission ... ok
+test onboarding_submission::tests::current_contract_rejects_supplied_identity_even_when_it_matches ... ok
+test onboarding_submission::tests::legacy_v1_and_v2_documents_keep_exact_identity_checks ... ok
+test preview::tests::previews_write_file_approval_with_diff ... ok
+test onboarding_submission::tests::native_tool_binds_ready_and_blocked_proposals_without_changing_semantics ... ok
+test preview::tests::previews_patch_file_approval_with_diff ... ok
+test preview::tests::skips_secret_shaped_approval_preview ... ok
+test onboarding_submission::tests::reconstructed_run_retains_original_contract_and_discovery ... ok
+test prompt::tests::worker_prompt_forbids_toolchain_discovery_before_execution ... ok
+test prompt::tests::onboarding_tool_schema_requires_the_controller_contract_shape ... ok
+test prompt::tests::atomic_patch_schema_exposes_its_exact_preimage_contract ... ok
+test workspace_source_tests::accepts_a_safe_https_repository_and_refs ... ok
+test workspace_source_tests::evidence_git_commands_trust_only_the_issued_workspace ... ok
+test prompt::tests::workspace_command_schema_exposes_only_verified_runner_executables ... ok
+test prompt::tests::worker_tool_schema_does_not_expose_non_resumable_approval_by_default ... ok
+test workspace_source_tests::node_acceptance_keeps_all_runtime_state_under_pharness_runtime ... ok
+test workspace_source_tests::old_attempt_payload_deserializes_with_the_general_task_contract ... ok
+test prompt::tests::worker_tool_schema_contains_terminal_and_read_only_actions ... ok
+test workspace_source_tests::profile_context_is_injected_and_evidence_retrieval_is_hash_bound ... ok
+test workspace_source_tests::profile_executor_rejects_tools_outside_the_pinned_allowlist ... ok
+test workspace_source_tests::rejects_credentials_and_unsafe_refs ... ok
+test workspace_source_tests::onboarding_profile_uses_its_controller_owned_subject_stage ... ok
+test workspace_source_tests::profile_tool_specs_expose_only_the_pinned_allowlist ... ok
+test evidence_refs::tests::both_v2_submission_schemas_bind_catalog_ids_and_preserve_legacy_shapes ... ok
+test onboarding_submission::tests::saved_contract_selects_matching_tool_schema_and_profile_instruction ... ok
+test workspace_source_tests::reliability_v2_verifier_uses_terminal_submission_without_finish ... ok
+test workspace_source_tests::verifier_profile_preserves_submission_turns_and_avoids_redundant_reads ... ok
+test workspace_source_tests::repository_instruction_symlink_escaping_workspace_is_ignored ... ok
+test onboarding_submission::tests::native_binding_preserves_blockers_candidate_validation_and_limits ... ok
+test workspace_source_tests::workspace_command_rejects_package_network_and_shell_composition ... ok
+test onboarding_submission::tests::new_run_rejects_missing_conflicting_or_malformed_original_context_before_execution ... ok
+test workspace_source_tests::reliability_v2_tool_hash_binds_exact_acceptance_and_evidence_ids ... ok
+test workspace_source_tests::repository_instructions_are_bounded_and_stay_inside_the_workspace ... ok
+test workspace_source_tests::workspace_command_executes_only_the_snapshot_runtime ... ok
+test workspace_source_tests::repository_contract_paths_are_enforced_by_the_workspace_executor ... ok
+test workspace_source_tests::atomic_patch_requires_preimages_and_never_partially_applies ... ok
+test workspace_source_tests::collects_bounded_evidence_against_the_pinned_commit ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+   Doc-tests pharness_runhost
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
