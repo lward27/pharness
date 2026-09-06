@@ -81,7 +81,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Baseline/current-source live observations pass; finite native readers, baseline admission and durable candidate controller locally validated; integrated release and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
-| M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
+| M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | production decision material validated in an unreleased slice; authenticated decision, delivery and recovery integration open | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
@@ -287,3 +287,7 @@ binds V2 references to controller IDs and gives Planner/Test Diagnosis explicit 
 suites with unchanged thresholds. It is locally validated and unreleased. Collect the
 currently running source-19 Verifier result; the full required qualification then runs
 on the next exact release, without repeating superseded old-source runs.
+
+The [production decision material](../../evidence/autonomous-sdlc/ASTRA-M09-PRODUCTION-DECISION-MATERIAL.md)
+passes 212 core-package checks. It adds no production write path or human-approval
+endpoint; native origin, durable delivery and recovery acceptance remain open.
