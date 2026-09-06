@@ -1,6 +1,6 @@
 # ASTRA M04C: Stage measurement mapping
 
-Status: implementation in validation; this is the explicit scenario mapping, not live qualification.
+Status: locally validated; this is the explicit scenario mapping, not live qualification.
 
 The three revised V2 suites use `stage-qualification-v2.3`. Onboarding stays at v2.2; the frozen coding and repair suites stay at v2.1. No numeric qualification threshold changes. Original failed reports remain unchanged. Historical V1 fixtures and their protocol scoring remain available.
 
