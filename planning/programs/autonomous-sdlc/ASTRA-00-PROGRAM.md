@@ -277,3 +277,7 @@ run meaningful checks, record exact results and limitations, commit implementati
 evidence, then update milestone/finding status. Continue eligible work until acceptance
 or a concrete external dependency requires input. Never weaken a gate, expand production
 authority, erase history, or count a manually completed step as autonomous success.
+
+The [integrated staging review](../../evidence/autonomous-sdlc/ASTRA-M08-INTEGRATION-REVIEW.md)
+records 782 passing workspace tests and the rendered finite observer permissions.
+It applies to source `6f40cdc`; integration, release and autonomous acceptance remain open.

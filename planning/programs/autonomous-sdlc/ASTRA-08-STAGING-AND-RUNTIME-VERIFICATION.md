@@ -144,3 +144,7 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
+
+The [integrated staging review](../../evidence/autonomous-sdlc/ASTRA-M08-INTEGRATION-REVIEW.md)
+records 782 passing workspace tests and the rendered finite observer permissions.
+It applies to source `6f40cdc`; integration, release and autonomous acceptance remain open.
