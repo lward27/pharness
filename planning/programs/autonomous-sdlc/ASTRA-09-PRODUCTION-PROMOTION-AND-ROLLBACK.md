@@ -1,6 +1,6 @@
 # ASTRA M09: Production approval and bounded rollback
 
-Status: planned.
+Status: initial decision material implemented and locally validated; not deployed; production integration and acceptance remain open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M08.
 
@@ -75,3 +75,12 @@ and finding ledger, then continue the next eligible milestone. If an external in
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
 
+
+## Implementation record — 2026-09-06
+
+[Production decision material](../../evidence/autonomous-sdlc/ASTRA-M09-PRODUCTION-DECISION-MATERIAL.md)
+binds one human decision to exact Finance source, evidence, baseline, configuration
+and GitOps diff, within the existing 30-minute maximum. The slice passes 212
+core-package tests but grants no production authority and implements no write path.
+Continue with the authenticated, persisted decision and native evidence integration
+listed in that report. All acceptance checkboxes above remain open.
