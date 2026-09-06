@@ -596,14 +596,11 @@ fn build_binding(
         base_agent_profile_hash: profile.profile_hash.clone(),
         agent_profile_hash: String::new(),
         tool_schema_hash: constrained_tool_schema_hash(&profile.tools, &["unit".to_string()], &[])?,
-        context_policy_hash: canonical_json_sha256(&json!({
-            "schema_version":"pharness.dev/repo-context-policy/v2",
-            "stage":"implement",
-            "max_input_tokens":policy.max_input_tokens,
-            "max_output_tokens":policy.max_output_tokens,
-            "controller_execution_ledger":true,
-            "deterministic_checkpoints":true,
-        }))?,
+        context_policy_hash: pharness_runhost::context_policy_hash(
+            pharness_core::InferenceStage::Implement,
+            policy.max_input_tokens,
+            policy.max_output_tokens,
+        )?,
         protocol_calibration_hash: canonical_json_sha256(&json!({
             "schema_version":"pharness.dev/protocol-contract/v2",
             "target_hash":target.config_hash,

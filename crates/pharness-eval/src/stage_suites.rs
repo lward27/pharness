@@ -247,14 +247,11 @@ pub(super) async fn run(
         agent_profile_hash: String::new(),
         tool_schema_hash: tool_schema_hash.clone(),
         context_policy_hash: if suite.is_v2() {
-            canonical_json_sha256(&json!({
-                "schema_version":"pharness.dev/repo-context-policy/v2",
-                "stage":suite.inference_stage(),
-                "max_input_tokens":policy.max_input_tokens,
-                "max_output_tokens":policy.max_output_tokens,
-                "controller_execution_ledger":true,
-                "deterministic_checkpoints":true,
-            }))?
+            pharness_runhost::context_policy_hash(
+                suite.inference_stage(),
+                policy.max_input_tokens,
+                policy.max_output_tokens,
+            )?
         } else {
             String::new()
         },
@@ -704,6 +701,8 @@ async fn run_fixture(
         }));
     }
     let action_trace = eval_action_trace(&events);
+    let mut submission_record = submission_evidence::capture(suite, fixture, submission.as_ref())?;
+    submission_evidence::attach_initial_context(&mut submission_record, &events)?;
     Ok(EvalResult {
         fixture: fixture.id.clone(),
         attempt,
@@ -748,11 +747,7 @@ async fn run_fixture(
         failure_detail,
         action_trace,
         failure_diff: None,
-        stage_submission: Some(submission_evidence::capture(
-            suite,
-            fixture,
-            submission.as_ref(),
-        )?),
+        stage_submission: Some(submission_record),
     })
 }
 
@@ -1520,6 +1515,9 @@ mod tests {
             if suite == "onboarding-v2" {
                 assert_eq!(report.results.len(), 12);
                 for result in &report.results {
+                    let context = &result.stage_submission.as_ref().unwrap()["initial_context"];
+                    assert_eq!(context["retention"], "complete");
+                    assert_eq!(context["document"]["messages"].as_array().unwrap().len(), 2);
                     let document = &result.stage_submission.as_ref().unwrap()["document"];
                     assert_eq!(
                         document["schema_version"],

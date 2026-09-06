@@ -79,14 +79,11 @@ pub(in crate::app) fn qualification_binding_for_policy(
         })?
     };
     let context_policy_hash = if reliability_v2 {
-        canonical_json_sha256(&json!({
-            "schema_version":"pharness.dev/repo-context-policy/v2",
-            "stage":stage,
-            "max_input_tokens":policy.max_input_tokens,
-            "max_output_tokens":policy.max_output_tokens,
-            "controller_execution_ledger":true,
-            "deterministic_checkpoints":true,
-        }))
+        pharness_runhost::context_policy_hash(
+            stage,
+            policy.max_input_tokens,
+            policy.max_output_tokens,
+        )
         .map_err(|error| ApiError::internal(error.to_string()))?
     } else {
         String::new()

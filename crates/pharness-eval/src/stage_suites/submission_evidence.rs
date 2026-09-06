@@ -6,6 +6,44 @@ use pharness_core::canonical_json_sha256;
 use serde_json::{json, Value};
 
 const DOCUMENT_LIMIT: usize = 16 * 1024;
+const CONTEXT_LIMIT: usize = 128 * 1024;
+
+pub(super) fn attach_initial_context(
+    evidence: &mut Value,
+    events: &[pharness_core::AgentEvent],
+) -> Result<()> {
+    let Some(context) = events
+        .iter()
+        .find(|event| event.kind == pharness_core::EventKind::RunStarted)
+        .and_then(|event| event.payload.get("initial_context"))
+    else {
+        evidence["initial_context"] = json!({"present":false,"meaning":"no retained initial context; do not infer delivery from a submission"});
+        return Ok(());
+    };
+    let bytes = serde_json::to_vec(context)?.len();
+    let mut redactions = 0;
+    let mut retained = if bytes <= CONTEXT_LIMIT {
+        redact(context.clone(), 0, &mut redactions)
+    } else {
+        Value::Null
+    };
+    let retention = if bytes > CONTEXT_LIMIT || serde_json::to_vec(&retained)?.len() > CONTEXT_LIMIT
+    {
+        retained = Value::Null;
+        "omitted_size"
+    } else if redactions > 0 {
+        "redacted"
+    } else {
+        "complete"
+    };
+    evidence["initial_context"] = json!({
+        "present":true,"raw_content_sha256":canonical_json_sha256(context)?,
+        "raw_bytes":bytes,"limit_bytes":CONTEXT_LIMIT,"retention":retention,
+        "redacted_values":redactions,"document":retained,
+        "meaning":"native starting input; provider serialization and semantic correctness require separate checks"
+    });
+    Ok(())
+}
 
 pub(super) fn capture(
     suite: SuiteKind,
@@ -136,6 +174,34 @@ mod tests {
     use crate::stage_suites::{fixtures, replay_actions, validate_submission, SuiteKind};
     use pharness_core::{canonical_json_sha256, AgentAction};
     use serde_json::{json, Value};
+
+    #[test]
+    fn starting_context_is_bounded_redacted_and_never_invented() {
+        use super::attach_initial_context;
+        let mut evidence = json!({});
+        attach_initial_context(&mut evidence, &[]).unwrap();
+        assert_eq!(evidence["initial_context"]["present"], false);
+        let mut event = pharness_core::AgentEvent {
+            event_id: "evt_context".into(),
+            session_id: "session_context".into(),
+            run_id: "run_context".into(),
+            seq: 1,
+            kind: pharness_core::EventKind::RunStarted,
+            payload: json!({"initial_context":{"schema_version":"pharness.dev/initial-model-context/v1","messages":[{"role":"system","content":"bounded context"}]}}),
+        };
+        attach_initial_context(&mut evidence, &[event.clone()]).unwrap();
+        assert_eq!(evidence["initial_context"]["retention"], "complete");
+        event.payload["initial_context"]["messages"][0]["content"] =
+            json!("Authorization: Bearer fixture-secret");
+        attach_initial_context(&mut evidence, &[event.clone()]).unwrap();
+        assert_eq!(evidence["initial_context"]["retention"], "redacted");
+        assert!(!evidence.to_string().contains("fixture-secret"));
+        event.payload["initial_context"]["messages"][0]["content"] =
+            json!("x".repeat(super::CONTEXT_LIMIT + 1));
+        attach_initial_context(&mut evidence, &[event]).unwrap();
+        assert_eq!(evidence["initial_context"]["retention"], "omitted_size");
+        assert!(evidence["initial_context"]["document"].is_null());
+    }
 
     fn verification(suite: SuiteKind) -> (super::StageFixture, Value) {
         let f = fixtures(suite).unwrap().remove(0);

@@ -1,0 +1,115 @@
+{
+  "observed_at": "2026-09-06T11:48:09.750557+00:00",
+  "source_revision": "a06eb27bb7c09593d002de877f2e2bfcc2cb3b85",
+  "base_revision": "ae4eed39be1260dc2cc9f9fbeb1f8586d66fb5fd",
+  "scope": "M04B versioned context, transcript recovery and bounded diagnostic retention; local validation only",
+  "source_files": {
+    "Cargo.lock": "sha256:afeb74ef93aa67d56aca436b43ab0477d142843903b9d568fc5e648c3bddd8d1",
+    "crates/pharness-api/src/app/inference.rs": "sha256:fe433e6d7dc6b3c08f2bfcade7cc5431c7bd09d537d2f67c7a18d0d473102ee8",
+    "crates/pharness-api/src/app/inference/qualification_binding.rs": "sha256:1bb7fe077fd6b77f4bba3f117702e12a5fde4356b637cbb36fe831bf235a54f0",
+    "crates/pharness-core/src/agent/runtime.rs": "sha256:2c7a952eb110409333c0aed730520309d709f60bb6fee4de4d4a53596256ebb3",
+    "crates/pharness-eval/src/coding_v2.rs": "sha256:3cbfa972eb0a97a8db4d31f1e45fedaf1febc4038bd2ad5313eb7a473092d173",
+    "crates/pharness-eval/src/stage_suites.rs": "sha256:eb576640e2d5023c1543c2e4a030b6f6e1a02b3197af3957d28f2e8750a363e3",
+    "crates/pharness-eval/src/stage_suites/submission_evidence.rs": "sha256:e0c0960985f89e33c005e2ae82f75c93d616f97cb5e81576a367df27b4f56f6a",
+    "crates/pharness-runhost/Cargo.toml": "sha256:71e5aa68e186f3abbdf563f739ce1bd325fce640d675ecc4d3a8ed4b8dc16036",
+    "crates/pharness-runhost/src/context_envelope.rs": "sha256:01c8d3e424c62280b497f80dd457c97d1682f037941f85e7e0e92dc3a6143ff5",
+    "crates/pharness-runhost/src/context_envelope/tests.rs": "sha256:df618cc04cbd9d9347c16a4b054a35c38b8252a58087588981425f46a9e23360",
+    "crates/pharness-runhost/src/lib.rs": "sha256:33efb3f03adbcfb5a607d653cd37b65312e2676422654d1c8044b69a04aa47ba"
+  },
+  "unchanged_controls": {
+    "deploy/helm/pharness/files/inference-registry.json": "sha256:6e0cf3931713c0b42e1f47a15223809a6fbda5623f91aa46806f90b092f90547",
+    "crates/pharness-core/src/repo_mode.rs": "sha256:22099825b358c418ea33ba96cd486f6088d50d337816a8ead209f30cb53df3a3",
+    "crates/pharness-core/src/inference.rs": "sha256:f846d5f7699bff736d600a8e3be2fd22db315bef2bb78c194a4129cbf58f718b",
+    "crates/pharness-api/src/app/agent_hosts.rs": "sha256:9464f5d4a4695f26b166febdc2fad4513e3530c1e70d2bd627ca062260bb4256",
+    "crates/pharness-api/src/app/hosted_workflow.rs": "sha256:5f47e4659798cce71d6c6f0ed3f92d3b6eaa808b00beb4dacfeb40b8aeccbd42"
+  },
+  "context_envelope_schema": "pharness.dev/agent-context-envelope/v1",
+  "initial_context_event_schema": "pharness.dev/initial-model-context/v1",
+  "binding": "context_policy_hash includes context_envelope_schema; legacy policy hashes select legacy messages; unknown hashes stop",
+  "initial_context_retention": {
+    "run_events": "one initial-context record for V2 stage runs",
+    "stage_evaluation_report_limit_bytes": 131072,
+    "sensitive_values": "redacted with explicit retention metadata",
+    "oversized": "hash and omission metadata retained; input is not represented as complete"
+  },
+  "component_tests": [
+    {
+      "target": "unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+      "passed": 284,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+      "passed": 161,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "target": "tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+      "passed": 39,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "unittests src/lib.rs (target/debug/deps/pharness_runhost-cc2d99e25dbc4177)",
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passing_component_tests": 554,
+  "ignored_live_tests": 1,
+  "architecture_tests": 5,
+  "checks": {
+    "tests": "passed",
+    "clippy": "five packages/all targets passed",
+    "format": "passed",
+    "architecture": "passed",
+    "whitespace": "passed"
+  },
+  "commands": [
+    "CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target cargo test --locked -p pharness-core -p pharness-runhost -p pharness-eval -p pharness-api -p pharness-openai-compatible",
+    "CARGO_HOME=/private/tmp/pharness-cargo-home CARGO_TARGET_DIR=$PWD/target cargo clippy --locked -p pharness-core -p pharness-runhost -p pharness-eval -p pharness-api -p pharness-openai-compatible --all-targets -- -D warnings",
+    "./scripts/check-app-module-boundaries.sh",
+    "cargo fmt --all --check"
+  ],
+  "qualification_changes": {
+    "fixture_revisions": "unchanged in this slice",
+    "coding_task_data_and_oracles": "unchanged; coding_v2 change only replaces duplicated context-policy hashing",
+    "model_profile_hash": "changes through explicitly versioned context-policy hash",
+    "numerical_gates": "unchanged",
+    "limits": "unchanged"
+  },
+  "limitations": [
+    "No live provider canary or new full qualification",
+    "Local provider serialization is not proof of upstream ingestion or reasoning",
+    "Recovery tests exercise actual shared-runner paths and serialized transcripts, not a process-kill or SQLite fault injection",
+    "Stage suites still need M04C measurement repairs before semantic qualification",
+    "No deployment, Finance source change, production approval or activation"
+  ]
+}
