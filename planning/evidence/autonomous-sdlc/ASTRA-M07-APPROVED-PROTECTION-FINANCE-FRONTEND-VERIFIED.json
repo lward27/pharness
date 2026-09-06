@@ -1,0 +1,63 @@
+{
+  "observed_at": "2026-09-06T00:56:16.856585+00:00",
+  "repository": "finance-frontend",
+  "pull_request": 8,
+  "merged_commit": "91b558003e1a9cbb64f229b0c0f97b827b328df9",
+  "merged_at": "2026-09-06T00:56:12Z",
+  "protected": true,
+  "protection": {
+    "url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection",
+    "required_status_checks": {
+      "url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection/required_status_checks",
+      "strict": true,
+      "contexts": [
+        "Source integrity"
+      ],
+      "contexts_url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection/required_status_checks/contexts",
+      "checks": [
+        {
+          "context": "Source integrity",
+          "app_id": 15368
+        }
+      ]
+    },
+    "required_pull_request_reviews": {
+      "url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection/required_pull_request_reviews",
+      "dismiss_stale_reviews": false,
+      "require_code_owner_reviews": false,
+      "require_last_push_approval": false,
+      "required_approving_review_count": 0
+    },
+    "required_signatures": {
+      "url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection/required_signatures",
+      "enabled": false
+    },
+    "enforce_admins": {
+      "url": "https://api.github.com/repos/lward27/finance-frontend/branches/main/protection/enforce_admins",
+      "enabled": true
+    },
+    "required_linear_history": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "allow_deletions": {
+      "enabled": false
+    },
+    "block_creations": {
+      "enabled": false
+    },
+    "required_conversation_resolution": {
+      "enabled": false
+    },
+    "lock_branch": {
+      "enabled": false
+    },
+    "allow_fork_syncing": {
+      "enabled": false
+    }
+  },
+  "application_source_changed": false,
+  "production_changed": false
+}
