@@ -1,0 +1,142 @@
+{
+  "status": "local validation passed; M04D live canary gate open",
+  "source_revision": "f0c7afd54d6f116766659c1960cb72d5d26b9935",
+  "base_main_revision": "49ab3703a26e357be44eb0221817a7f09db8fa8f",
+  "component_tests": {
+    "passed": 627,
+    "failed": 0,
+    "ignored": 1,
+    "targets": [
+      {
+        "target": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "status": "ok",
+        "passed": 286,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "status": "ok",
+        "passed": 162,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "target": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+        "status": "ok",
+        "passed": 47,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-2b437d7941fff989)",
+        "status": "ok",
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_runhost-cc2d99e25dbc4177)",
+        "status": "ok",
+        "passed": 44,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Running unittests src/lib.rs (target/debug/deps/pharness_store-2826119f05e4e8d3)",
+        "status": "ok",
+        "passed": 62,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_core",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_openai_compatible",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_runhost",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "Doc-tests pharness_store",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "clippy": "six packages, all targets, warnings denied; passed",
+  "formatting": "passed",
+  "architecture_checks": 5,
+  "logs": {
+    "ASTRA-M04-DIAGNOSTIC-CANARIES-COMPONENT-TESTS.log": {
+      "bytes": 98320,
+      "sha256": "81fe22ec709e37b91532eb4935ec39f7debed0091a1c9972b2b0b38ea7ced195"
+    },
+    "ASTRA-M04-DIAGNOSTIC-CANARIES-CLIPPY.log": {
+      "bytes": 1238,
+      "sha256": "b18e054d42fcf90f894a8d8083c7b553bebec77d130433e4ee7f827f381f0af0"
+    },
+    "ASTRA-M04-DIAGNOSTIC-CANARIES-ARCHITECTURE.log": {
+      "bytes": 135,
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    }
+  },
+  "local_environment": {
+    "node": "26.0.0",
+    "python": "3.14.4",
+    "rust": "1.95.0",
+    "meaning": "local regression coverage; not runner-image environment qualification"
+  },
+  "migration": 55,
+  "legacy_history_migration_and_reopen": "passed",
+  "schema_54_reader_rejected_schema_55": "passed",
+  "original_registry_targets_policies_defaults_unchanged": true,
+  "explicit_control_targets_added": 1,
+  "explicit_control_policies_added": 4,
+  "numeric_qualification_gates_changed": false,
+  "frozen_coding_tasks_changed": false,
+  "deployed": false,
+  "live_model_canaries_started": false,
+  "partial_runs_can_qualify": false,
+  "development_corrections": [
+    "strict empty full-scope variant after unknown fields were initially ignored",
+    "updated two historical tests to assert the new latest migration without removing old-history checks",
+    "deterministic diagnosis commit identity and unique per-case workspaces for exact comparison"
+  ]
+}

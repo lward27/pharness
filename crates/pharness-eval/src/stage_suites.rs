@@ -156,6 +156,25 @@ pub(super) async fn run(
     requested_policy_id: Option<&str>,
     evaluation_id: Option<&str>,
 ) -> Result<EvalReport> {
+    run_scoped(
+        suite,
+        provider,
+        attempts,
+        requested_policy_id,
+        evaluation_id,
+        pharness_core::InferenceEvaluationScope::default(),
+    )
+    .await
+}
+
+async fn run_scoped(
+    suite: &str,
+    provider: Provider,
+    attempts: u32,
+    requested_policy_id: Option<&str>,
+    evaluation_id: Option<&str>,
+    requested_scope: pharness_core::InferenceEvaluationScope,
+) -> Result<EvalReport> {
     let suite = SuiteKind::parse(suite)?;
     let attempts = attempts.max(1);
     let config = ApiRuntimeConfig::load_from_env()?;
@@ -164,6 +183,16 @@ pub(super) async fn run(
     } else {
         None
     };
+    let scope = gateway_context
+        .as_ref()
+        .map(|ctx| ctx.scope.clone())
+        .unwrap_or(requested_scope);
+    scope
+        .validate(suite.suite_id(), attempts)
+        .map_err(anyhow::Error::msg)?;
+    if scope.reference_evaluation_id().is_some() && gateway_context.is_none() {
+        bail!("input references require a saved gateway diagnostic");
+    }
     let (target, policy) = match gateway_context.as_ref() {
         Some(context) => (
             context.resolved_binding.target.clone(),
@@ -275,7 +304,24 @@ pub(super) async fn run(
     binding.binding_hash = binding.computed_hash()?;
     binding.validate()?;
 
-    let fixtures = fixtures(suite)?;
+    let mut fixtures = fixtures(suite)?;
+    if let Some(ids) = scope.case_ids() {
+        fixtures.retain(|f| ids.contains(&f.id));
+        if fixtures.len() != ids.len() {
+            bail!("requested diagnostic case is absent from this exact evaluator");
+        }
+    }
+    if let Some(context) = gateway_context.as_ref() {
+        if scope.reference_evaluation_id().is_some() {
+            for fixture in &mut fixtures {
+                let input = context
+                    .reference_inputs
+                    .get(&fixture.id)
+                    .context("saved diagnostic input is missing")?;
+                fixture.expected["diagnostic_input_reference"] = input.clone();
+            }
+        }
+    }
     let suite_hash =
         inference_qualification_suite_hash(suite.suite_id()).map_err(anyhow::Error::msg)?;
     if let Some(context) = gateway_context.as_ref() {
@@ -355,6 +401,7 @@ pub(super) async fn run(
         max_turns: profile.budget.initial_turns,
         attempts,
         resolved_settings: json!({
+            "evaluation_scope":scope,
             "binding_hash":binding.binding_hash,
             "reasoning":policy.reasoning,
             "temperature":policy.temperature(),
@@ -1381,21 +1428,41 @@ fn prepare_case(
     fixture: &StageFixture,
     attempt: u32,
 ) -> Result<(StageFixture, PathBuf)> {
-    if matches!(suite, SuiteKind::PlannerV2 | SuiteKind::VerifierV2) {
+    let (mut prepared, root) = if matches!(suite, SuiteKind::PlannerV2 | SuiteKind::VerifierV2) {
         let root = std::env::temp_dir().join(format!(
             "pharness-measurement-{}-{}",
             measurement::visible_id(suite, fixture),
             uuid::Uuid::new_v4()
         ));
         fs::create_dir(&root)?;
-        return Ok((measurement::prepare(&root, fixture, suite)?, root));
-    }
-    let root = prepare_workspace(suite, fixture, attempt)?;
-    let prepared = if suite == SuiteKind::TestDiagnosisV2 {
-        diagnosis::prepare(&root, fixture)?
+        (measurement::prepare(&root, fixture, suite)?, root)
     } else {
-        fixture.clone()
+        let root = prepare_workspace(suite, fixture, attempt)?;
+        let prepared = if suite == SuiteKind::TestDiagnosisV2 {
+            diagnosis::prepare(&root, fixture)?
+        } else {
+            fixture.clone()
+        };
+        (prepared, root)
     };
+    if suite.is_v2() {
+        prepared.expected["prepared_source_hash"] = json!(measurement::source_hash(&root)?);
+        prepared.expected["prepared_base_sha"] =
+            json!(git_lines(&root, &["rev-parse", "HEAD"])?.remove(0));
+    }
+    if let Some(reference) = fixture.expected.get("diagnostic_input_reference") {
+        let document = &reference["document"];
+        if reference["input_hash"] != canonical_json_sha256(document)?
+            || reference["workspace_hash"] != prepared.expected["prepared_source_hash"]
+            || reference["base_sha"] != prepared.expected["prepared_base_sha"]
+            || document["task"] != prepared.task
+            || document["context"] != prepared.context
+            || !document["evidence"].is_object()
+        {
+            bail!("diagnostic reference does not match this exact source, task and controller context; no input fallback is allowed");
+        }
+        prepared.evidence = document["evidence"].clone();
+    }
     Ok((prepared, root))
 }
 
@@ -1403,9 +1470,8 @@ fn prepare_workspace(suite: SuiteKind, fixture: &StageFixture, attempt: u32) -> 
     let root = std::env::temp_dir().join(format!(
         "pharness-stage-eval-{}-{attempt}-{}",
         measurement::visible_id(suite, fixture),
-        std::process::id()
+        uuid::Uuid::new_v4()
     ));
-    let _ = fs::remove_dir_all(&root);
     if suite == SuiteKind::OnboardingV2 {
         fs::create_dir(&root)?;
         onboarding::write_workspace(&root, &fixture.expected["workspace_files"])?;
@@ -1441,6 +1507,10 @@ fn prepare_workspace(suite: SuiteKind, fixture: &StageFixture, attempt: u32) -> 
         "__pycache__/\n*.pyc\n.pharness-runtime/\n",
     )?;
     git(&root, &["init", "-q"])?;
+    if suite == SuiteKind::TestDiagnosisV2 {
+        measurement::commit_snapshot(&root)?;
+        return Ok(root);
+    }
     git(&root, &["add", "."])?;
     git(
         &root,
@@ -1558,6 +1628,9 @@ impl ModelProvider for StageReplayProvider {
         }
     }
 }
+
+#[cfg(test)]
+mod diagnostic_tests;
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-use pharness_core::ResolvedInferenceBinding;
+use pharness_core::{InferenceEvaluationScope, ResolvedInferenceBinding};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -138,6 +138,8 @@ pub struct CreateModelGrantIssuance {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreateInferenceEvaluation {
+    #[serde(default)]
+    pub scope: InferenceEvaluationScope,
     pub id: String,
     pub suite_id: String,
     pub suite_hash: String,
@@ -153,6 +155,8 @@ pub struct CreateInferenceEvaluation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StoredInferenceEvaluation {
+    #[serde(default)]
+    pub scope: InferenceEvaluationScope,
     pub id: String,
     pub status: String,
     pub suite_id: String,

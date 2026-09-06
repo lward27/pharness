@@ -1,0 +1,142 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "astra-pre0055-archive-20260906",
+    "namespace": "pharness",
+    "labels": {
+      "app.kubernetes.io/part-of": "pharness",
+      "pharness.dev/program": "astra-autonomous-sdlc",
+      "pharness.dev/purpose": "pre0055-archive"
+    }
+  },
+  "spec": {
+    "backoffLimit": 0,
+    "activeDeadlineSeconds": 300,
+    "template": {
+      "metadata": {
+        "labels": {
+          "pharness.dev/purpose": "pre0055-archive"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ubuntu-lucas-engineering"
+        },
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "pharness-api-data-finance-20260827"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "128Mi"
+            }
+          }
+        ],
+        "initContainers": [
+          {
+            "name": "archive",
+            "image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+            "command": [
+              "pharness-admin"
+            ],
+            "args": [
+              "data",
+              "archive",
+              "--database",
+              "/data/pharness.db",
+              "--output-dir",
+              "/data/archives/ASTRA-pre-0055-20260906"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ],
+        "containers": [
+          {
+            "name": "verify",
+            "image": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+            "command": [
+              "python",
+              "-c",
+              "import json,pathlib,hashlib,sqlite3\np=pathlib.Path(\"/data/archives/ASTRA-pre-0055-20260906\")\nm=json.loads((p/\"manifest.json\").read_text())\nassert m[\"integrity_check\"]==\"ok\" and m[\"database_generation\"][\"id\"]==\"dbgen_finance_20260827\"\nassert max(x[\"version\"] for x in m[\"migrations\"])==54 and all(x[\"success\"] for x in m[\"migrations\"])\nh=hashlib.sha256((p/\"pharness.db\").read_bytes()).hexdigest();assert m[\"archive_database_sha256\"] in [h,\"sha256:\"+h]\ndb=sqlite3.connect(\"file:\"+str(p/\"pharness.db\")+\"?mode=ro\",uri=True)\ndef quoted(name):return '\"'+name.replace('\"','\"\"')+'\"'\ndef enc(value):return {\"sqlite_blob_hex\":value.hex()} if isinstance(value,bytes) else value\nfingerprints={}\nfor (name,) in db.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name\").fetchall():\n cols=[r[1] for r in db.execute(\"PRAGMA table_info(\"+quoted(name)+\")\")];fields=','.join(map(quoted,cols));h=hashlib.sha256();count=0\n for row in db.execute(\"SELECT \"+fields+\" FROM \"+quoted(name)+\" ORDER BY \"+fields):\n  h.update(json.dumps([enc(v) for v in row],ensure_ascii=False,separators=(',',':')).encode());h.update(b'\\n');count+=1\n fingerprints[name]={\"columns\":cols,\"rows\":count,\"sha256\":h.hexdigest()}\nassert db.execute(\"SELECT count(*) FROM work_items WHERE workflow_policy_json IS NOT NULL OR workflow_policy_hash IS NOT NULL\").fetchone()[0]==0\nassert all(fingerprints[t][\"rows\"]==0 for t in [\"hosted_reconciliations\",\"hosted_operations\",\"hosted_operation_locks\"])\nprint(json.dumps({\"archive_path\":str(p),\"database_sha256\":m[\"archive_database_sha256\"],\"database_bytes\":(p/\"pharness.db\").stat().st_size,\"manifest_sha256\":\"sha256:\"+hashlib.sha256((p/\"manifest.json\").read_bytes()).hexdigest(),\"integrity_check\":m[\"integrity_check\"],\"migrations\":m[\"migrations\"],\"database_generation\":m[\"database_generation\"],\"table_counts\":m[\"table_counts\"],\"original_column_fingerprints\":fingerprints,\"hosted_rows\":0,\"scope\":\"same-volume read-only source snapshot; not independent disaster recovery\"}))\n"
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data",
+                "readOnly": true
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -137,7 +137,7 @@ pub(super) fn prepare(
     Ok(prepared)
 }
 
-fn commit_snapshot(root: &Path) -> Result<()> {
+pub(super) fn commit_snapshot(root: &Path) -> Result<()> {
     git(root, &["add", "."])?;
     let status = Command::new("git")
         .current_dir(root)

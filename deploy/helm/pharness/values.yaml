@@ -16,8 +16,8 @@ features:
     enabled: false
 
 # Reader/contract preparation only. Keep creation disabled until the hosted
-# controller and delivery gates are accepted. This reader applies migration 0054;
-# ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md records the schema-54 rollback floor.
+# controller and delivery gates are accepted. New builds apply migration 0055;
+# ASTRA-M04-DIAGNOSTIC-CANARIES.md describes the new compatible-reader requirement.
 # These IDs were returned by the supported API in dbgen_finance_20260827.
 hostedWorkflow:
   enabled: false

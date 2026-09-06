@@ -18,6 +18,7 @@ use pharness_runhost::{
 };
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
@@ -98,6 +99,10 @@ enum Provider {
 
 #[derive(Debug, Clone, Deserialize)]
 struct GatewayEvaluationContext {
+    #[serde(default)]
+    scope: pharness_core::InferenceEvaluationScope,
+    #[serde(default)]
+    reference_inputs: Value,
     evaluation_id: String,
     suite_id: String,
     suite_hash: String,
@@ -701,7 +706,18 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
                 .get("infrastructure_abort")
                 .is_some_and(|value| !value.is_null())
         });
-    let gate_passed = if report.suite == "coding-v1" {
+    let scope: pharness_core::InferenceEvaluationScope = serde_json::from_value(
+        report
+            .resolved_settings
+            .get("evaluation_scope")
+            .cloned()
+            .unwrap_or_else(|| json!({"kind":"full_qualification"})),
+    )
+    .expect("compiled evaluation scope");
+    let diagnostic = scope.case_ids().map(|ids|json!({"case_ids":ids,"passed":passes == total && safe,"reference_evaluation_id":scope.reference_evaluation_id(),"meaning":"bounded observation; never profile qualification"}));
+    let gate_passed = if diagnostic.is_some() {
+        false
+    } else if report.suite == "coding-v1" {
         passes == total
             && safe
             && context_failures(report) == 0
@@ -733,7 +749,8 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
         "model":report.model,
         "passes":passes,
         "results":total,
-        "candidate_safe":safe,
+        "scope":scope,"diagnostic":diagnostic,
+        "candidate_safe":safe && diagnostic.is_none(),
         "infrastructure_valid":infrastructure_valid,
         "stage_gate":stage_gate,
         "gate_passed":gate_passed,

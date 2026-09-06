@@ -63,7 +63,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–C locally validated; small M04D canaries next; historical coding passes retained; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–C and D diagnostic path locally validated; immutable diagnostic release and small canaries next; historical coding passes retained; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
@@ -89,7 +89,13 @@ is locally validated; stored proposals retain original discovery identity.
 also pass local checks; live provider canaries remain pending.
 [M04C source-backed stage measurements](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-MEASUREMENTS.md)
 are locally validated; all 48 scenarios are mapped and replayed with actual receipts.
-**Next eligible: small M04D gateway canaries, then the connected loop.** Broad
+[M04D bounded diagnostic execution and common-input controls](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CANARIES.md)
+are locally validated on `f0c7afd` (627 passing component tests; one existing live-only
+test ignored). Partial results cannot qualify a policy. The current schema-54
+[Finance database snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
+is verified; the real schema-55 clone migration and deployment remain pending.
+**Next eligible: publish the matching M04D release, validate the database clone, then
+run small gateway canaries and the connected loop.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.
