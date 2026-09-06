@@ -1,0 +1,52 @@
+{
+  "observed_at": "2026-09-06T13:04:55.496737+00:00",
+  "cluster": "lucas_engineering",
+  "argo_repository": "https://github.com/lward27/pharness.git",
+  "argo_path": "deploy/helm/pharness",
+  "argo_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "argo_health": "Healthy",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "deployments": [
+    {
+      "name": "pharness-api",
+      "generation": 188,
+      "ready_replicas": 1,
+      "images": [
+        "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709"
+      ]
+    },
+    {
+      "name": "pharness-coding-egress-proxy",
+      "generation": 130,
+      "ready_replicas": 1,
+      "images": [
+        "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709"
+      ]
+    },
+    {
+      "name": "pharness-model-gateway",
+      "generation": 42,
+      "ready_replicas": 1,
+      "images": [
+        "registry.lucas.engineering/pharness-model-gateway@sha256:877c35c69c2cfcc0d3a9c16a351111b298294ad55e7cf30c875e3f2ad204f1b7"
+      ]
+    },
+    {
+      "name": "pharness-preparation-egress-proxy",
+      "generation": 130,
+      "ready_replicas": 1,
+      "images": [
+        "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709"
+      ]
+    },
+    {
+      "name": "pharness-ui",
+      "generation": 141,
+      "ready_replicas": 1,
+      "images": [
+        "registry.lucas.engineering/pharness-ui@sha256:1e8f81082340ec5ec98351e6eb5df0496b9b1c1b472c22ef6165237355f4999f"
+      ]
+    }
+  ],
+  "meaning": "Argo auto-sync applied the additive diagnostic-control registry from the merged chart; immutable image pins remain the prior source-19 release. No diagnostic run has been dispatched. New diagnostic API/worker/image behavior is not deployed or accepted."
+}

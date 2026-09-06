@@ -93,9 +93,8 @@ are locally validated; all 48 scenarios are mapped and replayed with actual rece
 are locally validated on `f0c7afd` (627 passing component tests; one existing live-only
 test ignored). Partial results cannot qualify a policy. The current schema-54
 [Finance database snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
-is verified; the real schema-55 clone migration and deployment remain pending.
-**Next eligible: publish the matching M04D release, validate the database clone, then
-run small gateway canaries and the connected loop.** Broad
+is verified, and the [real schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves all original columns in all 81 tables. The [complete diagnostic release](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) has seven verified images, a verified native bundle and validated pins.
+**Next eligible: publish the M04D pins, verify the live schema-55 reader and preserved data, then run small gateway canaries and the connected loop.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.

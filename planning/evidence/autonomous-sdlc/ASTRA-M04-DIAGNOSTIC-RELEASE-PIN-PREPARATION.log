@@ -1,0 +1,200 @@
+==> Linting deploy/helm/pharness
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+Prepared digest-pinning release values for 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267.
+Review the diff, commit it on a separate release branch, and merge it manually before Argo sync.
+diff --git a/deploy/helm/pharness/files/agent-execution-registry.json b/deploy/helm/pharness/files/agent-execution-registry.json
+index da31429..5ea139b 100644
+--- a/deploy/helm/pharness/files/agent-execution-registry.json
++++ b/deploy/helm/pharness/files/agent-execution-registry.json
+@@ -11,9 +11,9 @@
+         "plan"
+       ],
+       "runner_images": {
+-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338",
+-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:8d73540d5a3cd7d05a849ae2ca444146ba00fa91bbf9fa6e06653f818de4baa6"
++        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
++        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
++        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404"
+       },
+       "host_pool": "codex-reliability",
+       "codex_version": "codex-cli 0.150.1",
+@@ -35,7 +35,7 @@
+       "active_time_seconds": 600,
+       "protocol_restart_limit": 1,
+       "selectable": true,
+-      "policy_hash": "sha256:9c796c2d23bec6bd6b7a27aafd29d7934a5f02c5eb4f06c27f5cc08b239f25fe"
++      "policy_hash": "sha256:8d09b80daf65138804c042b32140f425ce4b633e38323d76d808ef154be03b4c"
+     },
+     {
+       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+@@ -47,9 +47,9 @@
+         "implement"
+       ],
+       "runner_images": {
+-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338",
+-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:8d73540d5a3cd7d05a849ae2ca444146ba00fa91bbf9fa6e06653f818de4baa6"
++        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
++        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
++        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404"
+       },
+       "host_pool": "codex-reliability",
+       "codex_version": "codex-cli 0.150.1",
+@@ -71,7 +71,7 @@
+       "active_time_seconds": 3600,
+       "protocol_restart_limit": 1,
+       "selectable": true,
+-      "policy_hash": "sha256:47e92839723472bb8ffe736b6a3c2b6c15531e35ac2a457b893646360fd21076"
++      "policy_hash": "sha256:570c62ec9d3f3e8d993b4828471a14a7b89f18830db65bd356fd580f5504c5ad"
+     },
+     {
+       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+@@ -83,9 +83,9 @@
+         "repair"
+       ],
+       "runner_images": {
+-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338",
+-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:8d73540d5a3cd7d05a849ae2ca444146ba00fa91bbf9fa6e06653f818de4baa6"
++        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
++        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
++        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404"
+       },
+       "host_pool": "codex-reliability",
+       "codex_version": "codex-cli 0.150.1",
+@@ -107,7 +107,7 @@
+       "active_time_seconds": 3600,
+       "protocol_restart_limit": 1,
+       "selectable": true,
+-      "policy_hash": "sha256:efe2335e3420f65d6d086ff869f70a4c2c79a2082941d6a69f17d022cf1d8756"
++      "policy_hash": "sha256:1a6b3976115e2545aa9e36b30abb0b9f24732a44282123f339f821d93a5e6e33"
+     },
+     {
+       "schema_version": "pharness.dev/agent-execution-policy/v1alpha1",
+@@ -119,9 +119,9 @@
+         "verify"
+       ],
+       "runner_images": {
+-        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54",
+-        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338",
+-        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:8d73540d5a3cd7d05a849ae2ca444146ba00fa91bbf9fa6e06653f818de4baa6"
++        "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02",
++        "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689",
++        "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404"
+       },
+       "host_pool": "codex-reliability",
+       "codex_version": "codex-cli 0.150.1",
+@@ -143,9 +143,9 @@
+       "active_time_seconds": 900,
+       "protocol_restart_limit": 1,
+       "selectable": true,
+-      "policy_hash": "sha256:ad43bd10d74edb3448fc2e7c864f8c58f2cf711d5c98b3ed684a8416ab6d4de6"
++      "policy_hash": "sha256:c82b2a1cf22665a1bf0f1d8c1e529685575d970662386f49d19351b21bc52063"
+     }
+   ],
+   "defaults": {},
+-  "config_hash": "sha256:e26bfda46ecd736838ce236867ac59bd81cd7bc972ac67411e932940f46730b7"
++  "config_hash": "sha256:dfb0fc06fc0889d4f8e3bc1e232c3b0d9f5f07eb27df20944cb8a15fa1524a9b"
+ }
+diff --git a/deploy/helm/pharness/values.yaml b/deploy/helm/pharness/values.yaml
+index 763a5c8..c824e67 100644
+--- a/deploy/helm/pharness/values.yaml
++++ b/deploy/helm/pharness/values.yaml
+@@ -62,9 +62,9 @@ organization:
+ api:
+   image:
+     repository: registry.lucas.engineering/pharness-runtime
+-    digest: sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709
++    digest: sha256:270abac12bdf9505b042855b5a7abb1369562e8087382eaec537822332b0b2db
+     pullPolicy: IfNotPresent
+-    revision: 19b0c55c48e3614d0b4507d56df3029a52475618
++    revision: 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+   # SQLite single-writer: keep exactly one API replica.
+   replicas: 1
+   host: pharness-api.lucas.engineering
+@@ -112,9 +112,9 @@ inferenceGateway:
+   directFireworksEnabled: true
+   image:
+     repository: registry.lucas.engineering/pharness-model-gateway
+-    digest: sha256:877c35c69c2cfcc0d3a9c16a351111b298294ad55e7cf30c875e3f2ad204f1b7
++    digest: sha256:893e4a96c7afa22ae5e90ec1b1ae7a82874d4c7fc0a19df7e5009539445cad27
+     pullPolicy: IfNotPresent
+-    revision: 19b0c55c48e3614d0b4507d56df3029a52475618
++    revision: 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+   replicas: 1
+   grantSecretName: pharness-model-grant-v2
+   grantSecretKey: key
+@@ -141,9 +141,9 @@ inferenceEvaluation:
+   nodeHostname: ubuntu-lucas-engineering-2
+   image:
+     repository: registry.lucas.engineering/pharness-eval-runner
+-    digest: sha256:8d73540d5a3cd7d05a849ae2ca444146ba00fa91bbf9fa6e06653f818de4baa6
++    digest: sha256:a47625d4aa0632bf8f91616fedc14265ce2637698904c5eb0ebb9bae3bce3404
+     pullPolicy: IfNotPresent
+-    revision: 19b0c55c48e3614d0b4507d56df3029a52475618
++    revision: 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+
+ # Enable the outbound native-host control plane. Stage policies remain
+ # unavailable until their exact host, protocol, and semantic qualifications
+@@ -157,9 +157,9 @@ codexAgentBackend:
+   leaseTtlSeconds: 45
+   image:
+     repository: registry.lucas.engineering/pharness-codex-host
+-    digest: sha256:0d5d8af760236075effa76240f606f2acbb73eb3ca616214a52ff8f0c91bfb0d
++    digest: sha256:48b544714850f7c00f25f1f87fdfc9e6dfe1870bf5fd37f0c35bef05bf6c4928
+     pullPolicy: IfNotPresent
+-    revision: 19b0c55c48e3614d0b4507d56df3029a52475618
++    revision: 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+   kubernetes:
+     # Packaging is acceptance-tested but intentionally not activated in the
+     # live cluster during this milestone.
+@@ -178,10 +178,10 @@ codexAgentBackend:
+     profiles:
+       - id: python-3.11
+         enabled: false
+-        image: registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54
++        image: registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02
+       - id: node-24
+         enabled: false
+-        image: registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338
++        image: registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689
+
+ retention:
+   scheduledEnabled: true
+@@ -316,8 +316,8 @@ worker:
+ environmentProfiles:
+   - id: python-3.11
+     active: true
+-    image: registry.lucas.engineering/pharness-python-runner@sha256:0b06a7154752d736cee504ddc76722681be0d45fd366ddc8e6c25db275bbbf54
+-    revision: "19b0c55c48e3614d0b4507d56df3029a52475618"
++    image: registry.lucas.engineering/pharness-python-runner@sha256:e9fd4cfba4afa0f3dcfe079a0432e881c4016ffc78dc30104e7757a36dae6c02
++    revision: "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267"
+     platform: linux/amd64
+     required_executables:
+       - pharness-worker
+@@ -338,8 +338,8 @@ environmentProfiles:
+       ephemeral_storage: 4Gi
+   - id: node-24
+     active: true
+-    image: registry.lucas.engineering/pharness-node-runner@sha256:e2be42778757260a611824e15ebe1be6dc6537c2fd073bcadd94a4c7bd284338
+-    revision: "19b0c55c48e3614d0b4507d56df3029a52475618"
++    image: registry.lucas.engineering/pharness-node-runner@sha256:a02edc7aafe5a99c856fcfffb3f4812136d51232bf9bf621447b1a9be55e9689
++    revision: "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267"
+     platform: linux/amd64
+     required_executables:
+       - pharness-worker
+@@ -381,9 +381,9 @@ tektonE2eBuildOutputSmoke:
+ ui:
+   image:
+     repository: registry.lucas.engineering/pharness-ui
+-    digest: sha256:1e8f81082340ec5ec98351e6eb5df0496b9b1c1b472c22ef6165237355f4999f
++    digest: sha256:60ea61d3eb41a09b6a9d6e155a1fa0f8b096cef8a32519b9480ecd5c3ecd3bc7
+     pullPolicy: IfNotPresent
+-    revision: 19b0c55c48e3614d0b4507d56df3029a52475618
++    revision: 92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267
+   replicas: 1
+   host: pharness.lucas.engineering
+   resources:

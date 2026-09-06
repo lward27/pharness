@@ -80,8 +80,7 @@ are locally validated, with all 48 original scenarios mapped and source/receipt 
 are locally validated on `f0c7afd` (627 passing component tests; one live-only ignored).
 Migration 0055 is additive; old schema-54 readers are proven incompatible with the
 new migration set. A current [schema-54 snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
-is verified. **Next: publish the matching release, verify the real migration on that
-copy, deploy compatible readers, then run small M04D gateway canaries** and the connected loop. No new broad qualification
+is verified, and the [actual schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves every original column in all 81 tables. [All seven images, the native bundle and release pins](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) are verified. **Next: publish the pins, verify the live compatible reader and preserved data, then run small M04D gateway canaries** and the connected loop. No new broad qualification
 or model switch is justified by these local passes.
 
 
