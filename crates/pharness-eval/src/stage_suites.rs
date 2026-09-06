@@ -788,6 +788,12 @@ fn execution_target(
     if suite.is_onboarding() {
         target["onboarding"] = json!({"onboarding_id":fixture.id});
     }
+    if suite == SuiteKind::OnboardingV2 {
+        target["onboarding_submission_contract"] =
+            json!(pharness_runhost::ONBOARDING_SUBMISSION_CONTRACT);
+        target["onboarding"]["discovery_id"] = fixture.context["discovery"]["id"].clone();
+        target["onboarding"]["discovery_hash"] = fixture.context["discovery"]["hash"].clone();
+    }
     if suite == SuiteKind::TesterV1 {
         let contract = qualification_contract();
         target["repository_contract"] = contract.clone();
@@ -1177,6 +1183,18 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
         summary: "qualification fixture complete".into(),
         success: true,
     });
+    if suite == SuiteKind::OnboardingV2 {
+        for action in &mut actions {
+            if let AgentAction::SubmitOnboardingProposal { proposal, .. } = action {
+                let object = proposal
+                    .as_object_mut()
+                    .context("compiled onboarding proposal")?;
+                for field in ["schema_version", "discovery_id", "discovery_hash"] {
+                    object.remove(field);
+                }
+            }
+        }
+    }
     Ok(actions)
 }
 
@@ -1499,6 +1517,57 @@ mod tests {
                     .map(|result| (&result.fixture, &result.safety_violations))
                     .collect::<Vec<_>>()
             );
+            if suite == "onboarding-v2" {
+                assert_eq!(report.results.len(), 12);
+                for result in &report.results {
+                    let document = &result.stage_submission.as_ref().unwrap()["document"];
+                    assert_eq!(
+                        document["schema_version"],
+                        pharness_core::ONBOARDING_PROPOSAL_SCHEMA
+                    );
+                    assert_eq!(
+                        document["discovery_id"],
+                        format!("rdisc_{}", result.fixture)
+                    );
+                    assert!(document["discovery_hash"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("sha256:"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn onboarding_v2_actions_propose_content_while_target_pins_original_identity() {
+        let profile = compiled_reliability_v2_agent_profiles(
+            "fixture/model",
+            RELIABILITY_V2_PROMPT_BUNDLE_VERSION,
+        )
+        .into_iter()
+        .find(|profile| profile.id == "repository-onboarding-proposer")
+        .unwrap();
+        for fixture in fixtures(SuiteKind::OnboardingV2).unwrap() {
+            let target = execution_target(SuiteKind::OnboardingV2, &fixture, &profile).unwrap();
+            assert_eq!(
+                target["onboarding_submission_contract"],
+                pharness_runhost::ONBOARDING_SUBMISSION_CONTRACT
+            );
+            assert_eq!(
+                target["onboarding"]["discovery_id"],
+                fixture.context["discovery"]["id"]
+            );
+            assert_eq!(
+                target["onboarding"]["discovery_hash"],
+                fixture.context["discovery"]["hash"]
+            );
+            for action in replay_actions(SuiteKind::OnboardingV2, &fixture).unwrap() {
+                if let AgentAction::SubmitOnboardingProposal { proposal, .. } = action {
+                    for field in ["schema_version", "discovery_id", "discovery_hash"] {
+                        assert!(proposal.get(field).is_none(), "{}: {field}", fixture.id);
+                    }
+                }
+            }
         }
     }
 }

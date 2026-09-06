@@ -1,0 +1,2099 @@
+   Compiling serde v1.0.228
+   Compiling serde_core v1.0.228
+   Compiling futures-io v0.3.32
+   Compiling tracing-attributes v0.1.31
+   Compiling getrandom v0.2.17
+   Compiling log v0.4.29
+   Compiling tracing-core v0.1.36
+   Compiling serde_json v1.0.149
+   Compiling hmac v0.12.1
+   Compiling ring v0.17.14
+   Compiling futures-util v0.3.32
+   Compiling httpdate v1.0.3
+   Compiling regex-automata v0.4.14
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling parking_lot_core v0.9.12
+   Compiling autocfg v1.5.0
+   Compiling foldhash v0.1.5
+   Compiling allocator-api2 v0.2.21
+   Compiling tracing v0.1.44
+   Compiling thiserror v2.0.18
+   Compiling hashbrown v0.15.5
+   Compiling rustls-webpki v0.103.13
+   Compiling num-traits v0.2.19
+   Compiling rustls v0.23.40
+   Compiling concurrent-queue v2.5.0
+   Compiling thiserror-impl v2.0.18
+   Compiling futures-executor v0.3.32
+   Compiling parking v2.2.1
+   Compiling zerocopy v0.8.48
+   Compiling futures-sink v0.3.32
+   Compiling globset v0.4.19
+   Compiling crc-catalog v2.5.0
+   Compiling crc v3.4.0
+   Compiling tower v0.5.3
+   Compiling ignore v0.4.32
+   Compiling event-listener v5.4.1
+   Compiling camino v1.2.2
+   Compiling tower-http v0.6.8
+   Compiling hashlink v0.10.0
+   Compiling smallvec v1.15.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling icu_normalizer v2.2.0
+   Compiling hyper v1.9.0
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling webpki-roots v0.26.11
+   Compiling crossbeam-queue v0.3.12
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling tokio-rustls v0.26.4
+   Compiling url v2.5.8
+   Compiling hyper-util v0.1.20
+   Compiling pkg-config v0.3.33
+   Compiling vcpkg v0.2.15
+   Compiling tinyvec_macros v0.1.1
+   Compiling tinyvec v1.11.0
+   Compiling atoi v2.0.0
+   Compiling parking_lot v0.12.5
+   Compiling secrecy v0.8.0
+   Compiling futures v0.3.32
+   Compiling libsqlite3-sys v0.30.1
+   Compiling spin v0.9.8
+   Compiling rand_core v0.6.4
+   Compiling tokio v1.52.1
+   Compiling heck v0.5.0
+   Compiling futures-intrusive v0.5.0
+   Compiling unicode-normalization v0.1.25
+   Compiling either v1.15.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling unicode-properties v0.1.4
+   Compiling base64 v0.22.1
+   Compiling unicode-bidi v0.3.18
+   Compiling futures-channel v0.3.32
+   Compiling hkdf v0.12.4
+   Compiling md-5 v0.10.6
+   Compiling stringprep v0.1.5
+   Compiling home v0.5.12
+   Compiling whoami v1.6.1
+   Compiling hex v0.4.3
+   Compiling byteorder v1.5.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling dotenvy v0.15.7
+   Compiling flume v0.11.1
+   Compiling rand_chacha v0.3.1
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling rand v0.8.6
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-core)
+   Compiling tokio-stream v0.1.18
+   Compiling winnow v0.7.15
+   Compiling getrandom v0.4.3
+   Compiling toml_write v0.1.2
+   Compiling rustversion v1.0.22
+   Compiling utf8parse v0.2.2
+   Compiling sqlx-core v0.8.6
+   Compiling lazy_static v1.5.0
+   Compiling sharded-slab v0.1.7
+   Compiling anstyle-parse v1.0.0
+   Compiling matchers v0.2.0
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling anstyle v1.0.14
+   Compiling toml_edit v0.22.27
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling tracing-subscriber v0.3.23
+   Compiling uuid v1.25.0
+   Compiling anstream v1.0.0
+   Compiling clap_lex v1.1.0
+   Compiling mime v0.3.17
+   Compiling strsim v0.11.1
+   Compiling sqlx-sqlite v0.8.6
+   Compiling sqlx-postgres v0.8.6
+   Compiling axum-core v0.4.5
+   Compiling clap_derive v4.6.1
+   Compiling clap_builder v4.6.0
+   Compiling toml v0.8.23
+   Compiling serde_path_to_error v0.1.20
+   Compiling matchit v0.7.3
+   Compiling clap v4.6.1
+   Compiling axum v0.7.9
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-openai-compatible)
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-fireworks)
+   Compiling sqlx v0.8.6
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-runhost)
+   Compiling pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-config)
+   Compiling pharness-store v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-store)
+   Compiling pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-codex-host)
+   Compiling pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-eval)
+   Compiling pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 21s
+     Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)
+
+running 1 test
+test tests::archive_uses_sqlite_backup_and_emits_a_verified_manifest ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)
+
+running 284 tests
+test app::inference::tests::every_qualification_suite_has_one_stage_profile_contract ... ok
+test app::inference::tests::body_hash_requires_exact_hex ... ok
+test app::inference::tests::qualification_tool_constraints_match_the_frozen_fixture_interfaces ... ok
+test app::inference::tests::stage_query_is_bounded ... ok
+test app::inference::tests::gateway_readiness_uses_the_control_plane_root ... ok
+test app::inference::tests::protocol_calibration_history_is_tool_call_complete_and_correction_bounded ... ok
+test app::inference::tests::run_tool_constraints_derive_names_not_arbitrary_commands ... ok
+test app::lifecycle_timeline::tests::terminal_records_with_missing_end_are_not_extended_to_the_observation_clock ... ok
+test app::lifecycle_timeline::tests::absent_start_is_not_replaced_by_created_time_and_seals_are_markers ... ok
+test app::lifecycle_timeline::tests::delivery_wait_uses_intent_not_late_stage_or_generic_update_time ... ok
+test app::lifecycle_timeline::tests::ordering_and_correction_are_deterministic_and_pauses_do_not_create_executions ... ok
+test app::hosted_workflow::delivery::tests::both_finance_applications_have_consistent_delivery_coordinates ... ok
+test app::operational_mode_tests::draining_allows_callbacks_and_cancellation_but_not_new_work ... ok
+test app::operational_mode_tests::legacy_work_item_creation_is_an_explicit_normal_mode_exception ... ok
+test app::operational_mode_tests::read_only_serves_reads_and_blocks_every_mutation ... ok
+test app::inference::tests::protocol_calibration_preserves_exact_generation_policy ... ok
+test app::agent_hosts::tests::qualification_contract_is_stage_specific_and_hash_bound ... ok
+test app::products::tests::product_keys_are_stable_and_bounded ... ok
+test app::products::tests::onboarding_binding_scopes_are_repository_relative_and_normalized ... ok
+test app::products::tests::onboarding_patch_paths_are_controller_bounded ... ok
+test app::products::tests::github_registration_urls_are_canonical_and_credential_free ... ok
+test app::products::tests::onboarding_context_lists_only_exact_active_environment_profile_ids ... ok
+test app::products::tests::onboarding_descriptors_require_matching_repository_and_discovered_lock ... ok
+test app::products::tests::repository_readiness_projects_missing_stale_and_current_without_client_inference ... ok
+test app::products::tests::onboarding_product_proposals_reject_unknown_fields ... ok
+test app::repo_mode::tests::correction_reprepares_when_prior_attempt_has_no_sealed_snapshot ... ok
+test app::repo_mode::tests::correction_refreshes_runner_provenance_on_the_preserved_workspace ... ok
+test app::products::tests::typed_product_scopes_accept_bounded_globs_and_reject_escapes ... ok
+test app::repo_mode::tests::approved_change_set_repairs_stored_run_provenance_before_source_authorization ... ok
+test app::repo_mode::tests::annotation_effect_is_state_hashed_and_cannot_cross_source_delivery ... ok
+test app::inference::tests::qualification_metrics_are_bound_to_every_immutable_input ... ok
+test app::repo_mode::tests::correction_reuses_an_exact_environment_snapshot ... ok
+test app::repo_mode::tests::correction_never_refreshes_around_source_or_contract_drift ... ok
+test app::repo_mode::tests::context_repository_projection_is_bounded_and_contains_no_raw_source ... ok
+test app::repo_mode::tests::failed_source_writer_permission_offers_only_an_exact_intent_retry ... ok
+test app::repo_mode::tests::pending_budget_extension_describes_only_remaining_hard_limit_headroom ... ok
+test app::repo_mode::tests::failed_approved_budget_extension_dispatch_offers_exact_same_run_retry ... ok
+test app::repo_mode::tests::provider_check_status_is_controller_derived ... ok
+test app::repo_mode::tests::repo_actions_follow_the_current_stage_run_after_automatic_dispatch ... ok
+test app::repo_mode::tests::pending_budget_extension_preempts_stale_failed_attempt_actions ... ok
+test app::repo_mode::tests::proposed_change_set_replaces_stage_chain_reauthorization_actions ... ok
+test app::repo_mode::tests::newer_proposed_work_plan_preempts_a_rejected_change_set_revision ... ok
+test app::repo_mode::tests::legacy_outcome_binding_allows_only_one_immutable_historical_verifier ... ok
+test app::tests::characterization::coding_run_scope_requires_matching_production_classification ... ok
+test app::repo_mode::tests::zero_turn_builder_startup_failure_preempts_attempt_exhaustion_for_recovery ... ok
+test app::tests::characterization::failed_capability_verification_can_retry_but_static_unavailability_cannot ... ok
+test app::repo_mode::tests::zero_turn_followup_startup_failure_retries_without_an_attempt_budget ... ok
+test app::tests::characterization::gitops_artifact_revision_keeps_legacy_revision_one_but_not_retry_evidence ... ok
+test app::tests::characterization::failed_capability_summary_names_only_the_known_check_scope ... ok
+test app::repo_mode::tests::source_head_drift_remains_observable_until_closed_then_offers_replan ... ok
+test app::repo_mode::tests::terminal_stage_failure_offers_bounded_same_workspace_correction_and_replan ... ok
+test app::repo_mode::tests::stage_chain_profile_lookup_finds_every_compiled_profile ... ok
+test app::hosted_workflow::delivery::tests::valid_contracts_for_the_wrong_application_cannot_authorize_delivery ... ok
+test app::agent_hosts::tests::qualification_report_requires_complete_protocol_and_derives_gate ... ok
+test app::tests::characterization::readiness_explains_unverified_runner_profiles_without_empty_blockers ... ok
+test app::tests::characterization::operator_evidence_json_snapshots_preserve_empty_filtered_and_paginated_shapes ... ok
+test app::tests::characterization::recognizes_only_a_closed_unmerged_gitops_observation_as_retryable ... ok
+test app::tests::characterization::refreshes_only_retryable_gitops_observations ... ok
+test app::tests::characterization::release_inventory_gate_requires_collection_not_unrelated_global_health ... ok
+test app::tests::characterization::release_verification_uses_the_pinned_contract_workload ... ok
+test app::tests::characterization::operator_auth_gates_api_routes_and_resolves_identity ... ok
+test app::tests::characterization::internal_routes_reject_missing_or_wrong_worker_token ... ok
+test app::tests::characterization::organization_overview_is_a_read_only_projection ... ok
+test app::tests::characterization::v3_characterization_fixture_matches_frozen_constants ... ok
+test app::tests::characterization::post_sync_release_verification_requires_a_completed_current_sync ... ok
+test app::tests::characterization::internal_routes_are_disabled_without_worker_token ... ok
+test app::tests::characterization::internal_worker_contract_marks_running_and_finishes_run ... ok
+test app::tests::characterization::post_sync_release_verification_reads_declared_targets_and_completes_only_when_healthy ... ok
+test app::tests::characterization::post_sync_release_verification_blocks_completion_when_required_prometheus_is_unavailable ... ok
+test app::tests::characterization::router_mounts_static_and_dynamic_run_routes ... ok
+test app::tests::characterization::route_inventory_matches_mounted_routes_and_auth_classes ... ok
+test app::tests::characterization::readiness_preserves_matching_and_mismatched_revision_semantics ... ok
+test app::tests::controller::controller_waits_are_bounded_idempotent_and_audited ... ok
+test app::tests::characterization::source_capability_posture_is_scoped_to_the_exact_repository ... ok
+test app::tests::controller::due_controller_waits_only_progress_from_evidence_or_block_on_expiry ... ok
+test app::tests::controller::approved_workspace_change_set_prepares_an_idempotent_git_delivery_plan ... ok
+test app::tests::controller::due_deployment_wait_observes_only_the_declared_argo_application ... ok
+test app::tests::controller::work_item_planning_declares_a_work_plan_and_ephemeral_workspace ... ok
+test app::tests::controller::due_pipeline_wait_observes_only_the_declared_tekton_run_and_persists_terminal_evidence ... ok
+test app::tests::controller::work_item_replan_refuses_to_bypass_a_captured_change_set ... ok
+test app::tests::controller::worker_can_pin_the_exact_issued_remote_workspace_while_preparing ... ok
+test app::tests::controller::work_item_replan_requires_remaining_budget_and_resumes_at_the_controller_boundary ... ok
+test app::tests::controller::work_item_reconcile_previews_then_declares_the_review_boundary ... ok
+test app::tests::delivery_reconcile::reconcile_dispatches_one_approved_git_writer_then_waits ... ok
+test app::tests::delivery_reconcile::failed_git_observer_dispatch_is_durable_and_retriable ... ok
+test app::tests::delivery_reconcile::reconcile_explicitly_dispatches_one_read_only_git_observer_then_waits ... ok
+test app::tests::delivery_reconcile::reconcile_dispatches_one_preflighted_gitops_writer_then_waits ... ok
+test app::tests::delivery_reconcile::reconcile_dispatches_one_preflighted_argo_runner_after_gitops_merge_then_waits ... ok
+test app::tests::delivery_reconcile::reconcile_dispatches_one_preflighted_tekton_executor_then_waits ... ok
+test app::tests::hosted_controller::hosted_flow_reads_do_not_claim_or_advance_and_hide_routine_manual_actions ... ok
+test app::tests::hosted_controller::legacy_actions_remain_available_but_hosted_routine_clicks_are_retired ... ok
+test app::tests::hosted_controller::hosted_source_publication_persists_execution_before_uncertain_dispatch ... ok
+test app::tests::hosted_controller::scheduler_applies_saved_plan_authority_once_without_a_browser_action ... ok
+test app::tests::hosted_controller::hosted_source_jobs_reconcile_lost_acknowledgement_without_another_job ... ok
+test app::tests::hosted_controller::scheduler_adopts_lost_acknowledgement_and_observes_terminal_run_while_paused ... ok
+test app::tests::hosted_controller::hosted_controls_are_versioned_and_never_rebind_budget_or_authorization ... ok
+test app::tests::hosted_build::expired_original_build_preparation_does_not_create_new_authority_or_jobs ... ok
+test app::tests::hosted_build::hosted_build_admission_revalidates_contract_and_rejects_unbound_callbacks ... ok
+test app::tests::hosted_controller::scheduler_leaves_legacy_idle_and_records_unqualified_hosted_blocker ... ok
+test app::tests::hosted_controller::scheduler_rejects_changed_plan_revision_and_unresolved_contradictions ... ok
+test app::tests::hosted_controller::signed_hosted_preparation_queues_existing_run_atomically_and_rejects_invalid_or_duplicate_callbacks ... ok
+test app::tests::hosted_build::hosted_build_recovers_original_dispatch_and_admits_only_once ... ok
+test app::tests::hosted_controller::unchanged_wait_expiry_does_not_create_another_run_or_extend_its_budget ... ok
+test app::tests::hosted_controller::terminal_normalization_survives_interruption_without_another_plan_or_run ... ok
+test app::tests::hosted_controller::terminal_recovery_blocks_missing_or_inconsistent_original_evidence ... ok
+test app::tests::hosted_delivery_records::hosted_deployment_records_are_readable_but_legacy_routes_cannot_advance_them ... ok
+test app::tests::hosted_pipeline::hosted_build_outputs_require_declared_results_without_conflicting_evidence ... ok
+test app::tests::hosted_source_controller::hosted_source_job_observation_checks_identity_and_never_recreates_terminal_jobs ... ok
+test app::tests::hosted_pipeline::hosted_pipeline_consumes_sealed_merge_without_legacy_run_artifacts ... ok
+test app::tests::hosted_pipeline::hosted_pipeline_authority_is_finite_non_deploying_and_cannot_be_manually_extended ... ok
+test app::tests::hosted_source_controller::hosted_source_writer_callback_preserves_operation_identity_during_observation ... ok
+test app::tests::hosted_pipeline::hosted_pipeline_rejects_unsealed_or_changed_source_instead_of_falling_back ... ok
+test app::tests::hosted_source_controller::hosted_source_controller_automatically_publishes_once_under_saved_authority ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_admission_is_once_and_gets_are_read_only ... ok
+test app::tests::hosted_build::failed_or_incomplete_hosted_builds_stop_delivery_and_cannot_use_manual_retry ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_observation_requires_admission_and_exact_parents ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_pause_withholds_new_admission_and_retains_late_receipts ... ok
+test app::tests::hosted_stage_execution::hosted_builder_and_repair_reject_a_single_qualifying_run ... ok
+test app::tests::hosted_stage_execution::hosted_frontend_contract_registration_preserves_legacy_execution_boundary ... ok
+test app::tests::hosted_stage_execution::hosted_qualification_matches_frozen_suite_without_conflating_live_tool_bindings ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_fresh_context_rejects_new_failed_or_expired_checks ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_rejects_cancelled_work_and_changed_pull_request ... ok
+test app::tests::hosted_stage_execution::hosted_readiness_and_creation_preserve_exact_planner_authorization ... ok
+test app::tests::hosted_stage_execution::hosted_repair_binds_qualified_implementation_and_resumes_without_reselection ... ok
+test app::tests::hosted_stage_execution::hosted_stage_configuration_changes_fail_before_new_workspaces_or_runs ... ok
+test app::tests::hosted_stage_execution::onboarding_submission_contract_follows_the_saved_selection ... ok
+test app::tests::hosted_stage_execution::resumed_hosted_run_cannot_omit_its_authorization_and_use_a_direct_provider ... ok
+test app::tests::hosted_source_merge::hosted_source_merge_provider_callback_records_exact_proof_and_keeps_release_open ... ok
+test app::tests::hosted_stage_execution::saved_stage_policy_ignores_changed_defaults_and_rejects_override_or_profile_drift ... ok
+test app::tests::hosted_source_controller::hosted_source_checkpoint_recovers_original_identity_but_pause_and_expiry_withhold_writes ... ok
+test app::tests::pipeline_delivery::builds_a_constrained_tekton_pipeline_run_manifest ... ok
+test app::tests::pipeline_delivery::cancelled_pipeline_analysis_is_a_terminal_failed_execution ... ok
+test app::tests::pipeline_delivery::deployment_approval_requires_matching_satisfied_pipeline_evidence ... ok
+test app::tests::onboarding_blockers::blocked_onboarding_round_trips_without_approval_or_implicit_progress ... ok
+test app::tests::pipeline_delivery::deployment_contract_is_exact_audited_and_retirable ... ok
+test app::tests::pipeline_delivery::deployment_preflight_is_durable_and_never_dispatches_an_argo_sync ... ok
+test app::tests::pipeline_delivery::execution_outcome_keeps_dispatch_identity_for_reconciliation ... ok
+test app::tests::pipeline_delivery::failed_pipeline_intent_requires_review_and_preserves_evidence_for_one_retry ... ok
+test app::tests::pipeline_delivery::finance_builds_cannot_inherit_deployment_identity_or_replace_tested_inputs ... ok
+test app::tests::pipeline_delivery::pipeline_contract_rejects_unknown_or_wrongly_shaped_inputs ... ok
+test app::tests::pipeline_delivery::pipeline_deployment_handoff_requires_exact_target_identifiers ... ok
+test app::tests::pipeline_delivery::release_and_registry_evidence_inherit_verified_pipeline_build_output ... ok
+test app::tests::pipeline_delivery::terminal_analysis_must_match_the_executor_pipeline_run ... ok
+test app::tests::pipeline_delivery::deployment_preflight_requires_the_exact_dev_gate_contract_and_envelope ... ok
+test app::tests::pipeline_delivery::terminal_execution_evidence_is_compact_and_idempotent ... ok
+test app::tests::pipeline_delivery::work_item_pipeline_contract_requires_the_observed_merge_commit ... ok
+test app::tests::pipeline_delivery::terminal_pipeline_handoff_creates_one_proposed_deployment_intent ... ok
+test app::tests::plans_changes::creates_transitions_and_revisions_stale_change_set_gates ... ok
+test app::tests::plans_changes::denial_decides_pending_approval_and_blocks_run ... ok
+test app::tests::plans_changes::transitions_and_revisions_stale_work_plan_gates ... ok
+test app::tests::production::deployment_preflight_waits_for_gitops_merge_provenance ... ok
+test app::tests::production::deployment_reconcile_action_follows_argo_and_release_artifacts ... ok
+test app::tests::production::delivery_failure_blocks_once_and_never_retries_or_rolls_back ... ok
+test app::tests::production::git_delivery_reconcile_action_follows_durable_handoff_artifacts ... ok
+test app::tests::production::gitops_change_set_reconcile_action_follows_durable_handoff_artifacts ... ok
+test app::tests::production::future_production_gates_are_visible_but_cannot_be_decided_early ... ok
+test app::tests::production::immutable_production_identifiers_reject_mutable_or_malformed_values ... ok
+test app::tests::production::gitops_delivery_plan_requires_a_current_resolved_base_revision ... ok
+test app::tests::production::pipeline_intent_reconcile_action_follows_approval_execution_and_build_output ... ok
+test app::tests::production::operator_summary_uses_exact_acceptance_evidence_and_deduplicates_failures ... ok
+test app::tests::production::production_rollback_gate_uses_its_bound_lifecycle_action ... ok
+test app::tests::production::protected_production_target_requires_every_exact_server_owned_coordinate ... ok
+test app::tests::production::production_authorization_rejects_expired_or_overlong_windows ... ok
+test app::tests::production::verified_release_completion_is_durable_and_fail_closed ... ok
+test app::tests::production::rollback_writer_and_observer_stay_bound_to_the_captured_digest_and_manual_merge ... ok
+test app::tests::hosted_source_controller::hosted_source_callback_does_not_reset_expired_wait_or_close_the_work_item ... ok
+test app::tests::hosted_staging::staging_partial_plan_is_read_only_until_serialized_admission_repairs_linkage ... ok
+test app::tests::repo_mode_v1::existing_canonical_contract_records_no_change_provenance_without_a_source_pr ... ok
+test app::tests::repo_mode_v1::cancelling_paused_repo_run_seals_stage_and_cancels_budget_extension ... ok
+test app::tests::repo_mode_v1::provider_observation_fixture_is_bounded_json ... ok
+test app::tests::repo_mode_v1::hosted_cutover_retires_the_unscoped_creation_route ... ok
+test app::tests::repo_mode_v1::hosted_readiness_uses_repository_defaults_and_blocks_unqualified_creation ... ok
+test app::tests::repo_mode_v1::repo_mode_fake_provider_closes_failed_when_merge_lacks_premerge_evidence ... ok
+test app::tests::repo_mode_v1::hosted_unadmitted_merge_closes_failed_without_sealing_release_inapplicable ... ok
+test app::tests::hosted_staging::staging_reclaims_expired_owner_without_replacing_authority_or_repeating_admission ... ok
+test app::tests::repo_mode_v1::repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge ... ok
+test app::tests::hosted_staging::unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commit ... ok
+test app::tests::hosted_staging::staging_pause_blocks_writes_but_allows_one_reader_to_recover_unknown_commit ... ok
+test app::tests::repo_mode_v1::worker_boundary_failure_seals_repo_stage_and_blocks_for_correction ... ok
+test app::tests::repo_mode_v1::zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence ... ok
+test app::tests::hosted_staging::staging_progresses_from_verified_build_and_preserves_distinct_completion_boundaries ... ok
+test app::tests::hosted_staging::expired_staging_preparation_cannot_renew_authority_and_cancelled_work_cannot_admit ... ok
+test app::tests::hosted_staging::staging_rejects_changed_build_and_contradictory_or_misbound_observations ... ok
+test app::tests::runs_capabilities::approval_by_id_refuses_non_current_pending_approval ... ok
+test app::tests::runs_capabilities::authenticated_run_creation_persists_and_filters_creator ... ok
+test app::tests::runs_capabilities::create_run_normalizes_empty_run_scope ... ok
+test app::tests::runs_capabilities::create_run_persists_requested_policy_mode ... ok
+test app::tests::runs_capabilities::create_run_persists_run_scope_metadata ... ok
+test app::tests::runs_capabilities::create_run_snapshots_active_permission_grants ... ok
+test app::tests::runs_capabilities::creates_gets_lists_events_and_cancels_run ... ok
+test app::tests::runs_capabilities::creates_sdlc_root_chain_and_audits_each_record ... ok
+test app::tests::runs_capabilities::creates_lists_gets_and_revokes_permission_grants ... ok
+test app::tests::runs_capabilities::direct_capability_execution_accepts_loki_log_summary ... ok
+test app::tests::runs_capabilities::direct_capability_execution_accepts_prometheus_inventory ... ok
+test app::tests::runs_capabilities::direct_capability_execution_accepts_registry_inspection ... ok
+test app::tests::repo_mode_v1::verifier_caveats_are_sealed_without_false_approval ... ok
+test app::tests::runs_capabilities::direct_capability_execution_can_be_cancelled_by_timeout ... ok
+test app::tests::runs_capabilities::direct_capability_execution_audits_success_summary ... ok
+test app::tests::runs_capabilities::parses_sse_last_event_ids ... ok
+test app::tests::runs_capabilities::policy_json_exposes_decision_flags_without_secrets ... ok
+test app::tests::runs_capabilities::production_baseline_surfaces_the_exact_read_only_capability_failure ... ok
+test app::tests::runs_capabilities::direct_capability_execution_denies_secret_reads ... ok
+test app::tests::runs_capabilities::reads_last_event_id_header ... ok
+test app::tests::runs_capabilities::direct_capability_execution_denies_secret_shaped_tekton_analysis ... ok
+test app::tests::runs_capabilities::rejects_invalid_permission_grant_shape ... ok
+test app::tests::runs_capabilities::rejects_permission_grant_without_environment_scope ... ok
+test app::tests::runs_capabilities::direct_capability_execution_denies_secret_shaped_tekton_reads ... ok
+test app::tests::runs_capabilities::direct_capability_execution_denies_secret_shaped_tekton_task_reads ... ok
+test app::tests::runs_capabilities::direct_capability_execution_rejects_non_cluster_actions ... ok
+test app::tests::runs_capabilities::direct_capability_execution_returns_tool_errors_as_json ... ok
+test app::tests::runs_capabilities::gets_and_denies_approval_by_id ... ok
+test app::tests::runs_capabilities::run_policy_applies_mode_override_without_mutating_defaults ... ok
+test app::tests::runs_capabilities::stream_start_seq_prefers_query_cursor ... ok
+test app::work_items::lifecycle::tests::repo_mode_nonterminal_statuses_can_be_cancelled ... ok
+test app::work_items::lifecycle::tests::repo_mode_waiting_external_can_close_after_observed_merge ... ok
+test app::tests::runs_capabilities::lists_pending_approvals ... ok
+test dispatch::recovery::tests::failed_observation_never_dispatches_and_conflicting_job_is_never_replaced ... ok
+test dispatch::recovery::tests::observed_job_requires_exact_dispatch_and_requested_execution_fields ... ok
+test app::tests::runs_capabilities::operator_run_groups_cover_all_matching_pages ... ok
+test dispatch::tests::chained_run_dispatches_after_predecessor_releases_capacity ... ok
+test dispatch::tests::chained_run_never_ignores_unrelated_active_capacity ... ok
+test dispatch::tests::chained_run_waits_only_for_its_exact_predecessor_job ... ok
+test dispatch::tests::counts_only_active_worker_jobs ... ok
+test dispatch::recovery::tests::lost_create_acknowledgment_and_repeated_dispatch_reuse_one_job ... ok
+test app::tests::runs_capabilities::reports_disabled_worker_config ... ok
+test app::tests::runs_capabilities::registry_inspection_records_registry_evidence ... ok
+test app::tests::runs_capabilities::returns_filtered_incidents_and_single_incident ... ok
+test app::tests::runs_capabilities::returns_run_artifacts_and_single_artifact ... ok
+test app::tests::runs_capabilities::returns_run_diff ... ok
+test app::tests::runs_capabilities::returns_run_observations_and_single_observation ... ok
+test dispatch::tests::argo_executor_manifest_isolated_and_sync_scoped ... ok
+test dispatch::tests::job_label_round_trips_run_id ... ok
+test dispatch::tests::job_names_are_dns_safe_and_attempt_scoped ... ok
+test dispatch::tests::gateway_bound_coding_job_has_no_upstream_provider_credential ... ok
+test dispatch::tests::discovery_manifest_uses_the_isolated_reader_without_model_or_writer_credentials ... ok
+test app::tests::runs_capabilities::readiness_distinguishes_identity_evidence_from_supply_chain_evidence ... ok
+test dispatch::tests::git_observer_manifest_has_only_its_read_only_credential ... ok
+test dispatch::tests::git_writer_manifest_isolated_from_model_credentials ... ok
+test dispatch::tests::recognizes_onboarding_proposer_runs_for_parent_recovery ... ok
+test dispatch::tests::recognizes_terminal_executor_job_states ... ok
+test dispatch::tests::rejects_worker_job_at_concurrency_limit ... ok
+test dispatch::tests::gitops_writer_manifest_isolated_from_source_and_model_credentials ... ok
+test dispatch::tests::gitops_observer_manifest_has_only_read_only_observer_credentials ... ok
+test dispatch::tests::inference_evaluation_manifest_has_only_internal_worker_identity ... ok
+test dispatch::tests::hosted_preparation_recovers_lost_ack_and_observes_terminal_job_without_recreating_it ... ok
+test dispatch::tests::onboarding_patch_manifest_has_reader_but_no_model_or_writer_credentials ... ok
+test dispatch::tests::onboarding_validation_manifest_is_an_isolated_exact_source_reader ... ok
+test dispatch::tests::onboarding_proposer_reader_credential_is_init_only ... ok
+test dispatch::tests::preparation_manifest_uses_only_the_preparation_proxy ... ok
+test worker::tests::classifies_terminal_attempts_from_structured_evidence ... ok
+test dispatch::tests::proxy_capability_preflights_wait_for_network_policy_convergence ... ok
+test worker::tests::extracts_cluster_artifact_from_tool_event ... ok
+test worker::tests::extracts_draft_remediation_plan_from_incident_candidate ... ok
+test worker::tests::extracts_file_change_from_write_tool_event ... ok
+test worker::tests::extracts_full_workspace_command_output_as_a_durable_artifact ... ok
+test worker::tests::extracts_incident_candidate_from_failed_pipeline_observation ... ok
+test worker::tests::extracts_loki_artifact_from_tool_event ... ok
+test worker::tests::extracts_observation_from_tool_event ... ok
+test worker::tests::extracts_only_the_requested_typed_submission ... ok
+test worker::tests::extracts_permission_grant_used_audit_event ... ok
+test worker::tests::extracts_pipeline_run_analysis_artifact_from_tool_event ... ok
+test dispatch::tests::repo_stage_manifests_reuse_workspace_and_isolate_test_writes ... ok
+test dispatch::tests::repository_readiness_uses_pinned_runner_without_model_or_writer_credentials ... ok
+test worker::tests::reconstructs_only_valid_workspace_source_from_persisted_target ... ok
+test worker::tests::rejected_change_set_can_only_advance_to_a_newer_work_plan_revision ... ok
+test worker::tests::rejects_workspace_evidence_that_does_not_match_its_source_contract ... ok
+test dispatch::tests::simultaneous_legacy_and_hosted_dispatch_share_one_worker_slot ... ok
+test worker::tests::result_json_preserves_non_empty_run_scope ... ok
+test worker::tests::result_json_uses_null_for_absent_run_scope ... ok
+test worker::tests::test_diagnosis_requires_allowlisted_evidence_and_never_repairs_structural_failures ... ok
+test worker::tests::validates_bounded_work_plan_shape ... ok
+test workspace::tests::captured_diff_preserves_git_patch_termination ... ok
+test workspace::tests::permits_only_exact_configured_remote_source ... ok
+test dispatch::tests::source_capability_preflight_honors_the_exact_requested_repository ... ok
+test workspace::tests::provisions_an_independent_clone_pinned_to_the_requested_commit ... ok
+test workspace::tests::rejects_repositories_outside_the_allowlist ... ok
+test dispatch::tests::source_observer_preflight_exercises_rules_checks_and_statuses ... ok
+test dispatch::tests::worker_manifest_mounts_durable_workspace_and_pins_node ... ok
+test dispatch::tests::worker_manifest_omits_affinity_when_not_configured ... ok
+test dispatch::tests::writer_capability_preflight_exercises_git_transport_without_mutating_a_ref ... ok
+test worker::tests::completed_remote_workspace_run_persists_durable_git_evidence ... ok
+test worker::tests::fresh_preparation_keeps_workspace_source_unresolved_until_checkout ... ok
+test worker::tests::read_only_remote_profile_accepts_only_clean_ephemeral_evidence ... ok
+test worker::tests::repo_change_set_material_captures_the_current_verify_outcome ... ok
+
+test result: ok. 284 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.61s
+
+     Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)
+
+running 162 tests
+test agent::context::tests::compacts_old_exchanges_without_orphaning_tool_calls ... ok
+test agent::context::tests::reserves_output_and_keeps_only_the_configured_recent_history_budget ... ok
+test agent::context::tests::default_budget_bounds_a_long_coding_transcript ... ok
+test agent::runtime::tests::completes_when_provider_finishes ... ok
+test agent::runtime::tests::empty_run_scope_serializes_as_null_in_runtime_events ... ok
+test agent::runtime::tests::cancellation_before_first_turn_stops_run ... ok
+test agent::runtime::tests::coding_finish_requires_change_and_final_diff_but_general_finish_does_not ... ok
+test agent::runtime::tests::fails_when_max_turns_is_exceeded ... ok
+test agent::runtime::tests::ambiguous_patch_failure_is_returned_to_the_model ... ok
+test agent::runtime::tests::builder_submission_boundary_requires_acceptance_status_and_diff_after_mutation ... ok
+test agent::runtime::tests::mandatory_context_overflow_fails_before_the_provider_is_called ... ok
+test agent::runtime::tests::approved_action_recoverable_failure_reaches_the_resumed_model ... ok
+test agent::runtime::tests::executes_read_file_tool_and_continues_to_finish ... ok
+test agent::runtime::tests::builder_submission_boundary_exposes_only_terminal_submission ... ok
+test agent::runtime::tests::pauses_when_approval_is_required ... ok
+test agent::runtime::tests::policy_denies_privileged_shell_command ... ok
+test agent::runtime::tests::policy_pause_prevents_write_execution ... ok
+test agent::runtime::tests::recoverable_tool_error_is_returned_to_the_model ... ok
+test agent::runtime::tests::reliability_v2_reports_a_denied_sub_action_as_a_tool_policy_rejection ... ok
+test agent::runtime::tests::resumable_transcript_restores_recovery_and_completion_state ... ok
+test agent::runtime::tests::reliability_v2_never_exceeds_two_protocol_corrections ... ok
+test agent::runtime::tests::soft_turn_budget_pauses_and_resumes_the_same_transcript ... ok
+test agent::runtime::tests::reliability_v2_corrects_an_unexposed_action_without_executing_it ... ok
+test agent::runtime::tests::reliability_v2_corrects_one_protocol_error_then_accepts_terminal_submission ... ok
+test agent::runtime::tests::recovery_limits_stop_an_identical_error_loop ... ok
+test agent::runtime::tests::workspace_command_artifact_payload_is_not_replayed_to_the_model ... ok
+test agent::runtime::tests::approved_action_executes_exact_paused_payload_and_continues ... ok
+test agent::runtime::tests::timeout_failure_is_returned_to_the_model ... ok
+test agent::runtime::tests::verifier_final_reserve_exposes_only_submission_and_finish_tools ... ok
+test hosted_sdlc::source_merge::tests::hosted_source_merge_accepts_only_current_bounded_authority_for_each_application ... ok
+test hosted_sdlc::build::tests::hosted_pipeline_identity_survives_defaults_but_rejects_replacement_and_mutation ... ok
+test hosted_sdlc::source_merge::tests::hosted_source_merge_cannot_authorize_gitops_or_another_branch ... ok
+test agent_execution::tests::qualification_contract_is_bound_to_exact_policy_and_stage ... ok
+test agent_execution::tests::mutable_runner_or_unsafe_sandbox_is_rejected ... ok
+test agent_execution::tests::policy_and_binding_hashes_are_deterministic ... ok
+test agent_execution::tests::one_host_pool_cannot_mix_incompatible_runtime_requirements ... ok
+test agent::runtime::tests::terminal_workspace_error_fails_without_a_recovery_turn ... ok
+test agent::runtime::tests::permission_grant_allows_write_and_emits_grant_id ... ok
+test hosted_sdlc::source_merge::tests::legacy_publication_authority_cannot_be_read_as_source_merge_authority ... ok
+test model::action::tests::builds_action_from_native_tool_call_arguments ... ok
+test inference::tests::rejects_hostname_for_insecure_http ... ok
+test inference::tests::rejects_openrouter_fallback ... ok
+test inference::tests::accepts_exact_private_http_opt_in ... ok
+test inference::tests::model_grants_are_short_lived_and_tamper_evident ... ok
+test hosted_sdlc::staging::tests::staging_authority_cannot_switch_application_production_or_execution_limits ... ok
+test inference::tests::resolved_agent_profile_hash_binds_the_inference_policy ... ok
+test hosted_sdlc::staging::tests::staging_plan_rejects_configuration_changes_mutable_baselines_and_no_ops ... ok
+test model::action::tests::builds_typed_repo_mode_submission_from_native_tool_call ... ok
+test model::action::tests::deserializes_structured_run_shell_action ... ok
+test model::action::tests::deserializes_structured_patch_action ... ok
+test model::action::tests::builds_fixed_onboarding_test_and_verifier_submissions ... ok
+test model::action::tests::rejects_non_object_tool_arguments ... ok
+test model::action::tests::deserializes_typed_cluster_read_actions ... ok
+test model::action::tests::parses_fenced_json_action_text ... ok
+test agent::runtime::tests::trusted_policy_allows_write_file_tool ... ok
+test model::action::tests::old_serialized_navigation_actions_use_new_field_defaults ... ok
+test policy::command_classifier::tests::classifies_privileged_and_secret_access ... ok
+test policy::command_classifier::tests::classifies_cluster_mutation_as_network ... ok
+test policy::command_classifier::tests::classifies_python_acceptance_commands_as_local_writes ... ok
+test policy::command_classifier::tests::classifies_read_only_commands ... ok
+test policy::safety_policy::tests::allows_loki_log_summary_and_denies_secret_shaped_query ... ok
+test policy::safety_policy::tests::allows_prometheus_inventory ... ok
+test policy::command_classifier::tests::rejects_setup_network_probes_even_inside_compound_commands ... ok
+test policy::safety_policy::tests::allows_read_only_file_actions ... ok
+test policy::safety_policy::tests::allows_registry_image_inspection_and_denies_secret_shaped_refs ... ok
+test policy::safety_policy::tests::allows_typed_cluster_reads ... ok
+test policy::safety_policy::tests::allows_typed_tekton_pipeline_run_analysis ... ok
+test policy::safety_policy::tests::allows_typed_tekton_reads ... ok
+test policy::safety_policy::tests::allows_typed_tekton_task_run_reads ... ok
+test policy::safety_policy::tests::asks_for_file_writes_by_default ... ok
+test policy::safety_policy::tests::attempt_grant_enforces_every_run_workspace_and_path_dimension ... ok
+test policy::safety_policy::tests::denies_privileged_shell_by_default ... ok
+test policy::safety_policy::tests::denies_secret_shaped_cluster_reads ... ok
+test policy::safety_policy::tests::denies_secret_shaped_tekton_pipeline_run_analysis ... ok
+test policy::safety_policy::tests::denies_secret_shaped_tekton_reads ... ok
+test policy::safety_policy::tests::permission_grant_allows_matching_file_write ... ok
+test policy::safety_policy::tests::permission_grant_does_not_override_denials_or_wrong_subject ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_environment ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_run_scope ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_sdlc_envelope ... ok
+test project::tests::acceptance_commands_deny_package_install_and_node_network_probes ... ok
+test policy::safety_policy::tests::permission_grant_scope_deserializes_sdlc_metadata ... ok
+test project::tests::profile_requires_an_immutable_linux_amd64_artifact ... ok
+test hosted_sdlc::staging::tests::staging_request_is_one_digest_change_on_the_expected_gitops_head ... ok
+test project::tests::rejects_mutable_or_partially_hashed_dependency_locks ... ok
+test project::tests::validates_budget_caps ... ok
+test project::tests::validates_npm_lock_v3_and_rejects_unsafe_inputs ... ok
+test repo_mode::onboarding::tests::legacy_candidates_remain_readable_but_contradictions_never_authorize ... ok
+test repo_mode::tests::canonical_hash_ignores_object_insertion_order_but_preserves_arrays ... ok
+test repo_mode::tests::compiled_profiles_are_stable_and_role_scoped ... ok
+test repo_mode::tests::reliability_v2_profiles_are_terminal_and_controller_tested ... ok
+test project::tests::profile_and_dependency_lock_must_be_compatible ... ok
+test repo_mode::onboarding::tests::retains_explicit_absence_without_granting_approval ... ok
+test project::tests::rejects_traversal_and_secret_paths ... ok
+test tools::capability::tests::preserves_mutation_and_production_risk_flags ... ok
+test tools::capability::tests::serializes_cluster_capability_kind_as_snake_case ... ok
+test project::tests::rejects_declared_symlink_escapes ... ok
+test project::tests::conflicting_canonical_and_alias_contracts_block_loading ... ok
+test tools::cluster::tempo::tests::live_finance_tempo_sample ... ignored, explicitly authorized read-only Tempo access is required
+test tools::cluster::tempo::tests::captured_m02_tempo_shape_preserves_the_partial_search_and_cannot_be_current_acceptance ... ok
+test tools::cluster::tempo::tests::normalizes_tempos_unpadded_trace_ids_before_detecting_duplicate_identities ... ok
+test project::tests::loads_strict_hashed_contract ... ok
+test project::tests::rejects_unknown_fields_and_lock_drift ... ok
+test project::tests::repo_mode_requires_canonical_contract_and_reports_matching_alias ... ok
+test project::tests::npm_contract_validation_detects_exact_lock_sha_drift ... ok
+test tools::cluster::tests::analyzes_argo_application_without_operation_details ... ok
+test tools::cluster::tests::analyzes_argo_application_with_compact_terminal_operation_state ... ok
+test tools::cluster::tempo::tests::rejects_wrong_scope_timing_duplicate_identities_and_malformed_data_without_claiming_health ... ok
+test tools::cluster::tests::analyzes_deployment_rollout_status_without_env_or_secrets ... ok
+test tools::cluster::tests::command_summary_uses_program_name_without_local_path ... ok
+test tools::cluster::tests::builds_pipeline_run_analysis_from_pipeline_and_task_runs ... ok
+test tools::cluster::tests::compacts_argocd_application_status ... ok
+test tools::cluster::tests::compacts_loki_response_with_bounded_redacted_entries ... ok
+test repository::tests::discovery_does_not_follow_symlinks_or_inspect_secret_paths ... ok
+test tools::cluster::tests::compacts_kubernetes_lists_without_breaking_json_redaction ... ok
+test tools::cluster::tests::compacts_prometheus_responses ... ok
+test tools::cluster::tests::compacts_prometheus_inventory_without_annotations_or_queries ... ok
+test repository::tests::discovery_enforces_entry_limit ... ok
+test tools::cluster::tests::compacts_tekton_pipeline_run_status ... ok
+test tools::cluster::tests::compacts_tekton_task_run_status ... ok
+test tools::cluster::tests::image_alignment_is_unknown_when_executor_skips_deployment_lookup ... ok
+test tools::cluster::tests::image_alignment_preserves_unconfigured_registry_mismatch ... ok
+test tools::cluster::tests::image_alignment_uses_configured_registry_aliases ... ok
+test tools::cluster::tests::normalizes_loki_window_and_limit ... ok
+test tools::cluster::tests::parses_image_references_without_losing_repository_identity ... ok
+test tools::cluster::tests::parses_registry_alias_configuration ... ok
+test tools::cluster::tests::redacts_secret_shaped_json_fields ... ok
+test tools::cluster::tests::redacts_secret_shaped_text_lines ... ok
+test tools::cluster::tests::declared_pipeline_build_results_preserve_source_boundary_and_conflicts ... ok
+test repository::tests::discovery_is_sorted_hashed_and_reports_legacy_contract ... ok
+test tools::cluster::tests::rejects_registry_base_urls_with_credentials ... ok
+test tools::cluster::tests::rejects_secret_shaped_kubernetes_request_before_command ... ok
+test tools::cluster::tests::rejects_prometheus_inventory_when_url_is_missing ... ok
+test tools::cluster::tests::rejects_loki_log_summary_when_url_is_missing ... ok
+test tools::cluster::tests::inspects_registry_image_identity_without_registry_probe ... ok
+test tools::cluster::tests::rejects_prometheus_query_when_url_is_missing ... ok
+test tools::cluster::tests::validates_kubernetes_names_without_shell_parsing ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_analysis_before_command ... ok
+test tools::fs::tests::patch_rejects_ambiguous_single_replacement ... ok
+test tools::cluster::tempo::tests::reads_only_the_fixed_finance_query_and_retains_sampling_limits ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_request_before_command ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_task_request_before_command ... ok
+test tools::cluster::tempo::tests::rejects_invalid_targets_and_elapsed_window_bounds_before_network_access ... ok
+test tools::cluster::tempo::tests::unavailable_empty_malformed_and_unrelated_evidence_is_inconclusive ... ok
+test tools::fs::tests::rejects_paths_outside_workspace ... ok
+test tools::fs::tests::reads_files_inside_workspace ... ok
+test tools::fs::tests::patches_files_inside_workspace ... ok
+test tools::fs::tests::reads_requested_utf8_line_range_with_boundaries ... ok
+test tools::shell::tests::denies_secret_shell_command_before_execution ... ok
+test tools::fs::tests::patch_can_replace_all_matches ... ok
+test tools::shell::tests::dry_run_shell_does_not_execute_command ... ok
+test tools::shell::tests::truncation_preserves_diagnostic_head_tail_and_omitted_count ... ok
+test tools::shell::tests::rejects_cwd_outside_workspace ... ok
+test tools::fs::tests::searches_text_files ... ok
+test tools::fs::tests::writes_files_inside_workspace ... ok
+test tools::fs::tests::search_can_use_an_explicit_safe_file_inside_an_ignored_directory ... ok
+test tools::shell::tests::typed_git_commands_trust_only_the_canonical_workspace ... ok
+test tools::fs::tests::search_and_directory_listing_apply_caps_and_ignore_rules ... ok
+test tools::shell::tests::nonzero_shell_exit_is_tool_result_error ... ok
+test tools::shell::tests::runs_shell_inside_workspace ... ok
+test tools::shell::tests::git_status_non_repo_is_structured_tool_error ... ok
+test tools::cluster::tempo::tests::enforces_the_body_cap_and_deadline_and_never_follows_redirects ... ok
+
+test result: ok. 161 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)
+
+running 6 tests
+test future_cluster_capabilities_are_typed ... ok
+test environment_ref_marks_production_context ... ok
+test execution_target_round_trips_local_process ... ok
+test execution_target_round_trips_kubernetes_job ... ok
+test resource_and_artifact_refs_round_trip ... ok
+test run_scope_carries_sdlc_metadata ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)
+
+running 2 tests
+test bindings_are_finite_and_do_not_fall_back_when_enabled ... ok
+test policy_rejects_expanded_authority_and_incompatible_contracts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)
+
+running 38 tests
+test codex_qualification::tests::stage_writable_roots_are_derived_only_from_stage_authority ... ok
+test codex_qualification::tests::subscription_errors_remain_distinct_from_general_provider_failures ... ok
+test coding_v2::tests::hidden_semantic_boundaries_are_explicit_in_every_stack_task ... ok
+test coding_v2::tests::fixture_scope_accepts_contract_test_files_but_rejects_toolchain_overrides ... ok
+test codex_qualification::tests::interruption_resume_budget_is_bounded_by_the_selected_policy ... ok
+test codex_qualification::tests::protocol_configs_keep_read_only_stages_without_writable_roots ... ok
+test codex_qualification::tests::interruption_protocol_uses_each_policies_own_stage_contract ... ok
+test stage_suites::integrity::planner_boundary::tests::direct_warnings_do_not_propose_the_operations_they_prohibit ... ok
+test coding_v2::tests::frozen_suite_has_eight_tasks_per_stack_and_stable_hashes ... ok
+test stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates ... FAILED
+test stage_suites::integrity::tests::failed_stage_diagnostics_preserve_contract_fields_without_inventing_missing_results ... ok
+test codex_qualification::tests::checkpoint_resume_requires_exact_policy_and_runtime_provenance ... ok
+test stage_suites::integrity::tests::planner_warnings_do_not_grant_execution_and_cannot_hide_unbounded_steps ... ok
+test stage_suites::submission_evidence::tests::diagnostics_preserve_other_stage_documents_without_inventing_verifier_results ... ok
+test stage_suites::integrity::tests::diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and_repairs ... ok
+test stage_suites::submission_evidence::tests::missing_large_deep_and_secret_shaped_submissions_remain_explicitly_incomplete ... ok
+test stage_suites::submission_evidence::tests::prior_live_verifier_report_remains_readable_without_invented_submissions ... ok
+test stage_suites::submission_evidence::tests::verifier_predicates_explain_every_failure_combination_without_changing_the_gate ... ok
+test stage_suites::submission_evidence::tests::retention_stays_bounded_when_redaction_expands_short_values ... ok
+test tests::builder_report_tool_hash_matches_the_resolved_profile_contract ... ok
+test tests::coding_gate_marks_provider_abort_as_invalid_infrastructure ... ok
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+test coding_v2::tests::abandoned_fixture_releases_scratch_without_touching_another_fixture ... ok
+test tests::evaluation_diagnostics_are_bounded_and_redact_sensitive_lines ... ok
+test tests::evaluation_metrics_count_typed_environment_probes ... ok
+test tests::evaluation_retains_tool_validation_without_replacing_the_terminal_failure ... ok
+test tests::fixture_scope_rejects_an_unexpected_changed_path ... ok
+test tests::planner_qualification_threshold_must_pass_in_each_independent_attempt ... ok
+test tests::stage_qualification_rejects_empty_partial_duplicate_and_aborted_reports ... ok
+test tests::transport_comparison_requires_direct_fireworks_as_the_gateway_baseline ... ok
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+test stage_suites::diagnosis::tests::diagnosis_snapshots_reproduce_assertion_compile_and_passing_receipts ... ok
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6127164) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some("   ")
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test stage_suites::onboarding::tests::scorer_rejects_fabricated_facts_and_duplicate_services ... ok
+test stage_suites::onboarding::tests::a_blocker_in_prose_cannot_substitute_for_a_blocked_proposal ... ok
+test stage_suites::onboarding::tests::scenarios_have_real_files_and_verified_discovery_instead_of_answer_context ... ok
+test stage_suites::tests::onboarding_v2_actions_propose_content_while_target_pins_original_identity ... ok
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6128477) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6129106) panicked at tests/pharness_hidden.rs:3:25:
+assertion failed: valid_date_range(4, 4)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6129821) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(" 5D ")
+ right: Some("5d")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6130586) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(inf)
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test_normalizes_ticker (test_validation.ValidationTests.test_normalizes_ticker) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6131481) panicked at tests/pharness_hidden.rs:3:25:
+assertion `left == right` failed
+  left: Some(0)
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `symbol`
+  --> src/lib.rs:15:41
+   |
+15 | pub fn display_name(name: Option<&str>, symbol: &str) -> String { name.unwrap().to_string() }
+   |                                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_symbol`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test tests::coding_v1_replay_trajectories_pass_independent_acceptance_checks ... ok
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6132433) panicked at src/lib.rs:15:72:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+hidden_semantics --- FAILED
+
+failures:
+
+---- hidden_semantics stdout ----
+
+thread 'hidden_semantics' (6133249) panicked at src/lib.rs:17:46:
+attempt to multiply with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hidden_semantics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test pharness_hidden`
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert normalize_symbol('   ') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert clamp_page_size(0) == 1
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test stage_suites::tests::every_stage_qualification_replay_fixture_passes ... ok
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert valid_date_range(4,4) and not valid_date_range(5,4)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert normalize_period(' 5D ') == '5d' and normalize_period('all') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert safe_ratio(1,0) is None
+                                         ~~~~~~~~~~^^^^^
+  File "/private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-42389-python-ratio-and-docs-1-01a07674-d16f-7ca1-baf6-be448374fbef/src/validation.py", line 19, in safe_ratio
+    return numerator / denominator
+           ~~~~~~~~~~^~~~~~~~~~~~~
+ZeroDivisionError: division by zero
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert parse_positive('0') is None and parse_positive('-1') is None and parse_positive('x') is None
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; assert display_name(None,'MSFT') == 'MSFT' and display_name(' ','MSFT') == 'MSFT'
+                                         ~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-42389-python-missing-field-fallback-1-01a07674-e116-7b41-8353-2541ef04764e/src/validation.py", line 29, in display_name
+    return name.strip()
+           ^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'strip'
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from src.validation import *; from src.consumer import next_delay; assert retry_delay_ms(2**32) == 2**32-1 and next_delay(3) == 750
+                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-42389-node-missing-field-fallback-1-01a07674-f521-7d91-bdec-02f0039fc7d2/src/validation.js:8
+export function displayName(name, symbol) { return name.trim(); }
+                                                        ^
+
+TypeError: Cannot read properties of null (reading 'trim')
+    at displayName (file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-42389-node-missing-field-fallback-1-01a07674-f521-7d91-bdec-02f0039fc7d2/src/validation.js:8:57)
+    at file:///private/var/folders/jd/jf_ng1xj7kq3sdgn2sj_y0qc0000gn/T/pharness-seed-check-42389-node-missing-field-fallback-1-01a07674-f521-7d91-bdec-02f0039fc7d2/[eval1]:1:61
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:249:26)
+    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:246:20)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v26.0.0
+test coding_v2::tests::hidden_checks_reject_every_seeded_semantic_bug ... ok
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+✔ public contract (1.100125ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 155.433625
+✔ public contract (0.811292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 142.674542
+✔ public contract (0.780209ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 152.333
+✔ public contract (1.034417ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 143.795958
+✔ public contract (0.796875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 110.366208
+✔ public contract (0.856209ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 177.764917
+✔ public contract (0.786208ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.537458
+✔ public contract (0.904292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 128.995625
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test coding_v2::tests::replay_patches_pass_public_and_hidden_checks_without_scope_drift has been running for over 60 seconds
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: unused import: `crate::retry_delay_ms`
+ --> src/consumer.rs:1:5
+  |
+1 | use crate::retry_delay_ms;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+test_contract (test_public.PublicContract.test_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+✔ public contract (0.769584ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98.591
+✔ public contract (0.751541ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.0555
+✔ public contract (0.747834ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.645833
+✔ public contract (0.777083ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 99.769291
+✔ public contract (0.768958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.941209
+✔ public contract (0.884875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.465208
+✔ public contract (0.751833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98.679417
+✔ public contract (0.766708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95.448959
+test coding_v2::tests::replay_patches_pass_public_and_hidden_checks_without_scope_drift ... ok
+
+failures:
+
+---- stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates stdout ----
+
+thread 'stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates' (6125236) panicked at crates/pharness-eval/src/stage_suites/integrity/tests.rs:152:9:
+assertion `left == right` failed
+  left: "stage-qualification-v2.2"
+ right: "stage-qualification-v2.1"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates
+
+test result: FAILED. 37 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 101.37s
+
+error: test failed, to rerun pass `-p pharness-eval --bin pharness-eval`

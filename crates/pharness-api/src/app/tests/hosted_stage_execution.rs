@@ -794,3 +794,42 @@ async fn make_repository_ready(state: &mut crate::app::AppState, repository_id: 
         input_hash:crate::app::hashing::canonical_material_hash(&input).unwrap(), content_hash:"sha256:readiness-test-fixture".into(), expires_at:Some((now + 900_000).to_string()),
     }).await.unwrap();
 }
+
+#[tokio::test]
+async fn onboarding_submission_contract_follows_the_saved_selection() {
+    let mut state = test_state().await;
+    enable_gateway(&mut state);
+    let (_, profile, binding) = qualification_fixture(
+        &state,
+        InferenceStage::Onboarding,
+        "repository-onboarding-proposer",
+        2,
+    )
+    .await;
+    assert_eq!(
+        pharness_runhost::onboarding_submission_contract_for_binding(&binding),
+        Some(pharness_runhost::ONBOARDING_SUBMISSION_CONTRACT)
+    );
+    assert_eq!(
+        binding.tool_schema_hash,
+        pharness_runhost::constrained_tool_schema_hash(&profile.tools, &[], &[]).unwrap()
+    );
+    let saved = serde_json::to_value(&binding).unwrap();
+    state.repo_mode.coding_reliability_v2_enabled = false;
+    let restored = serde_json::from_value(saved).unwrap();
+    assert_eq!(
+        pharness_runhost::onboarding_submission_contract_for_binding(&restored),
+        Some(pharness_runhost::ONBOARDING_SUBMISSION_CONTRACT)
+    );
+    let mut legacy = binding;
+    legacy.stage_prompt.as_mut().unwrap().revision = "2026-09-05.2".into();
+    assert_eq!(
+        pharness_runhost::onboarding_submission_contract_for_binding(&legacy),
+        None
+    );
+    legacy.stage_prompt = None;
+    assert_eq!(
+        pharness_runhost::onboarding_submission_contract_for_binding(&legacy),
+        None
+    );
+}

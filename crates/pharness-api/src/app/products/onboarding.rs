@@ -1142,6 +1142,7 @@ async fn start_repository_onboarding_proposer(
         branch: Some(branch),
         ..RunScope::default()
     };
+    let mut onboarding_submission_contract = None;
     let (inference_marker, resolved_profile) = if state.inference.enabled {
         let selection = crate::app::inference::latest_planned_selection(
             state,
@@ -1153,6 +1154,10 @@ async fn start_repository_onboarding_proposer(
         .ok_or_else(|| {
             ApiError::conflict("Onboarding inference selection was not pinned at creation")
         })?;
+        onboarding_submission_contract =
+            pharness_runhost::onboarding_submission_contract_for_binding(
+                &selection.resolved_binding,
+            );
         (
             crate::app::inference::execution_marker_for_selection(state, &selection),
             Some((
@@ -1183,6 +1188,7 @@ async fn start_repository_onboarding_proposer(
                 "inference":inference_marker,
                 "onboarding":{"onboarding_id":onboarding.id,"discovery_id":discovery.id,"discovery_hash":discovery_hash},
                 "agent_profile":profile,
+                "onboarding_submission_contract":onboarding_submission_contract,
                 "agent_context":context,
                 "workspace_source":source,
                 "run_scope":scope.to_optional_json(),

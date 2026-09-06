@@ -40,7 +40,7 @@ on the stated evidence. Run live evaluations serially.
 
 | Gate | Work and affected contracts | Required evidence | Status |
 | --- | --- | --- | --- |
-| M04A — Trusted submission boundary | Version the agent-facing submission separately from durable controller records. Bind onboarding discovery in native code; use catalog evidence IDs for selections. Validate required fields and reject conflicting supplied IDs with field-specific diagnostics. Preserve historical V1 reads and originally bound resumed Runs. | Valid, blocked, missing-context, stale/conflicting identity, extra-field and replay/resume tests. Schema and prompt describe the same accepted tool contract. Full durable proposal still carries its original identity and hash. | next eligible |
+| M04A — Trusted submission boundary | Version the agent-facing submission separately from durable controller records. Bind onboarding discovery in native code; use catalog evidence IDs for selections. Validate required fields and reject conflicting supplied IDs with field-specific diagnostics. Preserve historical V1 reads and originally bound resumed Runs. | Valid, blocked, missing-context, stale/conflicting identity, extra-field and replay/resume tests. Schema and prompt describe the same accepted tool contract. Full durable proposal still carries its original identity and hash. | native adapter and deterministic replay validated; full resume-context checks follow in B |
 | M04B — Context delivery | Assemble a versioned, inspectable context envelope with distinct instructions/data. Reuse the current runtime. Exercise initial, replay, checkpoint, budget and recovery serialization, including actual provider-facing messages. Retain the demonstrated MiniMax transport correction. | All required sections survive; missing required context fails before dispatch. Tool-call/result order and persisted replay remain valid. Small provider canary exercises the real envelope, not a repeated marker in a user message. | open; follows A for integration |
 | M04C — Valid stage measurements | Validate plans by structured paths, named commands and acceptance coverage; retire English negation parsing as an execution gate. Ground Planner/Diagnosis cases in matching workspaces and actual receipts. Give Verifier requirements, source changes and test evidence while keeping expected verdicts and answer markers private. | Explicit old-to-new scenario mapping and suite revisions, adversarial leakage checks, known correct/incorrect submissions, real command receipts, and distinct protocol versus semantic failure reports. Old protocol fixtures remain labelled history/regression. | open; follows A/B |
 | M04D — Small live canaries and model control | Through the real gateway/worker, run valid and blocked onboarding, a grounded plan, actual failure diagnosis, and blind verification. Diagnose the first boundary failure before another batch. Compare registered candidates to an explicitly recorded common control on identical inputs, tools and limits before optimizing roles. | Retained request/context/schema hashes, outputs, tool errors, usage and failure class. No silent model fallback. Passing canaries do not count as benchmark acceptance. | open; requires A–C |
@@ -66,6 +66,12 @@ answers, or count a replay as a live pass. Keep the frozen 24 coding tasks untou
 - [ ] Hosted activation refers to the exact qualified deployed runtime. Credential/provider failures remain concrete blockers; no fallback silently replaces the selected profile.
 
 ## Current facts and historical evidence
+
+[M04A trusted submissions](../../evidence/autonomous-sdlc/ASTRA-M04-TRUSTED-SUBMISSIONS.md)
+are implemented and locally validated (530 component checks; one live-only test
+ignored). Deployment, live qualification and full replay/context validation remain
+open. Next: M04B context delivery, followed by M04C valid measurements.
+
 
 Builder and seeded Repair on `48c77b7` each passed both 24-case attempts, 8/8 per
 stack. This is meaningful bounded editing evidence; it neither proves the connected

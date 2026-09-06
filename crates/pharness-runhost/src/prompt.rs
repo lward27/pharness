@@ -39,15 +39,19 @@ Treat tool errors as evidence. Change approach after a recoverable failure inste
 Typed submit_* tools are terminal: submit the required stage document exactly once when the stage work is complete. The controller, deterministic tests, and later stages decide success."#
 }
 
+pub(super) fn legacy_onboarding_stage_prompt() -> StagePromptPack {
+    StagePromptPack {
+        prompt_id: "repo-onboarding-v2",
+        revision: "2026-09-05.2",
+        stage: pharness_core::InferenceStage::Onboarding,
+        content: r#"Use discovery evidence to propose repository configuration. Label every item as a discovered fact, proposed configuration, assumption, conflict, or blocker. Copy executable facts only from discovery and compatible profile descriptors. Do not invent roots, commands, locks, Services, or profile IDs. Submit the smallest valid onboarding proposal. If required facts are absent or contradictory, use candidate_contract: null and explicit blockers or conflicts. A blocked proposal is retained evidence and cannot authorize source changes."#,
+    }
+}
+
 pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
     let revision = RELIABILITY_V2_PROMPT_BUNDLE_VERSION;
     match profile_id {
-        "repository-onboarding-proposer" => Some(StagePromptPack {
-            prompt_id: "repo-onboarding-v2",
-            revision: "2026-09-05.2",
-            stage: pharness_core::InferenceStage::Onboarding,
-            content: r#"Use discovery evidence to propose repository configuration. Label every item as a discovered fact, proposed configuration, assumption, conflict, or blocker. Copy executable facts only from discovery and compatible profile descriptors. Do not invent roots, commands, locks, Services, or profile IDs. Submit the smallest valid onboarding proposal. If required facts are absent or contradictory, use candidate_contract: null and explicit blockers or conflicts. A blocked proposal is retained evidence and cannot authorize source changes."#,
-        }),
+        "repository-onboarding-proposer" => Some(crate::onboarding_submission::current_prompt()),
         "repo-planner" => Some(StagePromptPack {
             prompt_id: "repo-planner-v2",
             revision,

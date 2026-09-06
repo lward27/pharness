@@ -1,0 +1,24 @@
+   Compiling tracing v0.1.44
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling hyper-util v0.1.20
+   Compiling tracing-subscriber v0.3.23
+   Compiling toml_edit v0.22.27
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling toml v0.8.23
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-core)
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-openai-compatible)
+   Compiling pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-fireworks)
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-runhost)
+   Compiling pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-config)
+   Compiling pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-codex-host)
+   Compiling pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-trusted-submissions/crates/pharness-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.39s
+     Running unittests src/main.rs (target/debug/deps/pharness_eval-fc09ccb163a6f3d9)
+
+running 1 test
+test stage_suites::integrity::tests::corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.00s
+

@@ -145,7 +145,7 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 #[test]
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
     for (id, revision) in [
-        ("onboarding-v2", "stage-qualification-v2.1"),
+        ("onboarding-v2", "stage-qualification-v2.2"),
         ("planner-v2", "stage-qualification-v2.2"),
         ("test-diagnosis-v2", "stage-qualification-v2.2"),
     ] {
