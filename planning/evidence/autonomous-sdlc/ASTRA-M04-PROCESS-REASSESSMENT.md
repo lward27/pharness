@@ -1,7 +1,7 @@
 # ASTRA M04: Reassess the process before another qualification cycle
 
 Reviewed: 2026-09-06. Source: main `04dbaeab51d9de939f0743d587c3aa3d10c21a8f`.
-Status: evidence-backed recommendation for owner review; no revised acceptance gate, model switch or production authorization is implemented by this document. Runtime `19b0c55` remains deployed and unqualified; its already-running Verifier evaluation is separate from this assessment.
+Status: owner-approved direction on 2026-09-06. The [revised M04 plan](../../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) owns implementation. This dated assessment changes no numerical acceptance gate, registered model or production authorization by itself. Runtime `19b0c55` remains deployed and unqualified; its already-running Verifier evaluation is separate from this assessment.
 
 ## Judgment
 
@@ -75,7 +75,7 @@ The current Verifier suite can remain useful as a labelled protocol regression. 
 
 A larger replacement becomes justified if the simplified, correctly instrumented loop still cannot complete a representative bounded change under the existing limits with an explicitly selected capable control model, or if preserving exact evidence/recovery requires unavoidable duplicate authorities throughout the implementation. We have not established either condition. Current results instead show fixable interface/measurement defects alongside real but unisolated model-quality risks.
 
-No additional broad qualification run, model change or production action was initiated for this reassessment. The already-running source-19 Verifier job may finish and retain its evidence. The next M04 implementation should follow this bounded redesign after the owner reviews the direction, rather than continue accumulating prompt/scorer exceptions.
+No additional broad qualification run, model change or production action was initiated for this reassessment. The already-running source-19 Verifier job may finish and retain its evidence. The owner subsequently approved this bounded redesign and instructed implementation. The revised M04 plan now replaces the prior broad-run sequence.
 
 ## Evidence and source pointers
 

@@ -63,95 +63,48 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder and seeded Repair passed on 48c77b7; Onboarding, Planner, Test Diagnosis and Verifier failed; corrected release deployed; fresh qualification running; M04 remains open | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A/B next; historical coding passes retained; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Basic Tempo reader, schema-54 records and staging handoff deployed; new native runtime integration and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
-| M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
+| M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | initial decision-material contract validated in draft; integration and acceptance open | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-### Current qualification — 2026-09-06
+### Current execution — 2026-09-06
 
-Runtime `19b0c55` remains unqualified. Onboarding scored 0/12 in both attempts;
-Planner scored 6/12 and 7/12; Test Diagnosis scored 1/12 in both. All results are
-retained. The [MiniMax context correction](../../evidence/autonomous-sdlc/ASTRA-M04-SYSTEM-CONTEXT-DELIVERY.md)
-passes 86 local regressions but requires deployment and fresh qualification.
-[Planner diagnosis](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-PLANNER-FAILURE.md)
-and [Test Diagnosis findings](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-TEST-DIAGNOSIS-FAILURE.md)
-separate remaining fixture/scorer defects from unsupported model claims. Fixing a
-harness defect does not retroactively qualify any run. Verifier qualification is
-in progress on source 19; all live evaluations remain serial. Hosted activation
-and autonomous Finance acceptance remain disabled/open.
+The owner approved the [M04 process reassessment](../../evidence/autonomous-sdlc/ASTRA-M04-PROCESS-REASSESSMENT.md)
+and requested implementation. [M04](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md)
+now owns six ordered gates: trusted submissions; context delivery; valid stage
+measurements; small live canaries and controlled model comparison; connected coding
+and repair; then frozen-release qualification. This targeted refactor retains the
+shared gateway/runner, durable controller, deterministic tests and execution limits.
+Independent verification and production approval remain separate boundaries.
 
-Next eligible: finish serial source-19 qualification, correct proven context/evaluator defects and prepare the next immutable release; continue M08 runtime integration and
-M10 refinement. All qualification Jobs on `48c77b7` are terminal. After live history preservation passed at 16:20 UTC, the gateway protocol checks
-passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
-with two frozen attempts. Both finished 24/24 on the first pass, with every stack
-8/8 and no reported hidden-test false passes or policy violations.
-[Builder qualification](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-BUILDER-QUALIFICATION.md)
-is passed. [Onboarding failed 0/12 in both attempts](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-ONBOARDING-FAILURE.md)
-despite passing 30 protocol checks. Planner subsequently scored 4/12 and 7/12;
-Test Diagnosis scored 0/12 in both attempts. Inspection found a Test Diagnosis
-scorer/tool-schema mismatch and an overbroad Planner substring check. These require
-contract-aligned regression fixes and fresh qualification, not reclassification of
-the recorded results as passes. The [scoring correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SCORING-CONTRACT-CORRECTION.md)
-preserves the twelve-case scenarios and thresholds, changes the two affected
-suite revisions to V2.1, and adds bounded contract diagnostics. The subsequent
-[onboarding correction](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-CONTRACT-AND-FIXTURE-CORRECTION.md)
-retains blocked proposals without invented contracts, guards approval/source effects,
-and uses real discovery for twelve distinct V2.1 fixtures. It requires compatible
-API/worker/UI deployment and fresh live qualification. Existing failed results remain unchanged.
-[Verifier finished at 20:14 UTC with 1/24 and 2/24 passes](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-VERIFIER-FAILURE.md).
-Its zero reported false approvals do not override 43 evidence/marker mismatches
-and two missing submissions. [Repair completed at 20:54 UTC with 24/24 in both attempts](../../evidence/autonomous-sdlc/ASTRA-M04-48C77B7-REPAIR-QUALIFICATION.md),
-8/8 per stack and eight recoverable tool failures within existing limits. Its
-seeded repair proof does not establish correction of an actual failed Builder workspace.
-The [submission diagnostic correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-SUBMISSION-DIAGNOSTICS.md)
-retains bounded accepted documents and separates the three Verifier predicates;
-the scorer, fixtures, gates, profiles and limits remain unchanged.
-Keep qualification Jobs serial. The frozen coding suite, thresholds, profiles and
-execution limits remain in force. Scorer repairs require explicit suite revisions
-and fresh evidence. The exact-runtime creation gate also requires
-matching qualification on any subsequent release before activation. The earlier fd74092 runs failed; they remain
-[recorded evidence](../../evidence/autonomous-sdlc/ASTRA-M04-FD740-QUALIFICATION-FAILURE-ANALYSIS.md),
-not superseded passes.
+**Next eligible: M04A trusted submission binding and M04B context delivery.** Validate
+these and the stage measurements before new broad qualification. Retain the already
+running source-19 Verifier result without starting another old-suite batch. M08 and
+M09 preparation may continue independently, but their acceptance gates remain open.
+The prepared Finance production-baseline change has not been approved; M04 approval
+does not authorize its merge or count as M11 production approval.
 
-The source-publication controller merged through [PR 338](https://github.com/lward27/pharness/pull/338),
-with its normal-callback identity regression fixed in [PR 342](https://github.com/lward27/pharness/pull/342).
-The finite build-dispatch restriction merged through [PR 336](https://github.com/lward27/pharness/pull/336),
-and the latest list polish merged through [PR 337](https://github.com/lward27/pharness/pull/337).
-Guarded source merge merged through [PR 344](https://github.com/lward27/pharness/pull/344)
-at `2bbc7a77152d4104651702e84bac3b1893739fc3`; its
-[validation](../../evidence/autonomous-sdlc/ASTRA-M07-GUARDED-SOURCE-MERGE.md)
-includes persisted merge admission, exact source/base checks and independent provider observation.
-The [verified build handoff](../../evidence/autonomous-sdlc/ASTRA-M07-HOSTED-BUILD-HANDOFF.md)
-merged through [PR 345](https://github.com/lward27/pharness/pull/345) at
-`252030cdd2e457e4658ed7489c7e6a833add2f28`; 464 API/core/worker checks passed.
-It binds finite build authority to sealed source and retains declared Tekton outputs
-and conflicts. The [durable build controller](../../evidence/autonomous-sdlc/ASTRA-M07-DURABLE-BUILD-CONTROLLER.md)
-now records one build admission, original Job and PipelineRun identities, one read-only
-recovery observer, bounded grants and duplicate-safe terminal receipts. Its implementation
-passed 672 workspace tests and merged in [PR 347](https://github.com/lward27/pharness/pull/347)
-at `94e81f89cfa6922224c23193520346a0884ced75`. Deployment and the actual autonomous build/registry chain
-remain open.
-These foundations are now included in the deployed 19b0c55 artifacts. Source-to-build
-progression and live source-merge acceptance remain open. The owner approved the Finance source protections. Both CI pull requests are
-merged and both main branches now require strict, app-bound checks and PRs,
-including administrators, with zero human reviewers. The
-[application and actual writer readback](../../evidence/autonomous-sdlc/ASTRA-M07-APPROVED-SOURCE-PROTECTION.md)
-passed; no owner decision remains for this policy.
-The owner updated the source writer's Administration read permission; both required
-reads are now [verified as authorized](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-CREDENTIAL-VERIFIED.json).
-Autonomous source-merge acceptance and exact-runtime coding qualification remain open.
+Runtime `19b0c55` remains unqualified: Onboarding 0/12 twice, Planner 6/12 and 7/12,
+Test Diagnosis 1/12 twice. Verifier is still in progress at this update. Builder and
+seeded Repair on earlier `48c77b7` passed 24/24 twice, 8/8 per stack; actual failed
+Builder-to-repair handoff and blind semantic verification remain unproven. Retain
+all failed evidence. The merged context/evidence corrections need deployment and
+fresh qualification; old success cannot qualify a new runtime.
 
-The [compatible correction release](../../evidence/autonomous-sdlc/ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md)
-is deployed with all seven verified artifacts and the native bundle. Exact live
-identity and schema/history preservation passed before fresh qualification began.
-Hosted creation and Coding Reliability V2 remain disabled; no autonomous acceptance
-is implied by this release.
+M07 source/build controller foundations are deployed. Both real Finance builds and
+the owner-approved, enforced source protections are evidenced; the autonomous
+source-to-build chain remains open. [M08 integration PR 363](https://github.com/lward27/pharness/pull/363)
+has local validation and real read-only staging observations, but remains unreleased
+and unaccepted as autonomous staging. [M09 initial contract PR 366](https://github.com/lward27/pharness/pull/366)
+binds exact production decision material in pure types; authenticated decisions,
+persistence, execution and recovery are still open. No production authority is
+created by those types or by infrastructure health.
 
 Current evidence entry points:
 
@@ -258,9 +211,3 @@ run meaningful checks, record exact results and limitations, commit implementati
 evidence, then update milestone/finding status. Continue eligible work until acceptance
 or a concrete external dependency requires input. Never weaken a gate, expand production
 authority, erase history, or count a manually completed step as autonomous success.
-
-The [stage evidence-contract correction](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-EVIDENCE-CONTRACT.md)
-binds V2 references to controller IDs and gives Planner/Test Diagnosis explicit V2.2
-suites with unchanged thresholds. It is locally validated and unreleased. Collect the
-currently running source-19 Verifier result; the full required qualification then runs
-on the next exact release, without repeating superseded old-source runs.
