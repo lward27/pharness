@@ -1,0 +1,7 @@
+{
+  "observed_at": "2026-09-06T00:56:11.430914+00:00",
+  "repository": "finance-frontend",
+  "pull_request": 8,
+  "expected_head": "4117a2a17e665a560079190af281a8844f7ea4aa",
+  "expected_base": "c4d64f9242f2955064f99e659bf1648ce6bc4273"
+}

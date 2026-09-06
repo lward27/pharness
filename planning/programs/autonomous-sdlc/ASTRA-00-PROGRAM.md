@@ -79,7 +79,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Builder and seeded Repair passed on 48c77b7; Onboarding, Planner, Test Diagnosis and Verifier failed; corrected release deployed; fresh qualification running; M04 remains open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
-| M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
+| M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
 | M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Baseline/current-source live observations pass; finite native readers, baseline admission and durable candidate controller locally validated; integrated release and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
@@ -137,14 +137,15 @@ recovery observer, bounded grants and duplicate-safe terminal receipts. Its impl
 passed 672 workspace tests and merged in [PR 347](https://github.com/lward27/pharness/pull/347)
 at `94e81f89cfa6922224c23193520346a0884ced75`. Deployment and the actual autonomous build/registry chain
 remain open.
-These changes are not included in the deployed 48c77b7 artifacts. Source-to-build
-progression and live source-merge acceptance remain open. The proposed required
-Finance source checks passed in both application PRs, but applying main-branch
-protections remains [a pending owner decision](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-MERGE-DECISION.md).
+These foundations are now included in the deployed 19b0c55 artifacts. Source-to-build
+progression and live source-merge acceptance remain open. The owner approved the Finance source protections. Both CI pull requests are
+merged and both main branches now require strict, app-bound checks and PRs,
+including administrators, with zero human reviewers. The
+[application and actual writer readback](../../evidence/autonomous-sdlc/ASTRA-M07-APPROVED-SOURCE-PROTECTION.md)
+passed; no owner decision remains for this policy.
 The owner updated the source writer's Administration read permission; both required
 reads are now [verified as authorized](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-CREDENTIAL-VERIFIED.json).
-Main branches remain unprotected pending the separate owner decision.
-That dependent gate cannot be waived; independent implementation can continue.
+Autonomous source-merge acceptance and exact-runtime coding qualification remain open.
 
 The [compatible correction release](../../evidence/autonomous-sdlc/ASTRA-19B0C55-IMMUTABLE-COMPATIBLE-RELEASE.md)
 is deployed with all seven verified artifacts and the native bundle. Exact live
