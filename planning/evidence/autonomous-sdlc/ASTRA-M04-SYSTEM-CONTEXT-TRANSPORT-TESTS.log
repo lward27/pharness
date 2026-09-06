@@ -1,0 +1,192 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling memchr v2.8.0
+   Compiling pin-project-lite v0.2.17
+   Compiling futures-core v0.3.32
+   Compiling bytes v1.11.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling itoa v1.0.18
+   Compiling once_cell v1.21.4
+   Compiling futures-sink v0.3.32
+   Compiling serde_core v1.0.228
+   Compiling log v0.4.29
+   Compiling futures-channel v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling tracing-core v0.1.36
+   Compiling slab v0.4.12
+   Compiling cfg-if v1.0.4
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling futures-io v0.3.32
+   Compiling smallvec v1.15.1
+   Compiling http v1.4.0
+   Compiling cc v1.2.61
+   Compiling writeable v0.6.3
+   Compiling serde v1.0.228
+   Compiling litemap v0.8.2
+   Compiling version_check v0.9.5
+   Compiling zeroize v1.8.2
+   Compiling core-foundation-sys v0.8.7
+   Compiling percent-encoding v2.3.2
+   Compiling generic-array v0.14.7
+   Compiling subtle v2.6.1
+   Compiling tower-service v0.3.3
+   Compiling system-configuration-sys v0.6.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling http-body v1.0.1
+   Compiling icu_properties_data v2.2.0
+   Compiling httparse v1.10.1
+   Compiling ring v0.17.14
+   Compiling errno v0.3.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling socket2 v0.6.3
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling rustls-pki-types v1.14.1
+   Compiling typenum v1.20.0
+   Compiling bitflags v2.11.1
+   Compiling syn v2.0.117
+   Compiling try-lock v0.2.5
+   Compiling untrusted v0.9.0
+   Compiling want v0.3.1
+   Compiling core-foundation v0.9.4
+   Compiling aho-corasick v1.1.4
+   Compiling sync_wrapper v1.0.2
+   Compiling zmij v1.0.21
+   Compiling crossbeam-utils v0.8.21
+   Compiling tower-layer v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling rustls v0.23.40
+   Compiling regex-syntax v0.8.10
+   Compiling httpdate v1.0.3
+   Compiling system-configuration v0.7.0
+   Compiling form_urlencoded v1.2.2
+   Compiling ipnet v2.12.0
+   Compiling serde_json v1.0.149
+   Compiling base64 v0.22.1
+   Compiling crossbeam-epoch v0.9.20
+   Compiling ryu v1.0.23
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling regex-automata v0.4.14
+   Compiling http-body-util v0.1.3
+   Compiling crossbeam-deque v0.8.7
+   Compiling digest v0.10.7
+   Compiling webpki-roots v1.0.7
+   Compiling bstr v1.13.1
+   Compiling hashbrown v0.17.0
+   Compiling equivalent v1.0.2
+   Compiling thiserror v1.0.69
+   Compiling same-file v1.0.6
+   Compiling iri-string v0.7.12
+   Compiling camino v1.2.2
+   Compiling indexmap v2.14.0
+   Compiling synstructure v0.13.2
+   Compiling walkdir v2.5.0
+   Compiling cpufeatures v0.2.17
+   Compiling unsafe-libyaml v0.2.11
+   Compiling sha2 v0.10.9
+   Compiling hmac v0.12.1
+   Compiling rustversion v1.0.22
+   Compiling mime v0.3.17
+   Compiling anyhow v1.0.102
+   Compiling lazy_static v1.5.0
+   Compiling sharded-slab v0.1.7
+   Compiling globset v0.4.19
+   Compiling matchers v0.2.0
+   Compiling serde_path_to_error v0.1.20
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling tracing-attributes v0.1.31
+   Compiling serde_derive v1.0.228
+   Compiling tokio v1.52.1
+   Compiling futures-util v0.3.32
+   Compiling async-trait v0.1.89
+   Compiling thiserror-impl v1.0.69
+   Compiling zerofrom v0.1.7
+   Compiling ignore v0.4.32
+   Compiling yoke v0.8.2
+   Compiling tracing v0.1.44
+   Compiling rustls-webpki v0.103.13
+   Compiling tracing-log v0.2.0
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling thread_local v1.1.9
+   Compiling matchit v0.7.3
+   Compiling nu-ansi-term v0.50.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling futures-executor v0.3.32
+   Compiling axum-core v0.4.5
+   Compiling futures v0.3.32
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling secrecy v0.8.0
+   Compiling icu_provider v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling hyper v1.9.0
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.4
+   Compiling tokio-util v0.7.18
+   Compiling tower-http v0.6.8
+   Compiling idna_adapter v1.2.2
+   Compiling hyper-util v0.1.20
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling hyper-rustls v0.27.9
+   Compiling axum v0.7.9
+   Compiling reqwest v0.12.28
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-core)
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-openai-compatible)
+   Compiling pharness-model-gateway v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-system-context-delivery/crates/pharness-model-gateway)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.85s
+     Running unittests src/main.rs (target/debug/deps/pharness_model_gateway-1620a636fb9432d8)
+
+running 4 tests
+test tests::request_validation_binds_alias_and_generation_settings ... ok
+test tests::backend_translation_overwrites_openrouter_routing ... ok
+test tests::backend_translation_preserves_minimax_context_for_older_and_updated_workers ... ok
+test tests::backend_translation_strips_non_fireworks_reasoning_fields ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/pharness_openai_compatible-935328701be30b30)
+
+running 17 tests
+test client::tests::rejects_multiple_actions_in_one_turn ... ok
+test stream::tests::ignores_comments_done_and_handles_fragmented_events ... ok
+test minimax::tests::minimax_empty_single_and_late_only_system_context_remain_defined ... ok
+test client::tests::rejects_proxy_urls_with_credentials_or_paths ... ok
+test gateway::tests::internal_urls_reject_embedded_credentials ... ok
+test stream::tests::preserves_structured_reasoning_and_fragmented_tool_arguments ... ok
+test minimax::tests::other_models_and_backends_keep_their_existing_message_envelopes ... ok
+test types::tests::maps_openrouter_reasoning_without_fireworks_field ... ok
+test types::tests::pins_openrouter_provider_and_disables_fallback ... ok
+test types::tests::valid_historical_tool_arguments_keep_their_exact_bytes ... ok
+test gateway::tests::hashed_gateway_value_is_the_transmitted_value ... ok
+test client::tests::malformed_current_actions_and_history_envelopes_remain_non_executable ... ok
+test types::tests::direct_and_gateway_wire_builder_preserve_minimax_controller_context ... ok
+test types::tests::maps_fireworks_reasoning_history ... ok
+test minimax::tests::minimax_keeps_controller_context_and_later_checkpoints_in_the_rendered_system_message ... ok
+test types::tests::rejected_tool_history_remains_visible_without_invalid_provider_json ... ok
+test client::tests::routes_https_requests_through_the_explicit_connect_proxy ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests pharness_openai_compatible
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

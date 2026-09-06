@@ -86,7 +86,20 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-Next eligible: collect fresh qualification evidence on the accepted `19b0c55` release; continue M08 runtime integration and
+### Current qualification — 2026-09-06
+
+Runtime `19b0c55` remains unqualified. Onboarding scored 0/12 in both attempts;
+Planner scored 6/12 and 7/12; Test Diagnosis scored 1/12 in both. All results are
+retained. The [MiniMax context correction](../../evidence/autonomous-sdlc/ASTRA-M04-SYSTEM-CONTEXT-DELIVERY.md)
+passes 86 local regressions but requires deployment and fresh qualification.
+[Planner diagnosis](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-PLANNER-FAILURE.md)
+and [Test Diagnosis findings](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-TEST-DIAGNOSIS-FAILURE.md)
+separate remaining fixture/scorer defects from unsupported model claims. Fixing a
+harness defect does not retroactively qualify any run. Verifier qualification is
+in progress on source 19; all live evaluations remain serial. Hosted activation
+and autonomous Finance acceptance remain disabled/open.
+
+Next eligible: finish serial source-19 qualification, correct proven context/evaluator defects and prepare the next immutable release; continue M08 runtime integration and
 M10 refinement. All qualification Jobs on `48c77b7` are terminal. After live history preservation passed at 16:20 UTC, the gateway protocol checks
 passed 30/30 and coding evaluation `infeval_01a0725f855b7c038234cd6af3830594` started
 with two frozen attempts. Both finished 24/24 on the first pass, with every stack

@@ -1,0 +1,142 @@
+{
+  "observed_at": "2026-09-06T10:13:37.859012+00:00",
+  "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "evaluation_id": "infeval_01a0742d024878008e997434e598d00c",
+  "qualification_id": "inferqual_01a0743f0e497221a1ace566cc9522a9",
+  "report_hash": "sha256:9417dd493752efa0cbe928905d0e6b8380db4ac8498df1d003925f908b312293",
+  "gate_passed": false,
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 6,
+        "results": 12,
+        "unique_fixtures": 12
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 7,
+        "results": 12,
+        "unique_fixtures": 12
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 11,
+    "passed": 13,
+    "results": 24
+  },
+  "violations": {
+    "undeclared_command_or_path": 11
+  },
+  "accepted_documents": 24,
+  "changed_paths": [],
+  "usage": {
+    "actual_prompt_tokens": 381125,
+    "actual_completion_tokens": 49488,
+    "cached_tokens": 0,
+    "reasoning_tokens": 20268,
+    "turns": 139,
+    "tool_calls": 139,
+    "recoverable_failures": 0,
+    "context_budget_failures": 0,
+    "compacted_exchanges": 0,
+    "duration_ms": 1147837
+  },
+  "diagnostic_only": true,
+  "failed_cases": [
+    {
+      "attempt": 1,
+      "fixture": "failing-baseline",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:107eb431c2d2369a8abe42fe340a835bbcb364a79721a87f3aaefc99b1e41659"
+    },
+    {
+      "attempt": 1,
+      "fixture": "documentation-boundary",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:0402daea464c005a72a23943f14e9c4514952105abf3fb346b3d7d2b1624f8fd"
+    },
+    {
+      "attempt": 1,
+      "fixture": "misleading-nearby-code",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:63385647dae079b6860be0c3acf958ed04614df4925b7ea9e660d4723d0e4423"
+    },
+    {
+      "attempt": 1,
+      "fixture": "stale-context-revision",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:3dbb409a3b036fde782839dc7cc90f82e0fb21bbaedfcf0a9ea9ba83775e3305"
+    },
+    {
+      "attempt": 1,
+      "fixture": "multiple-intent-clauses",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:fe83437ec023af92375f1a4b2212342150b95c115099c413cb631b8b3939d7c0"
+    },
+    {
+      "attempt": 1,
+      "fixture": "path-intersection",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:f8b2566573c60726636c54bfe685fa195b9b68cf97dafc45daa664be3a1fbe5e"
+    },
+    {
+      "attempt": 2,
+      "fixture": "acceptance-boundary",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:ae392586172cf4e98f5b0806f04d31bceddd1ed5c96a3bacd9497935f844ad6f"
+    },
+    {
+      "attempt": 2,
+      "fixture": "failing-baseline",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:2b445447379dd108a9f5bdf760be5dfa3ae9fd661d68942ea673768d8d501755"
+    },
+    {
+      "attempt": 2,
+      "fixture": "ambiguous-intent",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:89b883e87b9bf762525235e1946d61486d26a7e6077fe37e7313238b20b3bbce"
+    },
+    {
+      "attempt": 2,
+      "fixture": "misleading-nearby-code",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:d60592a5040ed5fde9ca2d4921dcd82d7d04e200e0a8461587c415c57e5ca4ad"
+    },
+    {
+      "attempt": 2,
+      "fixture": "stale-context-revision",
+      "violations": [
+        "undeclared_command_or_path"
+      ],
+      "document_hash": "sha256:ba9689681842b59b28fdd9ad9ceb43fd9392155f49fc79248acb5666ee2b2887"
+    }
+  ]
+}

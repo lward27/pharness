@@ -276,6 +276,7 @@ fn apply_backend_policy(
     target: &InferenceTargetRevision,
     policy: &StageInferencePolicyRevision,
 ) -> Result<(), GatewayError> {
+    pharness_openai_compatible::preserve_minimax_system_context(request, target.backend_kind);
     let effort = policy
         .reasoning
         .effort
@@ -661,6 +662,32 @@ mod tests {
         target.config_hash = String::new();
         target.config_hash = target.computed_hash().unwrap();
         target
+    }
+
+    #[test]
+    fn backend_translation_preserves_minimax_context_for_older_and_updated_workers() {
+        let mut target = fireworks_target();
+        target.upstream_model = "accounts/fireworks/models/minimax-m3".into();
+        let policy = policy(&target);
+        let mut request: ChatRequest = serde_json::from_value(serde_json::json!({
+            "model":target.upstream_model,
+            "messages":[
+                {"role":"system","content":"Base instructions"},
+                {"role":"system","content":"Controller discovery rdisc_1"},
+                {"role":"user","content":"Submit"},
+                {"role":"system","content":"Protocol correction: preserve exact discovery"}
+            ],
+            "tools":[],"tool_choice":"auto","parallel_tool_calls":false,
+            "stream":true,"temperature":0.1,"max_tokens":8192
+        }))
+        .unwrap();
+        apply_backend_policy(&mut request, &target, &policy).unwrap();
+        assert_eq!(request.messages.len(), 2);
+        assert_eq!(request.messages[0].content,"Base instructions\n\nController discovery rdisc_1\n\nProtocol correction: preserve exact discovery");
+        assert_eq!(request.messages[1].content, "Submit");
+        let first = request.clone();
+        apply_backend_policy(&mut request, &target, &policy).unwrap();
+        assert_eq!(request, first);
     }
 
     #[test]

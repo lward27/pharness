@@ -2,6 +2,7 @@
 
 mod client;
 mod gateway;
+mod minimax;
 mod stream;
 mod types;
 
@@ -10,6 +11,7 @@ pub use client::{
     OpenAiCompatibleTransportOptions, RetryPolicy,
 };
 pub use gateway::{GatewayClientConfig, GatewayModelClient};
+pub use minimax::preserve_minimax_system_context;
 pub use stream::{AccumulatedToolCall, OpenAiStreamAggregate, SseDecoder, ToolCallAccumulator};
 pub use types::{
     build_chat_request, ChatMessage, ChatRequest, ChatTool, ChoiceDelta, CompletionTokenDetails,

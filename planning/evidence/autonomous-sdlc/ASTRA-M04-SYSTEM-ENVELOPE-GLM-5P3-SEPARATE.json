@@ -1,0 +1,292 @@
+{
+  "model": "accounts/fireworks/models/glm-5p3",
+  "form": "separate",
+  "request": {
+    "model": "accounts/fireworks/models/glm-5p3",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Base instruction: ASTRA_ENVELOPE_SLOT_0_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository instruction: ASTRA_ENVELOPE_SLOT_1_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Execution environment: ASTRA_ENVELOPE_SLOT_2_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Repository map: ASTRA_ENVELOPE_SLOT_3_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Stage instruction: ASTRA_ENVELOPE_SLOT_4_6a459cc7"
+      },
+      {
+        "role": "system",
+        "content": "Controller discovery: ASTRA_ENVELOPE_SLOT_5_6a459cc7"
+      },
+      {
+        "role": "user",
+        "content": "This is a prompt-format diagnostic. Reply OK."
+      }
+    ],
+    "temperature": 0.1,
+    "max_tokens": 32,
+    "stream": false,
+    "echo": true,
+    "raw_output": true
+  },
+  "started_at": "2026-09-06T00:52:46.425658+00:00",
+  "http_status": 200,
+  "response_sha256": "92cb09b810fde56b8121ece8e05ad6e899fa41d8c60e316b0d6f6ee532ecfae2",
+  "top_level_fields": [
+    "id",
+    "object",
+    "created",
+    "model",
+    "choices",
+    "usage"
+  ],
+  "usage": {
+    "prompt_tokens": 136,
+    "total_tokens": 168,
+    "completion_tokens": 32,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 32
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 32
+    }
+  },
+  "strings": [
+    {
+      "path": "/id",
+      "bytes": 41,
+      "sha256": "f25a0353e3e20e7245bd79ba1a3d12b701ea44d1040da529aebdd47928bbddd2",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/object",
+      "bytes": 15,
+      "sha256": "e5ceded10e0255cf48444c9a8e2b7e00c594910381bac03f33cda6f50b53c7fb",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/model",
+      "bytes": 33,
+      "sha256": "0791e0da0d1889d68681d85617d9e9a1fbc000954644670555a1c3ac84d0a6f0",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/role",
+      "bytes": 9,
+      "sha256": "a39a7ffad4a3013f29da97b84f264337f234c1cf9b3c40c7c30c677a8a18609a",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/content",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/message/reasoning_content",
+      "bytes": 153,
+      "sha256": "c7d439ae6200c64a5af0fd257bc8a7b329a773dba7e2d8c8a858e072d0bc06bd",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/finish_reason",
+      "bytes": 6,
+      "sha256": "0f82aca66af91493b1ff401de5f1f7e3e24e14560df3f6f7e465dbc915b9947d",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/3",
+      "bytes": 21,
+      "sha256": "cc0b81465117fffc2ed337f976740b8edbc781a45bc6dedb122487ad78423fa7",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/5",
+      "bytes": 48,
+      "sha256": "7cf3d691738e30f25e0294ab013bd738b4a374e5cb605a22d18c1691acfa1e15",
+      "marker_positions": [
+        18,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/7",
+      "bytes": 54,
+      "sha256": "f0973648c97a0916e0ba33ac2e74528a40d31e28f37e972e8d9d05ce12ccbfae",
+      "marker_positions": [
+        -1,
+        24,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/9",
+      "bytes": 53,
+      "sha256": "bece2ca75ca0874841375d57327f3be9687458420139acff4c1b3f25c1e89b97",
+      "marker_positions": [
+        -1,
+        -1,
+        23,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/11",
+      "bytes": 46,
+      "sha256": "e299f99152ee087c7be69013f0fe6bfac92b8d3868ee23bea6ba501e0e2c1923",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        16,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/13",
+      "bytes": 49,
+      "sha256": "0612ecab049540baf0eb4a34492eb7b4d46f9e63a15dba23a2811a64b6b8e7af",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        19,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/15",
+      "bytes": 52,
+      "sha256": "e08754858bfa2186ea849fe87cb4e3bca70e35461598397e6d81562e88076ae6",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        22
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/prompt_fragments/17",
+      "bytes": 45,
+      "sha256": "8e41c971dbb1730b3a3f280b9874e17ef971858dc9e5a17c2eb9626fc7559b87",
+      "marker_positions": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/pretok_prompt_fragments",
+      "bytes": 368,
+      "sha256": "a4b8eb5f790d452247bc17cff10835cdc1ade74a4a1aec9dd94f1c118e4c0d7b",
+      "marker_positions": [
+        39,
+        93,
+        146,
+        192,
+        241,
+        293
+      ]
+    },
+    {
+      "path": "/choices/0/raw_output/completion",
+      "bytes": 631,
+      "sha256": "e41d1cae61104d456fcdd28093e3e89fd35f0636faac0d6be415dc998cb1a1f4",
+      "marker_positions": [
+        71,
+        135,
+        198,
+        254,
+        313,
+        375
+      ]
+    }
+  ],
+  "elapsed_seconds": 8.014,
+  "qualification_accepted": false
+}

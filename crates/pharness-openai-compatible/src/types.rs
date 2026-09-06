@@ -81,7 +81,7 @@ pub fn build_chat_request(
         None
     };
 
-    ChatRequest {
+    let mut wire = ChatRequest {
         model: model.into(),
         messages: request
             .messages
@@ -119,7 +119,9 @@ pub fn build_chat_request(
         reasoning_history,
         reasoning,
         provider,
-    }
+    };
+    crate::preserve_minimax_system_context(&mut wire, backend);
+    wire
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -420,6 +422,40 @@ mod tests {
             max_tokens: 8_192,
             reasoning: None,
         }
+    }
+
+    #[test]
+    fn direct_and_gateway_wire_builder_preserve_minimax_controller_context() {
+        let mut original = request();
+        original.messages = vec![
+            ModelMessage::system("Base stage rules"),
+            ModelMessage::system("Controller discovery: rdisc_current"),
+            ModelMessage::user("Submit the proposal"),
+            ModelMessage::system("Controller checkpoint: discovery is unchanged"),
+        ];
+        let mut wire = build_chat_request(
+            InferenceBackendKind::Fireworks,
+            "accounts/fireworks/models/minimax-m3",
+            original.clone(),
+            &policy(),
+            true,
+            None,
+        );
+        assert_eq!(wire.messages.len(), 2);
+        assert_eq!(wire.messages[0].content,
+            "Base stage rules\n\nController discovery: rdisc_current\n\nController checkpoint: discovery is unchanged");
+        assert_eq!(wire.messages[1].role, "user");
+        assert_eq!(original.messages.len(), 4);
+        // GatewayModelClient substitutes the alias only after this shared wire
+        // builder, then hashes this exact JSON value for its single-use grant.
+        wire.model = "fireworks-minimax-m3@v1".into();
+        let granted = serde_json::to_value(&wire).unwrap();
+        let received: serde_json::Value =
+            serde_json::from_slice(&serde_json::to_vec(&granted).unwrap()).unwrap();
+        assert_eq!(
+            pharness_core::canonical_json_sha256(&granted).unwrap(),
+            pharness_core::canonical_json_sha256(&received).unwrap()
+        );
     }
 
     #[test]

@@ -1,0 +1,59 @@
+{
+  "observed_at": "2026-09-06T01:04:13.103107+00:00",
+  "runtime_revision": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "evaluation_id": "infeval_01a073fe89947b33a1e8d1a24b7dc200",
+  "qualification_id": "inferqual_01a0742a3c327a23882ff985877ba392",
+  "report_hash": "sha256:0f32972e71c81a2381196fba63d72e25cc55269f54a3204df5766652c73dfd1d",
+  "raw_file_sha256": "4f586a51acc22d8785be975826811debc6594c6a99cd3c84e1c551858a223a59",
+  "stage_gate": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 0,
+        "results": 12,
+        "unique_fixtures": 12
+      },
+      {
+        "attempt": 2,
+        "complete": true,
+        "expected_results": 12,
+        "passed": 0,
+        "results": 12,
+        "unique_fixtures": 12
+      }
+    ],
+    "false_approvals": 0,
+    "false_rejections": 0,
+    "infrastructure_valid": true,
+    "other_quality_failures": 24,
+    "passed": 0,
+    "results": 24
+  },
+  "accepted_submissions": 0,
+  "submission_attempts": 79,
+  "terminal_reasons": {
+    "soft_budget_exhaustion": 9,
+    "missing_action": 7,
+    "tool_recovery_exhausted": 8
+  },
+  "usage": {
+    "actual_prompt_tokens": 1716688,
+    "actual_completion_tokens": 251737,
+    "cached_tokens": 1398159,
+    "reasoning_tokens": 157098,
+    "turns": 329,
+    "recoverable_failures": 71,
+    "duration_ms": 2631259,
+    "compacted_exchanges": 0,
+    "context_budget_failures": 0
+  },
+  "changed_paths": [],
+  "reported_violation_codes": {
+    "typed_submission_missing": 24
+  },
+  "last_validation_error_all_cases": "repository onboarding proposal does not match its controller-bound discovery",
+  "missing_evidence": "Rejected arguments and individual discovery ID/hash mismatch fields are not retained. Accepted-submission capture correctly reports no document.",
+  "qualification_accepted": false
+}
