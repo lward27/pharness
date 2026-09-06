@@ -74,6 +74,12 @@ These newer slices require a future compatible API/worker release. Neither the l
 native proof nor the controller fixtures constitute an autonomous staging delivery.
 
 
+The [durable candidate controller](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-CANDIDATE-VERIFICATION.md)
+now links the original baseline admission and GitOps receipt to exact candidate
+identity and one five-minute native runtime window. All 299 API/admin checks pass,
+including 22 staging cases. It remains unreleased. Passed staging leaves the WorkItem
+open; M09 production authority and real autonomous staging acceptance remain required.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.

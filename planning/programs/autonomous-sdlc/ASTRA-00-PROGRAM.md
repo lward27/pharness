@@ -17,6 +17,11 @@ revalidation and expiry enforced by the writer. It remains unreleased and does n
 close autonomous staging, production or Finance acceptance. Its v1alpha2 staging
 authority requires a newer compatible writer before any such authority is enabled.
 
+The [durable candidate controller](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-CANDIDATE-VERIFICATION.md)
+passes 299 API/admin checks, including 22 staging cases, and retains original
+baseline/commit/window evidence across interruptions. It is not deployed. Staging
+success remains separate from production authority and WorkItem completion.
+
 ## Product promise and authority
 
 Retire Repo Mode as a separate product experience while preserving its discovery,
@@ -75,7 +80,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; automatic source delivery and acceptance open | M04 and M06. |
-| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Basic Tempo, schema-54 records and staging foundation deployed; native Finance readers and durable baseline admission validated but unreleased; current-source staging baseline passes; autonomous candidate verification and older production baseline remain open | M07 and usable M02 staging bindings. |
+| M08 | [Staging and runtime verification](ASTRA-08-STAGING-AND-RUNTIME-VERIFICATION.md) | Baseline/current-source live observations pass; finite native readers, baseline admission and durable candidate controller locally validated; integrated release and autonomous staging acceptance open | M07 and usable M02 staging bindings. |
 | M09 | [Production approval and bounded rollback](ASTRA-09-PRODUCTION-PROMOTION-AND-ROLLBACK.md) | planned | M08. |
 | M10 | [Console convergence and polish](ASTRA-10-CONSOLE-CONVERGENCE-AND-POLISH.md) | initial corrections and PR 337 list consistency deployed; delivery-dependent states and acceptance gates open | May begin after M05; closes against M09 behavior. |
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
