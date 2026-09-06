@@ -133,6 +133,8 @@ created by those types or by infrastructure health.
 
 Current evidence entry points:
 
+- [M08 integration with M04A–D](../../evidence/autonomous-sdlc/ASTRA-M08-M04-PROCESS-INTEGRATION.md): 816 workspace checks and unchanged finite observer roles on `718d412`; draft only, with release and autonomous acceptance open.
+
 - [M02 platform acceptance](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md): supported certificate controller, trusted TLS and isolated staging; the [desktop BuildKit return](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md) restores the verified native AMD64 path.
 - [M03 integrity acceptance](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md): evidence normalization and architecture checks.
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
