@@ -59,9 +59,11 @@ The [build entry point](scripts/pharness-build.sh) requires an explicit builder;
 and all seven digests. It validates a separate clean GitOps release change.
 The scripts do not replace merge authorization or live release verification.
 
-For this program, local builds use the selected Rancher Desktop builder and
-its uncached Linux AMD64 execution check. A digest identifies an artifact;
-it is not by itself an SBOM, signature, or vulnerability attestation.
+Program builds currently use the restored `lucas-desktop` BuildKit service;
+the [return-to-service evidence](planning/evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md)
+records the cluster endpoint and uncached AMD64 checks. Local builds require
+explicit selection and verification of the Rancher Desktop builder. A digest
+identifies an artifact; it is not by itself an SBOM, signature, or vulnerability attestation.
 
 ## Reliability and roadmap
 

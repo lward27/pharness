@@ -178,3 +178,68 @@ fn inconclusive(mut evidence: Value, reason: &str) -> ToolResult {
     evidence["reasons"] = json!([reason]);
     ToolResult::ok("Finance health-trace correlation is inconclusive", evidence)
 }
+
+pub(super) fn collected_trace_passes(
+    expected: &FinanceDeploymentExpectation,
+    window: &FinanceRuntimeWindow,
+    probes: &Value,
+    trace: &Value,
+) -> bool {
+    if expected.application == FinanceApplication::Frontend {
+        return trace["trace_state"] == "not_instrumented"
+            && trace["limits"]["requests"] == 0
+            && trace["trace"].is_null()
+            && trace["trace_id"].is_null()
+            && trace["parent_span_id"].is_null()
+            && trace["receipt"].is_null()
+            && trace["trace_image_identity_verified"] == false
+            && trace["reasons"]
+                == json!(["frontend_binding_has_no_application_trace_requirement"]);
+    }
+    let Ok(health) = HealthRequest::from_probes(expected, window, probes) else {
+        return false;
+    };
+    let span = &trace["trace"];
+    trace["trace_state"] == "observed"
+        && trace["trace_image_identity_verified"] == false
+        && trace["reasons"] == json!([])
+        && trace["trace_id"] == health.trace_id
+        && trace["parent_span_id"] == health.parent_span_id
+        && span["trace_id"] == health.trace_id
+        && span["parent_span_id"] == health.parent_span_id
+        && span["service"] == expected.workload()
+        && span["namespace"] == expected.namespace()
+        && span["method"] == "GET"
+        && span["route"] == "/healthz"
+        && span["http_status"] == 200
+        && span["tempo_partial_status"] == "complete"
+        && span["server_span_id"].as_str().is_some_and(|s| {
+            s.len() == 16
+                && s.bytes().all(|b| b.is_ascii_hexdigit())
+                && s.bytes().any(|b| b != b'0')
+        })
+        && span["spans_inspected"]
+            .as_u64()
+            .is_some_and(|n| (1..=64).contains(&n))
+        && span["start_unix_ns"]
+            .as_u64()
+            .zip(span["end_unix_ns"].as_u64())
+            .is_some_and(|(start, end)| {
+                end >= start
+                    && end - start <= 32_000_000_000
+                    && span["duration_ms"].as_f64() == Some((end - start) as f64 / 1_000_000.0)
+                    && start
+                        >= health
+                            .started_ms
+                            .saturating_mul(1_000_000)
+                            .saturating_sub(1_000_000_000)
+                    && end
+                        <= health
+                            .completed_ms
+                            .saturating_mul(1_000_000)
+                            .saturating_add(1_000_000_000)
+            })
+        && trace["receipt"]["path"] == format!("/api/v2/traces/{}", health.trace_id)
+        && trace["receipt"]["query_parameters"]
+            == json!({"start":window.start_unix_seconds,"end":window.end_unix_seconds})
+}

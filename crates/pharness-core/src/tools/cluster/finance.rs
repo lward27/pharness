@@ -4,11 +4,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod assessment;
 mod identity;
 mod kubernetes;
 mod probes;
 mod signals;
 mod traces;
+pub use assessment::{FinanceRuntimeEvidence, FinanceVerificationPhase};
 pub use signals::FinanceRuntimeWindow;
 #[cfg(test)]
 mod tests;

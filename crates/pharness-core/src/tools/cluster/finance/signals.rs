@@ -20,6 +20,19 @@ pub struct FinanceRuntimeWindow {
     pub end_unix_seconds: u64,
 }
 
+pub(super) fn query_bindings(
+    expected: &FinanceDeploymentExpectation,
+    window: &FinanceRuntimeWindow,
+    before: &Value,
+    after: &Value,
+    now_ms: u64,
+) -> Result<Vec<Value>, &'static str> {
+    let context = window::Context::validate(expected, window, before, after, now_ms)?;
+    Ok(query::build(expected, window, &context).into_iter().map(|q| {
+        json!({"name":q.name,"source":q.source,"query":q.expression,"parameters":q.parameters})
+    }).collect())
+}
+
 impl FinanceRuntimeWindow {
     /// Start on the next 30-second query grid boundary after the native identity
     /// observation. Loki aligns range queries to this grid; rounding an existing
