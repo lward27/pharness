@@ -1,0 +1,19 @@
+{
+  "reviewed_at": "2026-09-06T11:02:15.002871+00:00",
+  "source_revision": "04dbaeab51d9de939f0743d587c3aa3d10c21a8f",
+  "source_sha256": {
+    "crates/pharness-runhost/src/prompt.rs": "21abc9fefa6b5d4a25628d27012c4577903c326087410122f5d8bdc01db9a4ed",
+    "crates/pharness-runhost/src/lib.rs": "80a9527dd8785539d570ddf17b22edb509cdfeb9ab5659cfdb6351379b0ce845",
+    "crates/pharness-eval/src/stage_suites.rs": "101778a92f5922b0302e158cc7dc6ef3bc9358b1ad5327410f4adb9b23a45bf6",
+    "crates/pharness-eval/src/stage_suites/integrity.rs": "4995a469f7770d8cd66facc864ae8e0cf8ff28dbc18282d454cac5b8425bb88d",
+    "crates/pharness-eval/src/stage_suites/integrity/planner_boundary.rs": "eae236358ff97e4aff6227ccd31121b652b3de09a1bd8d626334ed6668e054e6",
+    "deploy/helm/pharness/files/inference-registry.json": "6e0cf3931713c0b42e1f47a15223809a6fbda5623f91aa46806f90b092f90547",
+    "crates/pharness-api/src/app/hosted_workflow.rs": "5f47e4659798cce71d6c6f0ed3f92d3b6eaa808b00beb4dacfeb40b8aeccbd42"
+  },
+  "review_artifact": "ASTRA-M04-PROCESS-REASSESSMENT.md",
+  "review_sha256": "eb18e862998e01a20fb971d5fa194668b6bbbf5665e2e0346120b8d26886b58b",
+  "method": "Read source and retained execution evidence; no new model experiment or rescore.",
+  "code_changed": false,
+  "thresholds_budgets_models_changed": false,
+  "recommendations_implemented": false
+}
