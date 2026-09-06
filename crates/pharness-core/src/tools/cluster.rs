@@ -13,7 +13,8 @@ use tokio::time::timeout;
 mod finance;
 mod tempo;
 pub use finance::{
-    FinanceApplication, FinanceDeploymentExpectation, FinanceEnvironment, FinanceRuntimeWindow,
+    FinanceApplication, FinanceDeploymentExpectation, FinanceEnvironment, FinanceRuntimeEvidence,
+    FinanceRuntimeWindow, FinanceVerificationPhase,
 };
 pub use tempo::FinanceTraceWindow;
 
