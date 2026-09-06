@@ -1,0 +1,10 @@
+    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-core)
+    Checking pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-openai-compatible)
+    Checking pharness-store v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-store)
+    Checking pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-fireworks)
+    Checking pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-runhost)
+    Checking pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-config)
+    Checking pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-codex-host)
+    Checking pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-eval)
+    Checking pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m04-diagnostic-canaries/crates/pharness-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 38.81s
