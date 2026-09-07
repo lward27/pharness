@@ -590,7 +590,11 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                                     "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}
                                 }
                             },
-                            "writable_paths":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"string","minLength":1}},
+                            "writable_paths":{
+                                "description":"Future development write scope derived from discovery and existing constraints, not this onboarding Run's allowed_source_changes. Each expression is an exact repository-relative file (for example lib/handler.py) or an explicit recursive subtree (lib/**). Only a final /** grants descendant writes; lib or lib/ does not. Use canonical paths without trailing/repeated separators or . or .. components. Never silently expand exact-file authority.",
+                                "type":"array","minItems":1,"maxItems":100,
+                                "items":{"type":"string","minLength":1,"maxLength":256}
+                            },
                             "acceptance_commands":{
                                 "type":"array","minItems":1,"maxItems":50,
                                 "items":{

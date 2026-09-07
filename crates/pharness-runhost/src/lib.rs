@@ -2469,6 +2469,42 @@ mod workspace_source_tests {
             Err(ToolError::OutsideWorkspace { path }) if path == "rust-toolchain.toml"
         ));
         assert!(!root.join("rust-toolchain.toml").exists());
+
+        // Exercise the real write boundary, including exact-file grants. A subtree
+        // does not include a sibling with the same prefix or a parent traversal.
+        std::fs::create_dir_all(root.join("src/nested")).unwrap();
+        for (patterns, path, permitted) in [
+            (vec!["src/**"], "src/nested/module.rs", true),
+            (vec!["src/**"], "src-other/module.rs", false),
+            (vec!["src/**"], "src/../outside.rs", false),
+            (vec!["src/lib.rs"], "src/lib.rs", true),
+            (vec!["src/lib.rs"], "src/other.rs", false),
+            (vec!["src"], "src/other.rs", false),
+            (vec!["src/"], "src/other.rs", false),
+        ] {
+            let scoped = project_tools(&root, &patterns);
+            let result = scoped
+                .execute(&AgentAction::WriteFile {
+                    id: ActionId::new("write_scope_boundary"),
+                    reason: "exercise declared path authority".into(),
+                    path: path.into(),
+                    content: "// scoped write\n".into(),
+                })
+                .await;
+            if permitted {
+                result.unwrap();
+                assert_eq!(
+                    std::fs::read_to_string(root.join(path)).unwrap(),
+                    "// scoped write\n"
+                );
+            } else {
+                assert!(
+                    matches!(result, Err(ToolError::OutsideWorkspace { .. })),
+                    "{patterns:?}: {path}"
+                );
+                assert!(!root.join(path).exists());
+            }
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 

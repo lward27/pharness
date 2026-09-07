@@ -1,0 +1,27 @@
+{
+  "constrained_tool_schema_hash": "sha256:8414f1776f825424c914bb8dae2a116183f15d2606d03dd87244687da20e8c89",
+  "qualification": false,
+  "stage_prompt": {
+    "content_hash": "sha256:ca16979eb040d3a85c893ea9cdc43728b49c8b60d4cd2f267b3039ac7a78a2c8",
+    "prompt_id": "repo-onboarding-v2",
+    "revision": "2026-09-07.2",
+    "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+    "stage": "onboarding"
+  },
+  "tools": [
+    "read_file",
+    "list_dir",
+    "search_files",
+    "submit_onboarding_proposal"
+  ],
+  "schema_version": 1,
+  "base_revision": "fed4d17dcf84088b9aa7057477b7bc8be51576d1",
+  "method": "Production stage_prompt_for_profile and constrained_tool_schema_hash constructors, using the compiled onboarding profile tool list. Temporary read-only local inspector removed after capture.",
+  "source_files": {
+    "crates/pharness-core/src/project.rs": "sha256:90c975d980c8815d22161bad3648f83e8611fe600f9f283818cfac3f35f054f2",
+    "crates/pharness-runhost/src/lib.rs": "sha256:48656c1a104dfdc6ed50d62e6ec4f765e634812b7c4ee7ba88bb0e8d0edc01c9",
+    "crates/pharness-runhost/src/onboarding_submission.rs": "sha256:d0dc13cc1b3c1a29a6d4cc80e1eb332e63eac407b5bb4aaef0a47b617db047a2",
+    "crates/pharness-runhost/src/onboarding_submission/tests.rs": "sha256:fd48a171c0d2cca3db03819bc8ec19e8437f9417ecb06a75bbdb1d92b1ef6beb",
+    "crates/pharness-runhost/src/prompt.rs": "sha256:19074eaff7d7c89f9f24f411072c3e5be4a039804d99049a09664da263866581"
+  }
+}
