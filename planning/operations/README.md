@@ -6,6 +6,8 @@ and effect boundary before it runs.
 
 ## Playbooks
 
+- [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
+  prepares LM Studio for the existing PHarness gateway and separates initial setup from qualification.
 - [`release-verification-smoke-playbook.md`](runbooks/release-verification-smoke-playbook.md)
   exercises read-only release verification and durable completion evidence.
 - [`tekton-e2e-smoke.md`](runbooks/tekton-e2e-smoke.md) describes the bounded

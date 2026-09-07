@@ -66,7 +66,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–D deployed, live preservation and service checks pass; first small canary failed; inspect native scope evidence; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–D deployed, live preservation and service checks pass; first small canary failed; scope and local gateway corrections prepared; release/canary pending; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
@@ -76,7 +76,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-### Current execution — 2026-09-06
+### Current execution — 2026-09-07
 
 The owner approved the [M04 process reassessment](../../evidence/autonomous-sdlc/ASTRA-M04-PROCESS-REASSESSMENT.md)
 and requested implementation. [M04](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md)
@@ -98,7 +98,11 @@ test ignored). Partial results cannot qualify a policy. The current schema-54
 [Finance database snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
 is verified, and the [real schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves all original columns in all 81 tables. The [complete diagnostic release](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) has seven verified images, a verified native bundle and validated pins.
 The [matching deployment, live data preservation and full internal service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass.
-**Next eligible: inspect the failed source-92 Onboarding diagnostic and its native scope grading, then continue bounded canaries/controls and the connected loop.** Broad
+The [2026-09-07 gateway/local-model preparation and scope analysis](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md)
+identify the Onboarding scope mix-up and prepare a versioned shared prompt correction,
+gateway credential wiring and bounded transport checks. The Windows Minisforum guide
+is available; no local target is enabled and no local model is qualified.
+**Next eligible: release the tested preparation, repeat one `python-contract` canary with the clarified prompt and existing MiniMax policy, then continue bounded controls and the connected loop.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.
@@ -150,7 +154,7 @@ delivery configuration, allowed automatic actions, budgets, mutable source,
 read-only dependencies, and rollback permission. Existing operator projections
 explain current state and one useful action. GET and navigation never dispatch work.
 
-Use additive migrations from the verified current schema (0054 after the observed source-19b0c55 release).
+Use additive migrations from the verified current schema (0055 after the observed source-92f8f1b release).
 Preserve the Finance generation and retention/audit history. Compatible readers
 ship before hosted writes; record the minimum compatible rollback release.
 The M08 cardinality extension records one explicit SQL exception: SQLite requires

@@ -1,0 +1,99 @@
+{
+  "checks": [
+    {
+      "name": "cluster_identity",
+      "observed": {
+        "api_server": "https://192.168.20.192:6443",
+        "context": "lucas_engineering",
+        "profile_hash": "sha256:390d2ec82036988f943991ad4587ca16cdf966dd405c6a8e829322239422253a"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "kubernetes_ready",
+      "observed": "ok",
+      "status": "passed"
+    },
+    {
+      "name": "pipeline:pharness-yfinance-build",
+      "observed": {
+        "name": "pharness-yfinance-build"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "pipeline:pharness-finance-frontend-build",
+      "observed": {
+        "name": "pharness-finance-frontend-build"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "buildkit_endpoint",
+      "observed": {
+        "addresses": [
+          "192.168.50.145"
+        ],
+        "ports": [
+          12340
+        ]
+      },
+      "status": "passed"
+    },
+    {
+      "name": "pharness_gitops_source",
+      "observed": {
+        "health": "Healthy",
+        "path": "deploy/helm/pharness",
+        "revision": "4206a1447744a08e3a2bf6712e0a028479a0fb23",
+        "source": "https://github.com/lward27/pharness.git",
+        "sync": "Synced"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "registry_tls",
+      "observed": {
+        "catalog_access": true,
+        "tls_hostname_verified": "registry.lucas.engineering"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:pharness",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-operator-token"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:source_writer",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-git-writer-token"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:gitops_writer",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-gitops-writer-token"
+      },
+      "status": "passed"
+    }
+  ],
+  "cluster_mutations": [],
+  "completed_at": "2026-09-07T20:52:27.444130+00:00",
+  "context": "lucas_engineering",
+  "limitations": [
+    "Readiness does not prove write permissions, builds, qualification, or application acceptance."
+  ],
+  "observed_at": "2026-09-07T20:52:26.314968+00:00",
+  "schema_version": 1,
+  "status": "passed"
+}

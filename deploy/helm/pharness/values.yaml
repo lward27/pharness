@@ -121,6 +121,12 @@ inferenceGateway:
   fireworksCredential:
     secretName: pharness-fireworks
     secretKey: api-key
+  # Additional bindings used by selectable registry targets. Values are Secret
+  # references, never tokens. Only the gateway mounts these credentials.
+  additionalCredentials: {}
+  # lm-studio-api-key:
+  #   secretName: pharness-lm-studio
+  #   secretKey: api-key
   resources:
     requests:
       cpu: 50m

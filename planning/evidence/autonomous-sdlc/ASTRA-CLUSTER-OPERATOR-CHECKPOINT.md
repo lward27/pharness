@@ -2,6 +2,8 @@
 
 Recorded 2026-09-06. The owner requested helper/skill cleanup before further M04 implementation. This checkpoint does not close M04 or authorize Finance production.
 
+2026-09-07 continuation: [local-model readiness and Onboarding scope analysis](ASTRA-M04-LOCAL-MODEL-READINESS.md) records inspection of the retained failure, the prepared shared prompt/transport corrections, validation and the next release/canary gate. The source-92 observations below remain historical evidence; no new qualification is implied.
+
 ## Maintained entry point
 
 Use `~/.local/bin/lucas-ops` and the [Lucas Engineering operator guide](https://github.com/lward27/lucas_engineering/blob/main/docs/operations/ASTRA-CLUSTER-DEVELOPMENT.md). Infrastructure [PR 58](https://github.com/lward27/lucas_engineering/pull/58) adds the maintained CLI, profile, versioned skills, CI and acceptance evidence. Installed content hash: `59716f40df8ba6169cacee2819c0c37afc8487926363f9305bc594f33da2e7d0`.

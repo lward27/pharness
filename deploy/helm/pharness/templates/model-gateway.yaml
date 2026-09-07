@@ -1,4 +1,13 @@
 {{- if .Values.inferenceGateway.enabled }}
+{{- $credentialFiles := dict "fireworks-api-key" "/var/run/secrets/inference/fireworks-api-key" }}
+{{- range $binding, $secret := .Values.inferenceGateway.additionalCredentials }}
+{{- if or (hasKey $credentialFiles $binding) (not (regexMatch "^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$" $binding)) }}
+{{- fail (printf "invalid or reserved inference credential binding: %s" $binding) }}
+{{- end }}
+{{- $_ := required (printf "secretName required for inference credential %s" $binding) $secret.secretName }}
+{{- $_ := required (printf "secretKey required for inference credential %s" $binding) $secret.secretKey }}
+{{- $_ := set $credentialFiles $binding (printf "/var/run/secrets/inference-extra/%s/key" $binding) }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -63,7 +72,7 @@ spec:
             - name: PHARNESS_MODEL_GRANT_HMAC_FILE
               value: /var/run/secrets/pharness-grant/key
             - name: PHARNESS_INFERENCE_CREDENTIAL_FILES
-              value: '{"fireworks-api-key":"/var/run/secrets/inference/fireworks-api-key"}'
+              value: {{ $credentialFiles | toJson | quote }}
             - name: HTTPS_PROXY
               value: "http://pharness-coding-egress-proxy.{{ .Release.Namespace }}.svc.cluster.local:8080"
             - name: https_proxy
@@ -78,6 +87,11 @@ spec:
             - name: fireworks-key
               mountPath: /var/run/secrets/inference
               readOnly: true
+            {{- range $binding, $secret := .Values.inferenceGateway.additionalCredentials }}
+            - name: inference-{{ $binding }}
+              mountPath: /var/run/secrets/inference-extra/{{ $binding }}
+              readOnly: true
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -111,6 +125,14 @@ spec:
             items:
               - key: {{ .Values.inferenceGateway.fireworksCredential.secretKey }}
                 path: fireworks-api-key
+        {{- range $binding, $secret := .Values.inferenceGateway.additionalCredentials }}
+        - name: inference-{{ $binding }}
+          secret:
+            secretName: {{ $secret.secretName | quote }}
+            items:
+              - key: {{ $secret.secretKey | quote }}
+                path: key
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
