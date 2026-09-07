@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-09-07T22:47:09.539282+00:00",
+  "source_revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+  "owner_confirmation": "lucas-desktop is powered off; M1 Mac build authority persists",
+  "docker_context": "rancher-desktop",
+  "buildx_builder": "pharness-mac",
+  "endpoint": "tcp://127.0.0.1:12344",
+  "container_id": "45b998f8dc6a070a3dc73326fc28ad8b21d8679f5c30c044a0078b3577236a78",
+  "container_image_id": "sha256:59795d5a98a9e12ddf49567fcd1976a30f2d2a60ef469c2f9cedb9e5e3251b25",
+  "container_resources": {
+    "memory_bytes": 6442450944,
+    "nano_cpus": 4000000000
+  },
+  "vm_resources": {
+    "memory_gib": 8,
+    "cpus": 4,
+    "disk_gib": 160
+  },
+  "emulator_selection": "Existing VM binfmt Rosetta; retained bundled QEMU renamed .disabled-rosetta in this local container only",
+  "network": "Existing mTLS BuildKit connection and private registry NodePort route; canonical hostname and private CA verification retained",
+  "workflow_limits_changed": false,
+  "cluster_configuration_changed": false,
+  "evidence_files": {
+    "rust_execution_probe": "0af500187230905f3806655f39c3caed97d56267faeed61807c839b31f9b5c3a",
+    "service_collector": "cd34dc2694641ce8d60ab306594ae5d6d987e0b29ed7b19fa2c15e9207766d2a",
+    "baseline_window": "b527d83b61accfa6328dfb1442efc495ee518a8d9279ec0a681621fcb71e0330"
+  }
+}

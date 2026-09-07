@@ -1,0 +1,69 @@
+{
+  "images": {
+    "codex-host": {
+      "config_digest": "sha256:22f004926dd7d7a143aa3c418fd65c8d1a12f9fe325ef5f56d99d36ec901aa18",
+      "digest": "sha256:5a1a2925387bf32961faac2caa7a36173e1b6148535609a82545362dbf41707b",
+      "platform": "linux/amd64",
+      "repository": "pharness-codex-host",
+      "source_verified": true
+    },
+    "eval-runner": {
+      "config_digest": "sha256:9836f7ed12a916c1ddb76f75f20f0e17b5ab8c05268e639ff0774e9be8ee2844",
+      "digest": "sha256:44c765848067eb546eeebca53492853a0615f6709f4aa1747a6906b945b9363a",
+      "platform": "linux/amd64",
+      "repository": "pharness-eval-runner",
+      "source_verified": true
+    },
+    "model-gateway": {
+      "config_digest": "sha256:d390d5eb4981b55c14c3bea6b76e98408c8e2d7c84429352ec4af5d3e94810e3",
+      "digest": "sha256:b3d69905fa9dba5b9bc7d45ce7ad0ec3087785df6cfe0444b6720a94f0bd1680",
+      "platform": "linux/amd64",
+      "repository": "pharness-model-gateway",
+      "source_verified": true
+    },
+    "node-runner": {
+      "config_digest": "sha256:6f1b80ad5e0df11cabdd65082f3da45de8975702fe3b0f0d2fed0f34952bd5a6",
+      "digest": "sha256:a3bd3bacfaefd872f488928f759bebac4c743b81426d51591d91a4611c010060",
+      "platform": "linux/amd64",
+      "repository": "pharness-node-runner",
+      "source_verified": true
+    },
+    "python-runner": {
+      "config_digest": "sha256:75b5dca0dae465ec4914b957ec251e49c0df53b63c1294f40cc841e71121e9bb",
+      "digest": "sha256:c4b6a573a8175dc07351028f714a4302f37e3f4cddabdddb72d7137f29f73819",
+      "platform": "linux/amd64",
+      "repository": "pharness-python-runner",
+      "source_verified": true
+    },
+    "runtime": {
+      "config_digest": "sha256:a13ac8572b0476a15094eadea56a734c82c9e5a948073eb73ed88844783bf461",
+      "digest": "sha256:301df21039be58ff4e0f6f3c3facfb795ca8ee825ff21b74c047a4cbcfaae050",
+      "platform": "linux/amd64",
+      "repository": "pharness-runtime",
+      "source_verified": true
+    },
+    "ui": {
+      "config_digest": "sha256:5e3655a3eb2c82174157f607289505718469b23852565e434beacf3a3493b762",
+      "digest": "sha256:872d539ff817a9ca125809758d91346c9bdf0daa8632d1bffd85e0f11f8b5769",
+      "platform": "linux/amd64",
+      "repository": "pharness-ui",
+      "source_verified": true
+    }
+  },
+  "layer_contents_verified": false,
+  "limitations": [
+    "This check does not prove build test results, native bundle internal contents, GitOps reconciliation, or runtime acceptance."
+  ],
+  "native_bundle": {
+    "digest": "sha256:8b7ec3ba8648c2d57f2c60bcb33a6c4db8b5fd58c374121a4b20e07cbab3b3c3",
+    "path": "/Users/wardl/Personal/apps/pharness-release-artifacts/81edd9e81d280b0eda866b719c86562b3ff2f02c/native/pharness-codex-host-81edd9e81d280b0eda866b719c86562b3ff2f02c-linux-amd64.tar.gz",
+    "size_bytes": 231636102
+  },
+  "observed_at": "2026-09-07T23:02:04.370127+00:00",
+  "provenance_attestation_verified": false,
+  "sbom_verified": false,
+  "schema_version": 1,
+  "signature_verified": false,
+  "source_revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+  "status": "verified_artifacts"
+}
