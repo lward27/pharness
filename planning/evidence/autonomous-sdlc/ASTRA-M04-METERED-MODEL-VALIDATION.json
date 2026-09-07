@@ -1,0 +1,66 @@
+{
+  "recorded_at": "2026-09-07T22:22:39.299870+00:00",
+  "source_base": "bf2287e80664db84718da66b896b861c7ae9bfcb",
+  "checks": [
+    {
+      "check": "component tests",
+      "outcome": "passed",
+      "log_sha256": "3c33f8db21e63dc24f7ff234f164f964443c2f75f614385566f30139b514c7ba",
+      "summary": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.69s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "Clippy",
+      "outcome": "passed",
+      "log_sha256": "cb5beafab8c23ed038ba50a3b506e668c87152ed78c858971594bcaa6ec54b6d",
+      "summary": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.15s"
+      ]
+    },
+    {
+      "check": "architecture checks",
+      "outcome": "passed",
+      "log_sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3",
+      "summary": [
+        "Ran 5 tests in 0.004s",
+        "app module boundaries are valid"
+      ]
+    },
+    {
+      "check": "uncached private-builder AMD64 Rust compile and execution",
+      "outcome": "passed",
+      "log_sha256": "0af500187230905f3806655f39c3caed97d56267faeed61807c839b31f9b5c3a",
+      "summary": [
+        "#6 [3/3] RUN test \"$(uname -m)\" = x86_64 && test \"$(id -u)\" = 65532 && cargo --version && rustc --version && printf 'fn main() { println!(\"amd64-executed\"); }\\n' > /tmp/probe.rs && rustc /tmp/probe.rs -o /tmp/probe && /tmp/probe",
+        "#6 0.284 cargo 1.98.0 (797e8a9bc 2026-08-05)",
+        "#6 0.446 rustc 1.98.0 (88d9e12ae 2026-08-18)",
+        "#6 1.425 amd64-executed",
+        "#6 DONE 1.4s"
+      ]
+    }
+  ],
+  "source_hashes": {
+    "crates/pharness-openai-compatible/src/client.rs": "46c17b479ef16d45953b2f3532706b2838281d04d69be2cc0eca91cbed6a811f",
+    "crates/pharness-openai-compatible/src/gateway.rs": "73c0395230b2d45199c5b003cd7b292709b52a0f451a0228a9e357b57187b08e",
+    "deploy/docker/Dockerfile.codex-host": "0a7da80b19876add0c5fbb4b0729513e0c0f36df0f5a2ecede2d3d31d7c5a6ef",
+    "deploy/docker/Dockerfile.eval-runner": "756b00127fd568440f10442ab1e7215c31991648ecf8644094600be5c1171aba",
+    "deploy/docker/Dockerfile.model-gateway": "037631587ade180ad48e5a7f6c1875ce0e9cd518218bac670898f1fb05195773",
+    "deploy/docker/Dockerfile.node-runner": "2bf578922c54a8d8e0929a9a14fcf0821050505b23e0d9715f45642b2b476b3b",
+    "deploy/docker/Dockerfile.python-runner": "2d06c422ce1a42e8585ed61f380fd38b750cb903681a9a3f19d2f1f8ce7e0d09",
+    "deploy/docker/Dockerfile.runtime": "057d817826f25dc349c3e93ce7704df2c780d4061d914024fc16bff45bcc7f45",
+    "planning/operations/ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md": "092d55a80ebffce865fd08e413679ef84fd04ceea3b1057bdbe0bc09cc73d034"
+  },
+  "initial_test_failure": "The new positive tool-call fixture omitted the required reason field. Corrected the fixture; production action validation was unchanged.",
+  "limits": [
+    "Missing usage is not recorded as zero; the unsupported-capability failure prevents accepting an action or asking for a protocol correction. Consumed upstream tokens remain unknown.",
+    "No local model or coding policy is qualified by these tests.",
+    "Full image and bundle release remains required."
+  ]
+}

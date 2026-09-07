@@ -1,5 +1,5 @@
 use crate::{
-    aggregate_to_model_turn, build_chat_request, OpenAiCompatibleError, OpenAiStreamAggregate,
+    build_chat_request, client::metered_model_turn, OpenAiCompatibleError, OpenAiStreamAggregate,
     SseDecoder, StreamChunk,
 };
 use async_trait::async_trait;
@@ -263,7 +263,7 @@ impl ModelProvider for GatewayModelClient {
             });
         }
         let aggregate = self.complete_gateway_stream(&value, &grant.token).await?;
-        aggregate_to_model_turn(aggregate, mode)
+        metered_model_turn(aggregate, mode)
     }
 
     fn capabilities(&self) -> ModelCapabilities {
