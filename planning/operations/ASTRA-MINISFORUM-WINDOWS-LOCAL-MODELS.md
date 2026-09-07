@@ -81,14 +81,14 @@ try {
         throw 'Expected one structured report_ready tool call.'
     }
     $arguments = $calls[0].function.arguments | ConvertFrom-Json
-    if ($arguments.ready -ne $true) { throw 'Unexpected tool arguments.' }
+    if ($arguments.ready -isnot [bool] -or -not $arguments.ready) { throw 'Unexpected tool arguments.' }
     'Local API and one structured tool call passed. PHarness qualification is still pending.'
 } finally {
     Remove-Variable headers, credential, secret -ErrorAction SilentlyContinue
 }
 ```
 
-This simple test deliberately uses a complete JSON response. PHarness additionally requires streamed tool calls, continuation after tool results, correct context handling and its existing qualification gates. Plain text that resembles a tool call is not sufficient. [LM Studio tool support](https://lmstudio.ai/docs/developer/openai-compat/tools)
+This simple test deliberately uses a complete JSON response. PHarness additionally requires streamed tool calls, continuation after tool results, correct context handling and its existing qualification gates. Plain text that resembles a tool call is not sufficient. Streamed responses must also report nonzero input/output token usage and a consistent total; PHarness must stop before executing an action when that accounting is absent. [LM Studio tool support](https://lmstudio.ai/docs/developer/openai-compat/tools)
 
 ## 4. Connect PHarness and qualify the candidate
 

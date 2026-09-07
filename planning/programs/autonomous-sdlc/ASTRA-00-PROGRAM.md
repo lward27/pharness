@@ -102,7 +102,8 @@ The [2026-09-07 gateway/local-model preparation and scope analysis](../../eviden
 identify the Onboarding scope mix-up and prepare a versioned shared prompt correction,
 gateway credential wiring and bounded transport checks. The Windows Minisforum guide
 is available; no local target is enabled and no local model is qualified.
-**Next eligible: release the tested preparation, repeat one `python-contract` canary with the clarified prompt and existing MiniMax policy, then continue bounded controls and the connected loop.** Broad
+[Accounting correction and Mac build recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) supersede the incomplete first build candidate; no new release is claimed.
+**Next eligible: release the complete accounting-corrected preparation, repeat one `python-contract` canary with the clarified prompt and existing MiniMax policy, then continue bounded controls and the connected loop.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.

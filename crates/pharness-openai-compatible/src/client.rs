@@ -238,7 +238,7 @@ impl ModelProvider for OpenAiCompatibleClient {
             .complete_streaming(self.wire_request(request))
             .await
             .map_err(ProviderError::from)?;
-        aggregate_to_model_turn(aggregate, mode)
+        metered_model_turn(aggregate, mode)
     }
 
     fn capabilities(&self) -> ModelCapabilities {
@@ -248,6 +248,30 @@ impl ModelProvider for OpenAiCompatibleClient {
             json_schema_response_format: self.target.capabilities.json_schema,
         }
     }
+}
+
+// Real transports must establish accounting before returning an executable
+// action. The decoder below also serves isolated protocol fixtures.
+pub(crate) fn metered_model_turn(
+    aggregate: OpenAiStreamAggregate,
+    mode: ToolProtocolMode,
+) -> Result<ModelTurn, ProviderError> {
+    let accounted = aggregate.usage.as_ref().is_some_and(|usage| {
+        usage.prompt_tokens > 0
+            && usage.completion_tokens > 0
+            && usage
+                .prompt_tokens
+                .checked_add(usage.completion_tokens)
+                .is_some_and(|minimum| usage.total_tokens >= minimum)
+    });
+    if !accounted {
+        // This is not a correctable model protocol error: another unmetered
+        // request would compound the unknown consumption.
+        return Err(ProviderError::UnsupportedCapability {
+            capability: "complete, nonzero token usage accounting; no action was accepted".into(),
+        });
+    }
+    aggregate_to_model_turn(aggregate, mode)
 }
 
 pub fn aggregate_to_model_turn(
@@ -592,6 +616,51 @@ mod tests {
         };
         policy.policy_hash = policy.computed_hash().unwrap();
         policy
+    }
+
+    #[test]
+    fn real_responses_require_accounting_before_an_action_can_be_returned() {
+        for usage in [
+            serde_json::Value::Null,
+            serde_json::json!({}),
+            serde_json::json!({"prompt_tokens":0,"completion_tokens":4,"total_tokens":4}),
+            serde_json::json!({"prompt_tokens":3,"completion_tokens":0,"total_tokens":3}),
+            serde_json::json!({"prompt_tokens":3,"completion_tokens":4,"total_tokens":6}),
+            serde_json::json!({"prompt_tokens":u32::MAX,"completion_tokens":1,"total_tokens":u32::MAX}),
+            serde_json::json!({"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}),
+            serde_json::json!({"prompt_tokens":3,"completion_tokens":4,"total_tokens":9}),
+        ] {
+            let mut aggregate = OpenAiStreamAggregate::default();
+            aggregate.push_chunk(serde_json::from_value(serde_json::json!({
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"Cargo.toml\",\"reason\":\"inspect manifest\"}"}}]},"finish_reason":"tool_calls"}],
+                "usage":usage
+            })).unwrap());
+            let valid = matches!(usage["total_tokens"].as_u64(), Some(7 | 9));
+            let result = metered_model_turn(aggregate, ToolProtocolMode::NativeTools);
+            if valid {
+                assert_eq!(
+                    u64::from(result.unwrap().usage.unwrap().total_tokens),
+                    usage["total_tokens"].as_u64().unwrap()
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(ProviderError::UnsupportedCapability { .. })
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn missing_accounting_does_not_request_an_unmetered_protocol_correction() {
+        let aggregate = OpenAiStreamAggregate {
+            content: "not an action".into(),
+            ..OpenAiStreamAggregate::default()
+        };
+        assert!(matches!(
+            metered_model_turn(aggregate, ToolProtocolMode::JsonAction),
+            Err(ProviderError::UnsupportedCapability { .. })
+        ));
     }
 
     #[test]

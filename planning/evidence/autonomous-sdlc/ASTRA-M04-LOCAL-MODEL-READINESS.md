@@ -2,6 +2,8 @@
 
 2026-09-07. Implementation baseline: main `4206a1447744a08e3a2bf6712e0a028479a0fb23`. Prepared in a fresh `codex/astra-local-model-readiness` worktree. Status: implementation and local checks complete; immutable runtime release, real Minisforum connection and live model qualification remain separate gates.
 
+The preparation merged in [PR 374](https://github.com/lward27/pharness/pull/374). Its first release attempt was incomplete; [the accounting correction and Mac build recovery](ASTRA-M04-METERED-MODEL-TURNS.md) supersede that candidate and own the next release gate.
+
 ## What changed
 
 - The gateway deployment accepts additional **Secret references** through `inferenceGateway.additionalCredentials`. It retains the existing Fireworks mapping and mounts each extra credential only in the gateway. Schema/render checks reject reserved bindings, invalid path-like names and incomplete references. Merely adding a credential does not enable a model target or network path.

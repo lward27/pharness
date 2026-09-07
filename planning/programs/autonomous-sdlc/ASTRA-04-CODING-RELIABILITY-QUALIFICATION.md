@@ -11,7 +11,7 @@ Starting main: `04dbaeab51d9de939f0743d587c3aa3d10c21a8f`.
 Deployed runtime: `92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267`, unqualified; [live release and preservation evidence](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md).
 Hosted creation and Coding Reliability V2 remain disabled until the exact-runtime gates pass.
 
-Operator workflow: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). Latest preparation and resume point: [local gateway readiness and Onboarding scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md). The first diagnostic remains failed and unqualified; the shared prompt now distinguishes onboarding configuration permissions from future development scope. The new runtime must be released and tested with one bounded canary. Retired temporary helpers are historical only.
+Operator workflow: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). Latest preparation and resume point: [local gateway readiness and Onboarding scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md). The first diagnostic remains failed and unqualified; the shared prompt now distinguishes onboarding configuration permissions from future development scope. The [accounting correction and Mac builder recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) must be included in a complete runtime release, then tested with one bounded canary. Retired temporary helpers are historical only.
 
 ## Objective and implementation boundaries
 
