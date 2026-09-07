@@ -2,6 +2,51 @@ use super::*;
 use crate::stage_suites::{fixtures, replay_actions, validate_submission};
 use pharness_core::AgentAction;
 
+#[test]
+fn onboarding_configuration_permissions_cannot_replace_future_development_scope() {
+    let fixture = fixtures(SuiteKind::OnboardingV2)
+        .unwrap()
+        .into_iter()
+        .find(|fixture| fixture.id == "python-contract")
+        .unwrap();
+    let mut proposal = replay_actions(SuiteKind::OnboardingV2, &fixture)
+        .unwrap()
+        .into_iter()
+        .find_map(|action| match action {
+            AgentAction::SubmitOnboardingProposal { proposal, .. } => Some(proposal),
+            _ => None,
+        })
+        .unwrap();
+    // The grader receives the controller-bound document, not the agent's
+    // identity-free native tool arguments.
+    proposal["schema_version"] = json!(pharness_core::ONBOARDING_PROPOSAL_SCHEMA);
+    proposal["discovery_id"] = fixture.context["discovery"]["id"].clone();
+    proposal["discovery_hash"] = fixture.context["discovery"]["hash"].clone();
+    assert!(validate_submission(
+        SuiteKind::OnboardingV2,
+        &fixture,
+        Some(&proposal),
+        &[],
+        &mut Vec::new()
+    ));
+    // This is the scope submitted by source-92's failed live canary. Preserve
+    // its rejection; clarify the shared prompt instead of relaxing the grader.
+    proposal["candidate_contract"]["writable_paths"] = json!([
+        ".pharness/repository.yaml",
+        ".pharness/instructions.md",
+        ".pharness/project.yaml"
+    ]);
+    let mut violations = Vec::new();
+    assert!(!validate_submission(
+        SuiteKind::OnboardingV2,
+        &fixture,
+        Some(&proposal),
+        &[],
+        &mut violations
+    ));
+    assert!(violations.contains(&"undeclared_onboarding_write_scope".into()));
+}
+
 fn document(suite: SuiteKind, fixture: &StageFixture) -> Value {
     replay_actions(suite, fixture)
         .unwrap()

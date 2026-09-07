@@ -191,7 +191,7 @@ async fn chat_completions(
     validate_gateway_request(&request, target, policy, &claims)?;
     request.model = target.upstream_model.clone();
     apply_backend_policy(&mut request, target, policy)?;
-    forward_request(&state, target, request).await
+    forward_request(&state, target, policy.transport_max_attempts, request).await
 }
 
 fn resolve_binding<'a>(
@@ -277,6 +277,9 @@ fn apply_backend_policy(
     policy: &StageInferencePolicyRevision,
 ) -> Result<(), GatewayError> {
     pharness_openai_compatible::preserve_minimax_system_context(request, target.backend_kind);
+    if !target.capabilities.stream_options {
+        request.stream_options = None;
+    }
     let effort = policy
         .reasoning
         .effort
@@ -334,6 +337,7 @@ fn apply_backend_policy(
             request.reasoning_effort = effort;
             for message in &mut request.messages {
                 message.reasoning = None;
+                message.reasoning_details = None;
             }
         }
     }
@@ -343,8 +347,15 @@ fn apply_backend_policy(
 async fn forward_request(
     state: &GatewayState,
     target: &InferenceTargetRevision,
+    policy_max_attempts: u32,
     request: ChatRequest,
 ) -> Result<Response, GatewayError> {
+    let max_attempts = policy_max_attempts.min(target.transport.max_attempts);
+    if max_attempts == 0 {
+        return Err(GatewayError::InvalidRequest(
+            "transport attempts must be positive".into(),
+        ));
+    }
     let key = (target.target_id.clone(), target.revision.clone());
     let client = state
         .clients
@@ -372,8 +383,7 @@ async fn forward_request(
         let response = match result {
             Ok(Ok(response)) => response,
             Ok(Err(error))
-                if (error.is_connect() || error.is_timeout())
-                    && attempt < target.transport.max_attempts =>
+                if (error.is_connect() || error.is_timeout()) && attempt < max_attempts =>
             {
                 attempt += 1;
                 continue;
@@ -383,7 +393,7 @@ async fn forward_request(
                     "upstream connection failed".into(),
                 ))
             }
-            Err(_) if attempt < target.transport.max_attempts => {
+            Err(_) if attempt < max_attempts => {
                 attempt += 1;
                 continue;
             }
@@ -398,14 +408,29 @@ async fn forward_request(
             let retryable = status == reqwest::StatusCode::REQUEST_TIMEOUT
                 || status == reqwest::StatusCode::TOO_MANY_REQUESTS
                 || status.is_server_error();
-            if retryable && attempt < target.transport.max_attempts {
+            if retryable && attempt < max_attempts {
                 attempt += 1;
                 continue;
             }
-            let body = response.text().await.unwrap_or_default();
+            let body = bounded_error_body(
+                response,
+                Duration::from_secs(target.transport.stream_idle_timeout_seconds),
+            )
+            .await;
             return Err(GatewayError::Upstream(
                 status,
                 sanitize_upstream_error(&body),
+            ));
+        }
+        let is_event_stream = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(';').next())
+            .is_some_and(|value| value.trim().eq_ignore_ascii_case("text/event-stream"));
+        if !is_event_stream {
+            return Err(GatewayError::Unavailable(
+                "upstream did not return an event stream".into(),
             ));
         }
         let idle_timeout = Duration::from_secs(target.transport.stream_idle_timeout_seconds);
@@ -445,6 +470,26 @@ async fn forward_request(
         return Ok(gateway_response);
     }
 }
+
+async fn bounded_error_body(mut response: reqwest::Response, limit: Duration) -> String {
+    const MAX_ERROR_BYTES: usize = 4096;
+    timeout(limit, async move {
+        let mut bytes = Vec::new();
+        while let Ok(Some(chunk)) = response.chunk().await {
+            let remaining = MAX_ERROR_BYTES - bytes.len();
+            bytes.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+            if bytes.len() == MAX_ERROR_BYTES {
+                break;
+            }
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod local_tests;
 
 async fn claim_nonce(
     state: &GatewayState,
@@ -580,7 +625,7 @@ mod tests {
         INFERENCE_TARGET_SCHEMA, MODEL_GRANT_SCHEMA,
     };
 
-    fn target() -> InferenceTargetRevision {
+    pub(super) fn target() -> InferenceTargetRevision {
         let mut target = InferenceTargetRevision {
             schema_version: INFERENCE_TARGET_SCHEMA.into(),
             target_id: "openrouter-test".into(),
@@ -620,7 +665,7 @@ mod tests {
         target
     }
 
-    fn policy(target: &InferenceTargetRevision) -> StageInferencePolicyRevision {
+    pub(super) fn policy(target: &InferenceTargetRevision) -> StageInferencePolicyRevision {
         let mut policy = StageInferencePolicyRevision {
             schema_version: INFERENCE_POLICY_SCHEMA.into(),
             policy_id: "planner-openrouter".into(),
