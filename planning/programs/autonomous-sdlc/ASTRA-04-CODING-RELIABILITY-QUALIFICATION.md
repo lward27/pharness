@@ -11,7 +11,7 @@ Starting main: `04dbaeab51d9de939f0743d587c3aa3d10c21a8f`.
 Deployed runtime: `92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267`, unqualified; [live release and preservation evidence](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md).
 Hosted creation and Coding Reliability V2 remain disabled until the exact-runtime gates pass.
 
-Operator workflow: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). Latest preparation and resume point: [local gateway readiness and Onboarding scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md). The first diagnostic remains failed and unqualified; the shared prompt now distinguishes onboarding configuration permissions from future development scope. The [accounting correction and Mac builder recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) must be included in a complete runtime release, then tested with one bounded canary. Retired temporary helpers are historical only.
+Operator workflow: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). Latest preparation and resume point: [local gateway readiness and Onboarding scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md). The first diagnostic remains failed and unqualified; the shared prompt now distinguishes onboarding configuration permissions from future development scope. The [complete metered gateway release](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-GATEWAY-RELEASE.md) is deployed and observed. Its canary failed on the [shared writable-path contract gap](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md), which must be corrected before further comparisons. Retired temporary helpers are historical only.
 
 ## Objective and implementation boundaries
 
@@ -82,7 +82,7 @@ are locally validated, with all 48 original scenarios mapped and source/receipt 
 are locally validated on `f0c7afd` (627 passing component tests; one live-only ignored).
 Migration 0055 is additive; old schema-54 readers are proven incompatible with the
 new migration set. A current [schema-54 snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
-is verified, and the [actual schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves every original column in all 81 tables. [All seven images, the native bundle and release pins](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) are verified. The [live compatible reader, preserved data and full service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass. **Next: release the prepared scope/gateway correction and repeat the single `python-contract` canary with the unchanged MiniMax policy before further controls**, then the connected loop. No new broad qualification
+is verified, and the [actual schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves every original column in all 81 tables. [All seven images, the native bundle and release pins](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) are verified. The [live compatible reader, preserved data and full service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass. **Next: implement the [shared writable-scope contract correction](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md), with deterministic authority and feedback checks before a fresh immutable release and one new MiniMax diagnostic**, then the connected loop. No new broad qualification
 or model switch is justified by these local passes.
 
 
@@ -134,9 +134,12 @@ passes; M07–M12 and the two Finance acceptance WorkItems retain their own gate
 
 Read ASTRA-00-PROGRAM.md, this document and ASTRA-M04-PROCESS-REASSESSMENT.md.
 Verify current main, deployed identity and the last retained qualification result.
-Implement the next eligible M04 gate in a fresh codex/ worktree. Start with native
-submission bindings and versioned context delivery; then repair measurement validity,
-run small real-gateway canaries, prove the connected loop, and freeze the exact
+Implement the next eligible M04 gate in a fresh codex/ worktree. The source-81
+checkpoint owns the shared writable-scope contract gap: correct its description
+and early validation without broadening authority, prove deterministic regression
+checks, release, renew the bounded protocol verification if expired, and repeat the
+affected diagnostic. Do not restart already evidenced submission/context work.
+Then run common-input controls, prove the connected loop, and freeze the exact
 release before full qualification. Preserve the 24 coding tasks, all thresholds,
 existing execution budgets, historical failed evidence, independent verification
 and the human production-approval boundary. Do not launch a broad run to diagnose

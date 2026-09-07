@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-09-07T23:21:38.299137+00:00",
+  "operation_id": "astra-m04-81edd9e-onboarding-primary",
+  "state": "reconciled_rejected_before_dispatch",
+  "http_status": 409,
+  "reason": "All passing target protocol verifications have expired; the source-81 API rejects this condition before creating an evaluation. Latest stored policy evaluation remains the old terminal source-92 result.",
+  "latest_evaluation_id": "infeval_01a07730b1e275e096ba85c8afb04d4c",
+  "fresh_passing_verifications": 0,
+  "verifications": [
+    {
+      "id": "inferverify_01a077303e137c6199a8c4e1637c1103",
+      "status": "passed",
+      "expires_at": "1788706945"
+    },
+    {
+      "id": "inferverify_01a073fe12d77ca0965bd35bafd59178",
+      "status": "passed",
+      "expires_at": "1788653325"
+    },
+    {
+      "id": "inferverify_01a07285ed2d76819cfbdb5dfbfb3882",
+      "status": "passed",
+      "expires_at": "1788628674"
+    },
+    {
+      "id": "inferverify_01a07162be5d7ae2a975f57f72681474",
+      "status": "failed",
+      "expires_at": "1788609591"
+    }
+  ],
+  "source_guard": "crates/pharness-api/src/app/inference.rs:create_policy_qualification; fresh_target_verification before new_prefixed_id/create_inference_evaluation",
+  "original_intent_sha256": "61a916ba96fedf778803e276806719c5b0f563225a7fdb928a52e4ebed923885"
+}
