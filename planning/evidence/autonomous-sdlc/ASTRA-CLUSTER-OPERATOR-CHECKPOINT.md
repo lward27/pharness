@@ -4,7 +4,7 @@ Recorded 2026-09-06. The owner requested helper/skill cleanup before further M04
 
 2026-09-07 continuation: [local-model readiness and Onboarding scope analysis](ASTRA-M04-LOCAL-MODEL-READINESS.md) records inspection of the retained failure, the prepared shared prompt/transport corrections, validation and the next release/canary gate. The source-92 observations below remain historical evidence; no new qualification is implied.
 
-Latest continuation: [accounted model turns and Mac build recovery](ASTRA-M04-METERED-MODEL-TURNS.md). PR 374 is merged, but its partial image set is not a release. Build the complete accounting-corrected source before the next canary. lucas-desktop is off; the explicitly selected Mac builder passes a fresh non-root AMD64 Rust compile/execution probe.
+Latest continuation: [the complete metered gateway release](ASTRA-M04-METERED-GATEWAY-RELEASE.md) supersedes the partial build. All seven images and the native bundle are verified; Argo applied the pin and live identities match. The ten-minute observation passed with 21 samples. Protocol renewal passed 30/30; the new canary failed on directory-form writable paths. [The shared contract gap](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) owns the next implementation step. lucas-desktop is off; the Mac builder passed the actual AMD64 runtime checks.
 
 ## Maintained entry point
 
@@ -16,9 +16,11 @@ All 91 inactive one-off temporary ASTRA Python helpers are retained privately at
 
 ## Exact M04 resume point
 
-Compiled source remains `92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267`; observed release pin was `4bf9f0ae73a3ed2ef25e9bca53090e0edecf32f6`. Schema 55 remains compatible only with source 92 or later compatible readers. The native inference registry hash is `sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79`.
+Compiled source is now `81edd9e81d280b0eda866b719c86562b3ff2f02c`; observed release pin is `a8d7efa45ad39536e1eed5a38ae43176d6dc0dc0`. Schema 55 remains compatible only with source 92 or later compatible readers. The native inference registry hash is `sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79`.
 
-The first deployed diagnostic, `infeval_01a07730b1e275e096ba85c8afb04d4c`, is terminal. Its native operation status is `completed`, but the diagnostic **failed**; qualification is null and infrastructure validity is false. It used one primary MiniMax Onboarding `python-contract` case. Protocol calibration passed 30/30. Its detailed result reports `stage_scope_or_coverage: undeclared_onboarding_write_scope`. Preserve the distinction between a completed evaluation and a passing evaluation.
+The latest diagnostic is `infeval_01a07e2e99b77521b39a0cfb7bf42f00` on source 81: completed, failed, no qualification. It proposes src/ and tests/ where explicit recursive patterns are required. Fix shared path semantics and early validation before another model comparison; retain the [native failed result](ASTRA-M04-81EDD9E-ONBOARDING-RESULT.json). The first source-81 launch was rejected before dispatch for expired protocol verification; its intent and reconciliation are retained. No duplicate run was created.
+
+Historical first deployed diagnostic, `infeval_01a07730b1e275e096ba85c8afb04d4c`, is terminal. Its native operation status is `completed`, but the diagnostic **failed**; qualification is null and infrastructure validity is false. It used one primary MiniMax Onboarding `python-contract` case. Protocol calibration passed 30/30. Its detailed result reports `stage_scope_or_coverage: undeclared_onboarding_write_scope`. Preserve the distinction between a completed evaluation and a passing evaluation.
 
 The [recovered native result](ASTRA-M04-92F8F1B-ONBOARDING-PRIMARY-RECOVERED.json) was retrieved after Kubernetes expired Job `pharness-inference-eval-59996a313b7d`; no replacement model run was started. Inspect the retained submission, declared case scope and native grading path before choosing a correction or an exact-input control. Do not infer model incapability from this one classification or start another broad batch. The frozen benchmark thresholds and budgets remain unchanged.
 

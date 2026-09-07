@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-09-07T23:23:44.177690+00:00",
+  "evaluation_id": "infeval_01a07e2e99b77521b39a0cfb7bf42f00",
+  "job_name": "pharness-inference-eval-7647bfb10e4c",
+  "job_uid": "84826732-cc37-4697-b33a-47e3bc680f7b",
+  "image": "registry.lucas.engineering/pharness-eval-runner@sha256:44c765848067eb546eeebca53492853a0615f6709f4aa1747a6906b945b9363a",
+  "node_selector": null,
+  "status": {
+    "active": 1,
+    "ready": 0,
+    "startTime": "2026-09-07T23:22:58Z",
+    "terminating": 0,
+    "uncountedTerminatedPods": {}
+  }
+}

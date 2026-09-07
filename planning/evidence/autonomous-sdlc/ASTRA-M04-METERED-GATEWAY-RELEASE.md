@@ -1,6 +1,6 @@
 # ASTRA M04: Metered gateway release
 
-Compiled source: `81edd9e81d280b0eda866b719c86562b3ff2f02c` (PRs [374](https://github.com/lward27/pharness/pull/374) and [375](https://github.com/lward27/pharness/pull/375)). Status at pin preparation: all artifacts and deployment preflight pass; rollout and live diagnostic pending.
+Compiled source: `81edd9e81d280b0eda866b719c86562b3ff2f02c` (PRs [374](https://github.com/lward27/pharness/pull/374) and [375](https://github.com/lward27/pharness/pull/375)). Released through [PR 376](https://github.com/lward27/pharness/pull/376), GitOps revision `a8d7efa45ad39536e1eed5a38ae43176d6dc0dc0`. Exact live identities and the complete ten-minute service window pass. The subsequent live diagnostic completed and failed; see the [shared writable-scope gap](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md).
 
 The release includes gateway local-server preparation, truthful usage requirements and the clarified Onboarding scope prompt. It enables no local target, default-model change, budget increase, new schema or Finance production approval.
 
@@ -13,3 +13,11 @@ The [Mac builder record](ASTRA-METERED-MAC-BUILDER.json) and [recovery analysis]
 Observe the exact Argo pin revision and Pod image identities after merge, then complete a ten-minute service window. Keep the schema-55 compatible reader floor (`92f8f1b` or a compatible newer release); this release makes no schema change. A rollback, if needed, must be a compatible GitOps pin correction. Do not reset the database or infer that service recovery makes an evaluation pass.
 
 Then run one unchanged-policy MiniMax Onboarding `python-contract` diagnostic through the maintained operator interface and inspect its native result. Preserve failed historical evidence. The next result must not receive a qualification merely because it is a successful diagnostic. Real Minisforum connectivity awaits the owner's Windows setup and exact endpoint/model facts; the [setup guide](../../operations/ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md) is ready.
+
+[Observed deployment identities](ASTRA-METERED-RELEASE-OBSERVED.json) match all five serving Deployments and three serving endpoints. API/UI revision, gateway registry alignment, configured worker/evaluator images and Python/Node runner profiles match. The Finance database generation is unchanged; no store migration files changed from source 92 to this release. The initial auxiliary image selector included the unrelated yfinance delivery binding; its scope was corrected to PHarness without changing deployed configuration.
+
+[The ten-minute service window](ASTRA-METERED-RELEASED-SERVICE-WINDOW.json) passed with 21 console/API samples, stable Pod identities, zero restarts or Pod warnings, fresh availability/restart metrics and required API/UI log delivery. The severe-log query found no matches. Latency and resource usage are retained without claiming an unsupported SLO or application traces. This proves the internal release boundary; M04 coding qualification remains open.
+
+The first new diagnostic launch returned HTTP 409 because the target protocol verification had expired. Native reads and the source guard establish rejection before evaluation creation; the old terminal evaluation remained latest. Its original uncertain intent is retained with a separate reconciliation record. Renew the existing 30-case target protocol check before another launch; do not count an expired verification or infer a model failure from this rejection.
+
+The renewed protocol check passed 30/30, and the single source-81 diagnostic then completed without qualification. Its proposal improved the current-versus-future scope distinction but used directory strings that do not authorize descendant writes. The [next M04 boundary](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) is shared contract semantics and early validation before another model comparison. Release health does not resolve that failure.
