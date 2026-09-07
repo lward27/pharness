@@ -82,7 +82,7 @@ are locally validated, with all 48 original scenarios mapped and source/receipt 
 are locally validated on `f0c7afd` (627 passing component tests; one live-only ignored).
 Migration 0055 is additive; old schema-54 readers are proven incompatible with the
 new migration set. A current [schema-54 snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
-is verified, and the [actual schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves every original column in all 81 tables. [All seven images, the native bundle and release pins](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) are verified. The [live compatible reader, preserved data and full service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass. **Next: implement the [shared writable-scope contract correction](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md), with deterministic authority and feedback checks before a fresh immutable release and one new MiniMax diagnostic**, then the connected loop. No new broad qualification
+is verified, and the [actual schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves every original column in all 81 tables. [All seven images, the native bundle and release pins](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) are verified. The [live compatible reader, preserved data and full service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass. **Next: validate and release the [shared writable-scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CORRECTION.md), then run one new MiniMax diagnostic**, then the connected loop. No new broad qualification
 or model switch is justified by these local passes.
 
 
@@ -135,10 +135,10 @@ passes; M07–M12 and the two Finance acceptance WorkItems retain their own gate
 Read ASTRA-00-PROGRAM.md, this document and ASTRA-M04-PROCESS-REASSESSMENT.md.
 Verify current main, deployed identity and the last retained qualification result.
 Implement the next eligible M04 gate in a fresh codex/ worktree. The source-81
-checkpoint owns the shared writable-scope contract gap: correct its description
-and early validation without broadening authority, prove deterministic regression
-checks, release, renew the bounded protocol verification if expired, and repeat the
-affected diagnostic. Do not restart already evidenced submission/context work.
+checkpoint owns the shared writable-scope contract gap. Its correction is recorded
+in ASTRA-M04-WRITABLE-SCOPE-CORRECTION.md: verify the committed checks, release the
+complete immutable source, renew bounded protocol verification if expired, and
+repeat the affected diagnostic before controls. Do not restart already evidenced submission/context work.
 Then run common-input controls, prove the connected loop, and freeze the exact
 release before full qualification. Preserve the 24 coding tasks, all thresholds,
 existing execution budgets, historical failed evidence, independent verification

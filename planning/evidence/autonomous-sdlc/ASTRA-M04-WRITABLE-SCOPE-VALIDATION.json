@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "test_counts": {
+    "core": 163,
+    "runhost": 45,
+    "evaluator": 48,
+    "api_onboarding": 11,
+    "architecture_checker": 5
+  },
+  "ignored": [
+    "Existing opt-in live Tempo test; unrelated to writable scope."
+  ],
+  "logs": {
+    "/tmp/astra-writable-scope-tests-r2.log": "sha256:f42e4f5e0b48dc067ca0a4c2fcc1fa15fa21eef47f36e66f72805414d7d5fd33",
+    "/tmp/astra-writable-scope-eval-tests.log": "sha256:0c589819134a8df666c260863f747cb609e1170ac1ac5b61180f74426eba2b89",
+    "/tmp/astra-writable-scope-api-tests-r2.log": "sha256:e76ff90162e2c868a7e73d1708258899dc4d0cb2b4d8b8c1908b8dd494957520",
+    "/tmp/astra-writable-scope-clippy-r2.log": "sha256:e346b8213889fd89f5536a12e27d07c43091b8f2a7c148f83ec8a270c761c2c6",
+    "/tmp/astra-writable-scope-architecture.log": "sha256:580a0faacbef04633addefd66aca44a1c8a5b79abe16bba2053ef02a691e2db6"
+  },
+  "local_markdown_links_checked": 77,
+  "qualification": false
+}

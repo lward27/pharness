@@ -574,6 +574,19 @@ fn validate_unique_paths(
     let mut unique = BTreeSet::new();
     for value in values {
         validate_relative_path(value, allow_glob)?;
+        // Writable expressions are matched verbatim, not normalized like Path components.
+        // Never turn an ambiguous directory spelling into recursive write authority.
+        if allow_glob
+            && value
+                .strip_suffix("/**")
+                .unwrap_or(value)
+                .split('/')
+                .any(|component| component.is_empty() || component == ".")
+        {
+            return Err(RepositoryContractError::Invalid(format!(
+                "{label} contains noncanonical path {value:?}; use an exact repository-relative file or an explicit subtree ending in /**, without trailing/repeated separators or . components"
+            )));
+        }
         if !unique.insert(value.as_str()) {
             return Err(RepositoryContractError::Invalid(format!(
                 "{label} contains duplicate path {value}"
@@ -1091,6 +1104,47 @@ package_installation: preparation_only
         assert!(validate_relative_path("src/*.py", true).is_err());
         let root = fixture();
         validate_declared_paths(&root, &["new-tests".to_string()]).unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn writable_expressions_are_validated_without_normalizing_authority() {
+        let root = fixture();
+        let (mut contract, _) = RepositoryContract::load(&root).unwrap();
+        for path in [
+            "src/",
+            "tests/",
+            "src//**",
+            "./src/**",
+            "src/./app.py",
+            ".",
+            "./**",
+        ] {
+            contract.writable_paths = vec![path.into()];
+            let error = contract.validate_candidate().unwrap_err().to_string();
+            assert!(error.contains("noncanonical"), "{path}: {error}");
+            assert!(error.contains("exact repository-relative file"));
+            assert_eq!(contract.writable_paths, [path], "no silent scope expansion");
+        }
+        for path in [
+            "../src/**",
+            "src/../tests/**",
+            "/src/**",
+            "src/*.py",
+            "src\\app.py",
+            ".env",
+        ] {
+            contract.writable_paths = vec![path.into()];
+            assert!(contract.validate_candidate().is_err(), "{path}");
+        }
+        // Extensionless files and spaces remain valid exact paths. Directory roots
+        // are separate discovery facts and do not acquire writable-glob semantics.
+        for path in ["src/app.py", "src/**", "Makefile", "docs/User Guide.md"] {
+            contract.writable_paths = vec![path.into()];
+            contract.roots.source = vec!["src/".into()];
+            contract.validate_candidate().unwrap();
+            assert_eq!(contract.writable_paths, [path]);
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 

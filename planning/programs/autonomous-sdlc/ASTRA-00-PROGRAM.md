@@ -105,7 +105,7 @@ is available; no local target is enabled and no local model is qualified.
 [Accounting correction and Mac build recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) document why the incomplete first candidate was superseded.
 [The complete accounting-corrected release](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-GATEWAY-RELEASE.md) is now deployed from `81edd9e`; live identities match. The ten-minute service window passed with 21 samples.
 The new source-81 diagnostic failed without qualification after a passing 30/30 protocol renewal. It now separates the two permission scopes but submits nonrecursive directory strings. [The shared writable-scope contract gap](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) records the evidence and exact implementation boundary.
-**Next eligible: correct the shared writable-path description and early validation, prove deterministic authority checks, release, renew protocol verification if expired, then repeat one bounded diagnostic before controls.** Broad
+**Next eligible: validate and release the [shared writable-scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CORRECTION.md), renew protocol verification if expired, then repeat one bounded diagnostic before controls.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.

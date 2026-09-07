@@ -57,6 +57,48 @@ fn legacy_proposal(blocked: bool) -> Value {
 }
 
 #[tokio::test]
+async fn native_submission_rejects_ambiguous_scope_and_accepts_explicit_revision() {
+    let run = run(true);
+    let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
+    let mut proposal = semantic_proposal(false);
+    proposal["candidate_contract"]["writable_paths"] = json!(["src/", "tests/", "README.md"]);
+    let before = proposal.clone();
+    let error = tools
+        .execute(&AgentAction::SubmitOnboardingProposal {
+            id: "act_ambiguous_scope".into(),
+            reason: "propose discovered scope".into(),
+            proposal: proposal.clone(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, ToolError::InvalidArguments { ref message }
+        if message.contains("writable_paths") && message.contains("noncanonical")
+        && message.contains("/**")));
+    assert_eq!(proposal, before);
+
+    // Reading a historical document is still possible; it cannot authorize new work.
+    let mut historical = legacy_proposal(false);
+    historical["candidate_contract"] = proposal["candidate_contract"].clone();
+    let retained: RepositoryOnboardingProposal = serde_json::from_value(historical).unwrap();
+    assert!(retained.approvable_contract().is_err());
+    assert_eq!(retained.candidate_contract, before["candidate_contract"]);
+
+    proposal["candidate_contract"]["writable_paths"] = json!(["src/**", "tests/**", "README.md"]);
+    let result = tools
+        .execute(&AgentAction::SubmitOnboardingProposal {
+            id: "act_explicit_scope".into(),
+            reason: "explicitly propose recursive scope".into(),
+            proposal: proposal.clone(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        result.content["document"]["candidate_contract"],
+        proposal["candidate_contract"]
+    );
+}
+
+#[tokio::test]
 async fn native_tool_binds_ready_and_blocked_proposals_without_changing_semantics() {
     let run = run(true);
     let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();

@@ -146,7 +146,8 @@ including:
 - Immutable dependency input and lock identity.
 - Named deterministic acceptance commands.
 - Source, test, and documentation roots.
-- Normalized writable paths.
+- Canonical writable expressions: exact repository-relative files or explicit
+  recursive subtrees ending in `/**`.
 - Network and dependency-preparation policy.
 - Other bounded execution policy that affects what an AgentRun may do.
 
@@ -154,6 +155,16 @@ The Product model remains the initial authority for Product, Service,
 Environment, and RepositoryBinding relationships. The onboarding proposal may
 suggest those mappings, but the Repository contract does not become a second
 Product database.
+
+Writable expressions are matched as submitted. For example, `lib/handler.py`
+permits that file only, while `lib/**` permits descendants recursively. A
+directory root such as `lib` is a discovery fact; copying it into writable paths
+does not grant descendant writes. Trailing or repeated separators and `.` or
+`..` components are rejected in new executable candidates. PHarness never
+changes `lib/` into `lib/**` automatically, since that would broaden authority.
+Historical proposals remain readable but must pass current validation before
+approval or materialization. Changing the proposed scope requires an explicit
+revised proposal under the existing onboarding approval boundary.
 
 ## Central annotations
 
