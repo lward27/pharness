@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "source_revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+  "images": {
+    "runtime": {
+      "repository": "pharness-runtime",
+      "digest": "sha256:301df21039be58ff4e0f6f3c3facfb795ca8ee825ff21b74c047a4cbcfaae050"
+    },
+    "ui": {
+      "repository": "pharness-ui",
+      "digest": "sha256:872d539ff817a9ca125809758d91346c9bdf0daa8632d1bffd85e0f11f8b5769"
+    },
+    "python-runner": {
+      "repository": "pharness-python-runner",
+      "digest": "sha256:c4b6a573a8175dc07351028f714a4302f37e3f4cddabdddb72d7137f29f73819"
+    },
+    "node-runner": {
+      "repository": "pharness-node-runner",
+      "digest": "sha256:a3bd3bacfaefd872f488928f759bebac4c743b81426d51591d91a4611c010060"
+    },
+    "model-gateway": {
+      "repository": "pharness-model-gateway",
+      "digest": "sha256:b3d69905fa9dba5b9bc7d45ce7ad0ec3087785df6cfe0444b6720a94f0bd1680"
+    },
+    "eval-runner": {
+      "repository": "pharness-eval-runner",
+      "digest": "sha256:44c765848067eb546eeebca53492853a0615f6709f4aa1747a6906b945b9363a"
+    },
+    "codex-host": {
+      "repository": "pharness-codex-host",
+      "digest": "sha256:5a1a2925387bf32961faac2caa7a36173e1b6148535609a82545362dbf41707b"
+    }
+  },
+  "native_bundle": {
+    "path": "/Users/wardl/Personal/apps/pharness-release-artifacts/81edd9e81d280b0eda866b719c86562b3ff2f02c/native/pharness-codex-host-81edd9e81d280b0eda866b719c86562b3ff2f02c-linux-amd64.tar.gz",
+    "digest": "sha256:8b7ec3ba8648c2d57f2c60bcb33a6c4db8b5fd58c374121a4b20e07cbab3b3c3"
+  },
+  "build_receipts": [
+    {
+      "component": "runtime",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-runtime",
+      "digest": "sha256:301df21039be58ff4e0f6f3c3facfb795ca8ee825ff21b74c047a4cbcfaae050",
+      "immutable_ref": "registry.lucas.engineering/pharness-runtime@sha256:301df21039be58ff4e0f6f3c3facfb795ca8ee825ff21b74c047a4cbcfaae050",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "ui",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-ui",
+      "digest": "sha256:872d539ff817a9ca125809758d91346c9bdf0daa8632d1bffd85e0f11f8b5769",
+      "immutable_ref": "registry.lucas.engineering/pharness-ui@sha256:872d539ff817a9ca125809758d91346c9bdf0daa8632d1bffd85e0f11f8b5769",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "python-runner",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-python-runner",
+      "digest": "sha256:c4b6a573a8175dc07351028f714a4302f37e3f4cddabdddb72d7137f29f73819",
+      "immutable_ref": "registry.lucas.engineering/pharness-python-runner@sha256:c4b6a573a8175dc07351028f714a4302f37e3f4cddabdddb72d7137f29f73819",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "node-runner",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-node-runner",
+      "digest": "sha256:a3bd3bacfaefd872f488928f759bebac4c743b81426d51591d91a4611c010060",
+      "immutable_ref": "registry.lucas.engineering/pharness-node-runner@sha256:a3bd3bacfaefd872f488928f759bebac4c743b81426d51591d91a4611c010060",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "model-gateway",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-model-gateway",
+      "digest": "sha256:b3d69905fa9dba5b9bc7d45ce7ad0ec3087785df6cfe0444b6720a94f0bd1680",
+      "immutable_ref": "registry.lucas.engineering/pharness-model-gateway@sha256:b3d69905fa9dba5b9bc7d45ce7ad0ec3087785df6cfe0444b6720a94f0bd1680",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "eval-runner",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-eval-runner",
+      "digest": "sha256:44c765848067eb546eeebca53492853a0615f6709f4aa1747a6906b945b9363a",
+      "immutable_ref": "registry.lucas.engineering/pharness-eval-runner@sha256:44c765848067eb546eeebca53492853a0615f6709f4aa1747a6906b945b9363a",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "component": "codex-host",
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "builder": "pharness-mac",
+      "platform": "linux/amd64",
+      "image_url": "registry.lucas.engineering/pharness-codex-host",
+      "digest": "sha256:5a1a2925387bf32961faac2caa7a36173e1b6148535609a82545362dbf41707b",
+      "immutable_ref": "registry.lucas.engineering/pharness-codex-host@sha256:5a1a2925387bf32961faac2caa7a36173e1b6148535609a82545362dbf41707b",
+      "oci_source": "https://github.com/lward27/pharness",
+      "sbom_verified": false,
+      "signature_verified": false,
+      "provenance_verified": false
+    },
+    {
+      "revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+      "platform": "linux/amd64",
+      "codex_version": "0.150.1",
+      "archive": "pharness-codex-host-81edd9e81d280b0eda866b719c86562b3ff2f02c-linux-amd64.tar.gz",
+      "sha256": "8b7ec3ba8648c2d57f2c60bcb33a6c4db8b5fd58c374121a4b20e07cbab3b3c3"
+    }
+  ],
+  "build_log_sha256": "618248a084057424625eecb6d15cdf5a1af9bdb39ec95eb24a70ad04cb933d6f",
+  "operation": {
+    "operation_id": "astra-metered-model-release-build",
+    "source_revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+    "builder": "pharness-mac",
+    "docker_context": "rancher-desktop",
+    "started_at": "2026-09-07T22:23:44.065947+00:00",
+    "status": "completed",
+    "required_components": [
+      "runtime",
+      "ui",
+      "python-runner",
+      "node-runner",
+      "model-gateway",
+      "eval-runner",
+      "codex-host"
+    ],
+    "native_bundle_required": true,
+    "deployed": false,
+    "exit_code": 0,
+    "completed_at": "2026-09-07T23:01:37.258218+00:00"
+  }
+}

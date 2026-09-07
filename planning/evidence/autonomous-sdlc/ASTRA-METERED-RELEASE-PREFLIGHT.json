@@ -1,0 +1,12 @@
+{
+  "source_revision": "81edd9e81d280b0eda866b719c86562b3ff2f02c",
+  "actual_values": [
+    "values-yfinance-production.yaml"
+  ],
+  "all_rendered_images_immutable": true,
+  "agent_policy_changes": "runner images and corresponding hashes only",
+  "server_dry_run": "passed",
+  "render_sha256": "d713ba91163f5a8ec1aa1bcbcdc785bf45082278697a5f048595d8ccaa9db848",
+  "server_dry_run_log_sha256": "2c079a961be506ba34d2276740a72873ac5b936ab119412999fabfeddb92dbfb",
+  "rollout": "not yet performed"
+}
