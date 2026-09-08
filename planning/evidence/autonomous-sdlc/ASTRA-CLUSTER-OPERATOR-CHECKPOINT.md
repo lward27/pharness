@@ -6,6 +6,8 @@ Recorded 2026-09-06. The owner requested helper/skill cleanup before further M04
 
 Latest continuation (2026-09-08): [the writable-scope release](ASTRA-M04-WRITABLE-SCOPE-RELEASE.md) is deployed and its full ten-minute service window passed. [The next onboarding diagnostic](ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md) passed first attempt after 30/30 protocol calibration. The planned common-input control is blocked by a source-identity field mismatch discovered before dispatch; fix that reader boundary next. lucas-desktop is off; the Mac builder passed actual AMD64 runtime checks. No local model is activated.
 
+The [native source-identity correction](ASTRA-M04-DIAGNOSTIC-SOURCE-IDENTITY.md) is implemented with an actual-report regression; complete validation and release before the next primary/control pair.
+
 ## Maintained entry point
 
 Use `~/.local/bin/lucas-ops` and the [Lucas Engineering operator guide](https://github.com/lward27/lucas_engineering/blob/main/docs/operations/ASTRA-CLUSTER-DEVELOPMENT.md). Infrastructure [PR 58](https://github.com/lward27/lucas_engineering/pull/58) adds the maintained CLI, profile, versioned skills, CI and acceptance evidence. Installed content hash: `59716f40df8ba6169cacee2819c0c37afc8487926363f9305bc594f33da2e7d0`.

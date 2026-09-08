@@ -17,7 +17,7 @@ fn fixture() -> (StoredInferenceEvaluation, Value) {
         "diagnostic":{"case_ids":scope.case_ids(),"passed":true,"reference_evaluation_id":null},
         "report":{"resolved_settings":{"evaluation_scope":scope},"results":[{
             "fixture":"acceptance-boundary","attempt":1,"passed":true,"protected_paths_ok":true,"safety_violations":[],
-            "workspace_hash":format!("sha256:{}","a".repeat(64)),"base_sha":"a".repeat(40),
+            "workspace_hash":format!("sha256:{}","a".repeat(64)),"source_sha":"a".repeat(40),
             "stage_submission":{"document":{"model_output":"must not be reused"},"measurement_input":{"retention":"complete","document":input,"raw_content_sha256":canonical_json_sha256(&input).unwrap()}}
         }]}
     });
@@ -165,4 +165,64 @@ fn common_control_receives_only_complete_public_inputs_on_the_same_runtime() {
             "{pointer}"
         );
     }
+}
+
+#[test]
+fn common_control_reads_source_identity_from_retained_native_evaluator_report() {
+    // Real gateway output crosses the producer/consumer boundary that the
+    // hand-written fixture above cannot validate by itself.
+    let receipt: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../planning/evidence/autonomous-sdlc/ASTRA-M04-A2D05F1-ONBOARDING-RESULT.json"
+    )))
+    .unwrap();
+    let original: StoredInferenceEvaluation =
+        serde_json::from_value(receipt["evaluation"].clone()).unwrap();
+    let scope = InferenceEvaluationScope::Diagnostic {
+        case_ids: vec!["python-contract".into()],
+        reference_evaluation_id: Some(original.id.clone()),
+    };
+    let row = &original.report.as_ref().unwrap()["report"]["results"][0];
+    assert_eq!(
+        row["source_sha"],
+        "656be973d8d36f53b7a34018861dc59844c4164f"
+    );
+    assert!(row.get("base_sha").is_none());
+    let inputs = retained_inputs(
+        &original,
+        &scope,
+        &original.suite_id,
+        &original.runtime_revision,
+        &original.resolved_binding,
+    )
+    .unwrap();
+    let reference = &inputs["python-contract"];
+    assert_eq!(reference["base_sha"], row["source_sha"]);
+    assert_eq!(reference["workspace_hash"], row["workspace_hash"]);
+    assert_eq!(
+        reference["document"],
+        row["stage_submission"]["measurement_input"]["document"]
+    );
+    assert_eq!(
+        reference["input_hash"],
+        row["stage_submission"]["measurement_input"]["raw_content_sha256"]
+    );
+    assert_eq!(reference.as_object().unwrap().len(), 4);
+
+    // A legacy-looking alias must not fill in missing native source evidence.
+    let mut missing_source = original.clone();
+    let changed_row = &mut missing_source.report.as_mut().unwrap()["report"]["results"][0];
+    changed_row["base_sha"] = changed_row["source_sha"].clone();
+    changed_row.as_object_mut().unwrap().remove("source_sha");
+    missing_source.report_hash =
+        Some(canonical_json_sha256(missing_source.report.as_ref().unwrap()).unwrap());
+    let error = retained_inputs(
+        &missing_source,
+        &scope,
+        &original.suite_id,
+        &original.runtime_revision,
+        &original.resolved_binding,
+    )
+    .unwrap_err();
+    assert!(error.message.contains("source_sha"));
 }

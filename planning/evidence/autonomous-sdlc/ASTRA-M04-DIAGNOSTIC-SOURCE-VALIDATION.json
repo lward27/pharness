@@ -1,0 +1,73 @@
+{
+  "base_revision": "8f1308fa980b8c63c45b8b7b1fc8f2e0e15a4bb1",
+  "implemented_files": {
+    "crates/pharness-api/src/app/inference/diagnostics.rs": "sha256:9ad76d3f920ff7e1a9da7881faff3877458a8ead30e437b46f855a0aae41e74f",
+    "crates/pharness-api/src/app/inference/diagnostics/tests.rs": "sha256:52ecec3bd9696fab7982879f1e412db95001e04fd166567298ec1574675481be",
+    "crates/pharness-eval/src/stage_suites/diagnostic_tests.rs": "sha256:02cffa39721a7750d1bffb8662b14361ed162ebcfaaf3daa24a269835d634068"
+  },
+  "checks": {
+    "actual_native_report_before_fix": {
+      "exit_code": 101,
+      "failed": 1,
+      "expected_error": "HTTP 409: referenced diagnostic input is incomplete, altered, or outside the requested cases"
+    },
+    "diagnostic_tests_after_fix": {
+      "exit_code": 0,
+      "passed": 3
+    },
+    "all_api_inference_tests": {
+      "exit_code": 0,
+      "passed": 12
+    },
+    "evaluator_tests": {
+      "exit_code": 0,
+      "passed": 48,
+      "includes": "Serialized source/reference reconstruction for all nine declared cases across four stages; intentional failing fixture programs are expected by the successful suite."
+    },
+    "architecture": {
+      "exit_code": 0,
+      "checker_tests": 5
+    },
+    "clippy_api_eval_all_targets": {
+      "exit_code": 0,
+      "warnings_denied": true
+    },
+    "formatting": {
+      "exit_code": 0
+    }
+  },
+  "logs": {
+    "red_actual_report": {
+      "path": "/tmp/astra-diagnostic-source-red.log",
+      "sha256": "0c79ec8cb9a8fcbd7179dc090f78c8c550b111c883212c50d201e318420b0ddb",
+      "bytes": 2468
+    },
+    "green_actual_report": {
+      "path": "/tmp/astra-diagnostic-source-api.log",
+      "sha256": "0eb5fc6901445b73fa84112f02c9d0a38d35e371860132ad406363f43b142dc9",
+      "bytes": 1092
+    },
+    "inference": {
+      "path": "/tmp/astra-diagnostic-source-inference.log",
+      "sha256": "30a77e5005c89936b87a0515e6b45ae56e5bc802de095b76398dafc6d402f088",
+      "bytes": 1749
+    },
+    "evaluator": {
+      "path": "/tmp/astra-diagnostic-source-eval.log",
+      "sha256": "b9ac40f87bdd3773a908efb0d50bd68eacf6c04122f5b41c8cb3a5a108ecf8cf",
+      "bytes": 42646
+    },
+    "architecture": {
+      "path": "/tmp/astra-diagnostic-source-architecture.log",
+      "sha256": "580a0faacbef04633addefd66aca44a1c8a5b79abe16bba2053ef02a691e2db6",
+      "bytes": 135
+    },
+    "clippy": {
+      "path": "/tmp/astra-diagnostic-source-clippy.log",
+      "sha256": "3e0a294fab04274c9a35cd4bbac1eb5f9fbae4e0166f840d19143f97708fc771",
+      "bytes": 5555
+    }
+  },
+  "live_control_dispatched": false,
+  "qualification": null
+}

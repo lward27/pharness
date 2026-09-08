@@ -6,6 +6,8 @@ Current compiled PHarness release: `a2d05f1b41c15cb34a4543327ba468b9da3b5094`, o
 
 Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The latest single onboarding diagnostic passed without qualification; historical failures and retired helpers remain historical evidence.
 
+The [native source-identity correction](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-SOURCE-IDENTITY.md) is implemented with an actual-report regression; complete validation and release before the next primary/control pair.
+
 ## Product promise and authority
 
 Retire Repo Mode as a separate product experience while preserving its discovery,
