@@ -12,6 +12,8 @@ Deployed runtime: `a2d05f1b41c15cb34a4543327ba468b9da3b5094`, unqualified. [Rele
 
 Operator workflow: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The shared scope correction passes its bounded diagnostic; previous failures remain immutable. Inspection found that the common-input reader expects `base_sha` while native reports emit `source_sha`. Fix that demonstrated boundary before a control dispatch. Retired temporary helpers are historical only.
 
+The [native source-identity correction](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-SOURCE-IDENTITY.md) is implemented with an actual-report regression; complete validation and release before the next primary/control pair.
+
 ## Objective and implementation boundaries
 
 Prove that the existing gateway path can complete bounded engineering work with

@@ -81,6 +81,26 @@ async fn declared_canaries_run_only_requested_cases_and_cannot_qualify() {
                 canonical_json_sha256(&retained["document"]).unwrap()
             );
             assert!(result.workspace_hash.is_some());
+            // Exercise the serialized report -> reference -> reconstructed
+            // workspace boundary, rather than only prepared-fixture fields.
+            let native = serde_json::to_value(result).unwrap();
+            assert!(native["source_sha"].is_string());
+            assert!(native.get("base_sha").is_none());
+            let kind = SuiteKind::parse(suite).unwrap();
+            let mut fixture = fixtures(kind)
+                .unwrap()
+                .into_iter()
+                .find(|fixture| fixture.id == result.fixture)
+                .unwrap();
+            fixture.expected["diagnostic_input_reference"] = json!({
+                "document":retained["document"],
+                "input_hash":retained["raw_content_sha256"],
+                "workspace_hash":native["workspace_hash"],
+                "base_sha":native["source_sha"]
+            });
+            let (reconstructed, root) = prepare_case(kind, &fixture, 1).unwrap();
+            assert_eq!(reconstructed.evidence, retained["document"]["evidence"]);
+            fs::remove_dir_all(root).unwrap();
         }
     }
 }

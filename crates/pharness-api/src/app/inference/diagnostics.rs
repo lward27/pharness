@@ -69,6 +69,9 @@ fn retained_inputs(
             .ok_or_else(|| ApiError::conflict("referenced case has no identity"))?;
         let input = &row["stage_submission"]["measurement_input"];
         let document = &input["document"];
+        let source_sha = row["source_sha"].as_str().ok_or_else(|| {
+            ApiError::conflict("referenced diagnostic result is missing native source_sha")
+        })?;
         let hash =
             canonical_json_sha256(document).map_err(|e| ApiError::internal(e.to_string()))?;
         if input["retention"] != "complete"
@@ -76,14 +79,13 @@ fn retained_inputs(
             || !document.is_object()
             || document.to_string().len() > 128 * 1024
             || row["workspace_hash"].as_str().is_none()
-            || row["base_sha"].as_str().is_none()
             || !scope
                 .case_ids()
                 .is_some_and(|cases| cases.iter().any(|case| case == id))
         {
             return Err(ApiError::conflict("referenced diagnostic input is incomplete, altered, or outside the requested cases"));
         }
-        if inputs.insert(id.into(),json!({"document":document,"workspace_hash":row["workspace_hash"],"base_sha":row["base_sha"],"input_hash":hash})).is_some() {
+        if inputs.insert(id.into(),json!({"document":document,"workspace_hash":row["workspace_hash"],"base_sha":source_sha,"input_hash":hash})).is_some() {
             return Err(ApiError::conflict("diagnostic input reference repeats a case"));
         }
     }
