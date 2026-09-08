@@ -5,11 +5,7 @@ Evidence: [current M02 execution record](../../evidence/autonomous-sdlc/ASTRA-M0
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M01. May proceed independently of M03.
 
-The owner-reported desktop return was [revalidated and restored through GitOps](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md)
-on 2026-09-05. Tekton again uses the existing desktop endpoint, with unchanged Service/Task/TLS
-identities. Direct and Service-routed uncached AMD64 builds and registry verification passed.
-The Mac container/cache are retained, but its stopped forward is not an active fallback.
-This refresh establishes platform readiness, not autonomous delivery or 24-hour acceptance.
+The [2026-09-08 Mac return](../../evidence/autonomous-sdlc/ASTRA-M02-MAC-BUILDKIT-RETURN.md) supersedes the [September 5 desktop observation](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md): the owner reports that desktop off. Tekton now routes through the explicitly selected Mac VPN endpoint. Direct and Service-routed uncached AMD64 builds, immutable registry verification, exact Argo reconciliation and installed operator readiness pass. The Mac/VPN/forward dependency remains explicit; this refresh is platform readiness, not autonomous delivery or 24-hour acceptance.
 
 ## Objective and scope
 

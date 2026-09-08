@@ -1,0 +1,149 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T13:32:32.822569+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:f4d7f9dc9db79106b7d6c9c4e8fb0173ea61cf0b973a8739de6130d9afd0846d",
+    "agent_profile_id": "repository-onboarding-proposer",
+    "attempts": 1,
+    "binding_hash": "sha256:f413ab241fe9b0b41b2a4d1b84ab20eb5fd010b816511c9f138ac9cda7a7d014",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788874352961",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a08138694073d1b8831ae909f83122",
+    "job_name": "pharness-inference-eval-20bab23f7e22",
+    "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+    "policy_id": "onboarding-minimax-m3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D source38 primary onboarding canaries after verified release and 30/30 protocol; existing limits, no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:f4d7f9dc9db79106b7d6c9c4e8fb0173ea61cf0b973a8739de6130d9afd0846d",
+      "base_agent_profile_hash": "sha256:92ecf907c8acddb7d50815d6f81a503fe4c08d6893d985c155d252b8d8dadcf7",
+      "binding_hash": "sha256:f413ab241fe9b0b41b2a4d1b84ab20eb5fd010b816511c9f138ac9cda7a7d014",
+      "context_policy_hash": "sha256:b24d6936429a4e3344f59e90ce3796d94023799fc96ae28a1a043522148da335",
+      "policy": {
+        "display_name": "Reliability V2 onboarding MiniMax M3",
+        "eligible_profiles": [
+          "repository-onboarding-proposer"
+        ],
+        "eligible_stages": [
+          "onboarding"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+        "policy_id": "onboarding-minimax-m3-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "fireworks-minimax-m3"
+        },
+        "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+        "temperature_milli": 100,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:bae070e0949fcc48041432d0c7fd4cb14b40cc59324eda4c683d19eb4d723c85",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:ca16979eb040d3a85c893ea9cdc43728b49c8b60d4cd2f267b3039ac7a78a2c8",
+        "prompt_id": "repo-onboarding-v2",
+        "revision": "2026-09-07.2",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "onboarding"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "test"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [],
+          "reasoning_efforts": [],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+        "context_limit_tokens": 524288,
+        "display_name": "Fireworks MiniMax M3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-minimax-m3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/minimax-m3"
+      },
+      "tool_schema_hash": "sha256:8414f1776f825424c914bb8dae2a116183f15d2606d03dd87244687da20e8c89"
+    },
+    "runtime_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1788874353279",
+    "status": "running",
+    "suite_hash": "sha256:7fdb61cc2e5e7ad268b47ffb11d7a0eda861624c8c896b19bf5c94524f69e9f4",
+    "suite_id": "onboarding-v2",
+    "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+    "target_id": "fireworks-minimax-m3",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a08138694073d1b8831ae909f83122",
+  "kind": "pharness_evaluation",
+  "operation_id": "astra-m04-38-onboarding-primary",
+  "policy_id": "onboarding-minimax-m3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D source38 primary onboarding canaries after verified release and 30/30 protocol; existing limits, no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:9ee2ff7893b326eb71c7e537c3280d483f978251cae49376072a51dfe7984c56",
+  "schema_version": 1,
+  "source_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T13:32:33.200986+00:00"
+}

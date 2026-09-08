@@ -1,0 +1,101 @@
+{
+  "evaluation_id": "infeval_01a08138694073d1b8831ae909f83122",
+  "job": {
+    "images": [
+      "registry.lucas.engineering/pharness-eval-runner@sha256:88dcd4bbada14a75c983ac3f51228a0c075d04c1277921472f317870d41b334b"
+    ],
+    "name": "pharness-inference-eval-20bab23f7e22",
+    "status": {
+      "completionTime": "2026-09-08T13:37:52Z",
+      "conditions": [
+        {
+          "lastProbeTime": "2026-09-08T13:37:52Z",
+          "lastTransitionTime": "2026-09-08T13:37:52Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "SuccessCriteriaMet"
+        },
+        {
+          "lastProbeTime": "2026-09-08T13:37:52Z",
+          "lastTransitionTime": "2026-09-08T13:37:52Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "Complete"
+        }
+      ],
+      "ready": 0,
+      "startTime": "2026-09-08T13:32:33Z",
+      "succeeded": 1,
+      "terminating": 0,
+      "uncountedTerminatedPods": {}
+    },
+    "uid": "eb256365-fc75-4ca8-8504-004db7b2af53"
+  },
+  "observed_at": "2026-09-08T13:37:59.230651+00:00",
+  "pods": [
+    {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "250m",
+            "ephemeral-storage": "1Gi",
+            "memory": "512Mi"
+          },
+          "containerID": "containerd://2fb6a84c5f1fc791387c3dd0e7ce8eecebbf0fe30a84989e255da4becb3dbcd3",
+          "image": "sha256:421fc37f07148fbb820fcc1beb74126aeb196d0fc4d919a14fd05a75bd8a25c3",
+          "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:88dcd4bbada14a75c983ac3f51228a0c075d04c1277921472f317870d41b334b",
+          "lastState": {},
+          "name": "evaluate",
+          "ready": false,
+          "resources": {
+            "limits": {
+              "cpu": "2",
+              "ephemeral-storage": "4Gi",
+              "memory": "2Gi"
+            },
+            "requests": {
+              "cpu": "250m",
+              "ephemeral-storage": "1Gi",
+              "memory": "512Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": false,
+          "state": {
+            "terminated": {
+              "containerID": "containerd://2fb6a84c5f1fc791387c3dd0e7ce8eecebbf0fe30a84989e255da4becb3dbcd3",
+              "exitCode": 0,
+              "finishedAt": "2026-09-08T13:37:49Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-08T13:36:43Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/work",
+              "name": "work"
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "tmp"
+            }
+          ]
+        }
+      ],
+      "name": "pharness-inference-eval-20bab23f7e22-zm5zf",
+      "phase": "Succeeded",
+      "uid": "182419db-ad86-4740-83c5-19274fc53b33"
+    }
+  ]
+}

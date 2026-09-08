@@ -1,0 +1,26 @@
+# ASTRA M04: Exact-input onboarding comparison
+
+Recorded 2026-09-08. Runtime `38a4282c0bef27491a8e6e44640dbbe3f33526ca`, release pin `81de84f70393c9dd9dad302930a97acf88da4ec9`. The [release](ASTRA-M04-DIAGNOSTIC-SOURCE-RELEASE.md) and the native reference reader pass their observed boundaries. **Neither onboarding candidate passes this two-case diagnostic. M04 remains open.**
+
+## Objective results
+
+| Case | MiniMax primary | Registered Kimi control |
+| --- | --- | --- |
+| `python-contract` | Pass; 22.764 seconds, five tool calls | Fail; 105.529 seconds, five tool calls; proposes creating an existing Product Service |
+| `missing-lock` | Fail; 42.615 seconds, three submit attempts; invalid environment identifier exhausts bounded tool recovery | Pass; 52.161 seconds, three tool calls; null candidate with explicit missing-lock and incompatible-profile blockers |
+
+The native [primary result](ASTRA-M04-38A4282-ONBOARDING-PRIMARY-RESULT.json) and [control result](ASTRA-M04-38A4282-ONBOARDING-CONTROL-RESULT.json) remain unchanged. The [comparison](ASTRA-M04-38A4282-ONBOARDING-COMPARISON.json) establishes byte-equivalent retained public measurement inputs and initial context, equal workspace/source identities, and equal runtime, prompt, suite and tool hashes. Limits and reasoning settings are matched through the existing registered diagnostic policies. The control directly references primary `infeval_01a08138694073d1b8831ae909f83122`; it did not reconstruct substitute inputs. Both [primary](ASTRA-M04-38A4282-PRIMARY-PROTOCOL.json) and [control](ASTRA-M04-38A4282-CONTROL-PROTOCOL.json) protocol calibrations passed 30/30 before dispatch.
+
+Reported primary usage totals 57,500 input and 10,266 completion tokens; control totals 50,391 input and 7,444 completion tokens. These include all reported calls, not only the terminal submission. The primary Job took 319 seconds including image pull/startup; its evaluator container ran for 66 seconds. The [primary](ASTRA-M04-38A4282-ONBOARDING-PRIMARY-JOB.json) and [control](ASTRA-M04-38A4282-ONBOARDING-CONTROL-JOB.json) final Pod receipts retain actual evaluator image identities and process exits. A successful Job means the evaluation completed; it does not convert its failed cases into passes. Native diagnostic flags remain false, full-gate flags remain false, and qualification is null.
+
+## What failed and what it means
+
+The [primary inspection](ASTRA-M04-38A4282-PRIMARY-ANALYSIS.json) found the final native error `environment_profile is not a safe identifier`. The missing-lock task explicitly says to submit a null candidate when executable facts are unavailable; the nullable schema and native blocked-submission tests support that path. Kimi's successful blocked proposal on exactly those inputs confirms the path is usable. The native report does not retain the rejected argument payloads, so the exact invalid identifier is not asserted.
+
+Kimi's valid-repository submission contains `finance-web` in `service_proposals` while describing it as reuse of the existing Service. That array creates new Services; reuse belongs in `binding_proposals.service_keys`. The real product API rejects that collision (`Service finance-web already exists in the Product`), so the evaluator's rejection is not an invented acceptance rule. However, the native submit tool accepts the same deterministic conflict and the tool schema does not explain creation versus reuse. The model receives terminal acceptance where the downstream API will reject its proposal.
+
+My judgment: this is not evidence that changing models solves onboarding. Each candidate succeeds where the other fails. Fix the demonstrated boundary instead of adding another scorer exception or choosing a winner from two cases. Share the deterministic product-reference checks between the native submission boundary and product API, check against the original Run's product snapshot, and describe the fields' actual effects. Retain the API's fresh revalidation before approval/materialization. Preserve blocked null candidates, legitimate new-Service proposals under existing authorization, historical reads, and all budgets. A rejected duplicate should receive a precise field error while the existing bounded correction is still available.
+
+## Next execution boundary
+
+Add an actual-control-report regression, plus existing-Service reuse, legitimate new-Service binding, unknown/repeated keys, absent context and immutable-snapshot checks. Keep model claims separate from deterministic checks and do not silently repair a proposal. Release the correction through the immutable procedure, then run a fresh primary/control pair on the new exact runtime. Remaining Planner, Diagnosis and Verifier canaries have not been dispatched; connected-loop and full frozen qualification remain open. No policy defaults, local target or Finance production authorization changed.
