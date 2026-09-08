@@ -1,14 +1,14 @@
 # ASTRA M04: Release the Planner readiness boundary
 
-Status: the immutable release, exact live identities and full ten-minute service observation are verified. Fresh Planner diagnostics are in progress. This is not M04 qualification or Finance acceptance.
+Status: the immutable release, exact live identities and full ten-minute service observation are verified. Both fresh Planner diagnostics are terminal and pass 2/2 on identical valid inputs. This is not M04 qualification or Finance acceptance.
 
 ## Source and implementation
 
-Compiled source: `291e007cedcb2440a328f5e24710fb3423cb0ded`. [Release PR398](https://github.com/lward27/pharness/pull/398) merged as `90ab524aeef4fa6692057a6f89526674de3a8fa2` on 2026-09-08 at 21:00:53 UTC. The source includes [Planner decision PR395](https://github.com/lward27/pharness/pull/395) and [evaluator layer reuse PR394](https://github.com/lward27/pharness/pull/394).
+Compiled source: `291e007cedcb2440a328f5e24710fb3423cb0ded`. [Release PR #398](https://github.com/lward27/pharness/pull/398) merged as `90ab524aeef4fa6692057a6f89526674de3a8fa2` on 2026-09-08 at 21:00:53 UTC. The source includes [Planner decision PR #395](https://github.com/lward27/pharness/pull/395) and [evaluator layer reuse PR #394](https://github.com/lward27/pharness/pull/394).
 
 Planner submissions now distinguish a settled plan from a plan requiring a decision. Native sealing preserves unresolved blockers and automatic approval checks the exact sealed plan. The [implementation evidence](ASTRA-M04-PLANNER-DECISION-BOUNDARY.md) records 590 distinct component checks and the saved-contract compatibility boundary. Planner qualification advances to v2.6; the twelve scenario inputs, commands and acceptance requirements are preserved. Frozen coding/repair tasks, model defaults and budgets are unchanged.
 
-The separately validated [repair authorization PR397](https://github.com/lward27/pharness/pull/397) is not included in this release. It must be integrated before the connected-loop candidate is frozen. A passing release observation cannot close that handoff proof or the full qualification gate.
+The separately validated [repair authorization PR #397](https://github.com/lward27/pharness/pull/397) is not included in this release. It is merged as `67f5303`; include it when the connected-loop candidate is frozen. A passing release observation cannot close that handoff proof or the full qualification gate.
 
 ## Objective release evidence
 
@@ -31,4 +31,4 @@ Preferred rollback runtime is `d675159cb205d222616d253d311706be1889bb91`; the sc
 
 ## Remaining acceptance
 
-The full service window is complete. Finish the exact-policy protocol checks and declared Planner ready/failing-baseline primary/control pair. Retain native reports and inspect readiness/blockers alongside the scores. These two cases are diagnostics, never qualification. M04E still needs the connected failure/repair handoff and independently scoped verification; M04F still needs the full frozen acceptance matrix on its final runtime. M11 Finance and M12 operational acceptance remain open.
+The full service window and both exact-policy 30/30 prerequisites are complete. [The declared Planner pair](ASTRA-M04-291E007-PLANNER-COMPARISON.md) passes 2/2 for both runs: the ready case remains ready and the unresolved baseline remains blocked. The record includes independent inspection of the model prose and its remaining caveats. [Closeout](ASTRA-M04-291E007-CANARY-CLOSEOUT.json) confirms no active evaluations, unchanged source/configuration and 82 ordinary Runs. These two cases are diagnostics, never qualification. M04E still needs the connected failure/repair handoff and independently scoped verification; M04F still needs the full frozen acceptance matrix on its final runtime. M11 Finance and M12 operational acceptance remain open.

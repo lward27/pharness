@@ -1,0 +1,27 @@
+{
+  "observed_at": "2026-09-08T21:21:27.107134+00:00",
+  "evaluation_id": "infeval_01a082e00d067e4296115a19288f1070",
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "suite_hash": "sha256:d04551e2ea9055cba3eb6f6383b82173de6764d721a448d648f7a4314d39a9de",
+  "native_report_hash": "sha256:4544736d7c5d2b13b20cf79680049b4979fbad41250221a9397aaa37a0e84826",
+  "status": "valid_complete_inputs",
+  "cases": [
+    {
+      "case_id": "acceptance-boundary",
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:5e8d78a8069f1388b84e0c7a627ae81438a2dd192f18561620881c705d1f7091",
+      "native_passed": true,
+      "measurement_input_hash": "sha256:1725d1f583f764ae13d5c0aa98bd47502eb2ba4a74dbade1b9348698c95456d5",
+      "initial_context_hash": "sha256:e577994e55ebb651e6913ad6e4d8b0717c0a5e42e5d6de086ef25d88cd9c8203"
+    },
+    {
+      "case_id": "failing-baseline",
+      "source_sha": "f23225382faa7aeb3a961fb016042d898898b9fa",
+      "workspace_hash": "sha256:87af798add24bffb0ea76b093948342bf99ab43a31f023a799a56e332a8b1eec",
+      "native_passed": true,
+      "measurement_input_hash": "sha256:b586f2a288e426052d8f09aff98607ce92d244f6d03a826b0a214cb80411a569",
+      "initial_context_hash": "sha256:1af76b56113ceee9ccf7455a0b668f5efdc7ceb81c424b973dc20debde48b75f"
+    }
+  ],
+  "qualification": null
+}

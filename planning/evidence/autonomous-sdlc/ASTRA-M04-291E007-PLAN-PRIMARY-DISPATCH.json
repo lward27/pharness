@@ -1,0 +1,158 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T21:15:16.533435+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:e934a1655e0e0b9989db5bef1502af63ac90b9ad82d646b82117560bc04d7dcf",
+    "agent_profile_id": "repo-planner",
+    "attempts": 1,
+    "binding_hash": "sha256:2fbc307d8d672847d44bdefd47caa21394b314187a68ae7577da50ef943fd021",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788902116615",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a082e00d067e4296115a19288f1070",
+    "job_name": "pharness-inference-eval-7a0f82dc1be3",
+    "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+    "policy_id": "planner-kimi-k3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D source291e007 declared Planner readiness-boundary canary after PR395; unchanged policy, limits and defaults; no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:e934a1655e0e0b9989db5bef1502af63ac90b9ad82d646b82117560bc04d7dcf",
+      "base_agent_profile_hash": "sha256:ed492f67f083e1b70a156f9a0ef85788b2637875ac167f0753596533fe148e2f",
+      "binding_hash": "sha256:2fbc307d8d672847d44bdefd47caa21394b314187a68ae7577da50ef943fd021",
+      "context_policy_hash": "sha256:543825bff7978876745c2e56c279905a549db5fe711589f44e9556222386e416",
+      "policy": {
+        "display_name": "Reliability V2 planner Kimi K3",
+        "eligible_profiles": [
+          "repo-planner"
+        ],
+        "eligible_stages": [
+          "plan"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+        "policy_id": "planner-kimi-k3-v2",
+        "reasoning": {
+          "context_mode": "current_turn",
+          "effort": "high",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "fireworks-kimi-k3"
+        },
+        "target_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+        "temperature_milli": 100,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:d633915686d7d429d44e570ac465b49e4878cb9e3a9e4a0b60b9977b69d4cc6d",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:05c455ea6fcb047b2f12c46efbc6b42ac53c030fb780b5087aac3ee6994d48e4",
+        "prompt_id": "repo-planner-v2",
+        "revision": "2026-09-08.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "plan"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "implement",
+          "verify"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [
+            "current_turn",
+            "all_turns"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+        "context_limit_tokens": 1048576,
+        "display_name": "Fireworks Kimi K3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-kimi-k3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/kimi-k3"
+      },
+      "tool_schema_hash": "sha256:75ffa5ba3ed9d046ed3a54c5ff819230245a2efe7cd42abba2be3acf96a1b79f"
+    },
+    "runtime_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1788902116968",
+    "status": "running",
+    "suite_hash": "sha256:d04551e2ea9055cba3eb6f6383b82173de6764d721a448d648f7a4314d39a9de",
+    "suite_id": "planner-v2",
+    "target_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+    "target_id": "fireworks-kimi-k3",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a082e00d067e4296115a19288f1070",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-291E007-PLAN-PRIMARY",
+  "policy_id": "planner-kimi-k3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D source291e007 declared Planner readiness-boundary canary after PR395; unchanged policy, limits and defaults; no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:b9f5e6006f9c74b7c106387e7c49f20af353562fdc7b734431b7b4c0de4984bf",
+  "schema_version": 1,
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T21:15:17.054849+00:00"
+}

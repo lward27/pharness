@@ -1,6 +1,6 @@
 # ASTRA M04: Preserve the original authorization at the repair handoff
 
-Status: implemented and validated locally; not deployed. This is a local M04E/M06 integrity correction, not connected-loop or runtime acceptance.
+Status: implemented, validated locally and merged in PR397 as `67f53039a9485a4cd57af2c7dbaea14c4f7f9a44`; not deployed. [Merge and unchanged validated-source hashes](ASTRA-M04-REPAIR-AUTHORIZATION-MERGE.json) are retained. This is a local M04E/M06 integrity correction, not connected-loop or runtime acceptance.
 
 ## Observed defect
 
@@ -22,6 +22,6 @@ This test does not prove that a live invalid repair was dispatched, nor that the
 
 ## Integration and recovery
 
-This correction is separate from the already-frozen source291e007 Planner readiness release. Retain its evidence and merge this correction before the connected-loop candidate is frozen. Do not modify in-progress release artifacts or claim this code is included in them. Keep hosted activation off until the program gates pass.
+This correction is separate from the already-frozen source291e007 Planner readiness release. Retain its evidence and include this merged correction when the connected-loop candidate is frozen. Do not modify in-progress release artifacts or claim this code is included in them. Keep hosted activation off until the program gates pass.
 
 The preceding compatible reader remains data-compatible, but lacks this authorization recheck. Pause development and retain in-flight history before any rollback to it; do not use a rollback to continue an expired or superseded chain. The compatible-reader floor and Finance production approval rules in the master program remain unchanged.

@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-09-08T21:17:12.706700+00:00",
+  "status": "merged_not_deployed",
+  "pull_request": {
+    "headRefOid": "044348f333179416f792de4eb02f4a8ba82c32d3",
+    "mergeCommit": {
+      "oid": "67f53039a9485a4cd57af2c7dbaea14c4f7f9a44"
+    },
+    "mergedAt": "2026-09-08T21:16:10Z",
+    "state": "MERGED",
+    "url": "https://github.com/lward27/pharness/pull/397"
+  },
+  "validated_source_hashes_match": true,
+  "validation_file_hash": "sha256:c9463b2c8ecce1e7c83ff6ad09f112dbbeeed6de67cd0c797f15500cc9a0fe12",
+  "current_compiled_runtime": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "qualification": null
+}
