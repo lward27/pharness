@@ -144,6 +144,11 @@ fn real_verifier_sources_reproduce_defects_and_corrected_controls() {
             green_defects += 1;
         }
         if spec["oracle"].is_string() {
+            assert!(
+                records.iter().all(|r| r["exit_code"] == 0),
+                "{} must measure a semantic defect behind passing public checks: {records:?}",
+                fixture.id
+            );
             let result = oracle_receipt(&root, spec, &source_hash(&root).unwrap()).unwrap();
             assert_eq!(result["status"], "completed", "{}: {result}", fixture.id);
             assert_ne!(result["exit_code"], 0, "{}: {result}", fixture.id);
@@ -204,6 +209,115 @@ fn real_verifier_sources_reproduce_defects_and_corrected_controls() {
         green_defects >= 10,
         "semantic defects must not collapse into reading a failed public check: {green_defects}"
     );
+}
+
+#[test]
+fn invalid_semantic_fixture_stops_before_model_dispatch() {
+    let mut fixture = fixtures(SuiteKind::VerifierV2)
+        .unwrap()
+        .into_iter()
+        .find(|f| f.id == "frontend-semantic-mismatch")
+        .unwrap();
+    let source = fixture.expected["measurement"]["candidate_files"]["src/quote.mjs"]
+        .as_str()
+        .unwrap()
+        .replace(
+            "(Number(quote.price) * 100).toFixed(2)",
+            "Number(quote.price) * 100.toFixed(2)",
+        );
+    fixture.expected["measurement"]["candidate_files"]["src/quote.mjs"] = json!(source);
+    let root = std::env::temp_dir().join(format!(
+        "pharness-invalid-semantic-{}",
+        uuid::Uuid::now_v7()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let result = prepare(&root, &fixture, SuiteKind::VerifierV2);
+    std::fs::remove_dir_all(root).unwrap();
+    assert!(result
+        .err()
+        .expect("invalid fixture must fail")
+        .to_string()
+        .contains("compiled semantic-verification fixture requires passing public checks"));
+}
+
+#[test]
+fn corrected_baseline_preserves_the_failed_acceptance_assertion() {
+    let fixture = fixtures(SuiteKind::VerifierV2)
+        .unwrap()
+        .into_iter()
+        .find(|f| f.id == "unresolved-baseline-failure")
+        .unwrap();
+    let spec = &fixture.expected["measurement"];
+    let assertion = spec["candidate_files"]["tests/test_app.py"]
+        .as_str()
+        .unwrap()
+        .lines()
+        .find(|line| line.contains("def test_existing_contract"))
+        .unwrap();
+    assert!(
+        spec["corrected_files"]["tests/test_app.py"]
+            .as_str()
+            .unwrap()
+            .lines()
+            .any(|line| line == assertion),
+        "a corrected baseline must not erase its failing test"
+    );
+}
+
+#[test]
+fn approved_and_corrected_controls_satisfy_the_whole_public_contract() {
+    for fixture in fixtures(SuiteKind::VerifierV2).unwrap() {
+        let (prepared, root) = prepare_case(SuiteKind::VerifierV2, &fixture, 89).unwrap();
+        let spec = &fixture.expected["measurement"];
+        let node = spec["environment_profile"] == "node-24";
+        let oracle = if node {
+            "import {renderQuote,detailUrl,summaryUrl} from './src/quote.mjs'; import assert from 'node:assert/strict'; assert.equal(renderQuote({symbol:'ABC',price:12.5}),'<span>ABC: 12.50</span>'); assert.equal(renderQuote({symbol:'ABC',price:null}),'<span>ABC: Unavailable</span>'); assert.equal(renderQuote({symbol:'<img>&',price:1}),'<span>&lt;img&gt;&amp;: 1.00</span>'); for (const fn of [detailUrl,summaryUrl]) assert.equal(fn('A&B /?'), '/api/quote?symbol=' + encodeURIComponent('A&B /?'));"
+        } else {
+            "from src.app import handle; cfg={'MARKET_API_URL':'https://market.invalid'}; assert handle('/api/quote',{'symbol':'ABC','price':12.5},cfg)==(200,{'symbol':'ABC','price':12.5}); assert handle('/api/quote',{'symbol':'ABC','price':None},cfg)==(200,{'symbol':'ABC','price':None}); assert all(handle('/api/quote',{'symbol':s},cfg)==(422,{'error':'invalid symbol'}) for s in ['', ' ', None, 123]); assert all(handle('/api/quote',{'symbol':'ABC'},env)==(503,{'error':'service unavailable'}) for env in [{},{'MARKET_API_URL':''}]);"
+        };
+        let probe = json!({"environment_profile":spec["environment_profile"],"oracle":oracle});
+        if fixture.expected["decision"] == "approved" {
+            assert!(prepared.evidence["test_receipts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["exit_code"] == 0));
+            assert_eq!(
+                oracle_receipt(&root, &probe, &source_hash(&root).unwrap()).unwrap()["exit_code"],
+                0,
+                "{} approved",
+                fixture.id
+            );
+            if !node {
+                assert!(
+                    spec["candidate_files"]["README.md"]
+                        .as_str()
+                        .unwrap()
+                        .contains("503"),
+                    "{} approved documentation omits required error behavior",
+                    fixture.id
+                );
+            }
+        }
+        write_files(&root, &spec["corrected_files"]).unwrap();
+        assert_eq!(
+            oracle_receipt(&root, &probe, &source_hash(&root).unwrap()).unwrap()["exit_code"],
+            0,
+            "{} corrected",
+            fixture.id
+        );
+        if !node {
+            assert!(
+                spec["corrected_files"]["README.md"]
+                    .as_str()
+                    .unwrap()
+                    .contains("503"),
+                "{} corrected documentation omits required error behavior",
+                fixture.id
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

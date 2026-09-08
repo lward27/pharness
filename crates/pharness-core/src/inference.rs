@@ -23,9 +23,9 @@ pub fn inference_qualification_fixture_revision(suite_id: &str) -> Result<&'stat
     Ok(match suite_id {
         "onboarding-v1" | "planner-v1" | "tester-v1" | "verifier-v1" => "stage-qualification-v1.0",
         "coding-v1" => "coding-v1.7",
-        "verifier-v2" => "stage-qualification-v2.3",
+        "verifier-v2" => "stage-qualification-v2.4",
         "onboarding-v2" => "stage-qualification-v2.3",
-        "planner-v2" => "stage-qualification-v2.4",
+        "planner-v2" => "stage-qualification-v2.5",
         "test-diagnosis-v2" => "stage-qualification-v2.3",
         "coding-v2" => "coding-reliability-v2.1",
         "repair-v2" => "repair-reliability-v2.1",

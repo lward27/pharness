@@ -104,6 +104,17 @@ pub(super) fn prepare(
     if mode == "missing_unit_receipt" {
         test_receipts.retain(|r| r["name"] != "unit");
     }
+    if suite == SuiteKind::VerifierV2
+        && spec["oracle"].is_string()
+        && !test_receipts
+            .iter()
+            .all(|receipt| receipt["status"] == "completed" && receipt["exit_code"] == 0)
+    {
+        bail!(
+            "compiled semantic-verification fixture requires passing public checks: {}",
+            fixture.id
+        );
+    }
     let semantic = if mode == "semantic_receipt" {
         Some(oracle_receipt(root, spec, &candidate_hash)?)
     } else {

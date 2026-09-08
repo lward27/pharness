@@ -1,0 +1,8 @@
+{
+  "status": "not_started",
+  "reason": "Newly observed frontend semantic fixture has a syntax failure. Finish complete semantic-fixture audit before another release.",
+  "preflight_passed": true,
+  "image_pushes": 0,
+  "deployment_changes": 0,
+  "verifier_control_dispatched": false
+}

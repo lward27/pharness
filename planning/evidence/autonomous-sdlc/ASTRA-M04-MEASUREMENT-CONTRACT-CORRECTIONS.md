@@ -2,6 +2,8 @@
 
 Status: implemented and locally validated; not released or qualified. Base source `040caeb6ae1a47997583204510bef08bc9f5766b`; live diagnostic source remains `e508f430e9f006c5f3e9f74fdd120d275605d85c`.
 
+The subsequent [semantic-fixture audit](ASTRA-M04-SEMANTIC-FIXTURE-VALIDITY.md) preserves this correction and advances Planner to v2.5 and Verifier to v2.4. The intermediate source24790cc was preflighted but never built or deployed. The v2.4 Planner hash below identifies this earlier committed correction, not the next release.
+
 ## Behavior and scope
 
 A complete two-case diagnostic previously inherited the full twelve-case stage gate's `infrastructure_valid: false`. The report now checks the exact requested case set, one attempt, unique rows and absence of an infrastructure abort. A completed model failure remains a valid measurement with `diagnostic.passed: false`. Empty, partial, duplicated, wrong-case, wrong-attempt and aborted diagnostics cannot claim success. The nested full-stage gate is unchanged, and diagnostics always keep `gate_passed` and `candidate_safe` false.

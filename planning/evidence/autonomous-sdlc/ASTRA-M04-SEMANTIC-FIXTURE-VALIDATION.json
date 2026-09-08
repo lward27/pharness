@@ -1,0 +1,79 @@
+{
+  "status": "passed_local_validation_not_live_qualification",
+  "base_revision": "24790ccc0aea037d59cdaed0605d03c5c816145d",
+  "core_eval_tests": {
+    "command": "cargo test -p pharness-core -p pharness-eval",
+    "passed": 235,
+    "ignored_live_only": 1,
+    "binaries": [
+      {
+        "binary": "Running unittests src/lib.rs (/Users/wardl/Personal/apps/pharness-astra-diagnostic-completeness/target/debug/deps/pharness_core-f1ce54bcc7e97241)",
+        "result": "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+        "passed": 165,
+        "ignored": 1
+      },
+      {
+        "binary": "Running tests/core_types.rs (/Users/wardl/Personal/apps/pharness-astra-diagnostic-completeness/target/debug/deps/core_types-905b4c0e6ccad4d2)",
+        "result": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 6,
+        "ignored": 0
+      },
+      {
+        "binary": "Running tests/hosted_sdlc.rs (/Users/wardl/Personal/apps/pharness-astra-diagnostic-completeness/target/debug/deps/hosted_sdlc-d131624e68fb58fd)",
+        "result": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "ignored": 0
+      },
+      {
+        "binary": "Running unittests src/main.rs (/Users/wardl/Personal/apps/pharness-astra-diagnostic-completeness/target/debug/deps/pharness_eval-fc09ccb163a6f3d9)",
+        "result": "test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 91.60s",
+        "passed": 62,
+        "ignored": 0
+      },
+      {
+        "binary": "Doc-tests pharness_core",
+        "result": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "api_inference_tests": {
+    "command": "cargo test -p pharness-api app::inference",
+    "passed": 13
+  },
+  "clippy": {
+    "command": "cargo clippy -p pharness-core -p pharness-eval --all-targets -- -D warnings",
+    "status": "passed"
+  },
+  "formatting": "passed",
+  "architecture_regressions": 5,
+  "native_fixture_audit": {
+    "verifier_cases": 24,
+    "semantic_cases": 11,
+    "semantic_public_checks": "passed",
+    "semantic_private_probes": "failed_as_required",
+    "corrected_controls": "passed"
+  },
+  "regressions_reproduced_before_correction": [
+    "invalid syntax in frontend semantic case",
+    "deleted baseline assertion in corrected control",
+    "incomplete error documentation",
+    "wrong-query test expected wrong response key"
+  ],
+  "runtime_versions": {
+    "local_node": "26.0.0",
+    "local_python": "3.14.4",
+    "live_runner_qualification": false
+  },
+  "log_sha256": {
+    "astra-semantic-fixture-red": "af88558bfd662c90adcb00e09113fd6b8f6e1ec170b0ef0ceaa256ac0220a329",
+    "astra-semantic-fixture-measurement": "310daba0fff3ca451c7548a68210982ac2f8288cf834bfea27f2f60722d26817",
+    "astra-semantic-fixture-tests": "42f38b695346feeb7b51efe27ec2fd7402f8068e9b2247feee15b24fa537ca1d",
+    "astra-semantic-fixture-api": "d9eb4cc4b354cfc3c020215b50e6f54fe595f3d56c266cb2f6df48d7b450c39b",
+    "astra-semantic-fixture-clippy": "84c350d2b02895b4f06f0f01c4afb13c2eb30608c693b0ce50e641b4ae3bc986",
+    "astra-semantic-fixture-architecture": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "native_verifier_report_sha256": "7a73f464a9bed93943931f717d3107d4cc239a1791ce40c80153ca09a2a21b20",
+  "no_image_push_or_deployment": true
+}
