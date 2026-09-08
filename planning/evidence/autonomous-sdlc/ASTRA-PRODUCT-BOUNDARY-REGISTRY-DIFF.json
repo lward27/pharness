@@ -1,0 +1,5 @@
+{
+  "status": "passed",
+  "scope": "Only finite runner_images mappings and derived policy/config hashes changed. All other execution registry content is equal.",
+  "initial_comparison": "The initial check assumed scalar image fields; inspected finite runner_images mapping before correcting the comparison."
+}

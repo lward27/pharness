@@ -1,0 +1,20 @@
+{
+  "builder": "pharness-mac",
+  "command": [
+    "scripts/pharness-build.sh",
+    "all",
+    "--revision",
+    "80acca99b6417d14dac75620b516852b3103a80d",
+    "--builder",
+    "pharness-mac"
+  ],
+  "docker_context": "rancher-desktop",
+  "elapsed_seconds": 2108.2510890829726,
+  "exit_code": 0,
+  "finished_at": "2026-09-08T14:46:47.665942+00:00",
+  "source_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+  "started_at": "2026-09-08T14:11:39.384100+00:00",
+  "status": "passed",
+  "target": "all",
+  "worktree": "/Users/wardl/Personal/apps/pharness-astra-product-boundary-build"
+}

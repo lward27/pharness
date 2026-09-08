@@ -2,9 +2,9 @@
 
 Status: approved implementation program; M01–M03 accepted; M04 active; M05/M06 compatible reader deployed; hosted creation and end-to-end gates remain open. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `38a4282c0bef27491a8e6e44640dbbe3f33526ca`, observed through release pin `81de84f70393c9dd9dad302930a97acf88da4ec9` on 2026-09-08. [Exact identities and ten-minute service observation](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-SOURCE-RELEASE.md) pass. Schema 55 and the compatible-reader floor (`92f8f1b` or later compatible readers) remain unchanged. The runtime remains unqualified for autonomous Finance work.
+Current compiled PHarness release: `80acca99b6417d14dac75620b516852b3103a80d`, observed through release pin `bcfc5687c5b7527e771747cdb817dd5bd0d2bc22` on 2026-09-08. [Exact live identities](../../evidence/autonomous-sdlc/ASTRA-M04-PRODUCT-BOUNDARY-RELEASE.md) and the complete ten-minute service window pass. Schema 55 and the compatible-reader floor (`92f8f1b` or later compatible readers) remain unchanged. The runtime remains unqualified for autonomous Finance work.
 
-Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The [identical-input onboarding comparison](../../evidence/autonomous-sdlc/ASTRA-M04-38A4282-ONBOARDING-CONTROL.md) passes one of two cases for each model, on different cases. The source reader is repaired and proven live. The [shared Product submission checks](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-PRODUCT-BOUNDARY.md) are implemented and validated; release before the next exact-runtime diagnostics. Historical failures remain unchanged.
+Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The [identical-input onboarding comparison](../../evidence/autonomous-sdlc/ASTRA-M04-38A4282-ONBOARDING-CONTROL.md) passes one of two cases for each model, on different cases. The source reader is repaired and proven live. The [shared Product submission checks](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-PRODUCT-BOUNDARY.md) are deployed. The [source80 diagnostic](../../evidence/autonomous-sdlc/ASTRA-M04-80ACCA9-ONBOARDING-ANALYSIS.md) exposes a remaining grader scope mismatch; correct it before further calls. Historical failures remain unchanged.
 
 ## Product promise and authority
 
@@ -60,7 +60,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | M04A–D deployed; exact-input onboarding pair each passes 1/2; shared product-proposal checks implemented; release and remaining canaries/connected/full gates open | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | Product correction released; source80 primary 0/2 with confirmed grading defect; control paused; M04D–F open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
@@ -80,39 +80,13 @@ and repair; then frozen-release qualification. This targeted refactor retains th
 shared gateway/runner, durable controller, deterministic tests and execution limits.
 Independent verification and production approval remain separate boundaries.
 
-[M04A native submission binding](../../evidence/autonomous-sdlc/ASTRA-M04-TRUSTED-SUBMISSIONS.md)
-is locally validated; stored proposals retain original discovery identity.
-[M04B context delivery and replay](../../evidence/autonomous-sdlc/ASTRA-M04-CONTEXT-ENVELOPE.md)
-also pass local checks; live provider canaries remain pending.
-[M04C source-backed stage measurements](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-MEASUREMENTS.md)
-are locally validated; all 48 scenarios are mapped and replayed with actual receipts.
-[M04D bounded diagnostic execution and common-input controls](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CANARIES.md)
-are locally validated on `f0c7afd` (627 passing component tests; one existing live-only
-test ignored). Partial results cannot qualify a policy. The current schema-54
-[Finance database snapshot](../../evidence/autonomous-sdlc/ASTRA-M04-PRE0055-ARCHIVE-VERIFIED.json)
-is verified, and the [real schema-55 clone migration](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-CLONE-MIGRATION-VERIFIED.json) preserves all original columns in all 81 tables. The [complete diagnostic release](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-COMPATIBLE-RELEASE.md) has seven verified images, a verified native bundle and validated pins.
-The [matching deployment, live data preservation and full internal service window](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) now pass.
-The [2026-09-07 gateway/local-model preparation and scope analysis](../../evidence/autonomous-sdlc/ASTRA-M04-LOCAL-MODEL-READINESS.md)
-identify the Onboarding scope mix-up and prepare a versioned shared prompt correction,
-gateway credential wiring and bounded transport checks. The Windows Minisforum guide
-is available; no local target is enabled and no local model is qualified.
-[Accounting correction and Mac build recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) document why the incomplete first candidate was superseded.
-[The complete accounting-corrected release](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-GATEWAY-RELEASE.md) was deployed from `81edd9e`; its live identities matched. The ten-minute service window passed with 21 samples.
-The new source-81 diagnostic failed without qualification after a passing 30/30 protocol renewal. It now separates the two permission scopes but submits nonrecursive directory strings. [The shared writable-scope contract gap](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) records the evidence and exact implementation boundary.
-The [shared scope correction passed its first diagnostic](../../evidence/autonomous-sdlc/ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md). The [native source-identity reader correction](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-SOURCE-RELEASE.md) is now released from source `38a4282c0bef27491a8e6e44640dbbe3f33526ca`; exact images, data preservation and the ten-minute service window pass. The [fresh primary/control comparison](../../evidence/autonomous-sdlc/ASTRA-M04-38A4282-ONBOARDING-CONTROL.md) proves identical retained inputs and context. Both models pass 1/2, on different cases. The native submission tool accepts a duplicate Service that the product API correctly rejects later.
-**Next eligible: release the validated [shared Product submission checks](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-PRODUCT-BOUNDARY.md), then run a fresh same-runtime onboarding primary/control pair.** The [Mac build route is restored through GitOps](../../evidence/autonomous-sdlc/ASTRA-M02-MAC-BUILDKIT-RETURN.md) while lucas-desktop is off. Broad
-qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
-another old-suite batch. M08 and
-M09 preparation may continue independently, but their acceptance gates remain open.
-The prepared Finance production-baseline change has not been approved; M04 approval
-does not authorize its merge or count as M11 production approval.
+[M04A trusted submissions](../../evidence/autonomous-sdlc/ASTRA-M04-TRUSTED-SUBMISSIONS.md), [M04B context delivery](../../evidence/autonomous-sdlc/ASTRA-M04-CONTEXT-ENVELOPE.md), and [M04C grounded measurements](../../evidence/autonomous-sdlc/ASTRA-M04-STAGE-MEASUREMENTS.md) are implemented with deterministic validation. M04D's source38 [primary/control comparison](../../evidence/autonomous-sdlc/ASTRA-M04-38A4282-ONBOARDING-CONTROL.md) proves identical retained input and context, with each model passing one of two cases. It exposed a deterministic Product-validation gap at native submission; those failed results remain unchanged.
 
-Historical runtime `19b0c55` was unqualified: Onboarding 0/12 twice, Planner 6/12 and 7/12,
-Test Diagnosis 1/12 twice, and [Verifier 1/24 twice](../../evidence/autonomous-sdlc/ASTRA-M04-19B0C55-VERIFIER-ANALYSIS.md). Builder and
-seeded Repair on earlier `48c77b7` passed 24/24 twice, 8/8 per stack; actual failed
-Builder-to-repair handoff and blind semantic verification remain unproven. Retain
-all failed evidence. The context/evidence corrections are now deployed in `92f8f1b` and need fresh
-qualification; old success cannot qualify this runtime.
+The [shared Product validator](../../evidence/autonomous-sdlc/ASTRA-M04-ONBOARDING-PRODUCT-BOUNDARY.md) is now deployed as [source80](../../evidence/autonomous-sdlc/ASTRA-M04-PRODUCT-BOUNDARY-RELEASE.md). Its 301 Rust checks and five architecture regressions pass. Exact live serving and execution images match; the full ten-minute service window passes with 21 samples. The [maintained watcher](../../evidence/autonomous-sdlc/ASTRA-M04-EVALUATION-RECEIPT-ACCEPTANCE.md) now retains final Job/Pod execution receipts separately from native diagnostic verdicts.
+
+**Next eligible: reconcile the twelve-case onboarding grader with public inputs and shared contracts, using the [source80 diagnostic](../../evidence/autonomous-sdlc/ASTRA-M04-80ACCA9-ONBOARDING-ANALYSIS.md).** Its unchanged native result is 0/2, with a confirmed false scope rejection and a separate fabricated blocked contract. The control is unrun; correct the measurement before more calls. M04E connected-loop proof and M04F frozen qualification remain open, with unchanged cases, thresholds, model defaults and execution limits. Historical Builder/seeded-Repair success does not qualify this runtime. The [execution history](ASTRA-PROGRAM-EXECUTION-HISTORY.md) preserves previous releases, failed measurements and superseded instructions.
+
+The [Mac Tekton route](../../evidence/autonomous-sdlc/ASTRA-M02-MAC-BUILDKIT-RETURN.md) is accepted while lucas-desktop is off. The Windows Minisforum guide and gateway preparation are available; no local endpoint has been supplied or activated. M08/M09 preparation may proceed independently, but their acceptance gates remain open. The prepared Finance production-baseline change is unapproved; implementation authority does not replace M11's human production approval.
 
 M07 source/build controller foundations are deployed. Both real Finance builds and
 the owner-approved, enforced source protections are evidenced; the autonomous
@@ -125,7 +99,7 @@ created by those types or by infrastructure health.
 
 Current evidence entry points:
 
-- [M02 platform acceptance](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md): supported certificate controller, trusted TLS and isolated staging; the [desktop BuildKit return](../../evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md) restores the verified native AMD64 path.
+- [M02 platform acceptance](../../evidence/autonomous-sdlc/ASTRA-M02-FINANCE-PLATFORM-READINESS.md): supported certificate controller, trusted TLS and isolated staging; the [Mac BuildKit route](../../evidence/autonomous-sdlc/ASTRA-M02-MAC-BUILDKIT-RETURN.md) is verified while lucas-desktop is off.
 - [M03 integrity acceptance](../../evidence/autonomous-sdlc/ASTRA-M03-EVIDENCE-AND-CODE-INTEGRITY.md): evidence normalization and architecture checks.
 - [M06 compatible release and recovery floor](../../evidence/autonomous-sdlc/ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md): seven verified images and native bundle, exact Argo revision, schema 53 and preserved Finance history. Hosted creation and Coding Reliability V2 remain disabled.
 - [M07 real build evidence](../../evidence/autonomous-sdlc/ASTRA-M07-SOURCE-DELIVERY-AND-BUILDS.md): both actual Finance Tekton builds and registry identities; these program-operated builds do not count as autonomous WorkItems.
