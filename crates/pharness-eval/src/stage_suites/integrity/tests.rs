@@ -44,7 +44,7 @@ fn onboarding_configuration_permissions_cannot_replace_future_development_scope(
         &[],
         &mut violations
     ));
-    assert!(violations.contains(&"undeclared_onboarding_write_scope".into()));
+    assert!(violations.contains(&"ungrounded_development_write_scope".into()));
 }
 
 fn document(suite: SuiteKind, fixture: &StageFixture) -> Value {
@@ -189,7 +189,7 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 #[test]
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
     for (id, revision) in [
-        ("onboarding-v2", "stage-qualification-v2.2"),
+        ("onboarding-v2", "stage-qualification-v2.3"),
         ("planner-v2", "stage-qualification-v2.3"),
         ("test-diagnosis-v2", "stage-qualification-v2.3"),
         ("verifier-v2", "stage-qualification-v2.3"),
@@ -198,7 +198,11 @@ fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gat
             pharness_core::inference_qualification_fixture_revision(id).unwrap(),
             revision
         );
-        for old_revision in ["stage-qualification-v2.0", "stage-qualification-v2.1"] {
+        for old_revision in [
+            "stage-qualification-v2.0",
+            "stage-qualification-v2.1",
+            "stage-qualification-v2.2",
+        ] {
             if old_revision == revision {
                 continue;
             }

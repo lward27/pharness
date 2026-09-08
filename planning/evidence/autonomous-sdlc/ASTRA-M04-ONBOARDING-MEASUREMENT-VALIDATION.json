@@ -1,0 +1,192 @@
+{
+  "source_base": "e102b46ada4fa8c8ff9f0a27d22f7bfb34f5605b",
+  "observed_at": "2026-09-08T15:41:14.265909+00:00",
+  "status": "passed",
+  "scope": "deterministic validation only; release and live diagnostics pending",
+  "changed_rust_sha256": {
+    "crates/pharness-api/src/app/inference/diagnostics/tests.rs": "sha256:51045f11e66316138d33600ab930bfc1c6df11f3365151836dfbe9c533238467",
+    "crates/pharness-core/src/inference.rs": "sha256:8aa3415f0cb207236b72618def3da773a5ea4378be5a856d3c34f872ac9129ff",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "sha256:f6d7a484dd3689cdff2802ad0ff0087573ac6323d139d52cd3565273b260eac9",
+    "crates/pharness-eval/src/stage_suites/onboarding.rs": "sha256:4acae6f59085f478289d2602f1d6c1a90e647d8a329c9a425c84f9d6182f5150",
+    "crates/pharness-eval/src/stage_suites/onboarding/tests.rs": "sha256:8f645f4cbac41f55a74cb9fc5567a877127ad3eda01d1668a0e5317d6f196c49"
+  },
+  "checks": [
+    {
+      "name": "core-eval",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "pharness-core",
+        "-p",
+        "pharness-eval"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 90.795,
+      "log_path": "/tmp/astra-onboarding-alignment-core-eval-final.log",
+      "log_sha256": "sha256:e3877357cc8380f7ece944e5a8d1d4905f1d5442ba5aaa1b2207bdb6b2384641",
+      "final_lines": [
+        "\u2139 todo 0",
+        "\u2139 duration_ms 98.07825",
+        "test coding_v2::tests::replay_patches_pass_public_and_hidden_checks_without_scope_drift ... ok",
+        "",
+        "test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 87.82s",
+        "",
+        "   Doc-tests pharness_core",
+        "",
+        "running 0 tests",
+        "",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        ""
+      ]
+    },
+    {
+      "name": "api-inference",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "pharness-api",
+        "app::inference::"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.006,
+      "log_path": "/tmp/astra-onboarding-alignment-api-inference-final.log",
+      "log_sha256": "sha256:4251d4af083c81689aa106ca05955dc3bf63915f628365260b64aab50d645dfa",
+      "final_lines": [
+        "test app::inference::tests::body_hash_requires_exact_hex ... ok",
+        "test app::inference::tests::gateway_readiness_uses_the_control_plane_root ... ok",
+        "test app::inference::tests::protocol_calibration_history_is_tool_call_complete_and_correction_bounded ... ok",
+        "test app::inference::tests::run_tool_constraints_derive_names_not_arbitrary_commands ... ok",
+        "test app::inference::tests::protocol_calibration_preserves_exact_generation_policy ... ok",
+        "test app::inference::tests::qualification_metrics_are_bound_to_every_immutable_input ... ok",
+        "test app::inference::diagnostics::tests::partial_or_mislabelled_reports_never_claim_qualification ... ok",
+        "test app::inference::diagnostics::tests::common_control_receives_only_complete_public_inputs_on_the_same_runtime ... ok",
+        "test app::inference::diagnostics::tests::common_control_reads_source_identity_from_retained_native_evaluator_report ... ok",
+        "",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.02s",
+        ""
+      ]
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "pharness-core",
+        "-p",
+        "pharness-eval",
+        "-p",
+        "pharness-api",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 39.536,
+      "log_path": "/tmp/astra-onboarding-alignment-clippy-final.log",
+      "log_sha256": "sha256:45b59b56be00d4b799b79ff161d8735efe5e168afb873da9b1c7ac330641321f",
+      "final_lines": [
+        "    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-core)",
+        "    Checking pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-openai-compatible)",
+        "    Checking pharness-store v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-store)",
+        "    Checking pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-fireworks)",
+        "    Checking pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-runhost)",
+        "    Checking pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-config)",
+        "    Checking pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-codex-host)",
+        "    Checking pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-eval)",
+        "    Checking pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-onboarding-measurement-alignment/crates/pharness-api)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.46s"
+      ]
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "scripts/check-app-module-boundaries.sh"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.318,
+      "log_path": "/tmp/astra-onboarding-alignment-architecture-final.log",
+      "log_sha256": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+      "final_lines": [
+        ".....",
+        "----------------------------------------------------------------------",
+        "Ran 5 tests in 0.003s",
+        "",
+        "OK",
+        "app module boundaries are valid"
+      ]
+    },
+    {
+      "name": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.63,
+      "log_path": "/tmp/astra-onboarding-alignment-format-final.log",
+      "log_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "final_lines": []
+    },
+    {
+      "name": "whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.033,
+      "log_path": "/tmp/astra-onboarding-alignment-whitespace-final.log",
+      "log_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "final_lines": []
+    }
+  ],
+  "rust_tests": {
+    "core_unit": 165,
+    "core_integration": 8,
+    "evaluator": 54,
+    "api_inference": 12,
+    "total_passed": 239,
+    "ignored_live_core_tests": 1
+  },
+  "architecture_regressions_passed": 5,
+  "prior_expected_red": {
+    "test": "retained_native_valid_submission_is_not_an_invented_product_service",
+    "tests_run": 1,
+    "tests_failed": 1,
+    "violation": "invented_or_duplicate_product_service",
+    "log_sha256": "sha256:28341b66fd9e301559b63c059f2d54a3544a10d6856f218aeee453d9bcd5f0b4"
+  },
+  "initial_compatibility_test_failures": [
+    "suite version expectation and renamed scope diagnostic updated without weakening assertions",
+    "old native report correctly rejected as a current-suite reference; test now asserts rejection and separately checks verbatim source fields using a test-only request wrapper"
+  ],
+  "suite": {
+    "id": "onboarding-v2",
+    "previous_revision": "stage-qualification-v2.2",
+    "revision": "stage-qualification-v2.3",
+    "previous_hash": "sha256:7fdb61cc2e5e7ad268b47ffb11d7a0eda861624c8c896b19bf5c94524f69e9f4",
+    "hash": "sha256:c86e4fc492814f55ed04b32da5c8f69c4cfef8bba38fc7060b5377f69bdf586b",
+    "case_count": 12,
+    "executable_cases": 4,
+    "blocked_cases": 8
+  },
+  "unchanged_from_base": {
+    "crates/pharness-eval/src/coding_v2.rs": "sha256:3cbfa972eb0a97a8db4d31f1e45fedaf1febc4038bd2ad5313eb7a473092d173",
+    "crates/pharness-eval/src/stage_suites.rs": "sha256:eadebddd048216769938c1e78635a3fbaa4013b5f443843eb6a06dc30bb3041b",
+    "crates/pharness-runhost/src/onboarding_submission.rs": "sha256:0fc0727e3660c9c229347bf3501e83c5f5e8ef779ad97c7976ce5a06ad3d8b59",
+    "planning/evidence/autonomous-sdlc/ASTRA-M04-80ACCA9-ONBOARDING-PRIMARY-RESULT.json": "sha256:1a38cb98b62c8eb8de164af68c1df0eaa9b59d0116a8547f551f1e8536eeb280"
+  },
+  "historical_reports_rescored": false,
+  "live_calls_dispatched": 0,
+  "schema_migrations": [],
+  "model_or_budget_changes": [],
+  "qualification": null
+}
