@@ -1,0 +1,27 @@
+{
+  "observed_at": "2026-09-08T00:43:51.537803+00:00",
+  "evaluation_id": "infeval_01a07e7783717723aeb38a529472d1cf",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "job_name": "pharness-inference-eval-e927bf74cdb2",
+  "job_uid": "7b079818-308f-43a2-9848-6eb1ccb9cd6e",
+  "image": "registry.lucas.engineering/pharness-eval-runner@sha256:f845ab7b534d0e6e51e57a5e56893331c46eba7202bbbbcecba247a584db4653",
+  "policy_target_suite_and_budget_unchanged": true,
+  "prompt_and_tool_hashes_match_compiled_receipt": true,
+  "pods": [
+    {
+      "name": "pharness-inference-eval-e927bf74cdb2-f6jln",
+      "uid": "99435572-a5b2-432c-a0ae-9227cdcc0448",
+      "node": "ubuntu-lucas-engineering-2",
+      "phase": "Pending",
+      "containers": [
+        {
+          "name": "evaluate",
+          "image_id": "",
+          "ready": false,
+          "restarts": 0,
+          "waiting_reason": "PodInitializing"
+        }
+      ]
+    }
+  ]
+}

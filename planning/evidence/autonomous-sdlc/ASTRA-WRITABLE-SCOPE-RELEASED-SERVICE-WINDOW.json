@@ -1,0 +1,15 @@
+{
+  "phase": "released",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "duration_seconds": 600,
+  "status": "inconclusive_or_failed",
+  "samples": [],
+  "queries": {},
+  "limitations": [
+    "Internal service checks, not public ingress acceptance, model qualification or Finance runtime verification.",
+    "No application trace or unsupported latency SLO is asserted."
+  ],
+  "started_at": "2026-09-08T00:29:15.238860+00:00",
+  "failure_type": "AssertionError",
+  "finished_at": "2026-09-08T00:29:15.522212+00:00"
+}

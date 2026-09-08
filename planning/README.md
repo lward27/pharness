@@ -6,18 +6,22 @@ Last organized: 2026-09-04. Current program: [ASTRA autonomous SDLC](programs/au
 
 | Purpose | Read first | Meaning |
 | --- | --- | --- |
-| Getting started | [README](../README.md), [current baseline](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md) | What exists, what is deployed, and what is not yet proven |
+| Getting started | [README](../README.md), [program baseline](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md) | What exists, what is deployed, and what is not yet proven |
 | Development | [architecture](architecture/README.md), [UI guidance](../ui/AGENTS.md) | Ownership, invariants, and implementation checks |
 | Operation | [operations](operations/README.md) | Scoped runbooks and release verification |
 | Reference | [product vision](design/product-vision-and-boundaries.md), [product model](design/product-model.md), [stage outcomes](design/stage-outcomes-and-evidence-handoffs.md), [hosted configuration](design/ASTRA-HOSTED-WORKFLOW-CONFIGURATION.md) | Current direction and semantic contracts |
 | Roadmap | [ASTRA master and twelve milestones](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), [active index](active/README.md) | Approved work and acceptance gates |
 | Evidence | [evidence](evidence/README.md), [implemented records](implemented/README.md), [archive](archive/README.md) | Dated proof, shipped decisions, and superseded history |
 
-## Current implementation and release
+## Starting baseline and current status
+
+Use the [operator checkpoint](evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md)
+for the latest compiled release, observed deployment, diagnostic result and next
+eligible step. The following identities describe the program starting baseline.
 
 The starting source/configuration baseline is main
 `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`, observed live in Argo on 2026-09-04.
-The compiled release source is `83a2689c877a3f48688d1d457c34e83474698c46`.
+The compiled release source at that baseline was `83a2689c877a3f48688d1d457c34e83474698c46`.
 These identities differ intentionally: configuration/evidence commits do not imply
 that images were rebuilt. The [Lamina release evidence](evidence/smoke-results/pharness-lamina-operator-console-release-2026-09-04.md)
 records its prior acceptance. Refresh the [baseline addendum](evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md)

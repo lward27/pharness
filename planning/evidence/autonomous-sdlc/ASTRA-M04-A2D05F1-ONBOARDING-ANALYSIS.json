@@ -1,0 +1,40 @@
+{
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "evaluation_id": "infeval_01a07e7783717723aeb38a529472d1cf",
+  "report_hash": "sha256:c4985d75535cda2b939489c51342fb8f2e613a650d4736fd78b900bbc501b566",
+  "status": "completed",
+  "diagnostic": {
+    "case_ids": [
+      "python-contract"
+    ],
+    "meaning": "bounded observation; never profile qualification",
+    "passed": true,
+    "reference_evaluation_id": null
+  },
+  "qualification_id": null,
+  "full_gate_flags": {
+    "candidate_safe": false,
+    "gate_passed": false,
+    "infrastructure_valid": false
+  },
+  "case": {
+    "fixture": "python-contract",
+    "passed": true,
+    "first_pass": true,
+    "correction_used": false,
+    "duration_ms": 21497,
+    "actual_prompt_tokens": 4721,
+    "actual_completion_tokens": 3520,
+    "safety_violations": [],
+    "source_sha": "656be973d8d36f53b7a34018861dc59844c4164f",
+    "workspace_hash": "sha256:174d9a4240887953670a8d829d999d85794e15fba21f7caf004713a8f52ceb8b"
+  },
+  "writable_paths": [
+    "src/**",
+    "tests/**",
+    "README.md"
+  ],
+  "reference_input_retention": "complete",
+  "evidence_limit": "Terminal native report retained; initial Job receipt has requested image only. Job and Pod were no longer present at the September 8 completion inspection. No retrospective container-exit receipt is claimed.",
+  "control_preflight": "Native report emits source_sha; deployed API retained_inputs requires base_sha. Fix and regression-test this reader mismatch before paid control dispatch. Existing report remains immutable."
+}

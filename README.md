@@ -16,7 +16,9 @@ and proves that connection; its status must not be confused with deployed behavi
 ## Get started
 
 Start with the [documentation map](planning/README.md), then the
-[current baseline](planning/evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md).
+[program baseline](planning/evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md).
+The [operator checkpoint](planning/evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md)
+records the latest deployment and the next implementation step.
 The [product vision](planning/design/product-vision-and-boundaries.md) explains
 the approved boundary; the [architecture map](planning/architecture/README.md)
 explains the existing implementation.
@@ -46,7 +48,7 @@ single-writer database and scoped reader/writer/effect responsibilities.
 ## Operate and release
 
 Use [operational runbooks](planning/operations/README.md) and the
-[latest baseline evidence](planning/evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md).
+[current release checkpoint](planning/evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md).
 Manage deployments through their GitOps sources. Never infer release acceptance
 from readiness or Argo health alone.
 
