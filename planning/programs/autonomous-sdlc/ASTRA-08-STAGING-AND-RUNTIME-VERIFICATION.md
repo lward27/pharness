@@ -1,5 +1,7 @@
 # ASTRA M08: Staging and runtime verification
 
+Current integration: [the existing draft is refreshed against main e508f43](../../evidence/autonomous-sdlc/ASTRA-M08-CURRENT-MAIN-INTEGRATION.md), with 840 passing local checks; deployment and autonomous acceptance remain open.
+
 Status: basic Tempo reader, schema-54 delivery records and durable staging foundation deployed in source `19b0c55`. New native Finance identity, probe, signal and trace integration remains in development; autonomous staging acceptance is open.
 Authority: [approved program](ASTRA-00-PROGRAM.md).
 Dependencies: M07 and usable M02 staging bindings.
@@ -23,6 +25,62 @@ Its local tests do not establish a real GitOps mutation or running deployment.
 The operation retains its delivery locks after a committed digest while actual
 Argo and runtime verification remain pending. Production cannot be expressed by
 this authority; the existing production approval boundary is unchanged.
+
+The [native deployment identity reader](../../evidence/autonomous-sdlc/ASTRA-M08-DEPLOYMENT-IDENTITY.md)
+checks the exact Argo revision, Deployment/ReplicaSet/Pod ownership, running digest
+and ready service endpoints. Both existing staging baselines passed live read-only
+checks. It is not deployed or connected to the controller and does not establish
+a runtime observation window or application acceptance.
+
+The [deterministic application probes](../../evidence/autonomous-sdlc/ASTRA-M08-FUNCTIONAL-PROBES.md)
+are implemented and tested but not deployed. Frontend staging HTTP checks passed;
+the existing yfinance staging image failed current-source validation and market-route
+checks. [Baseline drift](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-BASELINE-DRIFT.md)
+records the discrepancy and the unproven source commit behind that image. Preserve
+these failures when defining baseline expectations and candidate acceptance.
+
+The [native window signal reader](../../evidence/autonomous-sdlc/ASTRA-M08-WINDOW-SIGNALS.md)
+passed two real five-minute staging observations at source `8173a4e83af22f1c2e178936e190644396f81ddc`.
+It binds readiness/restart metrics and Pod-UID log streams to bracketed deployment identities,
+uses all-address application HTTP counters, and rejects missing/stale evidence. Live testing
+caught Loki sampling alignment and a real Promtail out-of-memory delivery gap; both failed
+attempts remain recorded. The finite [collector recovery](../../evidence/autonomous-sdlc/ASTRA-M08-PROMTAIL-MEMORY-RECOVERY.md)
+is deployed through GitOps and fresh log coverage passed. The PHarness reader itself is not
+deployed. These results do not override backend functional failures or establish trace
+correlation, durable baseline admission, automatic staging or production readiness.
+
+The [health-request trace correlation](../../evidence/autonomous-sdlc/ASTRA-M08-HEALTH-TRACE-CORRELATION.md)
+passed a real five-minute staging check with matching request/parent IDs and a complete
+Tempo server span. Other backend probes still failed. The reader is not deployed;
+[API access preflight](../../evidence/autonomous-sdlc/ASTRA-M08-API-RUNTIME-READER-PREFLIGHT.json)
+identified missing finite Kubernetes read permissions and telemetry configuration.
+The local operator checks cannot substitute for deployed controller verification.
+
+The [finite API observer preparation](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-OBSERVER-ACCESS.md)
+adds namespace-scoped Finance reads and a separate Mimir endpoint while preserving legacy
+Prometheus inventory. Local code/chart validation and six in-cluster HTTP routing checks
+passed. The change is not deployed; effective API permissions and native controller
+execution still require observed evidence. The earlier empty-query failure is retained.
+
+The [current-source staging baseline](../../evidence/autonomous-sdlc/ASTRA-M08-YFINANCE-CURRENT-STAGING-BASELINE.md)
+now runs the existing tested `efa6294` image after GitOps PR 56. The unchanged functional
+probes and one shared five-minute metrics/log/health-trace window passed. Production is
+unchanged. This program-operated platform correction provides a usable staging starting
+point; it is not the autonomous delivery demonstration or an M11 maintenance WorkItem.
+
+The [bound runtime assessment](../../evidence/autonomous-sdlc/ASTRA-M08-RUNTIME-ASSESSMENT.md)
+passed a single native five-minute staging window with one shared identity pair. The
+[durable baseline gate](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-BASELINE-ADMISSION.md)
+connects those readers to persisted controller windows and a fresh staging admission.
+These newer slices require a future compatible API/worker release. Neither the local
+native proof nor the controller fixtures constitute an autonomous staging delivery.
+
+
+The [durable candidate controller](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-CANDIDATE-VERIFICATION.md)
+now links the original baseline admission and GitOps receipt to exact candidate
+identity and one five-minute native runtime window. All 299 API/admin checks pass,
+including 22 staging cases. It remains unreleased. Passed staging leaves the WorkItem
+open; M09 production authority and real autonomous staging acceptance remain required.
 
 ## Objective and scope
 
@@ -88,3 +146,7 @@ boundaries. Record results, commit the implementation and evidence, update the m
 and finding ledger, then continue the next eligible milestone. If an external input is
 missing, explain the exact blocker and continue independent work. Do not weaken a gate,
 silently switch provider/budget, or claim unexecuted deployment or autonomous acceptance.
+
+The [integrated staging review](../../evidence/autonomous-sdlc/ASTRA-M08-INTEGRATION-REVIEW.md)
+records 782 passing workspace tests and the rendered finite observer permissions.
+It applies to source `6f40cdc`; integration, release and autonomous acceptance remain open.

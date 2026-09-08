@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod admission;
 mod github;
 
 #[derive(Deserialize)]
@@ -135,6 +136,7 @@ impl Transport {
             "staging_admission_not_acknowledged"
         );
         // Never retry the mutation, including after an unknown response.
+        admission::validate(&admission, &context.authority, &plan, now())?;
         let known = git.commit_once(&context.authority, &plan, now()).await.ok();
         observe(git, &context.authority, &plan, known.as_deref()).await
     }

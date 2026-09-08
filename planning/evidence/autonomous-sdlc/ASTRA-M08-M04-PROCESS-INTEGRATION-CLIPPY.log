@@ -1,0 +1,11 @@
+    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-core)
+    Checking pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-openai-compatible)
+    Checking pharness-store v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-store)
+    Checking pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-fireworks)
+    Checking pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-runhost)
+    Checking pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-config)
+    Checking pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-codex-host)
+    Checking pharness-worker v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-worker)
+    Checking pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-eval)
+    Checking pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-m08-after-m04-contracts/crates/pharness-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 40.61s

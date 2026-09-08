@@ -1,0 +1,18 @@
+    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-probe-traces/crates/pharness-core)
+error: type `tools::cluster::finance::signals::window::Pod` is more private than the item `tools::cluster::finance::signals::window::Context::log_pod`
+   --> crates/pharness-core/src/tools/cluster/finance/signals/window.rs:177:5
+    |
+177 |     pub fn log_pod<'a>(&'a self, metric: &Value) -> Result<&'a Pod, &'static str> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `tools::cluster::finance::signals::window::Context::log_pod` is reachable at visibility `pub(in crate::tools::cluster::finance)`
+    |
+note: but type `tools::cluster::finance::signals::window::Pod` is only usable at visibility `pub(in crate::tools::cluster::finance::signals)`
+   --> crates/pharness-core/src/tools/cluster/finance/signals/window.rs:6:1
+    |
+  6 | pub(super) struct Pod {
+    | ^^^^^^^^^^^^^^^^^^^^^
+    = note: `-D private-interfaces` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(private_interfaces)]`
+
+error: could not compile `pharness-core` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `pharness-core` (lib test) due to 1 previous error
