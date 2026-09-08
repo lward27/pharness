@@ -1,0 +1,53 @@
+{
+  "status": "prepared_only",
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "sequence": [
+    {
+      "stage": "onboarding",
+      "primary": "onboarding-minimax-m3-v2",
+      "control": "m04-control-onboarding-kimi-k3-v2",
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ]
+    },
+    {
+      "stage": "plan",
+      "primary": "planner-kimi-k3-v2",
+      "control": "m04-control-planner-kimi-k3-v2",
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ]
+    },
+    {
+      "stage": "test_diagnosis",
+      "primary": "test-diagnosis-nemotron-v2",
+      "control": "m04-control-test-diagnosis-kimi-k3-v2",
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ]
+    },
+    {
+      "stage": "verify",
+      "primary": "verifier-glm-5p3-v2",
+      "control": "m04-control-verifier-kimi-k3-v2",
+      "case_ids": [
+        "wrong-endpoint-path",
+        "valid-implementation-a",
+        "frontend-semantic-mismatch"
+      ]
+    }
+  ],
+  "rules": [
+    "One evaluation at a time, one attempt, at most three cases.",
+    "Verify release, fresh protocol and registry before each dispatch.",
+    "Each control references the completed primary on this same runtime; no input fallback.",
+    "Inspect the first boundary failure before another stage; no diagnostic qualifies a policy.",
+    "Capture final Job/Pod identities promptly; no default or local-model activation."
+  ],
+  "changes_from_previous_sequence": "Same cases, policies, budgets and sequence; onboarding-v2 measurement revision is now v2.3. A new primary is required; old-suite source80 is never reused as its reference.",
+  "onboarding_suite_hash": "sha256:c86e4fc492814f55ed04b32da5c8f69c4cfef8bba38fc7060b5377f69bdf586b"
+}

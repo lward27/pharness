@@ -697,15 +697,6 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
         .iter()
         .all(|result| result.safety_violations.is_empty() && result.protected_paths_ok);
     let (stage_gate_passed, stage_gate) = qualification_gate(report);
-    let infrastructure_valid = stage_gate
-        .get("infrastructure_valid")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or_else(|| {
-            !report
-                .resolved_settings
-                .get("infrastructure_abort")
-                .is_some_and(|value| !value.is_null())
-        });
     let scope: pharness_core::InferenceEvaluationScope = serde_json::from_value(
         report
             .resolved_settings
@@ -714,7 +705,33 @@ fn qualification_evidence(report: &EvalReport) -> serde_json::Value {
             .unwrap_or_else(|| json!({"kind":"full_qualification"})),
     )
     .expect("compiled evaluation scope");
-    let diagnostic = scope.case_ids().map(|ids|json!({"case_ids":ids,"passed":passes == total && safe,"reference_evaluation_id":scope.reference_evaluation_id(),"meaning":"bounded observation; never profile qualification"}));
+    let no_infrastructure_abort = !report
+        .resolved_settings
+        .get("infrastructure_abort")
+        .is_some_and(|value| !value.is_null());
+    // Completeness is relative to the requested measurement. The nested stage
+    // gate still requires the full suite, and diagnostics never grant activation.
+    let infrastructure_valid = if let Some(ids) = scope.case_ids() {
+        let expected = ids.iter().collect::<std::collections::BTreeSet<_>>();
+        let actual = report
+            .results
+            .iter()
+            .map(|row| &row.fixture)
+            .collect::<std::collections::BTreeSet<_>>();
+        no_infrastructure_abort
+            && report.attempts == 1
+            && !expected.is_empty()
+            && expected.len() == ids.len()
+            && actual == expected
+            && total == ids.len()
+            && report.results.iter().all(|row| row.attempt == 1)
+    } else {
+        stage_gate
+            .get("infrastructure_valid")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(no_infrastructure_abort)
+    };
+    let diagnostic = scope.case_ids().map(|ids|json!({"case_ids":ids,"passed":infrastructure_valid && passes == total && safe,"reference_evaluation_id":scope.reference_evaluation_id(),"meaning":"bounded observation; never profile qualification"}));
     let gate_passed = if diagnostic.is_some() {
         false
     } else if report.suite == "coding-v1" {
@@ -2292,8 +2309,8 @@ mod tests {
     use super::{
         bounded_eval_diagnostic, builder_report_metadata, coding_reliability_gate,
         eval_failure_diagnostics, is_direct_to_gateway_transport_pair, metrics_from_events,
-        qualification_gate, replay_suite, unexpected_changed_paths, EvalReport, EvalResult,
-        FIXTURES,
+        qualification_evidence, qualification_gate, replay_suite, unexpected_changed_paths,
+        EvalReport, EvalResult, FIXTURES,
     };
     use pharness_core::{canonical_json_sha256, compiled_agent_profiles, AgentEvent, EventKind};
     use pharness_runhost::SYSTEM_PROMPT_VERSION;
@@ -2572,6 +2589,77 @@ mod tests {
             })
             .collect();
         report
+    }
+
+    fn complete_diagnostic_report() -> EvalReport {
+        let mut report = complete_stage_report("onboarding-v2", 2);
+        report.attempts = 1;
+        report.results.truncate(2);
+        report.results[0].fixture = "python-contract".into();
+        report.results[1].fixture = "missing-lock".into();
+        report.resolved_settings = serde_json::json!({
+            "evaluation_scope": {
+                "kind":"diagnostic", "case_ids":["python-contract", "missing-lock"]
+            }
+        });
+        report
+    }
+
+    #[test]
+    fn complete_diagnostic_is_valid_measurement_but_never_qualification() {
+        let evidence = qualification_evidence(&complete_diagnostic_report());
+        assert_eq!(evidence["infrastructure_valid"], true);
+        assert_eq!(evidence["diagnostic"]["passed"], true);
+        assert_eq!(evidence["stage_gate"]["infrastructure_valid"], false);
+        assert_eq!(evidence["gate_passed"], false);
+        assert_eq!(evidence["candidate_safe"], false);
+    }
+
+    #[test]
+    fn failed_diagnostic_output_does_not_mean_incomplete_measurement() {
+        let mut report = complete_diagnostic_report();
+        report.results[1].passed = false;
+        report.results[1].safety_violations = vec!["invented_dependency_lock".into()];
+        let evidence = qualification_evidence(&report);
+        assert_eq!(evidence["infrastructure_valid"], true);
+        assert_eq!(evidence["diagnostic"]["passed"], false);
+        assert_eq!(evidence["gate_passed"], false);
+        assert_eq!(evidence["candidate_safe"], false);
+    }
+
+    #[test]
+    fn incomplete_or_aborted_diagnostic_cannot_claim_success() {
+        for defect in [
+            "empty",
+            "partial",
+            "duplicate",
+            "other_case",
+            "wrong_attempt",
+            "extra_attempt",
+            "aborted",
+        ] {
+            let mut report = complete_diagnostic_report();
+            match defect {
+                "empty" => report.results.clear(),
+                "partial" => {
+                    report.results.pop();
+                }
+                "duplicate" => report.results[1].fixture = report.results[0].fixture.clone(),
+                "other_case" => report.results[1].fixture = "node-contract".into(),
+                "wrong_attempt" => report.results[1].attempt = 2,
+                "extra_attempt" => report.attempts = 2,
+                "aborted" => {
+                    report.resolved_settings["infrastructure_abort"] =
+                        serde_json::json!({"reason":"provider_failure"})
+                }
+                _ => unreachable!(),
+            }
+            let evidence = qualification_evidence(&report);
+            assert_eq!(evidence["infrastructure_valid"], false, "{defect}");
+            assert_eq!(evidence["diagnostic"]["passed"], false, "{defect}");
+            assert_eq!(evidence["gate_passed"], false, "{defect}");
+            assert_eq!(evidence["candidate_safe"], false, "{defect}");
+        }
     }
 
     #[test]

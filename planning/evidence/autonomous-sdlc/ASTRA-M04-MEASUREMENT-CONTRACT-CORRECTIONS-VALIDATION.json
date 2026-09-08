@@ -1,0 +1,160 @@
+{
+  "status": "passed_local_validation_not_live_qualification",
+  "base_revision": "040caeb6ae1a47997583204510bef08bc9f5766b",
+  "tests": {
+    "command": "cargo test -p pharness-core -p pharness-eval -p pharness-api",
+    "passed": 523,
+    "ignored": 1,
+    "binaries": [
+      {
+        "binary": "Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)",
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+        "passed": 1,
+        "ignored": 0
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)",
+        "result": "test result: ok. 290 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 79.51s",
+        "passed": 290,
+        "ignored": 0
+      },
+      {
+        "binary": "Running unittests src/lib.rs (target/debug/deps/pharness_core-238941fb1e3d81a7)",
+        "result": "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.43s",
+        "passed": 165,
+        "ignored": 1
+      },
+      {
+        "binary": "Running tests/core_types.rs (target/debug/deps/core_types-49742792ce738f1d)",
+        "result": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 6,
+        "ignored": 0
+      },
+      {
+        "binary": "Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-ebb0b1db1f0fe293)",
+        "result": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "passed": 2,
+        "ignored": 0
+      },
+      {
+        "binary": "Running unittests src/main.rs (target/debug/deps/pharness_eval-9654469e5ad2fff2)",
+        "result": "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 106.57s",
+        "passed": 59,
+        "ignored": 0
+      },
+      {
+        "binary": "Doc-tests pharness_core",
+        "result": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "clippy": {
+    "command": "cargo clippy -p pharness-core -p pharness-eval -p pharness-api --all-targets -- -D warnings",
+    "status": "passed"
+  },
+  "architecture": {
+    "command": "bash scripts/check-app-module-boundaries.sh",
+    "status": "passed",
+    "python_regressions": 5
+  },
+  "red_regressions": [
+    "complete_diagnostic_is_valid_measurement_but_never_qualification failed before scope-relative reporting",
+    "planner_required_checks_match_the_selected_and_executable_contract failed before fixture selection correction"
+  ],
+  "planner_fixture_diff": {
+    "only_changed_field": "spec.acceptance",
+    "cases": [
+      {
+        "case": "cross-repository-context",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "failing-baseline",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "ambiguous-intent",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "immutable-source",
+        "before": [
+          "compile"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "undeclared-path",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "documentation-boundary",
+        "before": [
+          "compile"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "stale-context-revision",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      },
+      {
+        "case": "path-intersection",
+        "before": [
+          "unit"
+        ],
+        "after": [
+          "unit",
+          "compile"
+        ]
+      }
+    ],
+    "scenario_count": 12
+  },
+  "local_log_sha256": {
+    "astra-diagnostic-completeness-red": "0dce6365f91a133fe2a65b4d37dd2ec498dc3517340ef2ff44e96e8fdfbcdf00",
+    "astra-planner-contract-red": "b5af829e2c77aa32f1b1ec9312409dadf9b1ae85b397c05364c07733cd746fa3",
+    "astra-measurement-contract-tests": "553c18beea8b29a9c594cc1e25553ef5ea987f7bf7d08bd53f482ad792d6e8ca",
+    "astra-measurement-contract-clippy": "6415f86c9420b05aaabfcb31970574a3fb750f9168445a2e2e47720b918d6e55",
+    "astra-measurement-contract-architecture": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "no_runtime_release_or_activation": true
+}

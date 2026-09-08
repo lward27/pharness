@@ -1,0 +1,110 @@
+{
+  "bounded_gateway_errors": [
+    {
+      "at": "2026-09-08T16:25:07.864153985Z",
+      "connection_timeout": true,
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "response_header_timeout": false
+    }
+  ],
+  "limitations": [
+    "Bounded new-connection read probes; no packet capture or large upload reproduction."
+  ],
+  "mutations": [],
+  "observed_at": "2026-09-08T16:25:55.754505+00:00",
+  "phase": "eval-runner-publish",
+  "probes": [
+    {
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "results": [
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "results": [
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.43.146.139",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        },
+        {
+          "destination": "10.42.0.165",
+          "status": "pass"
+        }
+      ]
+    }
+  ],
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "status": "observed"
+}

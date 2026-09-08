@@ -1,0 +1,343 @@
+{
+  "base_revision": "24790ccc0aea037d59cdaed0605d03c5c816145d",
+  "suites": {
+    "planner-v2": {
+      "revision": "stage-qualification-v2.5",
+      "hash": "sha256:dedd37009b6e24c7e6623a4e3431da83d6c2a3a582d1bda00440a3eabe237329"
+    },
+    "verifier-v2": {
+      "revision": "stage-qualification-v2.4",
+      "hash": "sha256:65230944e37087dcaccf77c184550223395768c0dd49cc5273bff6a061f72ac2"
+    },
+    "coding-v2": {
+      "revision": "coding-reliability-v2.1",
+      "hash": "sha256:4bf3fce21f86369794ac6e57816436ff331e7dd607eb303baaf720c885583767"
+    },
+    "repair-v2": {
+      "revision": "repair-reliability-v2.1",
+      "hash": "sha256:ee2b221c907d7dc346337d3b89fb314963846c9cfd093290b2d7e893b3b7101b"
+    }
+  },
+  "cases": [
+    {
+      "suite": "planner-v2",
+      "case": "cross-repository-context",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "acceptance-boundary",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "failing-baseline",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "ambiguous-intent",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "immutable-source",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "correction-feedback",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "undeclared-path",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "documentation-boundary",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "misleading-nearby-code",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "stale-context-revision",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "multiple-intent-clauses",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "planner-v2",
+      "case": "path-intersection",
+      "changed_fields": [
+        "requirements"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "wrong-endpoint-path",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "wrong-environment-variable",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "response-envelope-invention",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "unsafe-object-rendering",
+      "changed_fields": [],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "incomplete-tests",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "misleading-documentation",
+      "changed_fields": [
+        "requirements",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "stale-context",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "frontend-semantic-mismatch",
+      "changed_fields": [
+        "candidate_files.src/quote.mjs"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "valid-implementation-a",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "valid-implementation-b",
+      "changed_fields": [],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "wrong-query-parameter",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.tests/test_app.py",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "missing-null-handling",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "partial-call-site-update",
+      "changed_fields": [],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "acceptance-name-mismatch",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "hidden-test-failure",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "changed-protected-path",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "unresolved-baseline-failure",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.src/app.py",
+        "corrected_files.tests/test_app.py",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "unsafe-string-rendering",
+      "changed_fields": [],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "incorrect-error-code",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "missing-doc-update",
+      "changed_fields": [
+        "requirements",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "unapproved-context-head",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "valid-implementation-c",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "valid-implementation-d",
+      "changed_fields": [],
+      "scenario_and_expectation_preserved": true
+    },
+    {
+      "suite": "verifier-v2",
+      "case": "valid-implementation-e",
+      "changed_fields": [
+        "requirements",
+        "candidate_files.README.md",
+        "corrected_files.README.md"
+      ],
+      "scenario_and_expectation_preserved": true
+    }
+  ],
+  "frozen_coding_and_legacy_suites_unchanged": true,
+  "retained_expected_verifier_decisions": {
+    "approved": 5,
+    "rejected": 19
+  }
+}

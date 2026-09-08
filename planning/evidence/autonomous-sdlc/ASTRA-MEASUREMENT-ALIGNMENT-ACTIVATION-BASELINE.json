@@ -1,0 +1,7 @@
+{
+  "coding_reliability_v2_enabled": false,
+  "deployment_generation": 193,
+  "hosted_configuration_present": false,
+  "observed_at": "2026-09-08T16:26:16.990103+00:00",
+  "template_behavior": "Hosted configuration emitted only when hostedWorkflow.enabled is true."
+}

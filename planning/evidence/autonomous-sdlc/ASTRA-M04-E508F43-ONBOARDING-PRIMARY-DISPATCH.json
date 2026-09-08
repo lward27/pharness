@@ -1,0 +1,149 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T17:05:17.386978+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:6bdfae7b31f7cbb85d500cb1a1bd8a6d7b70453aefb10b70fd6e552f78a85ffa",
+    "agent_profile_id": "repository-onboarding-proposer",
+    "attempts": 1,
+    "binding_hash": "sha256:b0ede53c8c95bf758f989674c1978fe3facaabdfebf5646ad7c3d6b9f19a91fb",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788887117474",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a081fb2ea171528cb6e42403c84470",
+    "job_name": "pharness-inference-eval-34678c5704a3",
+    "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+    "policy_id": "onboarding-minimax-m3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D sourcee508 onboarding primary after versioned measurement alignment; declared bounded canaries, unchanged model settings and limits, no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:6bdfae7b31f7cbb85d500cb1a1bd8a6d7b70453aefb10b70fd6e552f78a85ffa",
+      "base_agent_profile_hash": "sha256:92ecf907c8acddb7d50815d6f81a503fe4c08d6893d985c155d252b8d8dadcf7",
+      "binding_hash": "sha256:b0ede53c8c95bf758f989674c1978fe3facaabdfebf5646ad7c3d6b9f19a91fb",
+      "context_policy_hash": "sha256:b24d6936429a4e3344f59e90ce3796d94023799fc96ae28a1a043522148da335",
+      "policy": {
+        "display_name": "Reliability V2 onboarding MiniMax M3",
+        "eligible_profiles": [
+          "repository-onboarding-proposer"
+        ],
+        "eligible_stages": [
+          "onboarding"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+        "policy_id": "onboarding-minimax-m3-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "fireworks-minimax-m3"
+        },
+        "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+        "temperature_milli": 100,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:bae070e0949fcc48041432d0c7fd4cb14b40cc59324eda4c683d19eb4d723c85",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:be9b45afdfa7daff19c3f8db9b5d7f92edd400918348585cbe4deaae24538b2c",
+        "prompt_id": "repo-onboarding-v2",
+        "revision": "2026-09-08.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "onboarding"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "test"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [],
+          "reasoning_efforts": [],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+        "context_limit_tokens": 524288,
+        "display_name": "Fireworks MiniMax M3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-minimax-m3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/minimax-m3"
+      },
+      "tool_schema_hash": "sha256:e66d3a0e64245b4a3d8aa3dd9cd6d5428d6eae7f3a9f95d2d9cb100d05fe76fc"
+    },
+    "runtime_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1788887117771",
+    "status": "running",
+    "suite_hash": "sha256:c86e4fc492814f55ed04b32da5c8f69c4cfef8bba38fc7060b5377f69bdf586b",
+    "suite_id": "onboarding-v2",
+    "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+    "target_id": "fireworks-minimax-m3",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-E508F43-ONBOARDING-PRIMARY",
+  "policy_id": "onboarding-minimax-m3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourcee508 onboarding primary after versioned measurement alignment; declared bounded canaries, unchanged model settings and limits, no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:5fa276ad1af4c1b506e296b4727e679a63c90307a933b50456f4eb2cb3ac7d66",
+  "schema_version": 1,
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T17:05:17.800235+00:00"
+}

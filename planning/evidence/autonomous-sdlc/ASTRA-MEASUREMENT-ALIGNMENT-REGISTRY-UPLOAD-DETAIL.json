@@ -1,0 +1,467 @@
+{
+  "actions_executed": [],
+  "logs": [
+    {
+      "entries": [
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:b5d788e421c75eef2f53743937e60f8815b278bbc2c29bd7d6742895d6028e52",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "802.206\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:00:30.850268505Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:8059a774c10fff5104a258d685418fc3ed3c8be9da4081159c6847a99c81bdb8",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "847.626\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:00:30.850325956Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:b791e0d68a37895d5d8833197df7d35e57b2901c6c7a7dc5aaf0176a6ea722b6",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "606.458\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:00:30.852631389Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:1c296b993bb732ca70e636d9b5449677ecd92adfa0848e14eefda161afe613fd",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "660.798\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:00:30.852832781Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:595a4ea3b6b39e0cec76d5ceccca1c4d021fa55fb212a7bf0d34dc8d2124c005",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "736.774\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:00:30.880470642Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "35.61718ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:00:51.61985549Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "769.107627ms",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:01:13.058145913Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:af62e068f6dc3eaf5765b06c12bb60cfd528a13470be0ae92ebcd252dccbfe90",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "593.249\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:01:13.194084858Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "53.978999ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:01:33.836269743Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "32.861314ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:01:53.11561984Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "44.70253ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:01:53.127728305Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "44.470563ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:01:53.127908658Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "20.873781842s",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:02:15.456308525Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:3da4f6a3336813cd0bcb072890d6280d593f798d7f05c69fecfcae03768d05bc",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "598.861\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:02:15.480502897Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "36.44846ms",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:02:25.420557607Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:5f72c25fbcb05494ae4a455a1737867973c6cbdbd6c652773dce09ff6cd70d84",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "550.744\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:02:25.464717393Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "53.433461ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:02:46.219225445Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "23.635702ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:02:55.288485439Z"
+        },
+        {
+          "http.request.method": "POST",
+          "http.response.duration": "943.417317ms",
+          "http.response.status": "202",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:03:27.228930784Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "1.013274434s",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:03:27.29856105Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "6.493194153s",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:03:32.182124461Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:ce0489d79b3bf683015c14d26a3b8a27f04e3b37400874173dd2ce9287e9bbfb",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "804.186\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:03:32.210097556Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "26.61161772s",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:03:43.09509806Z"
+        },
+        {
+          "err.code": "blob unknown",
+          "err.detail": "sha256:dd2f328227712f81a2f2241f33d7c25e31798e6bde9bdaf801b7a5797316d0bc",
+          "err.message": "blob unknown to registry",
+          "http.request.method": "HEAD",
+          "http.response.duration": "749.563\u00b5s",
+          "http.response.status": "404",
+          "http.response.written": "157",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:03:43.466934034Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "http.response.duration": "51.900307ms",
+          "http.response.status": "201",
+          "http.response.written": "0",
+          "level": "info",
+          "msg": "response completed",
+          "time": "2026-09-08T16:04:17.837068572Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "level": "error",
+          "msg": "error resolving upload: blob upload unknown",
+          "time": "2026-09-08T16:04:18.082557486Z"
+        },
+        {
+          "err.code": "blob upload unknown",
+          "err.detail": "blob upload unknown",
+          "err.message": "blob upload unknown to registry",
+          "http.request.method": "PUT",
+          "http.response.duration": "1.578842ms",
+          "http.response.status": "404",
+          "http.response.written": "119",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:04:18.08296654Z"
+        },
+        {
+          "copied": "1884160",
+          "http.request.method": "PUT",
+          "level": "error",
+          "msg": "client disconnected during blob PUT",
+          "time": "2026-09-08T16:04:19.588870783Z"
+        },
+        {
+          "err.code": "unknown",
+          "err.detail": "client disconnected",
+          "err.message": "unknown error",
+          "http.request.method": "PUT",
+          "http.response.duration": "292.619664ms",
+          "http.response.status": "500",
+          "http.response.written": "89",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:04:19.677420646Z"
+        }
+      ],
+      "pod": "docker-registry-5dd7cb8849-gc89j",
+      "repository": "pharness-node-runner"
+    },
+    {
+      "entries": [],
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "repository": "pharness-node-runner"
+    },
+    {
+      "entries": [
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:00:30.851806450Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:00:30.851881579Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:00:30.853916163Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:00:30.854282783Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 401,
+          "timestamp": "2026-09-08T16:00:30.863658683Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 401,
+          "timestamp": "2026-09-08T16:00:30.863705140Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 401,
+          "timestamp": "2026-09-08T16:00:30.863922246Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 401,
+          "timestamp": "2026-09-08T16:00:30.878241672Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:00:30.881706461Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:01:13.194685059Z"
+        },
+        {
+          "categories": [
+            "upstream timed out"
+          ],
+          "method": null,
+          "status": null,
+          "timestamp": "2026-09-08T16:01:53.081471082Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 504,
+          "timestamp": "2026-09-08T16:01:53.081874380Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:02:15.480521930Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:02:25.464814329Z"
+        },
+        {
+          "categories": [
+            "upstream timed out"
+          ],
+          "method": null,
+          "status": null,
+          "timestamp": "2026-09-08T16:03:26.283290555Z"
+        },
+        {
+          "categories": [
+            "upstream timed out"
+          ],
+          "method": null,
+          "status": null,
+          "timestamp": "2026-09-08T16:03:26.284027579Z"
+        },
+        {
+          "categories": [],
+          "method": "PUT",
+          "status": 504,
+          "timestamp": "2026-09-08T16:03:26.284421964Z"
+        },
+        {
+          "categories": [],
+          "method": "PUT",
+          "status": 504,
+          "timestamp": "2026-09-08T16:03:26.578452585Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:03:32.278437180Z"
+        },
+        {
+          "categories": [],
+          "method": "HEAD",
+          "status": 404,
+          "timestamp": "2026-09-08T16:03:43.466149776Z"
+        },
+        {
+          "categories": [],
+          "method": "PUT",
+          "status": 404,
+          "timestamp": "2026-09-08T16:04:18.082508816Z"
+        },
+        {
+          "categories": [],
+          "method": "PUT",
+          "status": 400,
+          "timestamp": "2026-09-08T16:04:19.584127913Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 499,
+          "timestamp": "2026-09-08T16:04:21.466126694Z"
+        },
+        {
+          "categories": [],
+          "method": "POST",
+          "status": 499,
+          "timestamp": "2026-09-08T16:04:23.086422456Z"
+        }
+      ],
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "repository": "pharness-node-runner"
+    }
+  ],
+  "observed_at": "2026-09-08T16:08:37.097843+00:00",
+  "since": "2026-09-08T15:58:00Z",
+  "tail_per_pod": 1500
+}

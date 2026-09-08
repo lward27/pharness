@@ -1,0 +1,53 @@
+{
+  "context": "lucas_engineering",
+  "evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470",
+  "events": [
+    {
+      "at": "2026-09-08T17:05:17.823002Z",
+      "count": null,
+      "message": "Successfully assigned pharness/pharness-inference-eval-34678c5704a3-7rvpn to ubuntu-lucas-engineering-2",
+      "reason": "Scheduled",
+      "type": "Normal"
+    },
+    {
+      "at": "2026-09-08T17:05:20Z",
+      "count": 1,
+      "message": "Pulling image \"registry.lucas.engineering/pharness-runtime@sha256:0c02cd4fe14ed00448b95f545baff868515d56c61264d2335f9b99d772f672d5\"",
+      "reason": "Pulling",
+      "type": "Normal"
+    },
+    {
+      "at": "2026-09-08T17:05:50Z",
+      "count": 1,
+      "message": "Successfully pulled image \"registry.lucas.engineering/pharness-runtime@sha256:0c02cd4fe14ed00448b95f545baff868515d56c61264d2335f9b99d772f672d5\" in 29.982s (29.982s including waiting). Image size: 119722881 bytes.",
+      "reason": "Pulled",
+      "type": "Normal"
+    },
+    {
+      "at": "2026-09-08T17:05:50Z",
+      "count": 1,
+      "message": "Created container: network-policy-stabilization",
+      "reason": "Created",
+      "type": "Normal"
+    },
+    {
+      "at": "2026-09-08T17:06:07Z",
+      "count": 1,
+      "message": "Started container network-policy-stabilization",
+      "reason": "Started",
+      "type": "Normal"
+    },
+    {
+      "at": "2026-09-08T17:06:24Z",
+      "count": 1,
+      "message": "Pulling image \"registry.lucas.engineering/pharness-eval-runner@sha256:39eccfc43f17178954e3c11a3dc049d63fd981bf3541bc8d7173a1c49a4cde7a\"",
+      "reason": "Pulling",
+      "type": "Normal"
+    }
+  ],
+  "job": "pharness-inference-eval-34678c5704a3",
+  "meaning": "Infrastructure initialization and image pulls; these observations are not model execution or a diagnostic verdict.",
+  "namespace": "pharness",
+  "observed_at": "2026-09-08T17:09:06.746778+00:00",
+  "pod_uid": "58364f7f-5dc9-4c64-88bb-bac17f24db91"
+}

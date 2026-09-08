@@ -1,0 +1,301 @@
+{
+  "observed_at": "2026-09-08T18:16:15.631234+00:00",
+  "status": "local_validation_passed",
+  "main_base": "5a409453d28d68d22b12899a312df763c51e48dd",
+  "previous_pr_363_head": "d8e25ccb6da0191b3bcdded2532d89b811520b21",
+  "implementation_conflicts": [],
+  "documentation_conflict": "ASTRA-00-PROGRAM.md; retained current decisions and appended this refresh",
+  "unchanged_staging_source_sha256": {
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "sha256:9f8cf651c194c35e99dcec85b5dcc12fdf052bf82f0f2db288e8df3d293e616c",
+    "crates/pharness-api/src/app/hosted_controller/staging.rs": "sha256:f6673f47957bed7dcaaf8b868b075c1f02fa5a00f590d08b2d8e1f90e159591d",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline.rs": "sha256:117c1752ffb28209b70919b1ae120d3383fd2b416b02222af979e8ecce4140f9",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/admission.rs": "sha256:7f32cb3ae2cf8464c87a0d52a5d45001018d60cafd8fdf123ac631a1cc11e41a",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/collection.rs": "sha256:f0c7f8a3523272a7a39bf6e2c672bafbf221a9312ad27af57ff5385358741cb7",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/records.rs": "sha256:85b883932c6773dc2b47b43dee55edaef9aa5ebd6a39b8c3bc3dd1aac9f2a3a7",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/test_support.rs": "sha256:97d826c71702962336db57bc90ddda06c74d0bdbde5b477616a9a0a00db371b8",
+    "crates/pharness-api/src/app/hosted_controller/staging/callbacks.rs": "sha256:aa43eb6e710dac86f1df63ccc0f2836e20b2efa82acfc532d36e3562387c1a32",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime.rs": "sha256:67d729f7e101a59d609b420bd9b88bdcc722518d7c17d75abe4d4c974c2cd615",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/collection.rs": "sha256:48e8a67d029d0850b2e0bfc4725b5acc1a51eb899509348f0f96aa5cab87be31",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/records.rs": "sha256:ffa39d67483643e037abcf11d3fc0580967f4b90ea5965c0a05c2f3139298431",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/result.rs": "sha256:21a357046832892e86e2713e32f2a3205f9bd85100bfda25daf34fcdeeaf13a9",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/test_support.rs": "sha256:45f43d199af07eb63efe5a60f6213af478e3994463d32c63c253a9c31087341b",
+    "crates/pharness-api/src/app/system.rs": "sha256:f25e92c53c652b93de13d27c717ef54bfed4076d8b12d9e427349d18e72dc93d",
+    "crates/pharness-api/src/app/tests/hosted_staging.rs": "sha256:1b15ece304046d402a882d644368f4d0874fd2ca81173ed22ccfddbc839b8bec",
+    "crates/pharness-api/src/app/tests/hosted_staging/baseline.rs": "sha256:cbc2ae0ea11fd828b99beb899a60d2d096a0935588146d170fd2679b84de0ff7",
+    "crates/pharness-api/src/app/tests/hosted_staging/native.rs": "sha256:c40947fdaca6938d06d60b031fb7f2d04dc1b2cc0df6ed4a650185d9e54526fd",
+    "crates/pharness-api/src/app/tests/hosted_staging/runtime.rs": "sha256:52dbf0e3acd528d43ecf25817f7741213b837f20494e26cc33e464a2e1630042",
+    "crates/pharness-config/src/lib.rs": "sha256:56790ef8c47449d099b1753668c66f994ad669c67b8955990862ff25b35b55c0",
+    "crates/pharness-core/src/hosted_sdlc/staging.rs": "sha256:6d8269878dca6691a4f9c4b2ddf08876a6eee1d42af1ec5ac9ea5c6dc65baf05",
+    "crates/pharness-core/src/hosted_sdlc/staging/tests.rs": "sha256:3b9f51fff33cb690b004ea5f221f88827b1bf68c762e355bd7d3991743235fef",
+    "crates/pharness-core/src/tools/cluster.rs": "sha256:85f6933acc03e6aa37601d080db86ac728bceb9deba9a46b09c096647b057df6",
+    "crates/pharness-core/src/tools/cluster/finance.rs": "sha256:c60a382a2d46ff25daf25f175cb4dbcba9f123c9b3df9e060ce5452d2eaff254",
+    "crates/pharness-core/src/tools/cluster/finance/assessment.rs": "sha256:e93375a70fc651611bb8287734097a7f14483612682bc2c05fca5ae6795d8a33",
+    "crates/pharness-core/src/tools/cluster/finance/assessment/binding.rs": "sha256:ce5c5af62dc2ae24e112131b495238452dc7d18b85c6c7adfe109e8856ac49ef",
+    "crates/pharness-core/src/tools/cluster/finance/assessment/tests.rs": "sha256:dc5743d8c764800ecc66a23f414d0d38b6f357981f23e6c2cef582d685784a4e",
+    "crates/pharness-core/src/tools/cluster/finance/identity.rs": "sha256:f84602b162a0a1b4dfb4bac78a355b36048f7895689911448025e86f8352b98d",
+    "crates/pharness-core/src/tools/cluster/finance/kubernetes.rs": "sha256:3a935ed896afafb9354cc65f4fe63f18333c80f7215709c7311819b16a50a30c",
+    "crates/pharness-core/src/tools/cluster/finance/probes.rs": "sha256:a8c25367f7834dd0d32fe589c49174d5df9931de4ccae391370e7a5c74c7b322",
+    "crates/pharness-core/src/tools/cluster/finance/probes/tests.rs": "sha256:50ee38fa9838319b93f7c16ae8ade7b261e8f0c8ecc92c7dea5f12c813191225",
+    "crates/pharness-core/src/tools/cluster/finance/probes/tests/runtime_live.rs": "sha256:07d82dbb2b4d0d1d93f85b845ba98f3a30ee68f17d6c7eeb4b58a318ede563a4",
+    "crates/pharness-core/src/tools/cluster/finance/signals.rs": "sha256:9993f9c9cc7ed5646e06ab296e9e5aad8817949af2fdf5b25409d161b9d58b2e",
+    "crates/pharness-core/src/tools/cluster/finance/signals/analysis.rs": "sha256:bc578f2333e9340328401278dbe9f62587cb2a8d3ed1344207244149f1e01b31",
+    "crates/pharness-core/src/tools/cluster/finance/signals/live.rs": "sha256:463ff719818ccb4663cff5fe077e79e59683691cda8740a48624d8c88f18b51a",
+    "crates/pharness-core/src/tools/cluster/finance/signals/query.rs": "sha256:dbcda07203a133e37ae72a9c6920828788e656ea2a6695b011948c5cf81e4ae1",
+    "crates/pharness-core/src/tools/cluster/finance/signals/request.rs": "sha256:d4c5516a38695862cf533299577de1cbabf55f89a434381b86a2a2ea2c778e13",
+    "crates/pharness-core/src/tools/cluster/finance/signals/tests.rs": "sha256:172bc66344dc7a864907e66402b9a89c1afd1722cee20022f8367d7540b56d54",
+    "crates/pharness-core/src/tools/cluster/finance/signals/window.rs": "sha256:1797bc910aa6a98e2a703270a6c7800ba2a73dc965a5da9009066e18c11ff38d",
+    "crates/pharness-core/src/tools/cluster/finance/tests.rs": "sha256:d9be7849a362a100a1ab021b0b0affdd69a9b9eb575ccc3700dcc394078c009d",
+    "crates/pharness-core/src/tools/cluster/finance/traces.rs": "sha256:ed2c3f4948277e0c7352e98f7a90eb0cec9040b6477d343dfdfed5d9ac0e2344",
+    "crates/pharness-core/src/tools/cluster/finance/traces/analysis.rs": "sha256:b18c76fd186d822fab6f592a2fb61bdf7759e157de2855f059562dd4695387c0",
+    "crates/pharness-core/src/tools/cluster/finance/traces/request.rs": "sha256:64d75a18441c02d6d67ae484cf5716210f0933ebad625233ef9c089397fde9f0",
+    "crates/pharness-core/src/tools/cluster/finance/traces/tests.rs": "sha256:a37f69dcf6aab8fed665f91a94a437b3a6b377b04f7f1e163a087959c4f4d61e",
+    "crates/pharness-core/src/tools/mod.rs": "sha256:0cdff0435791a2b4585c93a4d18d46f2f923683549cec28add56403ca3dcab38",
+    "crates/pharness-worker/src/staging_gitops.rs": "sha256:6a7eb96da88bd91e09a26b65bf9c2c859cbc0a2a8f56c6577d8c9fd506d82caa",
+    "crates/pharness-worker/src/staging_gitops/admission.rs": "sha256:c189c91247cd737e9beed0d216275ec607e46df8037b2b497af8a7094006f201",
+    "crates/pharness-worker/src/staging_gitops/admission/tests.rs": "sha256:e074843950280b583e57751fc5afe59ea58e10afd0acd09984ba8e6715d0bbc4",
+    "crates/pharness-worker/src/staging_gitops/github/tests/flow.rs": "sha256:255ed95feac7b012fb90ee1d828ebd7b73ae33c8ca9d9146ea8b18f24fcb187a"
+  },
+  "current_main_integrity_sha256": {
+    "crates/pharness-api/src/app/inference/diagnostics/tests.rs": "sha256:97d3748070761a7f7a8b912b2ffd3fec81d9e3df031ee1fab3419cddae324757",
+    "crates/pharness-core/src/inference.rs": "sha256:9930447e3076a8e49a8f2a8524cd2b71ea29f38146f0a9b41cf5e8d7f78d78b7",
+    "crates/pharness-eval/src/stage_suites/onboarding.rs": "sha256:4acae6f59085f478289d2602f1d6c1a90e647d8a329c9a425c84f9d6182f5150",
+    "crates/pharness-eval/src/stage_suites/onboarding/tests.rs": "sha256:8f645f4cbac41f55a74cb9fc5567a877127ad3eda01d1668a0e5317d6f196c49",
+    "crates/pharness-runhost/src/onboarding_submission.rs": "sha256:0fc0727e3660c9c229347bf3501e83c5f5e8ef779ad97c7976ce5a06ad3d8b59",
+    "crates/pharness-core/src/repo_mode/onboarding_product.rs": "sha256:de38d9b44b5c9dddd0f92da514cced1c0fbb44d2babe005fbd9499a0e0b4a0c2",
+    "crates/pharness-eval/src/coding_v2.rs": "sha256:3cbfa972eb0a97a8db4d31f1e45fedaf1febc4038bd2ad5313eb7a473092d173",
+    "crates/pharness-eval/src/stage_suites/fixtures/planner-v2.json": "sha256:c1ff96c946f19992b73caa528302fef7cdd7c6358ff3431c226331cdae75cfc5",
+    "crates/pharness-eval/src/stage_suites/fixtures/verifier-v2.json": "sha256:a687fb912e459e9f433d926dbf7154f8b26973faa9e3d2f7c9f79d3e32084755"
+  },
+  "tests": {
+    "targets": [
+      {
+        "target": "unittests src/bin/pharness-admin.rs",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 305,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 202,
+        "failed": 0,
+        "ignored": 6
+      },
+      {
+        "target": "tests/core_types.rs",
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "tests/hosted_sdlc.rs",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 62,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "tests/helm.rs",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 2
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 47,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/lib.rs",
+        "status": "ok",
+        "passed": 62,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "unittests src/main.rs",
+        "status": "ok",
+        "passed": 48,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "target": "tests/hosted_build.rs",
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "workspace_passed": 849,
+    "workspace_ignored": 8,
+    "explicit_helm_passed": 2,
+    "remaining_live_ignored": 6,
+    "total_passed": 851
+  },
+  "clippy": "workspace/all targets, warnings denied; passed",
+  "architecture_regressions_passed": 5,
+  "format": "passed",
+  "logs": {
+    "tests": {
+      "path": "/tmp/astra-m08-5a40945-tests.log",
+      "sha256": "sha256:35f8add333614897015d95668ab4ba280d96e4dc8a72d7ad1498377f0c3dd25c"
+    },
+    "helm": {
+      "path": "/tmp/astra-m08-5a40945-helm.log",
+      "sha256": "sha256:bb10d3a1b85f6080e34ba510381820490e5733632da7604e3f5baa7c569dd108"
+    },
+    "clippy": {
+      "path": "/tmp/astra-m08-5a40945-clippy.log",
+      "sha256": "sha256:86e56582e880195b9c40c72c41fd8aabd81f0859800b2ffc5b291093c86493ad"
+    },
+    "architecture": {
+      "path": "/tmp/astra-m08-5a40945-architecture.log",
+      "sha256": "sha256:d650b57688854219f189ddcd62613ab7e08b42298eb62cf33efcd4c24088aee3"
+    },
+    "format": {
+      "path": "/tmp/astra-m08-5a40945-format.log",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "chart": {
+    "observed_at": "2026-09-08T18:15:38.311912+00:00",
+    "cluster": {
+      "context": "lucas_engineering",
+      "api_server": "https://192.168.20.192:6443",
+      "profile_hash": "sha256:c90563518a5d1ed84f7b20879c4d6ce45f9391a81b6dc9f81b9c04e42e601708"
+    },
+    "argo_source": {
+      "helm": {
+        "valueFiles": [
+          "values-yfinance-production.yaml"
+        ]
+      },
+      "path": "deploy/helm/pharness",
+      "repoURL": "https://github.com/lward27/pharness.git",
+      "targetRevision": "HEAD"
+    },
+    "rendered_objects": 59,
+    "render_sha256": "sha256:01cc691b2cd7df8ed12da8885e630d01c39e847c24f9b14f022eb746fa7ad0e5",
+    "helm_lint": "passed",
+    "client_dry_run": "passed",
+    "observer_namespaces": [
+      "apps-prod",
+      "apps-staging",
+      "argocd"
+    ],
+    "observer_verbs": [
+      "get",
+      "list"
+    ],
+    "hosted_enabled": false,
+    "coding_v2_enabled": false,
+    "deployment": "not performed",
+    "live_argo_targets": [
+      {
+        "application": "yfinance-staging",
+        "namespace": "apps-staging",
+        "sync": "Synced",
+        "revision": "e66e8116c93c831baba65f521efab7bd14e24b4f",
+        "health": "Healthy"
+      },
+      {
+        "application": "finance-frontend-staging",
+        "namespace": "apps-staging",
+        "sync": "Synced",
+        "revision": "e66e8116c93c831baba65f521efab7bd14e24b4f",
+        "health": "Healthy"
+      },
+      {
+        "application": "yfinance-wrapper",
+        "namespace": "apps-prod",
+        "sync": "Synced",
+        "revision": "e66e8116c93c831baba65f521efab7bd14e24b4f",
+        "health": "Healthy"
+      },
+      {
+        "application": "finance-frontend",
+        "namespace": "apps-prod",
+        "sync": "Synced",
+        "revision": "e66e8116c93c831baba65f521efab7bd14e24b4f",
+        "health": "Healthy"
+      }
+    ],
+    "limitations": [
+      "Rendering and read-only target observations do not demonstrate an autonomous staging deployment or application verification.",
+      "Historical evidence logs retain their original bytes, including trailing blank lines."
+    ]
+  },
+  "release": "none; independent draft excluded from source5a40945 release",
+  "autonomous_staging_acceptance": false,
+  "production_approval_or_promotion": false,
+  "model_qualification": null
+}

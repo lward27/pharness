@@ -1,0 +1,7 @@
+{
+  "observed_at": "2026-09-08T16:57:03.907505+00:00",
+  "change": "Protocol dispatch now requires the separately retained R2 window to have status passed, duration 600 seconds and at least 21 direct samples. The original failed window cannot authorize dispatch.",
+  "before_sha256": "31c524548d12aee34bd946fb77a29e7fa0d1a9ca6c11b2628fe33f843c7fb525",
+  "after_sha256": "00532c24ac62bc02a4f08ea58860b73a711c983ae404ea5c8362e0558be5676e",
+  "protocol_dispatched": false
+}
