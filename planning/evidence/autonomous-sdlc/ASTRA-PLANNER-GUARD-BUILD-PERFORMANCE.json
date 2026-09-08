@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-09-08T21:01:39.900156+00:00",
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "status": "real_release_cache_reuse_observed",
+  "build_elapsed_seconds": 2065.052,
+  "image_push_phases_seconds": [
+    151.5,
+    41.5,
+    225.9,
+    229.7,
+    61.9,
+    282.5,
+    191.6
+  ],
+  "push_phase_sum_seconds": 1184.6,
+  "evaluator_runtime_tool_nodes": 13,
+  "runtime_tool_nodes_cached": [
+    "1/13",
+    "7/13",
+    "4/13",
+    "2/13",
+    "8/13",
+    "12/13",
+    "6/13",
+    "5/13",
+    "11/13",
+    "9/13",
+    "10/13",
+    "3/13",
+    "13/13"
+  ],
+  "non_base_tool_steps_cached": 12,
+  "tls_handshake_warning_count": 0,
+  "private_log_sha256": "sha256:a6c4d869223fb18ac3a1f5f477158f9719b0e58424689c8bfd12cff99a196051",
+  "limits": [
+    "This one build does not isolate cache-layout effects from network variance.",
+    "The previous intermittent registry transport issue is not declared permanently resolved."
+  ],
+  "qualification": null
+}
