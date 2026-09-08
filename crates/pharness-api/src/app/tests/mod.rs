@@ -209,3 +209,4 @@ mod plans_changes;
 mod production;
 mod repo_mode_v1;
 mod runs_capabilities;
+mod stage_chain_authority;

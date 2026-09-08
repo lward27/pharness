@@ -17,6 +17,44 @@ use pharness_store::{
 };
 use serde_json::{json, Value};
 
+/// Every stage, including a bounded repair, uses the originally approved plan.
+/// A new plan or expired grant cannot acquire authority from an existing chain.
+fn validate_chain_snapshot(
+    metadata: &pharness_store::StoredRepoWorkItemMetadata,
+    work_item: &pharness_store::StoredWorkItem,
+    plan: &pharness_store::StoredWorkPlan,
+    authorization: &pharness_store::StoredStageChainAuthorization,
+) -> Result<(), ApiError> {
+    if authorization
+        .expires_at
+        .parse::<u128>()
+        .ok()
+        .map_or(true, |expires_at| expires_at <= current_millis())
+    {
+        return Err(ApiError::conflict(
+            "stage-chain authorization expired before the next stage",
+        ));
+    }
+    if authorization.status != "active"
+        || authorization.revoked_at.is_some()
+        || authorization.work_item_id != work_item.id
+        || metadata.work_item_id != work_item.id
+        || plan.work_item_id.as_deref() != Some(work_item.id.as_str())
+        || plan.status != "approved"
+        || authorization.work_plan_id != plan.id
+        || authorization.work_plan_revision != plan.revision
+        || authorization.product_model_snapshot_id != metadata.product_model_snapshot_id
+        || authorization.product_model_snapshot_hash != metadata.product_model_snapshot_hash
+        || authorization.repository_id != metadata.repository_id
+        || work_item.source_commit.as_deref() != Some(authorization.source_commit.as_str())
+    {
+        return Err(ApiError::conflict(
+            "stage-chain authorization no longer matches the pinned WorkItem state",
+        ));
+    }
+    Ok(())
+}
+
 pub(in crate::app) async fn start_repo_planner(
     state: &AppState,
     work_item_id: &str,
@@ -346,7 +384,7 @@ pub(in crate::app) async fn start_repo_planner(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn start_repo_builder(
+pub(in crate::app) async fn start_repo_builder(
     state: &AppState,
     metadata: &StoredRepoWorkItemMetadata,
     work_item: &pharness_store::StoredWorkItem,
@@ -360,6 +398,7 @@ pub(super) async fn start_repo_builder(
     builder_profile_id: &str,
     correction_of: Option<&pharness_store::StoredStageOutcome>,
 ) -> Result<Value, ApiError> {
+    validate_chain_snapshot(metadata, work_item, plan, authorization)?;
     hosted::validate_planned(state, metadata, builder_profile_id).await?;
     let planned_execution = crate::app::agent_hosts::latest_planned_execution_selection(
         state,
@@ -1136,6 +1175,7 @@ async fn start_repo_automatic_repair(
         .active_stage_chain_authorization(work_item_id)
         .await?
         .ok_or_else(|| ApiError::conflict("stage-chain authorization is unavailable"))?;
+    validate_chain_snapshot(&metadata, &work_item, &plan, &authorization)?;
     let workspace = state
         .store
         .get_workspace(&authorization.workspace_id)
@@ -1254,28 +1294,7 @@ pub(super) async fn start_repo_followup_stage(
         .active_stage_chain_authorization(work_item_id)
         .await?
         .ok_or_else(|| ApiError::conflict("stage-chain authorization is unavailable"))?;
-    let now = current_millis();
-    if authorization
-        .expires_at
-        .parse::<u128>()
-        .ok()
-        .map_or(true, |expires_at| expires_at <= now)
-    {
-        return Err(ApiError::conflict(
-            "stage-chain authorization expired before the next stage",
-        ));
-    }
-    if authorization.work_plan_id != plan.id
-        || authorization.work_plan_revision != plan.revision
-        || authorization.product_model_snapshot_id != metadata.product_model_snapshot_id
-        || authorization.product_model_snapshot_hash != metadata.product_model_snapshot_hash
-        || authorization.repository_id != metadata.repository_id
-        || work_item.source_commit.as_deref() != Some(authorization.source_commit.as_str())
-    {
-        return Err(ApiError::conflict(
-            "stage-chain authorization no longer matches the pinned WorkItem state",
-        ));
-    }
+    validate_chain_snapshot(&metadata, &work_item, &plan, &authorization)?;
     let workspace = state
         .store
         .get_workspace(&authorization.workspace_id)
