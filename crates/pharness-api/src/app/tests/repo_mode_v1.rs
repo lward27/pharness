@@ -531,6 +531,7 @@ pub(super) async fn repo_fixture_for_source(
         .unwrap();
 
     let work_item_id = format!("witem_{suffix}");
+    let hosted_fixture = workflow_policy.is_some();
     let workflow_policy = workflow_policy.map(|mut policy| {
         policy.delivery_binding.product_id = product_id.clone();
         policy.delivery_binding.repository_id = repository_id.clone();
@@ -611,7 +612,7 @@ pub(super) async fn repo_fixture_for_source(
             resource_namespace: None,
             resource_kind: Some("Repository".into()),
             resource_name: Some(registered.repository.canonical_url.clone()),
-            work_plan_json: json!({"schema_version":"pharness.dev/work-plan/v1alpha1"}),
+            work_plan_json: if hosted_fixture { json!({"schema_version":"pharness.dev/work-plan/v1alpha1","readiness":{"status":"ready","blockers":[]}}) } else { json!({"schema_version":"pharness.dev/work-plan/v1alpha1"}) },
         })
         .await
         .unwrap();

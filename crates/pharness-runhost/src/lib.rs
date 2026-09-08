@@ -11,6 +11,7 @@
 mod context_envelope;
 mod evidence_refs;
 mod onboarding_submission;
+mod planner_submission;
 mod preview;
 mod prompt;
 
@@ -18,6 +19,7 @@ pub use context_envelope::{context_policy_hash, CONTEXT_ENVELOPE_SCHEMA};
 pub use onboarding_submission::{
     onboarding_submission_contract_for_binding, ONBOARDING_SUBMISSION_CONTRACT,
 };
+pub use planner_submission::planner_submission_contract_for_binding;
 pub use preview::approval_preview_for_action;
 pub use prompt::{
     repo_system_prompt, stage_prompt_for_profile, system_prompt, tool_schema_hash_for_profile,
@@ -278,6 +280,8 @@ fn tool_specs_for_run(
     allowed: Option<&BTreeSet<String>>,
 ) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
     let controller_bound_onboarding = onboarding_submission::uses_controller_binding(run)?;
+    let planner_readiness = pharness_core::planner_readiness_required(&run.execution_target_json)
+        .map_err(anyhow::Error::msg)?;
     let all = worker_tool_specs();
     let Some(allowed) = allowed else {
         return Ok(all);
@@ -344,6 +348,7 @@ fn tool_specs_for_run(
         &evidence_ids,
         reliability_v2_profile_id(run).is_some(),
         controller_bound_onboarding,
+        planner_readiness,
     )
 }
 
@@ -353,9 +358,13 @@ fn constrain_tool_specs(
     evidence_ids: &[String],
     bound_submission_refs: bool,
     controller_bound_onboarding: bool,
+    planner_readiness: bool,
 ) -> anyhow::Result<Vec<pharness_core::ToolSpec>> {
     for spec in &mut specs {
         match spec.name.as_str() {
+            "submit_work_plan" if planner_readiness => {
+                planner_submission::constrain_schema(&mut spec.parameters_schema);
+            }
             "submit_onboarding_proposal" if controller_bound_onboarding => {
                 onboarding_submission::constrain_schema(&mut spec.parameters_schema);
             }
@@ -421,7 +430,8 @@ pub fn constrained_tool_schema_hash(
         .into_iter()
         .filter(|spec| allowed.contains(&spec.name))
         .collect::<Vec<_>>();
-    let constrained = constrain_tool_specs(selected, acceptance_names, evidence_ids, true, true)?;
+    let constrained =
+        constrain_tool_specs(selected, acceptance_names, evidence_ids, true, true, true)?;
     Ok(pharness_core::canonical_json_sha256(
         &serde_json::to_value(constrained)?,
     )?)
@@ -1364,6 +1374,7 @@ struct ProjectTools {
     evidence_payloads: Vec<serde_json::Value>,
     bound_submission_refs: bool,
     onboarding_discovery: Option<onboarding_submission::OnboardingBinding>,
+    planner_readiness: bool,
 }
 
 impl ProjectTools {
@@ -1415,6 +1426,10 @@ impl ProjectTools {
             evidence_payloads,
             bound_submission_refs: reliability_v2_profile_id(run).is_some(),
             onboarding_discovery,
+            planner_readiness: pharness_core::planner_readiness_required(
+                &run.execution_target_json,
+            )
+            .map_err(anyhow::Error::msg)?,
         })
     }
 
@@ -2128,6 +2143,8 @@ impl ToolExecutor for ProjectTools {
                 onboarding_submission(self, proposal)
             }
             pharness_core::AgentAction::SubmitWorkPlan { work_plan, .. } => {
+                pharness_core::PlannerReadiness::from_document(work_plan, self.planner_readiness)
+                    .map_err(|message| ToolError::InvalidArguments { message })?;
                 structured_submission("work_plan", work_plan)
             }
             pharness_core::AgentAction::SubmitImplementation { implementation, .. } => {
@@ -2335,6 +2352,7 @@ mod workspace_source_tests {
             evidence_catalog: Vec::new(),
             evidence_payloads: Vec::new(),
             bound_submission_refs: false,
+            planner_readiness: false,
             onboarding_discovery: None,
         }
     }

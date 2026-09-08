@@ -54,7 +54,7 @@ pub(super) async fn advance(
         require_authority(snapshot, permission)?;
         if matches!(
             action.id.as_str(),
-            "approve_work_plan" | "approve_change_set"
+            "approve_work_plan" | "approve_change_set" | "authorize_stage_chain"
         ) {
             super::approval::validate(state, &claim.work_item_id, &action.id, &action.resource)
                 .await?;

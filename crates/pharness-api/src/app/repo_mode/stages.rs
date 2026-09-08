@@ -142,6 +142,7 @@ pub(in crate::app) async fn start_repo_planner(
             .map(|workspace| workspace.id.clone()),
         ..RunScope::default()
     };
+    let mut planner_submission_contract = None;
     let (agent_execution_marker, inference_marker, resolved_profile) = if let Some(selection) =
         &planned_execution
     {
@@ -165,6 +166,8 @@ pub(in crate::app) async fn start_repo_planner(
         .ok_or_else(|| {
             ApiError::conflict("Planner inference selection was not pinned at WorkItem creation")
         })?;
+        planner_submission_contract =
+            pharness_runhost::planner_submission_contract_for_binding(&selection.resolved_binding);
         (
             Value::Null,
             crate::app::inference::execution_marker_for_selection(state, &selection),
@@ -230,6 +233,7 @@ pub(in crate::app) async fn start_repo_planner(
                 "agent_execution":agent_execution_marker,
                 "inference":inference_marker,
                 "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only"},
+                "planner_submission_contract":planner_submission_contract,
                 "agent_profile":profile,
                 "agent_context":context,
                 "agent_evidence_payloads":evidence.payloads,
