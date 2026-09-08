@@ -73,6 +73,24 @@ fn partial_or_mislabelled_reports_never_claim_qualification() {
 }
 
 #[test]
+fn diagnostic_abort_cannot_claim_success_and_legacy_completeness_remains_readable() {
+    let (evaluation, mut report) = fixture();
+    // Older producers compared a bounded diagnostic with the whole suite. The
+    // reader must validate its native scope and rows rather than trust that flag.
+    report["infrastructure_valid"] = json!(false);
+    validate_report(&evaluation, &report).unwrap();
+    report["report"]["resolved_settings"]["infrastructure_abort"] = Value::Null;
+    validate_report(&evaluation, &report).unwrap();
+
+    report["report"]["resolved_settings"]["infrastructure_abort"] =
+        json!({"reason":"provider_failure"});
+    assert!(validate_report(&evaluation, &report).is_err());
+    report["diagnostic"]["passed"] = json!(false);
+    validate_report(&evaluation, &report).unwrap();
+    assert!(super::super::qualification_from_evaluation(&evaluation, report).is_err());
+}
+
+#[test]
 fn common_control_receives_only_complete_public_inputs_on_the_same_runtime() {
     let (original, _) = fixture();
     let scope = InferenceEvaluationScope::Diagnostic {
