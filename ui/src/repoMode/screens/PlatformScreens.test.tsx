@@ -33,7 +33,8 @@ describe("Environment profile settings", () => {
     expect(screen.queryByText(/Python pending/i)).not.toBeInTheDocument();
   });
 
-  it("separates gateway alignment, target verification, and policy qualification", async () => {
+  it("requires exact policy protocol evidence even when the shared target has passed", async () => {
+    let protocolVerified = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/inference-targets") && !init?.method) return json({
@@ -42,10 +43,10 @@ describe("Environment profile settings", () => {
         targets:[{target_id:"fireworks-kimi-k2p6",revision:"v1",display_name:"Fireworks Kimi K2.6",backend_kind:"fireworks",upstream_model:"accounts/fireworks/models/kimi-k2p6",allowed_stages:["plan","implement"],transport:{scheme:"https",private_network:false},authentication_configured:true,context_limit_tokens:262144,output_limit_tokens:16384,selectable:true,config_hash:"target-one",latest_verification:{status:"passed",expires_at:String(Math.floor(Date.now()/1000)+900)}}],
       });
       if (url.endsWith("/api/inference-policies")) return json({registry_hash:"registry-one",policies:[
-        {policy_id:"fireworks-legacy-v1",revision:"v1",display_name:"Fireworks legacy behavior",eligible_stages:["plan","implement"],eligible_profiles:["repo-planner","repo-builder"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{context_mode:"provider_default"},tool_choice:"required",context_assembly_limit:16000,temperature:0.1,maximum_output_tokens:4096,qualified:true,is_default:true,qualification_status:"accepted_legacy_baseline",policy_hash:"policy-one"},
-        {policy_id:"planner-kimi-k2p6-high-v1",revision:"v1",display_name:"Planner Kimi K2.6 high",eligible_stages:["plan"],eligible_profiles:["repo-planner"],reliability_v2_default_for_profiles:["repo-planner"],target:{target_id:"fireworks-kimi-k2p6"},reasoning:{effort:"high",context_mode:"current_turn"},tool_choice:"auto",context_assembly_limit:64000,temperature:0.1,maximum_output_tokens:8192,qualified:false,is_default:false,qualification_status:"not_qualified",policy_hash:"policy-two",qualification_contract:{suite_id:"planner-v1",agent_profile_id:"repo-planner",agent_profile_hash:"profile-two"}},
+        {policy_id:"fireworks-legacy-v1",revision:"v1",display_name:"Fireworks legacy behavior",eligible_stages:["plan","implement"],eligible_profiles:["repo-planner","repo-builder"],target:{target_id:"fireworks-kimi-k2p6",revision:"v1"},reasoning:{context_mode:"provider_default"},tool_choice:"required",context_assembly_limit:16000,temperature:0.1,maximum_output_tokens:4096,qualified:true,is_default:true,qualification_status:"accepted_legacy_baseline",policy_hash:"policy-one"},
+        {policy_id:"planner-kimi-k2p6-high-v1",revision:"v1",display_name:"Planner Kimi K2.6 high",eligible_stages:["plan"],eligible_profiles:["repo-planner"],reliability_v2_default_for_profiles:["repo-planner"],target:{target_id:"fireworks-kimi-k2p6",revision:"v1"},reasoning:{effort:"high",context_mode:"current_turn"},tool_choice:"auto",context_assembly_limit:64000,temperature:0.1,maximum_output_tokens:8192,qualified:false,is_default:false,qualification_status:"not_qualified",policy_hash:"policy-two",selectable:true,protocol_ready:protocolVerified,latest_protocol_verification:protocolVerified ? {status:"passed",expires_at:String(Math.floor(Date.now()/1000)+900),observed_capabilities:{policy:{policy_id:"planner-kimi-k2p6-high-v1",revision:"v1",policy_hash:"policy-two"}}} : null,qualification_contract:{suite_id:"planner-v1",agent_profile_id:"repo-planner",agent_profile_hash:"profile-two"}},
       ]});
-      if (url.includes("/preflight") && init?.method === "POST") return json({status:"passed"});
+      if (url.includes("/preflight") && init?.method === "POST") { protocolVerified = true; return json({status:"passed"}); }
       if (url.includes("/qualifications") && init?.method === "POST") return json({id:"infeval-one",status:"running",job_name:"pharness-inference-eval-one"});
       if (url.endsWith("/api/environment-profiles")) return json({profiles:[]});
       if (url.endsWith("/api/config/effective")) return json({features:{repo_mode_v1:{enabled:true,ui_enabled:true},coding_reliability_v2:{enabled:true}}});
@@ -63,12 +64,18 @@ describe("Environment profile settings", () => {
     expect(screen.getAllByText("repo-planner")).not.toHaveLength(0);
     expect(screen.getByRole("button",{name:"Run qualification"})).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button",{name:"Verify target"}));
+    expect(screen.getByRole("button",{name:"Run qualification"})).toBeDisabled();
+    expect(screen.queryByRole("button",{name:"Verify target"})).not.toBeInTheDocument();
+    const verify = screen.getByRole("button",{name:"Check protocol"});
+    fireEvent.click(verify);
+    fireEvent.click(verify);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/inference-targets/fireworks-kimi-k2p6/revisions/v1/preflight",
-      expect.objectContaining({method:"POST",body:JSON.stringify({actor:"lucas",reason:"Verify inference target protocol and isolated connectivity",config_hash:"registry-one"})}),
+      expect.objectContaining({method:"POST",body:JSON.stringify({actor:"lucas",reason:"Check this stage policy protocol",config_hash:"registry-one",policy:{policy_id:"planner-kimi-k2p6-high-v1",revision:"v1"}})}),
     ));
 
+    expect(fetchMock.mock.calls.filter(([input,init]) => String(input).includes("/preflight") && (init as RequestInit | undefined)?.method === "POST")).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole("button",{name:"Run qualification"})).toBeEnabled());
     fireEvent.click(screen.getByRole("button",{name:"Run qualification"}));
     const qualificationButton = screen.getByRole("button",{name:"Run two-attempt qualification"});
     fireEvent.click(qualificationButton);

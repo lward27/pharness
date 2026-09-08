@@ -1,4 +1,5 @@
 mod diagnostics;
+mod protocol_binding;
 mod qualification_binding;
 pub(super) use qualification_binding::qualification_binding_for_policy;
 
@@ -42,6 +43,8 @@ struct ConfigurationActionRequest {
     actor: String,
     reason: String,
     config_hash: String,
+    #[serde(default)]
+    policy: Option<InferencePolicyRef>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -983,6 +986,23 @@ async fn list_policies(
             .await?
             .into_iter()
             .next();
+        let latest_protocol_verification = protocol_binding::latest_verification(
+            state
+                .store
+                .list_inference_target_verifications(
+                    &policy.target.target_id,
+                    &policy.target.revision,
+                )
+                .await?,
+            policy,
+            &state.inference.registry.config_hash,
+            &state.build.api_revision,
+        );
+        let protocol_ready = latest_protocol_verification
+            .as_ref()
+            .is_some_and(|verification| {
+                protocol_binding::fresh_pass(verification, epoch_seconds())
+            });
         let is_default = policy.eligible_stages.iter().any(|stage| {
             state.inference.registry.defaults.get(stage)
                 == Some(&InferencePolicyRef {
@@ -1031,6 +1051,8 @@ async fn list_policies(
                 "qualified":qualified,
                 "qualification_status":if is_legacy_baseline { "accepted_legacy_baseline" } else if qualified { "passed" } else { "not_qualified" },
                 "latest_qualification":latest_qualification,
+                "latest_protocol_verification":latest_protocol_verification,
+                "protocol_ready":protocol_ready,
                 "latest_evaluation":latest_evaluation,
                 "qualification_contract":qualification_contract,
             }));
@@ -1118,14 +1140,13 @@ async fn preflight_target(
             )
         })?
         .clone();
-    let policy = state
-        .inference
-        .registry
-        .policies
-        .iter()
-        .find(|policy| policy.target.target_id == target_id && policy.target.revision == revision)
-        .ok_or_else(|| ApiError::conflict("target has no compatible configured inference policy"))?
-        .clone();
+    let policy = protocol_binding::select_policy(
+        &state.inference.registry,
+        &target_id,
+        &revision,
+        request.policy.as_ref(),
+    )?
+    .clone();
     let verification_id = new_prefixed_id("inferverify");
     let now = epoch_seconds();
     let result = verify_target_protocol(&state, &verification_id, &target, &policy).await;
@@ -1174,6 +1195,8 @@ async fn preflight_target(
                 "streaming":streaming_compatible,
                 "native_tools":tool_compatible,
                 "registry_hash":state.inference.registry.config_hash,
+                "policy":protocol_binding::policy_identity(&policy),
+                "runtime_revision":state.build.api_revision,
                 "protocol_calibration":calibration,
             }),
             sanitized_failure: failure,
@@ -1255,36 +1278,21 @@ async fn create_policy_qualification(
     let suite_hash = inference_qualification_suite_hash(suite_id).map_err(|error| {
         ApiError::internal(format!("failed to hash qualification suite: {error}"))
     })?;
-    let fresh_target_verification = state
-        .store
-        .list_inference_target_verifications(&target.target_id, &target.revision)
-        .await?
-        .into_iter()
-        .any(|verification| {
-            verification.target_hash == target.config_hash
-                && verification.status == "passed"
-                && verification.model_visible
-                && verification.streaming_compatible
-                && verification.tool_compatible
-                && verification
-                    .observed_capabilities
-                    .pointer("/protocol_calibration/passed")
-                    .and_then(Value::as_u64)
-                    == Some(30)
-                && verification
-                    .observed_capabilities
-                    .pointer("/protocol_calibration/required")
-                    .and_then(Value::as_u64)
-                    == Some(30)
-                && verification
-                    .expires_at
-                    .parse::<u64>()
-                    .ok()
-                    .is_some_and(|expires_at| expires_at > epoch_seconds())
-        });
-    if !fresh_target_verification {
+    let latest_protocol_verification = protocol_binding::latest_verification(
+        state
+            .store
+            .list_inference_target_verifications(&target.target_id, &target.revision)
+            .await?,
+        policy,
+        &state.inference.registry.config_hash,
+        &state.build.api_revision,
+    );
+    if !latest_protocol_verification
+        .as_ref()
+        .is_some_and(|verification| protocol_binding::fresh_pass(verification, epoch_seconds()))
+    {
         return Err(ApiError::conflict(
-            "inference target requires a fresh passing protocol verification before qualification",
+            "this exact inference policy requires a fresh passing protocol verification before qualification",
         ));
     }
     let evaluation_id = new_prefixed_id("infeval");

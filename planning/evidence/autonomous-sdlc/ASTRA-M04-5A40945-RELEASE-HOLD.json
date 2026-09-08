@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-08T18:29:54.143423+00:00",
+  "source_revision": "5a409453d28d68d22b12899a312df763c51e48dd",
+  "status": "release_held_for_demonstrated_protocol_policy_binding_correction",
+  "build": "continues with original operation and immutable source; retain all artifact receipts",
+  "reason": "Target preflight selects the first shared-model policy and qualification can accept another policy receipt. A compatible exact-policy-and-runtime gate is locally implemented and validated before renewed diagnostics.",
+  "candidate_worktree": "/Users/wardl/Personal/apps/pharness-astra-policy-bound-preflight",
+  "release_strategy": "Merge the validated correction after this source build completes, build a complete new-source artifact set, then perform one normal immutable release and full service observation. Do not mix image receipts across source revisions.",
+  "deployed_source_unchanged": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "gitops_pin_changes": 0,
+  "new_model_calls": 0,
+  "qualification": null,
+  "production_approval_or_promotion": false
+}
