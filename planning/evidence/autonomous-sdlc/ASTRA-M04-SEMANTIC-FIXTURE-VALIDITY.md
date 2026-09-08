@@ -1,6 +1,8 @@
 # ASTRA M04: Make semantic measurements match their claims
 
-Status: implemented and locally validated on base `24790ccc0aea037d59cdaed0605d03c5c816145d`. The deployed runtime remains sourcee508; no new build or deployment has started.
+2026-09-08 release follow-up: the [combined d675159 release](ASTRA-M04-POLICY-PROTOCOL-RELEASE.md) is deployed with verified images and the full passing service window. Original local validation and historical measurements below remain unchanged; model qualification is still open.
+
+Implementation validation baseline: `24790ccc0aea037d59cdaed0605d03c5c816145d`, while e508 was deployed. The subsequent combined release is linked above.
 
 ## Corrections
 
@@ -24,6 +26,6 @@ Three regressions failed before correction: frontend public checks were red, the
 
 ## Release and next execution
 
-Commit the validated change and evidence, then build the full immutable artifact set from one merged revision using the selected Mac builder. Reconcile the exact release and full observation window before new calls. Repeat the affected Planner and Verifier primary/control measurements with new suite hashes and same-runtime references. The [Diagnosis timeout](ASTRA-M04-E508F43-DIAGNOSIS-PREFLIGHT.md) remains a separate prerequisite; no provider or deadline is silently replaced.
+Implementation and evidence are committed. The complete source-d675159 artifact set, deployment and full observation window now pass. Continue the affected Planner and Verifier primary/control measurements with the new suite hashes and same-runtime references. The [Diagnosis timeout](ASTRA-M04-E508F43-DIAGNOSIS-PREFLIGHT.md) remains a separate prerequisite; no provider or deadline is silently replaced.
 
 Preserve schema 55, the source-92-compatible reader floor, all Finance records and existing execution limits. Roll back only to a compatible complete release. Hosted activation and Finance production remain gated. M04D–F and M11/M12 acceptance are not closed by this correction.

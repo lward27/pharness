@@ -1,0 +1,25 @@
+{
+  "bounded_log_sha256": "sha256:7c125d15e748aeca9decfce6bd5e7e357812f06af2f45157bd8ac761f7b41c8e",
+  "events": [
+    {
+      "component": "pharness-eval-runner",
+      "line_sha256": "sha256:8dd78c0e2c8090d0ce91c215ad21c9195e5028cbd9fa17b4d9706ed074ef0b44",
+      "method": "POST",
+      "request_path_sha256": "sha256:e6d0a1d0e9fda6b31759b32276d49b03824f41bef6e7b974c349f9f386e513d8",
+      "stage": "while connecting to upstream",
+      "timestamp": "2026-09-08T19:04:41.483105050Z",
+      "upstream_authority": "10.43.146.139:5000"
+    }
+  ],
+  "limitations": [
+    "Request paths, signed query values and credentials withheld.",
+    "A gateway timeout identifies a failed boundary, not its root cause.",
+    "A timeout may belong to a different component than the upload currently observed."
+  ],
+  "mutations": [],
+  "node": "ubuntu-lucas-engineering-2",
+  "observed_at": "2026-09-08T19:10:06.807035+00:00",
+  "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+  "pod_uid": "1dc55e2b-83db-40d8-a74a-52cb3c507865",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91"
+}

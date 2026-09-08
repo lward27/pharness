@@ -1,0 +1,333 @@
+{
+  "limits": "Projection and historical compatibility only; fresh exact-policy protocol checks and semantic diagnostics remain separate.",
+  "model_calls": 0,
+  "mutations": [],
+  "observed_at": "2026-09-08T19:31:55.708258+00:00",
+  "old_passes_remain_readable": true,
+  "old_passes_satisfy_new_gate": false,
+  "policies": [
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:022835e4b6310f0c50bf9efd6c972856971e365aa62a6fb0f09dde94108e553c",
+      "policy_id": "fireworks-legacy-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:20b9d567fe887019470c6a78a1dc4ce240d6206830213f7fbbf5e3eea7e6c40b",
+      "policy_id": "onboarding-kimi-k2p6-medium-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:b324a60fa7fa19d5c17fbeb0e14e6c5f24f466b0cca8d91f6f1252e08b21822e",
+      "policy_id": "planner-kimi-k2p6-high-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:397b823c91ca7a26a67f5ac415885a2c3f523526fd95c70449f501dea414ef11",
+      "policy_id": "builder-kimi-k2p6-medium-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:ae0e086dc8caebbee96017fffb03f5a3ea0d6a83962485b04c18f000a9582b12",
+      "policy_id": "onboarding-nemotron-lightning-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:f04d36cab7ee128f2ddb19c322bf582833d6106817a4f23d9ad639117f5bf09e",
+      "policy_id": "planner-qwen3p8-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-qwen3p8-2p4t-a95b"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:bbbb02a37fa27f6da211864d7215d6afa153d34a05d2c6992903f90f4d0014fd",
+      "policy_id": "builder-deepseek-v4-pro-0813-high-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-deepseek-v4-pro-0813"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:b00f6f4953ae519d70d208829672856ee1c2e770ef632beb12839163550300dc",
+      "policy_id": "tester-nemotron-lightning-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:5dcab96c8f7c5c3508db9a0168dccda2415344878b7d44d9400e6248ca69ac9f",
+      "policy_id": "verifier-glm-5p3-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-glm-5p3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:4d38002b58c02f7f8d3e794b977c5a29a65a77f4859da3b0a2963c0563ba8076",
+      "policy_id": "tester-kimi-k2p6-low-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:b6d215a5911f23549c2bfb47bac2d9b4c2b542a58c3026159244ab626c7b4f72",
+      "policy_id": "verifier-kimi-k2p6-high-v1",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+      "policy_id": "onboarding-minimax-m3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-minimax-m3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:b1739b1d1e6ff241bf67f38610b1ea6abcce24a2faaa6f2bae9241a71bbb6cdb",
+      "policy_id": "onboarding-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+      "policy_id": "planner-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:7781bf3e6f9ee6ff19849a11e8ff80943ec052dc8e1c30c3d844b56ee26c922f",
+      "policy_id": "planner-minimax-m3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-minimax-m3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:7815a223a991c4e23f9e6716561f869ba33f4a2e6490ba18ab8967b8377d4e77",
+      "policy_id": "builder-kimi-k2p7-code-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p7-code"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:5ab45b24706afd1cd9a22928ea44673e01469278fbb71e972f30e1a1a9d3a598",
+      "policy_id": "builder-deepseek-v4-pro-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-deepseek-v4-pro-0813"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:82569cfe4db0bc676bd420481b1839fabe1e6af89cb0765bb86fc4b54835f6c2",
+      "policy_id": "repair-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:24146ad25e9d402f6b94ca014ad7f9eae7664e2da37aa12519d291d82c263839",
+      "policy_id": "test-diagnosis-minimax-m3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-minimax-m3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+      "policy_id": "verifier-glm-5p3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-glm-5p3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:8b516b6e37635526f23c794114671938f86215970eb2366465b6c974006b46ec",
+      "policy_id": "verifier-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:30342a9aeb3eb4dd9807e162b862ae7eda248754461cea10d0cd8197abc9ca3f",
+      "policy_id": "planner-gpt-5p5-reference-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "openrouter-gpt-5p5-openai"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:1439659795c634c36d15eccea30c93fd4d786618ca3d2b06dd0711cf23b24d87",
+      "policy_id": "repair-gpt-5p5-reference-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "openrouter-gpt-5p5-openai"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:d7e824748c7e75d6aab0cb106801d77c12cb6176711297bddd735eb74a04bd01",
+      "policy_id": "verifier-gpt-5p5-reference-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "openrouter-gpt-5p5-openai"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:9f255d09c5eac3ffa412f461ee424441635b0d2eef2cb1466d34c0cf8f869281",
+      "policy_id": "m04-control-onboarding-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:8533d827c84f0205dfdeca679727e10df70856e3142920ee2ef1a7b24a65a1d8",
+      "policy_id": "m04-control-planner-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:57a3989aeff533989c0d8c767320fad29156039457f60007af0b02cd784db921",
+      "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    },
+    {
+      "latest_protocol_verification": null,
+      "policy_hash": "sha256:d5797c1a81980c776f64dbc19929f0dba0f23a4938b6c192a0ddc6a7f9fb9fb2",
+      "policy_id": "m04-control-verifier-kimi-k3-v2",
+      "protocol_ready": false,
+      "revision": "v1",
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      }
+    }
+  ],
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "retained_kimi_v1_verifications": 5,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "status": "passed_read_only_projection"
+}

@@ -1,0 +1,742 @@
+{
+  "finished_at": "2026-09-08T19:21:18.565544+00:00",
+  "mutations": [],
+  "observation_deadline_seconds": 180,
+  "observed_ready_at": "2026-09-08T19:20:37.459198+00:00",
+  "release_pin": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+  "samples": [
+    {
+      "observed_at": "2026-09-08T19:20:57.819000+00:00",
+      "ready": false,
+      "responses": {
+        "availability": {
+          "expression": "kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"}",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        },
+        "sample_timestamp": {
+          "expression": "timestamp(kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"})",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895257.819,
+                    "1788895215.185"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        }
+      }
+    },
+    {
+      "observed_at": "2026-09-08T19:21:08.229417+00:00",
+      "ready": false,
+      "responses": {
+        "availability": {
+          "expression": "kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"}",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        },
+        "sample_timestamp": {
+          "expression": "timestamp(kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"})",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1788895215.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895268.229,
+                    "1788895215.185"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        }
+      }
+    },
+    {
+      "observed_at": "2026-09-08T19:21:18.473215+00:00",
+      "ready": true,
+      "responses": {
+        "availability": {
+          "expression": "kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"}",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1"
+                  ]
+                },
+                {
+                  "metric": {
+                    "__name__": "kube_deployment_status_replicas_available",
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        },
+        "sample_timestamp": {
+          "expression": "timestamp(kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"})",
+          "response": {
+            "data": {
+              "result": [
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-api",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1788895275.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-coding-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1788895275.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-model-gateway",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1788895275.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-preparation-egress-proxy",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1788895275.185"
+                  ]
+                },
+                {
+                  "metric": {
+                    "app_kubernetes_io_component": "metrics",
+                    "app_kubernetes_io_instance": "prometheus",
+                    "app_kubernetes_io_managed_by": "Helm",
+                    "app_kubernetes_io_name": "kube-state-metrics",
+                    "app_kubernetes_io_part_of": "kube-state-metrics",
+                    "app_kubernetes_io_version": "2.18.0",
+                    "deployment": "pharness-ui",
+                    "helm_sh_chart": "kube-state-metrics-7.1.0",
+                    "instance": "10.42.1.112:8080",
+                    "job": "kubernetes-service-endpoints",
+                    "namespace": "pharness",
+                    "node": "ubuntu-lucas-engineering-2",
+                    "service": "prometheus-kube-state-metrics"
+                  },
+                  "value": [
+                    1788895278.473,
+                    "1788895275.185"
+                  ]
+                }
+              ],
+              "resultType": "vector"
+            },
+            "status": "success"
+          }
+        }
+      }
+    }
+  ],
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "started_at": "2026-09-08T19:20:57.685828+00:00",
+  "status": "passed",
+  "subsequent_full_window_seconds": 600
+}

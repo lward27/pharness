@@ -1,0 +1,263 @@
+{
+  "backend": {
+    "addresses": [
+      "10.42.0.165"
+    ],
+    "conditions": {
+      "ready": true,
+      "serving": true,
+      "terminating": false
+    },
+    "nodeName": "ubuntu-lucas-engineering",
+    "targetRef": {
+      "kind": "Pod",
+      "name": "docker-registry-5dd7cb8849-gc89j",
+      "namespace": "registry",
+      "uid": "2a17ac85-8614-485e-bc52-9f6744dcb476"
+    }
+  },
+  "limitations": [
+    "These later probes cannot establish why the earlier upstream connection failed.",
+    "No upload, credential, resource or network-policy mutation was used."
+  ],
+  "mutations": [],
+  "observations": [
+    {
+      "node": "ubuntu-lucas-engineering",
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "samples": [
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:01.603826+00:00",
+          "attempt": 1,
+          "connect_seconds": 0.000611,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001691,
+          "wall_seconds": 0.591
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:02.195198+00:00",
+          "attempt": 1,
+          "connect_seconds": 0.000453,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.002021,
+          "wall_seconds": 0.542
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:02.736786+00:00",
+          "attempt": 2,
+          "connect_seconds": 0.000462,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001794,
+          "wall_seconds": 0.659
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:03.395473+00:00",
+          "attempt": 2,
+          "connect_seconds": 0.000455,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001562,
+          "wall_seconds": 0.583
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:03.978353+00:00",
+          "attempt": 3,
+          "connect_seconds": 0.000536,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001988,
+          "wall_seconds": 0.591
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:04.569714+00:00",
+          "attempt": 3,
+          "connect_seconds": 0.000952,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.002684,
+          "wall_seconds": 0.661
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:05.231259+00:00",
+          "attempt": 4,
+          "connect_seconds": 0.000572,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001843,
+          "wall_seconds": 0.63
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:05.861840+00:00",
+          "attempt": 4,
+          "connect_seconds": 0.000574,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001898,
+          "wall_seconds": 0.6
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:06.462234+00:00",
+          "attempt": 5,
+          "connect_seconds": 0.000576,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.002224,
+          "wall_seconds": 0.596
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:07.057813+00:00",
+          "attempt": 5,
+          "connect_seconds": 0.000578,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.001776,
+          "wall_seconds": 0.571
+        }
+      ],
+      "uid": "b3c4ba43-1165-4390-80a3-1c7c7cb4d7f0"
+    },
+    {
+      "node": "ubuntu-lucas-engineering-2",
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "samples": [
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:01.544135+00:00",
+          "attempt": 1,
+          "connect_seconds": 0.001496,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.003767,
+          "wall_seconds": 5.347
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:06.891357+00:00",
+          "attempt": 1,
+          "connect_seconds": 0.001409,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.003448,
+          "wall_seconds": 4.529
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:11.420455+00:00",
+          "attempt": 2,
+          "connect_seconds": 0.001205,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.003055,
+          "wall_seconds": 4.241
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:15.662064+00:00",
+          "attempt": 2,
+          "connect_seconds": 0.08036,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.082464,
+          "wall_seconds": 4.134
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:19.795806+00:00",
+          "attempt": 3,
+          "connect_seconds": 0.001046,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.002722,
+          "wall_seconds": 4.093
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:23.888951+00:00",
+          "attempt": 3,
+          "connect_seconds": 0.001184,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.003211,
+          "wall_seconds": 4.533
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:28.422403+00:00",
+          "attempt": 4,
+          "connect_seconds": 0.016722,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.018428,
+          "wall_seconds": 4.029
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:32.451434+00:00",
+          "attempt": 4,
+          "connect_seconds": 0.001289,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.016831,
+          "wall_seconds": 4.263
+        },
+        {
+          "address": "10.43.146.139",
+          "at": "2026-09-08T19:11:36.714677+00:00",
+          "attempt": 5,
+          "connect_seconds": 0.001193,
+          "destination": "service",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.081223,
+          "wall_seconds": 3.792
+        },
+        {
+          "address": "10.42.0.165",
+          "at": "2026-09-08T19:11:40.507196+00:00",
+          "attempt": 5,
+          "connect_seconds": 0.015832,
+          "destination": "pod",
+          "http_code": 200,
+          "status": "observed",
+          "total_seconds": 0.017574,
+          "wall_seconds": 3.924
+        }
+      ],
+      "uid": "1dc55e2b-83db-40d8-a74a-52cb3c507865"
+    }
+  ],
+  "observed_at": "2026-09-08T19:11:44.432078+00:00",
+  "scope": "read-only fresh HTTP connections from existing registry gateways to registry Service and exact ready Pod",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91"
+}

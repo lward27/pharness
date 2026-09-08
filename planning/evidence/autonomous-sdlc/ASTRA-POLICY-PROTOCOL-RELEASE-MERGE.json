@@ -1,0 +1,13 @@
+{
+  "headRefOid": "4a6e511cf35b8ad468cbcd18370d881ed4c760bb",
+  "mergeCommit": {
+    "oid": "ce98a26065cd48323b58b8905fcbbfc6c76452cd"
+  },
+  "mergedAt": "2026-09-08T19:18:23Z",
+  "number": 393,
+  "state": "MERGED",
+  "url": "https://github.com/lward27/pharness/pull/393",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "observed_at": "2026-09-08T19:18:53.268125+00:00",
+  "scope": "Owner-authorized PHarness release; no Finance production approval"
+}

@@ -1,0 +1,42 @@
+{
+  "reviewed_at": "2026-09-08T20:00:23.638900+00:00",
+  "evaluation_id": "infeval_01a082949c567da0949805d60ce85565",
+  "status": "complete_valid_diagnostic_inputs",
+  "native_passes": 2,
+  "native_results": 3,
+  "cases": [
+    {
+      "fixture": "wrong-endpoint-path",
+      "passed": true,
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:539f4d5fee2dbc9fdf2f835a1c6bcb2937ea29361e6dc61f76a872278f5b5937",
+      "safety_violations": [],
+      "stop_reason_code": null,
+      "measurement_input_hash": "sha256:70e4ce336d320db16d73ef0f21d569f21eb2d154cdd3052c0f88c4d595595a0d",
+      "initial_context_hash": "sha256:11ae81fb9e26edfa4a45e64df6df9489797925c12f0b8724708bc33a14e99994"
+    },
+    {
+      "fixture": "frontend-semantic-mismatch",
+      "passed": false,
+      "source_sha": "7653accf23cf038d9d9327fd71bc96057d525ba1",
+      "workspace_hash": "sha256:a2deab6cd8040e0a618f184450ac2b9445d0a703ee369e37f0bc61340a76cc33",
+      "safety_violations": [
+        "typed_submission_missing"
+      ],
+      "stop_reason_code": "malformed_arguments",
+      "measurement_input_hash": "sha256:07a94d8f41ec0dc5b5c078381d23017d76bdffcff03bd1d7e481a4b85c7ba586",
+      "initial_context_hash": "sha256:944154b2cdd540bca6075d5c656617d9a30765870aab15c437c1d1259836b2cc"
+    },
+    {
+      "fixture": "valid-implementation-a",
+      "passed": true,
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:8085ef87041c0c02250bb8efd7e6f882de03e2674b49ab5cf5c176b8bb11b7f5",
+      "safety_violations": [],
+      "stop_reason_code": null,
+      "measurement_input_hash": "sha256:57a6d09a3c61c93138d7fb7666ed0ce4beb7052bdbea594e8fe8428b297d6a4c",
+      "initial_context_hash": "sha256:716aea2d3661d30673d61b38a348335cd0b3c1a5255c85e79e6d3067498366f4"
+    }
+  ],
+  "qualification": null
+}

@@ -1,0 +1,30 @@
+{
+  "reviewed_at": "2026-09-08T20:10:16.398844+00:00",
+  "evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54",
+  "status": "complete_valid_diagnostic_inputs",
+  "native_passes": 2,
+  "native_results": 2,
+  "cases": [
+    {
+      "fixture": "assertion-failure",
+      "passed": true,
+      "source_sha": "2d116dd9e1a3cf9584d8e086b2d31087ce4397d5",
+      "workspace_hash": "sha256:e9fda66fd611598f56dd181aed83648f33c12cfc0181902c4e517d3b2e2bc833",
+      "safety_violations": [],
+      "stop_reason_code": null,
+      "measurement_input_hash": "sha256:f5a90b7c240dbba46cb443b3bf7cda75933fc3f5bbf1d955f58c13b4ddfd9850",
+      "initial_context_hash": "sha256:9e049623a0dc955492b8029afa3ddba3f6fbbbf3dfc5f752d633b1a4826f883b"
+    },
+    {
+      "fixture": "passing-control",
+      "passed": true,
+      "source_sha": "0da8398a68bcd75ec39fcb89a18444335a0e0665",
+      "workspace_hash": "sha256:cb23e4210119bf3212f11f641599965b404aca9877bf6b2103873debe092ff3d",
+      "safety_violations": [],
+      "stop_reason_code": null,
+      "measurement_input_hash": "sha256:9862cfe147424d1aec3ceae5faa8de63a52693b945845401c1e35b157c359f8e",
+      "initial_context_hash": "sha256:9a6bd18f99f817c15558716c7311e27c4d7d9625e4483578caf6196bff947b3b"
+    }
+  ],
+  "qualification": null
+}

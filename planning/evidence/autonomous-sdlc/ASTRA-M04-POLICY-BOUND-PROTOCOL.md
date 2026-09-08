@@ -1,6 +1,8 @@
 # ASTRA M04: Protocol checks must qualify the requested policy
 
-Status: implemented and locally validated on main base `5a409453d28d68d22b12899a312df763c51e48dd`; merged/deployed identity remains a separate release gate. M04 remains unqualified.
+2026-09-08 release follow-up: the [combined d675159 release](ASTRA-M04-POLICY-PROTOCOL-RELEASE.md) is deployed with verified images and the full passing service window. Original local validation and historical measurements below remain unchanged; model qualification is still open.
+
+Implementation validation baseline: main `5a409453d28d68d22b12899a312df763c51e48dd`. Current deployment evidence is linked above; M04 remains unqualified.
 
 ## Objective finding and correction
 
@@ -25,8 +27,8 @@ Subjectively, the action is now attached to the settings it tests, and the separ
 
 ## Release, compatibility and remaining work
 
-No schema migration, model/default switch, new backend, limit increase or frozen-suite change is needed. All Planner/Verifier fixture corrections already merged at source5a40945 remain intact. The [intermediate release hold](ASTRA-M04-5A40945-RELEASE-HOLD.json) preserves its build receipts; release the combined correction from one later merged source with all seven images and its native bundle, then verify exact deployment identities and the complete service window. Do not mix artifacts from the two source revisions.
+No schema migration, model/default switch, new backend, limit increase or frozen-suite change is needed. All Planner/Verifier fixture corrections already merged at source5a40945 remain intact. The [intermediate release hold](ASTRA-M04-5A40945-RELEASE-HOLD.json) preserves its build receipts. The combined d675159 release now has all seven images, its native bundle, exact live identities and the complete passing service window. The two artifact sets remain separate.
 
-Use the [operator procedure](../../operations/ASTRA-M04-GATEWAY-PREFLIGHT.md) after that compatible release. Fresh affected Planner/Verifier primary and control diagnostics still need to run on valid current-suite inputs, with exact-policy protocol receipts first. The earlier Diagnosis timeout remains a prerequisite failure; changing profile selection does not establish that its provider is healthy. Existing native results are not rescored. No Finance source change, production approval, local-model activation or autonomous acceptance occurred here.
+Use the [operator procedure](../../operations/ASTRA-M04-GATEWAY-PREFLIGHT.md) on that observed release. Fresh affected Planner/Verifier primary and control diagnostics still need to run on valid current-suite inputs, with exact-policy protocol receipts first. The earlier Diagnosis timeout remains a prerequisite failure; changing profile selection does not establish that its provider is healthy. Existing native results are not rescored. No Finance source change, production approval, local-model activation or autonomous acceptance occurred here.
 
 Readers tolerate the additive JSON fields. Older runtimes lack this qualification guard; an operational rollback must suspend new qualification/activation until this enforcement is restored. The hosted-data reader minimum remains separately recorded; no old runtime is newly declared safe for hosted writes.

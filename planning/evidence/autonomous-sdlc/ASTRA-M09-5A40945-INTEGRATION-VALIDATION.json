@@ -1,0 +1,48 @@
+{
+  "observed_at": "2026-09-08T18:17:31.394477+00:00",
+  "status": "local_validation_passed",
+  "main_base": "5a409453d28d68d22b12899a312df763c51e48dd",
+  "staging_base": "12d3a06d03cf73d83606d0e685cf9820a13bd47c",
+  "previous_pr_366_head": "80e19feb148eadcc3e46e073ac3d2de1b02e88be",
+  "merge_conflicts": [],
+  "production_rust_unchanged_from_previous_draft": {
+    "crates/pharness-core/src/hosted_sdlc.rs": "sha256:7f0bdb937bf502201a2ecf6351c285a5dafa2c7209cad81802451bf5e5fc005c",
+    "crates/pharness-core/src/hosted_sdlc/production.rs": "sha256:26399bf14bfe51327d6923f31075d57d8d2c7b557ef11d93493f3418d0de1993",
+    "crates/pharness-core/src/hosted_sdlc/production/approval.rs": "sha256:4ada7e16586006eeb24d67fcffe54b2df4a4b148a7f8bf4843c245fd1b4b7b00",
+    "crates/pharness-core/src/hosted_sdlc/production/tests.rs": "sha256:95edeb99ac99d4a14c90cba956961ec12255770787e05f701d4507607253afd0"
+  },
+  "core_tests_passed": 216,
+  "live_core_tests_ignored": 6,
+  "production_contract_tests_included": 6,
+  "clippy": "core/all targets, warnings denied; passed",
+  "architecture_regressions_passed": 5,
+  "format": "passed",
+  "logs": {
+    "core": {
+      "path": "/tmp/astra-m09-5a40945-core.log",
+      "sha256": "sha256:ef551379136513fdecf112762d168e300151ea16858105fb1735531563b1094d"
+    },
+    "clippy": {
+      "path": "/tmp/astra-m09-5a40945-clippy.log",
+      "sha256": "sha256:24435a07f52d894aceedc2f4d04d0b61d89c760bfca9e17fdcee9d6e7010e8dd"
+    },
+    "architecture": {
+      "path": "/tmp/astra-m09-5a40945-architecture.log",
+      "sha256": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    "format": {
+      "path": "/tmp/astra-m09-5a40945-format.log",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "remaining_gates": [
+    "authenticated operator decision persistence and revalidation",
+    "serialized production GitOps effect after the human decision",
+    "native production observation",
+    "bounded rollback execution and recovery tests",
+    "live acceptance with actual human approvals"
+  ],
+  "live_changes": [],
+  "human_production_approval_recorded": false,
+  "qualification": null
+}

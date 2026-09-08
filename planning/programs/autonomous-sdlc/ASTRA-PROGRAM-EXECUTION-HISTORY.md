@@ -339,3 +339,19 @@ seeded Repair on earlier `48c77b7` passed 24/24 twice, 8/8 per stack; actual fai
 Builder-to-repair handoff and blind semantic verification remain unproven. Retain
 all failed evidence. The context/evidence corrections are now deployed in `92f8f1b` and need fresh
 qualification; old success cannot qualify this runtime.
+
+
+## M04 measurement and protocol correction checkpoint — 2026-09-08
+
+The [operator checkpoint before the combined release](https://github.com/lward27/pharness/blob/d675159cb205d222616d253d311706be1889bb91/planning/evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md) preserves the preceding detailed operational narrative. It is historical, not the current resume instruction. Sourcee508 was deployed through pin040caeb with exact identities and a full passing ten-minute R2 window; the first failed window remains retained. Its same-runtime Onboarding primary passed 1/2 and matched control 2/2. Planner native1/2 and Verifier native3/3 were invalid measurements, so their controls were deliberately not dispatched. Diagnosis timed out at its unchanged 300-second first-response bound before a semantic evaluation. No model switch or qualification followed.
+
+PR389 corrected diagnostic completeness and Planner selected commands. PR391 corrected and audited all semantic fixtures, advancing Planner to v2.5 and Verifier to v2.4 while preserving the frozen coding and repair tasks. Source24790cc was only preflighted. Source5a40945 subsequently produced seven verified images and a verified native bundle but was held from deployment after a shared-target protocol-check bug was found. PR392 fixes exact-policy selection, receipt binding and admission, and moves the console action beside each policy. The combined source is d675159. These are separate operations; no artifact or historical diagnostic is relabelled as a later release.
+
+M08 draft363 was refreshed against5a40945 with851 Rust checks, including two explicit Helm tests; M09 draft366 with216 core/integration checks. Both remain drafts, unreleased and unaccepted. Their implementation gates and the real Finance production approval remain separate from M04.
+
+
+## 2026-09-08: Complete d675159 diagnostics and merge the Planner exception guard
+
+The three primary/control pairs are terminal with exact-policy30/30 prerequisites and independently matched retained inputs: Planner native2/2 versus2/2, Verifier GLM2/3 versus Kimi3/3, and Diagnosis Nemotron2/2 versus Kimi2/2. The previous Diagnosis timeout did not recur. These are diagnostics, not qualification; the Planner control's recommendation to weaken an existing regression exposes a real approval gap despite its native score.
+
+PR395 merges the explicit saved-Run Planner readiness contract, blocked-outcome preservation, and shared exact-plan revalidation at automatic plan approval, implementation and ChangeSet approval. Its final implementation head is `4807e6dd69c73b70cc3ef07e943ebcd46037bf2d`, merged as `7b2c06daf4b549fa8acd62a363bd4aedb758fc2f`, with590 passing component tests across recorded full/focused checks and unchanged limits/schema/defaults. PR394 merges the separately validated evaluator layer reuse as `fda1174b57dfcf29ccc5ec2f6011bfe30c49e20e`. Both await one combined immutable release; serving images still contain d675159. The program must not count these local guards as live or connected-loop acceptance.
