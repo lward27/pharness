@@ -1,6 +1,6 @@
-use super::model::{find_product, normalize_key, product_model_json, validate_required};
+use super::model::{find_product, product_model_json, validate_required};
 use super::onboarding_policy::{
-    onboarding_environment_profile_descriptors, onboarding_patch_paths, validate_binding_scope,
+    onboarding_environment_profile_descriptors, onboarding_patch_paths,
     validate_onboarding_contract_compatibility,
 };
 use super::onboarding_state::{find_onboarding, onboarding_operator_response, onboarding_response};
@@ -511,80 +511,21 @@ async fn validate_onboarding_product_proposals(
     onboarding: &StoredRepositoryOnboarding,
     proposal: &pharness_core::RepositoryOnboardingProposal,
 ) -> Result<(), ApiError> {
-    if proposal.service_proposals.len() > 32 {
-        return Err(ApiError::bad_request(
-            "an onboarding proposal may define at most 32 Services",
-        ));
-    }
-    if proposal.binding_proposals.len() > 1 {
-        return Err(ApiError::bad_request(
-            "Repo Mode V1 permits at most one binding proposal for the onboarding Repository",
-        ));
-    }
+    // Recheck live Product state even when submission validated its original snapshot.
     let existing = state
         .store
         .list_product_services(&onboarding.product_id)
         .await?;
-    let mut service_keys = existing
-        .iter()
-        .map(|service| service.service_key.clone())
-        .collect::<std::collections::BTreeSet<_>>();
-    let existing_keys = service_keys.clone();
-    for service in &proposal.service_proposals {
-        let key = normalize_key(&service.service_key)?;
-        if key != service.service_key {
-            return Err(ApiError::bad_request(format!(
-                "Service key {} is not canonical; use {key}",
-                service.service_key
-            )));
-        }
-        validate_required(&service.display_name, "service display_name", 120)?;
-        if service.description.len() > 4_000 {
-            return Err(ApiError::bad_request(
-                "Service description exceeds 4,000 characters",
-            ));
-        }
-        if existing_keys.contains(&key) {
-            return Err(ApiError::conflict(format!(
-                "Service {key} already exists in the Product"
-            )));
-        }
-        if !service_keys.insert(key.clone()) {
-            return Err(ApiError::bad_request(format!(
-                "onboarding proposal repeats Service {key}"
-            )));
-        }
-    }
-    if let Some(binding) = proposal.binding_proposals.first() {
-        if binding.scopes.is_empty() || binding.scopes.len() > 64 {
-            return Err(ApiError::bad_request(
-                "binding scopes must contain between one and 64 repository-relative globs",
-            ));
-        }
-        let mut seen_services = std::collections::BTreeSet::new();
-        for key in &binding.service_keys {
-            if !seen_services.insert(key) {
-                return Err(ApiError::bad_request(format!(
-                    "binding proposal repeats Service key {key}"
-                )));
+    proposal
+        .validate_product_proposals(existing.iter().map(|service| service.service_key.as_str()))
+        .map_err(|error| match error {
+            pharness_core::RepositoryProductProposalError::Invalid(message) => {
+                ApiError::bad_request(message)
             }
-            if !service_keys.contains(key) {
-                return Err(ApiError::bad_request(format!(
-                    "binding proposal references unknown Service {key}"
-                )));
+            pharness_core::RepositoryProductProposalError::Conflict(message) => {
+                ApiError::conflict(message)
             }
-        }
-        let mut seen_scopes = std::collections::BTreeSet::new();
-        for scope in &binding.scopes {
-            validate_binding_scope(scope)?;
-            if !seen_scopes.insert(scope) {
-                return Err(ApiError::bad_request(format!(
-                    "binding proposal repeats scope {scope}"
-                )));
-            }
-        }
-    }
-    Ok(())
+        })
 }
 
 async fn approved_onboarding_model_change(

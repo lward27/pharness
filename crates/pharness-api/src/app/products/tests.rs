@@ -1,12 +1,15 @@
 use super::model::{normalize_key, validate_repository_binding_scope};
 use super::onboarding_policy::{
     onboarding_environment_profile_descriptors, onboarding_environment_profile_ids,
-    onboarding_patch_paths, validate_binding_scope,
+    onboarding_patch_paths,
 };
 use super::readiness::readiness_current_state;
 use super::registration::parse_github_repository_url;
 
-use pharness_core::{EnvironmentProfile, EnvironmentProfileLimits, PreparationStrategy};
+use pharness_core::{
+    validate_repository_binding_scope as validate_binding_scope, EnvironmentProfile,
+    EnvironmentProfileLimits, PreparationStrategy,
+};
 use serde_json::json;
 
 #[test]

@@ -57,6 +57,109 @@ fn legacy_proposal(blocked: bool) -> Value {
 }
 
 #[tokio::test]
+async fn retained_control_rejects_existing_service_creation_at_submission() {
+    let retained: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../planning/evidence/autonomous-sdlc/ASTRA-M04-38A4282-ONBOARDING-CONTROL-RESULT.json"
+    )))
+    .unwrap();
+    let row = retained["evaluation"]["report"]["report"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["fixture"] == "python-contract")
+        .unwrap();
+    let mut proposal = row["stage_submission"]["document"].clone();
+    let mut run = run(true);
+    for field in ["discovery_id", "discovery_hash"] {
+        run.execution_target_json["onboarding"][field] = proposal[field].clone();
+    }
+    run.execution_target_json["agent_context"]["discovery"] = json!({
+        "id":proposal["discovery_id"], "hash":proposal["discovery_hash"]
+    });
+    run.execution_target_json["agent_context"]["product_model"] = row["stage_submission"]
+        ["measurement_input"]["document"]["context"]["product_model"]
+        .clone();
+    for field in IDENTITY_FIELDS {
+        proposal.as_object_mut().unwrap().remove(field);
+    }
+    let original = proposal.clone();
+    let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
+    let error = tools
+        .execute(&AgentAction::SubmitOnboardingProposal {
+            id: "act_retained_duplicate".into(),
+            reason: "reuse existing Service".into(),
+            proposal: proposal.clone(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, ToolError::InvalidArguments { ref message }
+        if message.contains("service_proposals[0].service_key")
+        && message.contains("already exists") && message.contains("binding_proposals")));
+    assert_eq!(
+        proposal, original,
+        "reject without rewriting the model proposal"
+    );
+
+    // The existing binding already expresses reuse. Do not create the Service again.
+    proposal["service_proposals"] = json!([]);
+    let accepted = tools
+        .execute(&AgentAction::SubmitOnboardingProposal {
+            id: "act_reuse_existing".into(),
+            reason: "bind existing Service without creating it".into(),
+            proposal: proposal.clone(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        accepted.content["document"]["binding_proposals"],
+        proposal["binding_proposals"]
+    );
+}
+
+#[test]
+fn product_checks_use_the_original_wrapped_snapshot_and_require_known_context() {
+    let mut run = run(true);
+    run.execution_target_json["agent_context"]["product_model"] = json!({
+        "snapshot_id":"pmodel_original", "content_hash":"sha256:original",
+        "model":{"services":[{"service_key":"finance-web"}]}
+    });
+    let binding = OnboardingBinding::for_run(&run).unwrap().unwrap();
+    let mut proposal = semantic_proposal(false);
+    proposal["binding_proposals"] = json!([{"service_keys":["finance-web"], "scopes":["src/**"]}]);
+    assert!(binding.bind(&proposal).is_ok());
+    run.execution_target_json["agent_context"]["product_model"]["model"]["services"] = json!([]);
+    assert!(
+        binding.bind(&proposal).is_ok(),
+        "an existing Run retains its original snapshot"
+    );
+    assert!(OnboardingBinding::for_run(&run)
+        .unwrap()
+        .unwrap()
+        .bind(&proposal)
+        .is_err());
+
+    run.execution_target_json["agent_context"]
+        .as_object_mut()
+        .unwrap()
+        .remove("product_model");
+    let missing = OnboardingBinding::for_run(&run).unwrap().unwrap();
+    assert!(missing.bind(&semantic_proposal(true)).is_ok());
+    assert!(
+        matches!(missing.bind(&proposal), Err(ToolError::InvalidArguments { message })
+        if message.contains("original Run") && message.contains("product_model"))
+    );
+    for bad_model in [
+        json!({"model":null,"services":[{"service_key":"finance-web"}]}),
+        json!({"model":{"services":[{}]}}),
+        json!({"model":{"services":[{"service_key":"finance-web"},{"service_key":"finance-web"}]}}),
+    ] {
+        run.execution_target_json["agent_context"]["product_model"] = bad_model;
+        assert!(OnboardingBinding::for_run(&run).is_err());
+    }
+}
+
+#[tokio::test]
 async fn native_submission_rejects_ambiguous_scope_and_accepts_explicit_revision() {
     let run = run(true);
     let tools = ProjectTools::for_run(std::path::Path::new(&run.cwd), &run).unwrap();
@@ -138,6 +241,20 @@ fn saved_contract_selects_matching_tool_schema_and_profile_instruction() {
         .unwrap()
         .parameters_schema["properties"]["proposal"];
     assert_eq!(current_proposal["required"], json!(PROPOSAL_FIELDS));
+    assert_eq!(
+        current_proposal["properties"]["service_proposals"]["maxItems"],
+        32
+    );
+    assert_eq!(
+        current_proposal["properties"]["binding_proposals"]["maxItems"],
+        1
+    );
+    assert!(
+        current_proposal["properties"]["service_proposals"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Creates new Product Services only")
+    );
     for field in IDENTITY_FIELDS {
         assert!(current_proposal["properties"].get(field).is_none());
         assert!(!current_proposal["required"]
