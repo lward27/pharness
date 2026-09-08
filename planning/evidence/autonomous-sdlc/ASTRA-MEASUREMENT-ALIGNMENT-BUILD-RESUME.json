@@ -1,0 +1,17 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "started_at": "2026-09-08T16:17:51.784350+00:00",
+  "status": "passed",
+  "components": [
+    "model-gateway",
+    "eval-runner",
+    "codex-host"
+  ],
+  "original_failure_preserved": true,
+  "completed": [
+    "model-gateway",
+    "eval-runner",
+    "codex-host"
+  ],
+  "finished_at": "2026-09-08T16:33:40.538761+00:00"
+}

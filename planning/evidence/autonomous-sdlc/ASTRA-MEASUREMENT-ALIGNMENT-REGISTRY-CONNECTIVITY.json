@@ -1,0 +1,144 @@
+{
+  "cluster": "lucas_engineering",
+  "limitations": [
+    "Read probes do not reproduce large upload load or provide packet-level flow evidence.",
+    "Cilium/Hubble are not installed on this cluster."
+  ],
+  "method": "GET /v2/",
+  "mutations": [],
+  "observed_at": "2026-09-08T16:13:21.163281+00:00",
+  "path": "owned API tunnel to each existing gateway HTTP listener, through its configured registry backend",
+  "per_request_deadline_seconds": 5,
+  "results": [
+    {
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "samples": [
+        {
+          "at": "2026-09-08T16:13:17.446775+00:00",
+          "elapsed_seconds": 0.2563,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:17.964837+00:00",
+          "elapsed_seconds": 0.0377,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.251701+00:00",
+          "elapsed_seconds": 0.0296,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.541443+00:00",
+          "elapsed_seconds": 0.0334,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.832939+00:00",
+          "elapsed_seconds": 0.0259,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.114776+00:00",
+          "elapsed_seconds": 0.0261,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.400923+00:00",
+          "elapsed_seconds": 0.0239,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.684014+00:00",
+          "elapsed_seconds": 0.0266,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.970479+00:00",
+          "elapsed_seconds": 0.0303,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.258386+00:00",
+          "elapsed_seconds": 0.0274,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.545397+00:00",
+          "elapsed_seconds": 0.0437,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.846887+00:00",
+          "elapsed_seconds": 0.0286,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "samples": [
+        {
+          "at": "2026-09-08T16:13:17.447475+00:00",
+          "elapsed_seconds": 0.2576,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:17.965258+00:00",
+          "elapsed_seconds": 0.0425,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.260772+00:00",
+          "elapsed_seconds": 0.0294,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.543301+00:00",
+          "elapsed_seconds": 0.049,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:18.850176+00:00",
+          "elapsed_seconds": 0.0323,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.141698+00:00",
+          "elapsed_seconds": 0.0259,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.424289+00:00",
+          "elapsed_seconds": 0.029,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:19.712142+00:00",
+          "elapsed_seconds": 0.0368,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.001304+00:00",
+          "elapsed_seconds": 0.033,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.290901+00:00",
+          "elapsed_seconds": 0.0293,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.578193+00:00",
+          "elapsed_seconds": 0.0314,
+          "status": "passed"
+        },
+        {
+          "at": "2026-09-08T16:13:20.866718+00:00",
+          "elapsed_seconds": 0.0324,
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

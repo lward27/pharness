@@ -1,5 +1,7 @@
 # ASTRA M04: Release native Product proposal validation
 
+Continuation: the later [measurement alignment release](ASTRA-M04-MEASUREMENT-ALIGNMENT-RELEASE.md) corrects the private grading restriction. This document retains the original source80 outcome and the next-step assessment made at that time; it does not define the current runtime or rescore that report.
+
 Status: immutable artifacts, release pins, exact live identities and the complete ten-minute service window pass. No model qualification or Finance acceptance is implied.
 
 [PR 384](https://github.com/lward27/pharness/pull/384) merges the [shared Product submission validator](ASTRA-M04-ONBOARDING-PRODUCT-BOUNDARY.md) as source `80acca99b6417d14dac75620b516852b3103a80d`. [PR 385](https://github.com/lward27/pharness/pull/385) carries pin commit `5b95f650b434f300b9218bec48f3344bb820a7cb`, merged as `bcfc5687c5b7527e771747cdb817dd5bd0d2bc22`. The source38 deployment is the preceding compatible release. Schema 55 and the source92-compatible reader floor remain unchanged.

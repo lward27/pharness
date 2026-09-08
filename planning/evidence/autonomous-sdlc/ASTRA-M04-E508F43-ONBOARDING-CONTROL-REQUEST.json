@@ -1,0 +1,14 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04D sourcee508 onboarding matched Kimi control of retained primary inputs; primary 1/2 with fabricated blocked contract, unchanged limits and no qualification or activation",
+  "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "python-contract",
+      "missing-lock"
+    ],
+    "reference_evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470"
+  }
+}

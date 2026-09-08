@@ -1,0 +1,40 @@
+{
+  "created_at": "2026-09-08T17:29:44.997817+00:00",
+  "finished_at": "2026-09-08T17:34:45.086924+00:00",
+  "policy_id": "test-diagnosis-nemotron-v2",
+  "request": {
+    "actor": "lucas",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourcee508 bounded protocol calibration for declared stage canaries; unchanged limits and defaults"
+  },
+  "result": {
+    "actor": "lucas",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788888885055",
+    "expires_at": "1788889485",
+    "id": "inferverify_01a08211935575129894e2d5f71a9263",
+    "model_visible": false,
+    "observed_capabilities": {
+      "native_tools": false,
+      "protocol": "openai_chat_completions_v1",
+      "protocol_calibration": null,
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+      "streaming": false
+    },
+    "reachability": "unavailable",
+    "reason": "ASTRA M04D sourcee508 bounded protocol calibration for declared stage canaries; unchanged limits and defaults",
+    "sanitized_failure": "gateway protocol verification timed out",
+    "status": "failed",
+    "streaming_compatible": false,
+    "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+    "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+    "target_revision": "v1",
+    "tool_compatible": false
+  },
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "state": "completed",
+  "target": {
+    "revision": "v1",
+    "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+  }
+}

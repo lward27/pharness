@@ -1,6 +1,6 @@
 # ASTRA M04: Align onboarding measurement with the published contract
 
-Status: implementation and deterministic validation complete; not deployed or qualified. Base is `e102b46ada4fa8c8ff9f0a27d22f7bfb34f5605b`, in a fresh `codex/astra-onboarding-measurement-alignment` worktree. The running source remains `80acca99b6417d14dac75620b516852b3103a80d`.
+Status: implemented and released as source `e508f430e9f006c5f3e9f74fdd120d275605d85c`; exact live identities and the full ten-minute R2 service window verified; fresh live diagnostics pending. The implementation began from `e102b46ada4fa8c8ff9f0a27d22f7bfb34f5605b` in a fresh `codex/astra-onboarding-measurement-alignment` worktree. [Release evidence](ASTRA-M04-MEASUREMENT-ALIGNMENT-RELEASE.md) records artifact and deployment identity. No qualification is claimed.
 
 ## Problem and resulting behavior
 
@@ -46,7 +46,7 @@ All twelve onboarding cases, the frozen 24 coding tasks, per-stack thresholds, t
 
 ## Deployment, recovery and next gate
 
-Merge the reviewed correction from current main, build the full required image set and native bundle from that merged SHA using the selected Rancher Desktop builder, pin digests, and verify Argo revision and live identities. Finish the full service observation window before a new diagnostic. No schema migration, provider switch, profile activation or Finance production action is included. Hosted creation and Coding Reliability V2 stay disabled. Source80 is the preferred immediately preceding compatible rollback; the recorded schema-55 reader floor does not change.
+The reviewed correction was merged and released from one source revision using the selected Rancher Desktop builder. The full seven-image set, native bundle, digest pins, Argo revision and live identities now verify in the linked release evidence. The full service observation window must pass before a new diagnostic. No schema migration, provider switch, profile activation or Finance production action is included. Hosted creation and Coding Reliability V2 stay disabled. Source80 is the preferred immediately preceding compatible rollback; the recorded schema-55 reader floor does not change.
 
 Then run a fresh onboarding primary and matched control on the same new runtime and suite revision, preserving the public input/context hashes, native outputs, limits, protocol evidence and final execution receipts. Do not use source80's old-suite primary as the new control reference. Do not repeat an invalid harness test to decide a model winner. M04D's remaining stage canaries, M04E's connected loop and M04F's full qualification remain open.
 

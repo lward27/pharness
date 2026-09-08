@@ -1,0 +1,20 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "target": "codex-host",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "command": [
+    "scripts/pharness-build.sh",
+    "codex-host",
+    "--revision",
+    "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "--builder",
+    "pharness-mac"
+  ],
+  "started_at": "2026-09-08T16:28:11.777587+00:00",
+  "status": "passed",
+  "pid": 94746,
+  "exit_code": 0,
+  "finished_at": "2026-09-08T16:33:40.537601+00:00",
+  "elapsed_seconds": 328.763
+}

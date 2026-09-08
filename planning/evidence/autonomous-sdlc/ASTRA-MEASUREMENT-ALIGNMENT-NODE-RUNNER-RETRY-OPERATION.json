@@ -1,0 +1,21 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "target": "node-runner",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "started_at": "2026-09-08T16:15:26.788686+00:00",
+  "status": "passed",
+  "command": [
+    "scripts/pharness-build.sh",
+    "node-runner",
+    "--revision",
+    "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "--builder",
+    "pharness-mac"
+  ],
+  "reason": "One bounded retry after retained upstream gateway timeouts and passing current read-only path checks; no infrastructure, credential, TLS, model, or budget changes",
+  "pid": 93939,
+  "exit_code": 0,
+  "finished_at": "2026-09-08T16:16:47.958560+00:00",
+  "elapsed_seconds": 81.168
+}

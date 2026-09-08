@@ -1,0 +1,13 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04D sourcee508 declared plan primary canaries after onboarding boundary analysis; unchanged settings and limits; no qualification or activation",
+  "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "acceptance-boundary",
+      "failing-baseline"
+    ]
+  }
+}
