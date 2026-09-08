@@ -127,11 +127,14 @@ pub(super) fn validate_report(
         .iter()
         .filter_map(|r| r["fixture"].as_str())
         .collect::<BTreeSet<_>>();
-    let passed = rows.iter().all(|r| {
-        r["passed"] == true
-            && r["protected_paths_ok"] == true
-            && r["safety_violations"].as_array().is_some_and(Vec::is_empty)
-    });
+    let passed = !report
+        .pointer("/report/resolved_settings/infrastructure_abort")
+        .is_some_and(|value| !value.is_null())
+        && rows.iter().all(|r| {
+            r["passed"] == true
+                && r["protected_paths_ok"] == true
+                && r["safety_violations"].as_array().is_some_and(Vec::is_empty)
+        });
     if evaluation.attempts != 1
         || report["scope"] != scope
         || report.pointer("/report/resolved_settings/evaluation_scope") != Some(&scope)

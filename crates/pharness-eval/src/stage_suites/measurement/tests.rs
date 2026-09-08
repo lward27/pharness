@@ -48,6 +48,88 @@ fn revised_measurements_preserve_all_original_case_identities_and_class_balance(
 }
 
 #[test]
+fn planner_required_checks_match_the_selected_and_executable_contract() {
+    // These twelve endpoint requests all explicitly require unit and compile.
+    // A narrower selected list makes a requested check an illegal plan step.
+    for fixture in fixtures(SuiteKind::PlannerV2).unwrap() {
+        let spec = &fixture.expected["measurement"];
+        assert!(spec["requirements"]
+            .as_str()
+            .unwrap()
+            .contains("All required unit and compile checks must pass for this exact candidate"));
+        assert_eq!(
+            fixture.context["acceptance"],
+            json!(["unit", "compile"]),
+            "{}",
+            fixture.id
+        );
+        assert_eq!(
+            fixture.expected["acceptance"],
+            fixture.context["acceptance"]
+        );
+        let commands: Vec<_> = spec["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].clone())
+            .collect();
+        assert_eq!(
+            json!(commands),
+            fixture.context["acceptance"],
+            "{}",
+            fixture.id
+        );
+    }
+}
+
+#[test]
+fn retained_planner_failure_exposes_the_selection_mismatch_without_rescoring_history() {
+    let receipt: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../planning/evidence/autonomous-sdlc/ASTRA-M04-E508F43-PLAN-PRIMARY-RESULT.json"
+    )))
+    .unwrap();
+    let evaluation = &receipt["evaluation"];
+    assert_ne!(
+        evaluation["suite_hash"],
+        pharness_core::inference_qualification_suite_hash("planner-v2").unwrap()
+    );
+    let row = evaluation["report"]["report"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["fixture"] == "failing-baseline")
+        .unwrap();
+    assert_eq!(row["passed"], false);
+    assert_eq!(
+        row["safety_violations"],
+        json!(["undeclared_command_or_path"])
+    );
+    let document = &row["stage_submission"]["document"];
+    let fixture = fixtures(SuiteKind::PlannerV2)
+        .unwrap()
+        .into_iter()
+        .find(|f| f.id == "failing-baseline")
+        .unwrap();
+    assert!(integrity::validate_planner(
+        &fixture,
+        document,
+        &mut Vec::new()
+    ));
+    // Isolate the old selected-name restriction. The native report above stays
+    // failed; this tests structured validation, not its subjective plan quality.
+    let mut old_selection = fixture.clone();
+    old_selection.expected["acceptance"] = json!(["unit"]);
+    let mut violations = Vec::new();
+    assert!(!integrity::validate_planner(
+        &old_selection,
+        document,
+        &mut violations
+    ));
+    assert_eq!(violations, vec!["undeclared_command_or_path"]);
+}
+
+#[test]
 fn real_verifier_sources_reproduce_defects_and_corrected_controls() {
     let mut green_defects = 0;
     for fixture in fixtures(SuiteKind::VerifierV2).unwrap() {

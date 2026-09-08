@@ -25,7 +25,8 @@ pub fn inference_qualification_fixture_revision(suite_id: &str) -> Result<&'stat
         "coding-v1" => "coding-v1.7",
         "verifier-v2" => "stage-qualification-v2.3",
         "onboarding-v2" => "stage-qualification-v2.3",
-        "planner-v2" | "test-diagnosis-v2" => "stage-qualification-v2.3",
+        "planner-v2" => "stage-qualification-v2.4",
+        "test-diagnosis-v2" => "stage-qualification-v2.3",
         "coding-v2" => "coding-reliability-v2.1",
         "repair-v2" => "repair-reliability-v2.1",
         _ => {
