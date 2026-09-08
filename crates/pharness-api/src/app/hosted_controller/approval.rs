@@ -39,7 +39,7 @@ pub(in crate::app) async fn validate_stored(
         .await?
         .ok_or_else(|| ApiError::conflict("automatic approval has no current WorkPlan"))?;
     let outcomes = store.list_effective_stage_outcomes(work_item_id).await?;
-    if action == "approve_work_plan" {
+    if matches!(action, "approve_work_plan" | "authorize_stage_chain") {
         let outcome = outcomes
             .iter()
             .find(|o| o.stage_key == "plan")
@@ -75,6 +75,8 @@ pub(in crate::app) async fn validate_stored(
                 "the proposed WorkPlan does not match the sealed Planner revision",
             ));
         }
+        pharness_core::PlannerReadiness::require_ready(&plan.work_plan_json)
+            .map_err(ApiError::conflict)?;
     } else if action == "approve_change_set" {
         let change = store
             .get_change_set_by_work_plan(&plan.id)
@@ -96,6 +98,10 @@ pub(in crate::app) async fn validate_stored(
             ));
         }
         for stage in ["discover", "plan", "implement", "test", "verify"] {
+            if stage == "plan" {
+                pharness_core::PlannerReadiness::require_ready(&plan.work_plan_json)
+                    .map_err(ApiError::conflict)?;
+            }
             let outcome = outcomes
                 .iter()
                 .find(|o| o.stage_key == stage)

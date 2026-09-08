@@ -833,3 +833,27 @@ async fn onboarding_submission_contract_follows_the_saved_selection() {
         None
     );
 }
+
+#[tokio::test]
+async fn planner_submission_readiness_follows_saved_prompt_not_current_defaults() {
+    let mut state = test_state().await;
+    enable_gateway(&mut state);
+    let (_, _, mut binding) =
+        qualification_fixture(&state, InferenceStage::Plan, "repo-planner", 2).await;
+    assert_eq!(
+        pharness_runhost::planner_submission_contract_for_binding(&binding),
+        Some(pharness_core::PLANNER_SUBMISSION_CONTRACT)
+    );
+    let saved = serde_json::to_value(&binding).unwrap();
+    state.repo_mode.coding_reliability_v2_enabled = false;
+    let restored = serde_json::from_value(saved).unwrap();
+    assert_eq!(
+        pharness_runhost::planner_submission_contract_for_binding(&restored),
+        Some(pharness_core::PLANNER_SUBMISSION_CONTRACT)
+    );
+    binding.stage_prompt.as_mut().unwrap().revision = "2026-09-05.1".into();
+    assert_eq!(
+        pharness_runhost::planner_submission_contract_for_binding(&binding),
+        None
+    );
+}

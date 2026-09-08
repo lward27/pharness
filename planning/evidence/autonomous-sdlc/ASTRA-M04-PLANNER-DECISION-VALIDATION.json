@@ -1,0 +1,100 @@
+{
+  "recorded_at": "2026-09-08T20:11:57.851073+00:00",
+  "base_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+  "status": "component_validation_passed",
+  "validated_source_files": {
+    "crates/pharness-api/src/app/hosted_controller/approval.rs": "sha256:e9e4981af1259793a100f52a9cb8b8fc904070c6ab55502cf4d672fbe7569ab4",
+    "crates/pharness-api/src/app/hosted_controller/operations.rs": "sha256:15a4b2943973f2522aafac42d5f4c9adea9c4aa84357e135e27f961b12cb3465",
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "sha256:421385f0160f65793e17f1777650effe613fc3a453bb2c11a059aa9654fd7975",
+    "crates/pharness-api/src/app/repo_mode/stages.rs": "sha256:51c7117eda86c146fdbbd2a2e89f71b6b1231da286aabb26a0f788fb30d187a3",
+    "crates/pharness-api/src/app/tests/hosted_controller.rs": "sha256:410847ac76930febacf0a6378f9f919006a7b49742df1f3b820bf6a83c075cc6",
+    "crates/pharness-api/src/app/tests/hosted_stage_execution.rs": "sha256:34f3885e5f6441d4f68026006ddc6b68abd1f5dc0c29452c8d316b5fe5ba4105",
+    "crates/pharness-api/src/app/tests/repo_mode_v1.rs": "sha256:29d095598b577a54f0da42eb149e4120dc1f6309850d187f0c476945a5e6864d",
+    "crates/pharness-api/src/worker.rs": "sha256:7ae6b87e3a58ba673bcdeefdcbb2f845b9ee295a5476a59e10f5deef747c5017",
+    "crates/pharness-core/src/inference.rs": "sha256:4cd20744c3b232bd7e2de8e3ecabd833f27314c607e9d6fc6e5ff4f051392b08",
+    "crates/pharness-core/src/lib.rs": "sha256:475b42bbcf76b9326d1bd70f0a66cf470aa9002a34e2e2b366a1d97cc2b415c9",
+    "crates/pharness-core/src/repo_mode.rs": "sha256:7a34af88a615130dba5ee5f7019543ce973e352e17b1c59dfc33788d84ed30f6",
+    "crates/pharness-core/src/repo_mode/planner.rs": "sha256:f6c19ec575386c5427a8b4c962fcdcd0407ab41e0f3b4e440f8b0e6f8115d27a",
+    "crates/pharness-eval/src/stage_suites.rs": "sha256:5ad4b0dc8dc7a391158886e5e759d25d17cec237310f017c488e5ac6bec31823",
+    "crates/pharness-eval/src/stage_suites/fixtures/planner-v2.json": "sha256:786bc42b65c3f34120781804cf32519b974bd52a57822101f23d7bd3cba23c9e",
+    "crates/pharness-eval/src/stage_suites/integrity.rs": "sha256:48cc251306c969a06e732bbf2464364e5e4160146d7360f0e1022c07f628b4ec",
+    "crates/pharness-eval/src/stage_suites/integrity/tests.rs": "sha256:043cbeeecaa88822db559558cbdc97461a472a029937749ff98039f81909d2bb",
+    "crates/pharness-eval/src/stage_suites/measurement/tests.rs": "sha256:8afddbc33dcf23de3f9ae5ac2dc6365889e404daf9e6beaf47450d0258279cf5",
+    "crates/pharness-runhost/src/context_envelope.rs": "sha256:bd906ec9660893c4f1dabc36f8f84f534a799d0b26fcc36d5e2b71df77815652",
+    "crates/pharness-runhost/src/lib.rs": "sha256:a7869be36435e6de86920566a93cfc576bd7121da769edce11e7d018e1b470cd",
+    "crates/pharness-runhost/src/planner_submission.rs": "sha256:727d91eb381cb848150d629519545ded52cdd7950811ac31963d91af390c3bed",
+    "crates/pharness-runhost/src/planner_submission/tests.rs": "sha256:e979de50f13d62df342d68173104776fd0f0788de71511dba789b76f108ca46c",
+    "crates/pharness-runhost/src/prompt.rs": "sha256:04927fa5d9fddc9653ccd00558f85dc0eae5d01f8c6e66bcd02c586c7c96b04f"
+  },
+  "checks": {
+    "api_main": {
+      "passed": 298
+    },
+    "api_admin": {
+      "passed": 1
+    },
+    "core_library": {
+      "passed": 169,
+      "ignored": 1
+    },
+    "core_integrations": {
+      "passed": 8
+    },
+    "runhost": {
+      "passed": 50
+    },
+    "evaluator": {
+      "passed": 63,
+      "method": "62 passed in full run; stale v2.5 expected-revision assertion corrected to v2.6 and its focused recheck passed. Original failed result retained."
+    },
+    "clippy_all_targets": "passed with warnings denied",
+    "format": "passed",
+    "architecture": {
+      "passed": 5,
+      "module_boundaries": "passed"
+    },
+    "fixture_compatibility": "All twelve prior Planner case IDs, source files, requests, commands and acceptance preserved; only private readiness expectations added. Verifier fixtures, coding implementation, model defaults and limits unchanged."
+  },
+  "total_distinct_component_tests_passed": 589,
+  "planner_suite_revision": "stage-qualification-v2.6",
+  "planner_suite_hash": "sha256:d04551e2ea9055cba3eb6f6383b82173de6764d721a448d648f7a4314d39a9de",
+  "private_logs": {
+    "ASTRA-planner-decision-full-tests.log": {
+      "path": "/tmp/ASTRA-planner-decision-full-tests.log",
+      "sha256": "sha256:2dadace628c341f9cb9dad61da5bc5d815dd6d77e5dea60f6901a76fe9c11e22"
+    },
+    "ASTRA-planner-decision-full-tests-r2.log": {
+      "path": "/tmp/ASTRA-planner-decision-full-tests-r2.log",
+      "sha256": "sha256:0727e384c1ef33fa2fc0dd19cf4c8b2284e638ab57181e07e1ceb7445fbcc0c0"
+    },
+    "ASTRA-planner-decision-revision-test.log": {
+      "path": "/tmp/ASTRA-planner-decision-revision-test.log",
+      "sha256": "sha256:f6488dd6c9add9bc902ab1e6797dfdec8b965f1daa00408b830e59440cf669d0"
+    },
+    "ASTRA-planner-decision-contract-tests.log": {
+      "path": "/tmp/ASTRA-planner-decision-contract-tests.log",
+      "sha256": "sha256:10248ccf27f91da2f8d642cd8a4a1e2c4ea18b62ffed8b6476117e44174a39b5"
+    },
+    "ASTRA-planner-decision-runhost-tests-r2.log": {
+      "path": "/tmp/ASTRA-planner-decision-runhost-tests-r2.log",
+      "sha256": "sha256:09c3f49848a883db8859e2e859f42740617436e56ac96f4a7937aca1203d4635"
+    },
+    "ASTRA-planner-decision-clippy-r2.log": {
+      "path": "/tmp/ASTRA-planner-decision-clippy-r2.log",
+      "sha256": "sha256:564403b8da45da9e3088909da65979cbfb28186e935f237710b6ca867e7e701e"
+    },
+    "ASTRA-planner-decision-architecture.log": {
+      "path": "/tmp/ASTRA-planner-decision-architecture.log",
+      "sha256": "sha256:c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    }
+  },
+  "initial_test_failures": [
+    "Hosted test fixtures needed explicit readiness; source-only fixture shape was preserved.",
+    "A malformed submission retains its prior draft rather than creating a proposal.",
+    "An added context-delivery test initially omitted the required saved inference binding; corrected to use a validated saved binding.",
+    "The suite revision assertion initially retained v2.5; updated to v2.6."
+  ],
+  "qualification": null,
+  "deployed": false,
+  "scope": "Local deterministic component checks; seeded negative child tests intentionally fail and are asserted by their parent. This is not live model or Finance acceptance."
+}

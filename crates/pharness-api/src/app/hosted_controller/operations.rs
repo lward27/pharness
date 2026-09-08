@@ -23,7 +23,7 @@ pub(super) async fn execute_operation(
     }
     if matches!(
         operation.action.as_str(),
-        "approve_work_plan" | "approve_change_set"
+        "approve_work_plan" | "approve_change_set" | "authorize_stage_chain"
     ) {
         super::approval::validate(
             state,
