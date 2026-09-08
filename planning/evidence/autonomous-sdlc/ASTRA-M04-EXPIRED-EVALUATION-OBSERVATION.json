@@ -1,0 +1,13 @@
+{
+  "api_server": "https://192.168.20.192:6443",
+  "context": "lucas_engineering",
+  "evaluation_id": "infeval_01a07730b1e275e096ba85c8afb04d4c",
+  "failure_category": "not_found",
+  "job_name": "pharness-inference-eval-59996a313b7d",
+  "meaning": "Missing observation is not evaluation failure or permission to redispatch.",
+  "namespace": "pharness",
+  "observed_at": "2026-09-08T14:28:06.269502+00:00",
+  "prior_snapshot": null,
+  "runtime_revision": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267",
+  "status": "missing"
+}

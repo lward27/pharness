@@ -1,0 +1,2073 @@
+{
+  "phase": "baseline",
+  "source_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+  "duration_seconds": 300,
+  "status": "passed",
+  "samples": [
+    {
+      "at": "2026-09-08T14:25:31.930694+00:00",
+      "elapsed_seconds": 0.5378718376159668,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.19441666698548943,
+      "health_latency_seconds": 0.03231049998430535,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:26:02.067459+00:00",
+      "elapsed_seconds": 30.67463994026184,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.024350291991140693,
+      "health_latency_seconds": 0.0605485420092009,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:26:32.194152+00:00",
+      "elapsed_seconds": 60.801273822784424,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.03766004095086828,
+      "health_latency_seconds": 0.03422608302207664,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:27:02.306539+00:00",
+      "elapsed_seconds": 90.9137008190155,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.0273454170092009,
+      "health_latency_seconds": 0.0393374590203166,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:27:32.419425+00:00",
+      "elapsed_seconds": 121.02659893035889,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.030154333042446524,
+      "health_latency_seconds": 0.03416012495290488,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:28:02.537217+00:00",
+      "elapsed_seconds": 151.14437890052795,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.033450249989982694,
+      "health_latency_seconds": 0.03209591697668657,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:28:32.660726+00:00",
+      "elapsed_seconds": 181.26790189743042,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.030645916995126754,
+      "health_latency_seconds": 0.03732875001151115,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:29:02.805055+00:00",
+      "elapsed_seconds": 211.41222882270813,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.035879084025509655,
+      "health_latency_seconds": 0.042982749990187585,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:29:32.923016+00:00",
+      "elapsed_seconds": 241.53014588356018,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.029697707970626652,
+      "health_latency_seconds": 0.03952879103599116,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:30:03.049385+00:00",
+      "elapsed_seconds": 271.6565568447113,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.036736875015776604,
+      "health_latency_seconds": 0.03873187495628372,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    },
+    {
+      "at": "2026-09-08T14:30:31.555132+00:00",
+      "elapsed_seconds": 300.16230511665344,
+      "ui_sha256": "f06aea05e020ef039454d9cb0b514d349d1999afe271e1d5bc63df2ac08c0ffe",
+      "ui_latency_seconds": 0.04109087499091402,
+      "health_latency_seconds": 0.043206083006225526,
+      "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+      "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+    }
+  ],
+  "queries": {
+    "available_replicas": {
+      "expression": "kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"}",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "__name__": "kube_deployment_status_replicas_available",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-api",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1"
+                ],
+                [
+                  1788877561.393,
+                  "1"
+                ],
+                [
+                  1788877591.393,
+                  "1"
+                ],
+                [
+                  1788877621.393,
+                  "1"
+                ],
+                [
+                  1788877651.393,
+                  "1"
+                ],
+                [
+                  1788877681.393,
+                  "1"
+                ],
+                [
+                  1788877711.393,
+                  "1"
+                ],
+                [
+                  1788877741.393,
+                  "1"
+                ],
+                [
+                  1788877771.393,
+                  "1"
+                ],
+                [
+                  1788877801.393,
+                  "1"
+                ],
+                [
+                  1788877831.393,
+                  "1"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_deployment_status_replicas_available",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-coding-egress-proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1"
+                ],
+                [
+                  1788877561.393,
+                  "1"
+                ],
+                [
+                  1788877591.393,
+                  "1"
+                ],
+                [
+                  1788877621.393,
+                  "1"
+                ],
+                [
+                  1788877651.393,
+                  "1"
+                ],
+                [
+                  1788877681.393,
+                  "1"
+                ],
+                [
+                  1788877711.393,
+                  "1"
+                ],
+                [
+                  1788877741.393,
+                  "1"
+                ],
+                [
+                  1788877771.393,
+                  "1"
+                ],
+                [
+                  1788877801.393,
+                  "1"
+                ],
+                [
+                  1788877831.393,
+                  "1"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_deployment_status_replicas_available",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-model-gateway",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1"
+                ],
+                [
+                  1788877561.393,
+                  "1"
+                ],
+                [
+                  1788877591.393,
+                  "1"
+                ],
+                [
+                  1788877621.393,
+                  "1"
+                ],
+                [
+                  1788877651.393,
+                  "1"
+                ],
+                [
+                  1788877681.393,
+                  "1"
+                ],
+                [
+                  1788877711.393,
+                  "1"
+                ],
+                [
+                  1788877741.393,
+                  "1"
+                ],
+                [
+                  1788877771.393,
+                  "1"
+                ],
+                [
+                  1788877801.393,
+                  "1"
+                ],
+                [
+                  1788877831.393,
+                  "1"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_deployment_status_replicas_available",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-preparation-egress-proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1"
+                ],
+                [
+                  1788877561.393,
+                  "1"
+                ],
+                [
+                  1788877591.393,
+                  "1"
+                ],
+                [
+                  1788877621.393,
+                  "1"
+                ],
+                [
+                  1788877651.393,
+                  "1"
+                ],
+                [
+                  1788877681.393,
+                  "1"
+                ],
+                [
+                  1788877711.393,
+                  "1"
+                ],
+                [
+                  1788877741.393,
+                  "1"
+                ],
+                [
+                  1788877771.393,
+                  "1"
+                ],
+                [
+                  1788877801.393,
+                  "1"
+                ],
+                [
+                  1788877831.393,
+                  "1"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_deployment_status_replicas_available",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-ui",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1"
+                ],
+                [
+                  1788877561.393,
+                  "1"
+                ],
+                [
+                  1788877591.393,
+                  "1"
+                ],
+                [
+                  1788877621.393,
+                  "1"
+                ],
+                [
+                  1788877651.393,
+                  "1"
+                ],
+                [
+                  1788877681.393,
+                  "1"
+                ],
+                [
+                  1788877711.393,
+                  "1"
+                ],
+                [
+                  1788877741.393,
+                  "1"
+                ],
+                [
+                  1788877771.393,
+                  "1"
+                ],
+                [
+                  1788877801.393,
+                  "1"
+                ],
+                [
+                  1788877831.393,
+                  "1"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "available_replica_freshness": {
+      "expression": "time()-timestamp(kube_deployment_status_replicas_available{namespace=\"pharness\",deployment=~\"pharness-api|pharness-coding-egress-proxy|pharness-model-gateway|pharness-preparation-egress-proxy|pharness-ui\"})",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-api",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877561.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877591.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877621.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877651.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877681.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877711.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877741.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877771.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877801.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877831.393,
+                  "16.20799994468689"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-coding-egress-proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877561.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877591.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877621.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877651.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877681.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877711.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877741.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877771.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877801.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877831.393,
+                  "16.20799994468689"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-model-gateway",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877561.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877591.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877621.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877651.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877681.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877711.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877741.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877771.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877801.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877831.393,
+                  "16.20799994468689"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-preparation-egress-proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877561.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877591.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877621.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877651.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877681.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877711.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877741.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877771.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877801.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877831.393,
+                  "16.20799994468689"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "deployment": "pharness-ui",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "service": "prometheus-kube-state-metrics"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877561.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877591.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877621.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877651.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877681.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877711.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877741.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877771.393,
+                  "16.20799994468689"
+                ],
+                [
+                  1788877801.393,
+                  "46.20799994468689"
+                ],
+                [
+                  1788877831.393,
+                  "16.20799994468689"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "current_pod_restarts": {
+      "expression": "kube_pod_container_status_restarts_total{namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\"}",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "__name__": "kube_pod_container_status_restarts_total",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "container": "api",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "pod": "pharness-api-74446877d8-fdjdd",
+                "service": "prometheus-kube-state-metrics",
+                "uid": "e1d3af03-8d1c-451c-bd3c-c2a2ecd65d35"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877561.393,
+                  "0"
+                ],
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877621.393,
+                  "0"
+                ],
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877681.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ],
+                [
+                  1788877741.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ],
+                [
+                  1788877801.393,
+                  "0"
+                ],
+                [
+                  1788877831.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_pod_container_status_restarts_total",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "container": "gateway",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "pod": "pharness-model-gateway-5844748b5-p9xmc",
+                "service": "prometheus-kube-state-metrics",
+                "uid": "f2092a35-809d-44f4-87b1-7c904bb1bca8"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877561.393,
+                  "0"
+                ],
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877621.393,
+                  "0"
+                ],
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877681.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ],
+                [
+                  1788877741.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ],
+                [
+                  1788877801.393,
+                  "0"
+                ],
+                [
+                  1788877831.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_pod_container_status_restarts_total",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "container": "proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "pod": "pharness-coding-egress-proxy-77479cd76f-4dm82",
+                "service": "prometheus-kube-state-metrics",
+                "uid": "d612c9d6-b319-43fa-89bc-6111903715c7"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877561.393,
+                  "0"
+                ],
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877621.393,
+                  "0"
+                ],
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877681.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ],
+                [
+                  1788877741.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ],
+                [
+                  1788877801.393,
+                  "0"
+                ],
+                [
+                  1788877831.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_pod_container_status_restarts_total",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "container": "proxy",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "pod": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w",
+                "service": "prometheus-kube-state-metrics",
+                "uid": "d64b179d-e4f2-4b15-92c1-9530f438dbd0"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877561.393,
+                  "0"
+                ],
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877621.393,
+                  "0"
+                ],
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877681.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ],
+                [
+                  1788877741.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ],
+                [
+                  1788877801.393,
+                  "0"
+                ],
+                [
+                  1788877831.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "__name__": "kube_pod_container_status_restarts_total",
+                "app_kubernetes_io_component": "metrics",
+                "app_kubernetes_io_instance": "prometheus",
+                "app_kubernetes_io_managed_by": "Helm",
+                "app_kubernetes_io_name": "kube-state-metrics",
+                "app_kubernetes_io_part_of": "kube-state-metrics",
+                "app_kubernetes_io_version": "2.18.0",
+                "container": "ui",
+                "helm_sh_chart": "kube-state-metrics-7.1.0",
+                "instance": "10.42.1.112:8080",
+                "job": "kubernetes-service-endpoints",
+                "namespace": "pharness",
+                "node": "ubuntu-lucas-engineering-2",
+                "pod": "pharness-ui-67d74958df-k5p99",
+                "service": "prometheus-kube-state-metrics",
+                "uid": "95cd6259-0c3c-4f96-aa50-61270d49da28"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877561.393,
+                  "0"
+                ],
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877621.393,
+                  "0"
+                ],
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877681.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ],
+                [
+                  1788877741.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ],
+                [
+                  1788877801.393,
+                  "0"
+                ],
+                [
+                  1788877831.393,
+                  "0"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "cpu_cores": {
+      "expression": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\",container!=\"\",container!=\"POD\"}[1m]))",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "pod": "pharness-coding-egress-proxy-77479cd76f-4dm82"
+              },
+              "values": [
+                [
+                  1788877651.393,
+                  "0.00017889756657563967"
+                ],
+                [
+                  1788877771.393,
+                  "0.0001854232650536942"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-model-gateway-5844748b5-p9xmc"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0.00022628733588376257"
+                ],
+                [
+                  1788877711.393,
+                  "0.00028745543796778876"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w"
+              },
+              "values": [
+                [
+                  1788877591.393,
+                  "0.00019494226818729223"
+                ],
+                [
+                  1788877711.393,
+                  "0.00018314100221050302"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-ui-67d74958df-k5p99"
+              },
+              "values": [
+                [
+                  1788877591.393,
+                  "0.0001826982822553163"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "memory_bytes": {
+      "expression": "sum by (pod) (container_memory_working_set_bytes{namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\",container!=\"\",container!=\"POD\"})",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "pod": "pharness-api-74446877d8-fdjdd"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "32677888"
+                ],
+                [
+                  1788877561.393,
+                  "32677888"
+                ],
+                [
+                  1788877591.393,
+                  "32677888"
+                ],
+                [
+                  1788877621.393,
+                  "32677888"
+                ],
+                [
+                  1788877651.393,
+                  "32677888"
+                ],
+                [
+                  1788877681.393,
+                  "32808960"
+                ],
+                [
+                  1788877711.393,
+                  "32808960"
+                ],
+                [
+                  1788877741.393,
+                  "32706560"
+                ],
+                [
+                  1788877771.393,
+                  "32706560"
+                ],
+                [
+                  1788877801.393,
+                  "32706560"
+                ],
+                [
+                  1788877831.393,
+                  "32706560"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-coding-egress-proxy-77479cd76f-4dm82"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1077248"
+                ],
+                [
+                  1788877561.393,
+                  "1077248"
+                ],
+                [
+                  1788877591.393,
+                  "1077248"
+                ],
+                [
+                  1788877621.393,
+                  "1077248"
+                ],
+                [
+                  1788877651.393,
+                  "1081344"
+                ],
+                [
+                  1788877681.393,
+                  "1081344"
+                ],
+                [
+                  1788877711.393,
+                  "1081344"
+                ],
+                [
+                  1788877741.393,
+                  "1081344"
+                ],
+                [
+                  1788877771.393,
+                  "1081344"
+                ],
+                [
+                  1788877801.393,
+                  "1081344"
+                ],
+                [
+                  1788877831.393,
+                  "1081344"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-model-gateway-5844748b5-p9xmc"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "1941504"
+                ],
+                [
+                  1788877561.393,
+                  "1941504"
+                ],
+                [
+                  1788877591.393,
+                  "1941504"
+                ],
+                [
+                  1788877621.393,
+                  "1941504"
+                ],
+                [
+                  1788877651.393,
+                  "1941504"
+                ],
+                [
+                  1788877681.393,
+                  "1941504"
+                ],
+                [
+                  1788877711.393,
+                  "1941504"
+                ],
+                [
+                  1788877741.393,
+                  "1941504"
+                ],
+                [
+                  1788877771.393,
+                  "1941504"
+                ],
+                [
+                  1788877801.393,
+                  "1941504"
+                ],
+                [
+                  1788877831.393,
+                  "1941504"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "925696"
+                ],
+                [
+                  1788877561.393,
+                  "925696"
+                ],
+                [
+                  1788877591.393,
+                  "925696"
+                ],
+                [
+                  1788877621.393,
+                  "925696"
+                ],
+                [
+                  1788877651.393,
+                  "925696"
+                ],
+                [
+                  1788877681.393,
+                  "925696"
+                ],
+                [
+                  1788877711.393,
+                  "925696"
+                ],
+                [
+                  1788877741.393,
+                  "925696"
+                ],
+                [
+                  1788877771.393,
+                  "925696"
+                ],
+                [
+                  1788877801.393,
+                  "925696"
+                ],
+                [
+                  1788877831.393,
+                  "925696"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-ui-67d74958df-k5p99"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "7557120"
+                ],
+                [
+                  1788877561.393,
+                  "7557120"
+                ],
+                [
+                  1788877591.393,
+                  "7557120"
+                ],
+                [
+                  1788877621.393,
+                  "7557120"
+                ],
+                [
+                  1788877651.393,
+                  "7557120"
+                ],
+                [
+                  1788877681.393,
+                  "7557120"
+                ],
+                [
+                  1788877711.393,
+                  "7557120"
+                ],
+                [
+                  1788877741.393,
+                  "7557120"
+                ],
+                [
+                  1788877771.393,
+                  "7557120"
+                ],
+                [
+                  1788877801.393,
+                  "7557120"
+                ],
+                [
+                  1788877831.393,
+                  "7557120"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "cpu_throttled_period_ratio": {
+      "expression": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\",container!=\"\",container!=\"POD\"}[1m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\",container!=\"\",container!=\"POD\"}[1m]))",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "matrix",
+          "result": [
+            {
+              "metric": {
+                "pod": "pharness-coding-egress-proxy-77479cd76f-4dm82"
+              },
+              "values": [
+                [
+                  1788877651.393,
+                  "0"
+                ],
+                [
+                  1788877771.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-model-gateway-5844748b5-p9xmc"
+              },
+              "values": [
+                [
+                  1788877531.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w"
+              },
+              "values": [
+                [
+                  1788877591.393,
+                  "0"
+                ],
+                [
+                  1788877711.393,
+                  "0"
+                ]
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-ui-67d74958df-k5p99"
+              },
+              "values": [
+                [
+                  1788877591.393,
+                  "0"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "log_delivery": {
+      "expression": "sum by (pod) (count_over_time({namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\"}[300s]))",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "vector",
+          "result": [
+            {
+              "metric": {
+                "pod": "pharness-api-74446877d8-fdjdd"
+              },
+              "value": [
+                1788877831.562,
+                "63"
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-coding-egress-proxy-77479cd76f-4dm82"
+              },
+              "value": [
+                1788877831.562,
+                "90"
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w"
+              },
+              "value": [
+                1788877831.562,
+                "90"
+              ]
+            },
+            {
+              "metric": {
+                "pod": "pharness-ui-67d74958df-k5p99"
+              },
+              "value": [
+                1788877831.562,
+                "50"
+              ]
+            }
+          ],
+          "stats": {
+            "summary": {
+              "bytesProcessedPerSecond": 24648455,
+              "linesProcessedPerSecond": 102776,
+              "totalBytesProcessed": 660238,
+              "totalLinesProcessed": 2753,
+              "execTime": 0.026786181,
+              "queueTime": 0.000375502,
+              "subqueries": 0,
+              "totalEntriesReturned": 4,
+              "splits": 0,
+              "shards": 1,
+              "totalPostFilterLines": 2753,
+              "totalStructuredMetadataBytesProcessed": 80016
+            },
+            "querier": {
+              "store": {
+                "totalChunksRef": 0,
+                "totalChunksDownloaded": 0,
+                "chunksDownloadTime": 0,
+                "queryReferencedStructuredMetadata": false,
+                "queryUsedV2Engine": false,
+                "chunk": {
+                  "headChunkBytes": 0,
+                  "headChunkLines": 0,
+                  "decompressedBytes": 0,
+                  "decompressedLines": 0,
+                  "compressedBytes": 0,
+                  "totalDuplicates": 0,
+                  "postFilterLines": 0,
+                  "headChunkStructuredMetadataBytes": 0,
+                  "decompressedStructuredMetadataBytes": 0
+                },
+                "chunkRefsFetchTime": 0,
+                "congestionControlLatency": 0,
+                "pipelineWrapperFilteredLines": 0,
+                "dataobj": {
+                  "prePredicateDecompressedRows": 0,
+                  "prePredicateDecompressedBytes": 0,
+                  "prePredicateDecompressedStructuredMetadataBytes": 0,
+                  "postPredicateRows": 0,
+                  "postPredicateDecompressedBytes": 0,
+                  "postPredicateStructuredMetadataBytes": 0,
+                  "postFilterRows": 0,
+                  "pagesScanned": 0,
+                  "pagesDownloaded": 0,
+                  "pagesDownloadedBytes": 0,
+                  "pageBatches": 0,
+                  "totalRowsAvailable": 0,
+                  "totalPageDownloadTime": 0
+                }
+              }
+            },
+            "ingester": {
+              "totalReached": 1,
+              "totalChunksMatched": 4,
+              "totalBatches": 2,
+              "totalLinesSent": 293,
+              "store": {
+                "totalChunksRef": 0,
+                "totalChunksDownloaded": 0,
+                "chunksDownloadTime": 0,
+                "queryReferencedStructuredMetadata": false,
+                "queryUsedV2Engine": false,
+                "chunk": {
+                  "headChunkBytes": 24990,
+                  "headChunkLines": 117,
+                  "decompressedBytes": 635248,
+                  "decompressedLines": 2636,
+                  "compressedBytes": 34754,
+                  "totalDuplicates": 0,
+                  "postFilterLines": 2753,
+                  "headChunkStructuredMetadataBytes": 936,
+                  "decompressedStructuredMetadataBytes": 79080
+                },
+                "chunkRefsFetchTime": 436272,
+                "congestionControlLatency": 0,
+                "pipelineWrapperFilteredLines": 0,
+                "dataobj": {
+                  "prePredicateDecompressedRows": 0,
+                  "prePredicateDecompressedBytes": 0,
+                  "prePredicateDecompressedStructuredMetadataBytes": 0,
+                  "postPredicateRows": 0,
+                  "postPredicateDecompressedBytes": 0,
+                  "postPredicateStructuredMetadataBytes": 0,
+                  "postFilterRows": 0,
+                  "pagesScanned": 0,
+                  "pagesDownloaded": 0,
+                  "pagesDownloadedBytes": 0,
+                  "pageBatches": 0,
+                  "totalRowsAvailable": 0,
+                  "totalPageDownloadTime": 0
+                }
+              }
+            },
+            "cache": {
+              "chunk": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "index": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "result": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "statsResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "volumeResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "seriesResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "labelResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "instantMetricResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              }
+            },
+            "index": {
+              "totalChunks": 0,
+              "postFilterChunks": 0,
+              "shardsDuration": 0,
+              "usedBloomFilters": false
+            }
+          }
+        }
+      }
+    },
+    "severe_logs": {
+      "expression": "sum by (pod) (count_over_time({namespace=\"pharness\",pod=~\"pharness-api-74446877d8-fdjdd|pharness-coding-egress-proxy-77479cd76f-4dm82|pharness-model-gateway-5844748b5-p9xmc|pharness-preparation-egress-proxy-8dbfd8d84-lx68w|pharness-ui-67d74958df-k5p99\"} |~ \"(?i)(\\\\berror\\\\b|panic)\" [300s]))",
+      "response": {
+        "status": "success",
+        "data": {
+          "resultType": "vector",
+          "result": [],
+          "stats": {
+            "summary": {
+              "bytesProcessedPerSecond": 6106626,
+              "linesProcessedPerSecond": 25462,
+              "totalBytesProcessed": 660238,
+              "totalLinesProcessed": 2753,
+              "execTime": 0.108118282,
+              "queueTime": 0.000475426,
+              "subqueries": 0,
+              "totalEntriesReturned": 0,
+              "splits": 0,
+              "shards": 1,
+              "totalPostFilterLines": 2636,
+              "totalStructuredMetadataBytesProcessed": 80016
+            },
+            "querier": {
+              "store": {
+                "totalChunksRef": 0,
+                "totalChunksDownloaded": 0,
+                "chunksDownloadTime": 0,
+                "queryReferencedStructuredMetadata": false,
+                "queryUsedV2Engine": false,
+                "chunk": {
+                  "headChunkBytes": 0,
+                  "headChunkLines": 0,
+                  "decompressedBytes": 0,
+                  "decompressedLines": 0,
+                  "compressedBytes": 0,
+                  "totalDuplicates": 0,
+                  "postFilterLines": 0,
+                  "headChunkStructuredMetadataBytes": 0,
+                  "decompressedStructuredMetadataBytes": 0
+                },
+                "chunkRefsFetchTime": 0,
+                "congestionControlLatency": 0,
+                "pipelineWrapperFilteredLines": 0,
+                "dataobj": {
+                  "prePredicateDecompressedRows": 0,
+                  "prePredicateDecompressedBytes": 0,
+                  "prePredicateDecompressedStructuredMetadataBytes": 0,
+                  "postPredicateRows": 0,
+                  "postPredicateDecompressedBytes": 0,
+                  "postPredicateStructuredMetadataBytes": 0,
+                  "postFilterRows": 0,
+                  "pagesScanned": 0,
+                  "pagesDownloaded": 0,
+                  "pagesDownloadedBytes": 0,
+                  "pageBatches": 0,
+                  "totalRowsAvailable": 0,
+                  "totalPageDownloadTime": 0
+                }
+              }
+            },
+            "ingester": {
+              "totalReached": 1,
+              "totalChunksMatched": 4,
+              "totalBatches": 1,
+              "totalLinesSent": 0,
+              "store": {
+                "totalChunksRef": 0,
+                "totalChunksDownloaded": 0,
+                "chunksDownloadTime": 0,
+                "queryReferencedStructuredMetadata": false,
+                "queryUsedV2Engine": false,
+                "chunk": {
+                  "headChunkBytes": 24990,
+                  "headChunkLines": 117,
+                  "decompressedBytes": 635248,
+                  "decompressedLines": 2636,
+                  "compressedBytes": 34754,
+                  "totalDuplicates": 0,
+                  "postFilterLines": 2636,
+                  "headChunkStructuredMetadataBytes": 936,
+                  "decompressedStructuredMetadataBytes": 79080
+                },
+                "chunkRefsFetchTime": 362757,
+                "congestionControlLatency": 0,
+                "pipelineWrapperFilteredLines": 0,
+                "dataobj": {
+                  "prePredicateDecompressedRows": 0,
+                  "prePredicateDecompressedBytes": 0,
+                  "prePredicateDecompressedStructuredMetadataBytes": 0,
+                  "postPredicateRows": 0,
+                  "postPredicateDecompressedBytes": 0,
+                  "postPredicateStructuredMetadataBytes": 0,
+                  "postFilterRows": 0,
+                  "pagesScanned": 0,
+                  "pagesDownloaded": 0,
+                  "pagesDownloadedBytes": 0,
+                  "pageBatches": 0,
+                  "totalRowsAvailable": 0,
+                  "totalPageDownloadTime": 0
+                }
+              }
+            },
+            "cache": {
+              "chunk": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "index": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "result": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "statsResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "volumeResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "seriesResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "labelResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              },
+              "instantMetricResult": {
+                "entriesFound": 0,
+                "entriesRequested": 0,
+                "entriesStored": 0,
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "requests": 0,
+                "downloadTime": 0,
+                "queryLengthServed": 0
+              }
+            },
+            "index": {
+              "totalChunks": 0,
+              "postFilterChunks": 0,
+              "shardsDuration": 0,
+              "usedBloomFilters": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Internal service checks, not public ingress acceptance, model qualification or Finance runtime verification.",
+    "No application trace or unsupported latency SLO is asserted."
+  ],
+  "started_at": "2026-09-08T14:25:30.925800+00:00",
+  "start_snapshot": {
+    "pods": {
+      "pharness-api-74446877d8-fdjdd": {
+        "uid": "e1d3af03-8d1c-451c-bd3c-c2a2ecd65d35",
+        "containers": [
+          {
+            "name": "api",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-coding-egress-proxy-77479cd76f-4dm82": {
+        "uid": "d612c9d6-b319-43fa-89bc-6111903715c7",
+        "containers": [
+          {
+            "name": "proxy",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-model-gateway-5844748b5-p9xmc": {
+        "uid": "f2092a35-809d-44f4-87b1-7c904bb1bca8",
+        "containers": [
+          {
+            "name": "gateway",
+            "image_id": "registry.lucas.engineering/pharness-model-gateway@sha256:659b2bbc02f517435d7b7b492d92fb83a68458fc1a1693d4fc03f2943c8919df",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-preparation-egress-proxy-8dbfd8d84-lx68w": {
+        "uid": "d64b179d-e4f2-4b15-92c1-9530f438dbd0",
+        "containers": [
+          {
+            "name": "proxy",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-ui-67d74958df-k5p99": {
+        "uid": "95cd6259-0c3c-4f96-aa50-61270d49da28",
+        "containers": [
+          {
+            "name": "ui",
+            "image_id": "registry.lucas.engineering/pharness-ui@sha256:11df0949ca7158948820a7e61756a8d0bb6b210bcd356eb1c19b6cce676a5a31",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      }
+    },
+    "argo_revision": "80acca99b6417d14dac75620b516852b3103a80d"
+  },
+  "start": 1788877531.392815,
+  "end": 1788877831.5623271,
+  "elapsed_seconds": 300.1695120334625,
+  "end_snapshot": {
+    "pods": {
+      "pharness-api-74446877d8-fdjdd": {
+        "uid": "e1d3af03-8d1c-451c-bd3c-c2a2ecd65d35",
+        "containers": [
+          {
+            "name": "api",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-coding-egress-proxy-77479cd76f-4dm82": {
+        "uid": "d612c9d6-b319-43fa-89bc-6111903715c7",
+        "containers": [
+          {
+            "name": "proxy",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-model-gateway-5844748b5-p9xmc": {
+        "uid": "f2092a35-809d-44f4-87b1-7c904bb1bca8",
+        "containers": [
+          {
+            "name": "gateway",
+            "image_id": "registry.lucas.engineering/pharness-model-gateway@sha256:659b2bbc02f517435d7b7b492d92fb83a68458fc1a1693d4fc03f2943c8919df",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-preparation-egress-proxy-8dbfd8d84-lx68w": {
+        "uid": "d64b179d-e4f2-4b15-92c1-9530f438dbd0",
+        "containers": [
+          {
+            "name": "proxy",
+            "image_id": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      },
+      "pharness-ui-67d74958df-k5p99": {
+        "uid": "95cd6259-0c3c-4f96-aa50-61270d49da28",
+        "containers": [
+          {
+            "name": "ui",
+            "image_id": "registry.lucas.engineering/pharness-ui@sha256:11df0949ca7158948820a7e61756a8d0bb6b210bcd356eb1c19b6cce676a5a31",
+            "ready": true,
+            "restarts": 0
+          }
+        ]
+      }
+    },
+    "argo_revision": "80acca99b6417d14dac75620b516852b3103a80d"
+  },
+  "pod_warnings": [],
+  "finished_at": "2026-09-08T14:30:32.961141+00:00"
+}

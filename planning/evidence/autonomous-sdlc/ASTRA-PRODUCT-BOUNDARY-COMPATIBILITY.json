@@ -1,0 +1,177 @@
+{
+  "database_generation": {
+    "created_at": "1787837185820",
+    "id": "dbgen_finance_20260827",
+    "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+    "purpose": "clean-finance-product-generation",
+    "schema_version": "0049"
+  },
+  "hosted_creation_enabled": false,
+  "inference_registry": {
+    "api_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "blocker": null,
+    "direct_fireworks_enabled": true,
+    "gateway_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "registry_aligned": true,
+    "status": "available"
+  },
+  "migration_files_changed": [],
+  "minimum_compatible_reader": "92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267 or later compatible readers",
+  "observed_at": "2026-09-08T14:31:11.113549+00:00",
+  "preceding_runtime": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+  "qualification": null,
+  "run_summary": {
+    "summary": {
+      "by_age_bucket": [
+        {
+          "count": 82,
+          "value": "gte_24h"
+        }
+      ],
+      "by_branch": [
+        {
+          "count": 20,
+          "value": "main"
+        },
+        {
+          "count": 7,
+          "value": "pharness/witem_01a04aeb6fd57691967dfff496708cf4/attempt-1"
+        },
+        {
+          "count": 7,
+          "value": "pharness/witem_01a04da49f4c77a28c6036cc9d6dcf63/attempt-1"
+        },
+        {
+          "count": 6,
+          "value": "pharness/witem_01a04d7301de7273a394124918111e1b/attempt-1"
+        },
+        {
+          "count": 5,
+          "value": "pharness/witem_01a046988deb72319b80871151c1f245/attempt-1"
+        },
+        {
+          "count": 4,
+          "value": "pharness/witem_01a0468522f8744281547700eed782f3/attempt-1"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a045ef8d1c7862928b389210b5cac8/attempt-1"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a046224e277041bd03d58d6f78e08f/attempt-1"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a04d3748ae7f409f95b8e1370c3249/attempt-1"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a04ddd13387f228ed7adc02eb28d63/attempt-1"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a04ddd13387f228ed7adc02eb28d63/attempt-2"
+        },
+        {
+          "count": 3,
+          "value": "pharness/witem_01a0531881897aa18ead92fcf4d864b7/attempt-1"
+        },
+        {
+          "count": 2,
+          "value": "pharness/onboarding/ronb_01a04369c7e37c63abd5adfac43640b8"
+        },
+        {
+          "count": 2,
+          "value": "pharness/witem_01a04a9469397a52916658fda46f4ccf/attempt-1"
+        },
+        {
+          "count": 2,
+          "value": "pharness/witem_01a0530a7c1a79c2a0498e4c57e9ea11/attempt-1"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04369f1057e13a13c2453e9e5696a"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04369f6387e6095aee4354727bd1a"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04369fb627ac0bfd5a4c305c3bffe"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a0465e6c927cc0a68de8f0dea4edff"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04a73c85b75a19e6116df5a4eeeda"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04a88ace27000b308165d906d5826"
+        },
+        {
+          "count": 1,
+          "value": "pharness/onboarding/ronb_01a04d68ca627ac2b5864f47ac6ec8c2"
+        },
+        {
+          "count": 1,
+          "value": "pharness/witem_01a045ef8d1c7862928b389210b5cac8/attempt-2"
+        },
+        {
+          "count": 1,
+          "value": "pharness/witem_01a0464cd93777b3844374cb8a9b58aa/attempt-1"
+        }
+      ],
+      "by_namespace": [
+        {
+          "count": 82,
+          "value": null
+        }
+      ],
+      "by_production_impacting": [
+        {
+          "count": 82,
+          "value": false
+        }
+      ],
+      "by_repo": [
+        {
+          "count": 47,
+          "value": "https://github.com/lward27/finance-frontend.git"
+        },
+        {
+          "count": 17,
+          "value": "https://github.com/lward27/scraper_manager.git"
+        },
+        {
+          "count": 12,
+          "value": "https://github.com/lward27/finance_app_database_service.git"
+        },
+        {
+          "count": 6,
+          "value": "https://github.com/lward27/yfinance_wrapper.git"
+        }
+      ],
+      "by_status": [
+        {
+          "count": 68,
+          "value": "completed"
+        },
+        {
+          "count": 12,
+          "value": "failed"
+        },
+        {
+          "count": 2,
+          "value": "cancelled"
+        }
+      ],
+      "total": 82
+    }
+  },
+  "source_revision": "80acca99b6417d14dac75620b516852b3103a80d"
+}

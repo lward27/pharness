@@ -1,0 +1,8 @@
+{
+  "coding_reliability_v2_enabled": false,
+  "deployment_generation": 192,
+  "hosted_configuration_present": false,
+  "initial_read": "Attempt to read the omitted hosted configuration as a present key failed; absence was then checked against the template.",
+  "observed_at": "2026-09-08T14:31:55.584096+00:00",
+  "template_behavior": "Hosted configuration is emitted only when hostedWorkflow.enabled is true."
+}

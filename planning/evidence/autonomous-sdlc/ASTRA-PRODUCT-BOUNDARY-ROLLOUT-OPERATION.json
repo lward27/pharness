@@ -1,0 +1,65 @@
+{
+  "finished_at": "2026-09-08T14:54:22.945342+00:00",
+  "release_pin": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+  "samples": [
+    {
+      "argo_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+      "at": "2026-09-08T14:51:59.272531+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+      "at": "2026-09-08T14:52:19.734090+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+      "at": "2026-09-08T14:52:40.142001+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+      "at": "2026-09-08T14:53:00.543512+00:00",
+      "health": "Progressing",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+      "at": "2026-09-08T14:53:20.943818+00:00",
+      "health": "Progressing",
+      "running_pods": 7,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+      "at": "2026-09-08T14:53:41.339853+00:00",
+      "health": "Progressing",
+      "running_pods": 8,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+      "at": "2026-09-08T14:54:01.799990+00:00",
+      "health": "Healthy",
+      "running_pods": 7,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "bcfc5687c5b7527e771747cdb817dd5bd0d2bc22",
+      "at": "2026-09-08T14:54:22.255671+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    }
+  ],
+  "source_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+  "started_at": "2026-09-08T14:51:58.874728+00:00",
+  "status": "live_identities_verified"
+}

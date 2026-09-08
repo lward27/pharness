@@ -1,0 +1,444 @@
+{
+  "comparison_to_source38": [
+    {
+      "policy_id": "onboarding-minimax-m3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "planner-kimi-k3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "verifier-glm-5p3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "m04-control-onboarding-kimi-k3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "m04-control-planner-kimi-k3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    },
+    {
+      "policy_id": "m04-control-verifier-kimi-k3-v2",
+      "unchanged": {
+        "context_assembly_limit": true,
+        "is_default": true,
+        "maximum_output_tokens": true,
+        "policy_hash": true,
+        "reasoning": true,
+        "target": true,
+        "target_hash": true,
+        "temperature": true,
+        "tool_choice": true,
+        "tool_protocol": true,
+        "transport_retry_attempts": true
+      }
+    }
+  ],
+  "observed_at": "2026-09-08T14:59:23.249672+00:00",
+  "operation": "read_only_no_model_calls",
+  "policies": [
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "Reliability V2 onboarding MiniMax M3",
+      "eligible_profiles": [
+        "repository-onboarding-proposer"
+      ],
+      "eligible_stages": [
+        "onboarding"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:697f653a2e5ee8abac5e6a9c6af11a481f6204bfe15fcf57033fe843abb3170b",
+      "policy_id": "onboarding-minimax-m3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:92ecf907c8acddb7d50815d6f81a503fe4c08d6893d985c155d252b8d8dadcf7",
+        "agent_profile_id": "repository-onboarding-proposer",
+        "suite_id": "onboarding-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [
+        "repository-onboarding-proposer"
+      ],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-minimax-m3"
+      },
+      "target_hash": "sha256:0f123f716a86c6d6065b8e2c24c87f6c7cea97e83054d60892a92d7dcf590e50",
+      "temperature": 0.10000000149011612,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "Reliability V2 planner Kimi K3",
+      "eligible_profiles": [
+        "repo-planner"
+      ],
+      "eligible_stages": [
+        "plan"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+      "policy_id": "planner-kimi-k3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:ed492f67f083e1b70a156f9a0ef85788b2637875ac167f0753596533fe148e2f",
+        "agent_profile_id": "repo-planner",
+        "suite_id": "planner-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "current_turn",
+        "effort": "high",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [
+        "repo-planner"
+      ],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k3"
+      },
+      "target_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+      "temperature": 0.10000000149011612,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "Reliability V2 Test diagnosis Nemotron Lightning",
+      "eligible_profiles": [
+        "repo-test-diagnoser"
+      ],
+      "eligible_stages": [
+        "test"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 4096,
+      "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:759e17ac13b1d2ebeb3ff0a5b40e32e2dc305738f676f212cccf2d577aeeaf58",
+        "agent_profile_id": "repo-test-diagnoser",
+        "suite_id": "test-diagnosis-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [
+        "repo-test-diagnoser"
+      ],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+      },
+      "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+      "temperature": 0.0,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "Reliability V2 verifier GLM-5.3",
+      "eligible_profiles": [
+        "repo-verifier"
+      ],
+      "eligible_stages": [
+        "verify"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+      "policy_id": "verifier-glm-5p3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:d403e594158fe3434f192592698bd5da763dcb2449081b8c376e88fe44bd9ae0",
+        "agent_profile_id": "repo-verifier",
+        "suite_id": "verifier-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [
+        "repo-verifier"
+      ],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-glm-5p3"
+      },
+      "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+      "temperature": 0.0,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "M04 diagnostic control: onboarding / Kimi K3",
+      "eligible_profiles": [
+        "repository-onboarding-proposer"
+      ],
+      "eligible_stages": [
+        "onboarding"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:9f255d09c5eac3ffa412f461ee424441635b0d2eef2cb1466d34c0cf8f869281",
+      "policy_id": "m04-control-onboarding-kimi-k3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:45ac1e2a72886eef671b67f4bffca4f05083754e047645ec55c2affba66dcfac",
+        "agent_profile_id": "repository-onboarding-proposer",
+        "suite_id": "onboarding-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      },
+      "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+      "temperature": 0.10000000149011612,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "M04 diagnostic control: planner / Kimi K3",
+      "eligible_profiles": [
+        "repo-planner"
+      ],
+      "eligible_stages": [
+        "plan"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:8533d827c84f0205dfdeca679727e10df70856e3142920ee2ef1a7b24a65a1d8",
+      "policy_id": "m04-control-planner-kimi-k3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:ed492f67f083e1b70a156f9a0ef85788b2637875ac167f0753596533fe148e2f",
+        "agent_profile_id": "repo-planner",
+        "suite_id": "planner-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "current_turn",
+        "effort": "high",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      },
+      "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+      "temperature": 0.10000000149011612,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "M04 diagnostic control: test-diagnosis / Kimi K3",
+      "eligible_profiles": [
+        "repo-test-diagnoser"
+      ],
+      "eligible_stages": [
+        "test"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 4096,
+      "policy_hash": "sha256:57a3989aeff533989c0d8c767320fad29156039457f60007af0b02cd784db921",
+      "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:8f681a79c6eee08e762d43b01be3e45f5cf1b11a218ae04e16051afc78ec53c5",
+        "agent_profile_id": "repo-test-diagnoser",
+        "suite_id": "test-diagnosis-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      },
+      "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+      "temperature": 0.0,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    },
+    {
+      "context_assembly_limit": 65536,
+      "display_name": "M04 diagnostic control: verifier / Kimi K3",
+      "eligible_profiles": [
+        "repo-verifier"
+      ],
+      "eligible_stages": [
+        "verify"
+      ],
+      "is_default": false,
+      "maximum_output_tokens": 8192,
+      "policy_hash": "sha256:d5797c1a81980c776f64dbc19929f0dba0f23a4938b6c192a0ddc6a7f9fb9fb2",
+      "policy_id": "m04-control-verifier-kimi-k3-v2",
+      "qualification_contract": {
+        "agent_profile_hash": "sha256:ed92579d83fcc9831dcb36fac945e845e757657e03a16ce0c5e81ef04ac6c206",
+        "agent_profile_id": "repo-verifier",
+        "suite_id": "verifier-v2"
+      },
+      "qualification_status": "not_qualified",
+      "qualified": false,
+      "reasoning": {
+        "context_mode": "provider_default",
+        "expose_replay": true
+      },
+      "reliability_v2_default_for_profiles": [],
+      "revision": "v1",
+      "selectable": true,
+      "target": {
+        "revision": "m04-control-v1",
+        "target_id": "fireworks-kimi-k3"
+      },
+      "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+      "temperature": 0.0,
+      "tool_choice": "auto",
+      "tool_protocol": "native_tools",
+      "transport_retry_attempts": 3
+    }
+  ],
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "source_revision": "80acca99b6417d14dac75620b516852b3103a80d"
+}
