@@ -1,0 +1,148 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T20:09:04.055589+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:6da615c27bed2ff715af42d6cec890e07459f41e1a2da31b8e0d50c675d0d6da",
+    "agent_profile_id": "repo-test-diagnoser",
+    "attempts": 1,
+    "binding_hash": "sha256:d14c15ab9c412d73a422063e5467f9c6e0b43d23c1b10685866f85a821f1f056",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788898144096",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54",
+    "job_name": "pharness-inference-eval-81fed7451abb",
+    "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+    "policy_id": "test-diagnosis-nemotron-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D sourced675159 declared test-diagnosis primary after measurement and exact-policy protocol corrections; unchanged settings/limits; no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:6da615c27bed2ff715af42d6cec890e07459f41e1a2da31b8e0d50c675d0d6da",
+      "base_agent_profile_hash": "sha256:759e17ac13b1d2ebeb3ff0a5b40e32e2dc305738f676f212cccf2d577aeeaf58",
+      "binding_hash": "sha256:d14c15ab9c412d73a422063e5467f9c6e0b43d23c1b10685866f85a821f1f056",
+      "context_policy_hash": "sha256:3784741d2e514b6802141462fc547fb5f1f549828cc0b67f3d863257674e03a0",
+      "policy": {
+        "display_name": "Reliability V2 Test diagnosis Nemotron Lightning",
+        "eligible_profiles": [
+          "repo-test-diagnoser"
+        ],
+        "eligible_stages": [
+          "test"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 4096,
+        "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+        "policy_id": "test-diagnosis-nemotron-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b"
+        },
+        "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+        "temperature_milli": 0,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:56e4d967bf176a5fb8793a18f739975543eb362d17ca1ce55b8b20fc1ed08c70",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:c88a17391091e7520a55431ff1f877632be1d00fb79ef615a89b3b4b5423ab4e",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:545c6618ffcf4e5a221631820558da748b3da2c6899c2f17640ab3f3813faa88",
+        "prompt_id": "repo-test-diagnoser-v2",
+        "revision": "2026-09-06.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "test"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "test"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [],
+          "reasoning_efforts": [],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+        "context_limit_tokens": 262144,
+        "display_name": "Fireworks Nemotron Lightning 3.5 30B A3B",
+        "output_limit_tokens": 8192,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
+      },
+      "tool_schema_hash": "sha256:1cf91037190136c55697aa774bcf6891140ae9484f1fcd53a2f9a888ddb2d499"
+    },
+    "runtime_revision": "d675159cb205d222616d253d311706be1889bb91",
+    "scope": {
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1788898144485",
+    "status": "running",
+    "suite_hash": "sha256:2a2e9233ba078acad083878743d9b9ca2c63f8467151e6a8780a6dd21516c9af",
+    "suite_id": "test-diagnosis-v2",
+    "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+    "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-D675159-TEST-DIAGNOSIS-PRIMARY",
+  "policy_id": "test-diagnosis-nemotron-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourced675159 declared test-diagnosis primary after measurement and exact-policy protocol corrections; unchanged settings/limits; no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:95e8897313831a039bd7f8e2687894532dfd0369e536b78767fb8baa64e77ed0",
+  "schema_version": 1,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T20:09:04.561351+00:00"
+}

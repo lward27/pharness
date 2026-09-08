@@ -1,0 +1,149 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T19:52:52.518742+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:ef845083c7e444ff176209682377e0b96cc05a34536a45f6cace600ad8d139e5",
+    "agent_profile_id": "repo-verifier",
+    "attempts": 1,
+    "binding_hash": "sha256:1b8af2afe4833812c38adf6236ffa35d7bde4b6c151f27260c7400b7cfdcf857",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788897172567",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a082949c567da0949805d60ce85565",
+    "job_name": "pharness-inference-eval-239aa876d94f",
+    "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+    "policy_id": "verifier-glm-5p3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D sourced675159 declared verify primary after measurement and exact-policy protocol corrections; unchanged settings/limits; no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:ef845083c7e444ff176209682377e0b96cc05a34536a45f6cace600ad8d139e5",
+      "base_agent_profile_hash": "sha256:d403e594158fe3434f192592698bd5da763dcb2449081b8c376e88fe44bd9ae0",
+      "binding_hash": "sha256:1b8af2afe4833812c38adf6236ffa35d7bde4b6c151f27260c7400b7cfdcf857",
+      "context_policy_hash": "sha256:aea4cb8067d1f9738e0b6d782fc35ad457df9167bab87a2e4035740950f1fc90",
+      "policy": {
+        "display_name": "Reliability V2 verifier GLM-5.3",
+        "eligible_profiles": [
+          "repo-verifier"
+        ],
+        "eligible_stages": [
+          "verify"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+        "policy_id": "verifier-glm-5p3-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "fireworks-glm-5p3"
+        },
+        "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+        "temperature_milli": 0,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:af7531cd834f2843cf8a6a23beca2abd44d3b10016db55e044f1bdb281a1c461",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:1b0baed3abf90f932c1c6aa42da620aba6fffbc6e423f8a5ad23a4ca1c2fca65",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:b514ff0facd9da3965c19f176484876fb957d9a8bc32ab81b2c7d8f2fc8167fc",
+        "prompt_id": "repo-verifier-v2",
+        "revision": "2026-09-05.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "verify"
+      },
+      "target": {
+        "allowed_stages": [
+          "verify"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [],
+          "reasoning_efforts": [],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+        "context_limit_tokens": 1048576,
+        "display_name": "Fireworks GLM-5.3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-glm-5p3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/glm-5p3"
+      },
+      "tool_schema_hash": "sha256:97029a5eee0b390b7f20b3dfc014ac5b205c9340c1102c72f9e7ded7ea5dbc4e"
+    },
+    "runtime_revision": "d675159cb205d222616d253d311706be1889bb91",
+    "scope": {
+      "case_ids": [
+        "wrong-endpoint-path",
+        "valid-implementation-a",
+        "frontend-semantic-mismatch"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1788897172854",
+    "status": "running",
+    "suite_hash": "sha256:65230944e37087dcaccf77c184550223395768c0dd49cc5273bff6a061f72ac2",
+    "suite_id": "verifier-v2",
+    "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+    "target_id": "fireworks-glm-5p3",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a082949c567da0949805d60ce85565",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-D675159-VERIFY-PRIMARY",
+  "policy_id": "verifier-glm-5p3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourced675159 declared verify primary after measurement and exact-policy protocol corrections; unchanged settings/limits; no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "wrong-endpoint-path",
+        "valid-implementation-a",
+        "frontend-semantic-mismatch"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:4991f98f03908720f0d74c21f045f962c85425d64be157757b735ed994f2f7eb",
+  "schema_version": 1,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T19:52:52.872304+00:00"
+}

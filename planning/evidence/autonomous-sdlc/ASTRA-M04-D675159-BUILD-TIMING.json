@@ -1,0 +1,29 @@
+{
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "observed_at": "2026-09-08T19:19:57.890089+00:00",
+  "build_status": "passed",
+  "build_elapsed_seconds": 2175.62,
+  "reported_layer_push_seconds": [
+    153.0,
+    41.6,
+    225.7,
+    224.8,
+    62.2,
+    294.7,
+    202.7
+  ],
+  "reported_layer_push_sum_seconds": 1204.7,
+  "push_fraction_of_wall_time": 0.5537,
+  "tls_warning_rendered_occurrences": 6,
+  "unique_tls_warning_line_hashes": [
+    "sha256:2d4c4d08b1c7812fc3377af5b94c2926313fc6c458d6d5088c99abe9e3569976",
+    "sha256:dd645fb3cb6843868eb399376446c1560737a84a5bb98a9a791c0c78e448c9ed",
+    "sha256:f9479a593bf59c252372d3e0d73c177d86a2323285603c5a4ecb6a72a57edba2"
+  ],
+  "stderr_sha256": "sha256:ac522aee467fc6a58d744b3964c0efb0dd1d5a2eb276dd7def4ab8c127fdaf18",
+  "limitations": [
+    "Rendered warning counts do not establish independent incident counts.",
+    "Reported phase durations do not isolate bandwidth, cache misses or the upstream timeout cause.",
+    "The separately prepared layer-reuse experiment was not included in this release."
+  ]
+}

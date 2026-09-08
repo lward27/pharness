@@ -1,0 +1,68 @@
+{
+  "reviewed_at": "2026-09-08T20:08:11.095831+00:00",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "status": "matched_complete_valid_diagnostics",
+  "suite_hash": "sha256:65230944e37087dcaccf77c184550223395768c0dd49cc5273bff6a061f72ac2",
+  "runs": {
+    "primary": {
+      "evaluation_id": "infeval_01a082949c567da0949805d60ce85565",
+      "policy_id": "verifier-glm-5p3-v2",
+      "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+      "model": "accounts/fireworks/models/glm-5p3",
+      "native_passes": 2,
+      "native_results": 3,
+      "duration_ms": 321189,
+      "prompt_tokens": 110844,
+      "completion_tokens": 14843
+    },
+    "control": {
+      "evaluation_id": "infeval_01a0829cf8417f3292422ddd61bb386e",
+      "policy_id": "m04-control-verifier-kimi-k3-v2",
+      "policy_hash": "sha256:d5797c1a81980c776f64dbc19929f0dba0f23a4938b6c192a0ddc6a7f9fb9fb2",
+      "model": "accounts/fireworks/models/kimi-k3",
+      "native_passes": 3,
+      "native_results": 3,
+      "duration_ms": 270117,
+      "prompt_tokens": 113108,
+      "completion_tokens": 12767
+    }
+  },
+  "identical_retained_cases": [
+    {
+      "case_id": "wrong-endpoint-path",
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:539f4d5fee2dbc9fdf2f835a1c6bcb2937ea29361e6dc61f76a872278f5b5937",
+      "primary_passed": true,
+      "control_passed": true,
+      "primary_stop_reason_code": null,
+      "control_stop_reason_code": null,
+      "measurement_input_hash": "sha256:70e4ce336d320db16d73ef0f21d569f21eb2d154cdd3052c0f88c4d595595a0d",
+      "initial_context_hash": "sha256:11ae81fb9e26edfa4a45e64df6df9489797925c12f0b8724708bc33a14e99994"
+    },
+    {
+      "case_id": "frontend-semantic-mismatch",
+      "source_sha": "7653accf23cf038d9d9327fd71bc96057d525ba1",
+      "workspace_hash": "sha256:a2deab6cd8040e0a618f184450ac2b9445d0a703ee369e37f0bc61340a76cc33",
+      "primary_passed": false,
+      "control_passed": true,
+      "primary_stop_reason_code": "malformed_arguments",
+      "control_stop_reason_code": null,
+      "measurement_input_hash": "sha256:07a94d8f41ec0dc5b5c078381d23017d76bdffcff03bd1d7e481a4b85c7ba586",
+      "initial_context_hash": "sha256:944154b2cdd540bca6075d5c656617d9a30765870aab15c437c1d1259836b2cc"
+    },
+    {
+      "case_id": "valid-implementation-a",
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:8085ef87041c0c02250bb8efd7e6f882de03e2674b49ab5cf5c176b8bb11b7f5",
+      "primary_passed": true,
+      "control_passed": true,
+      "primary_stop_reason_code": null,
+      "control_stop_reason_code": null,
+      "measurement_input_hash": "sha256:57a6d09a3c61c93138d7fb7666ed0ce4beb7052bdbea594e8fe8428b297d6a4c",
+      "initial_context_hash": "sha256:716aea2d3661d30673d61b38a348335cd0b3c1a5255c85e79e6d3067498366f4"
+    }
+  ],
+  "qualification": null,
+  "defaults_or_limits_changed": false,
+  "conclusion": "GLM primary2/3 has a malformed terminal tool payload on the frontend case; Kimi control3/3 correctly rejects both defects and approves the valid change. Small diagnostic evidence favors Kimi for a future qualification candidate, not activation or a model-wide capability ranking."
+}

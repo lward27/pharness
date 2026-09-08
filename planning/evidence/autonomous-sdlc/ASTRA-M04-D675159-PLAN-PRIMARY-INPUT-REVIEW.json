@@ -1,0 +1,32 @@
+{
+  "observed_at": "2026-09-08T19:42:15.501679+00:00",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d",
+  "status": "complete_valid_inputs_for_matched_control",
+  "suite_hash": "sha256:dedd37009b6e24c7e6623a4e3431da83d6c2a3a582d1bda00440a3eabe237329",
+  "cases": [
+    {
+      "case_id": "acceptance-boundary",
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:5e8d78a8069f1388b84e0c7a627ae81438a2dd192f18561620881c705d1f7091",
+      "measurement_input_hash": "sha256:0106c797f93def0d29b560787dfa655ec8f16c386ae6fd1ff15438dd8be430a3",
+      "initial_context_hash": "sha256:1e0dd23d1c0977b18eb7ec54df3ac535126d30933d5e8a463411f622d2b592a0"
+    },
+    {
+      "case_id": "failing-baseline",
+      "source_sha": "f23225382faa7aeb3a961fb016042d898898b9fa",
+      "workspace_hash": "sha256:87af798add24bffb0ea76b093948342bf99ab43a31f023a799a56e332a8b1eec",
+      "measurement_input_hash": "sha256:77eda53d3655867707f1bdab10e32053ae6d1c8de4c2c450a5e540269673059c",
+      "initial_context_hash": "sha256:8ab9732c1fc38dea918067917c74c98b7f1849a29017fb8b21b779f10e47b9d5"
+    }
+  ],
+  "native_passes": 2,
+  "native_total": 2,
+  "qualification": null,
+  "usage": {
+    "prompt_tokens": 48302,
+    "completion_tokens": 5671,
+    "duration_ms": 148365
+  },
+  "subjective_caveat": "The failing-baseline plan preserves the pre-existing finding and proposes a separately documented legacy-route repair. It explicitly raises scope adjudication if the intent instead requires leaving it unresolved. Connected-loop scope/verification scrutiny remains necessary; a typed plan is not deployed correctness."
+}

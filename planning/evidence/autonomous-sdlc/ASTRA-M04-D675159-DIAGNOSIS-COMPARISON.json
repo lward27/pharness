@@ -1,0 +1,51 @@
+{
+  "reviewed_at": "2026-09-08T20:14:41.963317+00:00",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "status": "matched_complete_valid_diagnostics",
+  "suite_hash": "sha256:2a2e9233ba078acad083878743d9b9ca2c63f8467151e6a8780a6dd21516c9af",
+  "runs": {
+    "primary": {
+      "evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54",
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "native_passes": 2,
+      "native_results": 2,
+      "duration_ms": 6274,
+      "prompt_tokens": 13915,
+      "completion_tokens": 1679
+    },
+    "control": {
+      "evaluation_id": "infeval_01a082a6774176c1a9d61344c1b84aa0",
+      "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+      "model": "accounts/fireworks/models/kimi-k3",
+      "native_passes": 2,
+      "native_results": 2,
+      "duration_ms": 59779,
+      "prompt_tokens": 18656,
+      "completion_tokens": 2691
+    }
+  },
+  "identical_retained_cases": [
+    {
+      "case_id": "assertion-failure",
+      "source_sha": "2d116dd9e1a3cf9584d8e086b2d31087ce4397d5",
+      "workspace_hash": "sha256:e9fda66fd611598f56dd181aed83648f33c12cfc0181902c4e517d3b2e2bc833",
+      "primary_passed": true,
+      "control_passed": true,
+      "measurement_input_hash": "sha256:f5a90b7c240dbba46cb443b3bf7cda75933fc3f5bbf1d955f58c13b4ddfd9850",
+      "initial_context_hash": "sha256:9e049623a0dc955492b8029afa3ddba3f6fbbbf3dfc5f752d633b1a4826f883b"
+    },
+    {
+      "case_id": "passing-control",
+      "source_sha": "0da8398a68bcd75ec39fcb89a18444335a0e0665",
+      "workspace_hash": "sha256:cb23e4210119bf3212f11f641599965b404aca9877bf6b2103873debe092ff3d",
+      "primary_passed": true,
+      "control_passed": true,
+      "measurement_input_hash": "sha256:9862cfe147424d1aec3ceae5faa8de63a52693b945845401c1e35b157c359f8e",
+      "initial_context_hash": "sha256:9a6bd18f99f817c15558716c7311e27c4d7d9625e4483578caf6196bff947b3b"
+    }
+  ],
+  "qualification": null,
+  "defaults_or_limits_changed": false,
+  "conclusion": "Both candidates classify the actual assertion failure and propose no repair for the passing control. The prior protocol timeout did not recur; this pair does not establish full diagnosis qualification or justify a default change."
+}

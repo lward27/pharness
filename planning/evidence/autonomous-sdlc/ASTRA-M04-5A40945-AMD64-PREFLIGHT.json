@@ -1,0 +1,23 @@
+{
+  "cluster_mutations": [],
+  "image_pushes": 0,
+  "observed_at": "2026-09-08T18:01:06.365091+00:00",
+  "receipt": {
+    "builder": "pharness-mac",
+    "components": [
+      "runtime",
+      "ui",
+      "python-runner",
+      "node-runner",
+      "model-gateway",
+      "eval-runner",
+      "codex-host"
+    ],
+    "external_mutations": [],
+    "platform": "linux/amd64",
+    "platform_execution": "passed",
+    "preflight": "passed",
+    "revision": "5a409453d28d68d22b12899a312df763c51e48dd"
+  },
+  "status": "passed_uncached_amd64_execution"
+}
