@@ -2,15 +2,9 @@
 
 Status: approved implementation program; M01–M03 accepted; M04 active; M05/M06 compatible reader deployed; hosted creation and end-to-end gates remain open. Approved by the owner on 2026-09-04.
 Baseline: PHarness main `c36b46aceb72f3d7097bc0bdee74810c745f7c0c`; GitOps main `fa27225c4c33b710ce24708e17fd39ac05ab6aeb`.
-Current compiled PHarness release: `92f8f1b8e98dd45d0a01e030aeb99ef9bcf95267`, observed
-2026-09-06 at 13:54 UTC through release commit `4bf9f0ae73a3ed2ef25e9bca53090e0edecf32f6`.
-[Live schema 0055 preservation and internal service checks](../../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md) pass:
-all original application and audit data is preserved across 81 tables; only explicitly
-checked host snapshots and operational timestamps differ. `92f8f1b` is the minimum compatible reader.
-The runtime remains unqualified for autonomous Finance work.
-These are starting observations, not permanent latest-version claims.
+Current compiled PHarness release: `a2d05f1b41c15cb34a4543327ba468b9da3b5094`, observed through release pin `0f14597e11c437e007757365953f7b411e322252` on 2026-09-08. [Exact identities, service observation and one bounded onboarding diagnostic](../../evidence/autonomous-sdlc/ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md) pass. Schema 55 and the compatible-reader floor (`92f8f1b` or later compatible readers) remain unchanged. The runtime remains unqualified for autonomous Finance work.
 
-Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The first diagnostic completed with a failed result and no qualification; retired temporary helpers are historical only.
+Operator workflow and exact resume point: [cluster operator checkpoint](../../evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md). The latest single onboarding diagnostic passed without qualification; historical failures and retired helpers remain historical evidence.
 
 ## Product promise and authority
 
@@ -66,7 +60,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M01 | [Current baseline and authoritative documentation](ASTRA-01-BASELINE-AND-DOCUMENTATION.md) | accepted | None. This is the first milestone. |
 | M02 | [Finance platform readiness](ASTRA-02-FINANCE-PLATFORM-READINESS.md) | accepted | M01. May proceed independently of M03. |
 | M03 | [Evidence and code integrity](ASTRA-03-EVIDENCE-AND-CODE-INTEGRITY.md) | accepted | M01. May proceed independently of M02. |
-| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | approved process refactor; M04A–D deployed, live preservation and service checks pass; first small canary failed; scope and local gateway corrections prepared; release/canary pending; runtime unqualified | M03. Qualification blockers do not stop independent implementation. |
+| M04 | [Coding reliability qualification](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md) | M04A–D deployed; corrected onboarding diagnostic passed; common-input reader correction next; remaining canaries and connected/full gates open | M03. Qualification blockers do not stop independent implementation. |
 | M05 | [Unified hosted SDLC contract](ASTRA-05-UNIFIED-SDLC-CONTRACT.md) | compatible reader deployed; creation and delivery gates open | M02 bindings and M03 integrity. Code preparation may proceed while an unrelated TLS prerequisite is blocked; acceptance still requires usable bindings. |
 | M06 | [Durable autonomous controller](ASTRA-06-DURABLE-AUTONOMOUS-CONTROLLER.md) | engineering controller deployed; delivery integration and acceptance gates open | M05. |
 | M07 | [Exact-source delivery and real builds](ASTRA-07-SOURCE-DELIVERY-AND-BUILDS.md) | both real Finance builds verified; approved source protections applied; automatic source delivery and acceptance open | M04 and M06. |
@@ -76,7 +70,7 @@ assessment, and acceptance Markdown uses `ASTRA-`.
 | M11 | [Finance end-to-end acceptance](ASTRA-11-FINANCE-END-TO-END-ACCEPTANCE.md) | planned | M09 and M10, with all earlier gates satisfied. |
 | M12 | [Operations and program closeout](ASTRA-12-OPERATIONS-AND-PROGRAM-CLOSEOUT.md) | planned | M11 and all earlier acceptance gates. |
 
-### Current execution — 2026-09-07
+### Current execution — 2026-09-08
 
 The owner approved the [M04 process reassessment](../../evidence/autonomous-sdlc/ASTRA-M04-PROCESS-REASSESSMENT.md)
 and requested implementation. [M04](ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md)
@@ -103,9 +97,10 @@ identify the Onboarding scope mix-up and prepare a versioned shared prompt corre
 gateway credential wiring and bounded transport checks. The Windows Minisforum guide
 is available; no local target is enabled and no local model is qualified.
 [Accounting correction and Mac build recovery](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-MODEL-TURNS.md) document why the incomplete first candidate was superseded.
-[The complete accounting-corrected release](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-GATEWAY-RELEASE.md) is now deployed from `81edd9e`; live identities match. The ten-minute service window passed with 21 samples.
+[The complete accounting-corrected release](../../evidence/autonomous-sdlc/ASTRA-M04-METERED-GATEWAY-RELEASE.md) was deployed from `81edd9e`; its live identities matched. The ten-minute service window passed with 21 samples.
 The new source-81 diagnostic failed without qualification after a passing 30/30 protocol renewal. It now separates the two permission scopes but submits nonrecursive directory strings. [The shared writable-scope contract gap](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) records the evidence and exact implementation boundary.
-**Next eligible: validate and release the [shared writable-scope correction](../../evidence/autonomous-sdlc/ASTRA-M04-WRITABLE-SCOPE-CORRECTION.md), renew protocol verification if expired, then repeat one bounded diagnostic before controls.** Broad
+The [shared scope correction is released and the new diagnostic passes](../../evidence/autonomous-sdlc/ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md). Its source identity is present as `source_sha`; the common-input API incorrectly expects `base_sha`.
+**Next eligible: repair and validate that reference-reader boundary using the actual retained result, release it, then run a fresh primary and exact-input control on the same runtime before the remaining M04D canaries.** Broad
 qualification waits for those gates. The source-19 Verifier has completed; retain its failed result without starting
 another old-suite batch. M08 and
 M09 preparation may continue independently, but their acceptance gates remain open.

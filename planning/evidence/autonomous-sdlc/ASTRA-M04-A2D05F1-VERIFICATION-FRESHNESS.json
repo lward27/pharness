@@ -1,0 +1,8 @@
+{
+  "renewal_started_at": "2026-09-08T00:40:18.119969+00:00",
+  "all_prior_passed_verifications_expired": true,
+  "last_passed_verification_id": "inferverify_01a07e2da1167920bc34314cc92e985e",
+  "last_expiry_unix_seconds": 1788824214,
+  "target_id": "fireworks-minimax-m3",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094"
+}

@@ -4,7 +4,7 @@ Recorded 2026-09-06. The owner requested helper/skill cleanup before further M04
 
 2026-09-07 continuation: [local-model readiness and Onboarding scope analysis](ASTRA-M04-LOCAL-MODEL-READINESS.md) records inspection of the retained failure, the prepared shared prompt/transport corrections, validation and the next release/canary gate. The source-92 observations below remain historical evidence; no new qualification is implied.
 
-Latest continuation: [the complete metered gateway release](ASTRA-M04-METERED-GATEWAY-RELEASE.md) supersedes the partial build. All seven images and the native bundle are verified; Argo applied the pin and live identities match. The ten-minute observation passed with 21 samples. Protocol renewal passed 30/30; the new canary failed on directory-form writable paths. [The shared contract gap](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md) owns the next implementation step. lucas-desktop is off; the Mac builder passed the actual AMD64 runtime checks.
+Latest continuation (2026-09-08): [the writable-scope release](ASTRA-M04-WRITABLE-SCOPE-RELEASE.md) is deployed and its full ten-minute service window passed. [The next onboarding diagnostic](ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md) passed first attempt after 30/30 protocol calibration. The planned common-input control is blocked by a source-identity field mismatch discovered before dispatch; fix that reader boundary next. lucas-desktop is off; the Mac builder passed actual AMD64 runtime checks. No local model is activated.
 
 ## Maintained entry point
 
@@ -16,9 +16,11 @@ All 91 inactive one-off temporary ASTRA Python helpers are retained privately at
 
 ## Exact M04 resume point
 
-Compiled source is now `81edd9e81d280b0eda866b719c86562b3ff2f02c`; observed release pin is `a8d7efa45ad39536e1eed5a38ae43176d6dc0dc0`. Schema 55 remains compatible only with source 92 or later compatible readers. The native inference registry hash is `sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79`.
+Compiled source is `a2d05f1b41c15cb34a4543327ba468b9da3b5094`; observed release pin is `0f14597e11c437e007757365953f7b411e322252`. Schema 55 and the source-92-compatible reader floor remain unchanged. The native inference registry hash is `sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79`.
 
-The latest diagnostic is `infeval_01a07e2e99b77521b39a0cfb7bf42f00` on source 81: completed, failed, no qualification. It proposes src/ and tests/ where explicit recursive patterns are required. The [shared path correction](ASTRA-M04-WRITABLE-SCOPE-CORRECTION.md) is the next release/diagnostic boundary before another model comparison; retain the [native failed result](ASTRA-M04-81EDD9E-ONBOARDING-RESULT.json). The first source-81 launch was rejected before dispatch for expired protocol verification; its intent and reconciliation are retained. No duplicate run was created.
+The latest diagnostic is `infeval_01a07e7783717723aeb38a529472d1cf`: completed, diagnostic passed, no qualification. It submits explicit recursive scope on its first attempt. The [native result and analysis](ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md) retain usage, identity, unchanged full-gate flags and the missing final Pod receipt. The source-81 diagnostic remains failed and is not rescored.
+
+Next: fix the API common-input reference reader's `base_sha`/native `source_sha` mismatch with a regression using the actual evaluator report. Preserve report/source checks and immutable history. After the compatible release, run a fresh primary diagnostic and exact-input control on that same runtime, then the remaining M04D canaries. Do not spend a model call to rediscover this known pre-dispatch rejection.
 
 Historical first deployed diagnostic, `infeval_01a07730b1e275e096ba85c8afb04d4c`, is terminal. Its native operation status is `completed`, but the diagnostic **failed**; qualification is null and infrastructure validity is false. It used one primary MiniMax Onboarding `python-contract` case. Protocol calibration passed 30/30. Its detailed result reports `stage_scope_or_coverage: undeclared_onboarding_write_scope`. Preserve the distinction between a completed evaluation and a passing evaluation.
 

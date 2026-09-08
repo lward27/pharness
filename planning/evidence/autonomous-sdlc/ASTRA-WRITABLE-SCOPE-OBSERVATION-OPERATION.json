@@ -1,0 +1,10 @@
+{
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "gitops_revision": "0f14597e11c437e007757365953f7b411e322252",
+  "release_pr": "https://github.com/lward27/pharness/pull/379",
+  "started_at": "2026-09-08T00:26:32.219872+00:00",
+  "status": "passed_after_fresh_window",
+  "completed_at": "2026-09-08T00:40:17.919777+00:00",
+  "first_window": "ASTRA-WRITABLE-SCOPE-RELEASED-SERVICE-WINDOW.json",
+  "accepted_window": "ASTRA-WRITABLE-SCOPE-RELEASED-SERVICE-WINDOW-R2.json"
+}

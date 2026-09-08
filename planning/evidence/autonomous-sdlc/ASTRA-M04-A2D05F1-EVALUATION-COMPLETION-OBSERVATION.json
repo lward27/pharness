@@ -1,0 +1,15 @@
+{
+  "cluster": {
+    "api_server": "https://192.168.20.192:6443",
+    "context": "lucas_engineering",
+    "profile_hash": "sha256:390d2ec82036988f943991ad4587ca16cdf966dd405c6a8e829322239422253a"
+  },
+  "evaluation_id": "infeval_01a07e7783717723aeb38a529472d1cf",
+  "job_name": "pharness-inference-eval-e927bf74cdb2",
+  "job_observation": {
+    "category": "not_found",
+    "detail": "kubectl failed with exit 1"
+  },
+  "observed_at": "2026-09-08T12:22:59.789719+00:00",
+  "pods": []
+}

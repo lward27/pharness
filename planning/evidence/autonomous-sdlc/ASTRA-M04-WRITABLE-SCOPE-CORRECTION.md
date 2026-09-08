@@ -1,6 +1,6 @@
 # ASTRA M04: Explicit writable scope at submission
 
-2026-09-07. Source implementation follows the [source-81 diagnostic](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md). Release and live diagnostic acceptance are pending; M04 remains unqualified.
+2026-09-07. Source implementation follows the [source-81 diagnostic](ASTRA-M04-WRITABLE-SCOPE-CONTRACT-GAP.md). [Release and one live diagnostic](ASTRA-M04-A2D05F1-ONBOARDING-ACCEPTANCE.md) passed on 2026-09-08; M04 remains unqualified. The deployment procedure below is retained for this completed slice.
 
 ## Implementation boundary
 

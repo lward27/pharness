@@ -1,0 +1,289 @@
+{
+  "observed_at": "2026-09-08T00:29:15.112191+00:00",
+  "status": "passed",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "gitops_revision": "0f14597e11c437e007757365953f7b411e322252",
+  "deployments": [
+    {
+      "deployment": "pharness-api",
+      "generation": 191,
+      "pod": "pharness-api-564c867969-pcl2s",
+      "uid": "0e8e91fb-74e5-43e1-a976-5968b5730d48",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb"
+    },
+    {
+      "deployment": "pharness-coding-egress-proxy",
+      "generation": 133,
+      "pod": "pharness-coding-egress-proxy-54d8d7cb97-d97pk",
+      "uid": "51bbee2c-0b48-40d4-bef5-b97268974341",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb"
+    },
+    {
+      "deployment": "pharness-preparation-egress-proxy",
+      "generation": 133,
+      "pod": "pharness-preparation-egress-proxy-74fc6fb556-7v7ms",
+      "uid": "a4c590e7-921c-4606-be62-9cce124638bb",
+      "image": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb",
+      "image_id": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb"
+    },
+    {
+      "deployment": "pharness-ui",
+      "generation": 144,
+      "pod": "pharness-ui-845f9885c5-9bqfl",
+      "uid": "b5f8f073-9e2c-493f-a37c-8f9b8f7c9a52",
+      "image": "registry.lucas.engineering/pharness-ui@sha256:e7d782d50222d78fe75af16b4f8424960070bc24cefffeaa36d9b6267ce3de06",
+      "image_id": "registry.lucas.engineering/pharness-ui@sha256:e7d782d50222d78fe75af16b4f8424960070bc24cefffeaa36d9b6267ce3de06"
+    },
+    {
+      "deployment": "pharness-model-gateway",
+      "generation": 45,
+      "pod": "pharness-model-gateway-5fdd94677c-mxnbj",
+      "uid": "581ef3fe-71f9-4ffd-aead-d91f6a66b38b",
+      "image": "registry.lucas.engineering/pharness-model-gateway@sha256:817725ad7e7bdcbb4416b7815140150c579067f3ab77450fb15cc0b6d23b5850",
+      "image_id": "registry.lucas.engineering/pharness-model-gateway@sha256:817725ad7e7bdcbb4416b7815140150c579067f3ab77450fb15cc0b6d23b5850"
+    }
+  ],
+  "endpoints": {
+    "pharness-api": [
+      {
+        "uid": "0e8e91fb-74e5-43e1-a976-5968b5730d48",
+        "addresses": [
+          "10.42.0.112"
+        ]
+      }
+    ],
+    "pharness-ui": [
+      {
+        "uid": "b5f8f073-9e2c-493f-a37c-8f9b8f7c9a52",
+        "addresses": [
+          "10.42.0.110"
+        ]
+      }
+    ],
+    "pharness-model-gateway": [
+      {
+        "uid": "581ef3fe-71f9-4ffd-aead-d91f6a66b38b",
+        "addresses": [
+          "10.42.0.111"
+        ]
+      }
+    ]
+  },
+  "readiness": {
+    "api_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+    "ui_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+    "runtime_image_digest": "sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb",
+    "ui_image_digest": "sha256:e7d782d50222d78fe75af16b4f8424960070bc24cefffeaa36d9b6267ce3de06",
+    "platform_versions_match": true,
+    "database_generation": {
+      "created_at": "1787837185820",
+      "id": "dbgen_finance_20260827",
+      "initializing_revision": "dc11da96e559bea87812bf7451ea319e73e441dd",
+      "purpose": "clean-finance-product-generation",
+      "schema_version": "0049"
+    },
+    "operational_mode": "normal",
+    "legacy_work_item_creation_enabled": false,
+    "capabilities": [
+      {
+        "capability": "model_provider",
+        "status": "stale",
+        "summary": "model_provider verification expired; run the isolated preflight again",
+        "verified_at": "1788011929495",
+        "expires_at": "1788012829495"
+      },
+      {
+        "capability": "source_workspace",
+        "status": "stale",
+        "summary": "source_workspace verification expired; run the isolated preflight again",
+        "verified_at": "1788011958255",
+        "expires_at": "1788012858255"
+      },
+      {
+        "capability": "source_reader",
+        "status": "stale",
+        "summary": "source_reader verification expired; run the isolated preflight again",
+        "verified_at": "1788102391838",
+        "expires_at": "1788103291838"
+      },
+      {
+        "capability": "source_writer",
+        "status": "stale",
+        "summary": "source_writer verification expired; run the isolated preflight again",
+        "verified_at": "1788602796877",
+        "expires_at": "1788603696877"
+      },
+      {
+        "capability": "source_observer",
+        "status": "stale",
+        "summary": "source_observer verification expired; run the isolated preflight again",
+        "verified_at": "1788602804091",
+        "expires_at": "1788603704091"
+      },
+      {
+        "capability": "gitops_writer",
+        "status": "stale",
+        "summary": "gitops_writer verification expired; run the isolated preflight again",
+        "verified_at": "1788603488479",
+        "expires_at": "1788604388479"
+      },
+      {
+        "capability": "gitops_observer",
+        "status": "stale",
+        "summary": "gitops_observer verification expired; run the isolated preflight again",
+        "verified_at": "1788602819543",
+        "expires_at": "1788603719543"
+      },
+      {
+        "capability": "tekton",
+        "status": "configured_unverified",
+        "summary": "Tekton executor is configured but cluster authorization is unverified."
+      },
+      {
+        "capability": "argo",
+        "status": "configured_unverified",
+        "summary": "Argo runner identity and exact Application allowlist are configured but authorization is unverified."
+      },
+      {
+        "capability": "observability",
+        "status": "configured_unverified",
+        "summary": "Prometheus endpoint is configured but target inventory has not been freshly verified."
+      }
+    ],
+    "repository_allowlists": {
+      "gitops_observer": [
+        "https://github.com/lward27/lucas_engineering.git"
+      ],
+      "gitops_writer": [
+        "https://github.com/lward27/lucas_engineering.git"
+      ],
+      "source_observer": [
+        "https://github.com/lward27/finance_app_database_service.git",
+        "https://github.com/lward27/finance-frontend.git",
+        "https://github.com/lward27/scraper_manager.git",
+        "https://github.com/lward27/yfinance_wrapper.git"
+      ],
+      "source_reader": [
+        "https://github.com/lward27/finance_app_database_service.git",
+        "https://github.com/lward27/finance-frontend.git",
+        "https://github.com/lward27/lucas_engineering.git",
+        "https://github.com/lward27/scraper_manager.git",
+        "https://github.com/lward27/yfinance_wrapper.git"
+      ],
+      "source_writer": [
+        "https://github.com/lward27/finance_app_database_service.git",
+        "https://github.com/lward27/finance-frontend.git",
+        "https://github.com/lward27/scraper_manager.git",
+        "https://github.com/lward27/yfinance_wrapper.git"
+      ],
+      "workspace": [
+        "https://github.com/lward27/finance_app_database_service.git",
+        "https://github.com/lward27/finance-frontend.git",
+        "https://github.com/lward27/scraper_manager.git",
+        "https://github.com/lward27/yfinance_wrapper.git"
+      ]
+    },
+    "targets": {
+      "argo_application": "yfinance-wrapper",
+      "environment": "production",
+      "gitops_repo": "https://github.com/lward27/lucas_engineering.git",
+      "image_name": "registry.lucas.engineering/yfinance_wrapper",
+      "kustomization_path": "charts/yfinance-wrapper/kustomization.yaml",
+      "namespace": "apps-prod",
+      "rollback_owner": "lucas",
+      "source_repo": "https://github.com/lward27/yfinance_wrapper.git",
+      "workload_kind": "Deployment",
+      "workload_name": "yfinance-wrapper"
+    },
+    "environment_profiles": [
+      {
+        "id": "python-3.11",
+        "status": "stale",
+        "image": "registry.lucas.engineering/pharness-python-runner@sha256:ca93f9a74e0ccc0ee01c3a7c1cba60477ad8ee45616365b3c1078c612d9f0806",
+        "revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+        "platform": "linux/amd64",
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "python",
+          "pip"
+        ],
+        "preparation_strategy": "python_hashed_requirements",
+        "runtime_kind": "python",
+        "accepted_dependency_lock_kinds": [
+          "pip_requirements"
+        ],
+        "lifecycle_scripts": "denied",
+        "service_account": "pharness-python-runner",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance_app_database_service.git",
+          "https://github.com/lward27/scraper_manager.git",
+          "https://github.com/lward27/yfinance_wrapper.git"
+        ],
+        "blockers": [
+          "isolated runner verification expired"
+        ]
+      },
+      {
+        "id": "node-24",
+        "status": "stale",
+        "image": "registry.lucas.engineering/pharness-node-runner@sha256:91a774bfcb108ae6146376d4b5a7421a30e8c9ae296b23da1674c44b4a79b31b",
+        "revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+        "platform": "linux/amd64",
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "node",
+          "npm"
+        ],
+        "preparation_strategy": "node_npm_ci",
+        "runtime_kind": "node",
+        "accepted_dependency_lock_kinds": [
+          "npm_package_lock"
+        ],
+        "lifecycle_scripts": "denied",
+        "service_account": "pharness-node-runner",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance-frontend.git"
+        ],
+        "blockers": [
+          "isolated runner verification expired"
+        ]
+      }
+    ],
+    "inference": {
+      "api_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+      "blocker": null,
+      "direct_fireworks_enabled": true,
+      "gateway_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+      "registry_aligned": true,
+      "status": "available"
+    },
+    "blockers": [
+      "model_provider: model_provider verification expired; run the isolated preflight again",
+      "source_workspace: source_workspace verification expired; run the isolated preflight again",
+      "source_reader: source_reader verification expired; run the isolated preflight again",
+      "source_writer: source_writer verification expired; run the isolated preflight again",
+      "source_observer: source_observer verification expired; run the isolated preflight again",
+      "gitops_writer: gitops_writer verification expired; run the isolated preflight again",
+      "gitops_observer: gitops_observer verification expired; run the isolated preflight again",
+      "tekton: Tekton executor is configured but cluster authorization is unverified.",
+      "argo: Argo runner identity and exact Application allowlist are configured but authorization is unverified.",
+      "observability: Prometheus endpoint is configured but target inventory has not been freshly verified.",
+      "environment_profile python-3.11: isolated runner verification expired",
+      "environment_profile node-24: isolated runner verification expired"
+    ]
+  },
+  "configured_worker_images": {
+    "PHARNESS_WORKER_K8S_IMAGE": "registry.lucas.engineering/pharness-runtime@sha256:5623d5a7d4cba3a70076aa2d7e6bc6e274bed3cd647d983b45c8e691d3404ceb",
+    "PHARNESS_INFERENCE_EVALUATION_IMAGE": "registry.lucas.engineering/pharness-eval-runner@sha256:f845ab7b534d0e6e51e57a5e56893331c46eba7202bbbbcecba247a584db4653"
+  },
+  "configured_environment_profiles_verified": true,
+  "schema_migration_diff": []
+}
