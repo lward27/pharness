@@ -1,0 +1,119 @@
+{
+  "status": "ok",
+  "summary": "Observed Finance deployment identity; runtime acceptance is separate",
+  "content": {
+    "cluster": "lucas_engineering",
+    "completed_at_unix_ms": 1788643228295,
+    "expected": {
+      "application": "frontend",
+      "environment": "staging",
+      "gitops_commit_sha": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+      "image_digest": "sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+    },
+    "identity": {
+      "argo": {
+        "name": "finance-frontend-staging",
+        "resource_version": "48795590",
+        "uid": "ffdeda1a-d9e9-429a-b3be-a0d009da208e"
+      },
+      "deployment": {
+        "name": "finance-frontend",
+        "resource_version": "48560269",
+        "uid": "e585a356-f4b6-4100-b6bb-04014ee016a6"
+      },
+      "deployment_revision": "1",
+      "endpoint_slices": [
+        {
+          "name": "finance-frontend-4hd5m",
+          "resource_version": "48667566",
+          "uid": "7ce70a0a-8e7e-4225-92ab-cf0e74528eab"
+        }
+      ],
+      "generation": 1,
+      "gitops_revision": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+      "image_ref": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d",
+      "not_ready_endpoints_excluded": 1,
+      "observation_is_atomic": false,
+      "pods": [
+        {
+          "image_id": "registry.lucas.engineering/finance-frontend@sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d",
+          "ip": "10.42.0.83",
+          "name": "finance-frontend-67c58fbcfd-d64zb",
+          "resource_version": "48560265",
+          "restart_count": 0,
+          "started_at": "2026-09-05T01:28:37Z",
+          "uid": "c0f54d05-77e5-46ea-9ddb-576a13e07e65"
+        }
+      ],
+      "replicas": 1,
+      "runtime_verification": "not_evaluated",
+      "service": {
+        "name": "finance-frontend",
+        "resource_version": "48560178",
+        "uid": "0d57863d-b78b-4795-9724-4a78c37da22f"
+      },
+      "template_hash": "sha256:431387ae264e52c61e44409dea0d621fcaf3ac1f6965553260d8fdb462d0e9d6"
+    },
+    "identity_state": "verified",
+    "limits": {
+      "list_items": 32,
+      "reads": 6,
+      "response_bytes_per_read": 524288,
+      "timeout_ms": 15000
+    },
+    "read_receipts": [
+      {
+        "bytes": 8920,
+        "name": "finance-frontend-staging",
+        "namespace": "argocd",
+        "resource": "applications.argoproj.io",
+        "selector": null,
+        "sha256": "sha256:6539473ffaa0b300cb7b42847c636783081cc2ae90d1b0f5b9d2a4883e34a361"
+      },
+      {
+        "bytes": 6784,
+        "name": "finance-frontend",
+        "namespace": "apps-staging",
+        "resource": "deployments.apps",
+        "selector": null,
+        "sha256": "sha256:de1e72d27dab5d3190721868c37d24999c6510ddec5ff2085780cce5ca3dcef5"
+      },
+      {
+        "bytes": 6119,
+        "name": null,
+        "namespace": "apps-staging",
+        "resource": "replicasets.apps",
+        "selector": "app=finance-frontend",
+        "sha256": "sha256:715ad548fd68a7669086ccc787dfb5fe5a095ee7f05fa220c6af10d7635764d6"
+      },
+      {
+        "bytes": 51463,
+        "name": null,
+        "namespace": "apps-staging",
+        "resource": "pods",
+        "selector": "app=finance-frontend",
+        "sha256": "sha256:2e24217eb63f737a9320f8ffa53dcf79e76c9d8e232ac0fedab246f8289b9adc"
+      },
+      {
+        "bytes": 1499,
+        "name": "finance-frontend",
+        "namespace": "apps-staging",
+        "resource": "services",
+        "selector": null,
+        "sha256": "sha256:2d8cd5a9b4123373dc2a9ae3d5a2a4abbc5b2a625346f8d6002432cd1c67bdc0"
+      },
+      {
+        "bytes": 2986,
+        "name": null,
+        "namespace": "apps-staging",
+        "resource": "endpointslices.discovery.k8s.io",
+        "selector": "kubernetes.io/service-name=finance-frontend",
+        "sha256": "sha256:235e8b5056e349dc92861dd5d608baaf1d2815ff5ba084e3c7923ee1818a66d8"
+      }
+    ],
+    "reasons": [],
+    "runtime_verification": "not_evaluated",
+    "schema_version": "pharness.dev/finance-deployment-observation/v1alpha1",
+    "started_at_unix_ms": 1788643227275
+  }
+}

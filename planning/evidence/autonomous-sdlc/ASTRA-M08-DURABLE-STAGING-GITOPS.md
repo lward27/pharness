@@ -1,6 +1,11 @@
 # ASTRA M08: Durable staging GitOps handoff
 
-Status: implementation and local validation slice. Not deployed, not a successful staging release, and not M08 acceptance.
+Historical implementation record. This foundation subsequently deployed in source
+`19b0c55`; see [live release preservation](ASTRA-19B0C55-LIVE-PRESERVATION.md).
+The newer [baseline admission gate](ASTRA-M08-DURABLE-BASELINE-ADMISSION.md)
+supersedes this record's pre-write checks and requires another compatible release.
+Neither deployment closes autonomous staging or M08 acceptance. The observations
+and deployment instructions below describe the original, pre-release checkpoint.
 
 Source base: `5c2c2b5622d70e795f24c5a1eb6e92ec533e1185`, after refreshing from initial base `6f22bc832c07037b69c8a991186d96e2297b3ced`. Branch: `codex/astra-staging-controller`. The validation receipt records the final source-file hashes and test results.
 

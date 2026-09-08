@@ -1,0 +1,9 @@
+/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-api/src/app/hosted_controller/staging/baseline/test_support.rs:2:use super::*;
+/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-api/src/app/tests/hosted_staging/native.rs:5:use super::*;
+/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-api/src/app/tests/hosted_staging/baseline.rs:1:use super::*;
+wildcard imports and re-exports are forbidden under crates/pharness-api/src/app
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.005s
+
+OK

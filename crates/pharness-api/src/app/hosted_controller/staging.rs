@@ -6,12 +6,22 @@ use pharness_store::{
 };
 use serde_json::{json, Value};
 
+mod baseline;
 mod callbacks;
 mod evidence;
 mod preparation;
+mod runtime;
+#[cfg(test)]
+pub(in crate::app) use baseline::test_support::{
+    seed_baseline, seed_historical_admission, seed_inputs, seed_pending, seed_window,
+};
 pub(in crate::app) use callbacks::{
     internal_staging_attempt, internal_staging_context, internal_staging_outcome,
     internal_staging_plan,
+};
+#[cfg(test)]
+pub(in crate::app) use runtime::test_support::{
+    seed_runtime, seed_runtime_identity_attempts, seed_runtime_step,
 };
 pub(super) const ACTION: &str = "stage_verified_build";
 
@@ -33,12 +43,57 @@ pub(super) async fn candidate(
     else {
         return Ok(None);
     };
-    Ok(Some((
-        hash(
-            &json!({"pipeline_intent_id":intent.id,"build_evidence_hash":evidence_hash,"workflow_policy_hash":snapshot.metadata.workflow_policy_hash}),
-        )?,
-        intent.id,
-    )))
+    let input = hash(
+        &json!({"pipeline_intent_id":intent.id,"build_evidence_hash":evidence_hash,"workflow_policy_hash":snapshot.metadata.workflow_policy_hash}),
+    )?;
+    let identity = hash(&json!([snapshot.metadata.work_item_id, ACTION, input]))?;
+    if let Some(previous) = state
+        .store
+        .get_workflow_operation(&format!(
+            "workflowop_{}",
+            identity.trim_start_matches("sha256:")
+        ))
+        .await?
+    {
+        if previous.status == "succeeded" {
+            if completed(state, snapshot).await? {
+                return Ok(None);
+            }
+            return Err(ApiError::conflict("The recorded staging operation has no complete native runtime evidence; it cannot be replaced."));
+        }
+    }
+    Ok(Some((input, intent.id)))
+}
+
+pub(super) async fn completed(state: &AppState, snapshot: &Snapshot) -> Result<bool, ApiError> {
+    let Some((pipeline, _, _)) = evidence::build(state, &snapshot.metadata.work_item_id).await?
+    else {
+        return Ok(false);
+    };
+    let Some(deployment) = state
+        .store
+        .get_deployment_intent_for_stage(&pipeline.id, pharness_store::DeliveryStage::Staging)
+        .await?
+    else {
+        return Ok(false);
+    };
+    let execution = required(
+        &deployment.intent_json["hosted_staging"]["authority"],
+        "execution_id",
+    )?;
+    let saved = preparation::saved(state, &deployment.id, execution).await?;
+    if saved.operation.status != "succeeded"
+        || saved.operation.resource_refs["staging_runtime_result"]["status"] != "verified"
+    {
+        return Ok(false);
+    }
+    preparation::validate_current(state, &saved, false).await?;
+    let receipt = state
+        .store
+        .get_artifact(&artifact_id("commit", execution))
+        .await?
+        .ok_or_else(|| ApiError::conflict("completed staging is missing its commit receipt"))?;
+    runtime::verified(state, &saved, &receipt).await
 }
 
 pub(super) async fn reconcile(
@@ -135,13 +190,19 @@ pub(super) async fn reconcile(
         if refs != operation.resource_refs {
             state.store.record_workflow_operation(claim, &operation.id, "running", &refs, "Staging GitOps commit observed; deployment and runtime verification remain required", now()).await?;
         }
-        return Ok(condition(if expired { "wait_expired" } else { "waiting" }, "The staging digest change is committed. Argo deployment identity and application runtime verification remain pending; production is not authorized."));
+        let saved = preparation::saved(state, id, execution).await?;
+        return runtime::reconcile(state, claim, &saved, &receipt, expired).await;
     }
     let admitted = state
         .store
         .get_artifact(&artifact_id("attempt", execution))
         .await?
         .is_some();
+    if !admitted {
+        if let Some(condition) = baseline::reconcile(state, claim, &saved, expired).await? {
+            return Ok(condition);
+        }
+    }
     let recover = !admitted && claim.control == "active" && !expired;
     if recover {
         preparation::validate_current(state, &saved, true).await?;

@@ -91,7 +91,7 @@ The [Mac Tekton route](../../evidence/autonomous-sdlc/ASTRA-M02-MAC-BUILDKIT-RET
 M07 source/build controller foundations are deployed. Both real Finance builds and
 the owner-approved, enforced source protections are evidenced; the autonomous
 source-to-build chain remains open. [M08 integration PR 363](https://github.com/lward27/pharness/pull/363)
-has local validation and real read-only staging observations, but remains unreleased
+is [refreshed against current main](../../evidence/autonomous-sdlc/ASTRA-M08-CURRENT-MAIN-INTEGRATION.md), with 840 passing local checks and fresh read-only Finance target observations, but remains unreleased
 and unaccepted as autonomous staging. [M09 initial contract PR 366](https://github.com/lward27/pharness/pull/366)
 binds exact production decision material in pure types; authenticated decisions,
 persistence, execution and recovery are still open. No production authority is

@@ -1,0 +1,21 @@
+{
+  "source_revision": "23ea38ffaaf8f9068b9c34334d23e920b80a93ab",
+  "core_tests": 204,
+  "ignored_live_tests_in_default_suite": 6,
+  "clippy": "passed after correcting one collapsible-if warning; initial output retained",
+  "architecture": "passed including five parser regressions",
+  "formatting": "passed",
+  "live_assessment": "passed",
+  "window": {
+    "end_unix_seconds": 1788653340,
+    "start_unix_seconds": 1788653040
+  },
+  "logs_sha256": {
+    "ASTRA-M08-RUNTIME-ASSESSMENT-TESTS.log": "daf5b145b592453b3274671a91e8c25a083192d3b5b771b31cee49ec54b76e52",
+    "ASTRA-M08-RUNTIME-ASSESSMENT-CLIPPY.log": "e885f524943748d7aa67050dd67bdde7f94a08b705d26757e6fc3263054d6ab2",
+    "ASTRA-M08-RUNTIME-ASSESSMENT-ARCHITECTURE.log": "bc98287b86890fb3009f4173e7dcdee4f1c1c5d7a6c7505b2234c54406204169",
+    "ASTRA-M08-RUNTIME-ASSESSMENT-LIVE.log": "83ea966904689f49bffbebaa95b22c9dfc12b94a53fafde82ed5ff816e313a4a",
+    "ASTRA-M08-RUNTIME-ASSESSMENT-CLIPPY-R1-FAILURE.log": "d5d2b5083cf5a8f1d80be4a6fe527424c52b91b7886cf3f6502ff2f5aae9fcce"
+  },
+  "scope": "Native evidence composition and one program-operated staging window. API admission, autonomous staging and M11 acceptance remain pending."
+}
