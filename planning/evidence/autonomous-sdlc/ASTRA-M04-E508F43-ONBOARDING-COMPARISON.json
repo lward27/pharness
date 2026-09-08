@@ -1,0 +1,47 @@
+{
+  "observed_at": "2026-09-08T17:20:54.648034+00:00",
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "suite_hash": "sha256:c86e4fc492814f55ed04b32da5c8f69c4cfef8bba38fc7060b5377f69bdf586b",
+  "primary_evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470",
+  "control_evaluation_id": "infeval_01a082047f8c7032973e96986deb3619",
+  "case_comparisons": [
+    {
+      "case_id": "python-contract",
+      "identical_material": {
+        "source_sha": "656be973d8d36f53b7a34018861dc59844c4164f",
+        "workspace_hash": "sha256:174d9a4240887953670a8d829d999d85794e15fba21f7caf004713a8f52ceb8b",
+        "public_input_hash": "sha256:f38a6d6bf225ab9b4096513fd99f2f2709017c1ebb2520c2cb5f4e08c4d89786",
+        "initial_context_hash": "sha256:2836d49e4049b61426ba8593e7dee5888a70862b703bd6e03012aa8187244389"
+      },
+      "public_input_documents_equal": true,
+      "initial_context_documents_equal": true,
+      "primary_passed": true,
+      "control_passed": true
+    },
+    {
+      "case_id": "missing-lock",
+      "identical_material": {
+        "source_sha": "2d61b80cc3db6949f9fa6ccbdb61afd49bd20596",
+        "workspace_hash": "sha256:e16b5d43d7474d852cc6e75a5f1628f7493caf3ccfa4b7120ad1f6e2b1c45693",
+        "public_input_hash": "sha256:e1f1075ff3b097a123f04b0e9a11e6864914d8fbf90299b4a6f9e4ce79b0d11f",
+        "initial_context_hash": "sha256:08a675b22b89c9393b83e81521ebcf4b36809df4618457d1e2247189dc1de1a5"
+      },
+      "public_input_documents_equal": true,
+      "initial_context_documents_equal": true,
+      "primary_passed": false,
+      "control_passed": true
+    }
+  ],
+  "control_reference_matches": true,
+  "models_or_limits_changed": false,
+  "qualification": null,
+  "report_hashes": {
+    "infeval_01a081fb2ea171528cb6e42403c84470": "sha256:855fe6f6f6bfba56563025646fbf25b5bad12e55629a30e270142a990d28cfaf",
+    "infeval_01a082047f8c7032973e96986deb3619": "sha256:030361ad2c20bc36d44a11980ddcdcd8b0b767e961e956eac581418b9f3eaca8"
+  },
+  "legacy_full_suite_completeness_fields": [
+    false,
+    false
+  ],
+  "completeness_field_note": "The current wrapper derives infrastructure_valid from the full 12-case stage gate; diagnostics intentionally contain two cases. This false field is not an observed infrastructure abort. Preserve native reports; improve scoped report semantics separately."
+}

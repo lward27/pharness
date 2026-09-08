@@ -1,0 +1,73 @@
+{
+  "limitations": [
+    "Read-only socket and TCP counters; lifetime counters alone do not establish incident cause."
+  ],
+  "namespace": "registry",
+  "observed_at": "2026-09-08T16:27:02.231329+00:00",
+  "pods": [
+    {
+      "counters": {
+        "ActiveOpens": 1345,
+        "AttemptFails": 0,
+        "CurrEstab": 0,
+        "EstabResets": 0,
+        "ListenDrops": 0,
+        "ListenOverflows": 0,
+        "PassiveOpens": 71564,
+        "RetransSegs": 6949,
+        "TCPAbortOnTimeout": 2,
+        "TCPBacklogDrop": 0,
+        "TCPSynRetrans": 0,
+        "TCPTimeouts": 22
+      },
+      "pending_connects": [],
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "socket_states": {
+        "06": 12,
+        "0A": 2
+      }
+    },
+    {
+      "counters": {
+        "ActiveOpens": 22066,
+        "AttemptFails": 112,
+        "CurrEstab": 6,
+        "EstabResets": 51,
+        "ListenDrops": 0,
+        "ListenOverflows": 0,
+        "PassiveOpens": 289713,
+        "RetransSegs": 43453,
+        "TCPAbortOnTimeout": 0,
+        "TCPBacklogDrop": 0,
+        "TCPSynRetrans": 255,
+        "TCPTimeouts": 448
+      },
+      "pending_connects": [],
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "socket_states": {
+        "01": 6,
+        "06": 23,
+        "0A": 2
+      }
+    },
+    {
+      "counters": {
+        "ActiveOpens": 93366,
+        "AttemptFails": 93379,
+        "CurrEstab": 1,
+        "EstabResets": 1,
+        "ListenDrops": 0,
+        "ListenOverflows": 0,
+        "PassiveOpens": 61021,
+        "RetransSegs": 4031,
+        "TCPAbortOnTimeout": 0,
+        "TCPBacklogDrop": 0,
+        "TCPSynRetrans": 0,
+        "TCPTimeouts": 0
+      },
+      "pending_connects": [],
+      "pod": "docker-registry-5dd7cb8849-gc89j",
+      "socket_states": {}
+    }
+  ]
+}

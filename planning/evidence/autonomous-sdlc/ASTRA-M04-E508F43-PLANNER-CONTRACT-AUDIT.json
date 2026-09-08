@@ -1,0 +1,197 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "evaluation_id": "infeval_01a0820b8a4c7a329e029bf2d2916a24",
+  "suite_hash": "sha256:01f45441afaa41c3e9be862575953434fc6ef19271522ab273c75667e2baba00",
+  "status": "invalid_planner_acceptance_measurement",
+  "native_report_unchanged": true,
+  "native_report_file_sha256": "458eef1d25204b7f50ee4b6e3794c4d60b9117a5cd560a9d5d16cdd84e1a2b03",
+  "cases": [
+    {
+      "case_id": "cross-repository-context",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "acceptance-boundary",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit",
+        "compile"
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "failing-baseline",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "ambiguous-intent",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "immutable-source",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "compile"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "correction-feedback",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit",
+        "compile"
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "undeclared-path",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "documentation-boundary",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "compile"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "misleading-nearby-code",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit",
+        "compile"
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "stale-context-revision",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    },
+    {
+      "case_id": "multiple-intent-clauses",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit",
+        "compile"
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "path-intersection",
+      "required_by_request": [
+        "unit",
+        "compile"
+      ],
+      "declared_commands": [
+        "unit",
+        "compile"
+      ],
+      "selected_commands": [
+        "unit"
+      ],
+      "consistent": false
+    }
+  ],
+  "mismatch_count": 8,
+  "control_dispatched": false,
+  "interpretation": "Native 1/2 remains unchanged. Eight Planner requests require both checks while selecting one. Existing worker and grader reject unselected names. Correct public fixture selections, preserve bounded acceptance enforcement and rerun on a new suite/runtime; do not rank models from this failed case."
+}

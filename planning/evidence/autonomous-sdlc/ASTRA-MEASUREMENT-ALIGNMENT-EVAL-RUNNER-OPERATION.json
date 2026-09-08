@@ -1,0 +1,20 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "target": "eval-runner",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "command": [
+    "scripts/pharness-build.sh",
+    "eval-runner",
+    "--revision",
+    "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "--builder",
+    "pharness-mac"
+  ],
+  "started_at": "2026-09-08T16:20:32.475558+00:00",
+  "status": "passed",
+  "pid": 94381,
+  "exit_code": 0,
+  "finished_at": "2026-09-08T16:28:11.297747+00:00",
+  "elapsed_seconds": 458.819
+}

@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "scope": "Only finite runner_images mappings and derived policy/config hashes changed. All other execution registry content is equal.",
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "runner_images": {
+    "python-3.11": "registry.lucas.engineering/pharness-python-runner@sha256:a452a4388fde4cf84c5e260448fdb904f77fe1c34931c1c19e6b26443f283451",
+    "node-24": "registry.lucas.engineering/pharness-node-runner@sha256:4e09e23b8f24abcc26e717a99133302ab59de1639c0a46c786e9b6db4767c93c",
+    "evaluation": "registry.lucas.engineering/pharness-eval-runner@sha256:39eccfc43f17178954e3c11a3dc049d63fd981bf3541bc8d7173a1c49a4cde7a"
+  }
+}

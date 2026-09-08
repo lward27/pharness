@@ -1,0 +1,9 @@
+# ASTRA M08: Current measurement fixes integrated into staging draft
+
+Status: locally validated; draft PR 363 remains unreleased and unaccepted. This refresh merges main `5a409453d28d68d22b12899a312df763c51e48dd` into the preceding draft `d8e25ccb6da0191b3bcdded2532d89b811520b21`. Only the program document conflicted. All staging implementation files match the earlier draft byte for byte; current main's M04 fixes and frozen coding implementation are preserved.
+
+[Validation](ASTRA-M08-5A40945-INTEGRATION-VALIDATION.json) records 849 passing workspace tests and two explicitly run Helm tests, for 851 total; six live-only checks remain unrun. Workspace Clippy with warnings denied, formatting, five architecture regressions, and chart validation using the actual Argo values pass. Test counts use each outer test target's final summary: deliberately failing private-fixture subprocesses are assertions of the evaluator tests, not additional project failures or successes.
+
+The 59 rendered resources retain read-only Finance observer permissions and disabled hosted creation and Coding V2. Four Finance Argo applications are healthy at GitOps revision `e66e8116c93c831baba65f521efab7bd14e24b4f`. These observations establish coordinates and infrastructure health; they do not establish application telemetry or autonomous delivery.
+
+The separate source5a40945 release excludes this draft. No deployment, production approval, Finance source mutation, or acceptance claim occurs here. The [earlier refresh](ASTRA-M08-CURRENT-MAIN-INTEGRATION.md) and its original evidence remain intact. M08 still requires the real source/build-to-staging chain after M04 qualification; M11 still requires genuine human production approval.

@@ -1,0 +1,442 @@
+{
+  "local_node": "v26.0.0",
+  "local_python": "Python 3.14.4",
+  "cases": [
+    {
+      "case": "wrong-endpoint-path",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "wrong-environment-variable",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "response-envelope-invention",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "unsafe-object-rendering",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "incomplete-tests",
+      "mode": "coverage",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "misleading-documentation",
+      "mode": "documentation",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "stale-context",
+      "mode": "stale_test_receipt",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "frontend-semantic-mismatch",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "valid-implementation-a",
+      "mode": "normal",
+      "expected_decision": "approved",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "valid-implementation-b",
+      "mode": "normal",
+      "expected_decision": "approved",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0
+      },
+      "corrected_files": {
+        "unit": 0
+      }
+    },
+    {
+      "case": "wrong-query-parameter",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "missing-null-handling",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "partial-call-site-update",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "acceptance-name-mismatch",
+      "mode": "missing_unit_receipt",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "hidden-test-failure",
+      "mode": "semantic_receipt",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "changed-protected-path",
+      "mode": "protected_path",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "unresolved-baseline-failure",
+      "mode": "baseline_failure",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 1,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 1,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "unsafe-string-rendering",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "incorrect-error-code",
+      "mode": "normal",
+      "expected_decision": "rejected",
+      "semantic_oracle": true,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 1
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0,
+        "private_oracle": 0
+      }
+    },
+    {
+      "case": "missing-doc-update",
+      "mode": "documentation",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "unapproved-context-head",
+      "mode": "unapproved_source",
+      "expected_decision": "rejected",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "valid-implementation-c",
+      "mode": "normal",
+      "expected_decision": "approved",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    },
+    {
+      "case": "valid-implementation-d",
+      "mode": "normal",
+      "expected_decision": "approved",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0
+      },
+      "candidate_files": {
+        "unit": 0
+      },
+      "corrected_files": {
+        "unit": 0
+      }
+    },
+    {
+      "case": "valid-implementation-e",
+      "mode": "normal",
+      "expected_decision": "approved",
+      "semantic_oracle": false,
+      "baseline_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "candidate_files": {
+        "unit": 0,
+        "compile": 0
+      },
+      "corrected_files": {
+        "unit": 0,
+        "compile": 0
+      }
+    }
+  ]
+}

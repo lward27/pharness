@@ -1,5 +1,7 @@
 # ASTRA M04: Source80 onboarding measurement failure
 
+Continuation: the later [measurement alignment release](ASTRA-M04-MEASUREMENT-ALIGNMENT-RELEASE.md) corrects the private grading restriction. This document retains the original source80 outcome and the next-step assessment made at that time; it does not define the current runtime or rescore that report.
+
 Runtime `80acca99b6417d14dac75620b516852b3103a80d` passed its [immutable release observation](ASTRA-M04-PRODUCT-BOUNDARY-RELEASE.md). The new [primary diagnostic](ASTRA-M04-80ACCA9-ONBOARDING-PRIMARY-RESULT.json), `infeval_01a0818e971872d28b819febb74fac52`, completed with native diagnostic failure, 0/2 cases and no qualification. Preserve that report unchanged. The matched control and other stage canaries were not dispatched after inspection exposed another invalid measurement.
 
 ## Objective findings

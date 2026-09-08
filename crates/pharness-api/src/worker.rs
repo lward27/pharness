@@ -3653,6 +3653,28 @@ mod tests {
     }
 
     #[test]
+    fn retained_planner_output_requires_the_checks_selected_by_its_request() {
+        let receipt: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../planning/evidence/autonomous-sdlc/ASTRA-M04-E508F43-PLAN-PRIMARY-RESULT.json"
+        )))
+        .unwrap();
+        let row = receipt["evaluation"]["report"]["report"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["fixture"] == "failing-baseline")
+            .unwrap();
+        let document = &row["stage_submission"]["document"];
+        assert_eq!(
+            validate_work_plan(document, &["unit".into()]).unwrap_err(),
+            "WorkPlan step references undeclared acceptance command compile"
+        );
+        assert!(validate_work_plan(document, &["unit".into(), "compile".into()]).is_ok());
+        assert_eq!(row["passed"], false); // Original native result remains failed.
+    }
+
+    #[test]
     fn result_json_uses_null_for_absent_run_scope() {
         let run = stored_run(serde_json::json!({
             "kind": "local_process",

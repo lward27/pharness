@@ -1,0 +1,338 @@
+{
+  "actions_executed": [],
+  "argo": {
+    "health": {
+      "lastTransitionTime": "2026-09-05T10:27:53Z",
+      "status": "Healthy"
+    },
+    "name": "docker-registry",
+    "source": {
+      "path": "charts/docker-registry",
+      "repoURL": "https://github.com/lward27/lucas_engineering.git",
+      "targetRevision": "HEAD"
+    },
+    "status": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "registry",
+          "server": "https://kubernetes.default.svc"
+        },
+        "ignoreDifferences": [
+          {
+            "jsonPointers": [
+              "/data/haSharedSecret"
+            ],
+            "kind": "Secret",
+            "name": "docker-registry-secret",
+            "namespace": "registry"
+          },
+          {
+            "group": "apps",
+            "jsonPointers": [
+              "/spec/template/metadata/annotations/checksum~1secret"
+            ],
+            "kind": "Deployment",
+            "name": "docker-registry",
+            "namespace": "registry"
+          }
+        ],
+        "source": {
+          "path": "charts/docker-registry",
+          "repoURL": "https://github.com/lward27/lucas_engineering.git",
+          "targetRevision": "HEAD"
+        }
+      },
+      "revision": "e66e8116c93c831baba65f521efab7bd14e24b4f",
+      "status": "Synced"
+    }
+  },
+  "cluster": "lucas_engineering",
+  "logs": [
+    {
+      "errors": [
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:04:18.083471705Z"
+        },
+        {
+          "http.request.method": "PUT",
+          "level": "error",
+          "msg": "client disconnected during blob PUT",
+          "time": "2026-09-08T16:04:19.588870783Z"
+        },
+        {
+          "err.code": "unknown",
+          "err.message": "unknown error",
+          "http.request.method": "PUT",
+          "http.response.duration": "292.619664ms",
+          "http.response.status": "500",
+          "level": "error",
+          "msg": "response completed with error",
+          "time": "2026-09-08T16:04:19.677420646Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:04:19.678077174Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:04:20.368378596Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:04:30.373193007Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:04:40.374216753Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:04:50.37916692Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:00.384647695Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:10.388997011Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:20.394312433Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:30.399957833Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:40.404288312Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:05:50.409242996Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:00.41583898Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:10.417049606Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:20.417586551Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:30.424088372Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:40.42644123Z"
+        },
+        {
+          "level": "error",
+          "msg": "traces export: Post \\",
+          "time": "2026-09-08T16:06:50.430156125Z"
+        }
+      ],
+      "lookback": "30m",
+      "matching_lines": 235,
+      "pod": "docker-registry-5dd7cb8849-gc89j",
+      "status_counts": {
+        "200": 18,
+        "404": 28,
+        "500": 1,
+        "unparsed": 188
+      },
+      "tail_limit": 600
+    },
+    {
+      "errors": [
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:46:44.788818495Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:51:20.825865926Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:51:20.993046809Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:51:21.374927726Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:51:21.565061929Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:51:21.767089872Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:52:25.635373209Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:52:25.814528911Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:52:26.223863187Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:52:26.410582604Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:52:26.595326095Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:57:57.585712008Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:57:57.759592886Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:57:58.599309397Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:57:59.128732975Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T15:57:59.450875232Z"
+        }
+      ],
+      "lookback": "30m",
+      "matching_lines": 16,
+      "pod": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "status_counts": {
+        "unparsed": 16
+      },
+      "tail_limit": 600
+    },
+    {
+      "errors": [
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.853916163Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.854282783Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.863658683Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.863705140Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.863922246Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.878241672Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:00:30.881706461Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:01:13.194685059Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:01:53.081471082Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:01:53.081874380Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:02:15.480521930Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:02:25.464814329Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:26.283290555Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:26.284027579Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:26.284421964Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:26.578452585Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:32.278437180Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:03:43.466149776Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:04:18.082508816Z"
+        },
+        {
+          "diagnostic_kind": "unparsed gateway error; raw line intentionally withheld",
+          "timestamp": "2026-09-08T16:04:19.584127913Z"
+        }
+      ],
+      "lookback": "30m",
+      "matching_lines": 74,
+      "pod": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "status_counts": {
+        "unparsed": 74
+      },
+      "tail_limit": 600
+    }
+  ],
+  "namespace": "registry",
+  "observed_at": "2026-09-08T16:06:59.508779+00:00"
+}
