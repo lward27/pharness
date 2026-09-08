@@ -65,9 +65,10 @@ pub use project::{
 pub use project::{ProjectContract, ProjectContractError};
 pub use repo_mode::{
     canonical_json_sha256, compiled_agent_profiles, compiled_reliability_v2_agent_profiles,
-    AgentProfile, RepoStageKey, RepositoryBindingProposal, RepositoryOnboardingProposal,
-    RepositoryServiceProposal, StageOutcomeDocument, StageTerminalStatus, AGENT_CONTEXT_SCHEMA,
-    EVIDENCE_VALIDATION_SCHEMA, ONBOARDING_PROPOSAL_SCHEMA, STAGE_OUTCOME_SCHEMA,
+    validate_repository_binding_scope, AgentProfile, RepoStageKey, RepositoryBindingProposal,
+    RepositoryOnboardingProposal, RepositoryProductProposalError, RepositoryServiceProposal,
+    StageOutcomeDocument, StageTerminalStatus, AGENT_CONTEXT_SCHEMA, EVIDENCE_VALIDATION_SCHEMA,
+    ONBOARDING_PROPOSAL_SCHEMA, STAGE_OUTCOME_SCHEMA,
 };
 pub use repository::{
     discover_repository, DiscoveredCandidate, DiscoveredCommandCandidate, DiscoveredContractState,

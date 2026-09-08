@@ -1,0 +1,89 @@
+{
+  "source_base": "5cc6b9cb1c15f0173c9fcd960f0e97b63c7d6d7f",
+  "status": "passed",
+  "changed_rust_sha256": {
+    "crates/pharness-api/src/app/products/onboarding.rs": "sha256:8375dc5219e23ebe401731f512999fba521f8abcf9a9d0f10b22489f3404c5db",
+    "crates/pharness-api/src/app/products/onboarding_policy.rs": "sha256:209080381727c3d4bdd37393479911237d193ccd4098c7734a6e834859d6d208",
+    "crates/pharness-api/src/app/products/tests.rs": "sha256:7df6197ceeabbf30078adafbca997d0e4fb7c05bacdcd6aef1ffb1d9b7a75ba8",
+    "crates/pharness-api/src/app/tests/onboarding_blockers.rs": "sha256:cce0b9a9ddeaa4febf9f331144916010255907b4156598a3ac4f7a692ba03a6e",
+    "crates/pharness-core/src/lib.rs": "sha256:49be630f24f029ff438770e4ddab83f476bcdf6732c4684ecb1ca511e3243e0d",
+    "crates/pharness-core/src/repo_mode.rs": "sha256:ba322e943993588e5f5459f5ecea6fb2a709c424b207e1d1f01433f6dc9d366f",
+    "crates/pharness-runhost/src/onboarding_submission.rs": "sha256:0fc0727e3660c9c229347bf3501e83c5f5e8ef779ad97c7976ce5a06ad3d8b59",
+    "crates/pharness-runhost/src/onboarding_submission/tests.rs": "sha256:2bd470daa0c61de06f222a6bc6bc1c325382a03d616c9176f53539e3e475229e",
+    "crates/pharness-core/src/repo_mode/onboarding_product.rs": "sha256:de38d9b44b5c9dddd0f92da514cced1c0fbb44d2babe005fbd9499a0e0b4a0c2"
+  },
+  "checks": [
+    {
+      "name": "core-runhost",
+      "exit_code": 0,
+      "elapsed_seconds": 10.628,
+      "log_path": "/tmp/astra-product-boundary-core-runhost.log"
+    },
+    {
+      "name": "api-products",
+      "exit_code": 0,
+      "elapsed_seconds": 0.301,
+      "log_path": "/tmp/astra-product-boundary-api-products.log"
+    },
+    {
+      "name": "api-inference",
+      "exit_code": 0,
+      "elapsed_seconds": 0.166,
+      "log_path": "/tmp/astra-product-boundary-api-inference.log"
+    },
+    {
+      "name": "eval",
+      "exit_code": 101,
+      "elapsed_seconds": 0.096,
+      "log_path": "/tmp/astra-product-boundary-eval.log"
+    },
+    {
+      "name": "eval-final",
+      "exit_code": 0,
+      "elapsed_seconds": 101.605,
+      "log_path": "/tmp/astra-product-boundary-eval-final.log"
+    },
+    {
+      "name": "api-onboarding-final",
+      "exit_code": 0,
+      "elapsed_seconds": 11.777,
+      "log_path": "/tmp/astra-product-boundary-api-onboarding-final.log"
+    },
+    {
+      "name": "runhost-onboarding-final",
+      "exit_code": 0,
+      "elapsed_seconds": 1.665,
+      "log_path": "/tmp/astra-product-boundary-runhost-onboarding-final.log"
+    },
+    {
+      "name": "clippy",
+      "exit_code": 0,
+      "elapsed_seconds": 40.214,
+      "log_path": "/tmp/astra-product-boundary-clippy.log"
+    }
+  ],
+  "native_actual_report_red_regression": "old tool accepted the duplicate Service; the new tool rejects it and preserves valid binding reuse",
+  "architecture": {
+    "status": "passed",
+    "regression_tests": 5,
+    "log_sha256": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "log_sha256": {
+    "core-runhost": "sha256:3bd028966c624f64500cea41b9a100abcfd6db050b65a00fde22ba162fde9a93",
+    "api-products": "sha256:f2ae0cae38d86013328b2e1a7004ceff0270b145086f0c11788c843ba3c9deb5",
+    "api-inference": "sha256:706f7a245f4d981b5c047d2567a6a262d877a6a0564abfd29a91a5d0381b1ca3",
+    "api-onboarding-final": "sha256:6451aecfeb8056bd1205b574f3fbe9459580ef24443099c1897ab0a504b3937f",
+    "runhost-onboarding-final": "sha256:21d5a8795369f0fc3c1d4dd331b7966a38648ee8600f3dd141307d29370627b8",
+    "eval-final": "sha256:aa6428efb60056fc26d0a0f5659a87bd8479686d2922805ce2bc3f710840a07c",
+    "clippy": "sha256:4d85f985920caeb0a96b5fc5e9a53ac15e944b1d9d1f985cd1a033b7e3990818"
+  },
+  "limitations": [
+    "One core live-cluster test remains explicitly ignored; deterministic tests are not gateway/model or delivery qualification.",
+    "Initial evaluator command incorrectly selected a nonexistent library target; corrected package invocation passed.",
+    "Initial HTTP test used IDs already allocated by its fixture; corrected isolated IDs passed. No production state was involved."
+  ],
+  "budget_changes": false,
+  "model_changes": false,
+  "migration_changes": false,
+  "historical_evaluation_changes": false
+}

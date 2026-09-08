@@ -32,6 +32,8 @@ pub fn canonical_json_sha256(value: &serde_json::Value) -> Result<String, serde_
     Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
 }
 mod onboarding;
+mod onboarding_product;
+pub use onboarding_product::{validate_repository_binding_scope, RepositoryProductProposalError};
 
 pub const ONBOARDING_PROPOSAL_SCHEMA: &str = "pharness.dev/repository-onboarding-proposal/v1alpha2";
 

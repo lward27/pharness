@@ -1,0 +1,25 @@
+# ASTRA M04: Validate Product proposals at submission
+
+Implementation base: main `5cc6b9cb1c15f0173c9fcd960f0e97b63c7d6d7f`, after the [source38 onboarding comparison](ASTRA-M04-38A4282-ONBOARDING-CONTROL.md). Status: implemented and deterministically validated; immutable release and new live diagnostics pending. The deployed runtime remains source38 and unqualified.
+
+## Problem and resulting behavior
+
+The retained Kimi control placed the existing `finance-web` Service in `service_proposals` while describing reuse. Its terminal submit tool accepted the proposal; the real product API and the evaluator rejected it later. The actual-report regression reproduced that acceptance before the fix. This is a deterministic contract check that should be available during the existing bounded tool correction, not a reason to relax the evaluator or silently select a different model.
+
+The existing API Product checks now live in one core validator used by the native submission tool and the API. `service_proposals` creates new Services; `binding_proposals.service_keys` references existing or explicitly proposed new Services. The versioned current prompt and tool schema describe those effects and expose the API's established limits of 32 new Services, one repository binding and 1–64 binding scopes. The prompt revision is `2026-09-08.1`. The checker preserves canonical keys, display-name/description bounds, duplicate and unknown-key rejection, normalized scopes and HTTP 409 for an existing-Service collision; other invalid fields remain HTTP 400. It does not silently correct model output or grant creation authority.
+
+At native submission, checks use the original Run's saved product model. The production snapshot wrapper and retained compact diagnostic view are supported explicitly; an invalid wrapped model cannot fall back to another view. Missing Product context permits proposals without Product changes, including blocked null candidates, but rejects attempted Service creation/binding. Malformed or ambiguous supplied snapshots fail before model execution. Legacy submission reads retain their previous identity contract. The API still fetches current Product state before accepting, approving or materializing a proposal, so a later Service creation can invalidate an earlier proposed creation.
+
+## Validation boundaries
+
+The actual retained control is rejected at its first native submit with `service_proposals[0].service_key`, an existing-Service conflict, and guidance to bind the existing key. A cloned test proposal with only the duplicate creation removed retains its binding and is accepted. This is a deterministic regression, not a rescore or rewrite of the failed live report.
+
+Additional checks cover legitimate new-Service creation and binding, existing-Service reuse, duplicate/unknown keys, field/collection limits, unsafe and repeated scopes, blocked null candidates, original versus changed snapshots, absent context, malformed wrappers and preserved legacy reads. The HTTP integration test accepts a proposed new Service without creating it, applies a separate model change in its isolated test store, then proves fresh revalidation rejects the resulting collision without partially updating the onboarding record. Existing-Service binding still succeeds and unknown references fail.
+
+The [validation receipt](ASTRA-M04-ONBOARDING-PRODUCT-VALIDATION.json) records changed source and log hashes: 173 core checks, 47 Runhost checks, 33 API checks and 48 evaluator checks pass, plus five architecture regressions and module-boundary validation. The eleven onboarding Runhost checks were also repeated after the final diagnostic wording adjustment. One explicitly live core test remains ignored. Clippy passes for all four affected packages and all targets with warnings denied; formatting, whitespace and local Markdown links pass. Child fixture programs deliberately exercise failures; the enclosing 48 evaluator checks pass. No provider calls are part of deterministic tests. The live source38 results remain failed, with no qualification. Models, provider settings, token/turn/deadline/recovery limits, frozen 24 tasks, stage scorers, SQL schema and production authority are unchanged.
+
+## Release and next gate
+
+Build all seven images and the native bundle from one merged source through the selected Mac builder, pin verified digests, observe exact Argo/Pod identities and the full service window, and preserve database generation. There is no migration; source38 remains a compatible recovery release. Keep hosted creation and Coding Reliability V2 disabled. A release pass is not M04 acceptance.
+
+On the new exact runtime, renew protocol evidence and run one fresh primary onboarding pair followed by its registered exact-input Kimi control. Preserve failed results and capture final Job/Pod receipts before expiry. Inspect failures before more calls; remaining stage canaries, connected-loop proof and frozen qualification remain required. The new validation does not establish that either model is now reliable. No Finance production approval or local-model activation is implied.

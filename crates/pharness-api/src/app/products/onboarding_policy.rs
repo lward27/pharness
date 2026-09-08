@@ -1,22 +1,6 @@
 use crate::app::ApiError;
 use serde_json::{json, Value};
 
-pub(super) fn validate_binding_scope(scope: &str) -> Result<(), ApiError> {
-    if scope.is_empty()
-        || scope.len() > 256
-        || scope.starts_with(['/', '~'])
-        || scope.contains(['\\', '\n', '\r', '\0'])
-        || scope
-            .split('/')
-            .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
-    {
-        return Err(ApiError::bad_request(format!(
-            "binding scope {scope:?} is not a normalized repository-relative glob"
-        )));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 pub(super) fn onboarding_environment_profile_ids<'a>(
     profiles: impl IntoIterator<Item = (&'a str, bool)>,

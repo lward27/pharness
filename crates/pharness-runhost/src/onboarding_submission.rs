@@ -20,9 +20,9 @@ const PROPOSAL_FIELDS: [&str; 8] = [
 pub(super) fn current_prompt() -> StagePromptPack {
     StagePromptPack {
         prompt_id: "repo-onboarding-v2",
-        revision: "2026-09-07.2",
+        revision: "2026-09-08.1",
         stage: pharness_core::InferenceStage::Onboarding,
-        content: r#"Use discovery evidence to propose repository configuration. Separate discovered facts, proposed configuration, assumptions, conflicts and blockers. Copy executable facts only from discovery and compatible profile descriptors; do not invent roots, commands, locks, Services or profile IDs. Distinguish this onboarding Run's allowed_source_changes from candidate_contract.writable_paths: the former bounds onboarding configuration changes; the latter proposes the repository scope for future development WorkItems. Derive that future scope from discovered source, test and documentation roots and any existing contract constraints. Writable paths match exactly unless they end in /**: lib/handler.py permits that file only; lib/** permits descendants recursively. Directory roots and writable expressions have different syntax: lib or lib/ does not grant descendant writes. Use canonical repository-relative expressions without trailing/repeated separators or . or .. components; never broaden an existing exact-file permission into a subtree. Do not copy the onboarding-only .pharness paths into the future development scope. Describe both scopes accurately in instructions; proposing future paths does not authorize this Run to edit them. Submit only the configuration and explanation fields exposed by submit_onboarding_proposal. The controller attaches schema_version, discovery_id and discovery_hash from this Run; omit those fields. If required facts are absent or contradictory, submit candidate_contract: null with explicit blockers or conflicts. A blocked proposal is retained evidence and cannot authorize source changes."#,
+        content: r#"Use discovery evidence to propose repository configuration. Separate discovered facts, proposed configuration, assumptions, conflicts and blockers. Copy executable facts only from discovery and compatible profile descriptors; do not invent roots, commands, locks, Services or profile IDs. Distinguish this onboarding Run's allowed_source_changes from candidate_contract.writable_paths: the former bounds onboarding configuration changes; the latter proposes the repository scope for future development WorkItems. Derive that future scope from discovered source, test and documentation roots and any existing contract constraints. Writable paths match exactly unless they end in /**: lib/handler.py permits that file only; lib/** permits descendants recursively. Directory roots and writable expressions have different syntax: lib or lib/ does not grant descendant writes. Use canonical repository-relative expressions without trailing/repeated separators or . or .. components; never broaden an existing exact-file permission into a subtree. Do not copy the onboarding-only .pharness paths into the future development scope. Describe both scopes accurately in instructions; proposing future paths does not authorize this Run to edit them. service_proposals creates new Product Services only; do not list an existing Service there. Reuse existing keys in binding_proposals.service_keys with discovered repository scopes. Propose new Services only when supported by the request and discovery; use empty arrays when no creation or binding change is needed. Submit only the configuration and explanation fields exposed by submit_onboarding_proposal. The controller attaches schema_version, discovery_id and discovery_hash from this Run; omit those fields. If required facts are absent or contradictory, submit candidate_contract: null with explicit blockers or conflicts. A blocked proposal is retained evidence and cannot authorize source changes."#,
     }
 }
 
@@ -62,6 +62,12 @@ pub(super) fn constrain_schema(schema: &mut Value) {
     for field in IDENTITY_FIELDS {
         properties.remove(field);
     }
+    properties["service_proposals"]["description"] = json!("Creates new Product Services only. Do not repeat an existing Product Service here. Reuse existing service_keys in binding_proposals instead; use [] when no new Service is proposed.");
+    properties["service_proposals"]["maxItems"] = json!(32);
+    properties["binding_proposals"]["description"] = json!("Binds this Repository to existing Product service_keys or separately proposed new Services. Referencing an existing Service here reuses it without creating it. Use [] when no binding change is proposed.");
+    properties["binding_proposals"]["maxItems"] = json!(1);
+    properties["binding_proposals"]["items"]["properties"]["scopes"]["minItems"] = json!(1);
+    properties["binding_proposals"]["items"]["properties"]["scopes"]["maxItems"] = json!(64);
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +75,7 @@ pub(super) struct OnboardingBinding {
     controller_bound: bool,
     discovery_id: String,
     discovery_hash: String,
+    product_service_keys: Option<Vec<String>>,
 }
 
 impl OnboardingBinding {
@@ -118,6 +125,11 @@ impl OnboardingBinding {
             controller_bound,
             discovery_id: id.into(),
             discovery_hash: hash.into(),
+            product_service_keys: if controller_bound {
+                product_service_keys(context)?
+            } else {
+                None
+            },
         }))
     }
 
@@ -172,8 +184,47 @@ impl OnboardingBinding {
             }
         }
         proposal.validate_submission().map_err(invalid)?;
+        if self.controller_bound {
+            if let Some(keys) = &self.product_service_keys {
+                proposal
+                    .validate_product_proposals(keys.iter().map(String::as_str))
+                    .map_err(|error| invalid(error.to_string()))?;
+            } else if !proposal.service_proposals.is_empty()
+                || !proposal.binding_proposals.is_empty()
+            {
+                return Err(invalid("service_proposals and binding_proposals require the original Run's agent_context.product_model snapshot; do not invent Product state"));
+            }
+        }
         Ok(bound)
     }
+}
+
+fn product_service_keys(context: &Value) -> anyhow::Result<Option<Vec<String>>> {
+    let Some(product) = context
+        .get("product_model")
+        .filter(|value| !value.is_null())
+    else {
+        return Ok(None);
+    };
+    // Production wraps the immutable model; retained diagnostic Runs use its
+    // compact services view. An invalid wrapped model never falls back to that view.
+    let model = product.get("model").unwrap_or(product);
+    let services = model["services"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("agent_context.product_model requires an original services snapshot")
+    })?;
+    let mut keys = std::collections::BTreeSet::new();
+    for service in services {
+        let key = service["service_key"]
+            .as_str()
+            .filter(|key| !key.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!("agent_context.product_model.services requires service_key")
+            })?;
+        if !keys.insert(key.to_string()) {
+            anyhow::bail!("agent_context.product_model.services repeats service_key {key:?}");
+        }
+    }
+    Ok(Some(keys.into_iter().collect()))
 }
 
 fn invalid(message: impl Into<String>) -> ToolError {
