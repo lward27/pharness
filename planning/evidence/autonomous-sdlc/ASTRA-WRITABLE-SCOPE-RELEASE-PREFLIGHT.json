@@ -1,0 +1,35 @@
+{
+  "observed_at": "2026-09-08T00:22:31.526693+00:00",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "argo_source": {
+    "helm": {
+      "valueFiles": [
+        "values-yfinance-production.yaml"
+      ]
+    },
+    "path": "deploy/helm/pharness",
+    "repoURL": "https://github.com/lward27/pharness.git",
+    "targetRevision": "HEAD"
+  },
+  "server_dry_run": "passed",
+  "render_sha256": "sha256:3306b439d34690ccee1ef0a4201b9d2198ff623a683c7fb2f719fc4f019baf76",
+  "registry_change_scope": "Only exact runner images and corresponding policy/config hashes; all other registry content identical.",
+  "run_counts": [
+    {
+      "value": "completed",
+      "count": 68
+    },
+    {
+      "value": "failed",
+      "count": 12
+    },
+    {
+      "value": "cancelled",
+      "count": 2
+    }
+  ],
+  "all_retained_agent_runs_terminal": true,
+  "finance_production_approved": false,
+  "pharness_release_authorization": "Existing owner-authorized ASTRA platform implementation/release; Finance approval remains separate.",
+  "preflight_note": "Initial local field-name allowlist was incorrect; inspection and structural comparison of the actual registry confirmed image/hash-only changes. The already-passing server dry-run applies to byte-identical rendered configuration."
+}

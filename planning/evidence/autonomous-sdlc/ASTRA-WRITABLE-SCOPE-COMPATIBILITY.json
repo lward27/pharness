@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-09-07T23:45:51.805985+00:00",
+  "finance_contracts": {
+    "yfinance_wrapper": {
+      "blob_sha": "b3624700a99ebcb6e8d7cec8a335450d97ae6e20",
+      "path": ".pharness/repository.yaml",
+      "writable_path_section": "- src/**\n- tests/**\n- readme.md"
+    },
+    "finance-frontend": {
+      "blob_sha": "30deb7fed1c65389588f4c647fdb4be4cd0eb353",
+      "path": ".pharness/repository.yaml",
+      "writable_path_section": "- src/**\n- tests/**\n- README.md"
+    }
+  },
+  "schema_migration_diff": []
+}

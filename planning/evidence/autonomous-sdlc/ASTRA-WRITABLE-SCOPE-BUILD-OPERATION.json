@@ -1,0 +1,21 @@
+{
+  "operation_id": "astra-writable-scope-release-build",
+  "source_revision": "a2d05f1b41c15cb34a4543327ba468b9da3b5094",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "started_at": "2026-09-07T23:44:53.832538+00:00",
+  "status": "completed",
+  "required_components": [
+    "runtime",
+    "ui",
+    "python-runner",
+    "node-runner",
+    "model-gateway",
+    "eval-runner",
+    "codex-host"
+  ],
+  "native_bundle_required": true,
+  "deployed": false,
+  "exit_code": 0,
+  "completed_at": "2026-09-08T00:19:53.837825+00:00"
+}
