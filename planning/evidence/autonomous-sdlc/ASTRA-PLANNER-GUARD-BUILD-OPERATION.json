@@ -1,0 +1,21 @@
+{
+  "builder": "pharness-mac",
+  "command": [
+    "scripts/pharness-build.sh",
+    "all",
+    "--revision",
+    "291e007cedcb2440a328f5e24710fb3423cb0ded",
+    "--builder",
+    "pharness-mac"
+  ],
+  "docker_context": "rancher-desktop",
+  "elapsed_seconds": 2065.052,
+  "exit_code": 0,
+  "finished_at": "2026-09-08T20:58:27.558309+00:00",
+  "pid": 75332,
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "started_at": "2026-09-08T20:24:02.487098+00:00",
+  "status": "passed",
+  "target": "all",
+  "worktree": "/Users/wardl/Personal/apps/pharness-astra-planner-guard-build"
+}

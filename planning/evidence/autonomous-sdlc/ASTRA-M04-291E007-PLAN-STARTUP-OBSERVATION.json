@@ -1,0 +1,162 @@
+{
+  "containers": [
+    {
+      "allocatedResources": {
+        "cpu": "250m",
+        "ephemeral-storage": "1Gi",
+        "memory": "512Mi"
+      },
+      "containerID": "containerd://632ed433b43c8af33d37a8d4ca2c0c3daaed7ae49530f2630c7a10e4580d1086",
+      "image": "sha256:abff3e434c860bf7cf494f48afe4fcc8128e0645def7c2fd4b4ec8764de1a415",
+      "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8",
+      "lastState": {},
+      "name": "evaluate",
+      "ready": true,
+      "resources": {
+        "limits": {
+          "cpu": "2",
+          "ephemeral-storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "requests": {
+          "cpu": "250m",
+          "ephemeral-storage": "1Gi",
+          "memory": "512Mi"
+        }
+      },
+      "restartCount": 0,
+      "started": true,
+      "state": {
+        "running": {
+          "startedAt": "2026-09-08T21:19:19Z"
+        }
+      },
+      "user": {
+        "linux": {
+          "gid": 65532,
+          "supplementalGroups": [
+            65532
+          ],
+          "uid": 65532
+        }
+      },
+      "volumeMounts": [
+        {
+          "mountPath": "/work",
+          "name": "work"
+        },
+        {
+          "mountPath": "/tmp",
+          "name": "tmp"
+        }
+      ]
+    }
+  ],
+  "evaluation_id": "infeval_01a082e00d067e4296115a19288f1070",
+  "events": [
+    {
+      "last_timestamp": null,
+      "message": "Successfully assigned pharness/pharness-inference-eval-7a0f82dc1be3-z5qrj to ubuntu-lucas-engineering-2",
+      "reason": "Scheduled",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:15:17Z",
+      "message": "Pulling image \"registry.lucas.engineering/pharness-runtime@sha256:14f7abc1f75173818a97b6a7795d8fadde689ad3ddbb0b659b2d0251f57e7282\"",
+      "reason": "Pulling",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:15:45Z",
+      "message": "Successfully pulled image \"registry.lucas.engineering/pharness-runtime@sha256:14f7abc1f75173818a97b6a7795d8fadde689ad3ddbb0b659b2d0251f57e7282\" in 27.258s (27.259s including waiting). Image size: 119738261 bytes.",
+      "reason": "Pulled",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:15:45Z",
+      "message": "Created container: network-policy-stabilization",
+      "reason": "Created",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:16:00Z",
+      "message": "Started container network-policy-stabilization",
+      "reason": "Started",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:16:18Z",
+      "message": "Pulling image \"registry.lucas.engineering/pharness-eval-runner@sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8\"",
+      "reason": "Pulling",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:19:19Z",
+      "message": "Successfully pulled image \"registry.lucas.engineering/pharness-eval-runner@sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8\" in 3m0.745s (3m0.745s including waiting). Image size: 654471343 bytes.",
+      "reason": "Pulled",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:19:19Z",
+      "message": "Created container: evaluate",
+      "reason": "Created",
+      "type": "Normal"
+    },
+    {
+      "last_timestamp": "2026-09-08T21:19:20Z",
+      "message": "Started container evaluate",
+      "reason": "Started",
+      "type": "Normal"
+    }
+  ],
+  "init_containers": [
+    {
+      "allocatedResources": {
+        "cpu": "1m",
+        "memory": "4Mi"
+      },
+      "containerID": "containerd://d7eed150ed0a235a3e97112f2433adc0abfcf7bac3bae03f9076a467d01cd546",
+      "image": "sha256:839f36d8430641fd41839ae5d2a00eab3f2d4253cc0a9e64ec4d2dfe08eedc7e",
+      "imageID": "registry.lucas.engineering/pharness-runtime@sha256:14f7abc1f75173818a97b6a7795d8fadde689ad3ddbb0b659b2d0251f57e7282",
+      "lastState": {},
+      "name": "network-policy-stabilization",
+      "ready": true,
+      "resources": {
+        "limits": {
+          "cpu": "10m",
+          "memory": "16Mi"
+        },
+        "requests": {
+          "cpu": "1m",
+          "memory": "4Mi"
+        }
+      },
+      "restartCount": 0,
+      "started": false,
+      "state": {
+        "terminated": {
+          "containerID": "containerd://d7eed150ed0a235a3e97112f2433adc0abfcf7bac3bae03f9076a467d01cd546",
+          "exitCode": 0,
+          "finishedAt": "2026-09-08T21:16:16Z",
+          "reason": "Completed",
+          "startedAt": "2026-09-08T21:16:00Z"
+        }
+      },
+      "user": {
+        "linux": {
+          "gid": 65532,
+          "supplementalGroups": [
+            65532
+          ],
+          "uid": 65532
+        }
+      }
+    }
+  ],
+  "meaning": "Startup evidence; not a model result or qualification verdict.",
+  "observed_at": "2026-09-08T21:20:27.569826+00:00",
+  "phase": "Running",
+  "pod_name": "pharness-inference-eval-7a0f82dc1be3-z5qrj",
+  "pod_uid": "efa54396-7be9-424b-bc57-240b19592438",
+  "runtime_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded"
+}

@@ -1,0 +1,15 @@
+{
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "pull_request": 398,
+  "head": "54a9bfd0a5b77057e65e5454e0563d568f657c54",
+  "status": "merged",
+  "requested_at": "2026-09-08T21:00:51.336547+00:00",
+  "result": {
+    "mergeCommit": {
+      "oid": "90ab524aeef4fa6692057a6f89526674de3a8fa2"
+    },
+    "mergedAt": "2026-09-08T21:00:53Z",
+    "state": "MERGED",
+    "url": "https://github.com/lward27/pharness/pull/398"
+  }
+}
