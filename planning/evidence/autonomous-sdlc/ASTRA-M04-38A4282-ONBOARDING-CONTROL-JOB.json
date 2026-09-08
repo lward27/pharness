@@ -1,0 +1,146 @@
+{
+  "evaluation_id": "infeval_01a081417d0173f3a8a7f93ad191c09b",
+  "job": {
+    "images": [
+      "registry.lucas.engineering/pharness-eval-runner@sha256:88dcd4bbada14a75c983ac3f51228a0c075d04c1277921472f317870d41b334b"
+    ],
+    "name": "pharness-inference-eval-13888a2fa26f",
+    "status": {
+      "completionTime": "2026-09-08T13:45:43Z",
+      "conditions": [
+        {
+          "lastProbeTime": "2026-09-08T13:45:43Z",
+          "lastTransitionTime": "2026-09-08T13:45:43Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "SuccessCriteriaMet"
+        },
+        {
+          "lastProbeTime": "2026-09-08T13:45:43Z",
+          "lastTransitionTime": "2026-09-08T13:45:43Z",
+          "message": "Reached expected number of succeeded pods",
+          "reason": "CompletionsReached",
+          "status": "True",
+          "type": "Complete"
+        }
+      ],
+      "ready": 0,
+      "startTime": "2026-09-08T13:42:28Z",
+      "succeeded": 1,
+      "terminating": 0,
+      "uncountedTerminatedPods": {}
+    },
+    "uid": "b5d2ec9d-e08a-4e97-a7c3-038e518ba917"
+  },
+  "observed_at": "2026-09-08T13:45:52.044939+00:00",
+  "pods": [
+    {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "250m",
+            "ephemeral-storage": "1Gi",
+            "memory": "512Mi"
+          },
+          "containerID": "containerd://fef609d446c2f63e1acc7c3c19c4416598ad99c4dcfbee721730a257b9daba92",
+          "image": "sha256:421fc37f07148fbb820fcc1beb74126aeb196d0fc4d919a14fd05a75bd8a25c3",
+          "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:88dcd4bbada14a75c983ac3f51228a0c075d04c1277921472f317870d41b334b",
+          "lastState": {},
+          "name": "evaluate",
+          "ready": false,
+          "resources": {
+            "limits": {
+              "cpu": "2",
+              "ephemeral-storage": "4Gi",
+              "memory": "2Gi"
+            },
+            "requests": {
+              "cpu": "250m",
+              "ephemeral-storage": "1Gi",
+              "memory": "512Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": false,
+          "state": {
+            "terminated": {
+              "containerID": "containerd://fef609d446c2f63e1acc7c3c19c4416598ad99c4dcfbee721730a257b9daba92",
+              "exitCode": 0,
+              "finishedAt": "2026-09-08T13:45:41Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-08T13:43:02Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/work",
+              "name": "work"
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "tmp"
+            }
+          ]
+        }
+      ],
+      "init_container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "1m",
+            "memory": "4Mi"
+          },
+          "containerID": "containerd://46643dbc6d3448b1478488c746d743e93ef25f78548a1f37651c857c6de83f3a",
+          "image": "sha256:5b064c20a553882d9dc29f27397f9c9f8dfb6164407e898f4b6eef4bd7d70a70",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+          "lastState": {},
+          "name": "network-policy-stabilization",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "10m",
+              "memory": "16Mi"
+            },
+            "requests": {
+              "cpu": "1m",
+              "memory": "4Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": false,
+          "state": {
+            "terminated": {
+              "containerID": "containerd://46643dbc6d3448b1478488c746d743e93ef25f78548a1f37651c857c6de83f3a",
+              "exitCode": 0,
+              "finishedAt": "2026-09-08T13:43:01Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-08T13:42:45Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          }
+        }
+      ],
+      "name": "pharness-inference-eval-13888a2fa26f-prfms",
+      "node": "ubuntu-lucas-engineering-2",
+      "phase": "Succeeded",
+      "uid": "d24f156c-4e1d-48d0-8d0b-b3c3924e7f5d"
+    }
+  ]
+}

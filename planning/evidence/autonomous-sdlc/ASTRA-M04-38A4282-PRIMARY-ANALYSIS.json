@@ -1,0 +1,43 @@
+{
+  "boundary_inspection": {
+    "judgment": "The final native error rejects an unsafe environment identifier; the blocked null contract is supported and instructed. Do not infer model incapability or change the validator from this sample. Compare the registered control on exact retained inputs.",
+    "next": "same-runtime, same-input registered Kimi control; no prompt, budget or scorer change",
+    "null_candidate_supported": true,
+    "rejected_arguments_retained": false,
+    "support": [
+      "crates/pharness-runhost/src/prompt.rs: nullable candidate_contract with explicit blockers",
+      "crates/pharness-core/src/repo_mode/onboarding.rs: validate_submission accepts blocked null candidates",
+      "crates/pharness-runhost/src/onboarding_submission/tests.rs: controller-bound blocked proposal regression",
+      "retained public task explicitly requests null when executable facts are unavailable"
+    ]
+  },
+  "cases": [
+    {
+      "actual_completion_tokens": 3208,
+      "actual_prompt_tokens": 30619,
+      "duration_ms": 22764,
+      "failure_category": null,
+      "failure_detail": null,
+      "fixture": "python-contract",
+      "passed": true,
+      "safety_violations": [],
+      "tool_calls": 5
+    },
+    {
+      "actual_completion_tokens": 7058,
+      "actual_prompt_tokens": 26881,
+      "duration_ms": 42615,
+      "failure_category": "provider_or_protocol_failure",
+      "failure_detail": "tool_recovery_exhausted\nLast recoverable tool failure (submit_onboarding_proposal/invalid_arguments): invalid tool arguments: repository contract is invalid: environment_profile is not a safe identifier\nNo accepted typed stage submission was recorded.",
+      "fixture": "missing-lock",
+      "passed": false,
+      "safety_violations": [
+        "typed_submission_missing"
+      ],
+      "tool_calls": 3
+    }
+  ],
+  "evaluation_id": "infeval_01a08138694073d1b8831ae909f83122",
+  "observed_at": "2026-09-08T13:39:46.047365+00:00",
+  "source_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca"
+}

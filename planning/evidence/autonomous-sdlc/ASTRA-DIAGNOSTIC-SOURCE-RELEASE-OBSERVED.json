@@ -1,0 +1,390 @@
+{
+  "api_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+  "argo": {
+    "argo_revision": "81de84f70393c9dd9dad302930a97acf88da4ec9",
+    "at": "2026-09-08T13:17:49.513237+00:00",
+    "health": "Healthy",
+    "running_pods": 5,
+    "sync": "Synced"
+  },
+  "configured_execution_images": {
+    "PHARNESS_ENVIRONMENT_PROFILES_JSON": [
+      {
+        "active": true,
+        "id": "python-3.11",
+        "image": "registry.lucas.engineering/pharness-python-runner@sha256:d70c99e7b8fef648cd8f61aa0223b1fdf455b1dee260938f654b679ceef3c05e",
+        "limits": {
+          "cpu": "2",
+          "ephemeral_storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "platform": "linux/amd64",
+        "preparation_strategy": "python_hashed_requirements",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance_app_database_service.git",
+          "https://github.com/lward27/scraper_manager.git",
+          "https://github.com/lward27/yfinance_wrapper.git"
+        ],
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "python",
+          "pip"
+        ],
+        "revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+        "service_account": "pharness-python-runner"
+      },
+      {
+        "active": true,
+        "id": "node-24",
+        "image": "registry.lucas.engineering/pharness-node-runner@sha256:9f98a440374bb56211275cd09596681c3029cb91e5b33dc9bae9541dd374d34d",
+        "limits": {
+          "cpu": "2",
+          "ephemeral_storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "platform": "linux/amd64",
+        "preparation_strategy": "node_npm_ci",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance-frontend.git"
+        ],
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "node",
+          "npm"
+        ],
+        "revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+        "service_account": "pharness-node-runner"
+      }
+    ],
+    "PHARNESS_INFERENCE_EVALUATION_IMAGE": "registry.lucas.engineering/pharness-eval-runner@sha256:88dcd4bbada14a75c983ac3f51228a0c075d04c1277921472f317870d41b334b",
+    "PHARNESS_WORKER_K8S_IMAGE": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33"
+  },
+  "database_generation_unchanged": true,
+  "deployments": {
+    "pharness-api": {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "100m",
+            "ephemeral-storage": "128Mi",
+            "memory": "256Mi"
+          },
+          "containerID": "containerd://504fc6546fdf3789a6b9a72d90051fb0b3a9f36fbd52b7e20feaa1213e053aaa",
+          "image": "sha256:5b064c20a553882d9dc29f27397f9c9f8dfb6164407e898f4b6eef4bd7d70a70",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+          "lastState": {},
+          "name": "api",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "1",
+              "ephemeral-storage": "1Gi",
+              "memory": "1Gi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "ephemeral-storage": "128Mi",
+              "memory": "256Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": true,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T13:17:26Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/data",
+              "name": "data"
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "tmp"
+            },
+            {
+              "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+              "name": "kube-api-access-h58zf",
+              "readOnly": true,
+              "recursiveReadOnly": "Disabled"
+            }
+          ]
+        }
+      ],
+      "deployment_generation": 192,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+      "pod_name": "pharness-api-74446877d8-fdjdd",
+      "pod_uid": "e1d3af03-8d1c-451c-bd3c-c2a2ecd65d35"
+    },
+    "pharness-coding-egress-proxy": {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "10m",
+            "ephemeral-storage": "32Mi",
+            "memory": "32Mi"
+          },
+          "containerID": "containerd://d72ce7cb90a504a2a6e25b85a82471054651d9a11d929de51919052daf24263f",
+          "image": "sha256:5b064c20a553882d9dc29f27397f9c9f8dfb6164407e898f4b6eef4bd7d70a70",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+          "lastState": {},
+          "name": "proxy",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "200m",
+              "ephemeral-storage": "256Mi",
+              "memory": "128Mi"
+            },
+            "requests": {
+              "cpu": "10m",
+              "ephemeral-storage": "32Mi",
+              "memory": "32Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": true,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T13:17:14Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          }
+        }
+      ],
+      "deployment_generation": 134,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+      "pod_name": "pharness-coding-egress-proxy-77479cd76f-4dm82",
+      "pod_uid": "d612c9d6-b319-43fa-89bc-6111903715c7"
+    },
+    "pharness-model-gateway": {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "50m",
+            "ephemeral-storage": "64Mi",
+            "memory": "64Mi"
+          },
+          "containerID": "containerd://67c69a1e771e98259d0f0a9004bcdd3628f9d4c2e4f11f3aadafd4ea1468be22",
+          "image": "sha256:83349116536bc29d1561810eb1372380aac671c7e7d2a98e4ca706e3df74e697",
+          "imageID": "registry.lucas.engineering/pharness-model-gateway@sha256:659b2bbc02f517435d7b7b492d92fb83a68458fc1a1693d4fc03f2943c8919df",
+          "lastState": {},
+          "name": "gateway",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "500m",
+              "ephemeral-storage": "512Mi",
+              "memory": "256Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "ephemeral-storage": "64Mi",
+              "memory": "64Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": true,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T13:16:58Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/pharness/inference",
+              "name": "registry",
+              "readOnly": true,
+              "recursiveReadOnly": "Disabled"
+            },
+            {
+              "mountPath": "/var/run/secrets/pharness-grant",
+              "name": "grant-key",
+              "readOnly": true,
+              "recursiveReadOnly": "Disabled"
+            },
+            {
+              "mountPath": "/var/run/secrets/inference",
+              "name": "fireworks-key",
+              "readOnly": true,
+              "recursiveReadOnly": "Disabled"
+            }
+          ]
+        }
+      ],
+      "deployment_generation": 46,
+      "expected_image": "registry.lucas.engineering/pharness-model-gateway@sha256:659b2bbc02f517435d7b7b492d92fb83a68458fc1a1693d4fc03f2943c8919df",
+      "pod_name": "pharness-model-gateway-5844748b5-p9xmc",
+      "pod_uid": "f2092a35-809d-44f4-87b1-7c904bb1bca8"
+    },
+    "pharness-preparation-egress-proxy": {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "10m",
+            "ephemeral-storage": "32Mi",
+            "memory": "32Mi"
+          },
+          "containerID": "containerd://f9a3c9f20b6f37626b91ad98fe4b0e0699914dde3455b4e7d0d0ea3389d75d47",
+          "image": "sha256:5b064c20a553882d9dc29f27397f9c9f8dfb6164407e898f4b6eef4bd7d70a70",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+          "lastState": {},
+          "name": "proxy",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "200m",
+              "ephemeral-storage": "256Mi",
+              "memory": "128Mi"
+            },
+            "requests": {
+              "cpu": "10m",
+              "ephemeral-storage": "32Mi",
+              "memory": "32Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": true,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T13:17:14Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 65532,
+              "supplementalGroups": [
+                65532
+              ],
+              "uid": 65532
+            }
+          }
+        }
+      ],
+      "deployment_generation": 134,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:6811d81f87a879f17b7710efa1985ded61aab95a9b565167d63d42392ef76f33",
+      "pod_name": "pharness-preparation-egress-proxy-8dbfd8d84-lx68w",
+      "pod_uid": "d64b179d-e4f2-4b15-92c1-9530f438dbd0"
+    },
+    "pharness-ui": {
+      "container_statuses": [
+        {
+          "allocatedResources": {
+            "cpu": "25m",
+            "ephemeral-storage": "32Mi",
+            "memory": "64Mi"
+          },
+          "containerID": "containerd://d34f5131b2a803f7e9234858aa39364fb88f8ea1c4fff05c338227ecc626df7a",
+          "image": "sha256:82bcd1d711a12ae31a008a51affb44b5fefc0085587b3493c8cb0c0a622b10f4",
+          "imageID": "registry.lucas.engineering/pharness-ui@sha256:11df0949ca7158948820a7e61756a8d0bb6b210bcd356eb1c19b6cce676a5a31",
+          "lastState": {},
+          "name": "ui",
+          "ready": true,
+          "resources": {
+            "limits": {
+              "cpu": "250m",
+              "ephemeral-storage": "256Mi",
+              "memory": "256Mi"
+            },
+            "requests": {
+              "cpu": "25m",
+              "ephemeral-storage": "32Mi",
+              "memory": "64Mi"
+            }
+          },
+          "restartCount": 0,
+          "started": true,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T13:16:59Z"
+            }
+          },
+          "user": {
+            "linux": {
+              "gid": 101,
+              "supplementalGroups": [
+                101
+              ],
+              "uid": 101
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+              "name": "kube-api-access-55pkg",
+              "readOnly": true,
+              "recursiveReadOnly": "Disabled"
+            }
+          ]
+        }
+      ],
+      "deployment_generation": 145,
+      "expected_image": "registry.lucas.engineering/pharness-ui@sha256:11df0949ca7158948820a7e61756a8d0bb6b210bcd356eb1c19b6cce676a5a31",
+      "pod_name": "pharness-ui-67d74958df-k5p99",
+      "pod_uid": "95cd6259-0c3c-4f96-aa50-61270d49da28"
+    }
+  },
+  "endpoints": [
+    {
+      "pod_uids": [
+        "e1d3af03-8d1c-451c-bd3c-c2a2ecd65d35"
+      ],
+      "service": "pharness-api",
+      "slice": "pharness-api-ltwxf"
+    },
+    {
+      "pod_uids": [
+        "f2092a35-809d-44f4-87b1-7c904bb1bca8"
+      ],
+      "service": "pharness-model-gateway",
+      "slice": "pharness-model-gateway-66ncr"
+    },
+    {
+      "pod_uids": [
+        "95cd6259-0c3c-4f96-aa50-61270d49da28"
+      ],
+      "service": "pharness-ui",
+      "slice": "pharness-ui-8n4cm"
+    }
+  ],
+  "limitation": "Ten-minute service window and live primary/control diagnostics remain separate gates.",
+  "observed_at": "2026-09-08T13:17:50.197740+00:00",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "release_pin": "81de84f70393c9dd9dad302930a97acf88da4ec9",
+  "source_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca",
+  "status": "live_identities_verified",
+  "ui_revision": "38a4282c0bef27491a8e6e44640dbbe3f33526ca"
+}
