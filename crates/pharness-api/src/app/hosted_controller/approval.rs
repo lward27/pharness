@@ -40,43 +40,10 @@ pub(in crate::app) async fn validate_stored(
         .ok_or_else(|| ApiError::conflict("automatic approval has no current WorkPlan"))?;
     let outcomes = store.list_effective_stage_outcomes(work_item_id).await?;
     if matches!(action, "approve_work_plan" | "authorize_stage_chain") {
-        let outcome = outcomes
-            .iter()
-            .find(|o| o.stage_key == "plan")
-            .ok_or_else(|| {
-                ApiError::conflict("automatic plan approval requires sealed Planner evidence")
-            })?;
-        successful(outcome)?;
-        let execution = store
-            .get_stage_execution(&outcome.stage_execution_id)
-            .await?
-            .ok_or_else(|| ApiError::conflict("Planner execution is unavailable"))?;
-        if plan.id != resource
-            || plan.run_id.is_none()
-            || plan.run_id != execution.run_id
-            || !outcome.outcome["outputs"]
-                .as_array()
-                .is_some_and(|outputs| {
-                    outputs.iter().any(|o| {
-                        o["kind"] == "work_plan"
-                            && o["id"] == plan.id
-                            && o["revision"] == plan.revision
-                    })
-                })
-            || !outcome.outcome["agent_claims"]
-                .as_array()
-                .is_some_and(|claims| {
-                    claims.iter().any(|c| {
-                        c["kind"] == "planner_submission" && c["document"] == plan.work_plan_json
-                    })
-                })
-        {
-            return Err(ApiError::conflict(
-                "the proposed WorkPlan does not match the sealed Planner revision",
-            ));
+        if plan.id != resource {
+            return Err(ApiError::conflict("the selected WorkPlan changed"));
         }
-        pharness_core::PlannerReadiness::require_ready(&plan.work_plan_json)
-            .map_err(ApiError::conflict)?;
+        validate_plan(store, &plan, &outcomes).await?;
     } else if action == "approve_change_set" {
         let change = store
             .get_change_set_by_work_plan(&plan.id)
@@ -99,8 +66,7 @@ pub(in crate::app) async fn validate_stored(
         }
         for stage in ["discover", "plan", "implement", "test", "verify"] {
             if stage == "plan" {
-                pharness_core::PlannerReadiness::require_ready(&plan.work_plan_json)
-                    .map_err(ApiError::conflict)?;
+                validate_plan(store, &plan, &outcomes).await?;
             }
             let outcome = outcomes
                 .iter()
@@ -116,5 +82,47 @@ pub(in crate::app) async fn validate_stored(
             }
         }
     }
+    Ok(())
+}
+
+async fn validate_plan(
+    store: &pharness_store::SqliteStore,
+    plan: &pharness_store::StoredWorkPlan,
+    outcomes: &[StoredStageOutcome],
+) -> Result<(), ApiError> {
+    let outcome = outcomes
+        .iter()
+        .find(|o| o.stage_key == "plan")
+        .ok_or_else(|| {
+            ApiError::conflict("automatic plan approval requires sealed Planner evidence")
+        })?;
+    successful(outcome)?;
+    let execution = store
+        .get_stage_execution(&outcome.stage_execution_id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("Planner execution is unavailable"))?;
+    if plan.run_id.is_none()
+        || plan.run_id != execution.run_id
+        || !outcome.outcome["outputs"]
+            .as_array()
+            .is_some_and(|outputs| {
+                outputs.iter().any(|o| {
+                    o["kind"] == "work_plan" && o["id"] == plan.id && o["revision"] == plan.revision
+                })
+            })
+        || !outcome.outcome["agent_claims"]
+            .as_array()
+            .is_some_and(|claims| {
+                claims.iter().any(|c| {
+                    c["kind"] == "planner_submission" && c["document"] == plan.work_plan_json
+                })
+            })
+    {
+        return Err(ApiError::conflict(
+            "the proposed WorkPlan does not match the sealed Planner revision",
+        ));
+    }
+    pharness_core::PlannerReadiness::require_ready(&plan.work_plan_json)
+        .map_err(ApiError::conflict)?;
     Ok(())
 }

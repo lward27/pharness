@@ -1,13 +1,14 @@
 {
-  "recorded_at": "2026-09-08T20:11:57.851073+00:00",
+  "recorded_at": "2026-09-08T20:16:23.383105+00:00",
   "base_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
   "status": "component_validation_passed",
   "validated_source_files": {
-    "crates/pharness-api/src/app/hosted_controller/approval.rs": "sha256:e9e4981af1259793a100f52a9cb8b8fc904070c6ab55502cf4d672fbe7569ab4",
+    "crates/pharness-api/src/app/hosted_controller/approval.rs": "sha256:3d9a1e90dbc7c4ae48d1868b7f73b022d8012ae96bee499c8ba637a97bda615f",
     "crates/pharness-api/src/app/hosted_controller/operations.rs": "sha256:15a4b2943973f2522aafac42d5f4c9adea9c4aa84357e135e27f961b12cb3465",
     "crates/pharness-api/src/app/hosted_controller/progression.rs": "sha256:421385f0160f65793e17f1777650effe613fc3a453bb2c11a059aa9654fd7975",
     "crates/pharness-api/src/app/repo_mode/stages.rs": "sha256:51c7117eda86c146fdbbd2a2e89f71b6b1231da286aabb26a0f788fb30d187a3",
     "crates/pharness-api/src/app/tests/hosted_controller.rs": "sha256:410847ac76930febacf0a6378f9f919006a7b49742df1f3b820bf6a83c075cc6",
+    "crates/pharness-api/src/app/tests/hosted_source_merge.rs": "sha256:20bf3f893e9b705d761da09f24d0417a683761029f69a204ec0324e159b642cc",
     "crates/pharness-api/src/app/tests/hosted_stage_execution.rs": "sha256:34f3885e5f6441d4f68026006ddc6b68abd1f5dc0c29452c8d316b5fe5ba4105",
     "crates/pharness-api/src/app/tests/repo_mode_v1.rs": "sha256:29d095598b577a54f0da42eb149e4120dc1f6309850d187f0c476945a5e6864d",
     "crates/pharness-api/src/worker.rs": "sha256:7ae6b87e3a58ba673bcdeefdcbb2f845b9ee295a5476a59e10f5deef747c5017",
@@ -28,7 +29,8 @@
   },
   "checks": {
     "api_main": {
-      "passed": 298
+      "passed": 299,
+      "method": "298 full API tests pass after exact-plan revalidation at ChangeSet approval; the added stale-plan regression passes in a focused run."
     },
     "api_admin": {
       "passed": 1
@@ -55,7 +57,7 @@
     },
     "fixture_compatibility": "All twelve prior Planner case IDs, source files, requests, commands and acceptance preserved; only private readiness expectations added. Verifier fixtures, coding implementation, model defaults and limits unchanged."
   },
-  "total_distinct_component_tests_passed": 589,
+  "total_distinct_component_tests_passed": 590,
   "planner_suite_revision": "stage-qualification-v2.6",
   "planner_suite_hash": "sha256:d04551e2ea9055cba3eb6f6383b82173de6764d721a448d648f7a4314d39a9de",
   "private_logs": {
@@ -86,6 +88,22 @@
     "ASTRA-planner-decision-architecture.log": {
       "path": "/tmp/ASTRA-planner-decision-architecture.log",
       "sha256": "sha256:c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    },
+    "ASTRA-planner-decision-api-final.log": {
+      "path": "/tmp/ASTRA-planner-decision-api-final.log",
+      "sha256": "sha256:1d5aabb43ee9492696952db78c2a9ec19a2577f2f5a2e6cd1b67859a4f39a8b2"
+    },
+    "ASTRA-planner-decision-stale-plan-test.log": {
+      "path": "/tmp/ASTRA-planner-decision-stale-plan-test.log",
+      "sha256": "sha256:5b181b9f707e4bd57db240d32f07f0c80ec0aa2b7d8c72dc3216503e7e1a971d"
+    },
+    "ASTRA-planner-decision-clippy-final.log": {
+      "path": "/tmp/ASTRA-planner-decision-clippy-final.log",
+      "sha256": "sha256:9f847654793ac89960b796b2d72d23da4136d9577abcb22bbdfb9c6a467c6d8e"
+    },
+    "ASTRA-planner-decision-architecture-final.log": {
+      "path": "/tmp/ASTRA-planner-decision-architecture-final.log",
+      "sha256": "sha256:580a0faacbef04633addefd66aca44a1c8a5b79abe16bba2053ef02a691e2db6"
     }
   },
   "initial_test_failures": [
