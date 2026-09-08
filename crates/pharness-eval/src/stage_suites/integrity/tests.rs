@@ -190,7 +190,7 @@ fn diagnosis_replay_uses_the_actual_tool_contract_and_rejects_wrong_evidence_and
 fn corrected_suite_revisions_are_distinct_and_do_not_change_coding_or_repair_gates() {
     for (id, revision) in [
         ("onboarding-v2", "stage-qualification-v2.3"),
-        ("planner-v2", "stage-qualification-v2.5"),
+        ("planner-v2", "stage-qualification-v2.6"),
         ("test-diagnosis-v2", "stage-qualification-v2.3"),
         ("verifier-v2", "stage-qualification-v2.4"),
     ] {
@@ -250,4 +250,28 @@ fn failed_stage_diagnostics_preserve_contract_fields_without_inventing_missing_r
     assert!(
         !submission_diagnostic(suite, &fixture, Some(&wrong), &[]).contains("diagnostic-canary")
     );
+}
+
+#[test]
+fn failing_baseline_requires_a_decision_without_weakening_native_history() {
+    let cases = fixtures(SuiteKind::PlannerV2).unwrap();
+    for case in [
+        "failing-baseline",
+        "acceptance-boundary",
+        "ambiguous-intent",
+    ] {
+        let fixture = cases.iter().find(|f| f.id == case).unwrap();
+        let mut plan = document(SuiteKind::PlannerV2, fixture);
+        assert!(validate_planner(fixture, &plan, &mut Vec::new()));
+        // A supplied default to preserve the representation is sufficient for
+        // ambiguous-intent. The unrelated failing /legacy assertion is not.
+        plan["readiness"] = if case == "failing-baseline" {
+            json!({"status":"ready","blockers":[]})
+        } else {
+            json!({"status":"needs_decision","blockers":["Unnecessary decision"]})
+        };
+        let mut violations = Vec::new();
+        assert!(!validate_planner(fixture, &plan, &mut violations));
+        assert_eq!(violations, vec!["planner_readiness_misclassified"]);
+    }
 }

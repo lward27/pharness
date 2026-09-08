@@ -104,6 +104,11 @@ fn stage_prompt(run: &RunSpec, profile_id: &str) -> anyhow::Result<StagePromptPa
         && !crate::onboarding_submission::uses_controller_binding(run)?
     {
         Some(crate::prompt::legacy_onboarding_stage_prompt())
+    } else if profile_id == "repo-planner"
+        && !pharness_core::planner_readiness_required(&run.execution_target_json)
+            .map_err(anyhow::Error::msg)?
+    {
+        Some(crate::planner_submission::legacy_prompt())
     } else {
         crate::stage_prompt_for_profile(profile_id)
     }

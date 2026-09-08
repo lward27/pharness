@@ -92,10 +92,45 @@ pub(super) async fn fixture_with_policy(
         .await
         .unwrap()
         .unwrap();
+    let planner_run = store
+        .create_run(pharness_store::CreateRun {
+            id: pharness_core::RunId::new(format!("planner_{suffix}")),
+            session_id: plan.session_id.clone(),
+            user_task: "Bounded source fixture".into(),
+            cwd: "/workspace".into(),
+            max_turns: 10,
+            initial_status: "completed".into(),
+            execution_target_json: json!({}),
+        })
+        .await
+        .unwrap();
+    let plan = store
+        .revise_work_plan(
+            &plan.id,
+            pharness_store::UpdateWorkPlanRevision {
+                title: None,
+                summary: None,
+                risk_level: None,
+                requires_approval: None,
+                work_plan_json: plan.work_plan_json.clone(),
+                session_id: Some(plan.session_id.clone()),
+                run_id: Some(planner_run.id.clone()),
+                actor: Some("fixture".into()),
+                reason: Some("Bind exact Planner output".into()),
+            },
+        )
+        .await
+        .unwrap();
+    let plan = store
+        .update_work_plan_status(&plan.id, "approved", Some("fixture".into()), None)
+        .await
+        .unwrap();
     let mut bound = Vec::new();
     for key in ["discover", "plan", "implement", "test", "verify"] {
         let id = format!("stage_{suffix}_{key}");
-        let outcome = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"stage":key,"status":"succeeded","contradictions":[],"work_item_id":item.id,"stage_execution_id":id});
+        let outcome = json!({"schema_version":pharness_core::STAGE_OUTCOME_SCHEMA,"stage":key,"status":"succeeded","contradictions":[],"work_item_id":item.id,"stage_execution_id":id,
+            "outputs":if key == "plan" {json!([{"kind":"work_plan","id":plan.id,"revision":plan.revision}])} else {json!([])},
+            "agent_claims":if key == "plan" {json!([{"kind":"planner_submission","document":plan.work_plan_json}])} else {json!([])}});
         store
             .create_stage_execution(CreateStageExecution {
                 id: id.clone(),
@@ -107,7 +142,7 @@ pub(super) async fn fixture_with_policy(
                 agent_profile_version: None,
                 agent_profile_hash: None,
                 context_pack_id: None,
-                run_id: None,
+                run_id: (key == "plan").then(|| planner_run.id.clone()),
                 workspace_id: None,
                 input_snapshot: json!({}),
                 input_hash: hash(&json!({})).unwrap(),
@@ -655,4 +690,63 @@ async fn hosted_source_merge_fresh_context_rejects_new_failed_or_expired_checks(
         assert!(admit(&fixture, &a).await.is_err());
         assert_eq!(fake.creates(), 1);
     }
+}
+
+#[tokio::test]
+async fn change_set_approval_rechecks_exact_planner_revision_not_only_ready_claim() {
+    let fake = KubectlFixture::new(false);
+    let fixture = fixture("changed_ready_plan", &fake).await;
+    let store = &fixture.state.store;
+    let plan = store
+        .get_work_plan_by_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let change = store
+        .get_change_set_by_work_plan(&plan.id)
+        .await
+        .unwrap()
+        .unwrap();
+    crate::app::hosted_controller::approval::validate_stored(
+        store,
+        &fixture.work_item_id,
+        "approve_change_set",
+        &change.id,
+    )
+    .await
+    .unwrap();
+    let before = fake.creates();
+    let mut edited = plan.work_plan_json.clone();
+    edited["summary"] = json!("Unsealed replacement still claims ready");
+    store
+        .revise_work_plan(
+            &plan.id,
+            pharness_store::UpdateWorkPlanRevision {
+                title: None,
+                summary: None,
+                risk_level: None,
+                requires_approval: None,
+                work_plan_json: edited,
+                session_id: None,
+                run_id: None,
+                actor: Some("fixture".into()),
+                reason: Some("Changed after verification".into()),
+            },
+        )
+        .await
+        .unwrap();
+    let error = crate::app::hosted_controller::approval::validate_stored(
+        store,
+        &fixture.work_item_id,
+        "approve_change_set",
+        &change.id,
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        error.message.contains("sealed Planner revision"),
+        "{}",
+        error.message
+    );
+    assert_eq!(fake.creates(), before);
 }
