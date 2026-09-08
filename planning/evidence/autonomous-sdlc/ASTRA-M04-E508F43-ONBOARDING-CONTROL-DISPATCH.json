@@ -1,0 +1,159 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T17:15:27.946729+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:46fd91c0d89810388f92343880681eb20f1accf215bf4c2bd0df6b30bcfd7224",
+    "agent_profile_id": "repository-onboarding-proposer",
+    "attempts": 1,
+    "binding_hash": "sha256:4bbbb6964985cec5d6d76dc8b0af1f1ce88ff53dc016fade5a4c62798d61c4a5",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788887728012",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a082047f8c7032973e96986deb3619",
+    "job_name": "pharness-inference-eval-5b77f6c763a3",
+    "policy_hash": "sha256:9f255d09c5eac3ffa412f461ee424441635b0d2eef2cb1466d34c0cf8f869281",
+    "policy_id": "m04-control-onboarding-kimi-k3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D sourcee508 onboarding matched Kimi control of retained primary inputs; primary 1/2 with fabricated blocked contract, unchanged limits and no qualification or activation",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:46fd91c0d89810388f92343880681eb20f1accf215bf4c2bd0df6b30bcfd7224",
+      "base_agent_profile_hash": "sha256:45ac1e2a72886eef671b67f4bffca4f05083754e047645ec55c2affba66dcfac",
+      "binding_hash": "sha256:4bbbb6964985cec5d6d76dc8b0af1f1ce88ff53dc016fade5a4c62798d61c4a5",
+      "context_policy_hash": "sha256:b24d6936429a4e3344f59e90ce3796d94023799fc96ae28a1a043522148da335",
+      "policy": {
+        "display_name": "M04 diagnostic control: onboarding / Kimi K3",
+        "eligible_profiles": [
+          "repository-onboarding-proposer"
+        ],
+        "eligible_stages": [
+          "onboarding"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:9f255d09c5eac3ffa412f461ee424441635b0d2eef2cb1466d34c0cf8f869281",
+        "policy_id": "m04-control-onboarding-kimi-k3-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "m04-control-v1",
+          "target_id": "fireworks-kimi-k3"
+        },
+        "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "temperature_milli": 100,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:a359df5b95d1c0e57cd07dd9d0e053eba32b27067beacae7f881dedde6cae228",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:be9b45afdfa7daff19c3f8db9b5d7f92edd400918348585cbe4deaae24538b2c",
+        "prompt_id": "repo-onboarding-v2",
+        "revision": "2026-09-08.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "onboarding"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "test",
+          "verify"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [
+            "current_turn",
+            "all_turns"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "context_limit_tokens": 1048576,
+        "display_name": "M04 diagnostic control Kimi K3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "m04-control-v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-kimi-k3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/kimi-k3"
+      },
+      "tool_schema_hash": "sha256:e66d3a0e64245b4a3d8aa3dd9cd6d5428d6eae7f3a9f95d2d9cb100d05fe76fc"
+    },
+    "runtime_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470"
+    },
+    "started_at": "1788887728297",
+    "status": "running",
+    "suite_hash": "sha256:c86e4fc492814f55ed04b32da5c8f69c4cfef8bba38fc7060b5377f69bdf586b",
+    "suite_id": "onboarding-v2",
+    "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+    "target_id": "fireworks-kimi-k3",
+    "target_revision": "m04-control-v1"
+  },
+  "evaluation_id": "infeval_01a082047f8c7032973e96986deb3619",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-E508F43-ONBOARDING-CONTROL",
+  "policy_id": "m04-control-onboarding-kimi-k3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourcee508 onboarding matched Kimi control of retained primary inputs; primary 1/2 with fabricated blocked contract, unchanged limits and no qualification or activation",
+    "scope": {
+      "case_ids": [
+        "python-contract",
+        "missing-lock"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a081fb2ea171528cb6e42403c84470"
+    }
+  },
+  "request_hash": "sha256:4ec1a2c46cbee6b877e6a2e1cf50d80e9086f1a26708ec307082c9e423c1b019",
+  "schema_version": 1,
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T17:15:28.360437+00:00"
+}

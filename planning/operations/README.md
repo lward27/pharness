@@ -23,3 +23,15 @@ instructions.
 Before an effectful smoke, state the exact cluster context, namespace,
 application/repository target, expected mutation, success criteria, and cleanup
 ownership. Never copy credentials into a playbook or command transcript.
+
+## Starting a release observation window
+
+After exact Argo and running-image verification, confirm that the expected
+availability metrics are positive and fresh, and inspect their underlying sample
+timestamps. Samples used to start the window must follow the verified rollout;
+a range-query timestamp alone can still select an older pre-readiness sample.
+Then start the complete stated observation period. Retain failed or interrupted
+windows separately; never trim the first point, reuse a partial window as complete,
+or substitute direct health checks for telemetry. The [sourcee508 observation
+record](../evidence/autonomous-sdlc/ASTRA-M04-RELEASE-WINDOW-START.md) documents the
+observed timing problem and the added start check.

@@ -1,0 +1,21 @@
+{
+  "source_revision": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "worktree": "/Users/wardl/Personal/apps/pharness-astra-measurement-alignment-build",
+  "target": "all",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "command": [
+    "scripts/pharness-build.sh",
+    "all",
+    "--revision",
+    "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+    "--builder",
+    "pharness-mac"
+  ],
+  "started_at": "2026-09-08T15:43:38.038565+00:00",
+  "status": "failed",
+  "pid": 61339,
+  "exit_code": 1,
+  "finished_at": "2026-09-08T16:04:18.119416+00:00",
+  "elapsed_seconds": 1240.034
+}

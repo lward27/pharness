@@ -1,0 +1,203 @@
+{
+  "observed_at": "2026-09-08T16:10:05.187004+00:00",
+  "queries": {
+    "cpu_cores": {
+      "query": "rate(container_cpu_usage_seconds_total{namespace=\"registry\",pod=\"docker-registry-5dd7cb8849-gc89j\",container=\"docker-registry\"}[1m])",
+      "response": {
+        "data": {
+          "result": [
+            {
+              "metric": {
+                "beta_kubernetes_io_arch": "amd64",
+                "beta_kubernetes_io_instance_type": "k3s",
+                "beta_kubernetes_io_os": "linux",
+                "container": "docker-registry",
+                "cpu": "total",
+                "id": "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod2a17ac85_8614_485e_bc52_9f6744dcb476.slice/cri-containerd-1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918.scope",
+                "image": "docker.io/library/registry:3.0.0",
+                "instance": "ubuntu-lucas-engineering",
+                "job": "kubernetes-nodes-cadvisor",
+                "kubernetes_io_arch": "amd64",
+                "kubernetes_io_hostname": "ubuntu-lucas-engineering",
+                "kubernetes_io_os": "linux",
+                "metrics_path": "/metrics/cadvisor",
+                "name": "1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918",
+                "namespace": "registry",
+                "node_kubernetes_io_instance_type": "k3s",
+                "node_role_kubernetes_io_control_plane": "true",
+                "pod": "docker-registry-5dd7cb8849-gc89j"
+              },
+              "values": [
+                [
+                  1788883350,
+                  "0.040787486825717034"
+                ]
+              ]
+            }
+          ],
+          "resultType": "matrix"
+        },
+        "status": "success"
+      }
+    },
+    "cpu_throttled_ratio": {
+      "query": "rate(container_cpu_cfs_throttled_periods_total{namespace=\"registry\",pod=\"docker-registry-5dd7cb8849-gc89j\",container=\"docker-registry\"}[1m]) / rate(container_cpu_cfs_periods_total{namespace=\"registry\",pod=\"docker-registry-5dd7cb8849-gc89j\",container=\"docker-registry\"}[1m])",
+      "response": {
+        "data": {
+          "result": [
+            {
+              "metric": {
+                "beta_kubernetes_io_arch": "amd64",
+                "beta_kubernetes_io_instance_type": "k3s",
+                "beta_kubernetes_io_os": "linux",
+                "container": "docker-registry",
+                "id": "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod2a17ac85_8614_485e_bc52_9f6744dcb476.slice/cri-containerd-1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918.scope",
+                "image": "docker.io/library/registry:3.0.0",
+                "instance": "ubuntu-lucas-engineering",
+                "job": "kubernetes-nodes-cadvisor",
+                "kubernetes_io_arch": "amd64",
+                "kubernetes_io_hostname": "ubuntu-lucas-engineering",
+                "kubernetes_io_os": "linux",
+                "metrics_path": "/metrics/cadvisor",
+                "name": "1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918",
+                "namespace": "registry",
+                "node_kubernetes_io_instance_type": "k3s",
+                "node_role_kubernetes_io_control_plane": "true",
+                "pod": "docker-registry-5dd7cb8849-gc89j"
+              },
+              "values": [
+                [
+                  1788883350,
+                  "0.02510460251046025"
+                ]
+              ]
+            }
+          ],
+          "resultType": "matrix"
+        },
+        "status": "success"
+      }
+    },
+    "memory_working_set": {
+      "query": "container_memory_working_set_bytes{namespace=\"registry\",pod=\"docker-registry-5dd7cb8849-gc89j\",container=\"docker-registry\"}",
+      "response": {
+        "data": {
+          "result": [
+            {
+              "metric": {
+                "__name__": "container_memory_working_set_bytes",
+                "beta_kubernetes_io_arch": "amd64",
+                "beta_kubernetes_io_instance_type": "k3s",
+                "beta_kubernetes_io_os": "linux",
+                "container": "docker-registry",
+                "id": "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod2a17ac85_8614_485e_bc52_9f6744dcb476.slice/cri-containerd-1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918.scope",
+                "image": "docker.io/library/registry:3.0.0",
+                "instance": "ubuntu-lucas-engineering",
+                "job": "kubernetes-nodes-cadvisor",
+                "kubernetes_io_arch": "amd64",
+                "kubernetes_io_hostname": "ubuntu-lucas-engineering",
+                "kubernetes_io_os": "linux",
+                "metrics_path": "/metrics/cadvisor",
+                "name": "1c074399d86c3c75618ebdc11fe86e9e2da17dd3d87e1e20e12478a5b6b8b918",
+                "namespace": "registry",
+                "node_kubernetes_io_instance_type": "k3s",
+                "node_role_kubernetes_io_control_plane": "true",
+                "pod": "docker-registry-5dd7cb8849-gc89j"
+              },
+              "values": [
+                [
+                  1788883200,
+                  "63303680"
+                ],
+                [
+                  1788883215,
+                  "63303680"
+                ],
+                [
+                  1788883230,
+                  "63303680"
+                ],
+                [
+                  1788883245,
+                  "61497344"
+                ],
+                [
+                  1788883260,
+                  "61497344"
+                ],
+                [
+                  1788883275,
+                  "61497344"
+                ],
+                [
+                  1788883290,
+                  "61497344"
+                ],
+                [
+                  1788883305,
+                  "62038016"
+                ],
+                [
+                  1788883320,
+                  "62038016"
+                ],
+                [
+                  1788883335,
+                  "62038016"
+                ],
+                [
+                  1788883350,
+                  "54472704"
+                ],
+                [
+                  1788883365,
+                  "54472704"
+                ],
+                [
+                  1788883380,
+                  "54472704"
+                ],
+                [
+                  1788883395,
+                  "54472704"
+                ],
+                [
+                  1788883410,
+                  "54472704"
+                ],
+                [
+                  1788883425,
+                  "54693888"
+                ],
+                [
+                  1788883440,
+                  "54693888"
+                ],
+                [
+                  1788883455,
+                  "54693888"
+                ],
+                [
+                  1788883470,
+                  "54693888"
+                ],
+                [
+                  1788883485,
+                  "55046144"
+                ],
+                [
+                  1788883500,
+                  "55046144"
+                ]
+              ]
+            }
+          ],
+          "resultType": "matrix"
+        },
+        "status": "success"
+      }
+    }
+  },
+  "window_end": 1788883500.0,
+  "window_start": 1788883200.0
+}
