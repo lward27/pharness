@@ -3,8 +3,8 @@
 use super::{contract_for, git, git_lines, StageFixture};
 use anyhow::{bail, Context, Result};
 use pharness_core::{
-    discover_repository, RepositoryDiscoveryIdentity, RepositoryDiscoveryLimits,
-    RepositoryOnboardingProposal,
+    discover_repository, RepositoryContract, RepositoryDiscoveryIdentity,
+    RepositoryDiscoveryLimits, RepositoryOnboardingProposal,
 };
 use serde_json::{json, Value};
 use std::{
@@ -274,7 +274,11 @@ pub(super) fn validate(
                 .as_array()
                 .expect("discovery files")
                 .iter()
-                .any(|file| file["path"] == *root)
+                .any(|file| {
+                    file["path"]
+                        .as_str()
+                        .is_some_and(|path| Path::new(path) == Path::new(root))
+                })
             {
                 violations.push("invented_repository_root".into());
             }
@@ -292,151 +296,85 @@ pub(super) fn validate(
         if contract
             .writable_paths
             .iter()
-            .any(|path| !["src/**", "tests/**", "README.md"].contains(&path.as_str()))
+            .any(|scope| !development_scope_is_grounded(discovery, &contract, scope))
         {
-            violations.push("undeclared_onboarding_write_scope".into());
+            violations.push("ungrounded_development_write_scope".into());
         }
     }
-    if !proposal.service_proposals.is_empty()
-        || proposal.binding_proposals.iter().any(|binding| {
-            binding.service_keys.iter().any(|key| key != "finance-web")
-                || binding.scopes.iter().any(|scope| scope != "src/**")
-        })
-    {
-        violations.push("invented_or_duplicate_product_service".into());
+    let services = fixture.context["product_model"]["services"]
+        .as_array()
+        .expect("fixture Product services");
+    if let Err(error) = proposal.validate_product_proposals(
+        services
+            .iter()
+            .filter_map(|service| service["service_key"].as_str()),
+    ) {
+        violations.push(format!("invalid_product_proposal: {error}"));
     }
-    if fixture.expected["reuse_service"] == true
-        && !proposal
+    // These scenarios request reuse or no Product change; none requests Service creation.
+    // Product invariants and field diagnostics belong to the same validator used by the API.
+    if !proposal.service_proposals.is_empty() {
+        violations.push("unrequested_product_service_creation".into());
+    }
+    for requested in fixture.context["requested_service_keys"]
+        .as_array()
+        .expect("fixture requested Services")
+        .iter()
+        .filter_map(Value::as_str)
+    {
+        if !proposal
             .binding_proposals
             .iter()
-            .any(|binding| binding.service_keys.iter().any(|key| key == "finance-web"))
-    {
-        violations.push("existing_service_mapping_missing".into());
+            .any(|binding| binding.service_keys.iter().any(|key| key == requested))
+        {
+            violations.push("existing_service_mapping_missing".into());
+        }
     }
     violations.len() == initial
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::{replay_actions, SuiteKind};
-    use super::*;
-
-    fn proposal(fixture: &StageFixture) -> Value {
-        // The scorer consumes the full controller ToolFinished document.
-        // The shared-runner replay test covers binding the V2 model submission.
-        match replay_actions(SuiteKind::OnboardingV1, fixture)
-            .unwrap()
-            .remove(0)
-        {
-            pharness_core::AgentAction::SubmitOnboardingProposal { proposal, .. } => proposal,
-            _ => panic!("expected typed onboarding proposal"),
-        }
+// Submission validation already enforces the canonical exact-file / final-/** grammar.
+// Ground future write authority in declared roots backed by this discovery, without
+// confusing it with the separate onboarding-only configuration-write policy.
+fn development_scope_is_grounded(
+    discovery: &Value,
+    contract: &RepositoryContract,
+    scope: &str,
+) -> bool {
+    let subtree = scope.ends_with("/**");
+    let path = scope.strip_suffix("/**").unwrap_or(scope);
+    let files = discovery["files"].as_array().expect("discovery files");
+    // An exact discovered file is never a directory, even below a valid source root.
+    if files.iter().any(|file| {
+        file["kind"] != "directory"
+            && file["path"].as_str().is_some_and(|file_path| {
+                (file_path == path && subtree) || path.starts_with(&format!("{file_path}/"))
+            })
+    }) {
+        return false;
     }
-
-    #[test]
-    fn scenarios_have_real_files_and_verified_discovery_instead_of_answer_context() {
-        for fixture in fixtures().unwrap() {
-            let mut inventory = fixture.context["discovery"].clone();
-            inventory.as_object_mut().unwrap().remove("id");
-            inventory.as_object_mut().unwrap().remove("hash");
-            let discovery: pharness_core::RepositoryDiscovery =
-                serde_json::from_value(inventory).unwrap();
-            discovery.verify_content_hash().unwrap();
-            let files = &fixture.expected["workspace_files"];
-            match fixture.id.as_str() {
-                "node-contract" => {
-                    assert!(files["package-lock.json"].is_string());
-                    assert!(files["src/app.py"].is_null());
-                }
-                "missing-lock" => {
-                    assert!(files["requirements.lock"].is_null());
-                    assert!(files["pyproject.toml"].is_string());
-                }
-                "missing-test-root" => assert!(!discovery
-                    .files
-                    .iter()
-                    .any(|file| file.path.starts_with("tests"))),
-                "conflicting-aliases" => assert_eq!(discovery.contract.status, "conflicting"),
-                "incompatible-profile" => assert_eq!(
-                    fixture.context["contract_constraints"]["compatible_environment_profiles"],
-                    json!([])
-                ),
-                "local-dependency" => assert!(files["package-lock.json"]
+    contract
+        .roots
+        .source
+        .iter()
+        .chain(&contract.roots.tests)
+        .chain(&contract.roots.documentation)
+        .any(|root| {
+            let Some(file) = files.iter().find(|file| {
+                file["path"]
                     .as_str()
-                    .unwrap()
-                    .contains("file:./local-helper")),
-                "mutable-git-dependency" => assert!(files["package-lock.json"]
-                    .as_str()
-                    .unwrap()
-                    .contains("#main")),
-                _ => (),
+                    .is_some_and(|found| Path::new(found) == Path::new(root))
+            }) else {
+                return false;
+            };
+            let root = file["path"].as_str().expect("discovered root path");
+            if file["kind"] == "directory" {
+                path == root || path.starts_with(&format!("{root}/"))
+            } else {
+                !subtree && path == root
             }
-            assert!(fixture.context.get("candidate_contract").is_none());
-            assert!(fixture.evidence.get("candidate_contract").is_none());
-            assert!(
-                validate(&fixture, &proposal(&fixture), &mut vec![]),
-                "{}",
-                fixture.id
-            );
-        }
-    }
-
-    #[test]
-    fn scorer_rejects_fabricated_facts_and_duplicate_services() {
-        let fixtures = fixtures().unwrap();
-        let fixture = fixtures
-            .iter()
-            .find(|fixture| fixture.id == "python-contract")
-            .unwrap();
-        let good = proposal(fixture);
-        for (pointer, value) in [
-            (
-                "/candidate_contract/dependency_lock/sha256",
-                json!("a".repeat(64)),
-            ),
-            ("/candidate_contract/roots/tests", json!(["invented-tests"])),
-            (
-                "/candidate_contract/acceptance_commands/0/command",
-                json!("npm test"),
-            ),
-            ("/candidate_contract/environment_profile", json!("python")),
-            ("/candidate_contract/writable_paths", json!(["**"])),
-            ("/discovery_id", json!("rdisc_other")),
-            (
-                "/service_proposals",
-                json!([{"service_key":"finance-web","display_name":"Duplicate","description":"duplicate"}]),
-            ),
-        ] {
-            let mut invalid = good.clone();
-            *invalid.pointer_mut(pointer).unwrap() = value;
-            assert!(
-                !validate(fixture, &invalid, &mut vec![]),
-                "accepted {pointer}"
-            );
-        }
-        let shared = fixtures
-            .iter()
-            .find(|fixture| fixture.id == "shared-service")
-            .unwrap();
-        let mut invalid = proposal(shared);
-        invalid["binding_proposals"] = json!([]);
-        assert!(!validate(shared, &invalid, &mut vec![]));
-    }
-
-    #[test]
-    fn a_blocker_in_prose_cannot_substitute_for_a_blocked_proposal() {
-        let fixtures = fixtures().unwrap();
-        let fixture = fixtures
-            .iter()
-            .find(|fixture| fixture.id == "missing-lock")
-            .unwrap();
-        let mut invalid = proposal(fixture);
-        invalid["instructions"] = json!("immutable_dependency_lock_missing");
-        invalid["blockers"] = json!([]);
-        invalid["candidate_contract"] = contract_for("python-3.11", "pip_requirements");
-        let mut violations = vec![];
-        assert!(!validate(fixture, &invalid, &mut violations));
-        assert!(violations.contains(&"blocker_classification_missing".into()));
-        assert!(violations.contains(&"invented_dependency_lock".into()));
-    }
+        })
 }
+
+#[cfg(test)]
+mod tests;

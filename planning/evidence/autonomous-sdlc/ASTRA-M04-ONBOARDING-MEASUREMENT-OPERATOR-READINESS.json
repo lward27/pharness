@@ -1,0 +1,147 @@
+{
+  "checks": [
+    {
+      "name": "cluster_identity",
+      "observed": {
+        "api_server": "https://192.168.20.192:6443",
+        "context": "lucas_engineering",
+        "profile_hash": "sha256:c90563518a5d1ed84f7b20879c4d6ce45f9391a81b6dc9f81b9c04e42e601708"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "kubernetes_ready",
+      "observed": "ok",
+      "status": "passed"
+    },
+    {
+      "name": "pipeline:pharness-yfinance-build",
+      "observed": {
+        "name": "pharness-yfinance-build"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "pipeline:pharness-finance-frontend-build",
+      "observed": {
+        "name": "pharness-finance-frontend-build"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "buildkit_endpoint",
+      "observed": {
+        "addresses": [
+          "192.168.2.2"
+        ],
+        "ports": [
+          12340
+        ]
+      },
+      "status": "passed"
+    },
+    {
+      "name": "pharness_gitops_source",
+      "observed": {
+        "health": "Healthy",
+        "path": "deploy/helm/pharness",
+        "revision": "e102b46ada4fa8c8ff9f0a27d22f7bfb34f5605b",
+        "source": "https://github.com/lward27/pharness.git",
+        "sync": "Synced"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "registry_tls",
+      "observed": {
+        "catalog_access": true,
+        "tls_hostname_verified": "registry.lucas.engineering"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:pharness",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-operator-token"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:source_writer",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-git-writer-token"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "credential_reference:gitops_writer",
+      "observed": {
+        "namespace": "pharness",
+        "read_permitted": true,
+        "secret": "pharness-gitops-writer-token"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "pharness_authentication",
+      "observed": {
+        "api_revision": "80acca99b6417d14dac75620b516852b3103a80d",
+        "operational_mode": "normal",
+        "platform_versions_match": true,
+        "ui_revision": "80acca99b6417d14dac75620b516852b3103a80d"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "source_protection:lward27/yfinance_wrapper",
+      "observed": {
+        "protection_readable": true,
+        "repository": "lward27/yfinance_wrapper"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "source_protection:lward27/finance-frontend",
+      "observed": {
+        "protection_readable": true,
+        "repository": "lward27/finance-frontend"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "gitops_authentication",
+      "observed": {
+        "repository": "lward27/lucas_engineering"
+      },
+      "status": "passed"
+    },
+    {
+      "name": "builder_identity_and_mtls",
+      "observed": {
+        "advertised_platforms": [
+          "linux/arm64"
+        ],
+        "builder": "pharness-mac",
+        "client_endpoint": "tcp://127.0.0.1:12344",
+        "docker_context": "rancher-desktop",
+        "execution_test": "not_run",
+        "requested_platform": "linux/amd64",
+        "tls_version": "TLSv1.3"
+      },
+      "status": "passed"
+    }
+  ],
+  "cluster_mutations": [],
+  "completed_at": "2026-09-08T15:38:26.022068+00:00",
+  "context": "lucas_engineering",
+  "limitations": [
+    "Readiness does not prove write permissions, builds, qualification, or application acceptance."
+  ],
+  "observed_at": "2026-09-08T15:38:22.309858+00:00",
+  "schema_version": 1,
+  "status": "passed"
+}

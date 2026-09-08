@@ -188,8 +188,27 @@ fn common_control_reads_source_identity_from_retained_native_evaluator_report() 
         "656be973d8d36f53b7a34018861dc59844c4164f"
     );
     assert!(row.get("base_sha").is_none());
+    let current_suite_hash = inference_qualification_suite_hash(&original.suite_id).unwrap();
+    assert_ne!(original.suite_hash, current_suite_hash);
+    assert!(
+        retained_inputs(
+            &original,
+            &scope,
+            &original.suite_id,
+            &original.runtime_revision,
+            &original.resolved_binding,
+        )
+        .is_err(),
+        "the historical native report cannot be a current-suite control"
+    );
+
+    // Isolate the source-field reader regression with a test-only request wrapper.
+    // The native rows/input hashes remain verbatim. This is not a requalified or
+    // rescored report; the untouched historical request was rejected above.
+    let mut reader_fixture = original.clone();
+    reader_fixture.suite_hash = current_suite_hash;
     let inputs = retained_inputs(
-        &original,
+        &reader_fixture,
         &scope,
         &original.suite_id,
         &original.runtime_revision,
@@ -210,7 +229,7 @@ fn common_control_reads_source_identity_from_retained_native_evaluator_report() 
     assert_eq!(reference.as_object().unwrap().len(), 4);
 
     // A legacy-looking alias must not fill in missing native source evidence.
-    let mut missing_source = original.clone();
+    let mut missing_source = reader_fixture.clone();
     let changed_row = &mut missing_source.report.as_mut().unwrap()["report"]["results"][0];
     changed_row["base_sha"] = changed_row["source_sha"].clone();
     changed_row.as_object_mut().unwrap().remove("source_sha");
