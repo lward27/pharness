@@ -1,0 +1,26 @@
+{
+  "cluster": {
+    "api_server": "https://192.168.20.192:6443",
+    "context": "lucas_engineering",
+    "profile_hash": "sha256:390d2ec82036988f943991ad4587ca16cdf966dd405c6a8e829322239422253a"
+  },
+  "observed_at": "2026-09-08T13:02:24.067305+00:00",
+  "owner_report": "lucas-desktop is off",
+  "pharness_release_builder": "Explicit local pharness-mac builder; separate from the Tekton Service route",
+  "remaining_dependency": "Restore or requalify the documented Mac/VPN Service route through GitOps before Finance Tekton delivery. The current endpoint inventory does not prove reachability; no cluster fallback was activated during this release.",
+  "tekton_buildkit": {
+    "addresses": [
+      "192.168.50.145"
+    ],
+    "endpoint_slice": "k3s-buildkit-ipv4",
+    "namespace": "tekton-pipelines",
+    "ports": [
+      {
+        "name": "buildkit",
+        "port": 12340,
+        "protocol": "TCP"
+      }
+    ],
+    "uid": "485dd0ca-e2f9-4efd-a919-a6d6f5b7ed31"
+  }
+}
