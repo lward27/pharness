@@ -1,0 +1,86 @@
+{
+  "observed_at": "2026-09-08T16:01:14.983829+00:00",
+  "status": "local_validation_passed",
+  "main_base": "e508f430e9f006c5f3e9f74fdd120d275605d85c",
+  "staging_base": "d8e25ccb6da0191b3bcdded2532d89b811520b21",
+  "previous_pr_366_head": "8ac6d27a10c63075065ac4b0021d8eaf1053ad23",
+  "implementation_conflicts": [],
+  "production_rust_unchanged_from_previous_draft": {
+    "crates/pharness-core/src/hosted_sdlc.rs": "sha256:7f0bdb937bf502201a2ecf6351c285a5dafa2c7209cad81802451bf5e5fc005c",
+    "crates/pharness-core/src/hosted_sdlc/production.rs": "sha256:26399bf14bfe51327d6923f31075d57d8d2c7b557ef11d93493f3418d0de1993",
+    "crates/pharness-core/src/hosted_sdlc/production/approval.rs": "sha256:4ada7e16586006eeb24d67fcffe54b2df4a4b148a7f8bf4843c245fd1b4b7b00",
+    "crates/pharness-core/src/hosted_sdlc/production/tests.rs": "sha256:95edeb99ac99d4a14c90cba956961ec12255770787e05f701d4507607253afd0"
+  },
+  "checks": [
+    {
+      "name": "core",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "pharness-core"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 14.754,
+      "log_path": "/tmp/astra-m09-current-core.log"
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "pharness-core",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.468,
+      "log_path": "/tmp/astra-m09-current-clippy.log"
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "scripts/check-app-module-boundaries.sh"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.89,
+      "log_path": "/tmp/astra-m09-current-architecture.log"
+    },
+    {
+      "name": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.806,
+      "log_path": "/tmp/astra-m09-current-format.log"
+    }
+  ],
+  "core_tests_passed": 216,
+  "live_core_tests_ignored": 6,
+  "production_contract_tests_included": 6,
+  "architecture_regressions_passed": 5,
+  "log_sha256": {
+    "core": "sha256:9d6bf79f5faa0b059b87ba11a26f8fe8c6c67d76e9550a6b1bc311f71fcf58da",
+    "clippy": "sha256:f00c1ee48672b9b38c24810f0d78847610110cbfda44974db9f23200710735e1",
+    "architecture": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+    "format": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "remaining_gates": [
+    "authenticated operator decision persistence and revalidation",
+    "serialized production GitOps effect after the human decision",
+    "native production observation",
+    "bounded rollback execution and recovery tests",
+    "live acceptance with actual human approvals"
+  ],
+  "live_changes": [],
+  "human_production_approval_recorded": false,
+  "qualification": null
+}
