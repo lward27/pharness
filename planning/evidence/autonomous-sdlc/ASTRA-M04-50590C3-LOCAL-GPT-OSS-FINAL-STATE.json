@@ -1,0 +1,473 @@
+{
+  "observed_at": "2026-09-18T21:44:55.014824+00:00",
+  "gitops_revision": "50590c3c4f0ecf5c5000f03aa43f02e566dd017b",
+  "readiness": {
+    "api_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+    "inference": {
+      "api_registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "blocker": null,
+      "direct_fireworks_enabled": true,
+      "gateway_registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "registry_aligned": true,
+      "status": "available"
+    },
+    "operational_mode": "normal",
+    "platform_versions_match": true,
+    "ui_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded"
+  },
+  "target": {
+    "allowed_stages": [
+      "plan"
+    ],
+    "authentication_configured": true,
+    "backend_kind": "llama_cpp",
+    "capabilities": {
+      "json_schema": false,
+      "native_tools": true,
+      "reasoning_context_modes": [],
+      "reasoning_efforts": [],
+      "stream_options": true,
+      "streaming": true,
+      "tool_choice_modes": [
+        "auto",
+        "required"
+      ]
+    },
+    "config_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+    "context_limit_tokens": 65536,
+    "display_name": "Local GPT-OSS 120B on Minisforum",
+    "latest_verification": {
+      "actor": "lucas",
+      "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "created_at": "1789767547273",
+      "expires_at": "1789768358",
+      "id": "inferverify_01a0b67420427a71ab894e103e665fcf",
+      "model_visible": true,
+      "observed_capabilities": {
+        "native_tools": true,
+        "policy": {
+          "policy_hash": "sha256:3abc815a97f7cf0d07af116ea2f531f6fc819e154f48fe204767b368862fbd53",
+          "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+          "revision": "v1"
+        },
+        "protocol": "openai_chat_completions_v1",
+        "protocol_calibration": {
+          "calibration_hash": "sha256:0ce3b4b036bc9df0eb6f171d1a5237d175f89cc93c434862835d88ffedf0eb2f",
+          "cases": [
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "single_tool_call",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "multi_turn_continuation",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "tool_failure_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "long_terminal_submission",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "reasoning_replay",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": false,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "missing_action_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "malformed_arguments_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "multiple_actions_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "streaming_usage",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 1,
+              "case": "provider_error_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "single_tool_call",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "multi_turn_continuation",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "tool_failure_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "long_terminal_submission",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "reasoning_replay",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": false,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "missing_action_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "malformed_arguments_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "multiple_actions_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "streaming_usage",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 2,
+              "case": "provider_error_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "single_tool_call",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "multi_turn_continuation",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "tool_failure_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "long_terminal_submission",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "reasoning_replay",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": false,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "missing_action_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "malformed_arguments_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "multiple_actions_correction",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "streaming_usage",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            },
+            {
+              "arguments_valid": true,
+              "attempt": 3,
+              "case": "provider_error_recovery",
+              "finish_reason": "tool_calls",
+              "reasoning_observed": true,
+              "tool_name": "verification_complete",
+              "usage_observed": true
+            }
+          ],
+          "passed": 30,
+          "required": 30,
+          "schema_version": "pharness.dev/inference-protocol-calibration/v1alpha1"
+        },
+        "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+        "runtime_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+        "streaming": true
+      },
+      "reachability": "reachable",
+      "reason": "ASTRA M04 local GPT-OSS 120B Planner protocol calibration at GitOps revision 50590c3; diagnostic only, unchanged defaults",
+      "sanitized_failure": null,
+      "status": "passed",
+      "streaming_compatible": true,
+      "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+      "target_id": "llama-cpp-gpt-oss-120b-local",
+      "target_revision": "v1",
+      "tool_compatible": true
+    },
+    "output_limit_tokens": 8192,
+    "protocol": "openai_chat_completions_v1",
+    "revision": "v1",
+    "selectable": true,
+    "target_id": "llama-cpp-gpt-oss-120b-local",
+    "transport": {
+      "connect_timeout_seconds": 5,
+      "first_response_timeout_seconds": 300,
+      "max_attempts": 1,
+      "private_network": true,
+      "scheme": "http",
+      "stream_idle_timeout_seconds": 120
+    },
+    "upstream_model": "gpt-oss-120b-local"
+  },
+  "policy": {
+    "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+    "revision": "v1",
+    "policy_hash": "sha256:3abc815a97f7cf0d07af116ea2f531f6fc819e154f48fe204767b368862fbd53",
+    "target": {
+      "revision": "v1",
+      "target_id": "llama-cpp-gpt-oss-120b-local"
+    },
+    "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+    "selectable": true,
+    "is_default": false,
+    "qualified": false,
+    "qualification_status": "not_qualified",
+    "protocol_ready": true,
+    "latest_evaluation": {
+      "id": "infeval_01a0b675d1e377d3aee7e7b3e2ac903b",
+      "status": "completed",
+      "scope": {
+        "case_ids": [
+          "acceptance-boundary",
+          "failing-baseline"
+        ],
+        "kind": "diagnostic"
+      },
+      "qualification_id": null,
+      "report_hash": "sha256:19104657dc6327196cedb1e060b84920b984e7b9a6a77a58ec8431a1b06fa44b",
+      "diagnostic": {
+        "case_ids": [
+          "acceptance-boundary",
+          "failing-baseline"
+        ],
+        "meaning": "bounded observation; never profile qualification",
+        "passed": false,
+        "reference_evaluation_id": null
+      },
+      "infrastructure_valid": true,
+      "gate_passed": false,
+      "candidate_safe": false
+    },
+    "latest_protocol_verification": {
+      "id": "inferverify_01a0b67420427a71ab894e103e665fcf",
+      "status": "passed",
+      "expires_at": "1789768358",
+      "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+      "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "protocol_calibration": {
+        "calibration_hash": "sha256:0ce3b4b036bc9df0eb6f171d1a5237d175f89cc93c434862835d88ffedf0eb2f",
+        "passed": 30,
+        "required": 30
+      }
+    }
+  },
+  "defaults": [
+    {
+      "eligible_stages": [
+        "onboarding",
+        "plan",
+        "implement",
+        "test",
+        "verify"
+      ],
+      "policy_id": "fireworks-legacy-v1",
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "eligible_stages": [
+        "test"
+      ],
+      "policy_id": "tester-kimi-k2p6-low-v1",
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "eligible_stages": [
+        "verify"
+      ],
+      "policy_id": "verifier-kimi-k2p6-high-v1",
+      "revision": "v1",
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    }
+  ],
+  "active_evaluations": [],
+  "verifications": [
+    {
+      "id": "inferverify_01a0b67420427a71ab894e103e665fcf",
+      "status": "passed",
+      "created_at": "1789767547273",
+      "expires_at": "1789768358",
+      "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+      "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "reachability": "reachable",
+      "model_visible": true,
+      "streaming_compatible": true,
+      "tool_compatible": true,
+      "sanitized_failure": null,
+      "protocol_calibration": {
+        "calibration_hash": "sha256:0ce3b4b036bc9df0eb6f171d1a5237d175f89cc93c434862835d88ffedf0eb2f",
+        "passed": 30,
+        "required": 30
+      }
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-18T21:39:29.815535+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:d22d592cb70031b5b53ea543f71c731964760230d5b3faaf6b4f232b9b5fb66a",
+    "agent_profile_id": "repo-planner",
+    "attempts": 1,
+    "binding_hash": "sha256:becf7102ed784eab411148b58f6575eda5e03827dc6579e16836816429f04df7",
+    "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "created_at": "1789767569892",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a0b675d1e377d3aee7e7b3e2ac903b",
+    "job_name": "pharness-inference-eval-f2ba120927f6",
+    "policy_hash": "sha256:3abc815a97f7cf0d07af116ea2f531f6fc819e154f48fe204767b368862fbd53",
+    "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04 local GPT-OSS 120B Planner diagnostic after exact 30/30 protocol calibration; one attempt, unchanged defaults, no qualification authority",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:d22d592cb70031b5b53ea543f71c731964760230d5b3faaf6b4f232b9b5fb66a",
+      "base_agent_profile_hash": "sha256:c568ba843a78e1024e1756e35d1c498f6adab31d2c82b8c56ac3a48eed4ea98b",
+      "binding_hash": "sha256:becf7102ed784eab411148b58f6575eda5e03827dc6579e16836816429f04df7",
+      "context_policy_hash": "sha256:f511746f9895e0bcbdd87ffff25734a38cedb815512797823faf3d1350a93e4a",
+      "policy": {
+        "display_name": "M04 local diagnostic: planner / GPT-OSS 120B",
+        "eligible_profiles": [
+          "repo-planner"
+        ],
+        "eligible_stages": [
+          "plan"
+        ],
+        "max_input_tokens": 57344,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:3abc815a97f7cf0d07af116ea2f531f6fc819e154f48fe204767b368862fbd53",
+        "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "v1",
+          "target_id": "llama-cpp-gpt-oss-120b-local"
+        },
+        "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+        "temperature_milli": 100,
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 1
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:289eb1d3e73a12e2bc0df7cdf1c6fa37f36fb454089733268994c3433ca3be8a",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:05c455ea6fcb047b2f12c46efbc6b42ac53c030fb780b5087aac3ee6994d48e4",
+        "prompt_id": "repo-planner-v2",
+        "revision": "2026-09-08.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "plan"
+      },
+      "target": {
+        "allowed_stages": [
+          "plan"
+        ],
+        "authentication_binding": "llama-cpp-api-key",
+        "backend_kind": "llama_cpp",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [],
+          "reasoning_efforts": [],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+        "context_limit_tokens": 65536,
+        "display_name": "Local GPT-OSS 120B on Minisforum",
+        "output_limit_tokens": 8192,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "llama-cpp-gpt-oss-120b-local",
+        "transport": {
+          "allow_insecure_private_http": true,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 1,
+          "private_cidr": "192.168.10.71/32",
+          "private_port": 8080,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "http://192.168.10.71:8080/v1/",
+        "upstream_model": "gpt-oss-120b-local"
+      },
+      "tool_schema_hash": "sha256:75ffa5ba3ed9d046ed3a54c5ff819230245a2efe7cd42abba2be3acf96a1b79f"
+    },
+    "runtime_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic"
+    },
+    "started_at": "1789767570221",
+    "status": "running",
+    "suite_hash": "sha256:d04551e2ea9055cba3eb6f6383b82173de6764d721a448d648f7a4314d39a9de",
+    "suite_id": "planner-v2",
+    "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+    "target_id": "llama-cpp-gpt-oss-120b-local",
+    "target_revision": "v1"
+  },
+  "evaluation_id": "infeval_01a0b675d1e377d3aee7e7b3e2ac903b",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-50590C3-LOCAL-GPT-OSS-DIAGNOSTIC",
+  "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "reason": "ASTRA M04 local GPT-OSS 120B Planner diagnostic after exact 30/30 protocol calibration; one attempt, unchanged defaults, no qualification authority",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic"
+    }
+  },
+  "request_hash": "sha256:191fa96339d646dbedef8763a530a43f066f74d8124b424921b637fdcf4daecf",
+  "schema_version": 1,
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "state": "dispatched",
+  "updated_at": "2026-09-18T21:39:30.190786+00:00"
+}
