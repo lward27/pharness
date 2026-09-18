@@ -1,0 +1,13 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04 local GPT-OSS 120B Planner diagnostic after exact 30/30 protocol calibration; one attempt, unchanged defaults, no qualification authority",
+  "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "acceptance-boundary",
+      "failing-baseline"
+    ]
+  }
+}
