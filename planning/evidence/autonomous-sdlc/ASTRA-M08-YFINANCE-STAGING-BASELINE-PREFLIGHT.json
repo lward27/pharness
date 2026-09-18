@@ -1,0 +1,81 @@
+{
+  "recorded_at": "2026-09-05T23:28:34.386528+00:00",
+  "cluster": "lucas_engineering",
+  "gitops_base_revision": "9232b110177556b80e8a03197e17fc062965f4c3",
+  "source_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+  "image_digest": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+  "prior_staging_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+  "pipeline_run": {
+    "name": "astra-m07-yfinance-efa6294",
+    "uid": "88ffc3cd-4796-45a3-bdc9-60162127b325",
+    "pipeline": "pharness-yfinance-build",
+    "start_time": "2026-09-05T15:10:31Z",
+    "completion_time": "2026-09-05T15:18:06Z",
+    "results": {
+      "IMAGE_URL": "registry.lucas.engineering/yfinance_wrapper:git-efa6294954b01a089a65419c85542b8fc2f95c83",
+      "IMAGE_DIGEST": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+      "SOURCE_COMMIT": "efa6294954b01a089a65419c85542b8fc2f95c83"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-09-05T15:18:06Z",
+        "message": "Tasks Completed: 4 (Failed: 0, Cancelled 0), Skipped: 0",
+        "reason": "Succeeded",
+        "status": "True",
+        "type": "Succeeded"
+      }
+    ],
+    "timeout": {
+      "pipeline": "1h0m0s"
+    }
+  },
+  "registry": {
+    "manifest_and_config_hashes_verified": true,
+    "tls_verified": true,
+    "os": "linux",
+    "architecture": "amd64",
+    "oci_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+    "config_digest": "sha256:39e732ff6a8e96763b0f63001fec769e9392dede2b9811d4dfd1cc7bcb8bdb1e"
+  },
+  "prior_argo": {
+    "uid": "5783342f-a670-4c04-9cd5-da38773218eb",
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "apps-staging",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "charts/finance-staging/yfinance",
+          "repoURL": "https://github.com/lward27/lucas_engineering.git",
+          "targetRevision": "main"
+        }
+      },
+      "revision": "9232b110177556b80e8a03197e17fc062965f4c3",
+      "status": "Synced"
+    },
+    "health": {
+      "lastTransitionTime": "2026-09-05T10:11:29Z",
+      "status": "Healthy"
+    }
+  },
+  "prior_staging_deployment": {
+    "uid": "d0e76091-39f1-4f2a-9664-1ba120178403",
+    "generation": 1,
+    "image": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+  },
+  "production_snapshot": {
+    "uid": "6856fb18-5e83-411b-a5f0-b8ce29b574e7",
+    "generation": 14,
+    "spec_sha256": "0748a09778133e8dd686c7145bc863c89db544a2b6d44cb2c0b4bedf591df911",
+    "image": "registry.lucas.engineering/yfinance_wrapper@sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+  },
+  "rendered_resources": 3,
+  "render_change": "only yfinance-wrapper staging Deployment container image",
+  "server_dry_run": [
+    "service/yfinance-wrapper configured (server dry run)",
+    "deployment.apps/yfinance-wrapper configured (server dry run)",
+    "networkpolicy.networking.k8s.io/yfinance-staging configured (server dry run)"
+  ],
+  "scope": "Program-operated staging baseline repair from an existing tested immutable image; no new application source changes, production promotion, hosted WorkItem or M11 acceptance."
+}

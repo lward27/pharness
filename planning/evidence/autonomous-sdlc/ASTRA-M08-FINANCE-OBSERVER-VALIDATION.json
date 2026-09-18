@@ -1,0 +1,33 @@
+{
+  "recorded_at": "2026-09-05T23:25:07.092935+00:00",
+  "source_revision": "9c3a015a1e43de41e0ffa99eb378e5c07843168b",
+  "core_tests_passed": 200,
+  "config_tests_passed": 17,
+  "live_tests_opt_in": 5,
+  "clippy": "core, config and API all targets with -D warnings passed",
+  "architecture": "module boundaries and five parser regression checks passed",
+  "format_and_diff": "passed",
+  "source_file_sha256": {
+    "config/pharness.example.toml": "1868b25ebe22effe1c813cd6544ff11559d49174b70cc4203efaef22f1d0be3a",
+    "crates/pharness-api/src/app/system.rs": "f25e92c53c652b93de13d27c717ef54bfed4076d8b12d9e427349d18e72dc93d",
+    "crates/pharness-config/src/lib.rs": "56790ef8c47449d099b1753668c66f994ad669c67b8955990862ff25b35b55c0",
+    "crates/pharness-core/src/tools/cluster.rs": "b82ee6839674eaa9ce1f2269f7bf969241574640e3014e1ba9573a63c63f03c0",
+    "crates/pharness-core/src/tools/cluster/finance/signals.rs": "6c8748684528d220a0d1367da6c8e8bf8cd0b109fdec5f92376532df248d461a",
+    "crates/pharness-core/src/tools/cluster/finance/signals/live.rs": "463ff719818ccb4663cff5fe077e79e59683691cda8740a48624d8c88f18b51a",
+    "crates/pharness-core/src/tools/cluster/finance/signals/tests.rs": "172bc66344dc7a864907e66402b9a89c1afd1722cee20022f8367d7540b56d54",
+    "deploy/helm/pharness/templates/api.yaml": "c9c56fb4a95339f4ff8b4bd87cb61dddc19782254b56b9c220a14f2b5ca0cee1",
+    "deploy/helm/pharness/templates/finance-runtime-observer-rbac.yaml": "5d53ecc7ecb4a1fc76e259272a14bc1c4dfaf43d1bbff81e39c3f1d1a2cf06eb",
+    "deploy/helm/pharness/values.schema.json": "982482c2cfaa85cf20ba7f0e69a191c7c34a313362510cd394185ea12c1afcc1",
+    "deploy/helm/pharness/values.yaml": "17e331115a9df246a48a8b21e33dce4b0ee628fc7664d277354321a50129adc8"
+  },
+  "log_sha256": {
+    "TESTS": "f53d9191258b0042ac080a5234a9fc8f1cb9e257e481288f92ec62f3d7d12910",
+    "CLIPPY": "ce110d1b35378ad0286437994bab84d42b26cf7b085c41a943e12bcf08e56f2e",
+    "ARCHITECTURE": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3",
+    "HELM-LINT": "e3f780a4098c4c06647382480e14da108ceb4554fb4b478804ae29a6f02fbe40"
+  },
+  "in_cluster_routing_checks": 6,
+  "native_api_deployed": false,
+  "new_rbac_applied": false,
+  "hosted_creation_enabled": false
+}

@@ -56,6 +56,18 @@ Tempo server span. Other backend probes still failed. The reader is not deployed
 identified missing finite Kubernetes read permissions and telemetry configuration.
 The local operator checks cannot substitute for deployed controller verification.
 
+The [finite API observer preparation](../../evidence/autonomous-sdlc/ASTRA-M08-FINANCE-OBSERVER-ACCESS.md)
+adds namespace-scoped Finance reads and a separate Mimir endpoint while preserving legacy
+Prometheus inventory. Local code/chart validation and six in-cluster HTTP routing checks
+passed. The change is not deployed; effective API permissions and native controller
+execution still require observed evidence. The earlier empty-query failure is retained.
+
+The [current-source staging baseline](../../evidence/autonomous-sdlc/ASTRA-M08-YFINANCE-CURRENT-STAGING-BASELINE.md)
+now runs the existing tested `efa6294` image after GitOps PR 56. The unchanged functional
+probes and one shared five-minute metrics/log/health-trace window passed. Production is
+unchanged. This program-operated platform correction provides a usable staging starting
+point; it is not the autonomous delivery demonstration or an M11 maintenance WorkItem.
+
 ## Objective and scope
 
 Verify a running candidate using actual deployment identity and application behavior.

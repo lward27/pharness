@@ -1,0 +1,9 @@
+{
+  "source_revision": "efa6294954b01a089a65419c85542b8fc2f95c83",
+  "gitops_revision": "04a98931af43b6ea1d189369442f6a1b76dda589",
+  "pr_number": 56,
+  "pr_url": "https://github.com/lward27/lucas_engineering/pull/56",
+  "merged_at": "2026-09-05T23:29:18Z",
+  "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+  "scope": "staging baseline repair, not autonomous acceptance"
+}

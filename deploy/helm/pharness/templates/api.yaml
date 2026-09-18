@@ -337,6 +337,8 @@ spec:
               value: {{ .Values.api.cluster.argocdNamespace | quote }}
             - name: PHARNESS_PROMETHEUS_URL
               value: {{ .Values.api.cluster.prometheusUrl | quote }}
+            - name: PHARNESS_FINANCE_MIMIR_URL
+              value: {{ .Values.api.cluster.financeMimirUrl | quote }}
             - name: PHARNESS_LOKI_URL
               value: {{ .Values.api.cluster.lokiUrl | quote }}
             {{- if .Values.api.cluster.tempoUrl }}
