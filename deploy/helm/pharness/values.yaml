@@ -123,7 +123,10 @@ inferenceGateway:
     secretKey: api-key
   # Additional bindings used by selectable registry targets. Values are Secret
   # references, never tokens. Only the gateway mounts these credentials.
-  additionalCredentials: {}
+  additionalCredentials:
+    llama-cpp-api-key:
+      secretName: pharness-llama-cpp
+      secretKey: api-key
   # lm-studio-api-key:
   #   secretName: pharness-lm-studio
   #   secretKey: api-key
