@@ -16,6 +16,16 @@ fn render(credentials: Value) -> std::process::Output {
         .expect("Helm CLI is required for this deployment check")
 }
 
+fn render_defaults() -> std::process::Output {
+    let chart = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../deploy/helm/pharness");
+    Command::new("helm")
+        .args(["template", "pharness"])
+        .arg(chart)
+        .args(["--namespace", "pharness"])
+        .output()
+        .expect("Helm CLI is required for this deployment check")
+}
+
 fn documents(output: &std::process::Output) -> Vec<Value> {
     assert!(
         output.status.success(),
@@ -29,7 +39,7 @@ fn documents(output: &std::process::Output) -> Vec<Value> {
 
 #[test]
 #[ignore = "requires Helm; run explicitly for deployment changes"]
-fn credentials_are_mounted_only_in_the_gateway_without_opening_local_egress() {
+fn additional_credentials_are_mounted_only_in_the_gateway_without_changing_egress() {
     let baseline = documents(&render(json!({})));
     let additional = documents(&render(
         json!({"lm-studio-api-key":{"secretName":"pharness-lm-studio","secretKey":"api-key"}}),
@@ -61,7 +71,11 @@ fn credentials_are_mounted_only_in_the_gateway_without_opening_local_egress() {
         mapping["fireworks-api-key"],
         "/var/run/secrets/inference/fireworks-api-key"
     );
-    assert_eq!(mapping.as_object().unwrap().len(), 2);
+    assert_eq!(
+        mapping["llama-cpp-api-key"],
+        "/var/run/secrets/inference-extra/llama-cpp-api-key/key"
+    );
+    assert_eq!(mapping.as_object().unwrap().len(), 3);
     let volume = pod["volumes"]
         .as_array()
         .unwrap()
@@ -107,4 +121,61 @@ fn malformed_or_reserved_credential_bindings_fail_rendering() {
     ] {
         assert!(!render(credentials).status.success());
     }
+}
+
+#[test]
+#[ignore = "requires Helm; run explicitly for deployment changes"]
+fn minisforum_target_egress_and_credential_are_exactly_scoped() {
+    let docs = documents(&render_defaults());
+    let gateway = docs
+        .iter()
+        .find(|d| d["kind"] == "Deployment" && d["metadata"]["name"] == "pharness-model-gateway")
+        .unwrap();
+    let pod = &gateway["spec"]["template"]["spec"];
+    let container = &pod["containers"][0];
+    let env = container["env"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["name"] == "PHARNESS_INFERENCE_CREDENTIAL_FILES")
+        .unwrap();
+    let mapping: Value = serde_json::from_str(env["value"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        mapping["llama-cpp-api-key"],
+        "/var/run/secrets/inference-extra/llama-cpp-api-key/key"
+    );
+    assert!(pod["volumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v["secret"]["secretName"] == "pharness-llama-cpp"
+            && v["secret"]["items"] == json!([{"key":"api-key","path":"key"}])));
+
+    for deployment in docs
+        .iter()
+        .filter(|d| d["kind"] == "Deployment" && d["metadata"]["name"] != "pharness-model-gateway")
+    {
+        assert!(!serde_json::to_string(deployment)
+            .unwrap()
+            .contains("pharness-llama-cpp"));
+    }
+
+    let policy = docs
+        .iter()
+        .find(|d| d["kind"] == "NetworkPolicy" && d["metadata"]["name"] == "pharness-model-gateway")
+        .unwrap();
+    let local_egress = policy["spec"]["egress"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|rule| rule["to"][0].get("ipBlock").is_some())
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        local_egress,
+        vec![json!({
+            "to":[{"ipBlock":{"cidr":"192.168.10.71/32"}}],
+            "ports":[{"protocol":"TCP","port":8080}]
+        })]
+    );
 }
