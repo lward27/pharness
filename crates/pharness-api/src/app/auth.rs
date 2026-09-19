@@ -3,6 +3,7 @@ use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 /// Gate `/api/internal/*` behind the configured worker token.
 ///
@@ -34,7 +35,7 @@ pub(super) async fn require_worker_token(
 fn token_matches(provided: &str, expected: &str) -> bool {
     let provided = Sha256::digest(provided.as_bytes());
     let expected = Sha256::digest(expected.as_bytes());
-    provided == expected
+    bool::from(provided.as_slice().ct_eq(expected.as_slice()))
 }
 
 /// Authenticated operator identity resolved from the bearer token.
@@ -74,5 +75,16 @@ pub(super) async fn require_operator_token(
             next.run(request).await
         }
         None => ApiError::unauthorized("invalid or missing operator token").into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::token_matches;
+
+    #[test]
+    fn token_matching_accepts_only_the_exact_token() {
+        assert!(token_matches("operator-token", "operator-token"));
+        assert!(!token_matches("operator-token", "other-token"));
     }
 }

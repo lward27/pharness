@@ -1925,7 +1925,7 @@ fn validate_workspace_command(executable: &str, args: &[String]) -> Result<(), T
             arg.len() > 4096
                 || arg.contains('\0')
                 || arg.contains('\n')
-                || [";", "&&", "||", "`", "$(`", ">", "<"]
+                || [";", "&&", "||", "&", "|", "`", "$", "{", "}", ">", "<"]
                     .iter()
                     .any(|token| arg.contains(token))
         })
@@ -2547,6 +2547,12 @@ mod workspace_source_tests {
         assert!(validate_workspace_command("cargo", &["vendor".into()]).is_err());
         assert!(
             validate_workspace_command("python", &["-m".into(), "pytest && id".into()]).is_err()
+        );
+        assert!(
+            validate_workspace_command("python", &["-m".into(), "pytest | id".into()]).is_err()
+        );
+        assert!(
+            validate_workspace_command("python", &["-m".into(), "pytest & id".into()]).is_err()
         );
         assert!(validate_workspace_command("python", &["-m".into(), "pytest".into()]).is_ok());
     }

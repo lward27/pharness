@@ -1292,9 +1292,23 @@ async fn repository_git_output(
     askpass: &std::path::Path,
 ) -> anyhow::Result<std::process::Output> {
     Command::new("git")
+        .arg("-c")
+        .arg("core.hooksPath=/dev/null")
         .args(args)
+        .env_clear()
+        .env(
+            "PATH",
+            std::env::var_os("PATH").unwrap_or_else(|| "/usr/local/bin:/usr/bin:/bin".into()),
+        )
+        .env("HOME", "/tmp")
+        .env("LANG", "C.UTF-8")
+        .env(
+            "PHARNESS_SOURCE_READER_TOKEN",
+            std::env::var_os("PHARNESS_SOURCE_READER_TOKEN").unwrap_or_default(),
+        )
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", askpass)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .output()
         .await
