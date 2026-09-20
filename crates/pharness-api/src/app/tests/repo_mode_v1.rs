@@ -798,6 +798,10 @@ async fn hosted_readiness_uses_repository_defaults_and_blocks_unqualified_creati
         .unwrap()
         .iter()
         .any(|b| b["code"] == "hosted_workflow_not_ready"));
+    assert!(result["prerequisites"]
+        .as_array()
+        .is_some_and(|values| !values.is_empty()));
+    assert_eq!(result["recommended_resolution"]["kind"], "open_settings");
     assert!(result["workflow_policy"].is_null());
     let before = fixture
         .state
@@ -1214,6 +1218,14 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
     assert_eq!(
         product_overview["repositories"][0]["coding_readiness"],
         "ready"
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["work_item_eligibility"]["mutable"]["eligible"],
+        false
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["work_item_eligibility"]["context"]["eligible"],
+        true
     );
     assert_eq!(
         product_overview["repository_bindings"][0]["binding"]["repository_id"],

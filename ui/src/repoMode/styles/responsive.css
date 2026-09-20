@@ -7,6 +7,8 @@
 }
 
 @media (max-width:760px) {
+  .repo-context-choice,.repo-prerequisite-summary>ol>li { grid-template-columns:1fr; }
+  .repo-context-choice>button,.repo-prerequisite-summary .repo-status { justify-self:start; }
   .repo-topology-service,.repo-topology-scope { grid-template-columns:1fr; }
   .repo-topology-scope>button { justify-self:start; }
   .repo-app { display:block; }

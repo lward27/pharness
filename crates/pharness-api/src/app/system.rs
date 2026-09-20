@@ -21,6 +21,14 @@ struct CapabilityPreflightQuery {
     repository_id: Option<String>,
 }
 
+#[derive(Debug, Default, serde::Deserialize)]
+struct CapabilityVerificationAuditRequest {
+    #[serde(default)]
+    actor: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
 pub(super) const PROTECTED_ENVIRONMENT: &str = "production";
 pub(super) const PROTECTED_NAMESPACE: &str = "apps-prod";
 pub(super) const PROTECTED_ARGO_APPLICATION: &str = "yfinance-wrapper";
@@ -561,7 +569,26 @@ async fn preflight_system_capability(
     State(state): State<AppState>,
     Path(capability): Path<String>,
     Query(query): Query<CapabilityPreflightQuery>,
+    request: Option<Json<CapabilityVerificationAuditRequest>>,
 ) -> Result<Json<CapabilityStatusResponse>, ApiError> {
+    let audit = request.map(|Json(value)| value).unwrap_or_default();
+    let actor = audit
+        .actor
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let reason = audit
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if actor.is_some_and(|value| value.len() > 200)
+        || reason.is_some_and(|value| value.len() > 1_000)
+    {
+        return Err(ApiError::bad_request(
+            "actor or reason exceeds its length limit",
+        ));
+    }
     let profile = capability
         .strip_prefix("environment_profile:")
         .and_then(|id| {
@@ -669,6 +696,13 @@ async fn preflight_system_capability(
             expires_at: (now + 15 * 60 * 1_000).to_string(),
         })
         .await?;
+    tracing::info!(
+        capability,
+        actor = actor.unwrap_or("unspecified"),
+        reason = reason.unwrap_or("capability verification requested"),
+        verification_id = verification.id,
+        "operator requested isolated capability verification"
+    );
     Ok(Json(CapabilityStatusResponse {
         capability,
         status: verification.status,
