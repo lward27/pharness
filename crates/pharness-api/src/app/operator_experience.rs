@@ -1,5 +1,6 @@
 use super::clock::current_millis;
 use super::products::{ensure_repo_mode_enabled, onboarding_operator_projection};
+use super::repository_readiness::{current_readiness_mismatches, readiness_mismatch_summary};
 use super::system::{
     capability_statuses, environment_profile_capability_status,
     source_capability_statuses_for_repository,
@@ -623,6 +624,124 @@ async fn repository_catalog(
                 .store
                 .latest_repository_contract_version(&repository.id, &repository.registered_commit)
                 .await?;
+            let readiness_mismatches = match (readiness.as_ref(), contract.as_ref()) {
+                (Some(readiness), Some(contract)) => {
+                    match serde_json::from_value::<pharness_core::RepositoryContract>(
+                        contract.contract.clone(),
+                    ) {
+                        Ok(parsed) => {
+                            current_readiness_mismatches(
+                                state,
+                                &repository,
+                                &repository.registered_commit,
+                                contract,
+                                &parsed,
+                                readiness,
+                            )
+                            .await?
+                        }
+                        Err(_) => vec!["canonical_contract_invalid".into()],
+                    }
+                }
+                (None, _) => vec!["assessment_missing".into()],
+                (_, None) => vec!["canonical_contract_version_missing".into()],
+            };
+            let successful_discovery = state
+                .store
+                .latest_successful_repository_discovery(
+                    &repository.id,
+                    &repository.registered_commit,
+                )
+                .await?;
+            let current_discovery = match onboarding
+                .as_ref()
+                .filter(|value| {
+                    value
+                        .registered_commit
+                        .eq_ignore_ascii_case(&repository.registered_commit)
+                        || value.resolved_commit.as_deref().is_some_and(|commit| {
+                            commit.eq_ignore_ascii_case(&repository.registered_commit)
+                        })
+                })
+                .and_then(|value| value.current_discovery_id.as_deref())
+            {
+                Some(discovery_id) => state.store.get_repository_discovery(discovery_id).await?,
+                None => None,
+            };
+            let mutable_ready = readiness_mismatches.is_empty();
+            let mutable_summary = if mutable_ready {
+                "The registered revision has a current fully bound contract and coding assessment."
+                    .to_string()
+            } else {
+                readiness_mismatches
+                    .iter()
+                    .map(|code| readiness_mismatch_summary(code))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            };
+            let (context_status, context_code, context_summary) =
+                if successful_discovery.is_some() {
+                    (
+                        "ready",
+                        None,
+                        "Deterministic discovery is available for the registered revision."
+                            .to_string(),
+                    )
+                } else {
+                    match current_discovery.as_ref().map(|value| value.status.as_str()) {
+                    Some("queued" | "running") => (
+                        "running",
+                        Some("context_repository_discovery_running"),
+                        "Deterministic discovery is still running for the registered revision."
+                            .to_string(),
+                    ),
+                    Some("failed") => (
+                        "blocked",
+                        Some("context_repository_discovery_failed"),
+                        current_discovery
+                            .as_ref()
+                            .and_then(|value| value.error_summary.clone())
+                            .unwrap_or_else(|| {
+                                "Deterministic discovery failed for the registered revision."
+                                    .to_string()
+                            }),
+                    ),
+                    _ => (
+                        "missing",
+                        Some("context_repository_discovery_missing"),
+                        "No successful deterministic discovery exists for the registered revision."
+                            .to_string(),
+                    ),
+                }
+                };
+            let onboarding_destination = onboarding
+                .as_ref()
+                .map(|value| format!("repository-onboardings/{}", value.id))
+                .unwrap_or_else(|| format!("repositories/{}/overview", repository.id));
+            let work_item_eligibility = json!({
+                "observed_revision":repository.registered_commit,
+                "mutable":{
+                    "eligible":mutable_ready,
+                    "status":if mutable_ready { "ready" } else if readiness.is_some() { "stale" } else { "missing" },
+                    "blocker_codes":readiness_mismatches,
+                    "summary":mutable_summary,
+                    "resolution":if mutable_ready { Value::Null } else if contract.is_none() {
+                        json!({"kind":"open_onboarding","label":"Complete Repository onboarding","destination":onboarding_destination})
+                    } else {
+                        json!({"kind":"open_readiness","label":"Resolve Repository readiness","destination":format!("repositories/{}/readiness",repository.id)})
+                    },
+                },
+                "context":{
+                    "eligible":successful_discovery.is_some(),
+                    "status":context_status,
+                    "blocker_code":context_code,
+                    "summary":context_summary,
+                    "discovery_id":successful_discovery.as_ref().map(|value| value.id.as_str()).or_else(|| current_discovery.as_ref().map(|value| value.id.as_str())),
+                    "resolution":if successful_discovery.is_some() { Value::Null } else {
+                        json!({"kind":"prepare_context","label":if context_status == "running" { "Open discovery progress" } else { "Prepare context Repository" },"destination":onboarding_destination})
+                    },
+                },
+            });
             let stale_reasons = readiness_stale_reasons(readiness.as_ref(), contract.as_ref());
             let freshness = if readiness.is_none() {
                 "unavailable"
@@ -646,6 +765,7 @@ async fn repository_catalog(
                 "freshness":freshness,
                 "stale_reasons":stale_reasons,
                 "capability_posture":capability_posture,
+                "work_item_eligibility":work_item_eligibility,
                 "readiness":readiness,
                 "updated_at":repository.updated_at,
             }));

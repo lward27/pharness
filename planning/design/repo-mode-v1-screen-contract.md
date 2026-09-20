@@ -222,6 +222,21 @@ bounded intent, immutable source revision, acceptance boundary, applicable
 Service context, execution profile, and budget. Preflight explains any blocker
 before durable creation.
 
+Repository and context eligibility is visible at the first creation step.
+Ineligible optional context Repositories remain visible but disabled, with the
+exact Repository, revision, blocker, and preparation destination. No context is
+selected by default.
+
+When final preflight is blocked, the screen presents a server-authored
+prerequisite sequence before the authorization disclosure. It identifies the
+owning Repository and exact revision and offers one current corrective step:
+verify a capability, run or observe readiness, remove optional context, or open
+the owning onboarding, Product topology, Repository, or Settings surface. Every
+effectful inline step requires explicit operator review and reuses the entered
+actor and reason. After each step, the client reruns preflight and obtains a new
+preflight hash; it never batches hidden recovery work or creates the WorkItem
+automatically.
+
 The final confirmation states what PHarness may mutate and which later actions
 still require separate authorization.
 

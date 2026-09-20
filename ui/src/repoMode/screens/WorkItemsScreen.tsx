@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, Clock, GitPullRequest, MagnifyingGlass, Robot } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, CheckCircle, Clock, GitPullRequest, MagnifyingGlass, Robot, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { RunDetailView } from "../../views/RunDetailView";
 import { WorkItemDetailView } from "../../views/WorkItemDetailView";
-import { getJson, query, sendJson } from "../api";
+import { getJson, query, sendJson, type ApiRequestError } from "../api";
 import { actionEffectTone, ActionDialog, Empty, LinkButton, Metric, OutcomeDetails, ResourceState, SectionHeader, Status, type ServerAction } from "../components";
 import { navigate } from "../routes";
 import { useResource } from "../useResource";
+import { useDialog } from "../useDialog";
 import { EvidenceReferences, FactGrid, formatAge, formatMoment, Freshness, humanize, repositoryLabel, RawRecord, RecordList } from "../presentation";
 import { useConsoleDesign, useOrganizationOverview } from "../ConsoleContext";
 import { LifecycleTimeline } from "../LifecycleTimeline";
@@ -204,34 +205,143 @@ export function NewWorkItemScreen({ productId, operatorName }: { productId:strin
   const [form,setForm] = useState<any>({ repository_id:"", source_commit:"", title:"", intent:"", acceptance_command_names:[], context_repositories:[], builder_budget:defaultBudget, max_attempts:2, actor:operatorName || "operator", reason:"Request a bounded product change" });
   const [repository,setRepository] = useState<any>(null);
   const repositoryRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => repositoryRequest.current?.abort(), []);
+  const preflightRequest = useRef<AbortController | null>(null);
+  const resolutionRequest = useRef<AbortController | null>(null);
+  const blockerSummaryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => () => { repositoryRequest.current?.abort(); preflightRequest.current?.abort(); resolutionRequest.current?.abort(); }, []);
   const [preflight,setPreflight] = useState<any>(null);
   const [error,setError] = useState("");
+  const [errorDetails,setErrorDetails] = useState<unknown>(null);
+  const [pending,setPending] = useState("");
+  const [liveMessage,setLiveMessage] = useState("");
+  const [resolutionReview,setResolutionReview] = useState<any>(null);
+  const clearError = () => { setError(""); setErrorDetails(null); };
+  const captureError = (caught:unknown) => {
+    if ((caught as Error)?.name === "AbortError") return;
+    const value = caught as ApiRequestError;
+    setError(value instanceof Error ? value.message : String(caught));
+    setErrorDetails(value?.body || null);
+  };
+  const productRepositories = product.data?.repositories || [];
+  const selectedRepositorySummary = productRepositories.find((entry:any) => entry.id === form.repository_id);
+  const mutableEligibility = selectedRepositorySummary?.work_item_eligibility?.mutable;
+  const mutableReady = mutableEligibility ? mutableEligibility.eligible === true : repository?.readiness?.coding_status === "ready";
   const selectRepository = async (id:string) => {
     repositoryRequest.current?.abort();
     const controller = new AbortController();
     repositoryRequest.current = controller;
-    setForm((value:any) => ({...value,repository_id:id,source_commit:"",acceptance_command_names:[],context_repositories:[]})); setPreflight(null); setRepository(null); setError("");
+    preflightRequest.current?.abort(); resolutionRequest.current?.abort();
+    setForm((value:any) => ({...value,repository_id:id,source_commit:"",acceptance_command_names:[],context_repositories:[]})); setPreflight(null); setRepository(null); clearError(); setLiveMessage("");
     if(!id) return;
     try {
       const data = await getJson(`/api/repositories/${encodeURIComponent(id)}/overview`, {signal:controller.signal});
       if (controller.signal.aborted) return;
       setRepository(data); setForm((value:any) => ({...value,source_commit:data.repository.registered_commit}));
-    } catch(caught) { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught)); }
+    } catch(caught) { if (!controller.signal.aborted) captureError(caught); }
   };
   const commands = repository?.canonical_contract?.contract?.acceptance_commands || [];
-  const runPreflight = async () => {
-    setError("");
-    try { setPreflight(await sendJson(`/api/products/${encodeURIComponent(productId)}/work-items/preflight`,"POST",pickRequest(form))); setStep(4); } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
+  const runPreflight = async (requestForm = form) => {
+    preflightRequest.current?.abort();
+    const controller = new AbortController();
+    preflightRequest.current = controller;
+    clearError(); setPending("preflight"); setLiveMessage("Checking current WorkItem prerequisites.");
+    try {
+      const result = await sendJson(`/api/products/${encodeURIComponent(productId)}/work-items/preflight`,"POST",pickRequest(requestForm),{signal:controller.signal});
+      if(controller.signal.aborted || preflightRequest.current !== controller) return null;
+      setPreflight(result); setStep(4);
+      setLiveMessage(result.prerequisites?.length ? `${result.prerequisites.length} prerequisite${result.prerequisites.length === 1 ? "" : "s"} must be resolved.` : "All WorkItem prerequisites are ready.");
+      window.requestAnimationFrame(() => blockerSummaryRef.current?.focus());
+      return result;
+    } catch(caught) {
+      if(!controller.signal.aborted) captureError(caught);
+      return null;
+    } finally {
+      if(preflightRequest.current === controller) setPending("");
+    }
   };
-  const create = async () => { setError(""); try { const result = await sendJson(`/api/products/${encodeURIComponent(productId)}/work-items`,"POST",{...pickRequest(form),preflight_hash:preflight.preflight_hash,actor:form.actor,reason:form.reason}); navigate(`work-items/${result.work_item?.id || result.id}/overview`); } catch(caught) { setError(caught instanceof Error ? caught.message : String(caught)); setPreflight(null); setStep(3); } };
+  const refreshRepository = async (signal?:AbortSignal) => {
+    const data = await getJson(`/api/repositories/${encodeURIComponent(form.repository_id)}/overview`,{signal});
+    setRepository(data);
+    void product.refresh();
+    return data;
+  };
+  const waitForReadiness = async () => {
+    resolutionRequest.current?.abort();
+    const controller = new AbortController(); resolutionRequest.current = controller;
+    setPending("wait_for_readiness"); clearError(); setLiveMessage("Waiting for the exact-revision readiness assessment.");
+    try {
+      for(let attempt=0; attempt<40; attempt+=1) {
+        const data = await refreshRepository(controller.signal);
+        const preparation = data?.readiness_preparation;
+        if(preparation && ["failed","cancelled"].includes(preparation.status)) throw new Error(`Repository readiness ${preparation.status}: ${preparation.error_code || "inspect the Repository readiness record"}`);
+        if(data?.readiness?.coding_status === "ready" && !(data?.readiness_stale_reasons || []).length) {
+          setLiveMessage("Repository readiness succeeded. Rechecking the WorkItem.");
+          await runPreflight(); return;
+        }
+        if(!preparation || !["queued","running"].includes(preparation.status)) {
+          await runPreflight(); return;
+        }
+        await new Promise<void>((resolve,reject) => { const timer=window.setTimeout(resolve,1500); controller.signal.addEventListener("abort",() => {window.clearTimeout(timer);reject(new DOMException("Aborted","AbortError"));},{once:true}); });
+      }
+      setLiveMessage("The assessment is still running. Use Check progress to continue observing it.");
+      await runPreflight();
+    } catch(caught) { if(!controller.signal.aborted) captureError(caught); }
+    finally { if(resolutionRequest.current === controller) setPending(""); }
+  };
+  const applyResolution = async (resolution:any, actor = form.actor, reason = form.reason) => {
+    if(!resolution) return;
+    if(resolution.kind === "navigate" || resolution.kind?.startsWith("open_")) { navigate(resolution.destination); return; }
+    if(resolution.kind === "edit_work_item") { setStep(1); setPreflight(null); return; }
+    if(resolution.kind === "remove_context") {
+      const nextForm={...form,context_repositories:form.context_repositories.filter((context:any) => context.repository_id !== resolution.repository_id),actor,reason};
+      setForm(nextForm); setResolutionReview(null); setLiveMessage("Optional context removed. Rechecking the WorkItem."); await runPreflight(nextForm); return;
+    }
+    if(resolution.kind === "wait_for_readiness") { setResolutionReview(null); await waitForReadiness(); return; }
+    const controller = new AbortController(); resolutionRequest.current?.abort(); resolutionRequest.current=controller;
+    setPending(resolution.kind); clearError(); setLiveMessage(`${resolution.label} is in progress.`);
+    try {
+      if(resolution.kind === "verify_capability") {
+        const repositoryQuery=resolution.repository_id ? `?repository_id=${encodeURIComponent(resolution.repository_id)}` : "";
+        await sendJson(`/api/system/capabilities/${encodeURIComponent(resolution.capability)}/preflight${repositoryQuery}`,"POST",{actor,reason},{signal:controller.signal});
+        await refreshRepository(controller.signal);
+      } else if(resolution.kind === "run_readiness") {
+        await sendJson(`/api/repositories/${encodeURIComponent(resolution.repository_id)}/readiness-assessments`,"POST",{source_commit:resolution.source_commit,actor,reason},{signal:controller.signal});
+      }
+      setForm((value:any) => ({...value,actor,reason})); setResolutionReview(null);
+      const result=await runPreflight({...form,actor,reason});
+      if(resolution.kind === "run_readiness" && result?.recommended_resolution?.kind === "wait_for_readiness") await waitForReadiness();
+    } catch(caught) { if(!controller.signal.aborted) captureError(caught); }
+    finally { if(resolutionRequest.current === controller) setPending(""); }
+  };
+  const create = async () => {
+    clearError(); setPending("create");
+    try {
+      const result = await sendJson(`/api/products/${encodeURIComponent(productId)}/work-items`,"POST",{...pickRequest(form),preflight_hash:preflight.preflight_hash,actor:form.actor,reason:form.reason});
+      navigate(`work-items/${result.work_item?.id || result.id}/overview`);
+    } catch(caught) {
+      const value=caught as ApiRequestError; captureError(caught);
+      if(value.status === 409) { setLiveMessage("State changed after review. PHarness is refreshing the preflight for a new review."); await runPreflight(); }
+    } finally { setPending(""); }
+  };
+  const prerequisites = preflight?.prerequisites || [];
+  const currentPrerequisite = prerequisites.find((value:any) => value.status !== "ready");
+  const currentResolution = currentPrerequisite?.resolution || preflight?.recommended_resolution;
   return <ResourceState status={product.status} error={product.error}><SectionHeader eyebrow="New WorkItem" title={product.data?.product?.display_name || productId} summary="Create one bounded source-only intent against an immutable Repository revision." /><ol className="repo-stepper repo-four">{["Repository","Intent","Agent envelope","Preflight"].map((label,index) => <li className={index+1 < step ? "is-complete" : index+1 === step ? "is-current" : ""} key={label}><span>{index+1 < step ? <CheckCircle size={16} weight="fill" /> : index+1}</span><small>{label}</small></li>)}</ol><section className="repo-wizard repo-panel">
-    {step === 1 ? <><h2>Repository and immutable source</h2><label>Mutable Repository<select value={form.repository_id} onChange={event => selectRepository(event.target.value)}><option value="">Select a coding-ready Repository</option>{(product.data?.repositories || []).map((repo:any) => <option value={repo.id} key={repo.id}>{repositoryLabel(repo)}</option>)}</select></label>{repository ? <><dl className="repo-bindings"><div><dt>Contract readiness</dt><dd><Status value={repository.readiness?.contract_status} /></dd></div><div><dt>Coding readiness</dt><dd><Status value={repository.readiness?.coding_status} /></dd></div><div><dt>Source SHA</dt><dd className="repo-mono">{form.source_commit}</dd></div><div><dt>Service scope</dt><dd>Inherited from the reviewed Product binding</dd></div></dl><fieldset><legend>Optional read-only context Repositories · maximum 4</legend>{(product.data?.repositories || []).filter((entry:any) => entry.id !== form.repository_id).map((entry:any) => { const selected = form.context_repositories.some((value:any) => value.repository_id === entry.id); return <label className="repo-checkbox" key={entry.id}><input type="checkbox" checked={selected} disabled={!selected && form.context_repositories.length >= 4} onChange={event => setForm((value:any) => ({...value,context_repositories:event.target.checked ? [...value.context_repositories,{repository_id:entry.id,source_commit:entry.registered_commit}] : value.context_repositories.filter((context:any) => context.repository_id !== entry.id)}))} /><span><strong>{repositoryLabel(entry)}</strong><small className="repo-mono">{entry.registered_commit}</small></span></label>})}{(product.data?.repositories || []).length <= 1 ? <p className="repo-muted">No other Product-bound Repository is available as context.</p> : null}</fieldset></> : null}</> : null}
+    {step === 1 ? <><h2>Repository and immutable source</h2><label>Mutable Repository<select value={form.repository_id} onChange={event => selectRepository(event.target.value)}><option value="">Select a Repository</option>{productRepositories.map((repo:any) => <option value={repo.id} key={repo.id}>{repositoryLabel(repo)} · {repo.work_item_eligibility?.mutable?.status || repo.coding_readiness || "unavailable"}</option>)}</select></label>{repository ? <><dl className="repo-bindings"><div><dt>Contract readiness</dt><dd><Status value={repository.readiness?.contract_status || (repository.canonical_contract ? "ready" : "unavailable")} /></dd></div><div><dt>Coding readiness</dt><dd><Status value={mutableEligibility?.status || repository.readiness?.coding_status} /></dd></div><div><dt>Freshness</dt><dd><Status value={selectedRepositorySummary?.freshness || "unavailable"} /></dd></div><div><dt>Source SHA</dt><dd className="repo-mono">{form.source_commit || "Unavailable"}</dd></div></dl>{!mutableReady ? <div className="repo-corrective-path"><WarningCircle size={18} /><div><strong>This Repository is not ready for a WorkItem</strong><span>{mutableEligibility?.summary || "Resolve the exact Repository readiness blocker before continuing."}</span></div>{mutableEligibility?.resolution?.destination ? <button type="button" className="repo-primary" onClick={() => navigate(mutableEligibility.resolution.destination)}>{mutableEligibility.resolution.label}<ArrowSquareOut size={16} /></button> : null}</div> : null}<fieldset><legend>Optional read-only context Repositories · maximum 4</legend><p className="repo-muted">Add context only when this WorkItem needs bounded reads from another Product Repository. No context is selected by default.</p>{productRepositories.filter((entry:any) => entry.id !== form.repository_id).map((entry:any) => { const selected = form.context_repositories.some((value:any) => value.repository_id === entry.id); const eligibility=entry.work_item_eligibility?.context; const eligible=eligibility ? eligibility.eligible === true : true; const capped=!selected && form.context_repositories.length >= 4; return <div className={`repo-context-choice ${eligible ? "" : "is-disabled"}`} key={entry.id}><label className="repo-checkbox"><input type="checkbox" checked={selected} disabled={!selected && (!eligible || capped)} aria-describedby={`context-${entry.id}-status`} onChange={event => setForm((value:any) => ({...value,context_repositories:event.target.checked ? [...value.context_repositories,{repository_id:entry.id,source_commit:entry.registered_commit}] : value.context_repositories.filter((context:any) => context.repository_id !== entry.id)}))} /><span><strong>{repositoryLabel(entry)}</strong><small className="repo-mono">{entry.registered_commit}</small><small id={`context-${entry.id}-status`}>{eligible ? "Ready for bounded read-only context" : eligibility?.summary || "Context readiness unavailable"}</small></span><Status value={eligibility?.status || (eligible ? "ready" : "unavailable")} /></label>{!eligible && eligibility?.resolution?.destination ? <button type="button" onClick={() => navigate(eligibility.resolution.destination)}>{eligibility.resolution.label}<ArrowSquareOut size={15} /></button> : null}</div>})}{productRepositories.length <= 1 ? <p className="repo-muted">No other Product-bound Repository is available as context.</p> : null}</fieldset></> : null}</> : null}
     {step === 2 ? <><h2>Intent and acceptance boundary</h2><label>Title<input value={form.title} onChange={event => setForm((value:any) => ({...value,title:event.target.value}))} /></label><label>Bounded intent<textarea rows={6} value={form.intent} onChange={event => setForm((value:any) => ({...value,intent:event.target.value}))} /></label><fieldset><legend>Declared acceptance commands</legend>{commands.map((command:any) => <label className="repo-checkbox" key={command.name}><input type="checkbox" checked={form.acceptance_command_names.includes(command.name)} onChange={event => setForm((value:any) => ({...value,acceptance_command_names:event.target.checked ? [...value.acceptance_command_names,command.name] : value.acceptance_command_names.filter((name:string) => name !== command.name)}))} /><span><strong>{command.name}</strong><small className="repo-mono">{command.command}</small></span></label>)}</fieldset></> : null}
     {step === 3 ? <><h2>Agent profile and execution envelope</h2><div className="repo-profile-readonly"><Robot size={20} /><div><strong>repo-builder</strong><span>Compiled profile · selected by controller · {profiles.data?.agent_profiles?.find((profile:any) => profile.id === "repo-builder")?.profile_hash || "loading"}</span></div></div><details className="repo-raw-record"><summary>Advanced Planner backend override</summary><p className="repo-muted">Choose either a qualified Codex execution policy or an inference-gateway policy. PHarness pins the exact choice before Planner dispatch and never falls back.</p><label>Codex execution policy<select value={form.planner_execution_policy ? `${form.planner_execution_policy.policy_id}@${form.planner_execution_policy.revision}` : ""} onChange={event => { const [policy_id,revision] = event.target.value.split("@"); setForm((value:any) => ({...value,planner_execution_policy:event.target.value ? {policy_id,revision} : undefined,planner_inference_policy:event.target.value ? undefined : value.planner_inference_policy})); }}><option value="">Use inference policy or server default</option>{(plannerExecutionPolicies.data?.policies || []).filter((entry:any) => entry.available).map((entry:any) => <option key={`${entry.policy.policy_id}@${entry.policy.revision}`} value={`${entry.policy.policy_id}@${entry.policy.revision}`}>{entry.policy.display_name} · {entry.policy.model} · {entry.policy.reasoning_effort}</option>)}</select></label><label>Inference-gateway policy<select disabled={Boolean(form.planner_execution_policy)} value={form.planner_inference_policy ? `${form.planner_inference_policy.policy_id}@${form.planner_inference_policy.revision}` : ""} onChange={event => { const [policy_id,revision] = event.target.value.split("@"); setForm((value:any) => ({...value,planner_inference_policy:event.target.value ? {policy_id,revision} : undefined,planner_execution_policy:event.target.value ? undefined : value.planner_execution_policy})); }}><option value="">Qualified stage default</option>{(plannerPolicies.data?.policies || []).filter((policy:any) => policy.selectable && policy.qualified).map((policy:any) => <option key={`${policy.policy_id}@${policy.revision}`} value={`${policy.policy_id}@${policy.revision}`}>{policy.display_name}{policy.is_default ? " · default" : ""}</option>)}</select></label></details><div className="repo-form-grid">{Object.entries(form.builder_budget).map(([key,value]) => <label key={key}>{key.replaceAll("_"," ")}<input type="number" value={String(value)} onChange={event => setForm((current:any) => ({...current,builder_budget:{...current.builder_budget,[key]:Number(event.target.value)}}))} /></label>)}<label>Attempts<input type="number" min="1" max="3" value={form.max_attempts} onChange={event => setForm((value:any) => ({...value,max_attempts:Number(event.target.value)}))} /></label></div><p className="repo-muted">Provider transport retries and Codex protocol restart limits are server-owned and read-only.</p></> : null}
-    {step === 4 ? <><h2>Readiness and final summary</h2><p>Review the pinned source, recorded readiness, and exact authorization before submitting this change.</p><div className="repo-preflight"><dl className="repo-bindings"><div><dt>Repository</dt><dd>{preflight?.source_repo}</dd></div><div><dt>Source SHA</dt><dd className="repo-mono">{preflight?.source_commit}</dd></div><div><dt>Profile</dt><dd>{preflight?.environment_profile_id}</dd></div><div><dt>Planner backend</dt><dd>{preflight?.planner_execution?.policy?.display_name || preflight?.planner_execution?.display_name || preflight?.planner_inference?.display_name || preflight?.planner_inference?.policy?.policy_id || "Existing runhost default"}</dd></div><div><dt>Product snapshot</dt><dd className="repo-mono">{preflight?.product_model_snapshot_id}</dd></div></dl><h3>Durable mutations at submission</h3>{preflight?.predicted_mutations?.map((value:string) => <p key={value}><CheckCircle size={17} />{value.replaceAll("_"," ")}</p>)}<h3>Later authorization boundaries</h3><RecordList values={preflight?.authorization_boundaries} empty="No later authorization summary was returned." />{preflight?.warnings?.map((value:any,index:number) => <p className="repo-warning" key={index}>{value.summary || JSON.stringify(value)}</p>)}{preflight?.blockers?.map((value:any,index:number) => <p className="repo-error" key={index}>{value.summary || JSON.stringify(value)}</p>)}</div><div className="repo-form-grid"><label>Operator<input value={form.actor} onChange={event => setForm((value:any) => ({...value,actor:event.target.value}))} /></label><label>Reason<input value={form.reason} onChange={event => setForm((value:any) => ({...value,reason:event.target.value}))} /></label></div></> : null}
-    {error ? <div className="repo-error" role="alert">{error}</div> : null}<footer><button type="button" disabled={step === 1} onClick={() => {setStep(value => Math.max(1,value-1));setPreflight(null);}}>Back</button>{step < 3 ? <button className="repo-primary" type="button" disabled={step === 1 ? !form.repository_id || repository?.readiness?.coding_status !== "ready" : !form.title.trim() || !form.intent.trim() || !form.acceptance_command_names.length} onClick={() => setStep(value => value+1)}>Continue</button> : step === 3 ? <button className="repo-primary" type="button" onClick={runPreflight}>Check readiness</button> : <button className="repo-primary" type="button" disabled={Boolean(preflight?.blockers?.length) || !form.actor.trim() || !form.reason.trim()} onClick={create}>Confirm and create WorkItem</button>}</footer>
+    {step === 4 ? <><h2>Readiness and final summary</h2><p>Review the pinned source, resolve current prerequisites, and confirm the exact submission effect.</p>{prerequisites.length ? <div className="repo-prerequisite-summary" role="region" aria-labelledby="prerequisite-heading" tabIndex={-1} ref={blockerSummaryRef}><header><div><span className="repo-eyebrow">Action required</span><h3 id="prerequisite-heading">Resolve prerequisites</h3></div><span className="repo-count">{prerequisites.length}</span></header><p>PHarness will guide one explicit corrective step at a time. Nothing is refreshed or dispatched without your action.</p><ol>{prerequisites.map((prerequisite:any,index:number) => { const resolution=prerequisite.resolution; const current=prerequisite === currentPrerequisite; return <li className={current ? "is-current" : ""} key={prerequisite.id || `${prerequisite.code}-${index}`}><div><span className="repo-eyebrow">{prerequisite.subject?.role || "WorkItem"} Repository</span><strong>{prerequisite.subject?.repository_name || prerequisite.subject?.repository_id || "Unavailable Repository"}</strong><small className="repo-mono">{prerequisite.subject?.revision || "Revision unavailable"}</small><p>{prerequisite.summary}</p>{Array.isArray(prerequisite.details) ? prerequisite.details.map((detail:any) => <small key={detail.code || detail}>{detail.summary || humanize(String(detail))}</small>) : null}</div><Status value={prerequisite.status} />{current && resolution ? <div className="repo-prerequisite-actions"><button className="repo-primary" type="button" disabled={Boolean(pending)} onClick={() => resolution.confirmation_required ? setResolutionReview({prerequisite,resolution}) : applyResolution(resolution)}>{resolution.kind === "remove_context" ? <Trash size={15} /> : resolution.inline ? <CheckCircle size={15} /> : <ArrowSquareOut size={15} />}{pending ? "Working…" : resolution.label}</button>{(resolution.alternatives || []).map((alternative:any) => <button type="button" key={alternative.kind} onClick={() => applyResolution(alternative)}>{alternative.label}<ArrowSquareOut size={15} /></button>)}</div> : null}</li>})}</ol></div> : <div className="repo-ready-summary" role="status" tabIndex={-1} ref={blockerSummaryRef}><CheckCircle size={22} weight="fill" /><div><strong>Ready to create this WorkItem</strong><span>All exact-revision prerequisites passed. Creation still requires your explicit confirmation.</span></div></div>}<div className="repo-preflight"><dl className="repo-bindings"><div><dt>Repository</dt><dd>{preflight?.source_repo || "Unavailable"}</dd></div><div><dt>Source SHA</dt><dd className="repo-mono">{preflight?.source_commit || "Unavailable"}</dd></div><div><dt>Profile</dt><dd>{preflight?.environment_profile_id || "Unavailable"}</dd></div><div><dt>Planner backend</dt><dd>{preflight?.planner_execution?.policy?.display_name || preflight?.planner_execution?.display_name || preflight?.planner_inference?.display_name || preflight?.planner_inference?.policy?.policy_id || "Existing runhost default"}</dd></div><div><dt>Product snapshot</dt><dd className="repo-mono">{preflight?.product_model_snapshot_id || "Unavailable"}</dd></div></dl><h3>Durable mutations at submission</h3>{preflight?.predicted_mutations?.map((value:string) => <p key={value}><CheckCircle size={17} />{value.replaceAll("_"," ")}</p>)}{preflight?.warnings?.map((value:any,index:number) => <p className="repo-warning" key={index}>{value.summary || JSON.stringify(value)}</p>)}<details className="repo-raw-record"><summary>Later authorization boundaries</summary><RecordList values={preflight?.authorization_boundaries} empty="No later authorization summary was returned." /></details></div><div className="repo-form-grid"><label>Operator<input value={form.actor} onChange={event => setForm((value:any) => ({...value,actor:event.target.value}))} /></label><label>Reason<input value={form.reason} onChange={event => setForm((value:any) => ({...value,reason:event.target.value}))} /></label></div></> : null}
+    <div className="repo-live-status" role="status" aria-live="polite">{liveMessage}</div>{error ? <div className="repo-error" role="alert">{error}{errorDetails ? <details><summary>Structured server response</summary><pre>{JSON.stringify(errorDetails,null,2)}</pre></details> : null}</div> : null}<footer><button type="button" disabled={step === 1 || Boolean(pending)} onClick={() => {preflightRequest.current?.abort();resolutionRequest.current?.abort();setStep(value => Math.max(1,value-1));setPreflight(null);setLiveMessage("");}}>Back</button>{step < 3 ? <button className="repo-primary" type="button" disabled={Boolean(pending) || (step === 1 ? !form.repository_id || !mutableReady : !form.title.trim() || !form.intent.trim() || !form.acceptance_command_names.length)} onClick={() => setStep(value => value+1)}>Continue</button> : step === 3 ? <button className="repo-primary" type="button" disabled={Boolean(pending)} onClick={() => runPreflight()}>{pending === "preflight" ? "Checking…" : "Check readiness"}</button> : <button className="repo-primary" type="button" disabled={Boolean(pending) || Boolean(preflight?.blockers?.length) || Boolean(prerequisites.length) || !form.actor.trim() || !form.reason.trim()} onClick={create}>{pending === "create" ? "Creating…" : "Confirm and create WorkItem"}</button>}</footer>
+    {resolutionReview ? <PrerequisiteActionDialog review={resolutionReview} preflightHash={preflight?.preflight_hash} actor={form.actor} reason={form.reason} pending={Boolean(pending)} onClose={() => setResolutionReview(null)} onConfirm={(actor,reason) => applyResolution(resolutionReview.resolution,actor,reason)} /> : null}
   </section></ResourceState>;
+}
+
+function PrerequisiteActionDialog({review,preflightHash,actor:initialActor,reason:initialReason,pending,onClose,onConfirm}:any) {
+  const [actor,setActor]=useState(initialActor || "operator");
+  const [reason,setReason]=useState(initialReason || "Resolve WorkItem creation prerequisite");
+  const dialogRef=useRef<HTMLDivElement>(null);
+  useDialog(dialogRef,onClose);
+  return <div className="repo-dialog-backdrop" onMouseDown={event => {if(event.currentTarget === event.target) onClose();}}><div className="repo-dialog" role="dialog" aria-modal="true" aria-labelledby="prerequisite-action-title" ref={dialogRef}><header><div><span className="repo-eyebrow">WorkItem prerequisite</span><h2 id="prerequisite-action-title">{review.resolution.label}</h2></div><button type="button" aria-label="Close prerequisite review" onClick={onClose}><X size={18} /></button></header><p>{review.prerequisite.summary}</p><dl className="repo-bindings"><div><dt>Repository</dt><dd>{review.prerequisite.subject?.repository_name || review.prerequisite.subject?.repository_id}</dd></div><div><dt>Exact revision</dt><dd className="repo-mono">{review.prerequisite.subject?.revision || "Unavailable"}</dd></div><div><dt>Effect</dt><dd>{humanize(review.resolution.effect_class)}</dd></div><div><dt>Expected result</dt><dd>{review.resolution.expected_result}</dd></div><div><dt>Reviewed preflight</dt><dd className="repo-mono">{preflightHash || "Unavailable"}</dd></div></dl><label>Operator<input value={actor} onChange={event => setActor(event.target.value)} /></label><label>Reason<textarea rows={3} value={reason} onChange={event => setReason(event.target.value)} /></label><footer><button className="repo-primary" type="button" disabled={pending || !actor.trim() || !reason.trim()} onClick={() => onConfirm(actor.trim(),reason.trim())}>{pending ? "Applying…" : "Confirm corrective step"}</button><button type="button" onClick={onClose}>Cancel</button></footer></div></div>;
 }
 
 function pickRequest(form:any) { return { title:form.title, intent:form.intent, repository_id:form.repository_id, source_commit:form.source_commit, acceptance_command_names:form.acceptance_command_names, context_repositories:form.context_repositories, builder_budget:form.builder_budget, max_attempts:form.max_attempts, planner_inference_policy:form.planner_inference_policy, planner_execution_policy:form.planner_execution_policy }; }
