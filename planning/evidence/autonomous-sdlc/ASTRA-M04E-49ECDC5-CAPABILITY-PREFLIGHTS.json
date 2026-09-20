@@ -1,0 +1,82 @@
+{
+ "observed_at_utc": "2026-09-20T18:29:00Z",
+ "runtime": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+ "actor": "lucas",
+ "reason": "ASTRA M04E connected-loop candidate readiness on 49ecdc5",
+ "available": 12,
+ "total": 12,
+ "capabilities": {
+  "source_observer": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_pull_rules_checks_statuses for https://github.com/lward27/finance_app_database_service.git",
+   "verified_at": "1789927712168",
+   "expires_at": "1789928612168"
+  },
+  "source_workspace": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_read for https://github.com/lward27/finance_app_database_service.git",
+   "verified_at": "1789927625084",
+   "expires_at": "1789928525084"
+  },
+  "observability": {
+   "status": "available",
+   "summary": "Isolated identity verified prometheus_ready",
+   "verified_at": "1789927792095",
+   "expires_at": "1789928692095"
+  },
+  "source_reader": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_read for https://github.com/lward27/finance_app_database_service.git",
+   "verified_at": "1789927661079",
+   "expires_at": "1789928561079"
+  },
+  "argo": {
+   "status": "available",
+   "summary": "Isolated identity verified get_and_patch_application",
+   "verified_at": "1789927737940",
+   "expires_at": "1789928637940"
+  },
+  "tekton": {
+   "status": "available",
+   "summary": "Isolated identity verified create_pipelineruns",
+   "verified_at": "1789928164885",
+   "expires_at": "1789929064885"
+  },
+  "environment_profile:node-24": {
+   "status": "available",
+   "summary": "Isolated identity verified runner_revision_platform_executables_venv_and_preparation_egress for https://github.com/lward27/finance-frontend.git",
+   "verified_at": "1789927922556",
+   "expires_at": "1789928822556"
+  },
+  "environment_profile:python-3.11": {
+   "status": "available",
+   "summary": "Isolated identity verified runner_revision_platform_executables_venv_and_preparation_egress for https://github.com/lward27/finance_app_database_service.git",
+   "verified_at": "1789928094279",
+   "expires_at": "1789928994279"
+  },
+  "gitops_writer": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_push for https://github.com/lward27/lucas_engineering.git",
+   "verified_at": "1789927720258",
+   "expires_at": "1789928620258"
+  },
+  "model_provider": {
+   "status": "available",
+   "summary": "Isolated identity verified provider_authenticate",
+   "verified_at": "1789927589173",
+   "expires_at": "1789928489173"
+  },
+  "gitops_observer": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_pull for https://github.com/lward27/lucas_engineering.git",
+   "verified_at": "1789927729861",
+   "expires_at": "1789928629861"
+  },
+  "source_writer": {
+   "status": "available",
+   "summary": "Isolated identity verified repository_push for https://github.com/lward27/finance_app_database_service.git",
+   "verified_at": "1789927669336",
+   "expires_at": "1789928569336"
+  }
+ }
+}
