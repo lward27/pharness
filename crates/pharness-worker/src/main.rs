@@ -1287,29 +1287,80 @@ async fn repository_git_stdout(args: &[&str], askpass: &std::path::Path) -> anyh
         .context("repository Git output was not UTF-8")
 }
 
+const GIT_PROXY_ENV_VARS: [&str; 4] = ["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"];
+
+/// Build the minimal environment for a repository Git command: everything
+/// inherited is cleared, then an explicit allowlist is restored. The
+/// preparation proxy variables are allowlisted because runner-preparation
+/// egress is NetworkPolicy-restricted to the egress proxy, so repository
+/// fetches without a proxy cannot reach the remote (see the M04E
+/// dispatch-path audit: `bc59f30` cleared the environment and readiness
+/// `git fetch` began failing with `git_fetch_failed`).
+fn repository_git_environment(
+    proxy_env: &[(&str, &str)],
+    source_reader_token: std::ffi::OsString,
+    askpass: &std::path::Path,
+) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    let mut env = vec![
+        (
+            "PATH".into(),
+            "/usr/local/bin:/usr/bin:/bin".into(),
+        ),
+        ("HOME".into(), "/tmp".into()),
+        ("LANG".into(), "C.UTF-8".into()),
+        (
+            "PHARNESS_SOURCE_READER_TOKEN".into(),
+            source_reader_token,
+        ),
+        ("GIT_TERMINAL_PROMPT".into(), "0".into()),
+        (
+            "GIT_ASKPASS".into(),
+            askpass.as_os_str().to_os_string(),
+        ),
+        ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
+        ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+    ];
+    for (name, value) in proxy_env {
+        env.push((name.to_string().into(), value.to_string().into()));
+    }
+    env
+}
+
+fn inherited_git_proxy_environment() -> Vec<(String, String)> {
+    GIT_PROXY_ENV_VARS
+        .iter()
+        .filter_map(|name| {
+            std::env::var(*name)
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(|value| (name.to_string(), value))
+        })
+        .collect()
+}
+
 async fn repository_git_output(
     args: &[&str],
     askpass: &std::path::Path,
 ) -> anyhow::Result<std::process::Output> {
-    Command::new("git")
+    let proxy_env = inherited_git_proxy_environment();
+    let proxy_refs: Vec<(&str, &str)> = proxy_env
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let mut command = Command::new("git");
+    command
         .arg("-c")
         .arg("core.hooksPath=/dev/null")
         .args(args)
-        .env_clear()
-        .env(
-            "PATH",
-            std::env::var_os("PATH").unwrap_or_else(|| "/usr/local/bin:/usr/bin:/bin".into()),
-        )
-        .env("HOME", "/tmp")
-        .env("LANG", "C.UTF-8")
-        .env(
-            "PHARNESS_SOURCE_READER_TOKEN",
-            std::env::var_os("PHARNESS_SOURCE_READER_TOKEN").unwrap_or_default(),
-        )
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_ASKPASS", askpass)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env_clear();
+    for (name, value) in repository_git_environment(
+        &proxy_refs,
+        std::env::var_os("PHARNESS_SOURCE_READER_TOKEN").unwrap_or_default(),
+        askpass,
+    ) {
+        command.env(name, value);
+    }
+    command
         .output()
         .await
         .context("failed to spawn repository Git command")
@@ -4694,9 +4745,10 @@ mod tests {
         argo_application_terminal, argo_sync_patch_payload, ensure_tracked_workspace_unchanged,
         evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
-        github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
-        parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
-        prepare_declared_runtime, tracked_workspace_state, update_kustomization_image,
+        github_observer_json, github_observer_json_with_public_fallback,
+        load_preparation_contract, parse_github_pull_request_observation, parse_github_repository,
+        pipeline_run_terminal, prepare_declared_runtime, repository_git_environment,
+        tracked_workspace_state, update_kustomization_image,
         validate_git_delivery_context, validate_onboarding_patch_changed_paths,
         validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
         GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
@@ -4717,6 +4769,70 @@ mod tests {
         validate_onboarding_patch_changed_paths(&[]).unwrap();
         validate_onboarding_patch_changed_paths(&[".pharness/repository.yaml".into()]).unwrap();
         assert!(validate_onboarding_patch_changed_paths(&["src/main.rs".into()]).is_err());
+    }
+
+    #[test]
+    fn repository_git_environment_allows_only_the_minimal_set_and_optional_proxy() {
+        let askpass = std::path::Path::new("/tmp/askpass.sh");
+        let env = repository_git_environment(&[], "tok".into(), askpass);
+        let names: Vec<String> = env
+            .iter()
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "PATH",
+                "HOME",
+                "LANG",
+                "PHARNESS_SOURCE_READER_TOKEN",
+                "GIT_TERMINAL_PROMPT",
+                "GIT_ASKPASS",
+                "GIT_CONFIG_GLOBAL",
+                "GIT_CONFIG_NOSYSTEM",
+            ]
+        );
+        let map: Vec<(String, String)> = env
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string_lossy().into_owned(),
+                    value.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        assert!(map.contains(&("HOME".to_string(), "/tmp".to_string())));
+        assert!(map.contains(&(
+            "GIT_CONFIG_GLOBAL".to_string(),
+            "/dev/null".to_string()
+        )));
+        assert!(map.contains(&(
+            "GIT_ASKPASS".to_string(),
+            "/tmp/askpass.sh".to_string()
+        )));
+
+        let with_proxy = repository_git_environment(
+            &[("HTTPS_PROXY", "http://proxy:8080"), ("NO_PROXY", ".svc")],
+            "tok".into(),
+            askpass,
+        );
+        let proxy: Vec<(String, String)> = with_proxy
+            .iter()
+            .skip(8)
+            .map(|(name, value)| {
+                (
+                    name.to_string_lossy().into_owned(),
+                    value.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            proxy,
+            [
+                ("HTTPS_PROXY".to_string(), "http://proxy:8080".to_string()),
+                ("NO_PROXY".to_string(), ".svc".to_string()),
+            ]
+        );
     }
 
     #[test]
