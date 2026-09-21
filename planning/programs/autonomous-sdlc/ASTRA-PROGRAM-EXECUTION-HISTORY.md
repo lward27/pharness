@@ -377,3 +377,32 @@ While executing the M04E candidate-release slice (local build of `bc59f30` so th
 The [M04E candidate release and dispatch-readiness record](../../evidence/autonomous-sdlc/ASTRA-M04E-49ECDC5-CONNECTED-LOOP-CANDIDATE-RELEASE.md) verifies: exact serving identities for all seven pinned images (API/UI both report `49ecdc5`, `platform_versions_match: true`, registry hash `a2850180…` aligned), Argo `Synced/Healthy` on `83efe6a` with zero pod restarts, 12/12 isolated capability verifications `available`, a passed six-hundred-second service window (20 samples, stable health/revision/UI hash), and row-level Finance preservation (81 tables, zero missing/rewritten rows; 14 WorkItems, 82 Runs, 262 audit events, 4 holds; only +12 `capability_verifications` rows from this session's own preflights). No SQL migration is in `49ecdc5`. Hosted creation and Coding Reliability V2 remain disabled; no model/default/limit change; no connected-loop dispatch, no qualification.
 
 The first M04E connected coding/failure/repair attempt on `49ecdc5` and the M04F frozen qualification remain the next acceptance work. The preceding `291e007` Planner-readiness release remains the rollback floor (pause new Planner work before rolling back to it or to `92f8f1b`).
+
+## M04E dispatch-path audit and git-egress regression found — 2026-09-21
+
+Prepared to run M04E's first connected attempt on the deployed `49ecdc5` candidate. A
+code-traced audit of the connected loop's exact dispatch path
+([ASTRA-M04E-DISPATCH-PATH-AUDIT](../evidence/autonomous-sdlc/ASTRA-M04E-DISPATCH-PATH-AUDIT.md))
+found the loop is **not** dispatchable, for three independent reasons:
+
+1. The failure→diagnosis→repair handoff (`start_repo_automatic_repair`) is hard-gated on
+   `coding_reliability_v2_enabled` (`stages.rs:1052`), which is **off** in the deployed pod —
+   a failed Test stops the chain with no repair.
+2. The V2 stage policies `planner-kimi-k3-v2`, `test-diagnosis-nemotron-v2`, and
+   `verifier-glm-5p3-v2` have no passing qualification on this runtime (latest=failed);
+   `builder`/`repair` have passing rows whose hashes still match the live registry. The v1
+   fallback (V2 off) is itself blocked at test/verify by stale-hash qualifications.
+3. **`bc59f30`** (in the deployed `49ecdc5` lineage) hardened the worker's git helper
+   (`repository_git_output`) with `.env_clear()` without re-adding the preparation proxy env.
+   Runner-preparation egress is NetworkPolicy-restricted to the egress proxy, so every
+   readiness/source `git fetch` now fails. Reproduced deterministically with an in-cluster
+   A/B probe Job (same SA/image/labels/proxy, readiness fetch args): proxy env removed →
+   `Failed to connect to github.com port 443` (rc=128); proxy env inherited → fetch of the
+   exact pinned commit succeeds (rc=0). Readiness assessments for
+   `finance-frontend @ 28e55351…` failed `git_fetch_failed` 3/3 as a result.
+
+No WorkItem was created, no model Run dispatched, and no config flag changed during the
+audit. The corrected next slice is [M04E Slice 2](../active/ASTRA-M04E-GIT-EGRESS-REPAIR-SLICE.md):
+fix the git-helper egress regression, re-release, and restore readiness; V2 policy
+re-qualification and the first connected attempt follow (slices 3–4). The M04 gate table and
+master "Current execution" were corrected from this evidence.

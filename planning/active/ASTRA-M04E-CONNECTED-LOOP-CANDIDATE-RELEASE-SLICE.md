@@ -51,4 +51,4 @@ Make the M04E connected loop dispatchable on one verified exact runtime. The rep
 
 ## Next slice
 
-M04E Slice 2: first connected-loop attempt on this exact runtime — plan → implement → deterministic Test → actual failure diagnosis → one repair → Test → independently scoped verification — with at least one real failed implementation repaired through the actual handoff, no manually supplied patch, and an unresolved plan stopping before implementation.
+Superseded 2026-09-21: the [dispatch-path audit](../evidence/autonomous-sdlc/ASTRA-M04E-DISPATCH-PATH-AUDIT.md) proved the connected loop is not dispatchable on `49ecdc5` (V2 repair gate off; three V2 stage policies unqualified; `bc59f30` worker git-helper egress regression). Next is [M04E Slice 2: repair the git-egress regression, re-release, restore readiness](ASTRA-M04E-GIT-EGRESS-REPAIR-SLICE.md); the first connected attempt follows after V2 re-qualification (slices 3–4).
