@@ -1,6 +1,6 @@
 # ASTRA M04E Slice 2: Repair the worker git egress regression, re-release, restore readiness
 
-Status: proposed thin slice. Authority: [ASTRA master](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), [M04](../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md), and the [dispatch-path audit](../evidence/autonomous-sdlc/ASTRA-M04E-DISPATCH-PATH-AUDIT.md) (2026-09-21). Date: 2026-09-21.
+Status: **complete (2026-09-22).** Authority: [ASTRA master](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), [M04](../programs/autonomous-sdlc/ASTRA-04-CODING-RELIABILITY-QUALIFICATION.md), and the [dispatch-path audit](../evidence/autonomous-sdlc/ASTRA-M04E-DISPATCH-PATH-AUDIT.md) (2026-09-21). Date: 2026-09-21.
 Corrects: slice 1's "first connected attempt is the next slice" — the audit proved the loop is **not** dispatchable and found the blocking defect.
 
 ## Why this slice is the thin one
@@ -26,12 +26,12 @@ The audit established, with deterministic in-cluster A/B evidence, that `crates/
 
 ## Acceptance
 
-- [ ] Fix merged in main; worker unit tests pass locally; proxy env present in the git invocation, hardening preserved.
-- [ ] New runner image(s) built at exact digests; GitOps pin updated; Argo `Synced/Healthy` without manual intervention.
-- [ ] Fresh readiness assessment for `28e55351…` reaches `coding_status: ready` (declared `test`/`lint`/`build` executed, no `git_fetch_failed`).
-- [ ] Ten-minute service window passes; Finance DB fully preserved (only new verification rows).
-- [ ] Rollback floor re-stated for the new runtime; V2 flag and all policies unchanged; no model run dispatched.
-- [ ] Evidence committed under `planning/evidence/autonomous-sdlc/` with `ASTRA-` prefix; M04/master updated from evidence.
+- [x] Fix merged in main; worker unit tests pass locally; proxy env present in the git invocation, hardening preserved.
+- [x] New runner image(s) built at exact digests; GitOps pin updated; Argo `Synced/Healthy` without manual intervention.
+- [x] Fresh readiness assessment for `28e55351…` reaches `coding_status: ready` (declared `test`/`lint`/`build` executed, no `git_fetch_failed`).
+- [x] Ten-minute service window passes; Finance DB fully preserved (only new verification rows).
+- [x] Rollback floor re-stated for the new runtime; V2 flag and all policies unchanged; no model run dispatched.
+- [x] Evidence committed under `planning/evidence/autonomous-sdlc/` with `ASTRA-` prefix; M04/master updated from evidence.
 
 ## Boundaries and non-goals
 

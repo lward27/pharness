@@ -406,3 +406,17 @@ audit. The corrected next slice is [M04E Slice 2](../active/ASTRA-M04E-GIT-EGRES
 fix the git-helper egress regression, re-release, and restore readiness; V2 policy
 re-qualification and the first connected attempt follow (slices 3–4). The M04 gate table and
 master "Current execution" were corrected from this evidence.
+
+## M04E Slice 2: git-egress repair re-released, readiness restored — 2026-09-22
+
+Prepared and executed the M04E Slice 2 repair of the `bc59f30` worker git-helper
+egress regression found by the [dispatch-path audit](../../evidence/autonomous-sdlc/ASTRA-M04E-DISPATCH-PATH-AUDIT.md).
+
+- **Fix** (`111fb9b`): `repository_git_output` re-allows `HTTPS_PROXY`/`https_proxy`/`NO_PROXY`/`no_proxy` after `.env_clear()` (new pure `repository_git_environment()` builder); bc59f30 hardening preserved. Unit test added; worker 47/47 + 1 integration pass; workspace check clean.
+- **Re-release**: node-runner + python-runner rebuilt from `111fb9b` and pinned (env-profiles). The 359/327 MB runner images exceeded the public Cloudflare body cap (413), so they were pushed from inside the cluster through the private write gateway (`client_max_body_size 0`) using the `lucas-registry-push` credential; the in-cluster Tekton build path was unavailable (buildkit daemon = powered-off M1 Mac). runtime/UI remain at `49ecdc5` (`platform_versions_match` true); the agent-execution-registry runner_images are intentionally left at `49ecdc5` to avoid invalidating the passing builder/repair V2 qualifications.
+- **Deploy**: pin commit `b62367f`; Argo auto-synced `Synced`/`Healthy`; new API pod 0 restarts.
+- **Readiness restored**: fresh preflights (source_reader, environment_profile:node-24) `available`; readiness assessment `rready_01a0caea26517d428685fef692a5c9bb` for `finance-frontend @ 28e55351` = `coding_status: ready`, `contract_status: ready`, no `git_fetch_failed`; readiness-prep Job 1/1 in 57 s.
+- **Service window**: 20/20 samples pass (health 200, revision `49ecdc5`, registry hash `a2850180…`, stable UI hash), zero pod restarts.
+- **Finance preservation**: service-window bracket preserved=True (81 tables, 0 missing/rewritten); pre-deploy→post delta is only this session's additions plus one `organizations` row whose only changed field is `updated_at` (a no-content `ON CONFLICT` timestamp touch, `product.rs:19-22`), not a data rewrite.
+
+Evidence: [readiness-restore record](../../evidence/autonomous-sdlc/ASTRA-M04E-111FB9B-CONNECTED-LOOP-READINESS-RESTORE.md) (+ serving identities, service window, DB preservation, readiness assessment). No connected-loop dispatch, no V2 flag change, no policy re-qualification, no NetworkPolicy/egress change, no schema migration. Next: Slice 3 (re-qualify planner/test-diagnosis/verifier on `111fb9b`), then Slice 4 (enable the V2 gate and run the first connected attempt).
