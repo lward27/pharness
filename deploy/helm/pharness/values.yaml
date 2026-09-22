@@ -187,10 +187,10 @@ codexAgentBackend:
     profiles:
       - id: python-3.11
         enabled: false
-        image: registry.lucas.engineering/pharness-python-runner@sha256:8a8e4dd250c94e97c4fe1fe64c5921ff87f01ed95e40f087015ab3428104df16
+        image: registry.lucas.engineering/pharness-python-runner@sha256:349f575cd8151856025055a179e9ede8f5f73c947ccdaaa683c35d6ff4b0ad16
       - id: node-24
         enabled: false
-        image: registry.lucas.engineering/pharness-node-runner@sha256:e1f3056e7b0aee59183fe1f014c94936fbf872d31211b4d28fca063eafedc084
+        image: registry.lucas.engineering/pharness-node-runner@sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409
 
 retention:
   scheduledEnabled: true
@@ -325,8 +325,8 @@ worker:
 environmentProfiles:
   - id: python-3.11
     active: true
-    image: registry.lucas.engineering/pharness-python-runner@sha256:8a8e4dd250c94e97c4fe1fe64c5921ff87f01ed95e40f087015ab3428104df16
-    revision: "49ecdc5cc4eaf86197707dede6244bc55c888732"
+    image: registry.lucas.engineering/pharness-python-runner@sha256:349f575cd8151856025055a179e9ede8f5f73c947ccdaaa683c35d6ff4b0ad16
+    revision: "111fb9bf651843a3d1a424e8111130ece2c48898"
     platform: linux/amd64
     required_executables:
       - pharness-worker
@@ -347,8 +347,8 @@ environmentProfiles:
       ephemeral_storage: 4Gi
   - id: node-24
     active: true
-    image: registry.lucas.engineering/pharness-node-runner@sha256:e1f3056e7b0aee59183fe1f014c94936fbf872d31211b4d28fca063eafedc084
-    revision: "49ecdc5cc4eaf86197707dede6244bc55c888732"
+    image: registry.lucas.engineering/pharness-node-runner@sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409
+    revision: "111fb9bf651843a3d1a424e8111130ece2c48898"
     platform: linux/amd64
     required_executables:
       - pharness-worker
