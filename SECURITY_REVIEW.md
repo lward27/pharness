@@ -19,6 +19,7 @@ The original findings below are a static snapshot from 2026-09-18. They were che
 | M1 — constant-time comparison | Already fixed in the current tree: `auth.rs::token_matches` compares SHA-256 digests with `subtle::ConstantTimeEq`. |
 | M2 — empty operator-token fail-open | Already fixed at startup in `pharness-api/src/main.rs`: a non-loopback bind is rejected unless at least one operator token is configured. Token-free loopback development remains supported. |
 | Secret-scanning control | Added locally in this branch as [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml): checksum-pinned Gitleaks scans only commits introduced by a PR/push, with read-only workflow permissions. Its exact-value allowlist [`.gitleaks.toml`](.gitleaks.toml) suppresses only the scanner's false positive on the known public `served.api_revision` Git commit ID; it is independent of commit fingerprints and does not exempt the path or line. The workflow has not run in GitHub and is not merge-blocking until merged and configured as a required branch-protection check. It does not scan or remediate the historical exposed token. |
+| L2 — committed `.DS_Store` files | Fixed in current Lucas `main` (`7eb5784`): neither reviewed file is tracked, the worktree is clean, and `.gitignore:3` ignores `.DS_Store` at all depths. |
 | L1 — workspace command argument policy | Remains defense-in-depth only; arguments are executed directly, not through a shell. An executable-specific allowlist remains the stronger future improvement. |
 
 The low-effort source fixes H2, M1, and M2 are already present in remote history, so this continuation does not duplicate them. The current launch config removal is also upstream. A new-commit secret scanner is implemented locally but must be merged and observed passing before it can be called an active control. Its scan range intentionally avoids failing on the known historical token; that credential still requires rotation/revocation and history handling. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
@@ -38,7 +39,7 @@ The low-effort source fixes H2, M1, and M2 are already present in remote history
 | 7 | **MEDIUM — fixed** | pharness | Bearer-token comparison uses constant-time digest equality |
 | 8 | **MEDIUM — fixed** | pharness | Startup rejects non-loopback binds with no operator tokens |
 | 9 | **LOW** | pharness | `run_workspace_command` shell-token blocklist is incomplete (mitigated: not shell-run) |
-| 10 | **LOW** | lucas | Committed `.DS_Store` files (local filename disclosure) |
+| 10 | **LOW — fixed** | lucas | Previously committed `.DS_Store` files are no longer tracked and are ignored in current `main` |
 | 11 | **INFO** | both | Several controls are well-built (documented below as "verified mitigations") |
 
 **Current headline:** the remaining PHarness items are the still-reachable historical token blob (rotation unverified) and the live public bearer-only API ingress. OpenClaw's previously documented blast radius is absent from the current source/cluster objects inspected, but should be re-audited before redeployment. Several PHarness code findings from the original snapshot are already fixed.
@@ -93,9 +94,9 @@ The low-effort source fixes H2, M1, and M2 are already present in remote history
 - **Why it's low:** these commands are launched via `Command::new(executable).args(args)` — **not** through `/bin/sh -c` — so shell metacharacters in args are passed literally to the target binary and are *not* interpreted as shell operators. The residual risk is only if a target binary treats an argument as a program/option (e.g. `-c`/`--eval`, which `contains_inline_program` already blocks for `python`/`node`).
 - **Remediation (defense-in-depth):** prefer an explicit allowlist of executables + a per-executable argument policy rather than a global denylist; consider blocking `&`/`|`/`$`/`{`/`}` uniformly.
 
-### L2 (INFO). Committed `.DS_Store`
-- **Files:** `lucas_engineering/.DS_Store`, `lucas_engineering/charts/.DS_Store`
-- **Impact:** local directory/file-name disclosure only. **Remediation:** add to `.gitignore`, `git rm --cached`.
+### L2 (INFO). Committed `.DS_Store` files (fixed in current Lucas `main`)
+- **Historical files:** `lucas_engineering/.DS_Store`, `lucas_engineering/charts/.DS_Store`.
+- **Current disposition:** Lucas `HEAD` and `origin/main` both resolve to `7eb578440e6d2e5c2eaeb91d64bdcdb142e63734`; the worktree is clean, neither path is tracked, and `.gitignore:3` ignores `.DS_Store` at all depths. No further change is needed.
 
 > **Not a finding (false-positive check):** `planning/evidence/autonomous-sdlc/ASTRA-M02-REGISTRY-STABILITY.json` contains a field named `checksum/secret` whose value is a **SHA-256 content hash**, not a credential. No action needed.
 
