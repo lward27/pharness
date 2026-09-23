@@ -17,12 +17,13 @@ use pharness_core::{
 use pharness_openai_compatible::ChatRequest;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     net::SocketAddr,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::{sync::Mutex, time::timeout};
 use tower_http::trace::TraceLayer;
@@ -191,7 +192,38 @@ async fn chat_completions(
     validate_gateway_request(&request, target, policy, &claims)?;
     request.model = target.upstream_model.clone();
     apply_backend_policy(&mut request, target, policy)?;
-    forward_request(&state, target, policy.transport_max_attempts, request).await
+    let correlation_id = safe_correlation_id(&claims.run_id);
+    tracing::debug!(
+        correlation_id = %correlation_id,
+        request_sequence = claims.request_sequence,
+        target_id = %target.target_id,
+        target_revision = %target.revision,
+        policy_id = %policy.policy_id,
+        policy_revision = %policy.revision,
+        "model gateway request admitted"
+    );
+    forward_request(
+        &state,
+        target,
+        policy.transport_max_attempts,
+        request,
+        &correlation_id,
+        claims.request_sequence,
+    )
+    .await
+}
+
+fn safe_correlation_id(value: &str) -> String {
+    if !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        value.to_owned()
+    } else {
+        format!("invalid-{:x}", Sha256::digest(value.as_bytes()))
+    }
 }
 
 fn resolve_binding<'a>(
@@ -349,6 +381,8 @@ async fn forward_request(
     target: &InferenceTargetRevision,
     policy_max_attempts: u32,
     request: ChatRequest,
+    correlation_id: &str,
+    request_sequence: u32,
 ) -> Result<Response, GatewayError> {
     let max_attempts = policy_max_attempts.min(target.transport.max_attempts);
     if max_attempts == 0 {
@@ -368,6 +402,18 @@ async fn forward_request(
         .map_err(|error| GatewayError::Unavailable(error.to_string()))?;
     let mut attempt = 1;
     loop {
+        let attempt_started = Instant::now();
+        tracing::info!(
+            correlation_id,
+            request_sequence,
+            target_id = %target.target_id,
+            target_revision = %target.revision,
+            attempt,
+            max_attempts,
+            connect_timeout_seconds = target.transport.connect_timeout_seconds,
+            first_response_timeout_seconds = target.transport.first_response_timeout_seconds,
+            "upstream request started"
+        );
         let mut builder = client.post(url.clone()).json(&request);
         if let Some(binding) = &target.authentication_binding {
             let credential = state.credentials.get(binding).ok_or_else(|| {
@@ -381,26 +427,82 @@ async fn forward_request(
         )
         .await;
         let response = match result {
-            Ok(Ok(response)) => response,
+            Ok(Ok(response)) => {
+                tracing::debug!(
+                    correlation_id,
+                    request_sequence,
+                    target_id = %target.target_id,
+                    target_revision = %target.revision,
+                    attempt,
+                    status_code = response.status().as_u16(),
+                    elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                    "upstream response headers received"
+                );
+                response
+            }
             Ok(Err(error))
                 if (error.is_connect() || error.is_timeout()) && attempt < max_attempts =>
             {
+                tracing::warn!(
+                    correlation_id,
+                    request_sequence,
+                    target_id = %target.target_id,
+                    target_revision = %target.revision,
+                    attempt,
+                    failure_class = reqwest_error_class(&error),
+                    elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                    retrying = true,
+                    "upstream request failed before response headers"
+                );
                 attempt += 1;
                 continue;
             }
-            Ok(Err(_)) => {
+            Ok(Err(error)) => {
+                tracing::warn!(
+                    correlation_id,
+                    request_sequence,
+                    target_id = %target.target_id,
+                    target_revision = %target.revision,
+                    attempt,
+                    failure_class = reqwest_error_class(&error),
+                    elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                    retrying = false,
+                    "upstream request failed before response headers"
+                );
                 return Err(GatewayError::Unavailable(
                     "upstream connection failed".into(),
-                ))
+                ));
             }
             Err(_) if attempt < max_attempts => {
+                tracing::warn!(
+                    correlation_id,
+                    request_sequence,
+                    target_id = %target.target_id,
+                    target_revision = %target.revision,
+                    attempt,
+                    failure_class = "first_response_timeout",
+                    elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                    retrying = true,
+                    "upstream request timed out before response headers"
+                );
                 attempt += 1;
                 continue;
             }
             Err(_) => {
+                tracing::warn!(
+                    correlation_id,
+                    request_sequence,
+                    target_id = %target.target_id,
+                    target_revision = %target.revision,
+                    attempt,
+                    failure_class = "first_response_timeout",
+                    elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                    retrying = false,
+                    "upstream request timed out before response headers"
+                );
                 return Err(GatewayError::Unavailable(
                     "upstream first response timed out".into(),
-                ))
+                ));
             }
         };
         let status = response.status();
@@ -408,7 +510,19 @@ async fn forward_request(
             let retryable = status == reqwest::StatusCode::REQUEST_TIMEOUT
                 || status == reqwest::StatusCode::TOO_MANY_REQUESTS
                 || status.is_server_error();
-            if retryable && attempt < max_attempts {
+            let retrying = retryable && attempt < max_attempts;
+            tracing::warn!(
+                correlation_id,
+                request_sequence,
+                target_id = %target.target_id,
+                target_revision = %target.revision,
+                attempt,
+                status_code = status.as_u16(),
+                elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                retrying,
+                "upstream returned a non-success response"
+            );
+            if retrying {
                 attempt += 1;
                 continue;
             }
@@ -429,30 +543,101 @@ async fn forward_request(
             .and_then(|value| value.split(';').next())
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("text/event-stream"));
         if !is_event_stream {
+            tracing::warn!(
+                correlation_id,
+                request_sequence,
+                target_id = %target.target_id,
+                target_revision = %target.revision,
+                attempt,
+                elapsed_ms = attempt_started.elapsed().as_millis() as u64,
+                "upstream success response was not an event stream"
+            );
             return Err(GatewayError::Unavailable(
                 "upstream did not return an event stream".into(),
             ));
         }
         let idle_timeout = Duration::from_secs(target.transport.stream_idle_timeout_seconds);
         let upstream = Box::pin(response.bytes_stream());
+        let stream_started = Instant::now();
+        let stream_correlation_id = correlation_id.to_owned();
+        let stream_target_id = target.target_id.clone();
+        let stream_target_revision = target.revision.clone();
         let stream = futures::stream::unfold(
-            (upstream, false),
-            move |(mut upstream, terminated)| async move {
-                if terminated {
-                    return None;
-                }
-                match timeout(idle_timeout, upstream.next()).await {
-                    Ok(Some(chunk)) => {
-                        Some((chunk.map_err(std::io::Error::other), (upstream, false)))
+            (upstream, false, false),
+            move |(mut upstream, terminated, first_chunk_logged)| {
+                let correlation_id = stream_correlation_id.clone();
+                let target_id = stream_target_id.clone();
+                let target_revision = stream_target_revision.clone();
+                async move {
+                    if terminated {
+                        return None;
                     }
-                    Ok(None) => None,
-                    Err(_) => Some((
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            "upstream inference stream became idle",
-                        )),
-                        (upstream, true),
-                    )),
+                    match timeout(idle_timeout, upstream.next()).await {
+                        Ok(Some(chunk)) => match chunk {
+                            Ok(chunk) => {
+                                if !first_chunk_logged {
+                                    tracing::debug!(
+                                        correlation_id,
+                                        request_sequence,
+                                        target_id,
+                                        target_revision,
+                                        attempt,
+                                        elapsed_ms = stream_started.elapsed().as_millis() as u64,
+                                        "upstream stream first chunk received"
+                                    );
+                                }
+                                Some((Ok(chunk), (upstream, false, true)))
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    correlation_id,
+                                    request_sequence,
+                                    target_id,
+                                    target_revision,
+                                    attempt,
+                                    elapsed_ms = stream_started.elapsed().as_millis() as u64,
+                                    failure_class = "stream_read_error",
+                                    "upstream stream read failed"
+                                );
+                                Some((
+                                    Err(std::io::Error::other(error)),
+                                    (upstream, true, first_chunk_logged),
+                                ))
+                            }
+                        },
+                        Ok(None) => {
+                            tracing::debug!(
+                                correlation_id,
+                                request_sequence,
+                                target_id,
+                                target_revision,
+                                attempt,
+                                elapsed_ms = stream_started.elapsed().as_millis() as u64,
+                                "upstream stream completed"
+                            );
+                            None
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                correlation_id,
+                                request_sequence,
+                                target_id,
+                                target_revision,
+                                attempt,
+                                elapsed_ms = stream_started.elapsed().as_millis() as u64,
+                                idle_timeout_seconds = idle_timeout.as_secs(),
+                                failure_class = "stream_idle_timeout",
+                                "upstream stream became idle"
+                            );
+                            Some((
+                                Err(std::io::Error::new(
+                                    std::io::ErrorKind::TimedOut,
+                                    "upstream inference stream became idle",
+                                )),
+                                (upstream, true, first_chunk_logged),
+                            ))
+                        }
+                    }
                 }
             },
         );
@@ -468,6 +653,24 @@ async fn forward_request(
                 .map_err(|_| GatewayError::Unavailable("invalid target identity".into()))?,
         );
         return Ok(gateway_response);
+    }
+}
+
+fn reqwest_error_class(error: &reqwest::Error) -> &'static str {
+    if error.is_connect() && error.is_timeout() {
+        "connect_timeout"
+    } else if error.is_connect() {
+        "connect_error"
+    } else if error.is_timeout() {
+        "request_timeout"
+    } else if error.is_request() {
+        "request_error"
+    } else if error.is_body() {
+        "body_error"
+    } else if error.is_decode() {
+        "decode_error"
+    } else {
+        "other_error"
     }
 }
 
@@ -805,5 +1008,17 @@ mod tests {
             "model":"openrouter-test@v1","messages":[],"tools":[{"type":"function","function":{"name":"finish","description":"finish","parameters":{"type":"object"}}}],"tool_choice":"required","parallel_tool_calls":false,"stream":true,"temperature":0.1,"max_tokens":8192
         })).unwrap();
         validate_gateway_request(&request, &target, &policy, &claims).unwrap();
+    }
+
+    #[test]
+    fn correlation_id_keeps_safe_operation_ids_and_hashes_invalid_values() {
+        let operation_id = "verify_inferverify_01a0cfa2_case_1_attempt_1";
+        assert_eq!(safe_correlation_id(operation_id), operation_id);
+
+        let unsafe_id = "verify_case\nBearer secret";
+        let safe_id = safe_correlation_id(unsafe_id);
+        assert!(safe_id.starts_with("invalid-"));
+        assert!(!safe_id.contains('\n'));
+        assert!(!safe_id.contains("secret"));
     }
 }

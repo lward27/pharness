@@ -3,9 +3,11 @@
 Status: complete. The worker git-egress regression from `bc59f30` is repaired, the
 runner images are re-released at `111fb9b`, and repository readiness for
 `finance-frontend @ 28e55351…` is restored to `coding_status: ready`. This closes the
-dispatch-path blocker found by the [M04E dispatch-path audit](ASTRA-M04E-DISPATCH-PATH-AUDIT.md);
-the connected loop is again dispatchable (V2 policy re-qualification and the first
-connected attempt remain the following slices).
+worker git-egress/readiness blocker found by the [M04E dispatch-path audit](ASTRA-M04E-DISPATCH-PATH-AUDIT.md).
+It does **not** make the connected loop dispatchable: exact-policy V2 stage
+re-qualification is Slice 3, and V2 activation plus the first connected attempt are
+separate Slice 4 work. The API/UI runtime remains `49ecdc5`; `111fb9b` is the
+environment-profile runner revision.
 
 ## What was repaired
 

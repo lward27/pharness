@@ -1,0 +1,100 @@
+{
+  "schema_version": "pharness.dev/astra-m04e-slice-baseline/v1alpha1",
+  "observed_at_utc": "2026-09-23T18:54:00Z",
+  "slice": "M04E-Slice-3",
+  "git": {
+    "head": "cffa63f2cf41168883e798ded07d2bb9c2e65639",
+    "origin_main": "cffa63f2cf41168883e798ded07d2bb9c2e65639",
+    "worktree_clean_before_plan": true,
+    "branch": "codex/astra-m04e-slice3"
+  },
+  "argo": {
+    "application": "pharness",
+    "revision": "cffa63f2cf41168883e798ded07d2bb9c2e65639",
+    "sync": "Synced",
+    "health": "Healthy"
+  },
+  "served": {
+    "api_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+    "ui_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+    "platform_versions_match": true,
+    "operational_mode": "normal",
+    "inference_status": "available",
+    "direct_fireworks_enabled": true,
+    "coding_reliability_v2_enabled": false,
+    "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a"
+  },
+  "environment_profiles": {
+    "source_revision": "111fb9bf651843a3d1a424e8111130ece2c48898",
+    "node_runner": "registry.lucas.engineering/pharness-node-runner@sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409",
+    "python_runner": "registry.lucas.engineering/pharness-python-runner@sha256:349f575cd8151856025055a179e9ede8f5f73c947ccdaaa683c35d6ff4b0ad16"
+  },
+  "policy_targets": [
+    {
+      "policy_id": "planner-kimi-k3-v2",
+      "policy_revision": "v1",
+      "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+      "target_id": "fireworks-kimi-k3",
+      "target_revision": "v1",
+      "target_hash": "sha256:eb5fd6aff997fd63b2d2e7dfde5f16c338d98ede1de03be98e587846bcdf587e",
+      "suite_id": "planner-v2",
+      "agent_profile_id": "repo-planner",
+      "agent_profile_hash": "sha256:ed492f67f083e1b70a156f9a0ef85788b2637875ac167f0753596533fe148e2f",
+      "previous_verdict": "failed",
+      "previous_qualification_runtime": "19b0c55c48e3614d0b4507d56df3029a52475618",
+      "latest_semantic_evaluation_status": "completed",
+      "latest_semantic_evaluation_scope": "diagnostic",
+      "latest_semantic_evaluation_runtime": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+      "current_exact_policy_protocol_ready": false
+    },
+    {
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "policy_revision": "v1",
+      "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+      "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+      "target_revision": "v1",
+      "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+      "suite_id": "test-diagnosis-v2",
+      "agent_profile_id": "repo-test-diagnoser",
+      "agent_profile_hash": "sha256:759e17ac13b1d2ebeb3ff0a5b40e32e2dc305738f676f212cccf2d577aeeaf58",
+      "previous_verdict": "failed",
+      "previous_qualification_runtime": "19b0c55c48e3614d0b4507d56df3029a52475618",
+      "latest_semantic_evaluation_status": "completed",
+      "latest_semantic_evaluation_scope": "diagnostic",
+      "latest_semantic_evaluation_runtime": "d675159cb205d222616d253d311706be1889bb91",
+      "current_exact_policy_protocol_ready": false
+    },
+    {
+      "policy_id": "verifier-glm-5p3-v2",
+      "policy_revision": "v1",
+      "policy_hash": "sha256:b0fe06db99119545f35df02a0904a21aa52bdd0215b15aa1f78fdb1161f9c5eb",
+      "target_id": "fireworks-glm-5p3",
+      "target_revision": "v1",
+      "target_hash": "sha256:09b073ef396f7762a7ddae7e4a1ba111cd3b7c99349f604e145f8397c0ef7708",
+      "suite_id": "verifier-v2",
+      "agent_profile_id": "repo-verifier",
+      "agent_profile_hash": "sha256:d403e594158fe3434f192592698bd5da763dcb2449081b8c376e88fe44bd9ae0",
+      "previous_verdict": "failed",
+      "previous_qualification_runtime": "19b0c55c48e3614d0b4507d56df3029a52475618",
+      "latest_semantic_evaluation_status": "completed",
+      "latest_semantic_evaluation_scope": "diagnostic",
+      "latest_semantic_evaluation_runtime": "d675159cb205d222616d253d311706be1889bb91",
+      "current_exact_policy_protocol_ready": false
+    }
+  ],
+  "reconciliation": {
+    "inference_policies_checked": 30,
+    "active_latest_evaluations": 0,
+    "active_jobs_namespace_pharness": 0,
+    "builder_latest_verdict": "passed",
+    "builder_qualified": true,
+    "builder_exact_protocol_ready": false,
+    "builder_qualification_runtime": "48c77b7b4438d621ff9563b913857bcf771f1800",
+    "repair_latest_verdict": "passed",
+    "repair_qualified": true,
+    "repair_exact_protocol_ready": false,
+    "repair_qualification_runtime": "48c77b7b4438d621ff9563b913857bcf771f1800",
+    "protocol_receipts_for_stale_target_checks_use_registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79"
+  },
+  "scope": "Read-only identity and policy-state baseline before any Slice 3 model-backed request; no live API writes performed."
+}
