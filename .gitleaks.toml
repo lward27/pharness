@@ -1,0 +1,8 @@
+title = "PHarness secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The recorded served API source revision is a public Git commit ID, not a credential."
+regexes = ['''^49ecdc5cc4eaf86197707dede6244bc55c888732$''']
