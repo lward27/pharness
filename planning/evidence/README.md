@@ -24,7 +24,7 @@ behavior.
 
 - [Cluster operator checkpoint](autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md)
 - [Slice 3 network triage](autonomous-sdlc/ASTRA-M04E-SLICE3-NETWORK-TRIAGE.md) — read-only live path evidence; stalled hop unresolved
-- [Slice 3 transport observability implementation](autonomous-sdlc/ASTRA-M04E-SLICE3-TRANSPORT-OBSERVABILITY-IMPLEMENTATION.md) — local tests only; not released
+- [Slice 3 transport observability implementation](autonomous-sdlc/ASTRA-M04E-SLICE3-TRANSPORT-OBSERVABILITY-IMPLEMENTATION.md) — local tests and optimized gateway binary compile; OCI images not released
 
 ## Live smoke results
 
