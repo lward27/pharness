@@ -1,7 +1,7 @@
 # Pharness & Lucas Engineering — Security Review
 
 **Scope:** `/home/wardl/Personal/pharness` (Rust control plane: `pharness-api`, `pharness-worker`, `pharness-runhost`, `pharness-model-gateway`, `pharness-codex-host`, `pharness-core`) and `/home/wardl/Personal/lucas_engineering` (Helm/K8s cluster-ops repo, incl. the `openclaw` agent deployment).
-**Method:** Original review (2026-09-18): static source/manifests only. Reconciliation (2026-09-23): current PHarness source/config, sanitized live PHarness readiness, and bounded read-only Lucas-cluster object-name checks; no exploit attempts or credential values emitted.
+**Method:** Original review (2026-09-18): static source/manifests only. Reconciliation (2026-09-23): current PHarness source/config, sanitized live PHarness readiness, bounded read-only Lucas-cluster object-name checks, and local Gitleaks workflow validation with a synthetic key; no exploit attempts or credential values emitted.
 **Original review date:** 2026-09-18. **Reconciled:** 2026-09-23.
 
 > All secret values below are redacted. Where a finding names a secret, only its *location and nature* are given, never its value.
@@ -18,9 +18,10 @@ The original findings below are a static snapshot from 2026-09-18. They were che
 | C2/C3/H3 — OpenClaw | No OpenClaw paths were found in current Lucas `main` (`7eb5784`), and bounded cluster listing found no matching Deployment/StatefulSet, ConfigMap, ServiceAccount, ClusterRoleBinding, Pod, or Ingress. The 2026-09-18 findings are historical for the then-reviewed configuration; no OpenClaw change was needed or made here. Re-check before any redeployment. |
 | M1 — constant-time comparison | Already fixed in the current tree: `auth.rs::token_matches` compares SHA-256 digests with `subtle::ConstantTimeEq`. |
 | M2 — empty operator-token fail-open | Already fixed at startup in `pharness-api/src/main.rs`: a non-loopback bind is rejected unless at least one operator token is configured. Token-free loopback development remains supported. |
+| Secret-scanning control | Added locally in this branch as [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml): checksum-pinned Gitleaks scans only commits introduced by a PR/push, with read-only workflow permissions. Its exact-fingerprint baseline [`.gitleaksignore`](.gitleaksignore) suppresses only the scanner's false positive on the known `served.api_revision` Git commit ID. The workflow has not run in GitHub and is not merge-blocking until merged and configured as a required branch-protection check. It does not scan or remediate the historical exposed token. |
 | L1 — workspace command argument policy | Remains defense-in-depth only; arguments are executed directly, not through a shell. An executable-specific allowlist remains the stronger future improvement. |
 
-The low-effort source fixes H2, M1, and M2 are already present in remote history, so this continuation does not duplicate them. The current launch config removal is also upstream. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
+The low-effort source fixes H2, M1, and M2 are already present in remote history, so this continuation does not duplicate them. The current launch config removal is also upstream. A new-commit secret scanner is implemented locally but must be merged and observed passing before it can be called an active control. Its scan range intentionally avoids failing on the known historical token; that credential still requires rotation/revocation and history handling. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
 
 ---
 
@@ -155,7 +156,7 @@ These were checked and are **correct**; they reduce the severity of the code-inj
 
 1. **Credential response (C1):** confirm revocation/rotation of the exposed operator token. Coordinate any Git history rewrite and downstream clone cleanup; do not force-push shared history as an incidental cleanup step.
 2. **Design the API ingress boundary (H1):** prefer an internal/private route or a distinct mTLS/OIDC layer. The current public `pharness-api.lucas.engineering` ingress has no Basic Auth while the UI ingress does; revalidate CLI, console proxy, agent-host and SSE behavior before rollout.
-3. **Secret-scanning control:** no gitleaks/trufflehog workflow was found in this PHarness tree. Add a CI scanner after choosing a safe baseline for the known historical blob, and verify it rejects new secret-bearing commits.
+3. **Secret-scanning control:** a read-only, pinned Gitleaks workflow now exists on the local implementation branch, scanning only newly introduced commits so the known historical blob does not make every run fail. Merge it, verify it rejects a new test secret, and configure its check as required in branch protection before treating the control as enforced. This is prevention, not remediation of the old credential.
 4. **Keep OpenClaw off the current-state issue list** while its source/deployment objects remain absent. Before any redeployment, require scoped RBAC, approval-gated tools, explicit egress, and ingress authentication.
 5. **Defense in depth:** replace the run-workspace shell-token denylist with executable-specific argument policies when that contract can be tested without breaking native commands.
 6. **Tooling:** when the Rust toolchain is available, install it and run `cargo audit`; the original review was static and did not perform dependency auditing.
