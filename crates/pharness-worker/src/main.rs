@@ -294,7 +294,10 @@ async fn proxy_connect(
                 .await
                 .context("proxy request header timed out")??;
         if read == 0 {
-            anyhow::bail!("proxy client closed before sending CONNECT");
+            // Kubelet's TCP readiness/liveness probes only open the listener and
+            // close it; no proxy request was attempted, so this is not a warning.
+            tracing::debug!("proxy client closed before sending CONNECT");
+            return Ok(());
         }
         request.extend_from_slice(&chunk[..read]);
         if let Some(index) = request.windows(4).position(|window| window == b"\r\n\r\n") {
@@ -5262,6 +5265,21 @@ package_installation: preparation_only
             &allowed,
         )
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn connect_proxy_ignores_a_client_that_closes_without_a_request() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let allowed = ["api.fireworks.ai".to_string()].into_iter().collect();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            super::proxy_connect(stream, &allowed).await
+        });
+
+        drop(tokio::net::TcpStream::connect(address).await.unwrap());
+
+        server.await.unwrap().unwrap();
     }
 
     #[test]

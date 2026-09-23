@@ -1,0 +1,65 @@
+{
+  "api_server": "https://192.168.20.192:6443",
+  "context": "lucas_engineering",
+  "evaluation_id": "infeval_01a0cfa694aa7871a3972241bc7aac36",
+  "job": {
+    "conditions": [],
+    "configured_images": [
+      {
+        "image": "registry.lucas.engineering/pharness-eval-runner@sha256:7bf325a88b1c3b42ad2e119e275c640f020a7044c938e541bb8294da9561355e",
+        "name": "evaluate"
+      }
+    ],
+    "status": {
+      "active": 1,
+      "startTime": "2026-09-23T19:03:16Z"
+    },
+    "uid": "c6e3956d-43f5-4ffa-97f5-2c8ca377b969"
+  },
+  "job_name": "pharness-inference-eval-46b83c5359c2",
+  "meaning": "Execution observation only; process completion does not establish a passing evaluation or qualification.",
+  "namespace": "pharness",
+  "observed_at": "2026-09-23T19:24:26.235009+00:00",
+  "pods": [
+    {
+      "containers": [
+        {
+          "image": "sha256:4223d2033825a86adbd5a30622a4fe0253e05740ab3f3127dee5668f63fbe51a",
+          "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:7bf325a88b1c3b42ad2e119e275c640f020a7044c938e541bb8294da9561355e",
+          "name": "evaluate",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-23T19:03:50Z"
+            }
+          }
+        }
+      ],
+      "init_containers": [
+        {
+          "image": "sha256:ad8a92ac43e5b82fa38deac1c22ada53ed321aba65be44a80d8fd1e24fda56d4",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c",
+          "name": "network-policy-stabilization",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "terminated": {
+              "exitCode": 0,
+              "finishedAt": "2026-09-23T19:03:45Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-23T19:03:29Z"
+            }
+          }
+        }
+      ],
+      "name": "pharness-inference-eval-46b83c5359c2-nvx4l",
+      "node": "ubuntu-lucas-engineering-2",
+      "phase": "Running",
+      "uid": "651877e7-d0df-46e3-a80c-c91669e7991f"
+    }
+  ],
+  "runtime_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+  "schema_version": 1,
+  "status": "pending"
+}

@@ -15,6 +15,12 @@ Consult the master for current status rather than starting an older plan indepen
 | [Portable Codex host](PHarness-Portable-Codex-Agent-Host-and-Subscription-Reliability.md) | Existing capability retained; expansion deferred by this program |
 | [Data convergence](PHarness-Data-Model-Convergence-Entry-Point.md) | Prior entry point; preserve accepted data lifecycle and additive compatibility |
 
+## Current bounded work
+
+| Document | Status | Boundary |
+| --- | --- | --- |
+| [ASTRA M04E Slice 3: Exact-policy V2 stage requalification](ASTRA-M04E-V2-STAGE-POLICY-REQUALIFICATION-SLICE.md) | qualification stopped; transport fix unreleased | Planner passed. Test Diagnosis timed out. Payload-safe request-correlated gateway diagnostics and proxy probe-noise correction now pass local tests, but require immutable build/release and live identity verification before one new exact-policy preflight; V2 remains disabled. |
+
 The [Lamina console](../implemented/milestones/pharness-lamina-operator-console-redesign-milestone-2026-09-04.md)
 is already accepted and is the UI baseline. Do not replay its redesign or split new
 work back into competing Repo Mode product and screen roadmaps.

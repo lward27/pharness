@@ -5,11 +5,35 @@ use pharness_core::{
     INFERENCE_REGISTRY_SCHEMA, MODEL_GRANT_SCHEMA,
 };
 use serde_json::{json, Value};
+use std::io::Write;
+use tracing::instrument::WithSubscriber;
 
 struct Server(tokio::task::JoinHandle<()>);
 impl Drop for Server {
     fn drop(&mut self) {
         self.0.abort();
+    }
+}
+
+#[derive(Clone)]
+struct CaptureWriter(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CaptureWriter {
+    type Writer = Self;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+impl Write for CaptureWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -106,6 +130,38 @@ fn fixture(base: String, attempts: u32) -> (GatewayState, Value, HeaderMap) {
         clients: Arc::new(clients),
         replayed_nonces: Arc::new(Mutex::new(BTreeMap::new())),
     };
+    (state, request, headers)
+}
+
+fn fixture_with_first_response_timeout(
+    base: String,
+    attempts: u32,
+    timeout_seconds: u64,
+    correlation_id: &str,
+) -> (GatewayState, Value, HeaderMap) {
+    let (mut state, request, initial_headers) = fixture(base, attempts);
+    {
+        let registry = Arc::get_mut(&mut state.registry).unwrap();
+        registry.targets[0].transport.first_response_timeout_seconds = timeout_seconds;
+        registry.targets[0].config_hash = registry.targets[0].computed_hash().unwrap();
+        registry.policies[0].target_hash = registry.targets[0].config_hash.clone();
+        registry.policies[0].policy_hash = registry.policies[0].computed_hash().unwrap();
+    }
+    let mut claims = verify_model_grant(
+        bearer_token(&initial_headers).unwrap(),
+        &state.signing_key,
+        epoch_seconds(),
+    )
+    .unwrap();
+    claims.run_id = correlation_id.into();
+    claims.target_hash = state.registry.targets[0].config_hash.clone();
+    claims.policy_hash = state.registry.policies[0].policy_hash.clone();
+    let token = sign_model_grant(&claims, &state.signing_key).unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+    );
     (state, request, headers)
 }
 
@@ -229,6 +285,221 @@ async fn local_auth_alias_tools_and_stream_survive_the_gateway() {
 }
 
 #[tokio::test]
+async fn transport_events_correlate_without_logging_secrets_or_payloads() {
+    let upstream_headers = Arc::new(Mutex::new(None));
+    let captured_headers = upstream_headers.clone();
+    let (base, _server) = serve(Router::new().route(
+        "/v1/chat/completions",
+        post(move |headers: HeaderMap| {
+            let captured_headers = captured_headers.clone();
+            async move {
+                *captured_headers.lock().await = Some(headers);
+                (
+                    [(header::CONTENT_TYPE, "text/event-stream")],
+                    Body::from("data: PRIVATE_PROVIDER_RESPONSE_SENTINEL\n\n"),
+                )
+            }
+        }),
+    ))
+    .await;
+
+    let (state, mut request, initial_headers) = fixture(base, 1);
+    request["messages"][2]["content"] = json!("PRIVATE_PROMPT_SENTINEL");
+    let mut claims = verify_model_grant(
+        bearer_token(&initial_headers).unwrap(),
+        &state.signing_key,
+        epoch_seconds(),
+    )
+    .unwrap();
+    let correlation_id = "verify_inferverify_test_case_1_attempt_1";
+    claims.run_id = correlation_id.into();
+    claims.request_body_hash = canonical_json_sha256(&request).unwrap();
+    let grant = sign_model_grant(&claims, &state.signing_key).unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {grant}")).unwrap(),
+    );
+
+    let log_buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureWriter(log_buffer.clone()))
+        .with_ansi(false)
+        .without_time()
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+    let (status, _) = async {
+        let response = call(state, &request, headers).await;
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        (status, body)
+    }
+    .with_subscriber(subscriber)
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let logs = String::from_utf8(log_buffer.lock().unwrap().clone()).unwrap();
+    assert!(logs.contains(correlation_id));
+    assert!(logs.contains("upstream request started"));
+    assert!(logs.contains("upstream response headers received"));
+    assert!(logs.contains("upstream stream first chunk received"));
+    assert!(logs.contains("upstream stream completed"));
+    assert!(!logs.contains(&grant));
+    assert!(!logs.contains("test-local-credential"));
+    assert!(!logs.contains("PRIVATE_PROMPT_SENTINEL"));
+    assert!(!logs.contains("PRIVATE_PROVIDER_RESPONSE_SENTINEL"));
+
+    let observed = upstream_headers.lock().await.take().unwrap();
+    assert!(observed.get("x-pharness-correlation-id").is_none());
+}
+
+#[tokio::test]
+async fn upstream_error_logs_keep_status_and_correlation_but_not_error_body() {
+    let (base, _server) = serve(Router::new().route(
+        "/v1/chat/completions",
+        post(|| async {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":{"message":"PRIVATE_UPSTREAM_ERROR_SENTINEL"}})),
+            )
+        }),
+    ))
+    .await;
+    let (state, request, initial_headers) = fixture(base, 1);
+    let mut claims = verify_model_grant(
+        bearer_token(&initial_headers).unwrap(),
+        &state.signing_key,
+        epoch_seconds(),
+    )
+    .unwrap();
+    let correlation_id = "verify_inferverify_error_case_1_attempt_1";
+    claims.run_id = correlation_id.into();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!(
+            "Bearer {}",
+            sign_model_grant(&claims, &state.signing_key).unwrap()
+        ))
+        .unwrap(),
+    );
+
+    let log_buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureWriter(log_buffer.clone()))
+        .with_ansi(false)
+        .without_time()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
+    let (status, body) = async {
+        let response = call(state, &request, headers).await;
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        (status, body)
+    }
+    .with_subscriber(subscriber)
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert!(!String::from_utf8_lossy(&body).contains("PRIVATE_UPSTREAM_ERROR_SENTINEL"));
+
+    let logs = String::from_utf8(log_buffer.lock().unwrap().clone()).unwrap();
+    assert!(logs.contains(correlation_id));
+    assert!(logs.contains("status_code=502"));
+    assert!(logs.contains("upstream returned a non-success response"));
+    assert!(!logs.contains("PRIVATE_UPSTREAM_ERROR_SENTINEL"));
+}
+
+#[tokio::test]
+async fn first_response_timeout_logs_correlated_attempt_without_provider_details() {
+    let (base, _server) = serve(Router::new().route(
+        "/v1/chat/completions",
+        post(|| async {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":{"message":"PRIVATE_UPSTREAM_TIMEOUT_SENTINEL"}})),
+            )
+        }),
+    ))
+    .await;
+    let correlation_id = "verify_inferverify_timeout_case_1_attempt_1";
+    let (state, request, headers) = fixture_with_first_response_timeout(base, 1, 1, correlation_id);
+    let log_buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureWriter(log_buffer.clone()))
+        .with_ansi(false)
+        .without_time()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
+    let (status, body) = async {
+        let response = call(state, &request, headers).await;
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        (status, body)
+    }
+    .with_subscriber(subscriber)
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(!String::from_utf8_lossy(&body).contains("PRIVATE_UPSTREAM_TIMEOUT_SENTINEL"));
+
+    let logs = String::from_utf8(log_buffer.lock().unwrap().clone()).unwrap();
+    assert!(logs.contains(correlation_id));
+    assert!(logs.contains("first_response_timeout"));
+    assert!(logs.contains("upstream request timed out before response headers"));
+    assert!(!logs.contains("PRIVATE_UPSTREAM_TIMEOUT_SENTINEL"));
+    assert!(!logs.contains("test-local-credential"));
+}
+
+#[tokio::test]
+async fn connect_failure_logs_a_safe_failure_class_and_correlation_id() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let (state, request, initial_headers) = fixture(format!("http://{address}/v1"), 1);
+    let mut claims = verify_model_grant(
+        bearer_token(&initial_headers).unwrap(),
+        &state.signing_key,
+        epoch_seconds(),
+    )
+    .unwrap();
+    let correlation_id = "verify_inferverify_connect_case_1_attempt_1";
+    claims.run_id = correlation_id.into();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!(
+            "Bearer {}",
+            sign_model_grant(&claims, &state.signing_key).unwrap()
+        ))
+        .unwrap(),
+    );
+
+    let log_buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureWriter(log_buffer.clone()))
+        .with_ansi(false)
+        .without_time()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
+    let response = call(state, &request, headers)
+        .with_subscriber(subscriber)
+        .await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let logs = String::from_utf8(log_buffer.lock().unwrap().clone()).unwrap();
+    assert!(logs.contains(correlation_id));
+    assert!(logs.contains("connect_error"), "{logs}");
+    assert!(logs.contains("upstream request failed before response headers"));
+    assert!(!logs.contains("test-local-credential"));
+}
+
+#[tokio::test]
 async fn retry_count_obeys_the_stage_policy_and_errors_do_not_expose_upstream_text() {
     use std::sync::atomic::{AtomicU32, Ordering};
     let count = Arc::new(AtomicU32::new(0));
@@ -305,15 +576,31 @@ async fn stalled_success_stream_terminates_without_retry() {
     ))
     .await;
     let (state, request, headers) = fixture(base, 3);
-    let response = call(state, &request, headers).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(timeout(
-        Duration::from_secs(3),
-        axum::body::to_bytes(response.into_body(), 4096)
-    )
-    .await
-    .unwrap()
-    .is_err());
+    let log_buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureWriter(log_buffer.clone()))
+        .with_ansi(false)
+        .without_time()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
+    let (status, body) = async {
+        let response = call(state, &request, headers).await;
+        let status = response.status();
+        let body = timeout(
+            Duration::from_secs(3),
+            axum::body::to_bytes(response.into_body(), 4096),
+        )
+        .await
+        .unwrap();
+        (status, body)
+    }
+    .with_subscriber(subscriber)
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.is_err());
+    let logs = String::from_utf8(log_buffer.lock().unwrap().clone()).unwrap();
+    assert!(logs.contains("stream_idle_timeout"), "{logs}");
+    assert!(logs.contains("upstream stream became idle"));
 }
 
 #[tokio::test]

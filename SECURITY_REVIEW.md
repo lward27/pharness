@@ -1,10 +1,28 @@
 # Pharness & Lucas Engineering — Security Review
 
 **Scope:** `/home/wardl/Personal/pharness` (Rust control plane: `pharness-api`, `pharness-worker`, `pharness-runhost`, `pharness-model-gateway`, `pharness-codex-host`, `pharness-core`) and `/home/wardl/Personal/lucas_engineering` (Helm/K8s cluster-ops repo, incl. the `openclaw` agent deployment).
-**Method:** static, local-only review of source + deployment manifests. No builds, no network, no secrets emitted (all token/credential values are `[REDACTED]`).
-**Date:** 2026-09-18.
+**Method:** Original review (2026-09-18): static source/manifests only. Reconciliation (2026-09-23): current PHarness source/config, sanitized live PHarness readiness, bounded read-only Lucas-cluster object-name checks, and local Gitleaks workflow validation with a synthetic key; no exploit attempts or credential values emitted.
+**Original review date:** 2026-09-18. **Reconciled:** 2026-09-23.
 
 > All secret values below are redacted. Where a finding names a secret, only its *location and nature* are given, never its value.
+
+## Reconciliation update — 2026-09-23
+
+The original findings below are a static snapshot from 2026-09-18. They were checked against PHarness `main` at `cffa63f2cf41168883e798ded07d2bb9c2e65639`; this update records disposition without exposing credential material or rewriting the original analysis.
+
+| Finding | Current disposition |
+| --- | --- |
+| C1 — `.claude/launch.json` operator token | The token variable/value is absent from the current file; commit `cbe7ecc` removed it. Earlier reachable Git history still contains the pre-removal version unless repository history is rewritten, and no rotation evidence was found. Continue to treat the credential as compromised. History rewriting and rotation were not attempted here. |
+| H1 — public PHarness API ingress | Still open: the live `pharness-api.lucas.engineering` ingress exists and has no Basic Auth annotation; the live UI ingress does. Do not simply copy UI Basic Auth: a single `Authorization` header cannot carry both Basic and bearer credentials. Use an internal/private route or a separately designed mTLS/OIDC layer. |
+| H2 — worker checkout environment/hooks | Fixed by `111fb9b`: checkout clears inherited environment, permits only the needed preparation proxy variables plus the hardened Git variables, disables hooks, and keeps global/system Git config off. The worker tests and release evidence are recorded in [Slice 2](planning/evidence/autonomous-sdlc/ASTRA-M04E-111FB9B-CONNECTED-LOOP-READINESS-RESTORE.md). |
+| C2/C3/H3 — OpenClaw | No OpenClaw paths were found in current Lucas `main` (`7eb5784`), and bounded cluster listing found no matching Deployment/StatefulSet, ConfigMap, ServiceAccount, ClusterRoleBinding, Pod, or Ingress. The 2026-09-18 findings are historical for the then-reviewed configuration; no OpenClaw change was needed or made here. Re-check before any redeployment. |
+| M1 — constant-time comparison | Already fixed in the current tree: `auth.rs::token_matches` compares SHA-256 digests with `subtle::ConstantTimeEq`. |
+| M2 — empty operator-token fail-open | Already fixed at startup in `pharness-api/src/main.rs`: a non-loopback bind is rejected unless at least one operator token is configured. Token-free loopback development remains supported. |
+| Secret-scanning control | Added locally in this branch as [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml): checksum-pinned Gitleaks scans only commits introduced by a PR/push, with read-only workflow permissions. Its exact-value allowlist [`.gitleaks.toml`](.gitleaks.toml) suppresses only the scanner's false positive on the known public `served.api_revision` Git commit ID; it is independent of commit fingerprints and does not exempt the path or line. The workflow has not run in GitHub and is not merge-blocking until merged and configured as a required branch-protection check. It does not scan or remediate the historical exposed token. |
+| L2 — committed `.DS_Store` files | Fixed in current Lucas `main` (`7eb5784`): neither reviewed file is tracked, the worktree is clean, and `.gitignore:3` ignores `.DS_Store` at all depths. |
+| L1 — workspace command argument policy | Remains defense-in-depth only; arguments are executed directly, not through a shell. An executable-specific allowlist remains the stronger future improvement. |
+
+The low-effort source fixes H2, M1, and M2 are already present in remote history, so this continuation does not duplicate them. The current launch config removal is also upstream. A new-commit secret scanner is implemented locally but must be merged and observed passing before it can be called an active control. Its scan range intentionally avoids failing on the known historical token; that credential still requires rotation/revocation and history handling. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
 
 ---
 
@@ -12,70 +30,63 @@
 
 | # | Severity | Repo | Finding |
 |---|----------|------|---------|
-| 1 | **CRITICAL** | pharness | Live operator bearer token committed to git (`.claude/launch.json`) |
-| 2 | **CRITICAL** | lucas | `openclaw` exec-approval socket token hardcoded in a ConfigMap |
-| 3 | **CRITICAL** | lucas | `openclaw` agent is `cluster-admin` + unrestricted `Bash(*)`/`Read(*)`/`Write(*)` |
+| 1 | **CRITICAL** | pharness | Operator bearer token remains in reachable Git history (absent from current `.claude/launch.json`; rotation unverified) |
+| 2 | **CRITICAL — historical/absent** | lucas | Old `openclaw` exec-approval socket token finding; no matching current ConfigMap/workload found |
+| 3 | **CRITICAL — historical/absent** | lucas | Old `openclaw` `cluster-admin`/unrestricted-tools finding; no matching current binding/workload found |
 | 4 | **HIGH** | pharness | Public `pharness-api` ingress exposes the entire API with no Basic Auth (bearer-only) |
-| 5 | **HIGH** | pharness | Worker git-checkout inherits the full secret environment and does not disable repo hooks |
-| 6 | **HIGH** | lucas | `openclaw` gateway ingress exposes `/` with no auth annotation |
-| 7 | **MEDIUM** | pharness | Bearer-token comparison is not constant-time (`token_matches`) |
-| 8 | **MEDIUM** | pharness | Operator auth fails open when no tokens are configured |
+| 5 | **HIGH — fixed** | pharness | Worker git-checkout environment/hooks hardened in `111fb9b` |
+| 6 | **HIGH — historical/absent** | lucas | Old `openclaw` gateway ingress finding; no matching current ingress found |
+| 7 | **MEDIUM — fixed** | pharness | Bearer-token comparison uses constant-time digest equality |
+| 8 | **MEDIUM — fixed** | pharness | Startup rejects non-loopback binds with no operator tokens |
 | 9 | **LOW** | pharness | `run_workspace_command` shell-token blocklist is incomplete (mitigated: not shell-run) |
-| 10 | **LOW** | lucas | Committed `.DS_Store` files (local filename disclosure) |
+| 10 | **LOW — fixed** | lucas | Previously committed `.DS_Store` files are no longer tracked and are ignored in current `main` |
 | 11 | **INFO** | both | Several controls are well-built (documented below as "verified mitigations") |
 
-**Headline:** the highest-severity items are *secret management + blast radius*, not exotic code bugs. Two real tokens are committed to git, and the `openclaw` agent combines unrestricted shell/FS tooling with `cluster-admin` and outbound network (SSH + 443) — a single prompt-injection or model jailbreak there yields full cluster compromise.
+**Current headline:** the remaining PHarness items are the still-reachable historical token blob (rotation unverified) and the live public bearer-only API ingress. OpenClaw's previously documented blast radius is absent from the current source/cluster objects inspected, but should be re-audited before redeployment. Several PHarness code findings from the original snapshot are already fixed.
 
 ---
 
 ## Pharness — detailed findings
 
-### C1. Committed live operator token in `.claude/launch.json`
+### C1. Historical committed operator token in `.claude/launch.json` (current file cleaned)
 - **File:** `.claude/launch.json:7` (git-tracked)
-- **What:** a 64-hex bearer token is baked into the committed VS Code/Claude launch config:
+- **Historical finding:** a 64-hex bearer token was baked into the committed VS Code/Claude launch config. The current file no longer contains that variable/value (`cbe7ecc`), but the prior commit remains reachable in history:
   ```json
   "PHARNESS_API_PROXY=http://127.0.0.1:24777",
   "PHARNESS_API_PROXY_TOKEN=[REDACTED]"
   ```
-- **Impact:** anyone with read access to the repo (clones, forks, CI logs, `.bundle`/archive exports) obtains a working operator credential. Combined with H1 (API reachable on a public hostname with bearer-only auth), this is a direct path to full operator control of the API from the internet.
+- **Impact:** until rotated, anyone with access to the reachable historical blob could obtain the old credential. Its validity/rotation state was not verified. H1 remains an independent bearer-only public API exposure.
 - **Remediation:**
-  1. Rotate the token immediately (treat as compromised).
-  2. Remove the value from the file and from git history (e.g. `git filter-repo` / BFG), or stop tracking the file.
-  3. Add a pre-commit/CI secret scan (gitleaks/trufflehog) so this cannot recur.
-  4. Source dev tokens from a gitignored `.env` / secrets store instead of a tracked config.
+  1. Rotate/revoke the token (treat as compromised); this has not been verified.
+  2. Coordinate a history rewrite and downstream clone cleanup if the owner wants the blob purged. It was not attempted because this rewrites shared Git history.
+  3. Add a CI secret scan after deciding how to handle the known historical finding; source dev tokens from a gitignored local secrets store, not the shared launch config.
 
 ### H1. Public API ingress has no Basic Auth (bearer-only)
 - **File:** `deploy/helm/pharness/templates/ingress.yaml` — the `pharness-api` ingress block (third resource in the file, `path: /`, `pathType: Prefix` → `pharness-api:4777`, no `auth-type: basic` annotation).
 - **Contrast:** the `pharness-ui` ingress in the *same file* **does** set `nginx.ingress.kubernetes.io/auth-type: basic` + `auth-secret`. The `pharness-api` and `pharness-agent-host-api` ingresses do not.
 - **Config:** `deploy/helm/pharness/values.yaml` has `ingress.apiEnabled: true` (default) and `api.host: pharness-api.lucas.engineering`.
 - **Impact:** the entire operator API (runs, work-items, repo-mode, deployment, inference, agent-hosts admin routes) is a bearer-only surface on a public hostname. If the operator token is ever leaked (see C1), remote full control is possible. Bearer-only on the public internet also means the token is the *only* gate — no second factor, no IP allowlist.
-- **Remediation:** add the same Basic Auth (or a mTLS / OIDC proxy) annotation to the `pharness-api` ingress, or restrict it to an internal/private ingress; at minimum, require that `ingress.apiEnabled` and a token be set together (see M2).
+- **Remediation:** prefer an internal/private API route or design a separate mTLS/OIDC access layer. Do not merely copy UI Basic Auth: clients already use the `Authorization` header for the operator bearer token, and a single request cannot send Basic and bearer credentials in that header simultaneously. Startup now rejects non-loopback binds without operator tokens, but that does not add a second gate to the public ingress.
 
-### H2. Worker git checkout leaks the secret environment to untrusted repo hooks
+### H2. Worker git checkout secret-environment gap (fixed in `111fb9b`)
 - **File:** `crates/pharness-worker/src/main.rs` — `repository_git_output` (~lines 1288–1299)
-- **What:** the git commands used to clone/checkout the *target repository* set `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_CONFIG_NOSYSTEM`, but do **not** call `.env_clear()` and do **not** pin `core.hooksPath`. They therefore inherit the worker's **full** environment, which includes `PHARNESS_WORKER_TOKEN`, `PHARNESS_SOURCE_READER_TOKEN`, `PHARNESS_GIT_WRITER_TOKEN`, etc.
-- **Why it matters:** when git fetches/checks out a repo, any **git hook** shipped in that repo (`.git/hooks`, or `post-checkout`/`prepare` invoked by git) runs as a child of git and inherits that environment. A malicious or compromised repository could therefore read the worker/source/writer tokens and exfiltrate them. The **preparation** phase has network egress (see "verified mitigations" — egress proxy allows `github.com`/`pypi.org`/`files.pythonhosted.org`/`registry.npmjs.org`), so exfiltration is feasible.
-- **Contrast (the good news):** the *run* phase is hardened — `ProjectTools::run_acceptance` and `run_workspace_command` in `crates/pharness-runhost/src/lib.rs` both call `.env_clear()` and set a minimal env (PATH/HOME/LANG only). The gap is specifically the **preparation/checkout** phase.
-- **Remediation:**
-  1. In `repository_git_output`, call `.env_clear()` and re-add only `PATH`, `HOME`, `LANG`, `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_CONFIG_NOSYSTEM`.
-  2. Pin `core.hooksPath` to an empty/controlled dir (or pass `-c core.hooksPath=/dev/null`-style config) for every checkout so repo-bundled hooks never run.
-  3. Optionally set `GIT_OPTIONAL_LOCKS=0` and run fetch in a directory with no hooks.
+- **Historical finding:** `repository_git_output` once cleared inherited environment without restoring the preparation proxy variables. Commit `111fb9b` now passes only the required proxy allowlist plus the hardened Git variables, keeps hooks disabled and global/system Git config off, and retains the token-via-askpass boundary. See the [Slice 2 release evidence](planning/evidence/autonomous-sdlc/ASTRA-M04E-111FB9B-CONNECTED-LOOP-READINESS-RESTORE.md).
+- **Current disposition:** fixed and tested (`pharness-worker` tests plus workspace check recorded in the release evidence). No remaining checkout finding identified in this code path.
 
-### M1. Non-constant-time bearer-token comparison
+### M1. Non-constant-time bearer-token comparison (already fixed)
 - **File:** `crates/pharness-api/src/app/auth.rs:34-38` (`token_matches`), used by both `require_worker_token` and `require_operator_token`.
-- **What:** compares `Sha256(provided) == Sha256(expected)` with a normal `==`. Not constant-time.
-- **Impact:** theoretical timing side-channel on a 256-bit digest. Practical exploitability over a network is low (noise, and the digest, not the raw secret, is compared), so this is **medium/low** in practice — but it is the standard thing to fix.
-- **Remediation:** use a constant-time comparison (e.g. `subtle::ConstantTimeEq` or `ct_eq` on the digest bytes).
+- **Historical finding:** the comparison used ordinary equality. Current `token_matches` compares SHA-256 digests with `subtle::ConstantTimeEq` for both worker and operator tokens.
+- **Current disposition:** fixed in the current tree; no code change required.
 
-### M2. Operator auth fails open when no tokens are configured
+### M2. Operator auth fails open when no tokens are configured (startup guard added)
 - **File:** `crates/pharness-api/src/app/auth.rs:53`
   ```rust
   if state.operator_tokens.is_empty() || request.uri().path() == "/health" {
       return next.run(request).await;   // ← no auth at all when tokens are empty
   }
   ```
-- **Impact:** if `PHARNESS_OPERATOR_TOKENS` is unset/empty *and* the API is bound to a non-loopback address, **every** operator route is unauthenticated. The default bind is loopback (`127.0.0.1:4777`, `crates/pharness-config/src/lib.rs:18`), so the default local posture is safe — but a `PHARNESS_BIND=0.0.0.0` deployment that forgets the tokens is silently wide open.
-- **Remediation:** fail *closed*: if the bind address is non-loopback, refuse to start (or require at least one operator token) when `operator_tokens` is empty. At minimum, log a prominent warning.
+- **Historical finding:** middleware still preserves token-free loopback development, but startup now calls `validate_operator_auth_configuration` and refuses any non-loopback bind when `PHARNESS_OPERATOR_TOKENS` is empty. A unit test covers public-bind rejection and the loopback exception.
+- **Current disposition:** the dangerous public-bind configuration fails closed. The loopback-only behavior is intentional and documented.
 
 ### L1. `run_workspace_command` shell-token blocklist is incomplete (mitigated)
 - **File:** `crates/pharness-runhost/src/lib.rs:1920-1987` (`validate_workspace_command`)
@@ -83,15 +94,17 @@
 - **Why it's low:** these commands are launched via `Command::new(executable).args(args)` — **not** through `/bin/sh -c` — so shell metacharacters in args are passed literally to the target binary and are *not* interpreted as shell operators. The residual risk is only if a target binary treats an argument as a program/option (e.g. `-c`/`--eval`, which `contains_inline_program` already blocks for `python`/`node`).
 - **Remediation (defense-in-depth):** prefer an explicit allowlist of executables + a per-executable argument policy rather than a global denylist; consider blocking `&`/`|`/`$`/`{`/`}` uniformly.
 
-### L2 (INFO). Committed `.DS_Store`
-- **Files:** `lucas_engineering/.DS_Store`, `lucas_engineering/charts/.DS_Store`
-- **Impact:** local directory/file-name disclosure only. **Remediation:** add to `.gitignore`, `git rm --cached`.
+### L2 (INFO). Committed `.DS_Store` files (fixed in current Lucas `main`)
+- **Historical files:** `lucas_engineering/.DS_Store`, `lucas_engineering/charts/.DS_Store`.
+- **Current disposition:** Lucas `HEAD` and `origin/main` both resolve to `7eb578440e6d2e5c2eaeb91d64bdcdb142e63734`; the worktree is clean, neither path is tracked, and `.gitignore:3` ignores `.DS_Store` at all depths. No further change is needed.
 
 > **Not a finding (false-positive check):** `planning/evidence/autonomous-sdlc/ASTRA-M02-REGISTRY-STABILITY.json` contains a field named `checksum/secret` whose value is a **SHA-256 content hash**, not a credential. No action needed.
 
 ---
 
 ## Lucas Engineering (`lucas_engineering`) — detailed findings
+
+The three OpenClaw findings below describe the 2026-09-18 snapshot. They were not found in current Lucas `main` (`7eb5784`), and bounded read-only cluster listings found no matching workload, ConfigMap, ServiceAccount, ClusterRoleBinding, Pod or Ingress. Treat them as historical configuration evidence, not proof of a current deployment; repeat these checks before OpenClaw is restored.
 
 ### C2. `openclaw` exec-approval socket token hardcoded in a ConfigMap
 - **File:** `charts/openclaw/templates/configmap.yaml:72`
@@ -142,12 +155,11 @@ These were checked and are **correct**; they reduce the severity of the code-inj
 
 ## Recommended next steps (priority order)
 
-1. **Rotate + purge the committed tokens** (Pharness C1, Lucas C2) and add a CI secret scanner. *Do this first — these are live.*
-2. **De-privilege `openclaw`** (C3): replace `cluster-admin` with a scoped Role, replace `Bash(*)`/`Read(*)`/`Write(*)` with a tight allowlist, and actually gate high-risk ops through the exec-approval socket.
-3. **Close the API ingress auth gap** (H1) — add Basic Auth/mTLS to the `pharness-api` ingress or make it internal-only; fail-closed on missing operator tokens (M2).
-4. **Harden worker checkout** (H2): `env_clear()` + pin `core.hooksPath` for all repository git commands.
-5. **Constant-time token compare** (M1) — quick `subtle::ConstantTimeEq` swap.
-6. **Housekeeping:** auth on the openclaw ingress (H3), remove committed `.DS_Store` (L2), tighten the `run_workspace_command` arg policy (L1).
-7. **Tooling:** install the Rust toolchain and run `cargo audit` (blocked earlier — toolchain absent) to surface vulnerable dependencies; run `gitleaks`/`trufflehog` across both repos.
+1. **Credential response (C1):** confirm revocation/rotation of the exposed operator token. Coordinate any Git history rewrite and downstream clone cleanup; do not force-push shared history as an incidental cleanup step.
+2. **Design the API ingress boundary (H1):** prefer an internal/private route or a distinct mTLS/OIDC layer. The current public `pharness-api.lucas.engineering` ingress has no Basic Auth while the UI ingress does; revalidate CLI, console proxy, agent-host and SSE behavior before rollout.
+3. **Secret-scanning control:** a read-only, pinned Gitleaks workflow now exists on the local implementation branch, scanning only newly introduced commits so the known historical blob does not make every run fail. Merge it, verify it rejects a new test secret, and configure its check as required in branch protection before treating the control as enforced. This is prevention, not remediation of the old credential.
+4. **Keep OpenClaw off the current-state issue list** while its source/deployment objects remain absent. Before any redeployment, require scoped RBAC, approval-gated tools, explicit egress, and ingress authentication.
+5. **Defense in depth:** replace the run-workspace shell-token denylist with executable-specific argument policies when that contract can be tested without breaking native commands.
+6. **Tooling:** when the Rust toolchain is available, install it and run `cargo audit`; the original review was static and did not perform dependency auditing.
 
 *All token/credential values have been redacted (`[REDACTED]`).*
