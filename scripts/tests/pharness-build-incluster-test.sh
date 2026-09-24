@@ -13,6 +13,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
+PYTHONDONTWRITEBYTECODE=1 python3 "${SCRIPT_DIR}/pharness-fetch-oci-bundle-test.py"
+
 mkdir -p "${TEST_ROOT}/bin"
 cat >"${TEST_ROOT}/bin/git" <<'MOCK_GIT'
 #!/usr/bin/env bash
@@ -108,7 +110,6 @@ if output="$(PATH="${TEST_ROOT}/bin:${PATH}" \
   PHARNESS_TEST_REVISION="$REVISION" \
   PHARNESS_TEST_KUBECTL_CALLS="${TEST_ROOT}/kubectl-calls.log" \
   PHARNESS_TEST_MANIFEST="${TEST_ROOT}/pipelinerun.json" \
-  PHARNESS_KUBECTL="${TEST_ROOT}/bin/kubectl" \
   bash "$BUILD_SCRIPT" runtime --revision "$REVISION" --preflight-only 2>&1)"; then
   :
 else

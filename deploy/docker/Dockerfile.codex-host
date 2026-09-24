@@ -104,4 +104,8 @@ RUN set -eu; \
     sha256sum -c CHECKSUMS.sha256 >/dev/null
 
 FROM scratch AS bundle
+ARG PHARNESS_BUILD_REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
+      org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}" \
+      org.opencontainers.image.title="PHarness native Codex host bundle"
 COPY --from=bundle-verification /pharness-codex-host /pharness-codex-host
